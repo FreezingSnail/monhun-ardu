@@ -1,10 +1,11 @@
-# monhun-ardu-czb — Core: player FSM + weapons port
+# monhun-ardu-ahf — Adopt host unit + Ardens fxtest harness
 
 ## Files
-- added: `src/core/game.hpp` — shared structs + `WEAPON_DEFS[3]` (exact port of mock/game.js tables: sword spd 18, flail spd 15, gun spd 9; combo/special/branch attack tables; shells). `Rect` (+overlap), `circleRectOverlap`, `Input`, `Target` (hurt rect + onHit/onShove/onStun callback indirection for zq5/hrd), `Player` (inherits `fp::FpBody` + `fp::FpStam` so addMove/addVel/drainStam work directly), `Game`. Constants HOLD_TICKS=11, CHAIN_WIN=14, A_BUFFER=10, WORLD 256x112. No float, no Arduino.h, header-only.
-- added: `src/core/player.hpp` — `initGame`, `stepPlayer` (edge detect + tick order identical to mock: timers, B, A, state switch, stance, clamp). States idle/attack/special/dodge(16t,iT14,vx54)/deflect(9t,30)/shove(10t)/stun; chain+chainWin; branch windows (attack recovery or chainWin); aBuffer 10; hold-vs-tap B; stances parry(34t cap, drain 2)/whirl(whirlTick, hit every 16t, drain 8)/guard(drain 1); stanceAuto release; stamina int + 1/16 sub, regen +8/tick, drainStam; move speed factors whirl 6/10, guard 4/10, parry 0; meleeHitbox application on Target; gunshield shell consume + reload + `Game.lastShot` stub for hrd; `playerHurt` with guard block cost 22 / chip 25% / break -> stun 45, parry riposte (riposteT 90), deflect response via Target::onStun.
-- added: `tst/player_test.hpp` — `PlayerSuite(TestRunner&)`: weapon table equality, chain advance + window expiry, every branch (stepslash lunge, spincut, whirl, trip, pointblank + shell fallback to shove, guardbash), stance enter/auto-exit/cap, stamina drain-to-empty + regen, dodge roll distance (>10px/10t), hold-vs-tap B, canCancel, guard block cost + break stun, whirl periodic hit (dmg 8, push 8), shell consume + reload, riposte/deflect hooks, all-weapon smoke.
-- changed: `tst/main.cpp` — wires `PlayerSuite` into the runner (header-only, no Makefile change needed).
+- added: `tst/fxdatatest/harness/fxtest.hpp` — device assertion harness copied from `~/code/CreatureGathererFX/tst/fxdatatest/fxtest.hpp`: `FxTest` with `expectEq`/`expectEqIdx`/`expectVersion`, `ok()`, and `report()` that prints `PASSED=n FAILED=m` then a final bare `P` or `F` line (with `Serial.flush()`). No deps beyond Arduino.h/Serial.
+- added: `tst/fxdatatest/harness/fx_globals.hpp` — device global instance + `fxTestSetup()`, adapted from CreatureGathererFX `harness/fx_globals.hpp`. Defines ABG_IMPLEMENTATION/SPRITESU_IMPLEMENTATION, includes `../src/common.hpp` + `../src/fxdata.h` + `../src/core/{game,player}.hpp`, declares `decltype(arduboy) arduboy;`. Setup mirrors `monhun-ardu.ino`: `Serial.begin(9600); arduboy.begin(); FX::begin(FX_DATA_PAGE); FX::setCursorRange(0, 32767);` (single-arg `FX::begin` — this repo has no FX_SAVE_PAGE).
+- added: `tst/fxdatatest/boot_test.hpp` — first smoke suite `test_boot(FxTest&)`: `initGame(g, W_SWORD)`, record `startX`, run 16 ticks of `stepPlayer` with `Input{mx:1}`, assert `player.x == startX + 18` (sword spd 18/16 px/tick * 16 ticks = 18 px, remainder carried in subX) and `g.tick == 16`.
+- added: `tst/fxdatatest/test_boot.ino` — sketch shape copied from `test_moves.ino`: `setup()` runs `fxTestSetup(); FxTest test; test_boot(test); test.report(F("test_boot"));`, `loop()` exits.
+- changed: `Makefile` — replaced old `fxtest`/`fxtest-build`/`fxtest-run` (INTEGRATION_TESTS --serial-test) with CreatureGathererFX-style targets: `ARDENS ?= $(HOME)/code/Ardens/build/Ardens.app/Contents/MacOS/Ardens`, `FXTEST_MS ?= 3000`, `FXDATA_BIN ?= fxdata/fxdata.bin`, `FXTEST_BUILD_DIR ?= build/fxtest`. `fxtest` aliases `fxtest-headless`; skips (exit 0) when ARDENS unset or not executable. Preflight checks ARDENS executable, FXDATA_BIN exists, and `captureserial` in Ardens binary. Build stages under `build/fxtest/<name>` (copy src, ino, *.hpp, harness), compiles with arduino-cli FQBN `arduboy-homemade:avr:arduboy-fx`. Run boots `captureserial=$(FXTEST_MS) fxport=d1 display=ssd1306 file=<hex> file=<fxdata.bin>`, CRLF-normalizes, fails on empty output / `F` line / nonzero Ardens exit / missing P-F marker. Host `make test` untouched (188 asserts).
 
 ## `make test` output (tail)
 ```
@@ -17,8 +18,20 @@ Total Failed: 0
 ```
 Exit 0.
 
-## Notes / TODOs for zq5 (monster) + hrd (pole)
-- `Game.target` is the plug point: set `alive`, `rect` (hurt box), and `onHit` (damage + push + trip effect), `onShove` (gunshield shove push + freeze), `onStun` (deflect/parry monster stun). Currently no-ops in host tests.
-- `Game.lastShot` (1=ball, 2=scatter) + `lastShotX/Y` record gunshield fires; hrd spawns projectiles/effects from those (mock: 3 dirs for scatter via rotFp, spawn 13/16 px along facing, `speedF` from ShellDef).
-- Mock chain semantics kept: `chainWin` (14t) decrements every tick, so a 2nd combo attack (16–23t) always outlives the window and `chain` resets mid-attack; stage-2 branches (spincut/trip/guardbash) are reachable from the recovery path (`min(chain+1,2)`), exactly as in the mock. Do not "fix" this without touching mock.
-- `fp::isqrt` deviation (seed 1<<14) already noted in fp.hpp/1mb report.
+## `make fxtest-headless` output (tail)
+```
+test_boot
+Sketch uses 9626 bytes (32%) of program storage space. Maximum is 29696 bytes.
+Global variables use 1751 bytes (68%) of dynamic memory, leaving 809 bytes for local variables. Maximum is 2560 bytes.
+=== test_boot ===
+test_boot PASSED=2 FAILED=0
+P
+test_boot: PASS
+```
+Exit 0.
+
+## Deviations
+- None: `FXTEST_MS=3000` captured the full suite (2 asserts + marker) on this machine; no raise needed.
+- `fx_globals.hpp` drops the `FX_SAVE_PAGE` second arg to `FX::begin` (repo has no save partition), matching `monhun-ardu.ino`.
+- `fxtest-headless` skip also covers a missing (non-executable) ARDENS path, not just unset — per task spec ("unset or missing").
+- No `generated/` staging needed: boot suite reads no FX fixture tables yet.
