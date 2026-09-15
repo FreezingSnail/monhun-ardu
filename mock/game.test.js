@@ -253,6 +253,19 @@ test('isqrt exact for small and large values', () => {
   for (const [n, want] of cases) assert.equal(G.isqrt(n), want, 'isqrt(' + n + ')');
 });
 
+test('ball shell flies at ~2.2 px per tick', () => {
+  const g = G.newGame(2, 'train');
+  g.pole.x = 5000;
+  park(g);
+  ticks(g, G.HOLD_TICKS + 2, { b: true });
+  G.step(g, inp({ b: true, a: true }));
+  const pr = g.projectiles[0];
+  const x0 = pr.x;
+  ticks(g, 10, { b: true });
+  const pxPerTick = (pr.x - x0) / 16 / 10;
+  assert.ok(pxPerTick > 2.0 && pxPerTick < 2.4, 'ball speed ' + pxPerTick);
+});
+
 test('all three weapon starts are valid', () => {
   for (let i = 0; i < 3; i++) {
     const g = G.newGame(i);

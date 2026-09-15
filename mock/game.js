@@ -899,7 +899,10 @@ function clampMonster(g) {
 function updateProjectiles(g) {
   for (let i = g.projectiles.length - 1; i >= 0; i--) {
     const pr = g.projectiles[i];
-    addVel(pr, pr.vx, pr.vy);
+    // projectile x/y are 1/16 px already and vx/vy too: add straight.
+    // Do NOT route through the pixel-domain accumulator or shots crawl.
+    pr.x += pr.vx;
+    pr.y += pr.vy;
     pr.life--;
     const tgt = activeTarget(g);
     if (tgt) {
