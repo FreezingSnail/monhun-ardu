@@ -5,14 +5,16 @@ CXX_FLAGS = -std=c++17 -I/src -w -O0 -g3
 TEST_FLAGS = -DTEST
 DEBUG_FLAGS = -DDEBUG
 
-# Common source files for main tests
-TEST_SOURCES = "" 
+# Common source files for main tests (host tests live in tst/, binary in build/)
+TEST_SOURCES = tst/main.cpp
 
-
+# Host test output binary (build/ is gitignored; never leave artifacts in tst/)
+TEST_OUT = build/tests/host
 
 # Function to run tests
 define run_test
-	g++ $(1) $(CXX_FLAGS) $(2) $(3) -o tst/test.o && ./tst/test.o && rm tst/test.o
+	mkdir -p $(dir $(TEST_OUT))
+	g++ $(1) $(CXX_FLAGS) $(2) $(3) -o $(TEST_OUT) && ./$(TEST_OUT)
 endef
 
 full: gen build
