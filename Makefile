@@ -1,4 +1,4 @@
-.PHONY :  full build mini gen test fxtest fxtest-headless fxtest-headless-preflight fxtest-build fxtest-run
+.PHONY :  full build mini gen debug test fxtest fxtest-headless fxtest-headless-preflight fxtest-build fxtest-run
 
 # Common compiler flags
 CXX_FLAGS = -std=c++17 -I/src -w -O0 -g3
@@ -27,6 +27,12 @@ mini:
 
 gen:
 	./tools/gen.sh
+
+# Launch the Ardens debugger GUI with the shipping build + FX image.
+# Pause/continue F5, reset F8, settings O. Override ARDENS to use another build.
+debug: build
+	@test -f "$(FXDATA_BIN)" || { echo "debug: FX data image missing at $(FXDATA_BIN); run make gen" >&2; exit 1; }
+	"$(ARDENS)" display=ssd1306 fxport=d1 file=dist/monhun-ardu.ino.hex file=$(FXDATA_BIN)
 
 test:
 	$(call run_test,,$(TEST_FLAGS),$(TEST_SOURCES))

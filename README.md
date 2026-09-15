@@ -127,9 +127,14 @@ images/**/*.png ──tools/text2bmp.py────────► font sheets �
 make test               # host unit tests (497 asserts)
 make fxtest-headless    # Ardens device tests (boot/assets/audio/parity/perf)
 make build              # compile shipping sketch (output in dist/)
+make debug              # build, then open the Ardens debugger GUI with hex + FX image
 make mini               # compile for Arduboy Mini FQBN
 make gen                # regenerate FX assets + fxdata.h/bin from images/
 ```
+
+`make debug` launches Ardens on `dist/monhun-ardu.ino.hex` +
+`fxdata/fxdata.bin` (windowed, FX cart on `d1`, SSD1306). Debugger keys:
+`F5` pause/continue, `F8` reset, `O` settings, `F11` fullscreen.
 
 Notes:
 - `build`, `mini`, `gen`, `test`, `fxtest*` are all `.PHONY`, so `make build`
