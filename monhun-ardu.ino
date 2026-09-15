@@ -5,6 +5,7 @@
 #include "src/globals.hpp"
 #include "src/fxdata.h"
 #include "src/core/world.hpp"
+#include "src/external/Font4x6.h"
 
 decltype(arduboy) arduboy;
 
@@ -27,7 +28,8 @@ mh::Game g;
 // HUD is reserved at the top (y 0..HUD_H-1); world y=0 maps to screen y=HUD_H
 // and every block is clipped to the arena band. The mock put the HUD at the
 // bottom; the device flips it to the top (established by the loop bead), so
-// the arena shifts down by HUD_H px. No HUD pixels are drawn in this bead.
+// the arena shifts down by HUD_H px. drawHud() paints the strip untranslated
+// (no camera/shake) at the top, mirrored from the mock's bottom strip.
 
 // round(v + sub/16): sub is the 1/16 px remainder, matches mock Math.round().
 static inline int16_t rndPx(int16_t v, int16_t sub) {
@@ -361,6 +363,111 @@ static void drawEffects(const mh::Game& g, int16_t camX, int16_t camY) {
     }
 }
 
+/* ------------------------------------------------------------------- hud */
+
+// Mock drawHud(): HP + stamina bars, weapon name, gun shell/reload, then the
+// monster HP bar (hunt) or LAST/DPS (train). The mock drew this as the bottom
+// 8 px strip; the device reserves the top 8 px, so the strip is mirrored: the
+// divider sits at the arena edge (y = HUD_H-1) and the bars/text fill rows
+// 0..6. Drawn untranslated (mock restores the camera transform first) and
+// read-only.
+//
+// Text is Font4x6 (4x8 glyphs, PROGMEM/MCU flash). printChar() paints rows
+// y+1..y+7; cursorY = -1 places the 6 px cap in rows 0..5, inside the band.
+// Advance is 4 px glyph + 1 px spacing. Glyphs are set on every plane, so the
+// text composites white (shade 3), same as mock's scale-1 white text.
+static Font4x6 hudFont;
+
+static inline int16_t hudPut(int16_t x, char c) {
+    hudFont.printChar(c, static_cast<int8_t>(x), -1);
+    return static_cast<int16_t>(x + 5);
+}
+
+static uint8_t hudDigits(int32_t v) {
+    uint8_t n = 1;
+    while (v >= 10) { v /= 10; n++; }
+    return n;
+}
+
+// Print a non-negative value as exactly `digits` digits (leading zeros).
+static int16_t hudNum(int16_t x, int32_t v, uint8_t digits) {
+    if (digits > 5) digits = 5;
+    char b[5];
+    for (int8_t i = static_cast<int8_t>(digits - 1); i >= 0; i--) {
+        b[i] = static_cast<char>('0' + v % 10);
+        v /= 10;
+    }
+    for (uint8_t i = 0; i < digits; i++) x = hudPut(x, b[i]);
+    return x;
+}
+
+// Mock bar(): dark back/border, inner fill width round((w-2) * ratio).
+static void hudBar(int32_t x, int32_t y, int32_t w, int32_t h,
+                   int32_t num, int32_t den, uint8_t shade) {
+    blk(x, y, w, h, 1);
+    if (den <= 0 || num <= 0) return;
+    if (num > den) num = den;
+    int32_t fw = ((w - 2) * num + den / 2) / den;
+    if (fw > w - 2) fw = w - 2;
+    if (fw > 0) blk(x + 1, y + 1, fw, h - 2, shade);
+}
+
+static void drawHud(const mh::Game& g) {
+    const mh::Player& p = g.player;
+
+    blk(0, 0, mh::SCREEN_W, mh::HUD_H, 0);        // strip background (black)
+    blk(0, mh::HUD_H - 1, mh::SCREEN_W, 1, 1);    // divider at the arena edge
+
+    hudBar(1, 2, 28, 4, p.hp, p.hpMax, 3);        // player HP (white)
+    hudBar(29, 2, 16, 4, p.stam, p.stamMax, 2);   // stamina (light gray)
+
+    // Weapon marker (mock's full name shortened to fit the 128 px strip), then
+    // the mode marker (device-only, the mock implied it via pole vs beast).
+    int16_t x = 46;
+    if (g.weapon == mh::W_SWORD) {
+        x = hudPut(x, 'S'); x = hudPut(x, 'W'); x = hudPut(x, 'D');
+    } else if (g.weapon == mh::W_FLAIL) {
+        x = hudPut(x, 'F'); x = hudPut(x, 'L'); x = hudPut(x, 'A');
+    } else {
+        x = hudPut(x, 'G'); x = hudPut(x, 'U'); x = hudPut(x, 'N');
+    }
+    x = hudPut(x, g.mode == mh::MODE_TRAIN ? 'T' : 'H');
+
+    if (g.weapon == mh::W_GUN) {                  // shell count + reload
+        x = 67;
+        if (p.reload > 0) {
+            hudPut(x, 'R'); hudPut(x, 'L'); hudPut(x, 'D');
+            const mh::ShellDef* sh =
+                mh::weaponShell(&mh::WEAPON_DEFS[g.weapon], p.shell);
+            const int16_t rmax = mh::shellReload(sh);
+            if (rmax > 0) {
+                int32_t bw = (12 * (rmax - p.reload) + rmax / 2) / rmax;
+                if (bw < 1) bw = 1; else if (bw > 12) bw = 12;
+                blk(67, 6, bw, 1, 2);
+            }
+        } else {
+            x = hudPut(x, p.shell == 0 ? 'B' : 'S');
+            hudNum(x, p.shells[p.shell], hudDigits(p.shells[p.shell]));
+        }
+    }
+
+    if (g.mode == mh::MODE_TRAIN) {               // train total + DPS
+        int32_t total = g.train.total;
+        if (total > 9999) total = 9999;
+        int32_t dps = mh::trainDps(g);
+        if (dps > 999) dps = 999;
+        const uint8_t nt = hudDigits(total);
+        const uint8_t nd = hudDigits(dps);
+        x = static_cast<int16_t>(127 - 5 * (nt + nd + 2));
+        x = hudPut(x, 'T');
+        x = hudNum(x, total, nt);
+        x = hudPut(x, 'D');
+        hudNum(x, dps, nd);
+    } else {                                      // monster HP (hunt)
+        hudBar(82, 2, 44, 3, g.monster.hp, g.monster.hpMax, 3);
+    }
+}
+
 /* ------------------------------------------------------------------ loop */
 
 void setup() {
@@ -423,7 +530,7 @@ void render() {
     drawPlayer(g, ecX, ecY);
     drawProjectiles(g, ecX, ecY);
     drawEffects(g, ecX, ecY);
-    // HUD band stays black this bead; bead 8ss draws bars/weapon/ammo.
+    drawHud(g);
 }
 
 void loop() {

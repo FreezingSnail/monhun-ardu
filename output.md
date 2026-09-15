@@ -1,77 +1,75 @@
-# monhun-ardu-rze — Device: block-art render parity (mock blocks)
+# monhun-ardu-8ss — Device: HUD parity (bars, weapon, ammo, train stats)
 
 ## Files
-- changed: `monhun-ardu.ino` — full block-art `render()` ported from the
-  `mock/game.js` render section, plus render-only helpers/tables above it.
-  - `blk(x,y,w,h,shade)` is the single draw entry point: clips every rect to
-    `[0,SCREEN_W) x [HUD_H,SCREEN_H)` and calls `arduboy.fillRect(...,shade)`.
-    shade 0 clears pixels (mock black bodies carve holes in what is under them).
-  - `drawArena` / `drawPole` / `drawMonster` / `drawPlayer` / `drawProjectiles`
-    / `drawEffects` / `drawNumber`, matching mock draw order and shapes.
-  - PROGMEM tables: `SIN256[256]` (Q4 sine, `cos(a)=SIN256[(a+64)&255]`),
-    `FONT_DIG[10][5]` (3x5 digits), `RING6[6]` (whirl ring offsets).
-  - `rndPx(v,sub)` reproduces mock `Math.round()` on the fixed-point position.
-  - Camera clamp + tick-based shake + HUD-at-top offset; loop FX bracket and
-    `run()` unchanged. `render()` reads `Game` only (no mutation, no static
-    render state) and never branches on `currentPlane`.
+- changed: `monhun-ardu.ino` — HUD drawing added to `render()` (render-only,
+  read-only on `Game`). No core, mock, or test files touched.
+  - `#include "src/external/Font4x6.h"` (PROGMEM/MCU-flash text).
+  - `static Font4x6 hudFont` + `hudPut(x,c)` / `hudDigits(v)` / `hudNum(x,v,n)`:
+    `printChar(c, x, -1)` — the 4x8 glyph paints rows `y+1..y+7`, so cursorY
+    `-1` puts its 6 px cap in HUD rows 0..5. Advance 5 px (4 px + 1 px spacing).
+  - `hudBar(x,y,w,h,num,den,shade)`: mock `bar()` (shade-1 back, inner fill
+    `round((w-2)*ratio)`), used for HP / stamina / monster HP.
+  - `drawHud(g)`: black strip, divider, player HP, stamina, weapon marker,
+    mode marker, gun ammo/reload, then monster HP bar (hunt) or `T<total>D<dps>`
+    (train). Called last in `render()`, untranslated (mock restores the camera
+    before `drawHud`).
 - changed: `output.md` (this file).
-- `mock/`, `src/`, `tst/` untouched; no core logic or numbers changed.
 
 ## Build (`rm -rf build && make build`)
 ```
-Sketch uses 25566 bytes (86%) of program storage space. Maximum is 29696 bytes.
-Global variables use 1888 bytes (73%) of dynamic memory, leaving 672 bytes for local variables. Maximum is 2560 bytes.
+Sketch uses 28944 bytes (97%) of program storage space. Maximum is 29696 bytes.
+Global variables use 1910 bytes (74%) of dynamic memory, leaving 650 bytes for local variables. Maximum is 2560 bytes.
 ```
-- Flash 25566 B < 29696 B (headroom 4130 B).
-- Global RAM 1888 B, free **672 B** >= 300 B.
+- Flash 28944 B < 29696 B (headroom **752 B**). RAM free **650 B** >= 300 B.
 
-## Shade mapping (mock SHADES -> L4_Triplane)
-Mock has exactly 4 grays, mapped 1:1 to the ArduboyG triplane levels:
+## HUD layout (device top strip, y 0..7; mock was the bottom 8 px)
+The mock HUD is the bottom strip; the device reserves the top 8 px (loop bead),
+so the strip is mirrored vertically. The divider sits at the arena edge (`y=7`)
+and the content fills rows 0..6. Everything is untranslated by camera/shake.
 
-| mock index | mock color | L4 Triplane level | planes set |
-|---|---|---|---|
-| 0 | `#000000` BLACK | 0 | none |
-| 1 | `#4d4d4d` DARK_GRAY | 1 | plane 0 |
-| 2 | `#b3b3b3` LIGHT_GRAY | 2 | planes 0+1 |
-| 3 | `#ffffff` WHITE | 3 | planes 0+1+2 |
+| item | device (x, y) | mock |
+|---|---|---|
+| background | `blk(0,0,128,8,0)` + divider `y=7` shade1 | black fill + 1 px line |
+| player HP | `hudBar(1,2,28,4, hp, hpMax, 3)` white | `bar(2,ARENA_H+2,40,4, …,3)` |
+| stamina | `hudBar(29,2,16,4, stam, stamMax, 2)` light gray | `bar(46,ARENA_H+2,30,4, …,2)` |
+| weapon marker | 3 chars at x=46: `SWD`/`FLA`/`GUN` | full `def.name` at x=80 |
+| mode marker | 1 char at x=61: `H`/`T` | implied (pole vs beast) |
+| gun ammo | `RLD` while reloading (reload bar `x=67,y=6,w<=12` shade2) else `B`/`S` + count at x=67 | `RLD`/`name[0]+count` at x=112 |
+| hunt: monster HP | `hudBar(82,2,44,3, m.hp, m.hpMax, 3)` | `bar(W-52,2,48,3, …,3)` |
+| train: stats | `T<total>D<dps>`, right-aligned to x=126 | `LAST n` / `DPS n` at top-right |
 
-`ArduboyG::planeColor(plane, shade)` (`shade > plane`) resolves the level, so the
-same shapes/colors are drawn on all three plane passes and composite identically.
+- Bars are white (HP) and light gray (stamina); they are separated by the
+  shade-1 bar borders, so no two grays sit adjacent (pitfall).
+- Single 8 px row vs mock's two rows (`LAST` at y=2, `DPS` at y=10) forced the
+  train readout onto one line: `T`=total (`g.train.total`, capped 9999 display)
+  and `D`=dps (`mh::trainDps`). `LAST` is already surfaced by the rising damage
+  Number effect, so the HUD shows cumulative total + DPS instead.
+- Weapon full name shrank to 3 chars and weapon/mode became single glyphs to fit
+  bars + ammo + right readout in 128 px (bd design allows `BALL/B/B2`-style
+  simplification). All labels are short and use inline char literals.
+- Text renders white (Font4x6 sets bits on every plane), so mock's shade-2 DPS
+  gray is drawn white; bars keep the gray levels.
 
-## Mock draw-order deviations / notes
-- **HUD position**: mock HUD is the bottom 8 px (`ARENA_H..H-1`); device reserves
-  it at the **top** (`y 0..HUD_H-1`, set by the loop bead). World `y=0` therefore
-  maps to screen `y=HUD_H`; the arena is shifted down 8 px and `blk` clips at
-  `HUD_H`. No HUD pixels drawn this bead (bead 8ss).
-- **Shake**: core `Game` has no `shake` field yet and `freeze` is not gated or
-  decayed (deferred). The render derives a tick-based int offset amplitude from
-  the decaying `monster.hitFlash` / `pole.hitFlash` (a ~4-tick kick after a hit)
-  instead of mock `g.shake`. Player-hurt shake is not represented. Angles
-  1.7/2.3 rad -> 69/94 steps in the 256-step table. TODO: real `Game::shake`.
-- **Trig**: mock uses continuous `Math.sin/cos`; device uses a 256-step Q4 sine
-  table with integer rate steps (0.35->14, 0.55->22, 0.30->12 units/tick). Only
-  affects the spinning whirl ring / stun dots and shake, sub-pixel cosmetic.
-- **Reach scaling**: mock `a.reach*0.6` (sword) / `*0.5` (flail) are integer
-  (`*6/10`, `/2`) here; <=1 px vs mock.
-- **Positions**: mock rounds floats; device rounds the fp body via `rndPx`.
-  Projectiles use the pixel `pr.x/pr.y` directly (mock `pr.x>>4`).
-- **Damage numbers**: mock draws full text; device renders the digit-only 3x5
-  subset (damage values are integers). Position/rise/color match the mock.
-- **Arena background**: mock's explicit black screen fill is omitted; the L4
-  plane clear already leaves the buffer black before each pass.
-- No wireframe debug overlay (bead d54), no pause/win/lose overlays, no HUD.
-
-## TODOs
-- **8ss (HUD)**: region is screen `y 0..HUD_H-1`; `blk` clips world draws there.
-  Draw bars / weapon label / ammo / train stats with shade 0..3, untranslated by
-  camera or shake (mock calls `ctx.restore()` before `drawHud`).
-- **kt7.2 (sprites)**: replace `fillRect` block art with the 4-shade sprite sheet
-  + FX-gen pipeline; the sine/digit tables here can be dropped once sprite art
-  and baked damage-number glyphs exist.
-- **hitstop/shake bead**: add a real decaying `Game::shake` (and freeze gating)
-  and delete the render-derived shake from `render()`.
+## Notes / TODOs
+- **Flash**: Font4x6 + the Arduboy2 `Sprites` glyph blitter cost ~3.4 KB
+  (25566 -> 28944), leaving only 752 B. If a later bead (kt7.2 sprites, d54
+  overlay) needs flash, the sanctioned fallback is to drop Font4x6 and draw
+  digits/stats with the existing 3x5 `FONT_DIG` (`drawNumber`) and block-art
+  icons for weapon/mode (~2.8 KB recovered; no letter labels).
+- **kt7.2 (sprites)**: replace the block-art scene with the 4-shade sprite sheet
+  + FX pipeline. HUD can move to baked sprite glyphs then; `FONT_DIG`, `SIN256`
+  and Font4x6 can be dropped once sprite art is in.
+- **d54 (debug overlay)**: wireframe hurt/hit boxes + `state` text live in the
+  arena band (`ARENA_H-7` in the mock). Keep the HUD strip rows 0..7 reserved;
+  draw debug strings in the arena, not over the HUD.
+- **Other TODOs inherited from rze**: real decaying `Game::shake` (render
+  currently derives a tick-based kick from `hitFlash`); pause/win/lose overlays
+  not ported.
+- Display caps only: `T` saturates at 9999, `D` at 999 (render-only clamp; the
+  core values are unbounded).
 
 ## Tests
 - `make test` (host, C++17): 497 passed / 0 failed (unchanged).
 - `make fxtest-headless` (Ardens, device serial): `test_boot PASSED=4 FAILED=0`,
-  final marker `P` -> PASS.
+  final marker `P` -> PASS (Font4x6 is unused by the boot test, so it is not
+  linked there).
