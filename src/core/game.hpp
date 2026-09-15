@@ -7,6 +7,7 @@
 // retune numbers here.
 
 #include <stdint.h>
+#include "progmem.hpp"
 #include "fp.hpp"
 #include "input.hpp"
 
@@ -87,7 +88,10 @@ struct WeaponDef {
   ShellDef shells[2];
 };
 
-constexpr WeaponDef WEAPON_DEFS[3] = {
+// In flash on AVR (540 B, was SRAM). Host keeps the plain array so
+// player_test.hpp / shells_test.hpp field reads stay unchanged. Core code
+// reads fields through the accessors below.
+MH_PROGMEM const WeaponDef WEAPON_DEFS[3] = {
   // sword: fast taps, dodge (i-frames), parry stance + riposte special
   { W_SWORD, 18,
     { { 3, 5, 8, 9, 13, 12, 10, 9, 0, 0, 0, false, ATK_NONE },
@@ -123,6 +127,47 @@ constexpr WeaponDef WEAPON_DEFS[3] = {
       { 5, 7, 42, 4, 4, 30, 5, 3 } },
   },
 };
+
+// ------------------------------------------------ WEAPON_DEFS flash accessors
+// Every field read goes through one of these, so the same core code works with
+// the table in host RAM (make test) or AVR flash. Sub-objects are addressed as
+// `&d->attacks[i]` etc.; per-field readers then load exactly one value.
+
+inline int8_t weaponId(const WeaponDef* d) { return mhPgmReadI8(&d->id); }
+inline int16_t weaponSpd(const WeaponDef* d) { return mhPgmReadI16(&d->spd); }
+inline bool weaponCanCancel(const WeaponDef* d) { return mhPgmReadBool(&d->canCancel); }
+inline const Attack* weaponAttack(const WeaponDef* d, int16_t i) { return &d->attacks[i]; }
+inline const Attack* weaponSpecial(const WeaponDef* d) { return &d->special; }
+inline const Branch* weaponBranch(const WeaponDef* d, int16_t i) { return &d->branches[i]; }
+inline const ShellDef* weaponShell(const WeaponDef* d, int16_t i) { return &d->shells[i]; }
+
+inline int16_t attackStartup(const Attack* a) { return mhPgmReadI16(&a->startup); }
+inline int16_t attackActive(const Attack* a) { return mhPgmReadI16(&a->active); }
+inline int16_t attackRecover(const Attack* a) { return mhPgmReadI16(&a->recover); }
+inline int16_t attackDmg(const Attack* a) { return mhPgmReadI16(&a->dmg); }
+inline int16_t attackReach(const Attack* a) { return mhPgmReadI16(&a->reach); }
+inline int16_t attackHw(const Attack* a) { return mhPgmReadI16(&a->hw); }
+inline int16_t attackHh(const Attack* a) { return mhPgmReadI16(&a->hh); }
+inline int16_t attackStam(const Attack* a) { return mhPgmReadI16(&a->stam); }
+inline int16_t attackLunge(const Attack* a) { return mhPgmReadI16(&a->lunge); }
+inline int16_t attackPush(const Attack* a) { return mhPgmReadI16(&a->push); }
+inline int8_t attackEffect(const Attack* a) { return mhPgmReadI8(&a->effect); }
+inline bool attackShell(const Attack* a) { return mhPgmReadBool(&a->shell); }
+inline int8_t attackId(const Attack* a) { return mhPgmReadI8(&a->id); }
+
+inline int8_t branchStage(const Branch* b) { return mhPgmReadI8(&b->stage); }
+inline int8_t branchStance(const Branch* b) { return mhPgmReadI8(&b->stance); }
+inline int16_t branchAutoT(const Branch* b) { return mhPgmReadI16(&b->autoT); }
+inline const Attack* branchAtk(const Branch* b) { return &b->atk; }
+
+inline int16_t shellCount(const ShellDef* s) { return mhPgmReadI16(&s->count); }
+inline int16_t shellDmg(const ShellDef* s) { return mhPgmReadI16(&s->dmg); }
+inline int16_t shellSpeedF(const ShellDef* s) { return mhPgmReadI16(&s->speedF); }
+inline int16_t shellW(const ShellDef* s) { return mhPgmReadI16(&s->w); }
+inline int16_t shellH(const ShellDef* s) { return mhPgmReadI16(&s->h); }
+inline int16_t shellReload(const ShellDef* s) { return mhPgmReadI16(&s->reload); }
+inline int16_t shellStam(const ShellDef* s) { return mhPgmReadI16(&s->stam); }
+inline int8_t shellPellets(const ShellDef* s) { return mhPgmReadI8(&s->pellets); }
 
 struct Game;
 
@@ -215,10 +260,23 @@ struct MonsterAttack {
   int16_t windup, active, recover, speedF, dmg, reach, hw, hh;
 };
 
-constexpr MonsterAttack MONSTER_ATTACKS[2] = {
+// In flash on AVR (34 B, was SRAM). monster_test.hpp still reads the plain
+// host array field-by-field; core code uses the accessors below.
+MH_PROGMEM const MonsterAttack MONSTER_ATTACKS[2] = {
   { MK_LUNGE, 40, 10, 55, 34, 12, 12, 24, 22 },
   { MK_SWEEP, 48, 12, 60,  0,  9, 17, 32, 24 },
 };
+
+// --------------------------------------------- MONSTER_ATTACKS flash accessors
+inline int8_t monsterAttackKind(const MonsterAttack* a) { return mhPgmReadI8(&a->kind); }
+inline int16_t monsterAttackWindup(const MonsterAttack* a) { return mhPgmReadI16(&a->windup); }
+inline int16_t monsterAttackActive(const MonsterAttack* a) { return mhPgmReadI16(&a->active); }
+inline int16_t monsterAttackRecover(const MonsterAttack* a) { return mhPgmReadI16(&a->recover); }
+inline int16_t monsterAttackSpeedF(const MonsterAttack* a) { return mhPgmReadI16(&a->speedF); }
+inline int16_t monsterAttackDmg(const MonsterAttack* a) { return mhPgmReadI16(&a->dmg); }
+inline int16_t monsterAttackReach(const MonsterAttack* a) { return mhPgmReadI16(&a->reach); }
+inline int16_t monsterAttackHw(const MonsterAttack* a) { return mhPgmReadI16(&a->hw); }
+inline int16_t monsterAttackHh(const MonsterAttack* a) { return mhPgmReadI16(&a->hh); }
 
 enum MState : int8_t { MS_IDLE = 0, MS_PURSUE, MS_WINDUP, MS_ATTACK, MS_RECOVER, MS_DEAD };
 enum Over : int8_t { OVER_NONE = 0, OVER_WIN, OVER_LOSE };

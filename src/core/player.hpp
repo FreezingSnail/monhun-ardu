@@ -27,8 +27,8 @@ void Player::init(int8_t weapon) {
   bHeld = 0; bReady = false; bLocked = false;
   iT = 0;
   shell = 0; reload = 0;
-  shells[0] = WEAPON_DEFS[W_GUN].shells[0].count;
-  shells[1] = WEAPON_DEFS[W_GUN].shells[1].count;
+  shells[0] = shellCount(weaponShell(&WEAPON_DEFS[W_GUN], 0));
+  shells[1] = shellCount(weaponShell(&WEAPON_DEFS[W_GUN], 1));
 }
 
 void initGame(Game& g, int8_t weapon) {
@@ -40,13 +40,16 @@ void initGame(Game& g, int8_t weapon) {
   g.lastShot = 0; g.lastShotX = 0; g.lastShotY = 0;
 }
 
-static Rect meleeHitbox(const Player& p, const Attack& a) {
-  const int32_t cx = p.x + (p.w >> 1) + ((p.fx * a.reach) >> 4);
-  const int32_t cy = p.y + (p.h >> 1) + ((p.fy * a.reach) >> 4);
+static Rect meleeHitbox(const Player& p, const Attack* a) {
+  const int16_t reach = attackReach(a);
+  const int16_t hw = attackHw(a);
+  const int16_t hh = attackHh(a);
+  const int32_t cx = p.x + (p.w >> 1) + ((p.fx * reach) >> 4);
+  const int32_t cy = p.y + (p.h >> 1) + ((p.fy * reach) >> 4);
   Rect r;
-  r.x = static_cast<int16_t>(cx - (a.hw >> 1));
-  r.y = static_cast<int16_t>(cy - (a.hh >> 1));
-  r.w = a.hw; r.h = a.hh;
+  r.x = static_cast<int16_t>(cx - (hw >> 1));
+  r.y = static_cast<int16_t>(cy - (hh >> 1));
+  r.w = hw; r.h = hh;
   return r;
 }
 
@@ -60,9 +63,10 @@ static void clampPlayer(Player& p) {
 static void movePlayer(Player& p, int16_t mx, int16_t my, int16_t spd) {
   const int8_t i = fp::dirIndexFromInput(mx, my);
   if (i < 0) return;
-  const fp::Dir8& d = fp::DIR8[i];
-  p.fx = d.x; p.fy = d.y;
-  fp::addMove(p, d.x, d.y, spd);
+  const int16_t dx = fp::dir8X(i);
+  const int16_t dy = fp::dir8Y(i);
+  p.fx = dx; p.fy = dy;
+  fp::addMove(p, dx, dy, spd);
 }
 
 // fixed-velocity decay; 13/16 per tick default, 14/16 for dodge/deflect
@@ -83,13 +87,14 @@ static void applyDrift(Player& p, int16_t mult = 13) {
   if (p.vy > -1 && p.vy < 1) p.vy = 0;
 }
 
-static void startAttack(Game& g, const WeaponDef& def) {
+static void startAttack(Game& g, const WeaponDef* def) {
   Player& p = g.player;
-  const Attack& a = def.attacks[p.chain < 2 ? p.chain : 2];
+  const Attack* a = weaponAttack(def, p.chain < 2 ? p.chain : 2);
   if (p.stam < 1) return;
-  p.stam = p.stam - a.stam < 0 ? 0 : p.stam - a.stam;
+  const int16_t stam = attackStam(a);
+  p.stam = p.stam - stam < 0 ? 0 : p.stam - stam;
   p.state = PS_ATTACK;
-  p.atk = &a;
+  p.atk = a;
   p.t = 0;
   p.hitDone = false;
 }
@@ -100,19 +105,20 @@ static void exitStance(Player& p) {
   p.stanceAuto = 0;
 }
 
-static void enterStance(Game& g, const WeaponDef& def) {
+static void enterStance(Game& g, const WeaponDef* def) {
   Player& p = g.player;
   if (p.stance != ST_NONE) return;
   if (p.stam < 10) { p.bLocked = true; return; }
-  if (p.state != PS_IDLE && !(p.state == PS_ATTACK && def.canCancel)) { p.bLocked = true; return; }
-  p.stance = def.id == W_SWORD ? ST_PARRY : def.id == W_FLAIL ? ST_WHIRL : ST_GUARD;
+  if (p.state != PS_IDLE && !(p.state == PS_ATTACK && weaponCanCancel(def))) { p.bLocked = true; return; }
+  const int8_t id = weaponId(def);
+  p.stance = id == W_SWORD ? ST_PARRY : id == W_FLAIL ? ST_WHIRL : ST_GUARD;
   p.stanceT = 0;
   p.state = PS_IDLE;
   p.atk = nullptr;
   p.t = 0;
 }
 
-static void updateStance(Game& g, const WeaponDef& def) {
+static void updateStance(Game& g, const WeaponDef* def) {
   (void)def;
   Player& p = g.player;
   if (p.stanceAuto > 0) {
@@ -143,13 +149,13 @@ static void updateStance(Game& g, const WeaponDef& def) {
   }
 }
 
-static bool tryBranch(Game& g, const WeaponDef& def, const Input& inp) {
+static bool tryBranch(Game& g, const WeaponDef* def, const Input& inp) {
   (void)inp;
   Player& p = g.player;
 
   int stage = 0;
   if (p.state == PS_ATTACK && p.atk) {
-    if (p.t < p.atk->startup + p.atk->active) return false; // only from recovery
+    if (p.t < attackStartup(p.atk) + attackActive(p.atk)) return false; // only from recovery
     stage = p.chain + 1 < 2 ? p.chain + 1 : 2;
   } else if (p.state == PS_IDLE && p.chainWin > 0) {
     stage = p.chain;
@@ -158,14 +164,18 @@ static bool tryBranch(Game& g, const WeaponDef& def, const Input& inp) {
   }
 
   const Branch* br = nullptr;
-  for (const Branch& b : def.branches) if (b.stage == stage) { br = &b; break; }
+  for (int16_t i = 0; i < 2; i++) {
+    const Branch* b = weaponBranch(def, i);
+    if (branchStage(b) == stage) { br = b; break; }
+  }
   if (!br) return false;
 
-  if (br->stance != ST_NONE) {
+  const int8_t brStance = branchStance(br);
+  if (brStance != ST_NONE) {
     p.whirlTick = 0;
-    p.stance = static_cast<Stance>(br->stance);
+    p.stance = static_cast<Stance>(brStance);
     p.stanceT = 0;
-    p.stanceAuto = br->autoT;
+    p.stanceAuto = branchAutoT(br);
     p.state = PS_IDLE;
     p.atk = nullptr;
     p.t = 0;
@@ -174,45 +184,48 @@ static bool tryBranch(Game& g, const WeaponDef& def, const Input& inp) {
     return true;
   }
 
-  const Attack& atk = br->atk;
-  if (p.stam < atk.stam) return false;
-  if (atk.shell) {
+  const Attack* atk = branchAtk(br);
+  const int16_t atkStam = attackStam(atk);
+  if (p.stam < atkStam) return false;
+  if (attackShell(atk)) {
     if (p.shells[0] <= 0) return false;
     p.shells[0]--;
     p.reload = 45;
   }
-  p.stam -= atk.stam;
+  p.stam -= atkStam;
   p.state = PS_ATTACK;
-  p.atk = &atk;
+  p.atk = atk;
   p.t = 0;
   p.hitDone = false;
   p.chain = 0;
   p.chainWin = 0;
-  if (atk.lunge) {
-    p.vx = (p.fx * atk.lunge) >> 4;
-    p.vy = (p.fy * atk.lunge) >> 4;
+  const int16_t lunge = attackLunge(atk);
+  if (lunge) {
+    p.vx = (p.fx * lunge) >> 4;
+    p.vy = (p.fy * lunge) >> 4;
   }
   return true;
 }
 
-static void tapDefense(Game& g, const WeaponDef& def, const Input& inp) {
+static void tapDefense(Game& g, const WeaponDef* def, const Input& inp) {
   Player& p = g.player;
   if (p.state == PS_DODGE || p.state == PS_DEFLECT || p.state == PS_SHOVE ||
       p.state == PS_STUN || p.state == PS_SPECIAL) return;
-  if (p.state == PS_ATTACK && !def.canCancel) return;
+  if (p.state == PS_ATTACK && !weaponCanCancel(def)) return;
 
   // roll toward move input if any, else current facing
   int16_t dx = p.fx;
   int16_t dy = p.fy;
   if (inp.mx || inp.my) {
-    const fp::Dir8& d = fp::DIR8[fp::dirIndexFromInput(inp.mx, inp.my)];
-    dx = d.x;
-    dy = d.y;
+    const int8_t di = fp::dirIndexFromInput(inp.mx, inp.my);
+    dx = fp::dir8X(di);
+    dy = fp::dir8Y(di);
     p.fx = dx;
     p.fy = dy;
   }
 
-  if (def.id == W_SWORD) {
+  const int8_t defId = weaponId(def);
+  if (defId == W_SWORD) {
     if (p.stam < 14) return;
     p.stam -= 14;
     p.state = PS_DODGE;
@@ -221,7 +234,7 @@ static void tapDefense(Game& g, const WeaponDef& def, const Input& inp) {
     p.vx = (dx * 54) >> 4; // 3.4 px/t
     p.vy = (dy * 54) >> 4;
     exitStance(p);
-  } else if (def.id == W_FLAIL) {
+  } else if (defId == W_FLAIL) {
     if (p.stam < 10) return;
     p.stam -= 10;
     p.state = PS_DEFLECT;
@@ -242,14 +255,14 @@ static void tapDefense(Game& g, const WeaponDef& def, const Input& inp) {
       const int32_t dist = fp::isqrt(mdx * mdx + mdy * mdy);
       const int32_t dot = (mdx * p.fx + mdy * p.fy) >> 4; // px along facing
       if (dist > 0 && dist < 38 && dot * 5 > dist * 2) {
-        const fp::Dir8& d = fp::DIR8[fp::dirIndexFromDelta(mdx, mdy)];
-        if (g.target.onShove) g.target.onShove(g, d.x, d.y, 10, 2);
+        const int8_t di = fp::dirIndexFromDelta(mdx, mdy);
+        if (g.target.onShove) g.target.onShove(g, fp::dir8X(di), fp::dir8Y(di), 10, 2);
       }
     }
   }
 }
 
-static void fireShell(Game& g, const Player& p, const ShellDef& sh) {
+static void fireShell(Game& g, const Player& p, const ShellDef* sh) {
   (void)sh;
   // Projectiles + muzzle effects are owned by hrd; record the shot so hrd can
   // spawn them from the same facing / spawn point the mock used.
@@ -260,35 +273,40 @@ static void fireShell(Game& g, const Player& p, const ShellDef& sh) {
   g.lastShotFy = p.fy;
 }
 
-static void stanceSpecial(Game& g, const WeaponDef& def) {
+static void stanceSpecial(Game& g, const WeaponDef* def) {
   Player& p = g.player;
 
-  if (def.id == W_SWORD) {
+  const Attack* special = weaponSpecial(def);
+  const int8_t defId = weaponId(def);
+  if (defId == W_SWORD) {
+    const int16_t stam = attackStam(special);
     if (p.state != PS_IDLE) return;
-    if (p.stam < def.special.stam) return;
-    p.stam -= def.special.stam;
+    if (p.stam < stam) return;
+    p.stam -= stam;
     p.state = PS_SPECIAL;
-    p.atk = &def.special;
+    p.atk = special;
     p.t = 0;
     p.hitDone = false;
     exitStance(p);
     p.bLocked = true;
-  } else if (def.id == W_FLAIL) {
+  } else if (defId == W_FLAIL) {
+    const int16_t stam = attackStam(special);
     if (p.state != PS_IDLE || p.throwCd > 0) return;
-    if (p.stam < def.special.stam) return;
-    p.stam -= def.special.stam;
+    if (p.stam < stam) return;
+    p.stam -= stam;
     p.throwCd = 50;
     p.state = PS_SPECIAL;
-    p.atk = &def.special;
+    p.atk = special;
     p.t = 0;
     p.hitDone = false;
   } else {
     if (p.reload > 0) return;
-    const ShellDef& sh = def.shells[p.shell];
-    if (p.shells[p.shell] <= 0 || p.stam < sh.stam) return;
-    p.stam -= sh.stam;
+    const ShellDef* sh = weaponShell(def, p.shell);
+    const int16_t stam = shellStam(sh);
+    if (p.shells[p.shell] <= 0 || p.stam < stam) return;
+    p.stam -= stam;
     p.shells[p.shell]--;
-    p.reload = sh.reload;
+    p.reload = shellReload(sh);
     fireShell(g, p, sh);
   }
 }
@@ -341,7 +359,7 @@ static void playerHurt(Game& g, int16_t dmg, int16_t faceX, int16_t faceY) {
 
 static void updatePlayer(Game& g, const Input& inp, bool aP, bool bP, bool bR) {
   Player& p = g.player;
-  const WeaponDef& def = WEAPON_DEFS[g.weapon];
+  const WeaponDef* def = &WEAPON_DEFS[g.weapon];
 
   if (p.iT > 0) p.iT--;
   if (p.throwCd > 0) p.throwCd--;
@@ -399,7 +417,7 @@ static void updatePlayer(Game& g, const Input& inp, bool aP, bool bP, bool bR) {
       int16_t mx = inp.mx;
       int16_t my = inp.my;
       if (p.stance == ST_PARRY) { mx = 0; my = 0; }
-      int16_t sp = def.spd;
+      int16_t sp = weaponSpd(def);
       if (p.stance == ST_WHIRL) sp = (sp * 6) / 10;
       if (p.stance == ST_GUARD) sp = (sp * 4) / 10;
       movePlayer(p, mx, my, sp);
@@ -408,17 +426,21 @@ static void updatePlayer(Game& g, const Input& inp, bool aP, bool bP, bool bR) {
     }
     case PS_ATTACK:
     case PS_SPECIAL: {
-      const Attack& a = *p.atk;
-      const int32_t total = a.startup + a.active + a.recover;
+      const Attack* a = p.atk;
+      const int16_t startup = attackStartup(a);
+      const int16_t active = attackActive(a);
+      const int32_t total = startup + active + attackRecover(a);
       p.t++;
-      if (p.t >= a.startup && p.t < a.startup + a.active && !p.hitDone) {
+      if (p.t >= startup && p.t < startup + active && !p.hitDone) {
         const Rect hit = meleeHitbox(p, a);
         if (g.target.alive && hit.overlaps(g.target.rect)) {
           p.hitDone = true;
           const int32_t mult = (p.state == PS_SPECIAL && p.riposteT > 0) ? 2 : 1;
           const int32_t hx = hit.x + hit.w / 2;
           const int32_t hy = hit.y + hit.h / 2;
-          if (g.target.onHit) g.target.onHit(g, a.dmg * mult, hx, hy, a.push, a.effect);
+          if (g.target.onHit) {
+            g.target.onHit(g, attackDmg(a) * mult, hx, hy, attackPush(a), attackEffect(a));
+          }
         }
       }
       if (p.t >= total) {

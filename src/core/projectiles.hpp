@@ -134,7 +134,7 @@ static void spawnShot(Game& g) {
   const int8_t shot = g.lastShot;
   g.lastShot = 0;
   if (shot < 1 || shot > 2) return;
-  const ShellDef& sh = WEAPON_DEFS[g.weapon].shells[shot - 1];
+  const ShellDef* sh = weaponShell(&WEAPON_DEFS[g.weapon], shot - 1);
   const int16_t cx = g.lastShotX;
   const int16_t cy = g.lastShotY;
   const int16_t fx = g.lastShotFx;
@@ -145,7 +145,7 @@ static void spawnShot(Game& g) {
 
   int16_t dirX[3], dirY[3];
   int8_t n = 1;
-  if (sh.pellets == 1) {
+  if (shellPellets(sh) == 1) {
     dirX[0] = fx; dirY[0] = fy;
   } else {
     const fp::Dir8 left = fp::rotFp(fx, fy, 15, 6);   // ~22 deg left
@@ -165,10 +165,11 @@ static void spawnShot(Game& g) {
     pr.x = cx; pr.y = cy;
     pr.subX = static_cast<int16_t>((dirX[i] * 13) >> 4); // spawn centre + dir*13
     pr.subY = static_cast<int16_t>((dirY[i] * 13) >> 4);
-    pr.vx = static_cast<int16_t>((dirX[i] * sh.speedF) >> 4);
-    pr.vy = static_cast<int16_t>((dirY[i] * sh.speedF) >> 4);
-    pr.w = sh.w; pr.h = sh.h; pr.dmg = sh.dmg; pr.life = PROJ_LIFE;
-    pr.heavy = (sh.pellets == 1);
+    const int16_t speedF = shellSpeedF(sh);
+    pr.vx = static_cast<int16_t>((dirX[i] * speedF) >> 4);
+    pr.vy = static_cast<int16_t>((dirY[i] * speedF) >> 4);
+    pr.w = shellW(sh); pr.h = shellH(sh); pr.dmg = shellDmg(sh); pr.life = PROJ_LIFE;
+    pr.heavy = (shellPellets(sh) == 1);
   }
 }
 

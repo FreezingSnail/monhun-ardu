@@ -34,8 +34,8 @@ static void clampMonster(Game& g) {
 static void knockMonsterAway(Game& g, Monster& m, int32_t cx, int32_t cy, int16_t amt) {
   const int32_t dx = (m.x + (m.w >> 1)) - cx;
   const int32_t dy = (m.y + (m.h >> 1)) - cy;
-  const fp::Dir8& d = fp::DIR8[fp::dirIndexFromDelta(dx, dy)];
-  fp::addMove(m, d.x, d.y, amt);
+  const int8_t di = fp::dirIndexFromDelta(dx, dy);
+  fp::addMove(m, fp::dir8X(di), fp::dir8Y(di), amt);
   clampMonster(g);
 }
 
@@ -105,31 +105,35 @@ static void initMonster(Game& g) {
 static void chooseAttack(Monster& m, int32_t dist) {
   m.atk = dist > 32 ? &MONSTER_ATTACKS[0] : &MONSTER_ATTACKS[1]; // lunge / sweep
   m.state = MS_WINDUP;
-  m.t = m.atk->windup;
-  m.windupMax = m.atk->windup;
+  m.t = monsterAttackWindup(m.atk);
+  m.windupMax = m.t;
 }
 
 static void startMonsterAttack(Monster& m) {
-  const MonsterAttack& a = *m.atk;
+  const MonsterAttack* a = m.atk;
   m.state = MS_ATTACK;
   m.t = 0;
-  if (a.kind == MK_LUNGE) {
-    m.lvx = (m.fx * a.speedF) >> 4;
-    m.lvy = (m.fy * a.speedF) >> 4;
+  if (monsterAttackKind(a) == MK_LUNGE) {
+    const int16_t speedF = monsterAttackSpeedF(a);
+    m.lvx = (m.fx * speedF) >> 4;
+    m.lvy = (m.fy * speedF) >> 4;
   } else {
     m.lvx = 0;
     m.lvy = 0;
   }
 }
 
-static bool monsterHitsPlayer(const Game& g, const MonsterAttack& a) {
+static bool monsterHitsPlayer(const Game& g, const MonsterAttack* a) {
   const Monster& m = g.monster;
-  const int32_t cx = m.x + (m.w >> 1) + ((m.fx * a.reach) >> 4);
-  const int32_t cy = m.y + (m.h >> 1) + ((m.fy * a.reach) >> 4);
+  const int16_t reach = monsterAttackReach(a);
+  const int16_t hw = monsterAttackHw(a);
+  const int16_t hh = monsterAttackHh(a);
+  const int32_t cx = m.x + (m.w >> 1) + ((m.fx * reach) >> 4);
+  const int32_t cy = m.y + (m.h >> 1) + ((m.fy * reach) >> 4);
   Rect r;
-  r.x = static_cast<int16_t>(cx - (a.hw >> 1));
-  r.y = static_cast<int16_t>(cy - (a.hh >> 1));
-  r.w = a.hw; r.h = a.hh;
+  r.x = static_cast<int16_t>(cx - (hw >> 1));
+  r.y = static_cast<int16_t>(cy - (hh >> 1));
+  r.w = hw; r.h = hh;
   const Player& p = g.player;
   Rect pr;
   pr.x = p.x; pr.y = p.y; pr.w = p.w; pr.h = p.h;
@@ -180,8 +184,8 @@ static void updateMonster(Game& g) {
   const int32_t dy = (p.y + (p.h >> 1)) - (m.y + (m.h >> 1));
   const int32_t dist = fp::isqrt(dx * dx + dy * dy);
   const int8_t di = fp::dirIndexFromDelta(dx, dy);
-  m.fx = fp::DIR8[di].x;
-  m.fy = fp::DIR8[di].y;
+  m.fx = fp::dir8X(di);
+  m.fy = fp::dir8Y(di);
 
   if (m.stun > 0) {
     m.stun--;
@@ -201,9 +205,9 @@ static void updateMonster(Game& g) {
       } else if (dist < 24) {
         fp::addMove(m, -m.fx, -m.fy, (m.spd * 6) / 10);
       } else {
-        const fp::Dir8& s = fp::DIR8[(di + 2) & 7]; // perpendicular circle
-        fp::addMove(m, static_cast<int16_t>(s.x * m.circleDir),
-                       static_cast<int16_t>(s.y * m.circleDir), (m.spd * 8) / 10);
+        const int8_t si = static_cast<int8_t>((di + 2) & 7); // perpendicular circle
+        fp::addMove(m, static_cast<int16_t>(fp::dir8X(si) * m.circleDir),
+                       static_cast<int16_t>(fp::dir8Y(si) * m.circleDir), (m.spd * 8) / 10);
       }
       if (m.cd <= 0 && dist < 42) chooseAttack(m, dist);
       break;
@@ -212,17 +216,18 @@ static void updateMonster(Game& g) {
       if (m.t <= 0) startMonsterAttack(m);
       break;
     case MS_ATTACK: {
-      const MonsterAttack& a = *m.atk;
+      const MonsterAttack* a = m.atk;
+      const int16_t active = monsterAttackActive(a);
       m.t++;
-      if (a.kind == MK_LUNGE && m.t <= a.active) fp::addVel(m, m.lvx, m.lvy);
-      if (m.t <= a.active && monsterHitsPlayer(g, a)) {
-        playerHurt(g, a.dmg, m.fx, m.fy);
+      if (monsterAttackKind(a) == MK_LUNGE && m.t <= active) fp::addVel(m, m.lvx, m.lvy);
+      if (m.t <= active && monsterHitsPlayer(g, a)) {
+        playerHurt(g, monsterAttackDmg(a), m.fx, m.fy);
         if (p.hp <= 0) {
           p.hp = 0;
           if (g.over == OVER_NONE) g.over = OVER_LOSE;
         }
       }
-      if (m.t > a.active + a.recover) {
+      if (m.t > active + monsterAttackRecover(a)) {
         m.state = MS_PURSUE;
         m.cd = static_cast<int16_t>(55 + (g.tick % 40));
         m.circleDir = (g.tick % 2) ? 1 : -1;

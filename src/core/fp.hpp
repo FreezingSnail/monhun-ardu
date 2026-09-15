@@ -6,6 +6,7 @@
 // No float, no <math.h>, no Arduino.h.
 
 #include <stdint.h>
+#include "progmem.hpp"
 
 namespace fp {
 
@@ -14,7 +15,9 @@ const int16_t FP = 16; // 1 px = 16 fixed units
 // 8-way unit vectors, 16 == full pixel
 struct Dir8 { int16_t x, y; };
 
-const Dir8 DIR8[8] = {
+// Read-only, so it lives in flash on AVR (saves 32 B SRAM). Host build keeps
+// the plain array, so fp_test.hpp reads DIR8[i].x/.y unchanged.
+MH_PROGMEM const Dir8 DIR8[8] = {
   {  16,   0 }, // E
   {  11,  11 }, // SE
   {   0,  16 }, // S
@@ -24,6 +27,10 @@ const Dir8 DIR8[8] = {
   {   0, -16 }, // N
   {  11, -11 }, // NE
 };
+
+// Per-field flash accessors: read only x or y, never copy the struct.
+inline int16_t dir8X(int8_t i) { return mhPgmReadI16(&DIR8[i].x); }
+inline int16_t dir8Y(int8_t i) { return mhPgmReadI16(&DIR8[i].y); }
 
 // truncating fixed divide, rounds toward zero (hardware friendly).
 // C++ integer division already truncates toward zero; kept as a named
