@@ -1,27 +1,46 @@
-# monhun-ardu-ahf — Adopt host unit + Ardens fxtest harness
+# monhun-ardu-zq5 — Core: monster FSM + hit resolution port
 
 ## Files
-- added: `tst/fxdatatest/harness/fxtest.hpp` — device assertion harness copied from `~/code/CreatureGathererFX/tst/fxdatatest/fxtest.hpp`: `FxTest` with `expectEq`/`expectEqIdx`/`expectVersion`, `ok()`, and `report()` that prints `PASSED=n FAILED=m` then a final bare `P` or `F` line (with `Serial.flush()`). No deps beyond Arduino.h/Serial.
-- added: `tst/fxdatatest/harness/fx_globals.hpp` — device global instance + `fxTestSetup()`, adapted from CreatureGathererFX `harness/fx_globals.hpp`. Defines ABG_IMPLEMENTATION/SPRITESU_IMPLEMENTATION, includes `../src/common.hpp` + `../src/fxdata.h` + `../src/core/{game,player}.hpp`, declares `decltype(arduboy) arduboy;`. Setup mirrors `monhun-ardu.ino`: `Serial.begin(9600); arduboy.begin(); FX::begin(FX_DATA_PAGE); FX::setCursorRange(0, 32767);` (single-arg `FX::begin` — this repo has no FX_SAVE_PAGE).
-- added: `tst/fxdatatest/boot_test.hpp` — first smoke suite `test_boot(FxTest&)`: `initGame(g, W_SWORD)`, record `startX`, run 16 ticks of `stepPlayer` with `Input{mx:1}`, assert `player.x == startX + 18` (sword spd 18/16 px/tick * 16 ticks = 18 px, remainder carried in subX) and `g.tick == 16`.
-- added: `tst/fxdatatest/test_boot.ino` — sketch shape copied from `test_moves.ino`: `setup()` runs `fxTestSetup(); FxTest test; test_boot(test); test.report(F("test_boot"));`, `loop()` exits.
-- changed: `Makefile` — replaced old `fxtest`/`fxtest-build`/`fxtest-run` (INTEGRATION_TESTS --serial-test) with CreatureGathererFX-style targets: `ARDENS ?= $(HOME)/code/Ardens/build/Ardens.app/Contents/MacOS/Ardens`, `FXTEST_MS ?= 3000`, `FXDATA_BIN ?= fxdata/fxdata.bin`, `FXTEST_BUILD_DIR ?= build/fxtest`. `fxtest` aliases `fxtest-headless`; skips (exit 0) when ARDENS unset or not executable. Preflight checks ARDENS executable, FXDATA_BIN exists, and `captureserial` in Ardens binary. Build stages under `build/fxtest/<name>` (copy src, ino, *.hpp, harness), compiles with arduino-cli FQBN `arduboy-homemade:avr:arduboy-fx`. Run boots `captureserial=$(FXTEST_MS) fxport=d1 display=ssd1306 file=<hex> file=<fxdata.bin>`, CRLF-normalizes, fails on empty output / `F` line / nonzero Ardens exit / missing P-F marker. Host `make test` untouched (188 asserts).
+- added: `src/core/monster.hpp` — FSM ported 1:1 from `mock/game.js` half:
+  `updateMonster` (idle → pursue → windup → attack → recover; perpendicular
+  circle with `circleDir`; `stun` counter; `MS_DEAD`), `chooseAttack` (dist > 32
+  → lunge else sweep), `startMonsterAttack` (lunge `lvx/lvy = (face*speedF)>>4`),
+  `monsterHitsPlayer` (reach-anchored box on the fixed face), `damageMonster`
+  (crit when projection on facing > 3 px → ×1.4 as integer 14/10; `hitFlash`;
+  death → `MS_DEAD` + `over = OVER_WIN`), `knockMonsterAway`, `pushApart`
+  (pole immovable; attacking/windup beast shoves player; otherwise beast gives
+  way so idle players are never shoved), and `stepHunt` (mock order: sync target,
+  player, monster). Registers `monsterOnHit`/`monsterOnShove`/`monsterOnStun`
+  into `Game::target` so the player FSM resolves against the beast and hrd's pole
+  can plug into the same callback trio later.
+- added: `tst/monster_test.hpp` — 17 suites: table + init fields, tell timing
+  (40/48 counts), recovery windows (attack cd `55+tick%40` + `circleDir` flip;
+  recover cd 55), stun → recover 24, crit zone ×1.4 (both facing sides + floor),
+  death/win, lunge velocity ints, `addVel` sub-pixel carry, push rule both ways,
+  sweep hitting the player, player→monster damage via `Game::target`, and
+  playerHit routing (parry 60 / deflect 28 / guard chip / 34 i-frame gate /
+  knockback −35).
+- changed: `src/core/game.hpp` — added `MonsterAttack`/`MONSTER_ATTACKS`,
+  `MState`, `Over`, `Monster` (embedded in `Game`), and `Game::over`. Shared
+  structs header, same pattern as the existing embedded `Player`. `Player`'s
+  `initGame` intentionally untouched (zq5 integration calls `initMonster`).
+- changed: `tst/main.cpp` — include + run `MonsterSuite`.
 
 ## `make test` output (tail)
 ```
----------- all weapons step 60 ticks without breaking ----------
+---------- idle hunt runs: beast engages, hunter survives ----------
 Passed: 3
 Failed: 0
 ========== Total Counts ==========
-Total Passed: 188
+Total Passed: 287
 Total Failed: 0
 ```
-Exit 0.
+Exit 0 (188 asserts before this bead; +99).
 
 ## `make fxtest-headless` output (tail)
 ```
 test_boot
-Sketch uses 9626 bytes (32%) of program storage space. Maximum is 29696 bytes.
+Sketch uses 9806 bytes (33%) of program storage space. Maximum is 29696 bytes.
 Global variables use 1751 bytes (68%) of dynamic memory, leaving 809 bytes for local variables. Maximum is 2560 bytes.
 === test_boot ===
 test_boot PASSED=2 FAILED=0
@@ -30,8 +49,20 @@ test_boot: PASS
 ```
 Exit 0.
 
-## Deviations
-- None: `FXTEST_MS=3000` captured the full suite (2 asserts + marker) on this machine; no raise needed.
-- `fx_globals.hpp` drops the `FX_SAVE_PAGE` second arg to `FX::begin` (repo has no save partition), matching `monhun-ardu.ino`.
-- `fxtest-headless` skip also covers a missing (non-executable) ARDENS path, not just unset — per task spec ("unset or missing").
-- No `generated/` staging needed: boot suite reads no FX fixture tables yet.
+## Notes / deviations
+- `game.hpp` gained the `Monster` struct + `Game::monster`/`Game::over`: `Game`
+  must own the beast so `Target` callbacks (which take `Game&`) can reach it and
+  the player FSM's `Game::target` melee path resolves against it. No `player.hpp`
+  / `fp.hpp` / `mock/` changes; no retuning.
+- `playerHurt` in `player.hpp` dropped mock's `lose()`; `monster.hpp` clamps
+  player hp and sets `over = OVER_LOSE` after routing a monster hit, so the
+  death contract still holds.
+- `stepHunt` syncs `Game::target.rect` before `stepPlayer`, matching the mock
+  where the player sees the beast's pre-move position (monster moves after the
+  player each tick). `updateMonster` re-syncs after moving.
+
+## TODOs
+- `freeze`/`shake`/`effects`/projectiles live in hrd; monster only raises
+  `freeze` (crit 6, normal 4, death 12) and leaves visuals to hrd render.
+- Train mode / pole target selection (hrd) overrides `Game::target`; monster
+  stays hunt-only this bead.

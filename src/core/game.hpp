@@ -156,11 +156,42 @@ struct Player : fp::FpBody, fp::FpStam {
   void init(int8_t weapon);
 };
 
+// Monster attack table — byte-for-byte port of mock/game.js MONSTER_ATTACKS.
+// speedF only applies to the lunge; sweep is stationary.
+enum MKind : int8_t { MK_LUNGE = 0, MK_SWEEP = 1 };
+struct MonsterAttack {
+  int8_t  kind;
+  int16_t windup, active, recover, speedF, dmg, reach, hw, hh;
+};
+
+constexpr MonsterAttack MONSTER_ATTACKS[2] = {
+  { MK_LUNGE, 40, 10, 55, 34, 12, 12, 24, 22 },
+  { MK_SWEEP, 48, 12, 60,  0,  9, 17, 32, 24 },
+};
+
+enum MState : int8_t { MS_IDLE = 0, MS_PURSUE, MS_WINDUP, MS_ATTACK, MS_RECOVER, MS_DEAD };
+enum Over : int8_t { OVER_NONE = 0, OVER_WIN, OVER_LOSE };
+
+// FSM fields mirror the mock monster object; face is a fixed 1/16 unit vector
+// (never a normalized float).
+struct Monster : fp::FpBody {
+  int16_t w, h;      // hurt box size (px)
+  int16_t hp, hpMax;
+  MState  state;
+  int16_t t, cd;
+  int16_t fx, fy;    // 1/16 unit facing vector
+  const MonsterAttack* atk;
+  int16_t lvx, lvy;  // lunge velocity (1/16 px per tick)
+  int16_t windupMax, hitFlash, stun, circleDir, spd;
+};
+
 struct Game {
   int16_t tick, freeze;
   int8_t  weapon;
+  int8_t  over;       // Over: 0 none, 1 win, 2 lose
   bool    prevA, prevB;
   Player  player;
+  Monster monster;
   Target  target;
   int8_t  lastShot;   // gunshield: 0 none, 1 ball, 2 scatter (hrd consumes)
   int16_t lastShotX, lastShotY;

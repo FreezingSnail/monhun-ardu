@@ -2,11 +2,13 @@
 #include "test.hpp"
 #include "fp_test.hpp"
 #include "player_test.hpp"
+#include "monster_test.hpp"
 
 int main() {
   TestRunner runner;
   FpSuite(runner);
   PlayerSuite(runner);
+  MonsterSuite(runner);
   runner.printSummary();
   return runner.fail() ? 1 : 0;
 }
