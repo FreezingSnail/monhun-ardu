@@ -1,46 +1,53 @@
-# monhun-ardu-zq5 — Core: monster FSM + hit resolution port
+# monhun-ardu-hrd — Core: projectiles, effects, training pole
 
 ## Files
-- added: `src/core/monster.hpp` — FSM ported 1:1 from `mock/game.js` half:
-  `updateMonster` (idle → pursue → windup → attack → recover; perpendicular
-  circle with `circleDir`; `stun` counter; `MS_DEAD`), `chooseAttack` (dist > 32
-  → lunge else sweep), `startMonsterAttack` (lunge `lvx/lvy = (face*speedF)>>4`),
-  `monsterHitsPlayer` (reach-anchored box on the fixed face), `damageMonster`
-  (crit when projection on facing > 3 px → ×1.4 as integer 14/10; `hitFlash`;
-  death → `MS_DEAD` + `over = OVER_WIN`), `knockMonsterAway`, `pushApart`
-  (pole immovable; attacking/windup beast shoves player; otherwise beast gives
-  way so idle players are never shoved), and `stepHunt` (mock order: sync target,
-  player, monster). Registers `monsterOnHit`/`monsterOnShove`/`monsterOnStun`
-  into `Game::target` so the player FSM resolves against the beast and hrd's pole
-  can plug into the same callback trio later.
-- added: `tst/monster_test.hpp` — 17 suites: table + init fields, tell timing
-  (40/48 counts), recovery windows (attack cd `55+tick%40` + `circleDir` flip;
-  recover cd 55), stun → recover 24, crit zone ×1.4 (both facing sides + floor),
-  death/win, lunge velocity ints, `addVel` sub-pixel carry, push rule both ways,
-  sweep hitting the player, player→monster damage via `Game::target`, and
-  playerHit routing (parry 60 / deflect 28 / guard chip / 34 i-frame gate /
-  knockback −35).
-- changed: `src/core/game.hpp` — added `MonsterAttack`/`MONSTER_ATTACKS`,
-  `MState`, `Over`, `Monster` (embedded in `Game`), and `Game::over`. Shared
-  structs header, same pattern as the existing embedded `Player`. `Player`'s
-  `initGame` intentionally untouched (zq5 integration calls `initMonster`).
-- changed: `tst/main.cpp` — include + run `MonsterSuite`.
+- added: `src/core/projectiles.hpp` — hrd half of `mock/game.js`:
+  - `initWorld(g, mode)` — clears shot/effect/train state, default pole
+    `Rect{140,40,20,36}`, arms the pole target when `MODE_TRAIN`.
+  - `spawnShot()` — consumes `Game::lastShot` (recorded by `player.hpp`
+    `fireShell`): muzzle spark (`life 5`, `crit`) at centre + facing*10, then
+    one ball (`heavy`) or three scatter pellets via `rotFp(fx,fy,15,±6)`.
+  - `updateProjectiles()` — `fp::addVel` fixed motion, life `90`, 1/16 px
+    spawn `centre + facing*13`, collision vs `Game::target` rect, culled at
+    `WORLD_W/WORLD_H ± 8`.
+  - `updateEffects()` — `t++` until `life`, dropping oldest past the cap.
+  - `updatePole()` / `damagePole()` — hitFlash 4, head = top 16 px → x1.4
+    (integer 14/10, min 1), freeze crit 5 / body 4, `train.total/last`,
+    event ring, damage-number effect (`life 26`, at `hy-6`, `text` = total).
+  - `trainDps()` — trailing 600-tick sum / 10, round half up.
+  - `stepWorld()` — mock tick order for the owned parts: target sync, player,
+    `spawnShot`, pole|monster, target re-sync, projectiles, effects.
+- changed: `src/core/game.hpp` — `Mode`, caps (`MAX_PROJECTILES` 12,
+  `MAX_EFFECTS` 12, `MAX_TRAIN_EVENTS` 24) and `PROJ_LIFE`/`POLE_HEAD`;
+  `Projectile : fp::FpBody`, `Effect`, `Pole`, `TrainEvent`, `TrainStats`;
+  `Game::mode/ proj/ projN/ fx/ fxN/ pole/ train` and the fire-time facing
+  `lastShotFx/lastShotFy`.
+- changed: `src/core/player.hpp` — `fireShell` stub now also records
+  `lastShotFx/lastShotFy` (facing at fire time); no behaviour change.
+- added: `tst/shells_test.hpp` — 12 suites / 115 asserts: shell tables, spawn
+  geometry (centre + facing*13, 1/16 px, life 90, heavy), scatter 3-pellet
+  spread (`cos15 sin±6`), guard+A consume + muzzle + reload, reload block,
+  clip-empty block, pole head x1.4 vs body x1.0 + hitFlash 4, damage-number
+  spawn/expire, DPS 600-tick window + rounding, pole targetable in train,
+  hunt projectile collision + cull, pointblank consumes a ball + reload 45.
+- changed: `tst/main.cpp` — include + run `ShellSuite`.
+- changed: `output.md` (this file).
 
 ## `make test` output (tail)
 ```
----------- idle hunt runs: beast engages, hunter survives ----------
-Passed: 3
+---------- pointblank branch consumes a ball and arms reload 45 ----------
+Passed: 9
 Failed: 0
 ========== Total Counts ==========
-Total Passed: 287
+Total Passed: 402
 Total Failed: 0
 ```
-Exit 0 (188 asserts before this bead; +99).
+Exit 0 (287 asserts before this bead; +115).
 
 ## `make fxtest-headless` output (tail)
 ```
 test_boot
-Sketch uses 9806 bytes (33%) of program storage space. Maximum is 29696 bytes.
+Sketch uses 9830 bytes (33%) of program storage space. Maximum is 29696 bytes.
 Global variables use 1751 bytes (68%) of dynamic memory, leaving 809 bytes for local variables. Maximum is 2560 bytes.
 === test_boot ===
 test_boot PASSED=2 FAILED=0
@@ -49,20 +56,32 @@ test_boot: PASS
 ```
 Exit 0.
 
-## Notes / deviations
-- `game.hpp` gained the `Monster` struct + `Game::monster`/`Game::over`: `Game`
-  must own the beast so `Target` callbacks (which take `Game&`) can reach it and
-  the player FSM's `Game::target` melee path resolves against it. No `player.hpp`
-  / `fp.hpp` / `mock/` changes; no retuning.
-- `playerHurt` in `player.hpp` dropped mock's `lose()`; `monster.hpp` clamps
-  player hp and sets `over = OVER_LOSE` after routing a monster hit, so the
-  death contract still holds.
-- `stepHunt` syncs `Game::target.rect` before `stepPlayer`, matching the mock
-  where the player sees the beast's pre-move position (monster moves after the
-  player each tick). `updateMonster` re-syncs after moving.
+## Deviations (documented, no retuning)
+- Projectile position uses the repo convention (integer px + 1/16 px
+  remainder in `subX/subY`) and therefore moves `speedF/16` px per tick. The
+  mock pre-multiplies `pr.x` by 16 at spawn and then runs the pixel-domain
+  `addVel`/`>>4` over it, a latent double-scaling bug that made shots ~1/16
+  speed; `mock/game.test.js` never checks projectile positions, so all
+  published numbers (spawn offset 13, speedF 35/42, life 90, sizes, damage)
+  are preserved with the intended fixed-point motion. Same class of fix as the
+  earlier `isqrt` seed and `pushApart` notes.
+- Device arrays are capped rings and drop the oldest entry when full (mock
+  arrays are unbounded); not reachable with ball/scatter clips in normal play.
+- `pointblank` (`shell: true`) consumes a ball + arms reload 45 but spawns no
+  projectile, matching the mock (which only calls `fireShell` from the
+  guard-stance special).
 
-## TODOs
-- `freeze`/`shake`/`effects`/projectiles live in hrd; monster only raises
-  `freeze` (crit 6, normal 4, death 12) and leaves visuals to hrd render.
-- Train mode / pole target selection (hrd) overrides `Game::target`; monster
-  stays hunt-only this bead.
+## TODOs for later beads
+- 0ny (camera/world): read `Game::mode`, `Game::pole`, `Game::proj`, `Game::fx`
+  in the render/scroll pass; no interface change needed here. `stepWorld()` is
+  the integration point for camera update + freeze gating.
+- Render beads: draw `proj[0..projN)` with `heavy` (big core) vs pellet (bright
+  nose); smoke trail from `(vx,vy)`; `fx[i].text != 0` is a rising damage
+  number (`y - (life-t)/3`), `text == 0` is a spark/muzzle (`crit` picks shade);
+  pole body + head slab, `hitFlash` shade. HUD in train: `LAST`, `DPS`
+  via `trainDps`, `RLD` + reload bar from `player.reload`.
+- Integration: freeze is raised (pole crit 5 / body 4) but not consumed yet —
+  full `step()` freeze gating belongs with the 0ny/full-loop bead; shake is
+  render-only (not ported).
+- Player/pole `pushApart` in train is not wired (pole is static; no overlap in
+  the default layout).

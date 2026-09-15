@@ -256,6 +256,8 @@ static void fireShell(Game& g, const Player& p, const ShellDef& sh) {
   g.lastShot = p.shell + 1; // 1 ball, 2 scatter
   g.lastShotX = p.x + (p.w >> 1);
   g.lastShotY = p.y + (p.h >> 1);
+  g.lastShotFx = p.fx; // facing at fire time (hrd spawns before post-fire drift)
+  g.lastShotFy = p.fy;
 }
 
 static void stanceSpecial(Game& g, const WeaponDef& def) {

@@ -17,6 +17,17 @@ constexpr int16_t A_BUFFER   = 10; // attack input buffer in ticks
 constexpr int16_t WORLD_W    = 256;
 constexpr int16_t WORLD_H    = 112;
 
+// hrd: projectiles / effects / training pole. Caps are device-sized ring
+// buffers: the mock uses unbounded JS arrays, the device overrides the oldest
+// entry when full (documented in src/core/projectiles.hpp).
+constexpr int16_t MAX_PROJECTILES  = 12;
+constexpr int16_t MAX_EFFECTS      = 12;
+constexpr int16_t MAX_TRAIN_EVENTS = 24;
+constexpr int16_t PROJ_LIFE        = 90; // ticks, mock fireShell()
+constexpr int16_t POLE_HEAD        = 16; // head zone = top 16 px (x1.4)
+
+enum Mode : int8_t { MODE_HUNT = 0, MODE_TRAIN = 1 };
+
 enum WeaponId : int8_t { W_SWORD = 0, W_FLAIL = 1, W_GUN = 2 };
 enum PState : int8_t {
   PS_IDLE = 0, PS_ATTACK, PS_SPECIAL, PS_DODGE, PS_DEFLECT, PS_SHOVE, PS_STUN
@@ -130,6 +141,50 @@ struct Target {
   void (*onStun)(Game&, int ticks); // deflect / parry response
 };
 
+// hrd: shot / spark / damage-number state, mirroring mock/game.js
+// projectiles[] + effects[]. Positions are integer px with a 1/16 px
+// remainder in subX/subY (fp::FpBody), so a projectile moves speedF/16 px
+// per tick through fp::addVel. The mock stores pr.x pre-multiplied by 16 and
+// then runs it through the pixel-domain addVel, a latent double-scaling bug
+// that made shots ~1/16 speed (never exercised by mock/game.test.js); this
+// port keeps the published numbers (spawn centre + facing*13, speedF, life
+// 90) with the intended fixed-point motion.
+struct Projectile : fp::FpBody {
+  int16_t vx, vy; // 1/16 px per tick
+  int16_t w, h;   // collision size (px)
+  int16_t dmg;
+  int16_t life;
+  bool    heavy;  // ball (render: big core) vs scatter pellet
+};
+
+// text == 0: spark / muzzle effect. text != 0: rising damage number.
+struct Effect {
+  int16_t x, y;
+  int16_t t, life;
+  bool    crit;
+  int16_t text;
+};
+
+struct Pole {
+  Rect    rect;     // hurt box: 20x36 at (140,40)
+  int16_t hitFlash; // 4 on hit, decays in updatePole()
+};
+
+struct TrainEvent {
+  int32_t tick;
+  int16_t dmg;
+};
+
+// Rolling window of landed pole hits. total / last are unbounded/latest,
+// events backs trainDps() over the trailing 600 ticks.
+struct TrainStats {
+  int32_t total;
+  int16_t last;
+  TrainEvent ev[MAX_TRAIN_EVENTS];
+  int16_t head; // next write slot
+  int16_t count;
+};
+
 // Player inherits the fp bodies so addMove/addVel/drainStam work directly on
 // it (p.x/p.subX and p.stam/p.stamSub are the fp-owned fields).
 struct Player : fp::FpBody, fp::FpStam {
@@ -189,12 +244,20 @@ struct Game {
   int16_t tick, freeze;
   int8_t  weapon;
   int8_t  over;       // Over: 0 none, 1 win, 2 lose
+  int8_t  mode;       // Mode: hunt or train (hrd)
   bool    prevA, prevB;
   Player  player;
   Monster monster;
   Target  target;
-  int8_t  lastShot;   // gunshield: 0 none, 1 ball, 2 scatter (hrd consumes)
-  int16_t lastShotX, lastShotY;
+  int8_t  lastShot;   // 1 ball, 2 scatter; cleared by spawnShot (hrd)
+  int16_t lastShotX, lastShotY;   // player centre at fire time
+  int16_t lastShotFx, lastShotFy; // facing at fire time
+  int16_t projN;
+  Projectile proj[MAX_PROJECTILES];
+  int16_t fxN;
+  Effect  fx[MAX_EFFECTS];
+  Pole    pole;
+  TrainStats train;
 };
 
 } // namespace mh
