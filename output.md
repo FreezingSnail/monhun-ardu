@@ -1,77 +1,77 @@
-# monhun-ardu-kt7.1 — Core: move constant tables to PROGMEM (RAM 97% used)
+# monhun-ardu-rze — Device: block-art render parity (mock blocks)
 
 ## Files
-- added: `src/core/progmem.hpp` — portable shim:
-  - AVR: `#include <avr/pgmspace.h>`, `MH_PROGMEM` = `PROGMEM`, typed
-    `mhPgmReadU8/I8/U16/I16/U32/I32/Bool` readers (`pgm_read_byte/word/dword`).
-  - Host: `MH_PROGMEM` is empty, readers are plain dereferences — identical
-    values, no AVR headers.
-- changed: `src/core/fp.hpp` — `fp::DIR8[8]` is `MH_PROGMEM`; added per-field
-  `fp::dir8X(i)` / `fp::dir8Y(i)` (host `DIR8[i].x/.y` reads in fp_test.hpp are
-  untouched).
-- changed: `src/core/game.hpp` — `WEAPON_DEFS[3]` and `MONSTER_ATTACKS[2]` are
-  `MH_PROGMEM`; added flash accessors: `weaponId/Spd/CanCancel/Attack/Special/
-  Branch/Shell`, `attackStartup/Active/Recover/Dmg/Reach/Hw/Hh/Stam/Lunge/Push/
-  Effect/Shell/Id`, `branchStage/Stance/AutoT/Atk`, `shellCount/Dmg/SpeedF/W/H/
-  Reload/Stam/Pellets`, `monsterAttackKind/Windup/Active/Recover/SpeedF/Dmg/
-  Reach/Hw/Hh`.
-- changed: `src/core/player.hpp`, `src/core/monster.hpp`,
-  `src/core/projectiles.hpp` — every table field read now goes through an
-  accessor; `const WeaponDef&` / `const Attack&` / `const ShellDef&` /
-  `const MonsterAttack&` bindings to flash entries were replaced by pointers so
-  no reference is bound to a program-memory object. FSM/fields touched only,
-  no per-tick whole-struct copies.
+- changed: `monhun-ardu.ino` — full block-art `render()` ported from the
+  `mock/game.js` render section, plus render-only helpers/tables above it.
+  - `blk(x,y,w,h,shade)` is the single draw entry point: clips every rect to
+    `[0,SCREEN_W) x [HUD_H,SCREEN_H)` and calls `arduboy.fillRect(...,shade)`.
+    shade 0 clears pixels (mock black bodies carve holes in what is under them).
+  - `drawArena` / `drawPole` / `drawMonster` / `drawPlayer` / `drawProjectiles`
+    / `drawEffects` / `drawNumber`, matching mock draw order and shapes.
+  - PROGMEM tables: `SIN256[256]` (Q4 sine, `cos(a)=SIN256[(a+64)&255]`),
+    `FONT_DIG[10][5]` (3x5 digits), `RING6[6]` (whirl ring offsets).
+  - `rndPx(v,sub)` reproduces mock `Math.round()` on the fixed-point position.
+  - Camera clamp + tick-based shake + HUD-at-top offset; loop FX bracket and
+    `run()` unchanged. `render()` reads `Game` only (no mutation, no static
+    render state) and never branches on `currentPlane`.
 - changed: `output.md` (this file).
-- `mock/` and `tst/` untouched; no gameplay numbers or logic changed.
+- `mock/`, `src/`, `tst/` untouched; no core logic or numbers changed.
 
-## RAM / flash before -> after (`rm -rf build && make build`)
-Before (commit 0d1a80a):
+## Build (`rm -rf build && make build`)
 ```
-Sketch uses 17264 bytes (58%) of program storage space. Maximum is 29696 bytes.
-Global variables use 2494 bytes (97%) of dynamic memory, leaving 66 bytes for local variables. Maximum is 2560 bytes.
-```
-After:
-```
-Sketch uses 17202 bytes (57%) of program storage space. Maximum is 29696 bytes.
+Sketch uses 25566 bytes (86%) of program storage space. Maximum is 29696 bytes.
 Global variables use 1888 bytes (73%) of dynamic memory, leaving 672 bytes for local variables. Maximum is 2560 bytes.
 ```
-- Flash: 17264 -> 17202 (fits, < 29696).
-- Global RAM: 2494 -> 1888; free 66 -> **672 B** (target >= 300 B met).
-- Reclaimed: 606 B = WEAPON_DEFS 540 + MONSTER_ATTACKS 34 + fp::DIR8 32.
+- Flash 25566 B < 29696 B (headroom 4130 B).
+- Global RAM 1888 B, free **672 B** >= 300 B.
 
-`avr-nm` confirms the tables left SRAM (now `t` / flash symbols):
-```
-000000c5 00000022 t _ZN2mhL15MONSTER_ATTACKSE
-000000e7 00000020 t _ZN2fpL4DIR8E
-00000107 0000021c t _ZN2mhL11WEAPON_DEFSE
-0080013e 00000400 b _ZN12Arduboy2Base7sBufferE
-008005a8 000002b8 b g
-```
+## Shade mapping (mock SHADES -> L4_Triplane)
+Mock has exactly 4 grays, mapped 1:1 to the ArduboyG triplane levels:
 
-## `make test` (host, C++17) — unchanged 497 asserts
-```
-Total Passed: 497
-Total Failed: 0
-```
+| mock index | mock color | L4 Triplane level | planes set |
+|---|---|---|---|
+| 0 | `#000000` BLACK | 0 | none |
+| 1 | `#4d4d4d` DARK_GRAY | 1 | plane 0 |
+| 2 | `#b3b3b3` LIGHT_GRAY | 2 | planes 0+1 |
+| 3 | `#ffffff` WHITE | 3 | planes 0+1+2 |
 
-## `make fxtest-headless` (Ardens, device serial)
-```
-test_boot
-Sketch uses 11462 bytes (38%) of program storage space. Maximum is 29696 bytes.
-Global variables use 1179 bytes (46%) of dynamic memory, leaving 1381 bytes for local variables. Maximum is 2560 bytes.
-=== test_boot ===
-test_boot PASSED=4 FAILED=0
-P
-test_boot: PASS
-```
+`ArduboyG::planeColor(plane, shade)` (`shade > plane`) resolves the level, so the
+same shapes/colors are drawn on all three plane passes and composite identically.
 
-## Notes for the render bead (monhun-ardu-rze)
-- MCU flash headroom is now 29696 - 17202 = 12494 B; SRAM free is 672 B.
-- `WEAPON_DEFS` / `MONSTER_ATTACKS` / `fp::DIR8` are in **MCU flash** (not the
-  FX cart). Render reading `Game` state is unchanged (game state still in RAM).
-- If render needs table data (weapon HUD icon, facing vector, shell size), read
-  it through the accessors in `game.hpp` / `fp.hpp` (`dir8X/dir8Y`,
-  `weapon*`, `attack*`, `shell*`, `monsterAttack*`). Do NOT bind a reference to
-  a table entry and do NOT copy a whole struct per plane.
-- Any new core-level read-only table must be declared `MH_PROGMEM` with matching
-  accessors, or it silently eats the reclaimed 606 B again.
+## Mock draw-order deviations / notes
+- **HUD position**: mock HUD is the bottom 8 px (`ARENA_H..H-1`); device reserves
+  it at the **top** (`y 0..HUD_H-1`, set by the loop bead). World `y=0` therefore
+  maps to screen `y=HUD_H`; the arena is shifted down 8 px and `blk` clips at
+  `HUD_H`. No HUD pixels drawn this bead (bead 8ss).
+- **Shake**: core `Game` has no `shake` field yet and `freeze` is not gated or
+  decayed (deferred). The render derives a tick-based int offset amplitude from
+  the decaying `monster.hitFlash` / `pole.hitFlash` (a ~4-tick kick after a hit)
+  instead of mock `g.shake`. Player-hurt shake is not represented. Angles
+  1.7/2.3 rad -> 69/94 steps in the 256-step table. TODO: real `Game::shake`.
+- **Trig**: mock uses continuous `Math.sin/cos`; device uses a 256-step Q4 sine
+  table with integer rate steps (0.35->14, 0.55->22, 0.30->12 units/tick). Only
+  affects the spinning whirl ring / stun dots and shake, sub-pixel cosmetic.
+- **Reach scaling**: mock `a.reach*0.6` (sword) / `*0.5` (flail) are integer
+  (`*6/10`, `/2`) here; <=1 px vs mock.
+- **Positions**: mock rounds floats; device rounds the fp body via `rndPx`.
+  Projectiles use the pixel `pr.x/pr.y` directly (mock `pr.x>>4`).
+- **Damage numbers**: mock draws full text; device renders the digit-only 3x5
+  subset (damage values are integers). Position/rise/color match the mock.
+- **Arena background**: mock's explicit black screen fill is omitted; the L4
+  plane clear already leaves the buffer black before each pass.
+- No wireframe debug overlay (bead d54), no pause/win/lose overlays, no HUD.
+
+## TODOs
+- **8ss (HUD)**: region is screen `y 0..HUD_H-1`; `blk` clips world draws there.
+  Draw bars / weapon label / ammo / train stats with shade 0..3, untranslated by
+  camera or shake (mock calls `ctx.restore()` before `drawHud`).
+- **kt7.2 (sprites)**: replace `fillRect` block art with the 4-shade sprite sheet
+  + FX-gen pipeline; the sine/digit tables here can be dropped once sprite art
+  and baked damage-number glyphs exist.
+- **hitstop/shake bead**: add a real decaying `Game::shake` (and freeze gating)
+  and delete the render-derived shake from `render()`.
+
+## Tests
+- `make test` (host, C++17): 497 passed / 0 failed (unchanged).
+- `make fxtest-headless` (Ardens, device serial): `test_boot PASSED=4 FAILED=0`,
+  final marker `P` -> PASS.
