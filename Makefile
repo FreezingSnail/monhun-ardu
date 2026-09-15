@@ -1,4 +1,4 @@
-.PHONY :  test  fxtest fxtest-headless fxtest-headless-preflight fxtest-build fxtest-run
+.PHONY :  full build mini gen test fxtest fxtest-headless fxtest-headless-preflight fxtest-build fxtest-run
 
 # Common compiler flags
 CXX_FLAGS = -std=c++17 -I/src -w -O0 -g3
