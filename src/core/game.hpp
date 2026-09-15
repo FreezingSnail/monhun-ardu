@@ -245,6 +245,7 @@ struct Game {
   int8_t  weapon;
   int8_t  over;       // Over: 0 none, 1 win, 2 lose
   int8_t  mode;       // Mode: hunt or train (hrd)
+  int16_t camX, camY; // camera top-left in world px (mock g.cam), updated in world.hpp
   bool    prevA, prevB;
   Player  player;
   Monster monster;

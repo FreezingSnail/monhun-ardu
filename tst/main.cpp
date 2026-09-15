@@ -4,6 +4,7 @@
 #include "player_test.hpp"
 #include "monster_test.hpp"
 #include "shells_test.hpp"
+#include "world_test.hpp"
 
 int main() {
   TestRunner runner;
@@ -11,6 +12,7 @@ int main() {
   PlayerSuite(runner);
   MonsterSuite(runner);
   ShellSuite(runner);
+  WorldSuite(runner);
   runner.printSummary();
   return runner.fail() ? 1 : 0;
 }
