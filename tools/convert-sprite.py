@@ -46,13 +46,10 @@ def convert(fname, shades, sw=None, sh=None, num=None):
         print('%s: Invalid sprite dimensions' % fname)
         return None
 
-    bytes = []
-    # if sw > 255 or sh > 255:
-    #     bytes = bytearray([])
-    # else:
-    #     bytes = bytearray([sw, sh])
-
-    
+    # 2-byte width/height header (w, h each a single byte, both <= 255 for our
+    # sheets). SpritesU::drawPlusMaskFX(x, y, image, frame) reads exactly these
+    # two bytes and then draws from image + 2, so the blob must start with them.
+    bytes = bytearray([sw, sh])
 
     for n in range(num):
         bx = (n % nw) * sw

@@ -1,75 +1,126 @@
-# monhun-ardu-8ss — Device: HUD parity (bars, weapon, ammo, train stats)
+# monhun-ardu-kt7.2 — FX sprite + font assets, drop vendored font
+
+## Bead
+`monhun-ardu-kt7.2` (slice of epic `monhun-ardu-kt7`). ACCEPTANCE AMENDMENT:
+**all assets live on the FX chip** — 4-shade block sprites *and* fonts/text.
 
 ## Files
-- changed: `monhun-ardu.ino` — HUD drawing added to `render()` (render-only,
-  read-only on `Game`). No core, mock, or test files touched.
-  - `#include "src/external/Font4x6.h"` (PROGMEM/MCU-flash text).
-  - `static Font4x6 hudFont` + `hudPut(x,c)` / `hudDigits(v)` / `hudNum(x,v,n)`:
-    `printChar(c, x, -1)` — the 4x8 glyph paints rows `y+1..y+7`, so cursorY
-    `-1` puts its 6 px cap in HUD rows 0..5. Advance 5 px (4 px + 1 px spacing).
-  - `hudBar(x,y,w,h,num,den,shade)`: mock `bar()` (shade-1 back, inner fill
-    `round((w-2)*ratio)`), used for HP / stamina / monster HP.
-  - `drawHud(g)`: black strip, divider, player HP, stamina, weapon marker,
-    mode marker, gun ammo/reload, then monster HP bar (hunt) or `T<total>D<dps>`
-    (train). Called last in `render()`, untranslated (mock restores the camera
-    before `drawHud`).
-- changed: `output.md` (this file).
+- added `tools/gen-art.py` — deterministic author of the 4-shade PNG sheets from
+  the mock shapes (`mock/game.js` drawPlayer/drawMonster/drawPole/
+  drawProjectiles/drawEffects) and the mock `FONT` table. Palette maps 1:1 to the
+  L4 triplane levels (transparent=mask 0, black=0, dark=plane0, light=planes0+1,
+  white=planes0+1+2).
+- added `images/blocks/*.png` — `fxplayer_16x16` (2 frames), `fxmonster_32x24`
+  (8: idle/recover/flash/dead x east/west), `fxpole_20x40` (2: normal/flash),
+  `fxball_7x8`, `fxscatter_4x8`, `fxspark_4x4` (2).
+- added `images/fonts/{fxfontw,fxfontg}_4x8.png` — 128 ASCII-ordered 4x8 glyph
+  tiles (white / light-gray) from the mock FONT.
+- added `fxdata/blocks/Sprites.txt`, `fxdata/fonts/Sprites.txt` — generated
+  plus-mask triplane blobs (2-byte `[w,h]` header, then per shade plane:
+  interleaved data+mask).
+- changed `tools/convert-sprite.py` — restored the 2-byte `[sw,sh]` header
+  (matches `PowerRogue/tools/convert-sprite.py`; `SpritesU::drawPlusMaskFX`
+  reads exactly those two bytes then draws from `image + 2`).
+- changed `tools/gen.sh` — runs gen-art.py, converts `images/{blocks,fonts}` with
+  `convert-sprite.py -s 4`, packs `fxdata.txt`, and copies the header to `src/`.
+- changed `fxdata/fxdata.txt` — includes the two Sprites.txt files; the unused
+  `fontTrimmed` (ArduFontTrimmed) registration is dropped.
+- changed `src/fxdata.h`, `fxdata/fxdata.h` — generated header (offsets below).
+- changed `monhun-ardu.ino` — sprite/font draws (see render notes).
+- deleted `src/external/Font4x6.{h,cpp}` — no remaining reference (host tests
+  never included it); recovers the vendored-font flash.
+- added `tst/fxdatatest/test_assets.ino`, `asset_test.hpp` — device asset test.
+- changed `output.md` (this file).
 
-## Build (`rm -rf build && make build`)
+## gen.sh output
 ```
-Sketch uses 28944 bytes (97%) of program storage space. Maximum is 29696 bytes.
-Global variables use 1910 bytes (74%) of dynamic memory, leaving 650 bytes for local variables. Maximum is 2560 bytes.
+gen-art: wrote images/blocks (6 sheets) and images/fonts (2 sheets)
+FX data build tool version 1.15 by Mr.Blinky May 2021 - Jan 2023
+Using Python version 3.14.5
+Building FX data using /Users/connorfranc/monhun-ardu/fxdata/fxdata.txt
+Including file /Users/connorfranc/monhun-ardu/fxdata/blocks/Sprites.txt
+Including file /Users/connorfranc/monhun-ardu/fxdata/fonts/Sprites.txt
+Saving FX data header file /Users/connorfranc/monhun-ardu/fxdata/fxdata.h
+Saving 12466 bytes FX data to /Users/connorfranc/monhun-ardu/fxdata/fxdata-data.bin
+Saving FX development data to /Users/connorfranc/monhun-ardu/fxdata/fxdata.bin
+gen.sh: FX data + src/fxdata.h regenerated
 ```
-- Flash 28944 B < 29696 B (headroom **752 B**). RAM free **650 B** >= 300 B.
+`convert-sprite.py` prints a Pillow 12 `getdata` DeprecationWarning; warnings do
+not fail the `set -e` script and the output is unaffected.
 
-## HUD layout (device top strip, y 0..7; mock was the bottom 8 px)
-The mock HUD is the bottom strip; the device reserves the top 8 px (loop bead),
-so the strip is mirrored vertically. The divider sits at the arena edge (`y=7`)
-and the content fills rows 0..6. Everything is untranslated by camera/shake.
+## Generated symbols (`src/fxdata.h`, `FX_DATA_BYTES = 12466`)
+```
+fxmonster 0x000000   fxball    0x0016E6
+fxpole    0x001202   fxplayer  0x001712
+fxspark   0x0016B4   fxscatter 0x001894
+fxfontg   0x0018AE   fxfontw   0x0024B0
+```
+Raw `uint8_t` arrays only carry an offset (fxdata-build emits Width/Height/Frames
+only for `image_t`); frame sizes are compile-time constants in the sketch and the
+blobs self-describe via their 2-byte header, so `drawPlusMaskFX` reads the true
+w/h from FX. Sizes: player 16x16 x2, monster 32x24 x8, pole 20x40 x2 (20x36 art),
+ball 7x8, scatter 4x8 (4x4 art), spark 4x4 x2, font 4x8 x128.
 
-| item | device (x, y) | mock |
-|---|---|---|
-| background | `blk(0,0,128,8,0)` + divider `y=7` shade1 | black fill + 1 px line |
-| player HP | `hudBar(1,2,28,4, hp, hpMax, 3)` white | `bar(2,ARENA_H+2,40,4, …,3)` |
-| stamina | `hudBar(29,2,16,4, stam, stamMax, 2)` light gray | `bar(46,ARENA_H+2,30,4, …,2)` |
-| weapon marker | 3 chars at x=46: `SWD`/`FLA`/`GUN` | full `def.name` at x=80 |
-| mode marker | 1 char at x=61: `H`/`T` | implied (pole vs beast) |
-| gun ammo | `RLD` while reloading (reload bar `x=67,y=6,w<=12` shade2) else `B`/`S` + count at x=67 | `RLD`/`name[0]+count` at x=112 |
-| hunt: monster HP | `hudBar(82,2,44,3, m.hp, m.hpMax, 3)` | `bar(W-52,2,48,3, …,3)` |
-| train: stats | `T<total>D<dps>`, right-aligned to x=126 | `LAST n` / `DPS n` at top-right |
+## Flash / RAM (`rm -rf build && make build`)
+```
+before (6b2bf5c): Sketch uses 28944 bytes (97%)   Global variables 1910 bytes (650 free)
+after:            Sketch uses 25934 bytes (87%)   Global variables 1884 bytes (676 free)
+```
+- Flash headroom **3762 B (3.67 KB) >= 3.5 KB**; recovered **3010 B >= 3 KB**.
+- `Font4x6` (~3.4 KB) is gone. The only remaining sizeable flash tables are the
+  core `WEAPON_DEFS` and the render `SIN256`; no glyph/bitmap array lives in MCU
+  flash or RAM (all sprites + fonts are FX-side).
+- Small extra recovery: dropped `arduboy.initRandomSeed()` — the core is fully
+  deterministic and never calls `random()`, so seeding only pulled the AVR
+  `random`/`random_r` code into flash (~310 B). No gameplay change.
 
-- Bars are white (HP) and light gray (stamina); they are separated by the
-  shade-1 bar borders, so no two grays sit adjacent (pitfall).
-- Single 8 px row vs mock's two rows (`LAST` at y=2, `DPS` at y=10) forced the
-  train readout onto one line: `T`=total (`g.train.total`, capped 9999 display)
-  and `D`=dps (`mh::trainDps`). `LAST` is already surfaced by the rising damage
-  Number effect, so the HUD shows cumulative total + DPS instead.
-- Weapon full name shrank to 3 chars and weapon/mode became single glyphs to fit
-  bars + ammo + right readout in 128 px (bd design allows `BALL/B/B2`-style
-  simplification). All labels are short and use inline char literals.
-- Text renders white (Font4x6 sets bits on every plane), so mock's shade-2 DPS
-  gray is drawn white; bars keep the gray levels.
-
-## Notes / TODOs
-- **Flash**: Font4x6 + the Arduboy2 `Sprites` glyph blitter cost ~3.4 KB
-  (25566 -> 28944), leaving only 752 B. If a later bead (kt7.2 sprites, d54
-  overlay) needs flash, the sanctioned fallback is to drop Font4x6 and draw
-  digits/stats with the existing 3x5 `FONT_DIG` (`drawNumber`) and block-art
-  icons for weapon/mode (~2.8 KB recovered; no letter labels).
-- **kt7.2 (sprites)**: replace the block-art scene with the 4-shade sprite sheet
-  + FX pipeline. HUD can move to baked sprite glyphs then; `FONT_DIG`, `SIN256`
-  and Font4x6 can be dropped once sprite art is in.
-- **d54 (debug overlay)**: wireframe hurt/hit boxes + `state` text live in the
-  arena band (`ARENA_H-7` in the mock). Keep the HUD strip rows 0..7 reserved;
-  draw debug strings in the arena, not over the HUD.
-- **Other TODOs inherited from rze**: real decaying `Game::shake` (render
-  currently derives a tick-based kick from `hitFlash`); pause/win/lose overlays
-  not ported.
-- Display caps only: `T` saturates at 9999, `D` at 999 (render-only clamp; the
-  core values are unbounded).
+## Render notes
+- `sprDraw()` culls fully off-screen sprites, then `SpritesU::drawPlusMaskFX(x, y,
+  img, FRAME(i))`; `FRAME(i) = i*3 + currentPlane()` selects the plane data, so the
+  three render passes composite the 4 shades exactly like the old `fillRect`.
+- Sprite substitutions: pole (whole post/bands/head/eye/base), monster
+  (feet/body/head/eyes + dead heap, per state and facing), player shadow+body
+  (normal / dodge), ball + scatter, effect spark. `drawHud()` still runs last and
+  its black strip erases any sprite overhang into rows 0..7, so the HUD stays
+  clean despite sprites not being clipped to the arena band.
+- Text: `textPut()`/`hudPut()` draw ASCII-indexed 4x8 FX glyphs, advance 4 px
+  (mock `drawText` scale 1). HUD uses the white sheet; rising damage numbers pick
+  white (crit) vs light-gray (normal) to match the mock.
+- Still procedural (`fillRect`), deliberately: arena dots/border, HUD bars +
+  reload bar, sword arc/parry, flail chain, whirl ring, gun shield, deflect and
+  i-frame marks, stun sparkles, and the monster windup/attack telegraph boxes.
+  These are dynamic (aim/reach/rotation) and/or sub-4 px primitives, not "block
+  art" assets; the design's enumerated sprites (player/monster/pole/ball/scatter/
+  spark) are all FX-side.
+- Deviation to note: the mock's effect spark expands 4 one-pixel dots with radius
+  `r`; a fixed FX sprite cannot animate scale, so the spark is drawn as a fixed
+  4x4 sprite (light/white). TODO left in code.
+- Pole art: the mock base overhangs 2 px each side (`x-2, w+4`); a 20 px-wide
+  sprite cannot, so the base is drawn within the 20 px column. Pole height is
+  padded 20x36 -> 20x40 (converter requires a multiple of 8); rows 36..39 are
+  transparent. Ball/scatter padded 7x6 -> 7x8, 4x4 -> 4x8 likewise, with the art
+  in the top rows so the draw offset is unchanged.
 
 ## Tests
-- `make test` (host, C++17): 497 passed / 0 failed (unchanged).
-- `make fxtest-headless` (Ardens, device serial): `test_boot PASSED=4 FAILED=0`,
-  final marker `P` -> PASS (Font4x6 is unused by the boot test, so it is not
-  linked there).
+- `make test` (host C++17): **497 passed / 0 failed**.
+- `rm -rf build && make build`: flash 25934 B, RAM 1884 B (676 free).
+- `make fxtest-headless` (Ardens device serial):
+  - `test_assets PASSED=30 FAILED=0` -> final `P` PASS. Reads the `fxscatter`
+    blob (16 bytes run + header) and the `fxfontw` header/glyph-0 bytes from FX
+    inside the `enableOLED / waitForNextPlane / disableOLED` bracket the render
+    loop uses.
+  - `test_boot PASSED=4 FAILED=0` -> `P` PASS (unchanged).
+
+## TODO / follow-ups
+- Animate the effect spark radius (needs either 3 same-size growth frames or a
+  procedural fallback drawn behind the sprite).
+- Player per-weapon/stance/attack-phase silhouettes are approximated by the
+  body sheet; weapon overlays stay procedural because reach/aim exceed a 16x16
+  frame. If a later bead wants baked weapon frames, they need per-direction art.
+- `text2bmp.py` was evaluated but not used: it emits opaque RGB (no plus-mask
+  alpha) and indexes tiles by raw `ord(c)` requiring a 128-tile ASCII source;
+  the glyph sheets are authored directly from the mock FONT instead, through the
+  same `convert-sprite.py -> fxdata` pipeline.
+- `fxdata/*.bin` are force-added (repo `.gitignore` ignores `*.bin`) so the
+  device FX image and `make fxtest-headless` work from a clean clone without
+  running `make gen` first.

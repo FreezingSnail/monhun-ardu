@@ -1,27 +1,20 @@
 #!/bin/bash
-#python3 tools/movelistConverter.py > src/fxdata/data/movelists.txt
+# FX asset pipeline: author the 4-shade block/font sheets, convert them to the
+# SpritesU plus-mask triplane format, then pack fxdata/fxdata.txt into
+# fxdata/fxdata.bin + fxdata/fxdata-data.bin and copy the header to src/.
+set -e
 
-#mkdir -p fxdata/generated/images
-#python3 tools/text2bmp.py --font ArduboyFXFonts/Fontbitmaps/Font4x6/Font_5x6.png --input data/text/strings.txt --output_dir fxdata/generated/images --mode joined --greyscale
-#python3 tools/convert-sprite.py ../images -s 4 -o ../fxdata/
-#python3 tools/convert-sprite.py ../images/battleEffects -s 4 -o ../fxdata/battleEffects/
-#python3 tools/convert-sprite.py ../fxdata/generated/images -s 4 -o ../fxdata/generated/
-#cat fxdata/generated/images/string_images.txt >>fxdata/generated/Sprites.txt
-#
-## Genreate FX data
-#
-#
-#echo "Generating opponent data"
-##python3 tools/data_converters/opponent_data.py --format c
-#python3 tools/data_converters/opponent_data.py --format fx
-#
-#python3 tools/data_converters/type_table_data.py --format fx
-#python3 tools/moveGenerator.py --csv_path data/movesheet.csv
+# Author source PNGs from mock/game.js shapes + FONT (deterministic).
+python3 tools/gen-art.py
 
-#cp -r images fxdata/
+# Convert each sprite directory into a Sprites.txt of uint8_t plus-mask blobs.
+# convert-sprite.py resolves paths relative to tools/, hence the ../ prefixes.
+mkdir -p fxdata/blocks fxdata/fonts
+python3 tools/convert-sprite.py ../images/blocks -s 4 -o ../fxdata/blocks/
+python3 tools/convert-sprite.py ../images/fonts -s 4 -o ../fxdata/fonts/
+
+# Pack the FX image and emit the generated header.
 python3 Arduboy-Python-Utilities/fxdata-build.py fxdata/fxdata.txt
-#rm -rf fxdata/images
-#mv fxdata/fxdata.h src/fxdata.h
-#mv fxdata/fxdata.bin dist
-#mv fxdata/fxdata-data.bin dist
-#rm -rf fxdata/generated/images
+cp fxdata/fxdata.h src/fxdata.h
+
+echo "gen.sh: FX data + src/fxdata.h regenerated"

@@ -5,13 +5,47 @@
 #include "src/globals.hpp"
 #include "src/fxdata.h"
 #include "src/core/world.hpp"
-#include "src/external/Font4x6.h"
 
 decltype(arduboy) arduboy;
 
 // Single game state. The core is header-only and shared verbatim with the host
 // tests; the device loop only samples input, steps it, and reads it for draw.
 mh::Game g;
+
+/* ---------------------------------------------------------------- sprites */
+
+// Frame indices into the FX sprite sheets authored by tools/gen-art.py. Sheets
+// are left-to-right strips and FRAME(i) == i*3 + currentPlane() selects the
+// current plane's data, so one draw call per plane composites the 4 shades.
+namespace spr {
+// 16x16 player body. Weapon overlays stay procedural: aim (fx/fy) and reach are
+// dynamic and routinely exceed the 16x16 frame.
+constexpr uint8_t PLAYER_NORMAL = 0;
+constexpr uint8_t PLAYER_DODGE  = 1;
+
+// 32x24 monster: four states facing east, then the same four facing west.
+constexpr uint8_t MON_IDLE    = 0;
+constexpr uint8_t MON_RECOVER = 1;
+constexpr uint8_t MON_FLASH   = 2;
+constexpr uint8_t MON_DEAD    = 3;
+constexpr uint8_t MON_WEST    = 4;
+
+// 20x40 pole (20x36 art, padded): black-eyed head normal / hit flash.
+constexpr uint8_t POLE_NORMAL = 0;
+constexpr uint8_t POLE_FLASH  = 1;
+
+// 4x4 spark, light gray / white.
+constexpr uint8_t SPARK_LIGHT  = 0;
+constexpr uint8_t SPARK_BRIGHT = 1;
+} // namespace spr
+
+// Cull fully off-screen sprites before paying the FX seek, then blit on the
+// current plane. Max sheet size is 32x40, so these bounds are conservative.
+static inline void sprDraw(uint24_t img, int32_t x, int32_t y, uint16_t frame) {
+    if (x <= -32 || x >= mh::SCREEN_W || y <= -40 || y >= mh::SCREEN_H) return;
+    SpritesU::drawPlusMaskFX(static_cast<int16_t>(x), static_cast<int16_t>(y),
+                             img, frame);
+}
 
 /* ------------------------------------------------------------------ art */
 
@@ -94,32 +128,22 @@ static inline void blk(int32_t x, int32_t y, int32_t w, int32_t h, uint8_t shade
                      shade);
 }
 
-// 3x5 digits, bit2 = leftmost pixel. Subset of the mock FONT used by the rising
-// damage numbers (mock drawText scale 1).
-static const uint8_t MH_PROGMEM FONT_DIG[10][5] = {
-    { 0b111, 0b101, 0b101, 0b101, 0b111 }, // 0
-    { 0b010, 0b110, 0b010, 0b010, 0b111 }, // 1
-    { 0b111, 0b001, 0b111, 0b100, 0b111 }, // 2
-    { 0b111, 0b001, 0b011, 0b001, 0b111 }, // 3
-    { 0b101, 0b101, 0b111, 0b001, 0b001 }, // 4
-    { 0b111, 0b100, 0b111, 0b001, 0b111 }, // 5
-    { 0b111, 0b100, 0b111, 0b101, 0b111 }, // 6
-    { 0b111, 0b001, 0b001, 0b001, 0b001 }, // 7
-    { 0b111, 0b101, 0b111, 0b101, 0b111 }, // 8
-    { 0b111, 0b101, 0b111, 0b001, 0b111 }, // 9
-};
-
-static void drawGlyph(int32_t x, int32_t y, uint8_t d, uint8_t shade) {
-    for (uint8_t row = 0; row < 5; row++) {
-        const uint8_t bits = mhPgmReadU8(&FONT_DIG[d][row]);
-        for (uint8_t col = 0; col < 3; col++) {
-            if (bits & (4 >> col)) blk(x + col, y + row, 1, 1, shade);
-        }
-    }
+// Text comes from the FX glyph sheets (128 ASCII-ordered 4x8 tiles). The ink
+// byte lives on the light-gray (fxfontg) or white (fxfontw) plane, so FRAME(c)
+// makes glyph c render on its own plane. Advance 4 px == mock drawText scale 1
+// (3 px glyph + 1 px gap). No glyph bitmap lives in MCU flash or RAM.
+static inline int16_t textPut(uint24_t sheet, int32_t x, int32_t y, char c) {
+    const uint8_t code = static_cast<uint8_t>(c);
+    if (code < 128 && x > -4 && x < mh::SCREEN_W)
+        SpritesU::drawPlusMaskFX(static_cast<int16_t>(x), static_cast<int16_t>(y),
+                                 sheet, FRAME(code));
+    return static_cast<int16_t>(x + 4);
 }
 
-// Mock drawText(number, scale 1): left-to-right, 4 px advance.
+// Mock drawText(number, scale 1): digits left-to-right, 4 px advance. crit
+// (shade 3) is white, otherwise light gray, matching the mock's damage colors.
 static void drawNumber(int32_t x, int32_t y, int16_t value, uint8_t shade) {
+    const uint24_t sheet = (shade >= 3) ? fxfontw : fxfontg;
     uint16_t v = value < 0 ? 0 : static_cast<uint16_t>(value);
     uint8_t buf[5];
     uint8_t n = 0;
@@ -128,7 +152,8 @@ static void drawNumber(int32_t x, int32_t y, int16_t value, uint8_t shade) {
     } else {
         while (v > 0 && n < 5) { buf[n++] = static_cast<uint8_t>(v % 10); v /= 10; }
     }
-    for (uint8_t i = 0; i < n; i++) drawGlyph(x + i * 4, y, buf[n - 1 - i], shade);
+    for (uint8_t i = 0; i < n; i++)
+        textPut(sheet, x + i * 4, y, static_cast<char>('0' + buf[n - 1 - i]));
 }
 
 // Mock drawArena(): deterministic 1 px dots + world border.
@@ -150,17 +175,13 @@ static void drawArena(int16_t camX, int16_t camY) {
     blk(lx + mh::WORLD_W - 1, ly, 1, mh::WORLD_H, 2);
 }
 
-// Mock drawPole(): base post, ring bands, head, eye hole, ground plate.
+// Mock drawPole(): base post, ring bands, head, eye hole, ground plate, all
+// baked into the 20x40 (20x36 art) FX sprite; hit flash selects the head plane.
 static void drawPole(const mh::Pole& pole, int16_t camX, int16_t camY) {
     const int32_t x = static_cast<int32_t>(pole.rect.x) - camX;
     const int32_t y = static_cast<int32_t>(pole.rect.y) - camY + mh::HUD_H;
-    const int32_t w = pole.rect.w;
-    const int32_t h = pole.rect.h;
-    blk(x + 2, y + 12, w - 4, h - 12, 1);
-    for (int32_t i = 0; i < 3; i++) blk(x + 2, y + 20 + i * 7, w - 4, 1, 0);
-    blk(x, y, w, 16, pole.hitFlash > 0 ? 3 : 2);
-    blk(x + 8, y + 5, 4, 4, 0);
-    blk(x - 2, y + h - 2, w + 4, 2, 0);
+    const uint8_t f = pole.hitFlash > 0 ? spr::POLE_FLASH : spr::POLE_NORMAL;
+    sprDraw(fxpole, x, y, FRAME(f));
 }
 
 // Mock drawMonster(): dead heap, feet, body, head + eyes, stun sparkle, and the
@@ -172,30 +193,17 @@ static void drawMonster(const mh::Game& g, int16_t camX, int16_t camY) {
     const int32_t w = m.w;
     const int32_t h = m.h;
 
-    if (m.state == mh::MS_DEAD) {
-        blk(x, y + 16, w, 8, 1);
-        blk(x + w / 2 - 4, y + 14, 8, 4, 2);
-        return;
-    }
-
+    // Body, feet, head and eyes are baked per state/facing into the sprite;
+    // recover dims the body, windup flash and hit flash whiten it.
     const bool flashing = (m.state == mh::MS_WINDUP) &&
                           (((m.windupMax - m.t) / 4) % 2 == 0);
-    uint8_t body = 1;
-    if (m.state == mh::MS_RECOVER) body = 2;
-    if (m.hitFlash > 0) body = 3;
-    if (flashing) body = 3;
-
-    blk(x + 2, y + h - 1, w - 4, 1, 0);
-    for (int32_t i = 0; i < 4; i++) blk(x + 3 + i * 8, y + h - 3, 3, 3, 0);
-
-    blk(x + 2, y + 4, w - 4, 14, body);
-    blk(x + 6, y + 1, w - 12, 6, body);
-
-    const bool faceEast = m.fx >= 0;
-    const int32_t headX = faceEast ? x + w - 10 : x;
-    blk(headX, y + 6, 10, 12, m.state == mh::MS_RECOVER ? 2 : 3);
-    blk(faceEast ? headX + 7 : headX + 1, y + 13, 2, 2, 0);
-    blk(headX + 4, y + 9, 2, 2, 0);
+    uint8_t state = spr::MON_IDLE;
+    if (m.state == mh::MS_RECOVER) state = spr::MON_RECOVER;
+    if (m.hitFlash > 0 || flashing) state = spr::MON_FLASH;
+    if (m.state == mh::MS_DEAD) state = spr::MON_DEAD;
+    const uint8_t f = static_cast<uint8_t>(state + (m.fx >= 0 ? 0 : spr::MON_WEST));
+    sprDraw(fxmonster, x, y, FRAME(f));
+    if (m.state == mh::MS_DEAD) return;
 
     if (m.stun > 0) {
         const uint8_t a = static_cast<uint8_t>(static_cast<uint32_t>(g.tick) * ANG_MONSTER_STUN);
@@ -230,14 +238,11 @@ static void drawPlayer(const mh::Game& g, int16_t camX, int16_t camY) {
     const int32_t y = rndPx(p.y, p.subY) - camY + mh::HUD_H;
     const int32_t cx = x + 8;
     const int32_t cy = y + 8;
-    const uint8_t bodyShade = (p.state == mh::PS_DODGE) ? 2 : 3;
 
-    blk(x + 2, y + p.h - 1, p.w - 4, 1, 1);
-
-    blk(x + 5, y + 1, 6, 6, bodyShade);
-    blk(x + 4, y + 7, 8, 6, bodyShade);
-    blk(x + 5, y + 13, 2, 2, bodyShade);
-    blk(x + 9, y + 13, 2, 2, bodyShade);
+    // Shadow + body from the FX sheet; dodge dims the body one shade.
+    const uint8_t bodyFrame = (p.state == mh::PS_DODGE) ? spr::PLAYER_DODGE
+                                                        : spr::PLAYER_NORMAL;
+    sprDraw(fxplayer, x, y, FRAME(bodyFrame));
 
     if (g.weapon == mh::W_SWORD) {
         if (p.state == mh::PS_ATTACK || p.state == mh::PS_SPECIAL) {
@@ -331,14 +336,9 @@ static void drawProjectiles(const mh::Game& g, int16_t camX, int16_t camY) {
 
         const int32_t hw = pr.w >> 1;
         const int32_t hh = pr.h >> 1;
-        if (pr.heavy) {
-            blk(x - hw, y - hh, pr.w, pr.h, 2);
-            blk(x - hw + 1, y - hh + 1, pr.w - 2, pr.h - 2, 3);
-            blk(x - hw, y + hh - 2, pr.w, 1, 0);
-        } else {
-            blk(x - hw, y - hh, pr.w, pr.h, 2);
-            blk(x - hw + 1, y - hh + 1, 2, 2, 3);
-        }
+        // Ball (7x8) / scatter (4x8) sheets; art occupies the top 7x6 / 4x4.
+        if (pr.heavy) sprDraw(fxball, x - hw, y - hh, FRAME(0));
+        else          sprDraw(fxscatter, x - hw, y - hh, FRAME(0));
     }
 }
 
@@ -352,13 +352,13 @@ static void drawEffects(const mh::Game& g, int16_t camX, int16_t camY) {
             const int32_t y = static_cast<int32_t>(e.y) - (r + 1) / 3 - camY + mh::HUD_H;
             drawNumber(x - 2, y, e.text, e.crit ? 3 : 2);
         } else {
-            const uint8_t sh = e.crit ? 3 : 2;
+            // 4x4 spark sprite centred on the effect; crit selects the white
+            // plane. TODO: the mock expands the 4 dots with radius r — the FX
+            // sprite is fixed size, so the spread animation is dropped.
+            const uint8_t f = e.crit ? spr::SPARK_BRIGHT : spr::SPARK_LIGHT;
             const int32_t x = e.x - camX;
             const int32_t y = e.y - camY + mh::HUD_H;
-            blk(x - r, y, 1, 1, sh);
-            blk(x + r, y - 1, 1, 1, sh);
-            blk(x, y - r, 1, 1, sh);
-            blk(x, y + r, 1, 1, sh);
+            sprDraw(fxspark, x - 2, y - 2, FRAME(f));
         }
     }
 }
@@ -372,15 +372,10 @@ static void drawEffects(const mh::Game& g, int16_t camX, int16_t camY) {
 // 0..6. Drawn untranslated (mock restores the camera transform first) and
 // read-only.
 //
-// Text is Font4x6 (4x8 glyphs, PROGMEM/MCU flash). printChar() paints rows
-// y+1..y+7; cursorY = -1 places the 6 px cap in rows 0..5, inside the band.
-// Advance is 4 px glyph + 1 px spacing. Glyphs are set on every plane, so the
-// text composites white (shade 3), same as mock's scale-1 white text.
-static Font4x6 hudFont;
-
+// Text is drawn from the FX glyph sheet (fxfontw, 4x8 ASCII tiles) at row 1 so
+// the 5 px cap sits in HUD rows 1..5; advance 4 px, matching mock drawText.
 static inline int16_t hudPut(int16_t x, char c) {
-    hudFont.printChar(c, static_cast<int8_t>(x), -1);
-    return static_cast<int16_t>(x + 5);
+    return textPut(fxfontw, x, 1, c);
 }
 
 static uint8_t hudDigits(int32_t v) {
@@ -458,7 +453,7 @@ static void drawHud(const mh::Game& g) {
         if (dps > 999) dps = 999;
         const uint8_t nt = hudDigits(total);
         const uint8_t nd = hudDigits(dps);
-        x = static_cast<int16_t>(127 - 5 * (nt + nd + 2));
+        x = static_cast<int16_t>(127 - 4 * (nt + nd + 2));
         x = hudPut(x, 'T');
         x = hudNum(x, total, nt);
         x = hudPut(x, 'D');
@@ -475,7 +470,8 @@ void setup() {
 
     arduboy.boot();
     arduboy.startGray();
-    arduboy.initRandomSeed();
+    // initRandomSeed() dropped: the core is fully deterministic and never calls
+    // random(), so seeding only pulled the AVR random/random_r code into flash.
 
     FX::begin(FX_DATA_PAGE);
     FX::setCursorRange(0, 32767);
