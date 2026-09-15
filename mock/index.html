@@ -1,0 +1,81 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>MonHun Arduboy Mock</title>
+<style>
+  html, body { margin: 0; background: #181818; color: #bbb; font: 12px/1.6 ui-monospace, Menlo, monospace; }
+  #wrap { display: flex; flex-direction: column; align-items: center; gap: 10px; padding: 16px; }
+  canvas { width: 640px; height: 320px; image-rendering: pixelated; background: #000; border: 1px solid #333; }
+  table { border-collapse: collapse; }
+  td { padding: 1px 12px 1px 0; white-space: nowrap; }
+  .k { color: #eee; }
+  #combos { margin-top: 4px; border-top: 1px solid #333; }
+  #combos th { text-align: left; padding: 4px 14px 2px 0; color: #888; font-weight: normal; }
+  #combos td { padding: 1px 14px 1px 0; }
+  #combos .w { color: #eee; }
+</style>
+</head>
+<body>
+<div id="wrap">
+  <canvas id="screen" width="128" height="64"></canvas>
+  <table>
+    <tr>
+      <td><span class="k">Arrows</span> move</td>
+      <td><span class="k">Z</span> A: attack / stance special</td>
+      <td><span class="k">X</span> B: tap defend / hold stance</td>
+      <td><span class="k">1/2/3</span> sword / flail / gunshield (restarts)</td>
+    </tr>
+    <tr>
+      <td><span class="k">Q</span> swap shell&nbsp;&nbsp;<span class="k">K</span> train area</td>
+      <td><span class="k">R</span> reset hunt</td>
+      <td><span class="k">H</span> wireframe: red hurt / blue hit</td>
+      <td><span class="k">T</span> slow motion&nbsp;&nbsp;<span class="k">P</span> pause</td>
+    </tr>
+  </table>
+  <table id="combos">
+    <tr>
+      <th>A = Z key</th>
+      <th>B = X key</th>
+      <th>tap B</th>
+      <th>hold B = stance</th>
+      <th>stance + A</th>
+    </tr>
+    <tr>
+      <td class="w">SWORD</td>
+      <td>cut</td>
+      <td>dodge roll (moves)</td>
+      <td>parry (20 tick window)</td>
+      <td>riposte, 2x damage</td>
+    </tr>
+    <tr>
+      <td class="w">FLAIL</td>
+      <td>swing, chain speeds up</td>
+      <td>deflect step back</td>
+      <td>whirl, hits ring every 16t</td>
+      <td>ball throw, long reach</td>
+    </tr>
+    <tr>
+      <td class="w">GUN</td>
+      <td>bash</td>
+      <td>shove beast back</td>
+      <td>guard, chip damage only</td>
+      <td>fire shell, Q swaps ball/scatter</td>
+    </tr>
+    <tr>
+      <td class="w">SWORD chains</td>
+      <td colspan="4">A A A = 3-cut &nbsp;·&nbsp; A B = step-slash lunge &nbsp;·&nbsp; A A B = spin-cut, hits all around</td>
+    </tr>
+    <tr>
+      <td class="w">FLAIL chains</td>
+      <td colspan="4">A A A = big slam &nbsp;·&nbsp; A B = release into whirl &nbsp;·&nbsp; A A B = trip, beast falls 70t</td>
+    </tr>
+    <tr>
+      <td class="w">GUN chains</td>
+      <td colspan="4">A A A = bash x3 &nbsp;·&nbsp; A B = point-blank blast, eats ball &nbsp;·&nbsp; A A B = guard-bash push</td>
+    </tr>
+  </table>
+</div>
+<script src="game.js?v=4"></script>
+</body>
+</html>
