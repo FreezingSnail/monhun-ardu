@@ -462,11 +462,8 @@ static void updatePlayer(Game& g, const Input& inp, bool aP, bool bP, bool bR) {
 // projectile / effect updates live in the zq5 / hrd beads.
 void stepPlayer(Game& g, const Input& inp) {
   g.tick++;
-  const bool aP = inp.a && !g.prevA;
-  const bool bP = inp.b && !g.prevB;
-  const bool bR = !inp.b && g.prevB;
-  g.prevA = inp.a;
-  g.prevB = inp.b;
+  bool aP, bP, bR;
+  inputEdges(inp, g.prevA, g.prevB, aP, bP, bR); // shared edge rule (input.hpp)
   updatePlayer(g, inp, aP, bP, bR);
 }
 

@@ -8,6 +8,7 @@
 
 #include <stdint.h>
 #include "fp.hpp"
+#include "input.hpp"
 
 namespace mh {
 
@@ -121,11 +122,6 @@ constexpr WeaponDef WEAPON_DEFS[3] = {
     { { 2, 28, 35, 7, 6, 70, 6, 1 },
       { 5, 7, 42, 4, 4, 30, 5, 3 } },
   },
-};
-
-struct Input {
-  int16_t mx, my; // -1/0/1 per axis
-  bool a, b;
 };
 
 struct Game;

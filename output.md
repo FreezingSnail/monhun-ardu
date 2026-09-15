@@ -1,58 +1,52 @@
-# monhun-ardu-0ny — Core: world, camera, mode toggles
+# monhun-ardu-z99 — Device: input layer (dpad + A/B, hold detect)
 
 ## Files
-- added: `src/core/world.hpp` — the 0ny half of `mock/game.js`:
-  - geometry: `SCREEN_W 128`, `SCREEN_H 64`, `HUD_H 8`, `ARENA_H 56`,
-    `CAM_MAX_X = WORLD_W-SCREEN_W = 128`, `CAM_MAX_Y = WORLD_H-ARENA_H = 56`.
-  - `updateCamera(g)` — mock `updateCamera()`: centre on the player, clamp
-    `x 0..128`, `y 0..56`, int px only (no float).
-  - `updateActiveTarget(g)` — mock `activeTarget()`: arms `Game::target` at the
-    pole in train, the live beast in hunt (`alive=false` once dead), re-arming
-    each mode's `onHit/onShove/onStun` callbacks.
-  - `activeTargetRect(g)` — read-only `const Rect*` view (null when dead/absent).
-  - `newGame(g, weapon, mode)` — fresh world: `initGame` + `initMonster` +
-    `initWorld` + target arm + camera 0,0.
-  - `withWeapon(g, weapon)` / `resetHunt(g)` — mock wrappers that re-init with
-    the **current mode** (prototype bug fix: `newGame` defaults to hunt).
-  - `stepGame(g, inp)` — full tick: `updateCamera` then `stepWorld` (mock order).
-- changed: `src/core/game.hpp` — `Game::camX, camY` (int16 camera top-left).
-- added: `tst/world_test.hpp` — 9 suites / 44 asserts: world+camera constants,
-  camera order (1-tick trail), x follow+clamp, y clamp both ends, idle no-slide
-  (120 ticks), train monster frozen + pole target, activeTarget dead=null,
-  weapon-swap/reset keep mode, projectile cull `world+8` margin.
-- changed: `tst/main.cpp` — include + run `WorldSuite`.
-- changed: `tst/fxdatatest/boot_test.hpp` — includes `world.hpp` (compiles it for
-  AVR) and pins the start camera `(40,40)` to the host value.
-- changed: `output.md` (this file).
+- added: `src/core/input.hpp` — pure input layer, `namespace mh`, only
+  `<stdint.h>` (no `Arduino.h`, no float):
+  - `struct Input { int8_t mx, my; bool a, b; }` (mx/my -1/0/1 per axis).
+    Moved here from `game.hpp`; `game.hpp` now `#include "input.hpp"`.
+  - `struct InputState { bool prevA, prevB; uint8_t bHeld; bool bReady,
+    bLocked; bool aP, bP, bR; }` + `reset()`. `aP/bP/bR` are the per-tick mock
+    edges; `bHeld` counts held B ticks and saturates at the threshold; `bReady`
+    arms on press; `bLocked` latches once the threshold is reached so a hold
+    fires exactly once until release.
+  - `inputEdges(in, prevA, prevB, aP, bP, bR)` — stateless mock `step()` edge
+    rule (`aP = a && !prevA`, `bP = b && !prevB`, `bR = !b && prevB`).
+  - `stepInput(InputState&, const Input&, uint8_t holdTicks)` — one tick of
+    edges + hold counting. `holdTicks` is `HOLD_TICKS` (game.hpp, 11); no
+    second copy of the constant.
+- changed: `src/core/game.hpp` — `Input` now comes from `input.hpp` (textbook
+  fields `int8_t` instead of `int16_t`, as the bead specifies); no behaviour
+  change.
+- changed: `src/core/player.hpp` — `stepPlayer()` computes its edges via the
+  shared `inputEdges()` helper instead of duplicating the four lines. The
+  Player still owns `bHeld/bReady/bLocked` for the FSM (as instructed); this
+  layer does not mirror or mutate them, so there is one edge rule and one
+  owner of the FSM hold state.
+- added: `tst/input_test.hpp` — 7 permanent tests / 51 asserts.
+- changed: `tst/main.cpp` — include + run `InputSuite`.
 
-## Camera-order choice
-`updateCamera` runs **before logic**, exactly like mock `step()` (camera call
-sits above `updatePlayer`). The camera therefore shows the player position from
-the previous tick — a deliberate 1-tick trail, not lag to be fixed:
-- keeps the device bit-identical to the browser prototype for scroll feel;
-- is testable and pinned by "camera order" (`camX == 40` while the player has
-  already stepped to `x == 97`).
-The device loop should call `stepGame()` (camera + `stepWorld`), not
-`stepWorld()` directly, to preserve the order.
-
-## R key semantics (for the device bead)
-Mock `boot()` maps `KeyR -> resetHunt()`, `Digit1..3 -> withWeapon()`, and
-`KeyK -> newGame(weapon, other mode)`. Port equivalents:
-- R = `resetHunt(g)` — restart the current area with the current weapon (keeps
-  both weapon and mode). Not `newGame`, which would reset the area to hunt.
-- 1/2/3 = `withWeapon(g, 0|1|2)` — keeps the current area.
-- K (if wired) = `newGame(g, weapon, other mode)`.
+## Test coverage (`tst/input_test.hpp`)
+- A edge fires on press only, no repeat while held, fires again on re-press.
+- B edge `bP` and release edge `bR` fire once each.
+- Press + release across a tick boundary stays sub-threshold -> a tap.
+- Hold counter hits `HOLD_TICKS` on the 11th held tick, latches, and does not
+  re-fire while held (saturates).
+- Release clears counter + latch; re-press counts and fires again.
+- 10 held ticks never latch; d-pad leaves A/B untouched.
+- A and B edges independent (A+B combo is not consumed).
 
 ## `make test` output (tail)
 ```
----------- projectile cull bounds carry the mock world+8 px margin ----------
+++++++++++ Input layer: edges + B hold detection (src/core/input.hpp) ++++++++++
+---------- A and B edges are independent (A+B combo not consumed) ----------
 Passed: 4
 Failed: 0
 ========== Total Counts ==========
-Total Passed: 446
+Total Passed: 497
 Total Failed: 0
 ```
-Exit 0 (402 asserts before this bead; +44).
+Exit 0 (446 before; +51).
 
 ## `make fxtest-headless` output (tail)
 ```
@@ -64,10 +58,34 @@ test_boot PASSED=4 FAILED=0
 P
 test_boot: PASS
 ```
-Exit 0 (2 device checks before; +2).
+Exit 0.
+
+## Adapter the device loop bead (monhun-ardu-3p1) must write
+`monhun-ardu.ino` keeps the FX bracket
+(`FX::enableOLED` / `arduboy.waitForNextPlane()` / `FX::disableOLED`) and calls
+`run()` only when `arduboy.needsUpdate()`. Inside `run()`:
+
+```cpp
+// BtnA -> a (attack), BtnB -> b (defense/stance), d-pad -> mx/my.
+// pollButtons() must already have been called this frame.
+mh::Input in;
+in.mx = (arduboy.pressed(RIGHT_BUTTON) ? 1 : 0)
+      - (arduboy.pressed(LEFT_BUTTON)  ? 1 : 0);
+in.my = (arduboy.pressed(DOWN_BUTTON)  ? 1 : 0)
+      - (arduboy.pressed(UP_BUTTON)    ? 1 : 0);
+in.a  = arduboy.pressed(A_BUTTON);
+in.b  = arduboy.pressed(B_BUTTON);
+mh::stepGame(g, in);   // stepPlayer() applies the same edge rule internally
+```
+
+- Hardware A -> `Input::a`, B -> `Input::b`; poll exactly once per logic tick.
+- `stepGame()`/`stepPlayer()` compute `aP/bP/bR` through `mh::inputEdges()`, so
+  the device does **not** need to build an `InputState` for the FSM. A+B is left
+  untouched for the future debug toggle (both edges surface independently).
+- No `Arduino.h` (or any hardware symbol) leaks into `src/core/`; `Input` is a
+  plain struct, so host tests and AVR share the identical edge/hold rule.
 
 ## Notes
-- No float/double, no `Arduino.h`; ints + `fp.hpp` only. No retuning.
-- `mock/`, `fp.hpp`, and player/monster/projectile behaviour untouched.
-- `stepWorld()` still owns the per-tick target sync and the train-skips-monster
-  branch, so neither the beast AI nor any collected damage changes.
+- No float/double, no retuning; `HOLD_TICKS` stays 11 in `game.hpp`.
+- `mock/` untouched; player/monster/projectile/world behaviour unchanged
+  (446 original asserts still green).
