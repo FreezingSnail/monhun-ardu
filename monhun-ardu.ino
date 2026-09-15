@@ -6,6 +6,13 @@
 #include "src/fxdata.h"
 #include "src/core/world.hpp"
 
+// Compile-time gate for the 1-bit wireframe debug overlay (hurt/hit boxes).
+// 0 = release: every debug symbol below is preprocessed out (zero flash/RAM).
+// 1 = debug: world-space wire boxes drawn after the scene, before the HUD.
+#ifndef DEBUG_HURTBOXES
+#define DEBUG_HURTBOXES 0
+#endif
+
 decltype(arduboy) arduboy;
 
 // Single game state. The core is header-only and shared verbatim with the host
@@ -363,6 +370,113 @@ static void drawEffects(const mh::Game& g, int16_t camX, int16_t camY) {
     }
 }
 
+/* ------------------------------------------------------------- debug wire */
+
+#if DEBUG_HURTBOXES
+// 1-bit wireframe overlay, ported from mock/game.js drawDebug() (source of
+// truth). No color on device, so hurt vs hit boxes are told apart by edge
+// style: hurt = solid border, hit = dotted (alternating 1 px). Drawn on every
+// plane with the identical shapes, exactly like the block scene, so the L4
+// triplane pass resolves to the same image. Read-only: never mutates Game.
+//
+// World rects are the sim's exact int rectangles (raw int coords, not the
+// rndPx sub-pixel smoothing used for sprites), translated by the same camera
+// and HUD offset the sprite/blk scene uses.
+
+// Solid 1 px border (hurt boxes).
+static void wireSolid(int32_t x, int32_t y, int32_t w, int32_t h) {
+    if (w < 1 || h < 1) return;
+    blk(x, y, w, 1, 3);
+    blk(x, y + h - 1, w, 1, 3);
+    blk(x, y, 1, h, 3);
+    blk(x + w - 1, y, 1, h, 3);
+}
+
+// Dotted 1 px border (hit boxes): every other pixel on each edge.
+static void wireDot(int32_t x, int32_t y, int32_t w, int32_t h) {
+    if (w < 1 || h < 1) return;
+    for (int32_t i = 0; i < w; i += 2) {
+        blk(x + i, y, 1, 1, 3);
+        blk(x + i, y + h - 1, 1, 1, 3);
+    }
+    for (int32_t j = 0; j < h; j += 2) {
+        blk(x, y + j, 1, 1, 3);
+        blk(x + w - 1, y + j, 1, 1, 3);
+    }
+}
+
+static void drawDebug(const mh::Game& g, int16_t camX, int16_t camY) {
+    const int32_t ox = -camX;
+    const int32_t oy = -camY + mh::HUD_H;
+    const mh::Player& p = g.player;
+
+    // Hurt boxes (solid): player body, then the live target hurt rect (monster
+    // body in hunt, training pole in train) as activeTarget() would report.
+    wireSolid(p.x + ox, p.y + oy, p.w, p.h);
+    if (g.target.alive)
+        wireSolid(g.target.rect.x + ox, g.target.rect.y + oy,
+                  g.target.rect.w, g.target.rect.h);
+
+    // Active player melee hit box (dotted): the sim's meleeHitbox() rect, so
+    // the wire matches the frame the overlap test actually runs against.
+    if ((p.state == mh::PS_ATTACK || p.state == mh::PS_SPECIAL) && p.atk) {
+        const mh::Rect hit = mh::meleeHitbox(p, p.atk);
+        wireDot(hit.x + ox, hit.y + oy, hit.w, hit.h);
+    }
+
+    // Monster windup/attack hit box (dotted), same reach/facing projection and
+    // hw/hh the monster hit test uses; the windup outline is the telegraph.
+    if (g.mode == mh::MODE_HUNT && g.monster.atk &&
+        (g.monster.state == mh::MS_WINDUP || g.monster.state == mh::MS_ATTACK)) {
+        const mh::Monster& m = g.monster;
+        const int32_t reach = mh::monsterAttackReach(m.atk);
+        const int32_t hx = m.x + (m.w >> 1) + (((int32_t)m.fx * reach) >> 4);
+        const int32_t hy = m.y + (m.h >> 1) + (((int32_t)m.fy * reach) >> 4);
+        const int32_t hw = mh::monsterAttackHw(m.atk);
+        const int32_t hh = mh::monsterAttackHh(m.atk);
+        wireDot(hx - (hw >> 1) + ox, hy - (hh >> 1) + oy, hw, hh);
+    }
+
+    // Live shell/projectile hit rects (dotted), exact pr.w x pr.h collision box.
+    for (int16_t i = 0; i < g.projN; i++) {
+        const mh::Projectile& pr = g.proj[i];
+        wireDot(pr.x - (pr.w >> 1) + ox, pr.y - (pr.h >> 1) + oy, pr.w, pr.h);
+    }
+
+    // Flail whirl radius (dotted 48x48 box) while the whirl stance is held.
+    if (p.stance == mh::ST_WHIRL) {
+        const int32_t cx = p.x + (p.w >> 1);
+        const int32_t cy = p.y + (p.h >> 1);
+        wireDot(cx - 24 + ox, cy - 24 + oy, 48, 48);
+    }
+
+    // Hit-spark markers (small white plus) at live non-text effects.
+    for (int16_t i = 0; i < g.fxN; i++) {
+        const mh::Effect& e = g.fx[i];
+        if (e.text || e.t >= e.life) continue;
+        const int32_t sx = e.x + ox;
+        const int32_t sy = e.y + oy;
+        blk(sx, sy - 1, 1, 3, 3);
+        blk(sx - 1, sy, 3, 1, 3);
+    }
+}
+
+// Runtime toggle inside the debug build: hold A+B for 30 ticks to flip. The
+// buttons still reach the sim unchanged (run() never consumes them); A+B is
+// only *observed* here, so normal input cannot be eaten by the overlay.
+static bool    s_wire = true;
+static uint8_t s_wireHold = 0;
+
+static void pollDebugToggle(const mh::Input& in) {
+    if (in.a && in.b) {
+        if (s_wireHold < 30) s_wireHold++;
+        if (s_wireHold == 30) s_wire = !s_wire;
+    } else {
+        s_wireHold = 0;
+    }
+}
+#endif // DEBUG_HURTBOXES
+
 /* ------------------------------------------------------------------- hud */
 
 // Mock drawHud(): HP + stamina bars, weapon name, gun shell/reload, then the
@@ -489,6 +603,9 @@ void run() {
           - (arduboy.pressed(UP_BUTTON)    ? 1 : 0);
     in.a  = arduboy.pressed(A_BUTTON);
     in.b  = arduboy.pressed(B_BUTTON);
+#if DEBUG_HURTBOXES
+    pollDebugToggle(in); // observes A+B; does not consume input from stepGame
+#endif
     mh::stepGame(g, in);
 }
 
@@ -526,6 +643,9 @@ void render() {
     drawPlayer(g, ecX, ecY);
     drawProjectiles(g, ecX, ecY);
     drawEffects(g, ecX, ecY);
+#if DEBUG_HURTBOXES
+    if (s_wire) drawDebug(g, ecX, ecY);
+#endif
     drawHud(g);
 }
 
