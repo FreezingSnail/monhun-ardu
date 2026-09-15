@@ -5,6 +5,7 @@
 #include "src/globals.hpp"
 #include "src/fxdata.h"
 #include "src/core/world.hpp"
+#include "src/audio.hpp"
 
 // Compile-time gate for the 1-bit wireframe debug overlay (hurt/hit boxes).
 // 0 = release: every debug symbol below is preprocessed out (zero flash/RAM).
@@ -18,6 +19,10 @@ decltype(arduboy) arduboy;
 // Single game state. The core is header-only and shared verbatim with the host
 // tests; the device loop only samples input, steps it, and reads it for draw.
 mh::Game g;
+
+// Audio cue edge detector. Driven from run() after stepGame(); reads Game only
+// (no core changes). Muted at compile time with -DMH_AUDIO=0.
+mh::AudioState s_audio;
 
 /* ---------------------------------------------------------------- sprites */
 
@@ -607,6 +612,7 @@ void run() {
     pollDebugToggle(in); // observes A+B; does not consume input from stepGame
 #endif
     mh::stepGame(g, in);
+    mh::audioUpdate(s_audio, g);
 }
 
 // Full block-art scene, mock draw order: arena, target (pole|beast), player,
