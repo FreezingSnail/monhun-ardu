@@ -71,7 +71,7 @@ function dirIndexFromDelta(dx, dy) {
 // integer sqrt (bit method)
 function isqrt(n) {
   let r = 0;
-  let bit = 1 << 15;
+  let bit = 1 << 14; // seed must be an even power of 4, else small n break
   while (bit > n) bit >>= 2;
   while (bit) {
     if (n >= r + bit) { n -= r + bit; r = (r >> 1) + bit; }
@@ -1497,7 +1497,7 @@ function boot() {
 
 if (typeof module !== 'undefined' && module.exports) {
   module.exports = {
-    newGame, step, render, withWeapon, resetHunt,
+    newGame, step, render, withWeapon, resetHunt, isqrt,
     WEAPON_DEFS, MONSTER_ATTACKS,
     W, H, ARENA_H, HOLD_TICKS, SHADES, WORLD_W, WORLD_H, FP,
   };

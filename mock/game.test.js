@@ -248,6 +248,11 @@ test('weapon swap and reset keep train mode', () => {
   assert.equal(g.mode, 'hunt');
 });
 
+test('isqrt exact for small and large values', () => {
+  const cases = [[0, 0], [1, 1], [2, 1], [9, 3], [10, 3], [15, 3], [16, 4], [255, 15], [256, 16], [1000, 31], [65535, 255]];
+  for (const [n, want] of cases) assert.equal(G.isqrt(n), want, 'isqrt(' + n + ')');
+});
+
 test('all three weapon starts are valid', () => {
   for (let i = 0; i < 3; i++) {
     const g = G.newGame(i);
