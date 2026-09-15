@@ -199,8 +199,12 @@ static void updateProjectiles(Game& g) {
         continue;
       }
     }
-    if (pr.life <= 0 || pr.x < -8 || pr.x > WORLD_W + 8 ||
-        pr.y < -8 || pr.y > WORLD_H + 8) {
+    // Mock culls on the 1/16 px field, so a shot still inside the last
+    // sub-pixel of the margin survives one extra tick. Compare the same way.
+    const int32_t fpx = pr.x * 16 + pr.subX;
+    const int32_t fpy = pr.y * 16 + pr.subY;
+    if (pr.life <= 0 || fpx < -(8 << 4) || fpx > (WORLD_W + 8) << 4 ||
+        fpy < -(8 << 4) || fpy > (WORLD_H + 8) << 4) {
       removeProjectile(g, i);
     }
   }
@@ -208,17 +212,27 @@ static void updateProjectiles(Game& g) {
 
 // ---------------------------------------------------------------- full tick
 
-// One tick in mock step() order for the parts owned here. Camera/world scroll
-// (0ny) and freeze gating are intentionally not implemented yet; render beads
-// read Game::mode / pole / proj / fx directly.
-static void stepWorld(Game& g, const Input& inp) {
+// Tick body, mock step() order from updatePlayer() through updateEffects().
+// Edges are supplied by the caller so stepGame() can run them before the
+// over/freeze gate (mock computes edges every tick, frozen or not).
+static void stepWorldBody(Game& g, const Input& inp, bool aP, bool bP, bool bR) {
   if (g.mode == MODE_TRAIN) armPoleTarget(g); else syncMonsterTarget(g);
-  stepPlayer(g, inp);
+  updatePlayer(g, inp, aP, bP, bR);
   if (g.lastShot) spawnShot(g);
   if (g.mode == MODE_TRAIN) updatePole(g); else updateMonster(g);
   if (g.mode == MODE_TRAIN) armPoleTarget(g); else syncMonsterTarget(g);
   updateProjectiles(g);
   updateEffects(g);
+}
+
+// Legacy entry: tick++ + edges + body, no over/freeze gate. Host unit tests
+// drive sub-systems directly through this; the full loop uses stepGame()
+// (world.hpp), which adds mock step()'s over/freeze gating.
+static void stepWorld(Game& g, const Input& inp) {
+  g.tick++;
+  bool aP, bP, bR;
+  inputEdges(inp, g.prevA, g.prevB, aP, bP, bR);
+  stepWorldBody(g, inp, aP, bP, bR);
 }
 
 } // namespace mh

@@ -76,11 +76,24 @@ static void resetHunt(Game& g) {
   newGame(g, g.weapon, g.mode);
 }
 
-// One full tick in mock step() order: camera first, then player/target/rounds.
-// Camera therefore trails the logic by exactly one tick (mock parity).
+// One full tick in mock step() order: tick++, input edges, camera, then the
+// over / freeze gates, then player/target/rounds. The gates are the mock's
+// hitstop: a frozen tick still ages the clock, edges and effects-over branch,
+// but skips all sim updates, so device play matches the prototype exactly.
 static void stepGame(Game& g, const Input& inp) {
+  g.tick++;
+  bool aP, bP, bR;
+  inputEdges(inp, g.prevA, g.prevB, aP, bP, bR); // edges run even while frozen
   updateCamera(g);
-  stepWorld(g, inp);
+  if (g.over != OVER_NONE) {
+    updateEffects(g); // mock: effects keep ticking after win/lose
+    return;
+  }
+  if (g.freeze > 0) {
+    g.freeze--;
+    return; // mock: hitstop skips sim, not effects
+  }
+  stepWorldBody(g, inp, aP, bP, bR);
 }
 
 } // namespace mh

@@ -12,6 +12,11 @@
 
 namespace mh {
 
+// Defined in projectiles.hpp (included after this header). The mock's damage
+// handlers spawn a hit spark, so player/monster hit paths forward here.
+static void addEffect(Game& g, int16_t x, int16_t y, int16_t life, bool crit,
+                      int16_t text);
+
 void Player::init(int8_t weapon) {
   (void)weapon;
   x = 96; y = 60; w = 16; h = 16;
@@ -33,6 +38,7 @@ void Player::init(int8_t weapon) {
 
 void initGame(Game& g, int8_t weapon) {
   g.tick = 0; g.freeze = 0;
+  g.over = OVER_NONE;
   g.weapon = weapon;
   g.prevA = g.prevB = false;
   g.player.init(weapon);
@@ -321,12 +327,14 @@ static void playerHurt(Game& g, int16_t dmg, int16_t faceX, int16_t faceY) {
   if (p.state == PS_DEFLECT && p.t > 0) {
     if (g.target.onStun) g.target.onStun(g, 28);
     g.freeze = g.freeze > 5 ? g.freeze : 5;
+    addEffect(g, static_cast<int16_t>(p.x + 8), static_cast<int16_t>(p.y + 8), 6, true, 0);
     return;
   }
   if (p.stance == ST_PARRY && p.stanceT <= 20) {
     p.riposteT = 90;
     if (g.target.onStun) g.target.onStun(g, 60);
     g.freeze = g.freeze > 8 ? g.freeze : 8;
+    addEffect(g, static_cast<int16_t>(p.x + 8), static_cast<int16_t>(p.y + 8), 8, true, 0);
     return;
   }
   if (p.stance == ST_GUARD) {
@@ -355,6 +363,7 @@ static void playerHurt(Game& g, int16_t dmg, int16_t faceX, int16_t faceY) {
   p.atk = nullptr;
   exitStance(p);
   g.freeze = g.freeze > 6 ? g.freeze : 6;
+  addEffect(g, static_cast<int16_t>(p.x + 8), static_cast<int16_t>(p.y + 8), 8, false, 0);
 }
 
 static void updatePlayer(Game& g, const Input& inp, bool aP, bool bP, bool bR) {

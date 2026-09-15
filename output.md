@@ -1,76 +1,99 @@
-# monhun-ardu-d54 — Device: wireframe debug overlay (hurt/hit)
+# monhun-ardu-p82 — Test: on-device sim parity suite (Ardens)
 
 ## Bead
-`monhun-ardu-d54` (slice of epic `monhun-ardu-kt7`). 1-bit wire boxes at the
-same int rects the sim uses, compile-time gated so the release build excludes
-them entirely.
+`monhun-ardu-p82` (slice of epic `monhun-ardu-kt7`). Proves the C++ core sim
+matches the JS prototype (`mock/game.js`, the source of truth) for fixed,
+scripted input sequences, tick by tick, on real AVR hardware via Ardens.
 
 ## Files
-- changed `monhun-ardu.ino` — `DEBUG_HURTBOXES` gate (default 0), 1-bit
-  wireframe overlay (`wireSolid` / `wireDot` / `drawDebug`), A+B hold toggle,
-  `drawDebug()` call in `render()` after effects and before the HUD.
-- changed `output.md` (this file).
+- added `tools/gen-parity-fixtures.js` — Node fixture generator; steps the mock
+  over 20 deterministic scenarios and writes the C header below (JS only to
+  produce fixtures; the test itself is C++/Ardens).
+- added `tst/fxdatatest/parity_fixtures.hpp` — generated, permanent fixtures in
+  flash (`MH_PROGMEM`): per-tick input bytes, per-tick 16-bit full-state hashes,
+  20-field snapshots, start-state overrides, scene index.
+- added `tst/fxdatatest/parity_test.hpp` — replays the fixture scripts through
+  `mh::stepGame` and compares.
+- added `tst/fxdatatest/test_parity.ino` — Ardens entry point (`P`/`F` report).
+- changed `src/core/world.hpp` — `stepGame()` now implements the mock's
+  over/freeze (hitstop) gates.
+- changed `src/core/projectiles.hpp` — `stepWorldBody()` split out of
+  `stepWorld()`; projectile cull compares the 1/16 px field like the mock.
+- changed `src/core/player.hpp` — init `g.over`; hit-spark effects on
+  deflect/parry/player hurt.
+- changed `src/core/monster.hpp` — hit-spark effect on monster damage.
 
-No core (`src/core/*`) changes; overlay/render only. No float/double, no
-retuning.
+No Makefile change needed: `test_parity.ino` is picked up automatically by
+`FXTEST_INOS = $(wildcard tst/fxdatatest/test_*.ino)`, so it runs alongside
+`test_boot` / `test_assets` in `fxtest-build` / `fxtest-run`.
 
-## Gate
-```c
-#ifndef DEBUG_HURTBOXES
-#define DEBUG_HURTBOXES 0
-#endif
+## Fixture generation
 ```
-- `0` (default / release): `drawDebug`, the wire helpers, `s_wire`, and
-  `pollDebugToggle` are preprocessed out — zero flash/RAM cost.
-- `1`: overlay compiled in. Build with the define temporarily set to `1` (or
-  `-DDEBUG_HURTBOXES=1`); the committed value is `0`.
-
-## Overlay contents (drawn in world space, after the scene, before the HUD)
-Camera + HUD translation is applied exactly as the sprite/blk scene
-(`x - camX`, `y - camY + HUD_H`). All rects are the sim's raw int coordinates
-(no `rndPx` sub-pixel smoothing), and every shape is drawn on every plane so
-the L4 triplane pass composites a single image. Render stays read-only.
-
-No color on device, so hurt vs hit is edge style:
-- **solid** border = hurt box
-- **dotted** border = hit box
-
-| Box | Source | Style |
-|---|---|---|
-| Player hurt | `p.x/y/w/h` | solid |
-| Target hurt | `g.target.rect` if `g.target.alive` (monster body in hunt, pole in train) | solid |
-| Player active attack | `mh::meleeHitbox(p, p.atk)` when `PS_ATTACK`/`PS_SPECIAL` | dotted |
-| Monster windup/attack (telegraph) | `m.x/y + facing * monsterAttackReach`, `hw x hh` when hunt and `MS_WINDUP`/`MS_ATTACK` | dotted |
-| Shells / projectiles | `pr.x/y +/- pr.w/h` for each live `g.proj[i]` | dotted |
-| Flail whirl radius | 48x48 centered on player when `p.stance == ST_WHIRL` | dotted |
-| Hit-spark markers | small white plus at each live non-text `g.fx[i]` | solid plus |
-
-Runtime toggle: hold **A+B for 30 ticks** to flip. `run()` only *observes* the
-buttons (`pollDebugToggle`) and still passes the same `mh::Input` to
-`stepGame`, so normal input is never eaten. Overlay defaults visible when the
-debug build is compiled in.
-
-## Flash / RAM (`rm -rf build && make build`)
+node tools/gen-parity-fixtures.js
+# -> wrote tst/fxdatatest/parity_fixtures.hpp
+#    scenes=20 ticks=1269 snapshots=32 cpFields=20
 ```
-DEBUG_HURTBOXES 0: Sketch uses 25934 bytes (87%)  Global variables 1884 bytes (676 free)
-DEBUG_HURTBOXES 1: Sketch uses 28074 bytes (94%)  Global variables 1885 bytes (675 free)
+
+## What is compared
+Scenarios (same seeds/inputs as the mock; no RNG): player chains per weapon
+(sword/flail/gunshield), sword stepslash/pointblank branches, dodge i-frames,
+parry/whirl/guard stances, shell fire + reload + ball speed, monster attack
+cycle + windup + sweep hit, pole head/body damage + train DPS, train-mode
+freeze, guard stamina drain, world clamp, beast push-apart.
+
+- **Every tick**: a 16-bit FNV-1a hash of the full sim state (game scalars,
+  player/ monster/attack FSM, pole/train, projectiles, effects). Fixture reads
+  are flash loads; no fixture copy lands in RAM.
+- **Every 64 ticks + final tick**: 20 packed field asserts — player x/y, hp,
+  stam, state, stance, chain, ball/scatter ammo, reload, projectile count,
+  train total/last, monster x/y/state/hp/stun, camera x/y.
+
+Tests live permanently in `tst/fxdatatest/`; no temp files, no Python. Integers
+only, no float.
+
+## Mismatches found and fixed (core bugs vs. mock)
+1. **Missing over/freeze gating** — `stepGame()` ran the full sim every tick,
+   but the mock's `step()` skips `updatePlayer`/target/projectiles while
+   `freeze > 0` and after `over`, and applies a `shake`/effects-only path (the
+   prototype's hitstop). Diverged on every hit. Fixed in `world.hpp`:
+   tick++/edges/camera run first, then the over and freeze gates.
+   `stepWorldBody()` was split out so host sub-system tests keep their direct,
+   ungated entry point. This is the *gate* only; real `Game::shake` remains the
+   separate hitstop TODO in `monhun-ardu.ino`.
+2. **Projectile cull margin** — the mock culls on the 1/16 px position
+   (`> (WORLD_W+8)<<4`), so a shot in the last sub-pixel of the margin lives one
+   more tick; the port compared integer px and kept/culled a tick early
+   (scene 10, tick 86). Fixed to compare `pr.x*16 + pr.subX`.
+3. **Missing hit-spark effects** — the mock's `playerHit`/`damageMonster` push a
+   spark into `effects`; the port omitted them (scene 8 tick 17, scene 12 tick
+   1). Added `addEffect(...)` (forward-declared in `player.hpp`, defined in
+   `projectiles.hpp`) on monster damage, and on deflect/parry/normal player
+   hurt. Guard path spawns no spark, matching the mock.
+
+## Test tails
+`make test` (host C++17):
 ```
-- Disabled config is unchanged from the landed build (25934 B) and well under
-  the ~27700 B cap.
-- Enabled config adds 2140 B flash (wire helpers + drawDebug + toggle), fits
-  under the 29696 B program max, and adds 1 B RAM (`s_wireHold`; `s_wire` is a
-  bool merged into adjacent storage).
-- Headroom: disabled 3762 B; enabled 1622 B.
+========== Total Counts ==========
+Total Passed: 497
+Total Failed: 0
+```
 
-## Tests
-- `make test` (host C++17): **497 passed / 0 failed** (unchanged).
-- `make fxtest-headless` (Ardens device serial): **green** —
-  `test_assets PASSED=30 FAILED=0`, `test_boot PASSED=4 FAILED=0` (both final `P`).
+`make fxtest-headless` (Ardens, all three device suites):
+```
+=== test_assets ===
+asset_test PASSED=30 FAILED=0
+P
+test_assets: PASS
+=== test_boot ===
+test_boot PASSED=4 FAILED=0
+P
+test_boot: PASS
+=== test_parity ===
+parity_test PASSED=660 FAILED=0
+P
+test_parity: PASS
+```
 
-## TODO / follow-ups
-- Overlay is compile-time only; a runtime default-on/off persisted choice is
-  not needed for the slice.
-- The mock's debug also prints the player/monster state strings; the device
-  overlay omits them (no state-text budget on the 8 px HUD) — boxes only.
-- Damage-number effects are deliberately skipped as spark markers (`e.text`
-  filtered); they already render as numbers.
+Flash/RAM of the parity sketch: 28932 B / 29696 B program (764 B headroom),
+1883 B globals (677 B stack). Checkpoint stride is 64 to keep the suite inside
+the FX ROM budget; per-tick hashes still cover all 1269 ticks.
