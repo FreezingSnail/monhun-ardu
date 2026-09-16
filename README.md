@@ -173,7 +173,7 @@ Notes:
    direct masked framebuffer writes (`816767d`) — render max 13312 → 3984 µs,
    plane 82 → 156 Hz, logic 27 → 52 Hz, profiler `mh::blk` share 29% → 3.6%.
    Any new feature must fit flash (~2016 B free) and keep the perf gates green.
-2. **Flash headroom** is thin: shipping 27672/29696 B (2024 B free). The
+2. **Flash headroom** is thin: shipping 27680/29696 B (2016 B free). The
    `DEBUG_HURTBOXES=1` and `test_perf` images sit at 99% — any new feature must
    budget flash, prefer FX data.
 3. **RAM history**: constant tables originally sat in AVR `.rodata` (RAM) at
