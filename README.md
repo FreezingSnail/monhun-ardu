@@ -11,18 +11,18 @@ port of a browser prototype (`mock/`), verified tick-for-tick against it.
 | Item | State |
 |---|---|
 | Vertical-slice sim | Ported + parity-verified (20 scenes / 1269 ticks / 660 device asserts) |
-| Device render + HUD + audio | Working (block/FX-sprite art, cue tones; HUD text/FX glyphs — bars clipped, `7y3`) |
+| Device render + HUD + audio | Working (block/FX-sprite art, cue tones; HUD text/FX glyphs + bars — `7y3` clamp fixed) |
 | Host unit tests | `make test` — **1490 passed / 0 failed** |
-| Device tests (Ardens) | boot 4, assets 254, audio 14, menu 55, parity 660, data 221, perf 5 — all PASS |
-| Perf gate (`monhun-ardu-8v7`, re-verified `42n.6`) | **PASS.** plane 156 Hz (≥135), logic 52 Hz (≥45), render max 4676 µs (≤7407), tick 988 µs, RAM free 494 B |
+| Device tests (Ardens) | boot 4, assets 254, audio 14, menu 55, hud 17, parity 660, data 221, perf 5 — all PASS |
+| Perf gate (`monhun-ardu-8v7`, re-verified `42n.6` + `7y3`) | **PASS.** plane 156 Hz (≥135), logic 52 Hz (≥45), render max 5056 µs (≤7407), tick 988 µs, RAM free 467 B |
 | Perf tooling | Headless Ardens profiler dump (`profiledump=<path>`, local patch) + on-device cycle bench (`test_perf`) |
-| Shipping build | flash **28132 / 29696 B** (94%), RAM **1950 / 2560 B** (610 free) |
+| Shipping build | flash **28378 / 29696 B** (96%), RAM **1950 / 2560 B** (610 free) |
 | FX data image | **21123 B** of 16 MB used |
 
 Speculative gameplay status: combat (sword / flail / gunshield), monster FSM,
 training pole + DPS mode, camera/world clamps, HUD, audio cues all in place.
 Perf-verified on device. Remaining: real art pass (`vx2`, human), feel tuning
-(`1to`, human), EEPROM save (`qyb`, deferred), HUD bar clamp bug (`7y3`).
+(`1to`, human), EEPROM save (`qyb`, deferred).
 
 ---
 
@@ -118,6 +118,7 @@ images/**/*.png ──tools/convert-sprite.py──► fxdata/*/Sprites.txt ─�
    - `test_audio` — cue-map asserts with real tones
    - `test_data` — FX-cart weapon/monster tables match the mock values and packed layout
    - `test_parity` — replays mock-generated traces tick-by-tick vs core
+   - `test_hud` — pins HUD bar/divider framebuffer bytes + world-clip control
    - `test_perf` — cycle-based bench + budget gates
    - Fixtures for parity are generated with
      `node tools/gen-parity-fixtures.js` (Node only produces fixtures; the test
@@ -129,7 +130,7 @@ images/**/*.png ──tools/convert-sprite.py──► fxdata/*/Sprites.txt ─�
 
 - `L4_Triplane` + `ABG_TIMER1` + `ABG_SYNC_PARK_ROW` (`src/common.hpp`).
 - Measured under load (bench): **156 Hz plane sweep, 52 Hz logic**, render max
-  4676 µs/plane, logic tick 988 µs, 494 B free RAM. Mock runs 60 Hz; tick order
+  5056 µs/plane, logic tick 988 µs, 467 B free RAM. Mock runs 60 Hz; tick order
   is equivalent.
 - Debug overlay `DEBUG_HURTBOXES=1` (hold A+B to toggle). Off by default; the
   overlay build is flash-tight and only for development.
@@ -269,11 +270,17 @@ Notes:
    boundary (int px vs 1/16 px), and missing player hurt sparks were fixed in
    core to match the mock; the mock itself had an isqrt seed bug and a
    projectile-speed double-scaling bug, both fixed (`6c9371e`, `4ac3f5b`).
-7. **HUD bars are invisible on device** (known bug, `monhun-ardu-7y3`): `blk()`
-   clamps every rect to y >= HUD_H, but `drawHud()` draws its divider at y=7 and
-   the HP / stamina / monster / reload bars at rows 2..6, so those calls return
-   without painting; only the FX-glyph text shows. Fixing it re-adds ~16
-   MH_MASK page reads/plane when the bars render.
+7. **HUD bars were invisible on device** (fixed, `monhun-ardu-7y3`): `blk()`
+   clamped every rect to y >= HUD_H, but `drawHud()` draws its divider at y=7 and
+   the HP / stamina / monster / reload bars at rows 2..6, so those calls returned
+   without painting; only the FX-glyph text showed. The clamp now lives in a
+   shared `blkClamp()` core with two wrappers: `blk()` (world, y >= HUD_H) and
+   `hudBlk()` (HUD strip, y >= 0); only the HUD call sites switched, so the
+   arena border still cannot spill into rows 0..7. `test_hud` pins the real
+   framebuffer bytes for every bar/divider on planes 0/1 plus the world-clip
+   negative control; the perf gate absorbs the ~16 extra MH_MASK page
+   reads/plane when the bars render (render max 4676 -> 5056 µs, inside the
+   7407 µs budget).
 
 ---
 

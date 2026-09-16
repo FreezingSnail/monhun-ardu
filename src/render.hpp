@@ -113,10 +113,11 @@ static inline void sprDraw(uint24_t img, int32_t x, int32_t y, uint16_t frame) {
 // Game snapshot feeds all three passes. Read-only: render never mutates Game.
 //
 // HUD is reserved at the top (y 0..HUD_H-1); world y=0 maps to screen y=HUD_H
-// and every block is clipped to the arena band. The mock put the HUD at the
+// and world blocks are clipped to the arena band. The mock put the HUD at the
 // bottom; the device flips it to the top (established by the loop bead), so
 // the arena shifts down by HUD_H px. drawHud() paints the strip untranslated
-// (no camera/shake) at the top, mirrored from the mock's bottom strip.
+// (no camera/shake) at the top, mirrored from the mock's bottom strip, and uses
+// the HUD-band rect path (hudBlk) so its rows 0..HUD_H-1 are paintable.
 
 // round(v + sub/16): sub is the 1/16 px remainder, matches mock Math.round().
 static inline int16_t rndPx(int16_t v, int16_t sub) {
@@ -149,9 +150,14 @@ static const uint8_t MH_PROGMEM RING6[6] = {0, 43, 85, 128, 171, 213};
 static const uint8_t MH_PROGMEM MH_MASK_TOP[8] = {0xFF, 0xFE, 0xFC, 0xF8, 0xF0, 0xE0, 0xC0, 0x80};
 static const uint8_t MH_PROGMEM MH_MASK_BOT[8] = {0x01, 0x03, 0x07, 0x0F, 0x1F, 0x3F, 0x7F, 0xFF};
 
-// Clip a block to the screen arena band and paint it. shade 0 clears the pixels
-// on the current plane (mock black bodies mask what is under them). Nothing is
-// ever written outside [0,SCREEN_W) x [HUD_H,SCREEN_H).
+// Clip a block to the screen's [minY, SCREEN_H) band and paint it. shade 0
+// clears the pixels on the current plane (mock black bodies mask what is under
+// them). Nothing is ever written outside [0,SCREEN_W) x [minY,SCREEN_H).
+//
+// Callers pick the band through the wrappers below: world drawing needs the
+// arena clamp y >= HUD_H so the scene never paints into the HUD strip (the
+// arena's vertical borders would otherwise fill rows 0..7 whenever camY > 0),
+// while the HUD strip itself must be paintable down to y=0.
 //
 // ArduboyG::fillRect -> Arduboy2Base::fillRect is a drawFastVLine per column,
 // each with its own bounds clip; the attack telegraph rects are the largest per
@@ -162,14 +168,14 @@ static const uint8_t MH_PROGMEM MH_MASK_BOT[8] = {0x01, 0x03, 0x07, 0x0F, 0x1F, 
 // 128 bytes/page, pixel(x,y) = buf[page*128 + x], bit y&7. Clamping above is the
 // only bounds work needed; writes stay inside [0,1024). Render runs between
 // waitForNextPlane() calls, never during the plane blit.
-__attribute__((noinline)) static void blk(int32_t x, int32_t y, int32_t w, int32_t h, uint8_t shade) {
+__attribute__((noinline)) static void blkClamp(int32_t x, int32_t y, int32_t w, int32_t h, uint8_t shade, int32_t minY) {
     if (w <= 0 || h <= 0)
         return;
     int32_t x0 = x, y0 = y, x1 = x + w, y1 = y + h;
     if (x0 < 0)
         x0 = 0;
-    if (y0 < mh::HUD_H)
-        y0 = mh::HUD_H;
+    if (y0 < minY)
+        y0 = minY;
     if (x1 > mh::SCREEN_W)
         x1 = mh::SCREEN_W;
     if (y1 > mh::SCREEN_H)
@@ -206,6 +212,17 @@ __attribute__((noinline)) static void blk(int32_t x, int32_t y, int32_t w, int32
         ++page;
         top = 0;
     }
+}
+
+// World/arena rect: clipped below the 8 px HUD strip (y >= HUD_H).
+static inline void blk(int32_t x, int32_t y, int32_t w, int32_t h, uint8_t shade) {
+    blkClamp(x, y, w, h, shade, mh::HUD_H);
+}
+
+// HUD-strip rect: rows 0..HUD_H-1 allowed (divider, HP/stamina/monster bars,
+// gun reload bar). See drawHud()/hudBar().
+static inline void hudBlk(int32_t x, int32_t y, int32_t w, int32_t h, uint8_t shade) {
+    blkClamp(x, y, w, h, shade, 0);
 }
 
 // Text comes from the FX glyph sheets (128 ASCII-ordered 4x8 tiles). The ink
@@ -628,7 +645,7 @@ static int16_t hudNum(int16_t x, int32_t v, uint8_t digits) {
 
 // Mock bar(): dark back/border, inner fill width round((w-2) * ratio).
 static void hudBar(int32_t x, int32_t y, int32_t w, int32_t h, int32_t num, int32_t den, uint8_t shade) {
-    blk(x, y, w, h, 1);
+    hudBlk(x, y, w, h, 1);
     if (den <= 0 || num <= 0)
         return;
     if (num > den)
@@ -637,16 +654,17 @@ static void hudBar(int32_t x, int32_t y, int32_t w, int32_t h, int32_t num, int3
     if (fw > w - 2)
         fw = w - 2;
     if (fw > 0)
-        blk(x + 1, y + 1, fw, h - 2, shade);
+        hudBlk(x + 1, y + 1, fw, h - 2, shade);
 }
 
 static void drawHud(const mh::Game &g) {
     const mh::Player &p = g.player;
 
     // No strip background fill: ArduboyG waitForNextPlane(BLACK) wipes the
-    // framebuffer black before each plane, and blk() clamps the arena band to
-    // y >= HUD_H anyway, so a y=0 HUD wipe was a no-op.
-    blk(0, mh::HUD_H - 1, mh::SCREEN_W, 1, 1);   // divider at the arena edge
+    // framebuffer black before each plane, so the HUD rows only need the
+    // shapes/text drawn. The strip uses the HUD-band path (rows 0..7); the
+    // arena below stays y >= HUD_H clipped.
+    hudBlk(0, mh::HUD_H - 1, mh::SCREEN_W, 1, 1);   // divider at the arena edge
 
     hudBar(1, 2, 28, 4, p.hp, p.hpMax, 3);        // player HP (white)
     hudBar(29, 2, 16, 4, p.stam, p.stamMax, 2);   // stamina (light gray)
@@ -683,7 +701,7 @@ static void drawHud(const mh::Game &g) {
                     bw = 1;
                 else if (bw > 12)
                     bw = 12;
-                blk(67, 6, bw, 1, 2);
+                hudBlk(67, 6, bw, 1, 2);
             }
         } else {
             x = hudPut(x, p.shell == 0 ? 'B' : 'S');
