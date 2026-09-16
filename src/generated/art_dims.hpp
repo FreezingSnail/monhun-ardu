@@ -19,6 +19,12 @@ constexpr int16_t sword_atk2_reach = 16;
 constexpr int16_t sword_special_hw = 20;
 constexpr int16_t sword_special_hh = 16;
 constexpr int16_t sword_special_reach = 18;
+constexpr int16_t sword_branch0_hw = 14;
+constexpr int16_t sword_branch0_hh = 12;
+constexpr int16_t sword_branch0_reach = 18;
+constexpr int16_t sword_branch1_hw = 28;
+constexpr int16_t sword_branch1_hh = 26;
+constexpr int16_t sword_branch1_reach = 12;
 constexpr int16_t flail_atk0_hw = 20;
 constexpr int16_t flail_atk0_hh = 16;
 constexpr int16_t flail_atk0_reach = 19;
@@ -31,6 +37,12 @@ constexpr int16_t flail_atk2_reach = 24;
 constexpr int16_t flail_special_hw = 14;
 constexpr int16_t flail_special_hh = 18;
 constexpr int16_t flail_special_reach = 32;
+constexpr int16_t flail_branch0_hw = 0;
+constexpr int16_t flail_branch0_hh = 0;
+constexpr int16_t flail_branch0_reach = 0;
+constexpr int16_t flail_branch1_hw = 22;
+constexpr int16_t flail_branch1_hh = 14;
+constexpr int16_t flail_branch1_reach = 22;
 constexpr int16_t gunshield_atk0_hw = 14;
 constexpr int16_t gunshield_atk0_hh = 12;
 constexpr int16_t gunshield_atk0_reach = 11;
@@ -43,6 +55,12 @@ constexpr int16_t gunshield_atk2_reach = 13;
 constexpr int16_t gunshield_special_hw = 0;
 constexpr int16_t gunshield_special_hh = 0;
 constexpr int16_t gunshield_special_reach = 0;
+constexpr int16_t gunshield_branch0_hw = 18;
+constexpr int16_t gunshield_branch0_hh = 16;
+constexpr int16_t gunshield_branch0_reach = 15;
+constexpr int16_t gunshield_branch1_hw = 16;
+constexpr int16_t gunshield_branch1_hh = 14;
+constexpr int16_t gunshield_branch1_reach = 14;
 
 constexpr int16_t monster_lunge_hw = 24;
 constexpr int16_t monster_lunge_hh = 22;
@@ -58,21 +76,18 @@ constexpr int16_t whirl_orbit_ry = 14;
 constexpr int16_t whirl_radius = 24;
 
 // Sheet frame layout (uniform frame per sheet, left-to-right strip).
-constexpr uint8_t slash_frame_w = 24;
-constexpr uint8_t slash_frame_h = 24;
-constexpr uint8_t slash_frames = 4;
+constexpr uint8_t slash_frame_w = 32;
+constexpr uint8_t slash_frame_h = 32;
+constexpr uint8_t slash_frames = 5;
 constexpr uint8_t ripspecial_frame_w = 24;
 constexpr uint8_t ripspecial_frame_h = 24;
 constexpr uint8_t ripspecial_frames = 1;
 constexpr uint8_t parry_frame_w = 24;
 constexpr uint8_t parry_frame_h = 16;
 constexpr uint8_t parry_frames = 1;
-constexpr uint8_t chain_frame_w = 40;
-constexpr uint8_t chain_frame_h = 16;
-constexpr uint8_t chain_frames = 3;
 constexpr uint8_t whirl_frame_w = 8;
 constexpr uint8_t whirl_frame_h = 4;
-constexpr uint8_t whirl_frames = 2;
+constexpr uint8_t whirl_frames = 4;
 constexpr uint8_t deflect_frame_w = 24;
 constexpr uint8_t deflect_frame_h = 16;
 constexpr uint8_t deflect_frames = 1;
@@ -90,26 +105,35 @@ constexpr uint8_t trail_frame_h = 4;
 constexpr uint8_t trail_frames = 2;
 constexpr uint8_t telegraph_frame_w = 32;
 constexpr uint8_t telegraph_frame_h = 24;
-constexpr uint8_t telegraph_frames = 2;
+constexpr uint8_t telegraph_frames = 4;
 constexpr uint8_t chip_frame_w = 8;
 constexpr uint8_t chip_frame_h = 8;
-constexpr uint8_t chip_frames = 1;
+constexpr uint8_t chip_frames = 2;
 
-// Sword slash boxes: core hw x hh centred in the slash frame; the white
-// core sits at the centre, the riposte rim (hw+4 x hh+4) at 0,0.
-constexpr uint8_t slash_pad_x = 2;
-constexpr uint8_t slash_pad_y = 4;
-constexpr uint8_t slash_core_pad = 2;
+// Sword slash: 32x32 frame, hit box (hw x hh) centred with the 4x4
+// white core at slash_core_x/y (the hit-box centre). Frame order: 12x10
+// combo, 18x14 combo, 20x16 special, 14x12 step-slash, 28x26 spin-cut.
+constexpr uint8_t slash_core_x = 14;
+constexpr uint8_t slash_core_y = 14;
+constexpr uint8_t slash_core_size = 4;
 constexpr uint8_t slash_riposte_pad = 2;
 
-// Telegraph: hit box centred in the frame, bright core at centre.
+// Telegraph: hit box centred in the frame, core at centre. Frames: lunge
+// windup, lunge attack, sweep windup, sweep attack.
 constexpr uint8_t telegraph_lunge_x = 4;
 constexpr uint8_t telegraph_lunge_y = 1;
 constexpr uint8_t telegraph_sweep_x = 0;
 constexpr uint8_t telegraph_sweep_y = 0;
 
-// Whirl dot frames in fxwhirl (per-frame white extras at the orbit).
+// Whirl frames in fxwhirl: 2x2 light orbit dot, 4x4 white ball, 1x1
+// light chain dot, 2x2 white stun sparkle.
 constexpr uint8_t whirl_dot_frame = 0;
 constexpr uint8_t whirl_ball_frame = 1;
+constexpr uint8_t whirl_chain_frame = 2;
+constexpr uint8_t whirl_stun_frame = 3;
+
+// Chip frames in fxchip: 3x3 white idle/aim chip, 4x4 white ball.
+constexpr uint8_t chip_idle_frame = 0;
+constexpr uint8_t chip_ball_frame = 1;
 
 }   // namespace art_dims

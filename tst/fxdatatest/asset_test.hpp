@@ -80,16 +80,30 @@ inline void test_assets(FxTest &test) {
     // col*2. Light gray fills passes 0+1, white all three, black erasers mask
     // only.
 
-    // Sword slash: 24x24 frames (page_count 3), light box (6,7,12,10) with the
-    // white 4x4 core at (8,9). Body offset 14 = col 7 rows 6..13 (pass 0).
-    if (blobHeader(fxslash, 24, 24, test, F("slash w/h"))) {
-        // frame 0 (box 12x10 at (6,7)): cols 6..15 rows 7..14 pass 0 are all
-        // light (data 128 / mask 128), starting at body 12.
-        static const uint8_t box_cols[20] = {128, 128, 128, 128, 128, 128, 128, 128, 128, 128, 128, 128, 128, 128, 128, 128, 128, 128, 128, 128};
-        blobBytes(fxslash, 12, box_cols, sizeof(box_cols), test, F("slash f0 box"));
-        // frame 3 (special, box 20x16 at (2,4)): same light pattern from body 444.
-        static const uint8_t special_box[12] = {128, 128, 128, 128, 128, 128, 128, 128, 128, 128, 128, 128};
-        blobBytes(fxslash, 444, special_box, sizeof(special_box), test, F("slash f3 box"));
+    // Sword slash: 32x32 frames (page_count 4), one frame per distinct sword
+    // box, box centred in the frame with the white 4x4 core at (14,14). Body
+    // offset = ((frame*3 + pass) * 4 + page) * 64 + col * 2.
+    if (blobHeader(fxslash, 32, 32, test, F("slash w/h"))) {
+        // frame 0 (combo box 12x10 at (10,11)): pass 0 page 1 (rows 11..15) is
+        // data/mask 248 at cols 10/11, page 2 (rows 16..20) is 31.
+        static const uint8_t box_hi[4] = {248, 248, 248, 248};
+        blobBytes(fxslash, 84, box_hi, sizeof(box_hi), test, F("slash f0 box rows11-15"));
+        static const uint8_t box_lo[4] = {31, 31, 31, 31};
+        blobBytes(fxslash, 148, box_lo, sizeof(box_lo), test, F("slash f0 box rows16-20"));
+        // white 4x4 core at (14,14): pass 2 page 1 cols 14..17 = 192/248.
+        static const uint8_t core[8] = {192, 248, 192, 248, 192, 248, 192, 248};
+        blobBytes(fxslash, 604, core, sizeof(core), test, F("slash f0 core"));
+        // frame 0 col 0 is outside the box: fully transparent.
+        static const uint8_t clear8[8] = {0, 0, 0, 0, 0, 0, 0, 0};
+        blobBytes(fxslash, 0, clear8, sizeof(clear8), test, F("slash f0 outside"));
+        // frame 2 (special box 20x16 at (6,8)): the light box clears plane 2
+        // (data 0 / mask 255 at cols 6..9 rows 8..15).
+        static const uint8_t light_p2[8] = {0, 255, 0, 255, 0, 255, 0, 255};
+        blobBytes(fxslash, 2124, light_p2, sizeof(light_p2), test, F("slash f2 plane2 eraser"));
+        // frame 4 (spin-cut box 28x26 at (2,3)): page 0 rows 3..7 = 248 at
+        // cols 2/3, page 3 rows 24..28 = 31.
+        blobBytes(fxslash, 3076, box_hi, sizeof(box_hi), test, F("slash f4 box rows3-7"));
+        blobBytes(fxslash, 3268, box_lo, sizeof(box_lo), test, F("slash f4 box rows24-28"));
     }
 
     // Riposte rim: 24x24 (page_count 3), light 24x20 rect covering the special
@@ -117,26 +131,21 @@ inline void test_assets(FxTest &test) {
         blobBytes(fxparry, 70, blade_low, sizeof(blade_low), test, F("parry f0 blade page1"));
     }
 
-    // Flail chain: 40x16 (page_count 2), dark 1 px dots. Frame 0 reach 19 puts
-    // dots at cols 24/29/34; frame 1 (reach 21) dots at 25/30/35. Body 48 =
-    // frame 0 page 0 col 24 pass 0; body 52 = frame 0 col 25 pass 0 (dot at
-    // row 8 => bits 1+2).
-    if (blobHeader(fxchain, 40, 16, test, F("chain w/h"))) {
-        // dot 1 (col 24, row 8) lives in page 1: its (data, mask) pair starts
-        // at body 50 (mask bit 0). Dot 2 (col 29) starts at body 60.
-        static const uint8_t dot1[4] = {0, 0, 0, 0};
-        blobBytes(fxchain, 48, dot1, sizeof(dot1), test, F("chain f0 page1 col24"));
-        static const uint8_t dot2[4] = {0, 0, 1, 1};
-        blobBytes(fxchain, 146, dot2, sizeof(dot2), test, F("chain f1 page1 col29"));
-    }
-
     // Whirl: 8x4 (page_count 1); frame 0 the 2x2 light orbit dot (passes 0,1),
-    // frame 1 the 4x4 white ball (all passes). Body 48 = frame 1 pass 0 col 0.
+    // frame 1 the 4x4 white ball (all passes), frame 2 the 1x1 light chain dot
+    // (cleared plane 2), frame 3 the 2x2 white stun sparkle. Body offsets:
+    // frame*48 + pass*16 + col*2.
     if (blobHeader(fxwhirl, 8, 4, test, F("whirl w/h"))) {
         static const uint8_t dot_whirl[6] = {3, 3, 3, 3, 0, 0};
         blobBytes(fxwhirl, 0, dot_whirl, sizeof(dot_whirl), test, F("whirl dot frame"));
-        static const uint8_t ball_whirl[4] = {15, 15, 15, 15};
-        blobBytes(fxwhirl, 48, ball_whirl, sizeof(ball_whirl), test, F("whirl ball frame"));
+        static const uint8_t ball_whirl[8] = {15, 15, 15, 15, 15, 15, 15, 15};
+        blobBytes(fxwhirl, 80, ball_whirl, sizeof(ball_whirl), test, F("whirl ball frame"));
+        static const uint8_t chain_dot[4] = {1, 1, 0, 0};
+        blobBytes(fxwhirl, 96, chain_dot, sizeof(chain_dot), test, F("whirl chain dot frame"));
+        static const uint8_t chain_p2[4] = {0, 1, 0, 0};
+        blobBytes(fxwhirl, 128, chain_p2, sizeof(chain_p2), test, F("whirl chain plane2 eraser"));
+        static const uint8_t stun_dot[4] = {3, 3, 3, 3};
+        blobBytes(fxwhirl, 176, stun_dot, sizeof(stun_dot), test, F("whirl stun frame"));
     }
 
     // Deflect: 24x16 (page_count 2); light 1x12 bars at cols 2 and 21 rows
@@ -185,23 +194,33 @@ inline void test_assets(FxTest &test) {
         blobBytes(fxtrail, 24, puff1, sizeof(puff1), test, F("trail dark puff"));
     }
 
-    // Telegraph: 32x24 (page_count 3). Frame 0 lunge box (4,1,24,22) dark with
-    // the light 2x2 core; frame 1 sweep box (0,0,32,24) light with white core.
-    // Body 0 = f0 col 0 rows 0..3 pass 0 (0 here, box starts row 1 => 254s at
-    // body 10 = page 0 col 1). Body 194 = f1 pass 1 col 0 rows 0..3 (light).
+    // Telegraph: 32x24 (page_count 3), 4 frames = lunge windup / lunge attack
+    // / sweep windup / sweep attack, box and core centred. Frame bytes 576.
+    // f0: dark lunge box (4,1,24,22) at body 8 (col 4, rows 1..7 = 254) with
+    // the light 2x2 core at (15,11) (body 286, rows 11..12 = 24).
+    // f1: light lunge box with the white 4x4 core at (14,10) (body 1052).
+    // f2: dark sweep box (full frame) body 1152; f3: light sweep (body 1920).
     if (blobHeader(fxtelegraph, 32, 24, test, F("telegraph w/h"))) {
-        static const uint8_t lunge_lead[12] = {0, 0, 0, 0, 0, 0, 0, 0, 254, 254, 254, 254};
-        blobBytes(fxtelegraph, 0, lunge_lead, sizeof(lunge_lead), test, F("lunge f0 col0"));
-        static const uint8_t lunge_core[6] = {254, 254, 254, 254, 254, 254};
-        blobBytes(fxtelegraph, 10, lunge_core, sizeof(lunge_core), test, F("lunge f0 col1"));
-        static const uint8_t sweep_lead[12] = {0, 0, 0, 0, 0, 0, 0, 254, 0, 254, 0, 254};
-        blobBytes(fxtelegraph, 194, sweep_lead, sizeof(sweep_lead), test, F("sweep f1 pass1"));
+        static const uint8_t lunge_windup[4] = {254, 254, 254, 254};
+        blobBytes(fxtelegraph, 8, lunge_windup, sizeof(lunge_windup), test, F("lunge windup box"));
+        static const uint8_t windup_core[4] = {24, 255, 24, 255};
+        blobBytes(fxtelegraph, 286, windup_core, sizeof(windup_core), test, F("lunge windup core"));
+        static const uint8_t lunge_attack[4] = {254, 254, 254, 254};
+        blobBytes(fxtelegraph, 776, lunge_attack, sizeof(lunge_attack), test, F("lunge attack box"));
+        static const uint8_t attack_core[8] = {60, 255, 60, 255, 60, 255, 60, 255};
+        blobBytes(fxtelegraph, 1052, attack_core, sizeof(attack_core), test, F("lunge attack core"));
+        static const uint8_t sweep_windup[4] = {255, 255, 255, 255};
+        blobBytes(fxtelegraph, 1152, sweep_windup, sizeof(sweep_windup), test, F("sweep windup dark"));
+        static const uint8_t sweep_attack[4] = {255, 255, 255, 255};
+        blobBytes(fxtelegraph, 1920, sweep_attack, sizeof(sweep_attack), test, F("sweep attack light"));
     }
 
-    // Chip: 8x8 (page_count 1), white 4x4 head at the frame origin. Body 0 =
-    // col 0 rows 0..7 pass 0 (rows 0..3 white, below transparent).
+    // Chip: 8x8 (page_count 1); frame 0 the 3x3 white idle/aim chip, frame 1
+    // the 4x4 white ball. Body 0 / 80 = frame 0/1 pass 2 col 0.
     if (blobHeader(fxchip, 8, 8, test, F("chip w/h"))) {
-        static const uint8_t chip[8] = {15, 15, 15, 15, 15, 15, 15, 15};
-        blobBytes(fxchip, 0, chip, sizeof(chip), test, F("chip f0 col0"));
+        static const uint8_t idle[8] = {7, 7, 7, 7, 7, 7, 0, 0};
+        blobBytes(fxchip, 32, idle, sizeof(idle), test, F("chip idle frame"));
+        static const uint8_t ball[8] = {15, 15, 15, 15, 15, 15, 15, 15};
+        blobBytes(fxchip, 80, ball, sizeof(ball), test, F("chip ball frame"));
     }
 }

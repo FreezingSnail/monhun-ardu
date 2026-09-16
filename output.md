@@ -1,218 +1,221 @@
-# monhun-ardu-42n.2 — Assets: author remaining code-mocked block graphics as PNG sheets
+# monhun-ardu-42n.3 — Render: draw remaining overlays/effects from FX sheets; delete procedural shape code
 
-Status: **done** (all gates green: gen deterministic, build 27282 B / 1941 B RAM unchanged,
-host tests 658/0, device fxtest all PASS, PNG↔mock pixel evidence below).
+Status: **done (review round 2)** — all five review drifts fixed, assets regenerated,
+tests extended, full verification re-run. `make build` flash **26644 B** (baseline
+27282, **-638 B**), RAM 1941 B unchanged; host tests **702/0** (658 + 44 new dims
+checks); device suites all PASS (boot 4/0, assets **254/0**, audio 14/0, parity 660/0,
+data 194/0, perf 5/0); perf B line `rMx=4736` (budget 7407), `pHz=156`, `lHz=52`,
+`ram=493`; `make gen` deterministic across two runs; Ardens profiler re-recorded.
+No commits — tree left dirty for the orchestrator.
 
 - Repo: `/Users/connorfranc/monhun-ardu`
-- HEAD before/after: `f0595a5` (unchanged; no commits made — orchestrator owns the commit)
+- HEAD: `9ed4285` (unchanged)
 - Date: 2026-09-16
-- Working tree: left dirty intentionally
 
-## What was implemented (per bead DESIGN)
+## Review fixes
 
-1. **`tools/fxdump.cpp`** (new): host dumper that includes `src/core/game.hpp` and prints the
-   core dimensions gen-art.py needs as JSON — per-weapon attack `hw/hh/reach` (3 combo + special),
-   monster `lunge`/`sweep` `hw/hh/reach`, monster hurt box 32x24, whirl orbit radii 20/14/24.
-   No number is duplicated in Python; `tools/gen.sh` builds it with host g++ and writes
-   `build/fxdump.json`.
-2. **`tools/gen-art.py`** (extended): consumes `build/fxdump.json` and authors 12 new
-   overlay/effect sheets pixel-exact to the current `blk()` shapes in `src/render.hpp`
-   (which mirror `mock/game.js`): `fxslash_24x24` (4 frames: combo 1/2/3 + special),
-   `fxripspecial_24x24`, `fxparry_24x16`, `fxchain_40x16` (3 combo reaches), `fxwhirl_8x4`
-   (2x2 orbit dot + 4x4 ball), `fxdeflect_24x16`, `fxguard_12x16` (plate+notch, guard, shove),
-   `fxreload_10x8`, `fxerase_4x16` (shade-0 eraser: mask=1/data=0), `fxtrail_4x4` (light+dark puff),
-   `fxtelegraph_32x24` (lunge windup + sweep, light/dark box + core), `fxchip_8x8` (4x4 white).
-   Existing block/font sheets are byte-identical to HEAD (verified). Every sheet passed an
-   authoring self-check (sheet dims == derived frame size; each blk rect lands in the typed
-   plane; every other pixel stays transparent) and a re-read-from-disk pixel comparison.
-   `--dump` prints the ASCII pixel dump used as evidence.
-3. **`src/generated/art_dims.hpp`** (new, generated): per-frame core dims (`sword_atk0_hw` …,
-   `monster_sweep_reach`, `whirl_orbit_rx`…) plus sheet frame layout (`slash_frame_w`,
-   `slash_frames`, `telegraph_lunge_x`…). Emitted by the same run that authors the PNGs, so
-   the header and the sheets cannot drift apart.
-4. **`fxdata/fxdata.txt` / `fxdata/fxdata.h` / `src/fxdata.h`**: 18 sprite symbols now
-   (12 new: `fxdeflect`, `fxparry`, `fxchip`, `fxguard`, `fxtrail`, `fxwhirl`, `fxripspecial`,
-   `fxslash`, `fxtelegraph`, `fxreload`, `fxerase`, `fxchain`). FX image 13040 → 19124 B
-   (`fxdata.bin` 13056 → 19200 B), still far under 64 KB. `fxdata/tables/*` unchanged.
-5. **`tools/gen.sh`**: added the fxdump build/dump step; deletes `fxdata/*/Sprites.txt`
-   before regenerating (convert-sprite.py appends, never truncates — a stale append kept old
-   symbols for renamed sheets, found and fixed during this bead).
-6. **`tst/art_dims_test.hpp`** (new, wired into `tst/main.cpp`): 161 new host checks.
-   - dims header == core accessors for all 3 weapons × (3 attacks + special) and both monster
-     attacks (drift test: change hw/hh/reach in game.hpp and this fails until `make gen`).
-   - slash frame layout packs the core box centred with the white core at +2 and the riposte
-     rim at the special box + 2 px per side.
-   - parses `fxdata/blocks/Sprites.txt` (plus-mask blob format: 2-byte header, then per frame,
-     per shade pass, per page, per column a data/mask pair) and asserts the declared boxes and
-     decorations have ink exactly where the core dims say: slash box is light at the core-dim
-     rect, chain dots at `(reach*i)>>2`, telegraph box at `(32-hw)/2, (24-hh)/2` with the core at
-     the centre, guard notch is mask-only, i-frame erase row is mask-only, trail/whirl puffs and
-     balls on the right planes, plus frame counts for truncation.
-7. **`tst/fxdatatest/asset_test.hpp`** (extended): device byte checks for all 12 new sheets —
-   header w/h + pinned body bytes dumped from the flashed image and cross-checked against the
-   PNGs. asset suite 30 → 234 checks. Notable hardening: `blobBytes` reads per-byte
-   (`readPendingUInt8`/`readEnd`) instead of `readBytesEnd`, whose inline asm corrupted the
-   caller's stack in this call pattern (found via device bisect; per-byte matches the render
-   path anyway).
+1. **Sword branch attacks now have exact frames.** `tools/fxdump.cpp` dumps each
+   weapon's `branches[]` (`id`/`hw`/`hh`/`reach`) from the core branch attacks;
+   `gen-art.py` builds the fxslash frame list from the three main attacks + special +
+   attack branches (id != ATK_NONE), deduped in order → **32x32 sheet, 5 frames**:
+   `12x10 combo, 18x14 combo, 20x16 special, 14x12 step-slash, 28x26 spin-cut`. Box is
+   centred (frame local 16,16 == hit-box centre) and the 4x4 white core is baked at the
+   box centre (always (14,14)); render matches the live `hw/hh` **exactly** against the
+   dumped dims (no size-class fallback) and anchors at `hx-16, hy-16`.
+2. **Telegraph state shades restored.** fxtelegraph is now 4 frames — lunge windup,
+   lunge attack, sweep windup, sweep attack — selected by `m.state` (MS_WINDUP vs
+   MS_ATTACK) and `monsterAttackKind` (MK_LUNGE vs MK_SWEEP). Windup = shade-1 box with
+   the 2x2 shade-2 core; attack = shade-2 box with the 4x4 shade-3 core; anchor stays
+   box centre `(ax-16, ay-12)`.
+3. **Chain dots are 1x1 light again.** fxwhirl gained a 1x1 LIGHT frame (frame 2, also
+   used for the flail's idle hand dot); chain/throw dots draw it at the exact
+   `rr=(reach*i)>>2` position. `fxchain` was removed end-to-end: gen-art authoring,
+   `images/blocks/fxchain_40x16.png`, the Sprites.txt symbol, `fxdata.h`, the host dims
+   test and the device asset test. No dead FX data remains (FX image 19124 → 21090 B
+   net of all five fixes).
+4. **Chip split into two frames.** fxchip: frame 0 = 3x3 white idle/aim chip, frame 1 =
+   4x4 white ball. Render: sword idle + flail idle ball use frame 0 at the mock top-left;
+   the flail attack/throw ball uses frame 1 at `tip-2`.
+5. **Player stun sparkle is white.** fxwhirl frame 3 = 2x2 WHITE (player stun); frame 0
+   stays the 2x2 LIGHT dot (whirl orbit + monster stun).
 
 ## Files changed/added
 
 ```
- M fxdata/blocks/Sprites.txt        (18 symbols, 18908 -> 19124 B blob text region)
- M fxdata/fxdata-data.bin           (13040 -> 19124 B)
- M fxdata/fxdata.bin                (13056 -> 19200 B)
- M fxdata/fxdata.h                  (+12 sheet symbols; offsets shifted)
+ M fxdata/blocks/Sprites.txt        (fxslash 32x32/5, fxtelegraph 4, fxwhirl 4, fxchip 2, fxchain gone)
+ M fxdata/fxdata-data.bin           (19124 -> 21090 B)
+ M fxdata/fxdata.bin                (19200 -> 21248 B)
+ M fxdata/fxdata.h                  (symbols/offsets regenerated)
  M src/fxdata.h                     (generated copy)
- M tools/gen-art.py                 (fxdump JSON input, 12 new sheets, self-checks, dims header, dump)
- M tools/gen.sh                     (+fxdump step, Sprites.txt cleanup)
- M tst/main.cpp                     (+ artdimstest::ArtDimsSuite)
- M tst/fxdatatest/asset_test.hpp    (+204 checks; per-byte blob reader)
-?? tools/fxdump.cpp                 (new host dumper)
-?? src/generated/art_dims.hpp       (new generated dims header)
-?? tst/art_dims_test.hpp            (new host dims-drift + sprite-contract suite)
-?? images/blocks/fxslash_24x24.png      ?? images/blocks/fxripspecial_24x24.png
-?? images/blocks/fxparry_24x16.png      ?? images/blocks/fxchain_40x16.png
-?? images/blocks/fxwhirl_8x4.png        ?? images/blocks/fxdeflect_24x16.png
-?? images/blocks/fxguard_12x16.png      ?? images/blocks/fxreload_10x8.png
-?? images/blocks/fxerase_4x16.png       ?? images/blocks/fxtrail_4x4.png
-?? images/blocks/fxtelegraph_32x24.png  ?? images/blocks/fxchip_8x8.png
+ M src/generated/art_dims.hpp       (branch dims, slash 32x32/core, 4-frame telegraph, whirl/chip frames)
+ M src/render.hpp                   (exact slash frames, state+kind telegraph, 1x1 chain dot, chip/whirl frames)
+ M tools/fxdump.cpp                 (+ branch id/hw/hh/reach JSON)
+ M tools/gen-art.py                 (branch frames, 4-frame telegraph, whirl/chip frames, fxchain removed)
+ M tst/art_dims_test.hpp            (+branch dims, 5-frame slash, 4-frame telegraph, whirl/chip/stun)
+ M tst/fxdatatest/asset_test.hpp    (+20 device pins, fxchain removed, new frame offsets)
+ D images/blocks/fxchain_40x16.png  (removed; unused)
+ D images/blocks/fxslash_24x24.png  (replaced)
+?? images/blocks/fxslash_32x32.png  (new)
+ M images/blocks/fxchip_8x8.png     M images/blocks/fxtelegraph_32x24.png
+ M images/blocks/fxwhirl_8x4.png    M output.md
 ```
 
-No files left in `images/` outside the manifest-visible naming convention; no orphans (the
-generator also removes stale `fx*_WxH.png` it no longer authors).
+No core/sim file touched; parity fixtures byte-identical.
 
 ## Verification evidence
 
-### 1. `make gen` determinism (three runs, byte-compare)
+### 1. `make gen` determinism (two full runs, byte-compare)
 
 ```
-run N:  gen-art: wrote 18 block sheets (12 overlay/effect icons) + 2 font sheets
-        gen-art: pixel check OK (20 sheets, disk-exact)
-        Saving 19124 bytes FX data to .../fxdata-data.bin
-        gen.sh: FX data + src/fxdata.h regenerated
+gen-art: wrote 17 block sheets (11 overlay/effect icons) + 2 font sheets
+gen-art: pixel check OK (19 sheets, disk-exact)
+Saving 21090 bytes FX data to .../fxdata-data.bin
+gen.sh: FX data + src/fxdata.h regenerated
 ```
 
-Two full snapshot sets compared with `diff -r`: **identical** (GEN_DETERMINISTIC). Stable md5
-(unchanged across runs):
+Second run compared byte-for-byte (fx bins, headers, Sprites.txt, every PNG in
+images/blocks + images/fonts): **GEN_DETERMINISTIC**. Stable md5s:
 
 ```
-f45f525bea7120e6956b4574023dfbac  fxdata/fxdata.bin
-1703bde8c4067920f72e2b7c7d4f0be7  fxdata/blocks/Sprites.txt
-ff8064cc5af14c8db50d75cf5a598565  src/fxdata.h
-80b00ef48c5cd490a1bd50bf12fe2a7e  src/generated/art_dims.hpp
+fe8fb7c181a055965ecd6b020d73c865  fxdata/fxdata.bin
+4455d2cf9eb3c70567d3325da5a72d3d  fxdata/fxdata-data.bin
+205df177038ec3418caaee59a986201f  src/fxdata.h
+d3272fa0ddc841ab440bee089048acb1  src/generated/art_dims.hpp
+453465604de6f805f62ecc1319003de9  fxdata/blocks/Sprites.txt
 ```
 
-All 6 existing block sheets + 2 font sheets are pixel-identical to HEAD (Pillow compare), so
-their blobs stayed byte-stable except for the shifted offsets.
-
-### 2. `make build` — flash/RAM vs baseline
-
-Baseline (HEAD f0595a5): flash **27282 B (91%)**, RAM **1941 B (75%)**. After:
+### 2. `make build` — flash/RAM vs baseline (27282 B / 1941 B)
 
 ```
-arduino-cli compile --fqbn "arduboy-homemade:avr:arduboy-fx" --optimize-for-debug --output-dir dist
-Sketch uses 27282 bytes (91%) of program storage space. Maximum is 29696 bytes.
+Sketch uses 26644 bytes (89%) of program storage space. Maximum is 29696 bytes.
 Global variables use 1941 bytes (75%) of dynamic memory, leaving 619 bytes for local variables. Maximum is 2560 bytes.
 ```
 
-Delta: **0 B flash, 0 B RAM** — expected: the sheets are only referenced by the new
-`fxdata.h` constants, and the render bead (42n.3) is what starts drawing them.
+Delta: **-638 B flash**, 0 B RAM. (v1 of this bead was 26542; the exact-frame matching
+and branch art cost +102 B, still far inside budget.) `test_perf` sketch: 29232 →
+**28680 B** (96%).
 
-### 3. `make test` — 497 -> 658 passed, 0 failed
+### 3. `make test` — 702 passed / 0 failed (658 + 44 new dims checks)
 
 ```
-Total Passed: 658
+========== Total Counts ==========
+Total Passed: 702
 Total Failed: 0
 ```
 
-`art dims` suite alone: 161 checks (dims header == core accessors, slash layout, blob-contract
-pixel presence for all 12 sheets). Tuning any hw/hh/reach in `src/core/game.hpp` fails this
-suite until `make gen` regenerates `src/generated/art_dims.hpp` and the PNGs.
+New coverage: `sword_branch0/1` dims drift checks; 5-frame slash layout (box centred,
+core centre == box centre == frame centre, frame order pinned); 4-frame telegraph
+(windup/attack shade + core for both attacks); whirl chain dot (1x1, plane-2 eraser) and
+white stun frame; chip 3x3/4x4 frames. fxchain checks removed.
 
 ### 4. `make fxtest-headless` (Ardens present, exit 0)
 
 ```
 === test_assets ===
-asset_test PASSED=234 FAILED=0
+asset_test PASSED=254 FAILED=0
 P
 test_assets: PASS
 === test_audio ===
 test_audio PASSED=14 FAILED=0
 P
+test_audio: PASS
 === test_boot ===
 test_boot PASSED=4 FAILED=0
 P
+test_boot: PASS
 === test_data ===
 data_test PASSED=194 FAILED=0
 P
+test_data: PASS
 === test_parity ===
 parity_test PASSED=660 FAILED=0
 P
+test_parity: PASS
 === test_perf ===
-B pUs=6379 pHz=156 lHz=52 lTk=988 rMx=3996 rAv=3868 ram=489
+B pUs=6388 pHz=156 lHz=52 lTk=988 rMx=4736 rAv=4573 ram=493
 perf_test PASSED=5 FAILED=0
 P
 test_perf: PASS
 ```
 
-Perf gates unchanged from the 42n.1 baseline (plane 156 Hz ≥ 135, logic 52 Hz ≥ 45, render max
-3996 µs ≤ 7407, free RAM 489 B ≥ 300). Parity 660/0 — no sim change.
+Baselines rMx=3996 / pHz=156 / lHz=52 / ram=489 → after: **rMx=4736** (+740 µs for the
+sprite draws, budget 7407), rates unchanged, ram=493. All gates PASS.
 
-### 5. PNG sheets are pixel-exact to the mock/game.js shapes
+### 5. Ardens headless profiler (`profiledump`, 3000 ms)
 
-The shapes in `gen-art.py` are the literal `blk()` rects from `src/render.hpp` with the core
-dims substituted from fxdump (e.g. slash box = `hw x hh` centred in the frame, core at +2;
-telegraph box = `(32-hw)/2, (24-hh)/2`; chain dots at `(reach*i)>>2`). `make gen` fails
-loudly if any authored pixel deviates from that blk set. The device suite then pins the
-flashed bytes against the PNG model. Independent host re-check of every PNG → Sprites.txt
-blob (a from-scratch implementation of the convert-sprite layout): **all 18 sheets match**.
-
-ASCII pixel dump (from `gen-art.py --dump`) proving the mock shapes; `l`=light, `W`=white,
-`g`=dark, `K`=black eraser, `.`=transparent:
-
+BEFORE (baseline 9ed4285):
 ```
-slash  frame 24x24  frames 4  size 96x24          telegraph  frame 32x24  frames 2
-  ......llllllllllll............llllllllllll...    ....gggggggggggggggggggggggg....
-  ......llWWWWllllll............llWWWWllllll...    ....gggggggggggllgggggggggggg....  <- lunge:
-  ......llllllllllll............llllllllllll...    ....gggggggggggggggggggggggg....     24x22 dark box
-  (frame 0: 12x10 light box, white 4x4 core)       ....llllllllllllllWWWWllllllll....  <- sweep:
-                                                   ....llllllllllllllWWWWllllllll....     32x24 light box,
-parry  frame 24x16  frames 1                       (right frame)                         white 4x4 core
-  ...........WW...........
-  .........llllll.........   <- white 2x14 blade + light 6x2 cap
-  ...........WW...........
-
-guard  frame 12x16  frames 3        chain  frame 40x16  frames 3        whirl  frame 8x4  frames 2
-  .llllKKllll..WWWWWWWWWW..          ....................g....g....g...  ll......WWWW....
-  .llllKKllll..WWWWWWWWWW..          (dots at cx+4/8/12 for reach 19)     ll......WWWW....
-  (plate+black notch, guard, shove)                                     (2x2 dot, 4x4 ball)
-
-erase  frame 4x16  frames 1   chip 8x8        reload 10x8      trail 4x4        deflect 24x16
-  KKKK                        WWWW....        ..........       llgg             ..l..................l..
-  ....                        WWWW....        llllllllll       (light, dark)    (two 1x12 light bars)
-  ....  <- shade-0 eraser     ........
+cycles 25423326  cpu_active_pct 53.0
+7161772 14.92  abg_detail::...::paint(...)
+4739633  9.87  main
+1717933  3.58  mh::blk(long, long, long, long, unsigned char)
+1254134  2.61  SpritesU::drawPlusMaskFX(int, int, uint24, unsigned int)
+ 505582  1.05  FX::readEnd()
 ```
 
-Byte-level evidence from the device (excerpt of the pinned checks):
+AFTER (final):
+```
+cycles 25856784  cpu_active_pct 53.9
+7161772 14.92  abg_detail::...::paint(...)
+4752287  9.90  main
+1755846  3.66  SpritesU::drawPlusMaskFX(int, int, uint24, unsigned int)
+1557546  3.24  mh::blk(long, long, long, long, unsigned char)
+ 547556  1.14  FX::readEnd()
+ 186434  0.39  mh::hudBar(...) (.constprop.19)
+ 184880  0.39  mh::drawPlayer(...) (.constprop.37)
+```
+
+`mh::blk` 1.72 M → 1.56 M cycles (the residue is the HUD bars + arena border that stay
+procedural); `drawPlusMaskFX` 1.25 M → 1.76 M (all overlay shapes are now sprites);
+total active 25.42 M → 25.86 M (+1.7%). v1 dump kept at `build/profiler_42n3_v1.txt`,
+final at `build/profiler_42n3_after.txt`, baseline at `build/profiler_42n3_before.txt`.
+
+### 6. grep evidence — swapped call sites gone, only primitives remain
 
 ```
-FAIL-free run: asset_test PASSED=234 FAILED=0
-e.g. fxslash f0 box cols 6..15 rows 7..14 pass0 = {128,128,128,128,128,128,128,128,...}
-     fxguard f0 plate  = {0,0,254,254,254,254,254,254,254,254}   (light plane 0+1 lift)
-     fxguard f0 notch  = {127,127,127,127,0,127,0,127}           (black eraser at row 7)
-     fxerase row 0     = {0,1,0,1,0,1,0,1}                       (mask=1, data=0)
-     fxtelegraph f0    = box starts at col 1 (lunge hw 24 => x=4) with the light core
+$ for f in drawPlayer drawMonster drawProjectiles drawEffects; do ... blk count ...
+drawPlayer: blk=0 sprDraw=17
+drawMonster: blk=0 sprDraw=3
+drawProjectiles: blk=0 sprDraw=5
+drawEffects: blk=0 sprDraw=1
 ```
 
-## Notes / open items
+Remaining `blk()` sites in `src/render.hpp`: the helper definition, `drawArena()` world
+border (4), `drawDebug` wire (DEBUG_HURTBOXES only), `hudBar` (2), the HUD divider and
+the HUD gun reload bar. fxchain references are gone from every file (only
+`whirl_chain_frame` remains, the 1x1 chain dot).
 
-- The render bead (42n.3) consumes `src/generated/art_dims.hpp` for frame constants and
-  anchors; anchor conventions are documented next to each sheet in `gen-art.py`
-  (frame origin == hit-box top-left / player centre / etc.). `fxdata.h` supplies the
-  `*_WIDTH/*_HEIGHT` symbol constants.
-- `blobBytes` in the device test deliberately avoids `readBytesEnd` (its AVR inline asm
-  clobbered `z`/stack in this pattern); the render path reads per-byte through the same
-  `mhFxRead*` helpers, so this matches shipping behaviour.
-- `fxdata/blocks/Sprites.txt` is regenerated from scratch each `make gen` (gen.sh removes it
-  first) because convert-sprite.py appends rather than truncates.
-- No commit made; tree left dirty as instructed.
+### 7. Exact render anchors (mock/game.js shapes)
+
+| shape | frame | anchor |
+|---|---|---|
+| sword combo box 12x10 / 18x14 / special 20x16 / step-slash 14x12 / spin-cut 28x26 | `fxslash` 0/1/2/3/4, exact hw/hh match | frame local (16,16) → `hx-16, hy-16` |
+| riposte rim (special + 2 px/side) | `fxripspecial` f0 | `hx-hw/2-2, hy-hh/2-2` |
+| parry blade | `fxparry` f0 | `cx-12, cy-12` |
+| sword idle 3x3 white | `fxchip` f0 | computed top-left - 1 |
+| flail chain/throw dots (1x1 light, any reach/facing) | `fxwhirl` f2 | exact `(cx+fx*rr>>4, cy+fy*rr>>4)` |
+| flail idle hand dot 1x1 | `fxwhirl` f2 | exact computed position |
+| flail attack/throw ball 4x4 white | `fxchip` f1 | tip - 2 |
+| flail idle ball 3x3 white | `fxchip` f0 | computed - 1 |
+| whirl ring 2x2 light + 4x4 white ball | `fxwhirl` f0/f1 | exact trig positions |
+| monster telegraph (windup dark / attack light, per kind) | `fxtelegraph` f0/f1/f2/f3 | `ax-16, ay-12` |
+| monster stun 2x2 light / player stun 2x2 white | `fxwhirl` f0/f3 | exact trig positions |
+| i-frame erase 4x1 shade 0 | `fxerase` f0 | `x+6, y+3` |
+
+Erase frame byte evidence (all three passes carry `(data,mask)=(0,1)` on row 0, so the
+pixels are cleared on every plane; device asset test pins the row-0 pair):
+
+```
+fxerase 4x16: pass0/1/2 page0 = (0,1)(0,1)(0,1)(0,1) 0,0 0,0 0,0 0,0 ; rest transparent
+```
+
+### 8. Notes / scope
+
+- FX cart grew 19124 → 21090 B (fxslash 32x32/5 frames + telegraph 4 frames + whirl/chip
+  extras, less the removed fxchain blob) — still far under the 64 KB cart.
+- `MAX_FX_DRAW`, `sprDraw` cull bounds (32x40 max used sheet = fxpole), camera/shake,
+  reach/trig math and parity fixtures untouched.
+- No Python/perl/ruby test harness; all tests are C++ in `tst/` (host + device).
+- One pin offset slip during bring-up (fxslash f0 page-1 col-10 body index 276 → 84, the
+  page stride is `w*2=64`) was caught by the device asset suite and fixed before final
+  verification.

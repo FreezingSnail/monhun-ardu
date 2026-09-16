@@ -10,6 +10,7 @@
 #include "common.hpp"
 #include "fxdata.h"
 #include "core/world.hpp"
+#include "generated/art_dims.hpp"   // frame layout + core dims for the FX sheets
 
 #ifndef DEBUG_HURTBOXES
 #define DEBUG_HURTBOXES 0
@@ -23,8 +24,7 @@ namespace mh {
 // are left-to-right strips and FRAME(i) == i*3 + currentPlane() selects the
 // current plane's data, so one draw call per plane composites the 4 shades.
 namespace spr {
-// 16x16 player body. Weapon overlays stay procedural: aim (fx/fy) and reach are
-// dynamic and routinely exceed the 16x16 frame.
+// 16x16 player body.
 constexpr uint8_t PLAYER_NORMAL = 0;
 constexpr uint8_t PLAYER_DODGE = 1;
 
@@ -42,10 +42,57 @@ constexpr uint8_t POLE_FLASH = 1;
 // 4x4 spark, light gray / white.
 constexpr uint8_t SPARK_LIGHT = 0;
 constexpr uint8_t SPARK_BRIGHT = 1;
+
+// Overlay/effect sheets (bead monhun-ardu-42n.2); anchors are documented at
+// each draw site in drawPlayer/drawMonster/drawProjectiles.
+// fxslash 32x32: one frame per distinct sword hit box, box centred in the
+// frame with the 4x4 white core at the centre (slash_core_x/y). Frame order:
+// 12x10 combo (frames 0 is also combo 2), 18x14 combo 3, 20x16 special,
+// 14x12 step-slash branch, 28x26 spin-cut branch.
+constexpr uint8_t SLASH_SMALL = 0;
+constexpr uint8_t SLASH_MID = 1;
+constexpr uint8_t SLASH_SPECIAL = 2;
+constexpr uint8_t SLASH_STEPSLASH = 3;
+constexpr uint8_t SLASH_SPINCUT = 4;
+// fxripspecial 24x24: special hit box grown 2 px per side, rim at frame 0,0.
+constexpr uint8_t RIPOSTE_RIM = 0;
+// fxparry 24x16: white blade + light cap, player centre at frame local 12,12.
+constexpr uint8_t PARRY_BLADE = 0;
+// fxwhirl 8x4: 2x2 light orbit dot, 4x4 white ball, 1x1 light chain dot,
+// 2x2 white stun sparkle.
+constexpr uint8_t WHIRL_DOT = art_dims::whirl_dot_frame;
+constexpr uint8_t WHIRL_BALL = art_dims::whirl_ball_frame;
+constexpr uint8_t WHIRL_CHAIN = art_dims::whirl_chain_frame;
+constexpr uint8_t WHIRL_STUN = art_dims::whirl_stun_frame;
+// fxdeflect 24x16: two 1x12 light bars, frame centred on the 16 px body.
+constexpr uint8_t DEFLECT_BARS = 0;
+// fxguard 12x16: light plate + black notch, white guard plate, white shove.
+constexpr uint8_t GUARD_PLATE = 0;
+constexpr uint8_t GUARD_WHITE = 1;
+constexpr uint8_t GUARD_SHOVE = 2;
+// fxreload 10x8: light 10x2 bar on frame row 3 (bar centre at frame centre).
+constexpr uint8_t RELOAD_BAR = 0;
+// fxerase 4x16: frame row 0 is a mask-only shade-0 eraser, rest transparent.
+constexpr uint8_t ERASE_HOLE = 0;
+// fxtrail 4x4: 2x2 light puff (frame 0) / dark puff (frame 1).
+constexpr uint8_t TRAIL_LIGHT = 0;
+constexpr uint8_t TRAIL_DARK = 1;
+// fxtelegraph 32x24, box centred with the core at the box centre. Frames:
+// lunge windup / lunge attack / sweep windup / sweep attack (the mock's
+// windup box is shade 1 with a 2x2 light core, the attack box shade 2 with a
+// 4x4 white core, for both attacks).
+constexpr uint8_t TELE_LUNGE_WINDUP = 0;
+constexpr uint8_t TELE_LUNGE_HIT = 1;
+constexpr uint8_t TELE_SWEEP_WINDUP = 2;
+constexpr uint8_t TELE_SWEEP_HIT = 3;
+// fxchip 8x8: 3x3 white idle/aim chip (frame 0) / 4x4 white ball (frame 1).
+constexpr uint8_t CHIP_IDLE = art_dims::chip_idle_frame;
+constexpr uint8_t CHIP_BALL = art_dims::chip_ball_frame;
 }   // namespace spr
 
 // Cull fully off-screen sprites before paying the FX seek, then blit on the
-// current plane. Max sheet size is 32x40, so these bounds are conservative.
+// current plane. Max sheet size is still 32x40 (fxtelegraph 32x24, fxpole
+// 20x40), so these bounds stay conservative.
 static inline void sprDraw(uint24_t img, int32_t x, int32_t y, uint16_t frame) {
     if (x <= -32 || x >= mh::SCREEN_W || y <= -40 || y >= mh::SCREEN_H)
         return;
@@ -275,7 +322,7 @@ static void drawMonster(const mh::Game &g, int16_t camX, int16_t camY) {
 
     if (m.stun > 0) {
         const uint8_t a = static_cast<uint8_t>(static_cast<uint32_t>(g.tick) * ANG_MONSTER_STUN);
-        blk(x + w / 2 + mulQ4(cos256(a), 9), y - 3 + mulQ4(sin256(a), 2), 2, 2, 2);
+        sprDraw(fxwhirl, x + w / 2 + mulQ4(cos256(a), 9), y - 3 + mulQ4(sin256(a), 2), FRAME(spr::WHIRL_DOT));
     }
 
     if (m.state == mh::MS_WINDUP || m.state == mh::MS_ATTACK) {
@@ -284,21 +331,20 @@ static void drawMonster(const mh::Game &g, int16_t camX, int16_t camY) {
             const int32_t reach = mh::monsterAttackReach(a);
             const int32_t ax = x + w / 2 + (((int32_t)m.fx * reach) >> 4);
             const int32_t ay = y + h / 2 + (((int32_t)m.fy * reach) >> 4);
-            const int32_t hw = mh::monsterAttackHw(a);
-            const int32_t hh = mh::monsterAttackHh(a);
-            if (m.state == mh::MS_WINDUP) {
-                blk(ax - hw / 2, ay - hh / 2, hw, hh, 1);
-                blk(ax - 1, ay - 1, 2, 2, 2);
-            } else {
-                blk(ax - hw / 2, ay - hh / 2, hw, hh, 2);
-                blk(ax - 2, ay - 2, 4, 4, 3);
-            }
+            // Frame by state (MS_WINDUP vs MS_ATTACK) and attack kind: the
+            // mock's windup box is shade 1 with a 2x2 light core, the attack
+            // box shade 2 with a 4x4 white core, for both lunge and sweep.
+            const bool lunge = mh::monsterAttackKind(a) == mh::MK_LUNGE;
+            const uint8_t f = static_cast<uint8_t>((lunge ? spr::TELE_LUNGE_WINDUP : spr::TELE_SWEEP_WINDUP) + (m.state == mh::MS_WINDUP ? 0 : 1));
+            sprDraw(fxtelegraph, ax - 16, ay - 12, FRAME(f));
         }
     }
 }
 
-// Mock drawPlayer(): shadow, body, weapon-specific silhouette, i-frame flicker
-// and stun sparkle. Sword arc / parry, flail chain + whirl ring, gun plate.
+// Mock drawPlayer(): shadow, body, weapon-specific overlay frames, i-frame
+// flicker and stun sparkle. Sword arc / parry, flail chain + whirl ring, gun
+// plate. All overlay shapes come from the FX sheets (bead monhun-ardu-42n.2);
+// the position math (rndPx, reach, mulQ4 trig) is the mock's, unchanged.
 static void drawPlayer(const mh::Game &g, int16_t camX, int16_t camY) {
     const mh::Player &p = g.player;
     const int32_t x = rndPx(p.x, p.subX) - camX;
@@ -324,27 +370,42 @@ static void drawPlayer(const mh::Game &g, int16_t camX, int16_t camY) {
                 const int32_t hy = cy + (((int32_t)p.fy * reach) >> 4);
                 const int32_t hw = mh::attackHw(a);
                 const int32_t hh = mh::attackHh(a);
-                blk(hx - hw / 2, hy - hh / 2, hw, hh, phase == 1 ? 2 : 1);
-                blk(hx - 2, hy - 2, 4, 4, 3);
+                // 32x32 composite frame, hit box centred (frame local 16,16 ==
+                // hx,hy) with the 4x4 white core baked at the box centre.
+                // Exact frame for the live hw/hh: combo 12x10 (frames 0, also
+                // combo 2), combo 3 18x14, special 20x16, step-slash branch
+                // 14x12, spin-cut branch 28x26.
+                uint8_t f = spr::SLASH_SMALL;
+                if (hw == art_dims::sword_atk2_hw && hh == art_dims::sword_atk2_hh)
+                    f = spr::SLASH_MID;
+                else if (hw == art_dims::sword_special_hw && hh == art_dims::sword_special_hh)
+                    f = spr::SLASH_SPECIAL;
+                else if (hw == art_dims::sword_branch0_hw && hh == art_dims::sword_branch0_hh)
+                    f = spr::SLASH_STEPSLASH;
+                else if (hw == art_dims::sword_branch1_hw && hh == art_dims::sword_branch1_hh)
+                    f = spr::SLASH_SPINCUT;
+                sprDraw(fxslash, hx - 16, hy - 16, FRAME(f));
                 if (p.state == mh::PS_SPECIAL && p.riposteT > 0) {
-                    blk(hx - hw / 2 - 2, hy - hh / 2 - 2, hw + 4, hh + 4, 2);
+                    // Riposte rim: special box + 2 px per side, rim at frame 0,0.
+                    sprDraw(fxripspecial, hx - (hw >> 1) - 2, hy - (hh >> 1) - 2, FRAME(spr::RIPOSTE_RIM));
                 }
             }
         } else if (p.stance == mh::ST_PARRY) {
-            blk(cx - 1, cy - 12, 2, 14, 3);
-            blk(cx - 3, cy - 14, 6, 2, 2);
+            // Blade frame anchored on the player centre (frame local 12,12).
+            sprDraw(fxparry, cx - 12, cy - 12, FRAME(spr::PARRY_BLADE));
         } else {
-            blk(cx + ((p.fx * 7) >> 4) - 1, cy + ((p.fy * 7) >> 4) - 1, 3, 3, 3);
+            // Idle: chip sheet's 3x3 white head on the mock top-left.
+            sprDraw(fxchip, cx + ((p.fx * 7) >> 4) - 1, cy + ((p.fy * 7) >> 4) - 1, FRAME(spr::CHIP_IDLE));
         }
     } else if (g.weapon == mh::W_FLAIL) {
         if (p.stance == mh::ST_WHIRL) {
             const uint8_t ang = static_cast<uint8_t>(p.whirlTick * ANG_WHIRL_RING);
             for (uint8_t i = 0; i < 6; i++) {
                 const uint8_t ai = static_cast<uint8_t>(ang + mhPgmReadU8(&RING6[i]));
-                blk(cx + mulQ4(cos256(ai), 20), cy + mulQ4(sin256(ai), 14), 2, 2, 2);
+                sprDraw(fxwhirl, cx + mulQ4(cos256(ai), 20), cy + mulQ4(sin256(ai), 14), FRAME(spr::WHIRL_DOT));
             }
             const uint8_t ba = static_cast<uint8_t>(p.whirlTick * ANG_WHIRL_BALL);
-            blk(cx + mulQ4(cos256(ba), 20) - 2, cy + mulQ4(sin256(ba), 14) - 2, 4, 4, 3);
+            sprDraw(fxwhirl, cx + mulQ4(cos256(ba), 20) - 2, cy + mulQ4(sin256(ba), 14) - 2, FRAME(spr::WHIRL_BALL));
         } else if (p.state == mh::PS_ATTACK || p.state == mh::PS_SPECIAL) {
             const mh::Attack *a = p.atk;
             if (a) {
@@ -354,38 +415,44 @@ static void drawPlayer(const mh::Game &g, int16_t camX, int16_t camY) {
                 int32_t reach = mh::attackReach(a);
                 if (phase != 1)
                     reach = reach / 2;   // mock 0.5 chain
+                // 1x1 light dots from the reach/aim math (8-way facing, halved
+                // startup/recovery reach, trip branch reach 12); the ball is
+                // the 4x4 white chip, both at the mock's exact positions.
                 for (int32_t i = 1; i <= 3; i++) {
                     const int32_t rr = (reach * i) >> 2;
-                    blk(cx + (((int32_t)p.fx * rr) >> 4), cy + (((int32_t)p.fy * rr) >> 4), 1, 1, 2);
+                    sprDraw(fxwhirl, cx + (((int32_t)p.fx * rr) >> 4), cy + (((int32_t)p.fy * rr) >> 4), FRAME(spr::WHIRL_CHAIN));
                 }
-                blk(cx + (((int32_t)p.fx * reach) >> 4) - 2, cy + (((int32_t)p.fy * reach) >> 4) - 2, 4, 4, 3);
+                sprDraw(fxchip, cx + (((int32_t)p.fx * reach) >> 4) - 2, cy + (((int32_t)p.fy * reach) >> 4) - 2, FRAME(spr::CHIP_BALL));
             }
         } else {
-            blk(cx + ((p.fx * 4) >> 4), cy + ((p.fy * 4) >> 4), 1, 1, 2);
-            blk(cx + ((p.fx * 9) >> 4) - 1, cy + ((p.fy * 9) >> 4) - 1, 3, 3, 3);
+            sprDraw(fxwhirl, cx + ((p.fx * 4) >> 4), cy + ((p.fy * 4) >> 4), FRAME(spr::WHIRL_CHAIN));
+            sprDraw(fxchip, cx + ((p.fx * 9) >> 4) - 1, cy + ((p.fy * 9) >> 4) - 1, FRAME(spr::CHIP_IDLE));
         }
         if (p.state == mh::PS_DEFLECT) {
-            blk(x - 2, y + 2, 1, 12, 2);
-            blk(x + p.w + 1, y + 2, 1, 12, 2);
+            // Two light bars; frame centred on the 16 px body (player top-left -4).
+            sprDraw(fxdeflect, x - 4, y, FRAME(spr::DEFLECT_BARS));
         }
     } else {   // gunshield
         const bool guard = (p.stance == mh::ST_GUARD);
         const int32_t shx = cx + ((p.fx * 5) >> 4);
         const int32_t shy = cy + ((p.fy * 5) >> 4);
-        blk(shx - 5, shy - 7, 10, 14, guard ? 3 : 2);
-        blk(shx - 1, shy - 7, 2, 14, 0);
+        // 12x16 plate frame, 10x14 plate at frame local 1,1: origin is the
+        // plate centre minus (6,8). Guard swaps in the white plate.
+        sprDraw(fxguard, shx - 6, shy - 8, FRAME(guard ? spr::GUARD_WHITE : spr::GUARD_PLATE));
         if (p.state == mh::PS_SHOVE) {
-            blk(shx + ((p.fx * 4) >> 4) - 5, shy + ((p.fy * 4) >> 4) - 7, 10, 14, 3);
+            const int32_t shx2 = shx + ((p.fx * 4) >> 4);
+            const int32_t shy2 = shy + ((p.fy * 4) >> 4);
+            sprDraw(fxguard, shx2 - 5, shy2 - 8, FRAME(spr::GUARD_SHOVE));
         }
         if (p.reload > 0)
-            blk(x + 3, y - 3, 10, 2, 2);
+            sprDraw(fxreload, x + 3, y - 6, FRAME(spr::RELOAD_BAR));
     }
 
     if (p.iT > 0 && (g.tick % 4) < 2)
-        blk(x + 6, y + 3, 4, 1, 0);
+        sprDraw(fxerase, x + 6, y + 3, FRAME(spr::ERASE_HOLE));
     if (p.state == mh::PS_STUN) {
         const uint8_t a = static_cast<uint8_t>(static_cast<uint32_t>(g.tick) * ANG_PLAYER_STUN);
-        blk(cx + mulQ4(cos256(a), 7), y - 2 + mulQ4(sin256(a), 2), 2, 2, 3);
+        sprDraw(fxwhirl, cx + mulQ4(cos256(a), 7), y - 2 + mulQ4(sin256(a), 2), FRAME(spr::WHIRL_STUN));
     }
 }
 
@@ -398,9 +465,10 @@ static void drawProjectiles(const mh::Game &g, int16_t camX, int16_t camY) {
         const int32_t bx = (pr.vx * 2) >> 4;
         const int32_t by = (pr.vy * 2) >> 4;
 
-        blk(x - bx * 2 - 1, y - by * 2 - 1, 2, 2, 1);
-        blk(x - bx * 3 - 1, y - by * 3 - 1, 2, 2, 1);
-        blk(x - bx - 1, y - by - 1, 2, 2, 2);
+        // 2x2 trail puffs at the mock offsets, drawn far dark -> near light.
+        sprDraw(fxtrail, x - bx * 2 - 1, y - by * 2 - 1, FRAME(spr::TRAIL_DARK));
+        sprDraw(fxtrail, x - bx * 3 - 1, y - by * 3 - 1, FRAME(spr::TRAIL_DARK));
+        sprDraw(fxtrail, x - bx - 1, y - by - 1, FRAME(spr::TRAIL_LIGHT));
 
         const int32_t hw = pr.w >> 1;
         const int32_t hh = pr.h >> 1;

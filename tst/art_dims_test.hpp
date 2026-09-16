@@ -129,6 +129,19 @@ int16_t monHh(const MonsterAttack *a) {
 
 // ----------------------------------------------------------- dims vs core
 
+// Branch attacks are drawn through the same overlay path as the main attacks
+// (sword step-slash / spin-cut in particular), so their boxes must be dumped
+// and pinned too.
+void assertBranchDims(Test &t, const WeaponDef *w, const char *what) {
+    t.assert(art_dims::sword_branch0_hw, coreHw(branchAtk(weaponBranch(w, 0))), "sword branch0 hw");
+    t.assert(art_dims::sword_branch0_hh, coreHh(branchAtk(weaponBranch(w, 0))), "sword branch0 hh");
+    t.assert(art_dims::sword_branch0_reach, coreReach(branchAtk(weaponBranch(w, 0))), "sword branch0 reach");
+    t.assert(art_dims::sword_branch1_hw, coreHw(branchAtk(weaponBranch(w, 1))), "sword branch1 hw");
+    t.assert(art_dims::sword_branch1_hh, coreHh(branchAtk(weaponBranch(w, 1))), "sword branch1 hh");
+    t.assert(art_dims::sword_branch1_reach, coreReach(branchAtk(weaponBranch(w, 1))), "sword branch1 reach");
+    (void)what;
+}
+
 void testCoreDimMirrors(Test &t) {
     std::cout << "---------- art dims match core accessors ----------" << std::endl;
     const WeaponDef *w = &WEAPON_DEFS[0];
@@ -144,6 +157,7 @@ void testCoreDimMirrors(Test &t) {
     t.assert(art_dims::sword_special_hw, coreHw(weaponSpecial(w)), "sword special hw");
     t.assert(art_dims::sword_special_hh, coreHh(weaponSpecial(w)), "sword special hh");
     t.assert(art_dims::sword_special_reach, coreReach(weaponSpecial(w)), "sword special reach");
+    assertBranchDims(t, w, "sword");
 
     w = &WEAPON_DEFS[1];
     t.assert(art_dims::flail_atk0_hw, coreHw(weaponAttack(w, 0)), "flail atk0 hw");
@@ -182,38 +196,51 @@ void testCoreDimMirrors(Test &t) {
 
 // -------------------------------------- slash frame layout carries core dims
 
-// The slash frame is 24x24 with the hit box centred: box origin + core pad.
+// The slash frame is 32x32 with the hit box centred and the white 4x4 core on
+// the box centre (slash_core_x/y). One frame per distinct sword box, in the
+// order the generator authors them.
 void testSlashLayout(Test &t) {
     const WeaponDef *w = &WEAPON_DEFS[0];
-    const int16_t boxes[4][2] = {
+    const int16_t boxes[5][2] = {
         {coreHw(weaponAttack(w, 0)), coreHh(weaponAttack(w, 0))},
-        {coreHw(weaponAttack(w, 1)), coreHh(weaponAttack(w, 1))},
         {coreHw(weaponAttack(w, 2)), coreHh(weaponAttack(w, 2))},
         {coreHw(weaponSpecial(w)), coreHh(weaponSpecial(w))},
+        {coreHw(branchAtk(weaponBranch(w, 0))), coreHh(branchAtk(weaponBranch(w, 0)))},
+        {coreHw(branchAtk(weaponBranch(w, 1))), coreHh(branchAtk(weaponBranch(w, 1)))},
     };
-    for (int i = 0; i < 4; i++) {
+    for (int i = 0; i < 5; i++) {
         const int x = (art_dims::slash_frame_w - boxes[i][0]) / 2;
         const int y = (art_dims::slash_frame_h - boxes[i][1]) / 2;
-        t.assertGreaterThan(x - art_dims::slash_pad_x, -1, "slash box x fits");
+        t.assertGreaterThan(x, -1, "slash box x fits");
         t.assertGreaterThan(art_dims::slash_frame_w - (x + boxes[i][0]), -1, "slash box right fits");
+        t.assertGreaterThan(y, -1, "slash box y fits");
         t.assertGreaterThan(art_dims::slash_frame_h - (y + boxes[i][1]), -1, "slash box bottom fits");
         t.assert((art_dims::slash_frame_h - boxes[i][1]) % 2, 0, "slash box y centred");
         t.assert((art_dims::slash_frame_w - boxes[i][0]) % 2, 0, "slash box x centred");
+        // core centre == box centre == frame centre
+        t.assert(x + boxes[i][0] / 2, art_dims::slash_frame_w / 2, "slash box centre x");
+        t.assert(y + boxes[i][1] / 2, art_dims::slash_frame_h / 2, "slash box centre y");
+        t.assert(art_dims::slash_core_x + art_dims::slash_core_size / 2, art_dims::slash_frame_w / 2, "slash core centre x");
+        t.assert(art_dims::slash_core_y + art_dims::slash_core_size / 2, art_dims::slash_frame_h / 2, "slash core centre y");
     }
+    // Frame order: combo 12x10, combo 18x14, special 20x16, step-slash 14x12,
+    // spin-cut 28x26.
+    t.assert(art_dims::sword_atk0_hw, boxes[0][0], "slash f0 box w");
+    t.assert(art_dims::sword_atk2_hw, boxes[1][0], "slash f1 box w");
+    t.assert(art_dims::sword_special_hw, boxes[2][0], "slash f2 box w");
+    t.assert(art_dims::sword_branch0_hw, boxes[3][0], "slash f3 box w");
+    t.assert(art_dims::sword_branch1_hw, boxes[4][0], "slash f4 box w");
+    t.assert(art_dims::sword_branch1_hh, boxes[4][1], "slash f4 box h");
 }
 
 // --------------------------------------------- per-sheet pixel presence
 
 void testSheetPixels(Test &t) {
-    Blob slash, ripspecial, parry, chain, whirl, deflect, guard, reload, erase, trail, telegraph, chip;
-    if (!parseBlob("fxslash", slash, t) || !parseBlob("fxripspecial", ripspecial, t) || !parseBlob("fxparry", parry, t) || !parseBlob("fxchain", chain, t) || !parseBlob("fxwhirl", whirl, t) ||
-        !parseBlob("fxdeflect", deflect, t) || !parseBlob("fxguard", guard, t) || !parseBlob("fxreload", reload, t) || !parseBlob("fxerase", erase, t) || !parseBlob("fxtrail", trail, t) ||
-        !parseBlob("fxtelegraph", telegraph, t) || !parseBlob("fxchip", chip, t))
+    Blob slash, ripspecial, parry, whirl, deflect, guard, reload, erase, trail, telegraph, chip;
+    if (!parseBlob("fxslash", slash, t) || !parseBlob("fxripspecial", ripspecial, t) || !parseBlob("fxparry", parry, t) || !parseBlob("fxwhirl", whirl, t) || !parseBlob("fxdeflect", deflect, t) ||
+        !parseBlob("fxguard", guard, t) || !parseBlob("fxreload", reload, t) || !parseBlob("fxerase", erase, t) || !parseBlob("fxtrail", trail, t) || !parseBlob("fxtelegraph", telegraph, t) ||
+        !parseBlob("fxchip", chip, t))
         return;
-
-    const WeaponDef *sword = &WEAPON_DEFS[0];
-    const WeaponDef *flail = &WEAPON_DEFS[1];
-    const WeaponDef *gun = &WEAPON_DEFS[2];
 
     // Sheet headers agree with the generated frame layout.
     t.assert(slash.w, art_dims::slash_frame_w, "slash blob frame w");
@@ -221,45 +248,48 @@ void testSheetPixels(Test &t) {
     t.assert(slash.frames, art_dims::slash_frames, "slash blob frames");
     t.assert(parry.w, art_dims::parry_frame_w, "parry blob frame w");
     t.assert(parry.h, art_dims::parry_frame_h, "parry blob frame h");
-    t.assert(chain.w, art_dims::chain_frame_w, "chain blob frame w");
-    t.assert(chain.frames, art_dims::chain_frames, "chain blob frames");
     t.assert(guard.w, art_dims::guard_frame_w, "guard blob frame w");
     t.assert(guard.frames, art_dims::guard_frames, "guard blob frames");
     t.assert(telegraph.w, art_dims::telegraph_frame_w, "telegraph blob frame w");
     t.assert(telegraph.h, art_dims::telegraph_frame_h, "telegraph blob frame h");
     t.assert(telegraph.frames, art_dims::telegraph_frames, "telegraph blob frames");
+    t.assert(whirl.frames, art_dims::whirl_frames, "whirl blob frames");
+    t.assert(chip.frames, art_dims::chip_frames, "chip blob frames");
 
-    // Sword slash frames 0..3: light-gray box (plane 1 only) centred in the
-    // frame with the white core 2 px inside it. Frame 1 is the combo-2 special
-    // (identical box to frame 0) and frame 3 is the special (20x16).
-    static const int sw_frame[4] = {0, 1, 2, 3};
-    static const int sw_atk[4] = {0, 1, 2, -1};   // -1 = weapon special
-    for (int i = 0; i < 4; i++) {
-        const int16_t hw = (sw_atk[i] >= 0) ? coreHw(weaponAttack(sword, sw_atk[i])) : coreHw(weaponSpecial(sword));
-        const int16_t hh = (sw_atk[i] >= 0) ? coreHh(weaponAttack(sword, sw_atk[i])) : coreHh(weaponSpecial(sword));
-        const int px = (slash.w - hw) / 2;
-        const int py = (slash.h - hh) / 2;
-        const int cx = px + art_dims::slash_core_pad;
-        const int cy = py + art_dims::slash_core_pad;
-
-        // box top-left pixel: plane0 off, plane1 on, plane2 off (light gray)
+    // Sword slash frames 0..4: light box (hw x hh) centred in the 32x32 frame
+    // with the white 4x4 core on the box centre. Frame order: combo 12x10,
+    // combo 18x14, special 20x16, step-slash 14x12, spin-cut 28x26.
+    const WeaponDef *sword = &WEAPON_DEFS[0];
+    const int16_t boxes[5][2] = {
+        {coreHw(weaponAttack(sword, 0)), coreHh(weaponAttack(sword, 0))},
+        {coreHw(weaponAttack(sword, 2)), coreHh(weaponAttack(sword, 2))},
+        {coreHw(weaponSpecial(sword)), coreHh(weaponSpecial(sword))},
+        {coreHw(branchAtk(weaponBranch(sword, 0))), coreHh(branchAtk(weaponBranch(sword, 0)))},
+        {coreHw(branchAtk(weaponBranch(sword, 1))), coreHh(branchAtk(weaponBranch(sword, 1)))},
+    };
+    for (int i = 0; i < 5; i++) {
+        const int px = (slash.w - boxes[i][0]) / 2;
+        const int py = (slash.h - boxes[i][1]) / 2;
+        // box top-left pixel: plane0 on, plane1 on, plane2 off (light gray)
         t.assert(bitAt(py % 8, pixelMask(slash, i, 0, px, py / 8)), 1, "slash box mask");
         t.assert(bitAt(py % 8, pixelData(slash, i, 0, px, py / 8)), 1, "slash box plane0 on");
         t.assert(bitAt(py % 8, pixelData(slash, i, 1, px, py / 8)), 1, "slash box plane1 on");
         t.assert(bitAt(py % 8, pixelData(slash, i, 2, px, py / 8)), 0, "slash box plane2 off");
-        // white core: all planes on
-        t.assert(bitAt(cy % 8, pixelData(slash, i, 0, cx, cy / 8)), 1, "slash core plane0");
-        t.assert(bitAt(cy % 8, pixelData(slash, i, 2, cx, cy / 8)), 1, "slash core plane2");
+        // white core at the box/frame centre: all planes on
+        t.assert(bitAt(art_dims::slash_core_y % 8, pixelData(slash, i, 0, art_dims::slash_core_x, art_dims::slash_core_y / 8)), 1, "slash core plane0");
+        t.assert(bitAt(art_dims::slash_core_y % 8, pixelData(slash, i, 2, art_dims::slash_core_x, art_dims::slash_core_y / 8)), 1, "slash core plane2");
         // outside the box (one px left) stays transparent
         t.assert(bitAt(py % 8, pixelMask(slash, i, 0, px - 1, py / 8)), 0, "slash outside box clear");
-        // riposte rim matches the special box + 2 px per side
-        if (i == 3) {
-            const int rx = (ripspecial.w - (hw + 2 * art_dims::slash_riposte_pad)) / 2;
-            const int ry = (ripspecial.h - (hh + 2 * art_dims::slash_riposte_pad)) / 2;
-            t.assert(bitAt(ry % 8, pixelMask(ripspecial, 0, 0, rx, ry / 8)), 1, "riposte rim mask");
-            t.assert(bitAt(ry % 8, pixelData(ripspecial, 0, 1, rx, ry / 8)), 1, "riposte rim light");
-            t.assert(bitAt(ry % 8, pixelData(ripspecial, 0, 2, rx, ry / 8)), 0, "riposte rim no white");
-        }
+    }
+    // Riposte rim matches the special box + 2 px per side.
+    {
+        const int rhw = boxes[2][0] + 2 * art_dims::slash_riposte_pad;
+        const int rhh = boxes[2][1] + 2 * art_dims::slash_riposte_pad;
+        const int rx = (ripspecial.w - rhw) / 2;
+        const int ry = (ripspecial.h - rhh) / 2;
+        t.assert(bitAt(ry % 8, pixelMask(ripspecial, 0, 0, rx, ry / 8)), 1, "riposte rim mask");
+        t.assert(bitAt(ry % 8, pixelData(ripspecial, 0, 1, rx, ry / 8)), 1, "riposte rim light");
+        t.assert(bitAt(ry % 8, pixelData(ripspecial, 0, 2, rx, ry / 8)), 0, "riposte rim no white");
     }
 
     // Parry: white blade bar 2x14 at frame x=11, light-gray cap 6x2 at x=9,y=2.
@@ -267,21 +297,17 @@ void testSheetPixels(Test &t) {
     t.assert(bitAt(4 % 8, pixelData(parry, 0, 2, 12, 4 / 8)), 1, "parry blade plane2");
     t.assert(bitAt(2 % 8, pixelData(parry, 0, 1, 10, 2 / 8)), 1, "parry cap plane1");
 
-    // Flail chain: 1 px dark-gray dots at frame centre + (reach*i)>>2 (player
-    // centre anchor, y = 8). Frame i bakes combo reach i; dot d sits at
-    // x = chain_frame_w/2 + (reach*d)>>2.
-    for (int i = 0; i < 3; i++) {
-        const int16_t reach = coreReach(weaponAttack(flail, i));
-        for (int d = 1; d <= 3; d++) {
-            const int x = art_dims::chain_frame_w / 2 + ((reach * d) >> 2);
-            t.assert(bitAt(8 % 8, pixelMask(chain, i, 0, x, 8 / 8)), 1, "chain dot mask");
-            t.assert(bitAt(8 % 8, pixelData(chain, i, 0, x, 8 / 8)), 1, "chain dot dark");
-        }
-    }
-
-    // Whirl: frame 0 is a 2x2 light-gray orbit dot, frame 1 a 4x4 white ball.
+    // Whirl: frame 0 is a 2x2 light orbit dot, frame 1 a 4x4 white ball,
+    // frame 2 a 1x1 light chain dot, frame 3 a 2x2 white stun sparkle.
     t.assert(bitAt(0, pixelData(whirl, art_dims::whirl_dot_frame, 0, 0, 0)), 1, "whirl dot plane0");
     t.assert(bitAt(1, pixelData(whirl, art_dims::whirl_ball_frame, 2, 1, 0)), 1, "whirl ball plane2");
+    t.assert(bitAt(0, pixelData(whirl, art_dims::whirl_chain_frame, 0, 0, 0)), 1, "whirl chain dot plane0");
+    t.assert(bitAt(0, pixelData(whirl, art_dims::whirl_chain_frame, 1, 0, 0)), 1, "whirl chain dot plane1");
+    t.assert(bitAt(0, pixelData(whirl, art_dims::whirl_chain_frame, 2, 0, 0)), 0, "whirl chain dot plane2 off");
+    t.assert(bitAt(0, pixelMask(whirl, art_dims::whirl_chain_frame, 0, 1, 0)), 0, "whirl chain dot 1px");
+    t.assert(bitAt(0, pixelData(whirl, art_dims::whirl_stun_frame, 2, 0, 0)), 1, "whirl stun plane2");
+    t.assert(bitAt(1, pixelData(whirl, art_dims::whirl_stun_frame, 2, 1, 0)), 1, "whirl stun plane2 row1");
+    t.assert(bitAt(0, pixelMask(whirl, art_dims::whirl_stun_frame, 0, 2, 0)), 0, "whirl stun 2px wide");
     // Deflect: two light-gray 1x12 bars at the player's left/right edge.
     t.assert(bitAt(2 % 8, pixelData(deflect, 0, 0, 2, 2 / 8)), 1, "deflect left bar plane0");
     t.assert(bitAt(2 % 8, pixelData(deflect, 0, 0, 21, 2 / 8)), 1, "deflect right bar plane0");
@@ -308,25 +334,33 @@ void testSheetPixels(Test &t) {
     t.assert(bitAt(0, pixelData(trail, 1, 0, 0, 0)), 1, "trail puff dark plane0");
     t.assert(bitAt(0, pixelData(trail, 1, 1, 0, 0)), 0, "trail puff dark plane1 off");
 
-    // Telegraph: lunge box dark gray centred with a light 2x2 core; sweep box
-    // light with a white 4x4 core.
+    // Telegraph frames 0..3: lunge windup (dark box + 2x2 light core), lunge
+    // attack (light box + 4x4 white core), sweep windup and sweep attack. Box
+    // and core are centred in the 32x24 frame for both attacks.
     const int lx = art_dims::telegraph_lunge_x;
     const int ly = art_dims::telegraph_lunge_y;
-    t.assert(bitAt(ly % 8, pixelData(telegraph, 0, 0, lx, ly / 8)), 1, "lunge telegraph plane0");
-    t.assert(bitAt(ly % 8, pixelData(telegraph, 0, 1, lx, ly / 8)), 0, "lunge telegraph not light");
     const int lcx = lx + monHw(&MONSTER_ATTACKS[0]) / 2 - 1;
     const int lcy = ly + monHh(&MONSTER_ATTACKS[0]) / 2 - 1;
-    t.assert(bitAt(lcy % 8, pixelData(telegraph, 0, 0, lcx, lcy / 8)), 1, "lunge core light");
+    t.assert(bitAt(ly % 8, pixelData(telegraph, 0, 0, lx, ly / 8)), 1, "lunge windup dark");
+    t.assert(bitAt(ly % 8, pixelData(telegraph, 0, 1, lx, ly / 8)), 0, "lunge windup not light");
+    t.assert(bitAt(lcy % 8, pixelData(telegraph, 0, 1, lcx, lcy / 8)), 1, "lunge windup core light");
+    t.assert(bitAt(ly % 8, pixelData(telegraph, 1, 1, lx, ly / 8)), 1, "lunge attack light");
+    t.assert(bitAt((lcy - 1) % 8, pixelData(telegraph, 1, 2, lcx - 1, (lcy - 1) / 8)), 1, "lunge attack core white");
     const int sx = art_dims::telegraph_sweep_x;
     const int sy = art_dims::telegraph_sweep_y;
-    t.assert(bitAt(sy % 8, pixelData(telegraph, 1, 1, sx, sy / 8)), 1, "sweep telegraph light");
-    t.assert(bitAt(sy % 8, pixelData(telegraph, 1, 0, sx, sy / 8)), 1, "sweep telegraph plane0");
-    const int scx = sx + monHw(&MONSTER_ATTACKS[1]) / 2 - 2;
-    const int scy = sy + monHh(&MONSTER_ATTACKS[1]) / 2 - 2;
-    t.assert(bitAt(scy % 8, pixelData(telegraph, 1, 2, scx, scy / 8)), 1, "sweep core white");
+    const int scx = sx + monHw(&MONSTER_ATTACKS[1]) / 2 - 1;
+    const int scy = sy + monHh(&MONSTER_ATTACKS[1]) / 2 - 1;
+    t.assert(bitAt(sy % 8, pixelData(telegraph, 2, 0, sx, sy / 8)), 1, "sweep windup dark");
+    t.assert(bitAt(sy % 8, pixelData(telegraph, 2, 1, sx, sy / 8)), 0, "sweep windup not light");
+    t.assert(bitAt(scy % 8, pixelData(telegraph, 2, 1, scx, scy / 8)), 1, "sweep windup core light");
+    t.assert(bitAt(sy % 8, pixelData(telegraph, 3, 1, sx, sy / 8)), 1, "sweep attack light");
+    t.assert(bitAt((scy - 1) % 8, pixelData(telegraph, 3, 2, scx - 1, (scy - 1) / 8)), 1, "sweep attack core white");
 
-    // Chip: the 4x4 white head the flail special / sword core reuse.
-    t.assert(bitAt(0, pixelData(chip, 0, 2, 0, 0)), 1, "chip white");
+    // Chip: 3x3 white idle/aim chip (frame 0) and 4x4 white ball (frame 1).
+    t.assert(bitAt(0, pixelData(chip, art_dims::chip_idle_frame, 2, 0, 0)), 1, "chip idle white");
+    t.assert(bitAt(0, pixelData(chip, art_dims::chip_idle_frame, 2, 1, 0)), 1, "chip idle row0 col1");
+    t.assert(bitAt(0, pixelMask(chip, art_dims::chip_idle_frame, 0, 3, 0)), 0, "chip idle 3px wide");
+    t.assert(bitAt(0, pixelData(chip, art_dims::chip_ball_frame, 2, 1, 0)), 1, "chip ball white");
     t.assert(chip.w, art_dims::chip_frame_w, "chip blob frame w");
 
     // Frame coverage: every declared frame of every new sheet is parsed, so a
@@ -334,7 +368,6 @@ void testSheetPixels(Test &t) {
     t.assert(slash.frames, art_dims::slash_frames, "slash frames parsed");
     t.assert(ripspecial.frames, art_dims::ripspecial_frames, "riposte frames parsed");
     t.assert(parry.frames, art_dims::parry_frames, "parry frames parsed");
-    t.assert(chain.frames, art_dims::chain_frames, "chain frames parsed");
     t.assert(whirl.frames, art_dims::whirl_frames, "whirl frames parsed");
     t.assert(deflect.frames, art_dims::deflect_frames, "deflect frames parsed");
     t.assert(guard.frames, art_dims::guard_frames, "guard frames parsed");

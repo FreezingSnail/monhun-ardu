@@ -1,7 +1,8 @@
 // Host-side dumper for the core table dimensions that the art pipeline needs
 // (bead monhun-ardu-42n.2). Prints JSON on stdout from the same src/core/game.hpp
 // tables the firmware uses, so tools/gen-art.py never duplicates a number:
-// attack hw/hh/reach, monster attack hw/hh, monster hurt box size, whirl radii.
+// attack hw/hh/reach (main attacks, special and attack branches), monster
+// attack hw/hh, monster hurt box size, whirl radii.
 //
 // Deterministic: fixed traversal order, little text, no timestamps.
 //
@@ -50,7 +51,24 @@ int main() {
         putNum("hh", attackHh(sp));
         printf(", ");
         putNum("reach", attackReach(sp));
-        printf("}\n");
+        printf("},\n");
+        // Branch attacks (combo follow-ups): same fields plus the AtkId so the
+        // art pipeline can tell an attack branch (id != ATK_NONE) from a stance
+        // branch (id == ATK_NONE, all-zero box).
+        printf("      \"branches\": [\n");
+        for (int b = 0; b < 2; b++) {
+            const Attack *br = branchAtk(weaponBranch(d, b));
+            printf("        {");
+            putNum("id", attackId(br));
+            printf(", ");
+            putNum("hw", attackHw(br));
+            printf(", ");
+            putNum("hh", attackHh(br));
+            printf(", ");
+            putNum("reach", attackReach(br));
+            printf("}%s\n", b < 1 ? "," : "");
+        }
+        printf("      ]\n");
         printf("    }%s\n", w < 2 ? "," : "");
     }
     printf("  ],\n");

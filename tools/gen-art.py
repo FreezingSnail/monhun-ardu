@@ -116,13 +116,16 @@ def load_dims(path):
 def attack_boxes(dims):
     """Per-sheet core dims from fxdump, keyed by sheet id."""
     sword, flail, gun = dims.weapons
+    # fxslash carries one frame per distinct sword hit box: the three main
+    # combo attacks (12x10 twice), the special (20x16) and the two attack
+    # branches (step-slash 14x12, spin-cut 28x26). Order is the frame order.
+    slash = [(sword.attacks[i].hw, sword.attacks[i].hh) for i in range(3)]
+    slash.append((sword.special.hw, sword.special.hh))
+    for b in sword.branches:
+        if b.id:
+            slash.append((b.hw, b.hh))
     return {
-        "slash": [(sword.attacks[i].hw, sword.attacks[i].hh) for i in range(3)]
-        + [(sword.special.hw, sword.special.hh)],
-        "reaches": {
-            "slash": [sword.attacks[i].reach for i in range(3)] + [sword.special.reach],
-            "chain": [flail.attacks[i].reach for i in range(3)] + [flail.special.reach],
-        },
+        "slash": list(dict.fromkeys(slash)),
         "ripspecial": (sword.special.hw, sword.special.hh),
         "monster": {
             "lunge": (dims.monsterAttacks.lunge.hw, dims.monsterAttacks.lunge.hh),
@@ -161,40 +164,24 @@ def sheet_size(rects):
 def icon_defs(dims):
     d = attack_boxes(dims)
     lunge, sweep = d["monster"]["lunge"], d["monster"]["sweep"]
-    reaches = d["reaches"]
 
     def slash_frame(hw, hh):
-        px = (24 - hw) // 2
-        py = (24 - hh) // 2
-        blocks = [(LIGHT, px, py, hw, hh)]
-        if hw > 4 and hh > 4:
-            blocks.append((WHITE, px + 2, py + 2, 4, 4))
-        return blocks
-
-    chain_frames = []
-    # Frames bake the combo reaches (19/21/24), 1 px dots at rr=(reach*i)>>2
-    # with the mock's truncating tip; the special throw (reach 32) spawns the
-    # fxchip ball instead of a chain dot, so no frame is needed for it.
-    for reach in dict.fromkeys(reaches["chain"][:3]):
-        blocks = []
-        for i in (1, 2, 3):
-            rr = (reach * i) >> 2
-            blocks.append((DARK, 20 + rr, 8, 1, 1))
-        chain_frames.append(blocks)
+        px = (32 - hw) // 2
+        py = (32 - hh) // 2
+        # White 4x4 core on the hit-box centre, which is always (14,14) in the
+        # uniform 32x32 frame, so the mock's core at (hx-2, hy-2) is exact.
+        return [(LIGHT, px, py, hw, hh), (WHITE, 14, 14, 4, 4)]
 
     return [
-        {"id": "slash", "w": 24, "h": 24, "anchor": "box top-left",
-         "reaches": reaches["slash"],
+        {"id": "slash", "w": 32, "h": 32, "anchor": "box centre",
          "frames": [slash_frame(hw, hh) for hw, hh in d["slash"]]},
         {"id": "ripspecial", "w": 24, "h": 24, "anchor": "box top-left",
-         "reaches": [dims.weapons[0].special.reach],
          "frames": [[(LIGHT, 0, 0, d["ripspecial"][0] + 4, d["ripspecial"][1] + 4)]]},
         {"id": "parry", "w": 24, "h": 16, "anchor": "player centre",
          "frames": [[(WHITE, 11, 0, 2, 14), (LIGHT, 9, 2, 6, 2)]]},
-        {"id": "chain", "w": 40, "h": 16, "anchor": "player centre",
-         "reaches": reaches["chain"], "frames": chain_frames},
         {"id": "whirl", "w": 8, "h": 4, "anchor": "dot top-left",
-         "frames": [[(LIGHT, 0, 0, 2, 2)], [(WHITE, 0, 0, 4, 4)]]},
+         "frames": [[(LIGHT, 0, 0, 2, 2)], [(WHITE, 0, 0, 4, 4)],
+                    [(LIGHT, 0, 0, 1, 1)], [(WHITE, 0, 0, 2, 2)]]},
         {"id": "deflect", "w": 24, "h": 16, "anchor": "player top-left",
          "frames": [[(LIGHT, 2, 2, 1, 12), (LIGHT, 21, 2, 1, 12)]]},
         {"id": "guard", "w": 12, "h": 16, "anchor": "plate centre",
@@ -207,18 +194,20 @@ def icon_defs(dims):
          "frames": [[(BLACK, 0, 0, 4, 1)]]},
         {"id": "trail", "w": 4, "h": 4, "anchor": "puff top-left",
          "frames": [[(LIGHT, 0, 0, 2, 2)], [(DARK, 0, 0, 2, 2)]]},
+        # Frames in order: lunge windup, lunge attack, sweep windup, sweep
+        # attack. The mock's windup box is shade 1 with a 2x2 shade-2 core and
+        # the attack box shade 2 with a 4x4 shade-3 core, for both attacks.
         {"id": "telegraph", "w": 32, "h": 24, "anchor": "box centre",
-         "frames": [[(DARK, (32 - lunge[0]) // 2, (24 - lunge[1]) // 2, lunge[0], lunge[1]),
-                     (LIGHT, 15, 11, 2, 2)],
-                    [(LIGHT, (32 - sweep[0]) // 2, (24 - sweep[1]) // 2, sweep[0], sweep[1]),
-                     (WHITE, 14, 10, 4, 4)]]},
+         "frames": [[(DARK, (32 - lunge[0]) // 2, (24 - lunge[1]) // 2, lunge[0], lunge[1]), (LIGHT, 15, 11, 2, 2)],
+                    [(LIGHT, (32 - lunge[0]) // 2, (24 - lunge[1]) // 2, lunge[0], lunge[1]), (WHITE, 14, 10, 4, 4)],
+                    [(DARK, (32 - sweep[0]) // 2, (24 - sweep[1]) // 2, sweep[0], sweep[1]), (LIGHT, 15, 11, 2, 2)],
+                    [(LIGHT, (32 - sweep[0]) // 2, (24 - sweep[1]) // 2, sweep[0], sweep[1]), (WHITE, 14, 10, 4, 4)]]},
         {"id": "chip", "w": 8, "h": 8, "anchor": "chip top-left",
-         "frames": [[(WHITE, 0, 0, 4, 4)]]},
+         "frames": [[(WHITE, 0, 0, 3, 3)], [(WHITE, 0, 0, 4, 4)]]},
     ]
 
 
-# Existing block sheets (kept byte-stable; the chip sheet also carries the
-# flail's 4x4 white head so the overlay pass reuses one small sheet).
+# Existing block sheets (kept byte-stable).
 def player_frames():
     """16x16 body+shadow only; weapon overlays live on the overlay sheets."""
     frames = []
@@ -522,6 +511,11 @@ def emit_dims_header(dims, icons, path):
         L.append("constexpr int16_t %s_special_hw = %d;" % (name, sp.hw))
         L.append("constexpr int16_t %s_special_hh = %d;" % (name, sp.hh))
         L.append("constexpr int16_t %s_special_reach = %d;" % (name, sp.reach))
+        # Branch attacks: stance branches carry an all-zero box (id 0).
+        for i, br in enumerate(weapon.branches):
+            L.append("constexpr int16_t %s_branch%d_hw = %d;" % (name, i, br.hw))
+            L.append("constexpr int16_t %s_branch%d_hh = %d;" % (name, i, br.hh))
+            L.append("constexpr int16_t %s_branch%d_reach = %d;" % (name, i, br.reach))
     L.append("")
     lunge = dims.monsterAttacks.lunge
     sweep = dims.monsterAttacks.sweep
@@ -548,29 +542,38 @@ def emit_dims_header(dims, icons, path):
         L.append("constexpr uint8_t %s_frames = %d;" % (d["id"], len(d["frames"])))
     L.append("")
 
-    # Slash boxes: the rect (box_w x box_h) centred in the slash frame with the
-    # white core. The dims test re-derives these from the core accessors.
-    sw = by_id["slash"]["w"]
-    sh = by_id["slash"]["h"]
-    L.append("// Sword slash boxes: core hw x hh centred in the slash frame; the white")
-    L.append("// core sits at the centre, the riposte rim (hw+4 x hh+4) at 0,0.")
-    L.append("constexpr uint8_t slash_pad_x = %d;" % ((sw - 20) // 2))
-    L.append("constexpr uint8_t slash_pad_y = %d;" % ((sh - 16) // 2))
-    L.append("constexpr uint8_t slash_core_pad = 2;")
+    # Slash boxes: the rect (box_w x box_h) centred in the 32x32 slash frame
+    # with the white 4x4 core on the hit-box centre. The dims test re-derives
+    # these from the core accessors.
+    L.append("// Sword slash: 32x32 frame, hit box (hw x hh) centred with the 4x4")
+    L.append("// white core at slash_core_x/y (the hit-box centre). Frame order: 12x10")
+    L.append("// combo, 18x14 combo, 20x16 special, 14x12 step-slash, 28x26 spin-cut.")
+    L.append("constexpr uint8_t slash_core_x = %d;" % ((by_id["slash"]["w"] - 4) // 2))
+    L.append("constexpr uint8_t slash_core_y = %d;" % ((by_id["slash"]["h"] - 4) // 2))
+    L.append("constexpr uint8_t slash_core_size = 4;")
     L.append("constexpr uint8_t slash_riposte_pad = 2;")
     L.append("")
 
     # Telegraph boxes: hit box centred in the frame (same size as the monster
-    # hurt box) with the flash core at its centre.
-    L.append("// Telegraph: hit box centred in the frame, bright core at centre.")
+    # hurt box) with the flash core at its centre. Frame order: lunge windup,
+    # lunge attack, sweep windup, sweep attack.
+    L.append("// Telegraph: hit box centred in the frame, core at centre. Frames: lunge")
+    L.append("// windup, lunge attack, sweep windup, sweep attack.")
     for name, atk in (("lunge", lunge), ("sweep", sweep)):
         L.append("constexpr uint8_t telegraph_%s_x = %d;" % (name, (32 - atk.hw) // 2))
         L.append("constexpr uint8_t telegraph_%s_y = %d;" % (name, (24 - atk.hh) // 2))
     L.append("")
 
-    L.append("// Whirl dot frames in fxwhirl (per-frame white extras at the orbit).")
+    L.append("// Whirl frames in fxwhirl: 2x2 light orbit dot, 4x4 white ball, 1x1")
+    L.append("// light chain dot, 2x2 white stun sparkle.")
     L.append("constexpr uint8_t whirl_dot_frame = 0;")
     L.append("constexpr uint8_t whirl_ball_frame = 1;")
+    L.append("constexpr uint8_t whirl_chain_frame = 2;")
+    L.append("constexpr uint8_t whirl_stun_frame = 3;")
+    L.append("")
+    L.append("// Chip frames in fxchip: 3x3 white idle/aim chip, 4x4 white ball.")
+    L.append("constexpr uint8_t chip_idle_frame = 0;")
+    L.append("constexpr uint8_t chip_ball_frame = 1;")
     L.append("")
     L.append("}   // namespace art_dims")
 
