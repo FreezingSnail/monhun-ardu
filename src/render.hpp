@@ -528,7 +528,9 @@ static void hudBar(int32_t x, int32_t y, int32_t w, int32_t h,
 static void drawHud(const mh::Game& g) {
     const mh::Player& p = g.player;
 
-    blk(0, 0, mh::SCREEN_W, mh::HUD_H, 0);        // strip background (black)
+    // No strip background fill: ArduboyG waitForNextPlane(BLACK) wipes the
+    // framebuffer black before each plane, and blk() clamps the arena band to
+    // y >= HUD_H anyway, so a y=0 HUD wipe was a no-op.
     blk(0, mh::HUD_H - 1, mh::SCREEN_W, 1, 1);    // divider at the arena edge
 
     hudBar(1, 2, 28, 4, p.hp, p.hpMax, 3);        // player HP (white)

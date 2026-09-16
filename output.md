@@ -176,3 +176,85 @@ evidence exactly.
 ## Verdict
 All perf budgets PASS with zero run-to-run variance; profiler confirms the
 hotspot fix; host + device suites green. Gate closed.
+
+---
+
+# monhun-ardu-kt7.4 — Render: drop redundant black fills
+
+## Bead
+`monhun-ardu-kt7.4` (slice of epic `monhun-ardu-kt7`). ArduboyG's
+`waitForNextPlane(BLACK)` already wipes the shared framebuffer to black during
+each plane blit (`src/external/ArduboyG.h`, doDisplay/paint: clear flag + clear
+color -> `st X,0`), so shade-0 "background" fills are wasted writes. Render-only
+audit of `src/render.hpp`.
+
+## Files
+- changed `src/render.hpp`:
+  - `drawHud()`: removed `blk(0, 0, SCREEN_W, HUD_H, 0)` (the `// strip
+    background (black)` fill). It was not just redundant — `blk()` clamps the
+    arena band to `y >= HUD_H`, so with `y=0, h=HUD_H` the call hit
+    `y0 >= y1` and returned before `fillRect`: a pure call-overhead no-op. The
+    HUD strip is painted black by the per-plane wipe that precedes every pass.
+- changed `output.md`.
+
+## Shade-0 audit (draw order)
+Only three shade-0 draws existed; no direct `arduboy.fillRect(..., 0)`.
+- `:531 blk(0,0,SCREEN_W,HUD_H,0)` — REDUNDANT, removed (see above).
+- `:328 blk(shx-1, shy-7, 2, 14, 0)` — KEPT: in-frame eraser cutting the notch
+  out of the shield block painted at `:327` in the same pass.
+- `:335 blk(x+6, y+3, 4, 1, 0)` — KEPT: blink hole erased inside the player
+  body painted earlier in the same pass.
+No draw-order changes; no core/sim/fixture edits; `MAX_FX_DRAW` untouched.
+
+## Profiler evidence (Ardens headless, 3000 ms)
+```
+Ardens headless=3000 display=ssd1306 fxport=d1 profiledump=build/profiler_after.txt \
+  file=dist/monhun-ardu.ino.elf file=fxdata/fxdata.bin
+```
+
+BEFORE (`build/profiler_before.txt`):
+```
+cycles 27005017  cycles_with_sleep 48000574  cpu_active_pct 56.3
+hotspots	count	pct	begin	end	name
+ 7161772	14.92	0x112a	0x115e	abg_detail::...ArduboyG_Common...::paint(...)
+ 5101749	10.63	0x332a	0x6aa0	main
+ 2092942	 4.36	0x0ff2	0x112a	mh::blk(long, long, long, long, unsigned char) (.part.11)
+ 1281239	 2.67	0x1b72	0x1e74	SpritesU::drawPlusMaskFX(int, int, uint24, unsigned int)
+  768842	 1.60	0x0fc6	0x0ff2	Arduboy2Base::drawPixel(int, int, unsigned char) (.part.1)
+```
+
+AFTER (`build/profiler_after.txt`):
+```
+cycles 26952578  cycles_with_sleep 48000574  cpu_active_pct 56.2
+hotspots	count	pct	begin	end	name
+ 7161772	14.92	0x112a	0x115e	abg_detail::...ArduboyG_Common...::paint(...)
+ 5100729	10.63	0x332a	0x6a84	main
+ 2038167	 4.25	0x0ff2	0x112a	mh::blk(long, long, long, long, unsigned char) (.part.11)
+ 1281313	 2.67	0x1b72	0x1e74	SpritesU::drawPlusMaskFX(int, int, uint24, unsigned int)
+  768684	 1.60	0x0fc6	0x0ff2	Arduboy2Base::drawPixel(int, int, unsigned char) (.part.1)
+```
+
+Total active cycles **27005017 -> 26952578** (-52439, -0.19%); `mh::blk`
+overhead **2092942 -> 2038167** (-54775). Because the removed call returned
+before `fillRect` (arena clamp), the saving is the per-frame `blk` call/clamp
+overhead, not a `fillRect` cycle — `paint` (the plane blit that performs the
+black wipe) is unchanged at 7.16 M. Shipping flash **27698 -> 27670 B** (-28 B),
+consistent with the dropped call and clamp path.
+
+## Perf gate (`make fxtest-headless`, test_perf)
+```
+B pUs=6840 pHz=146 lHz=48 lTk=972 rMx=6000 rAv=5327 ram=478
+perf_test PASSED=5 FAILED=0
+```
+| gate | budget | result | verdict |
+|---|---|---|---|
+| render max fits 1/135 s | <= 7407 us | **6000 us** | PASS |
+| plane rate | >= 135 Hz | **146 Hz** | PASS |
+| logic tick fits one logic frame | <= 19230 us | **972 us** | PASS |
+| logic rate | >= 45 Hz | **48 Hz** | PASS |
+| free RAM | >= 300 B | **478 B** | PASS |
+
+## Test tails
+`make test`: `Total Passed: 497 / Total Failed: 0`.
+`make fxtest-headless`: assets 30/0, audio 14/0, boot 4/0, parity 660/0,
+perf 5/0 — all PASS.
