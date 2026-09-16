@@ -29,10 +29,12 @@ gen:
 	./tools/gen.sh
 
 # Launch the Ardens debugger GUI with the shipping build + FX image.
+# Uses the ELF (DWARF debug info: source view, symbols, globals), not the hex.
 # Pause/continue F5, reset F8, settings O. Override ARDENS to use another build.
 debug: build
+	@test -f "dist/monhun-ardu.ino.elf" || { echo "debug: ELF missing at dist/monhun-ardu.ino.elf; run make build" >&2; exit 1; }
 	@test -f "$(FXDATA_BIN)" || { echo "debug: FX data image missing at $(FXDATA_BIN); run make gen" >&2; exit 1; }
-	"$(ARDENS)" display=ssd1306 fxport=d1 file=dist/monhun-ardu.ino.hex file=$(FXDATA_BIN)
+	"$(ARDENS)" display=ssd1306 fxport=d1 file=dist/monhun-ardu.ino.elf file=$(FXDATA_BIN)
 
 test:
 	$(call run_test,,$(TEST_FLAGS),$(TEST_SOURCES))
