@@ -11,18 +11,18 @@ port of a browser prototype (`mock/`), verified tick-for-tick against it.
 | Item | State |
 |---|---|
 | Vertical-slice sim | Ported + parity-verified (20 scenes / 1269 ticks / 660 device asserts) |
-| Device render + HUD + audio | Working (block/FX-sprite art, HUD bars, cue tones) |
+| Device render + HUD + audio | Working (block/FX-sprite art, cue tones; HUD text/FX glyphs — bars clipped, `7y3`) |
 | Host unit tests | `make test` — **1281 passed / 0 failed** |
-| Device tests (Ardens) | boot 4, assets 30, audio 14, parity 660, perf 5 — all PASS |
-| Perf gate (`monhun-ardu-8v7`) | **PASS — closed.** plane 156 Hz (≥135), logic 52 Hz (≥45), render max 4676 µs (≤7407), tick 988 µs, RAM free 495 B |
+| Device tests (Ardens) | boot 4, assets 254, audio 14, parity 660, data 194, perf 5 — all PASS |
+| Perf gate (`monhun-ardu-8v7`, re-verified `42n.6`) | **PASS.** plane 156 Hz (≥135), logic 52 Hz (≥45), render max 4676 µs (≤7407), tick 988 µs, RAM free 495 B |
 | Perf tooling | Headless Ardens profiler dump (`profiledump=<path>`, local patch) + on-device cycle bench (`test_perf`) |
 | Shipping build | flash **26444 / 29696 B** (89%), RAM **1941 / 2560 B** (619 free) |
-| FX data image | **12466 B** of 16 MB used |
+| FX data image | **21090 B** of 16 MB used |
 
 Speculative gameplay status: combat (sword / flail / gunshield), monster FSM,
 training pole + DPS mode, camera/world clamps, HUD, audio cues all in place.
 Perf-verified on device. Remaining: real art pass (`vx2`, human), feel tuning
-(`1to`, human), EEPROM save (`qyb`, deferred).
+(`1to`, human), EEPROM save (`qyb`, deferred), HUD bar clamp bug (`7y3`).
 
 ---
 
@@ -86,7 +86,8 @@ images/**/*.png ──tools/convert-sprite.py──► fxdata/*/Sprites.txt ─�
 - MCU flash holds only `src/fxdata.h` offset constants and code. No glyph or
   bitmap arrays in MCU flash or RAM.
 - Current blobs: `fxmonster`, `fxplayer`, `fxpole`, `fxball`, `fxscatter`,
-  `fxspark`, `fxfontw`, `fxfontg` (12466 B total).
+  `fxspark`, `fxfontw`, `fxfontg`, the overlay/effect sheets and the two raw
+  content tables (`mhWeaponDefs`, `mhMonsterAttacks`) — 21090 B total.
 - Regenerate with `make gen` (or `./tools/gen.sh`); bins are tracked despite
   `*.bin` being gitignored (force-added) so device tests are reproducible.
 - `fxdata/manifest.json` (tracked) pins sha256+size for every source image,
@@ -110,6 +111,7 @@ images/**/*.png ──tools/convert-sprite.py──► fxdata/*/Sprites.txt ─�
    - `test_boot` — boots, camera pin
    - `test_assets` — reads FX blobs inside the OLED bracket, checks plane bytes
    - `test_audio` — cue-map asserts with real tones
+   - `test_data` — FX-cart weapon/monster tables match the mock values and packed layout
    - `test_parity` — replays mock-generated traces tick-by-tick vs core
    - `test_perf` — cycle-based bench + budget gates
    - Fixtures for parity are generated with
@@ -122,7 +124,7 @@ images/**/*.png ──tools/convert-sprite.py──► fxdata/*/Sprites.txt ─�
 
 - `L4_Triplane` + `ABG_TIMER1` + `ABG_SYNC_PARK_ROW` (`src/common.hpp`).
 - Measured under load (bench): **156 Hz plane sweep, 52 Hz logic**, render max
-  4736 µs/plane, logic tick 988 µs, 493 B free RAM. Mock runs 60 Hz; tick order
+  4676 µs/plane, logic tick 988 µs, 495 B free RAM. Mock runs 60 Hz; tick order
   is equivalent.
 - Debug overlay `DEBUG_HURTBOXES=1` (hold A+B to toggle). Off by default; the
   overlay build is flash-tight and only for development.
@@ -132,8 +134,8 @@ images/**/*.png ──tools/convert-sprite.py──► fxdata/*/Sprites.txt ─�
 ## Commands
 
 ```sh
-make test               # host unit tests (497 asserts)
-make fxtest-headless    # Ardens device tests (boot/assets/audio/parity/perf)
+make test               # host unit tests (1281 asserts)
+make fxtest-headless    # Ardens device tests (boot/assets/audio/parity/data/perf)
 make build              # compile shipping sketch (output in dist/)
 make debug              # build, then open Ardens debugger (ELF + DWARF) with FX image
 make mini               # compile for Arduboy Mini FQBN
