@@ -137,6 +137,16 @@ for source view, symbols, globals, call stack) + `fxdata/fxdata.bin`
 (windowed, FX cart on `d1`, SSD1306). Debugger keys: `F5` pause/continue,
 `F8` reset, `O` settings, `F11` fullscreen.
 
+Also available there:
+- **CPU profiler** — instruction-level inclusive CPU load and raw cycle counts,
+  hotspot list, annotations on source/disassembly. Open via the debugger menu
+  (Profiler) or set `open_profiler=1` in `Ardens.ini` (already enabled on this
+  machine). Used to locate `drawArena`'s modulo cost; the perf-fix bead
+  (`monhun-ardu-kt7.3`) captures its output as evidence.
+- **Auto-breaks**: stack overflow, null deref, out-of-bounds, SPI write
+  collision, FX busy access — useful when touching render/FX code.
+- Snapshots (`F4`), display screenshots (`F2`), GIF recording (`F3`).
+
 Notes:
 - `build`, `mini`, `gen`, `test`, `fxtest*` are all `.PHONY`, so `make build`
   always recompiles even when `build/` (host tests, staged fxtests) exists.
