@@ -258,3 +258,125 @@ perf_test PASSED=5 FAILED=0
 `make test`: `Total Passed: 497 / Total Failed: 0`.
 `make fxtest-headless`: assets 30/0, audio 14/0, boot 4/0, parity 660/0,
 perf 5/0 — all PASS.
+
+---
+
+# monhun-ardu-kt7.5 — Render: fast direct-buffer rect fill
+
+## Bead
+`monhun-ardu-kt7.5` (slice of epic `monhun-ardu-kt7`). Attack frames spiked in
+the Ardens profiler because `mh::blk()` forwarded to
+`ArduboyG::fillRect` -> `Arduboy2Base::fillRect`, which is one
+`drawFastVLine` per column, each with its own per-pixel bounds clip
+(`Arduboy2.cpp:646`). The monster windup/attack telegraphs, player
+sword/flail/shield blocks and the whirl ring are the largest rects per frame, so
+the rect path is replaced with direct writes into the current plane's
+framebuffer.
+
+## Files
+- changed `src/render.hpp` — render-only:
+  - `blk()` now paints the clipped rect straight into
+    `arduboy.getBuffer()` (page bytes) instead of `arduboy.fillRect`.
+    Plane semantics are exactly ArduboyG's: `arduboy.colour(shade)` gives the
+    per-plane byte (a pixel is lit on this plane iff `shade > plane`); nonzero
+    ORs the page bits in, zero ANDs them out — shade 0 still erases, as
+    `drawFastVLine` did.
+  - Framebuffer layout: 128 bytes/page, `pixel(x,y) = buf[page*128 + x]`,
+    bit `y&7`. First/last pages get a partial mask, middle pages a full byte;
+    the rows are written once per column via a byte `count` loop. Page masks use
+    two 8-byte PROGMEM tables (`MH_MASK_TOP`/`MH_MASK_BOT`) so no AVR
+    variable-shift helper loops are emitted; all coords are byte-sized after the
+    existing clamp.
+  - `blk()` keeps its signature and every call site; no draw order, shade or
+    geometry change. Marked `noinline` so the one body is not duplicated across
+    the ~30 call sites by LTO (keeps flash flat).
+- changed `output.md`.
+
+## Correctness argument
+`blk()` already clips to `[0,SCREEN_W) x [HUD_H,SCREEN_H)`, a subset of the
+screen, so the per-column clipping inside `fillRect` never fires; the only thing
+replaced is *how* the same page bits are set. `colour(shade)` is the exact
+`planeColor(current_plane, shade)` that `ArduboyG::fillRect` passed, and a zero
+byte clears bits identically. Same pixels, same shades, same order, by
+construction.
+
+## Perf gate (test_perf, Ardens cycle-accurate update)
+BEFORE (`make fxtest-headless`):
+```
+B pUs=6840 pHz=146 lHz=48 lTk=972 rMx=6000 rAv=5327 ram=478
+perf_test PASSED=5 FAILED=0
+```
+AFTER:
+```
+B pUs=6379 pHz=156 lHz=52 lTk=976 rMx=3984 rAv=3842 ram=489
+perf_test PASSED=5 FAILED=0
+```
+| gate | budget | before | after | result |
+|---|---|---|---|---|
+| render max (hunt+train worst case) | <= 7407 us | 6000 us | **3984 us** | PASS |
+| render avg | — | 5327 us | **3842 us** | -27.9% |
+| plane rate | >= 135 Hz | 146 Hz | **156 Hz** | PASS |
+| logic tick fits one logic frame | <= 19230 us | 972 us | 976 us | PASS |
+| logic rate | >= 45 Hz | 48 Hz | **52 Hz** | PASS |
+| free RAM | >= 300 B | 478 B | **489 B** | PASS |
+
+Render max **-33.6%**, render avg **-27.9%** on the attack-heavy bench scenes
+(flail whirl telegraph + beast mid-attack), which is the spike the report was
+about.
+
+## Profiler evidence (Ardens headless, 3000 ms)
+Command (from repo root, after `make build`):
+```
+"$HOME/code/Ardens/build/Ardens.app/Contents/MacOS/Ardens" headless=3000 \
+  display=ssd1306 fxport=d1 profiledump=build/profiler.txt \
+  file=dist/monhun-ardu.ino.elf file=fxdata/fxdata.bin >/dev/null
+```
+
+BEFORE (`build/profiler-before.txt`):
+```
+cycles 26952578  cycles_with_sleep 48000574  cpu_active_pct 56.2
+hotspots	count	pct	begin	end	name
+ 7161772	14.92	0x112a	0x115e	abg_detail::...ArduboyG_Common...::paint(...)
+ 5100729	10.63	0x332a	0x6a84	main
+ 2038167	 4.25	0x0ff2	0x112a	mh::blk(long, long, long, long, unsigned char) (.part.11)
+ 1281313	 2.67	0x1b72	0x1e74	SpritesU::drawPlusMaskFX(int, int, uint24, unsigned int)
+  768684	 1.60	0x0fc6	0x0ff2	Arduboy2Base::drawPixel(int, int, unsigned char) (.part.1)
+```
+
+AFTER (`build/profiler-after.txt`):
+```
+cycles 25360131  cycles_with_sleep 48000002  cpu_active_pct 52.8
+hotspots	count	pct	begin	end	name
+ 7161772	14.92	0x0fd6	0x100a	abg_detail::...ArduboyG_Common...::paint(...)
+ 4713629	 9.82	0x3320	0x6a8e	main
+ 1718517	 3.58	0x100a	0x11a2	mh::blk(long, long, long, long, unsigned char)
+ 1279997	 2.67	0x1b6c	0x1e6e	SpritesU::drawPlusMaskFX(int, int, uint24, unsigned int)
+  331561	 0.69	0x0e0a	0x0e16	FX::readEnd()
+```
+
+Total active cycles **26.95 M -> 25.36 M** (-5.9%, cpu_active 56.2% -> 52.8%);
+`mh::blk` **2.038 M -> 1.718 M** (-15.7%, 4.25% -> 3.58%). The one-shot serial
+profiler samples a whole 3 s of normal play (sparse telegraphs), so it shows the
+per-call tax drop; the worst-case attack frames are what `test_perf` benches and
+there the render max fell 33.6%. `paint` (#1, 7.16 M) is the unchanged ArduboyG
+plane-blit floor.
+
+## Test tails (after)
+`make test`: `Total Passed: 497 / Total Failed: 0`.
+`make fxtest-headless`: assets 30/0, audio 14/0, boot 4/0, parity 660/0,
+perf 5/0 — all PASS.
+
+## Flash / RAM
+Shipping (`make build`): BEFORE **27670 B (93%)**, AFTER **27680 B (93%)** / 29696
+(+10 B); globals **1941 B (75%)** unchanged, 619 B free.
+Bench (`test_perf`): BEFORE **29618 B (99%)**, AFTER **29628 B (99%)** / 29696
+(+10 B); globals **1912 B (74%)** unchanged, 648 B free. The direct fill offsets
+the removed `fillRect`/`drawFastVLine` library footprint, so flash is flat.
+
+## Notes / semantics
+- No core/sim or mock change; parity fixtures untouched (660 pass).
+- Integer-only, no float/double; no `__divmod`/variable-shift helpers emitted.
+- `noinline` is a code-size guard against LTO cloning the body at every call
+  site; it does not change behaviour.
+- Render still runs between `waitForNextPlane()` calls, never during a plane
+  blit (`ABG_SYNC_PARK_ROW` untouched).

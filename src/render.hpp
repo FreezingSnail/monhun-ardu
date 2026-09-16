@@ -117,10 +117,26 @@ constexpr uint8_t ANG_SHAKE_Y = 94;
 // 6-ring offsets: i*60deg in 256/turn units (42.667 -> rounded).
 static const uint8_t MH_PROGMEM RING6[6] = { 0, 43, 85, 128, 171, 213 };
 
+// Page masks for the direct framebuffer rect fill. MH_MASK_TOP[top] has bits
+// top..7 set, MH_MASK_BOT[bot] bits 0..bot; a page slice mask is the AND of the
+// two. Tables avoid AVR variable-shift loops (`0xFF << n` lowers to a loop).
+static const uint8_t MH_PROGMEM MH_MASK_TOP[8] = { 0xFF,0xFE,0xFC,0xF8,0xF0,0xE0,0xC0,0x80 };
+static const uint8_t MH_PROGMEM MH_MASK_BOT[8] = { 0x01,0x03,0x07,0x0F,0x1F,0x3F,0x7F,0xFF };
+
 // Clip a block to the screen arena band and paint it. shade 0 clears the pixels
 // on the current plane (mock black bodies mask what is under them). Nothing is
 // ever written outside [0,SCREEN_W) x [HUD_H,SCREEN_H).
-static inline void blk(int32_t x, int32_t y, int32_t w, int32_t h, uint8_t shade) {
+//
+// ArduboyG::fillRect -> Arduboy2Base::fillRect is a drawFastVLine per column,
+// each with its own bounds clip; the attack telegraph rects are the largest per
+// frame, so the rect is painted straight into the current plane's framebuffer
+// instead. The plane byte is exactly ArduboyG's conversion (colour(): a pixel is
+// lit on this plane iff shade > plane), nonzero means OR the page bits in, zero
+// means AND them out (shade 0 is an eraser, not a no-op). Framebuffer layout:
+// 128 bytes/page, pixel(x,y) = buf[page*128 + x], bit y&7. Clamping above is the
+// only bounds work needed; writes stay inside [0,1024). Render runs between
+// waitForNextPlane() calls, never during the plane blit.
+__attribute__((noinline)) static void blk(int32_t x, int32_t y, int32_t w, int32_t h, uint8_t shade) {
     if (w <= 0 || h <= 0) return;
     int32_t x0 = x, y0 = y, x1 = x + w, y1 = y + h;
     if (x0 < 0) x0 = 0;
@@ -128,9 +144,33 @@ static inline void blk(int32_t x, int32_t y, int32_t w, int32_t h, uint8_t shade
     if (x1 > mh::SCREEN_W) x1 = mh::SCREEN_W;
     if (y1 > mh::SCREEN_H) y1 = mh::SCREEN_H;
     if (x0 >= x1 || y0 >= y1) return;
-    arduboy.fillRect(static_cast<int16_t>(x0), static_cast<int16_t>(y0),
-                     static_cast<uint8_t>(x1 - x0), static_cast<uint8_t>(y1 - y0),
-                     shade);
+
+    // Clamped, so every coord now fits a byte and pages 0..7.
+    const uint8_t col = arduboy.colour(shade);
+    const uint8_t xa = static_cast<uint8_t>(x0);
+    const uint8_t xb = static_cast<uint8_t>(x1);
+    const uint8_t ya = static_cast<uint8_t>(y0);
+    const uint8_t yb = static_cast<uint8_t>(y1 - 1);
+    const uint8_t p0 = static_cast<uint8_t>(ya >> 3);
+    const uint8_t p1 = static_cast<uint8_t>(yb >> 3);
+    const uint8_t count = static_cast<uint8_t>(xb - xa);
+    uint8_t* p = arduboy.getBuffer() + static_cast<uint16_t>(p0) * 128 + xa;
+    uint8_t top = static_cast<uint8_t>(ya & 7);
+    uint8_t page = p0;
+    for (;;) {
+        const uint8_t bot = (page == p1) ? static_cast<uint8_t>(yb & 7) : 7;
+        uint8_t mask = mhPgmReadU8(&MH_MASK_TOP[top]) & mhPgmReadU8(&MH_MASK_BOT[bot]);
+        if (col) {
+            for (uint8_t i = 0; i < count; i++) p[i] |= mask;
+        } else {
+            mask = static_cast<uint8_t>(~mask);
+            for (uint8_t i = 0; i < count; i++) p[i] &= mask;
+        }
+        if (page == p1) break;
+        p += 128;
+        ++page;
+        top = 0;
+    }
 }
 
 // Text comes from the FX glyph sheets (128 ASCII-ordered 4x8 tiles). The ink
