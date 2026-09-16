@@ -115,3 +115,64 @@ Flash +26 B shipping, +16 B bench vs the pre-fix build; both fit.
 - No core/sim change; `tools/gen-parity-fixtures.js` fixtures and
   `tst/fxdatatest/parity_test.hpp` stay byte-identical (660 pass).
 - No float/double anywhere in the change.
+
+---
+
+# monhun-ardu-8v7 — Gate: device perf bench (independently re-run & closed)
+
+Independent re-run of the perf gate at HEAD `80bbfb0` (arena modulo fix +
+`MAX_FX_DRAW=6`), confirming the kt7.3 numbers are stable and deterministic.
+
+## Build / test at HEAD `80bbfb0`
+`make build` (shipping `arduboy-fx`): flash **27698 B (93%)** / 29696, globals
+**1941 B (75%)** / 2560, 619 B free for locals.
+`make test`: **497 passed / 0 failed**.
+`make fxtest-headless`: assets 30/0, audio 14/0, boot 4/0, parity 660/0,
+perf 5/0 — all PASS.
+
+## Perf gate — three independent runs, byte-identical
+`test_perf.ino` (Ardens cycle-accurate, `captureserial=3000`):
+```
+run 1 (fxtest-headless): B pUs=6839 pHz=146 lHz=48 lTk=972 rMx=6008 rAv=5335 ram=478
+run 2 (direct):          B pUs=6839 pHz=146 lHz=48 lTk=972 rMx=6008 rAv=5335 ram=478
+run 3 (direct):          B pUs=6839 pHz=146 lHz=48 lTk=972 rMx=6008 rAv=5335 ram=478
+```
+Run-to-run variance **zero** on every field; `perf_test PASSED=5 FAILED=0` each time.
+
+| gate | budget | result | verdict |
+|---|---|---|---|
+| render max fits 1/135 s | <= 7407 us | **6008 us** | PASS |
+| plane rate | >= 135 Hz | **146 Hz** | PASS |
+| logic tick fits one logic frame | <= 19230 us | **972 us** | PASS |
+| logic rate | >= 45 Hz | **48 Hz** | PASS |
+| free RAM (deepest SP) | >= 300 B | **478 B** | PASS |
+
+## Independent profiler re-confirmation (headless Ardens, 3000 ms)
+```
+"$HOME/code/Ardens/build/Ardens.app/Contents/MacOS/Ardens" headless=3000 \
+  display=ssd1306 fxport=d1 profiledump=build/profiler.txt \
+  file=dist/monhun-ardu.ino.elf file=fxdata/fxdata.bin >/dev/null
+```
+Top rows (tab-separated):
+```
+cycles 27005017  cycles_with_sleep 48000574  cpu_active_pct 56.3
+hotspots	count	pct	begin	end	name
+ 7161772	14.92	0x112a	0x115e	abg_detail::ArduboyG_Common<...>::paint(...)
+ 5101749	10.63	0x332a	0x6aa0	main
+ 2092942	 4.36	0x0ff2	0x112a	mh::blk(long, long, long, long, unsigned char) (.part.11)
+ 1281239	 2.67	0x1b72	0x1e74	SpritesU::drawPlusMaskFX(int, int, uint24, unsigned int)
+  768842	 1.60	0x0fc6	0x0ff2	Arduboy2Base::drawPixel(int, int, unsigned char) (.part.1)
+```
+Arena/blk hotspot confirmed gone from the top: `mh::blk` 4.36% (vs 29.24%
+pre-fix), no `__divmodhi4` anywhere in the report; total active cycles 27.0 M
+(cpu_active 56.3%, vs 48.0 M / 100% pre-fix). `paint` (#1, 7.16 M) is the
+unchanged ArduboyG plane-blit floor, outside the render scene. Matches kt7.3
+evidence exactly.
+
+## Bench flash / RAM
+`test_perf` image: flash **29646 B (99%)** / 29696, globals **1912 B (74%)** /
+2560, 648 B free for locals.
+
+## Verdict
+All perf budgets PASS with zero run-to-run variance; profiler confirms the
+hotspot fix; host + device suites green. Gate closed.
