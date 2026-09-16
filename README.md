@@ -14,7 +14,7 @@ port of a browser prototype (`mock/`), verified tick-for-tick against it.
 | Device render + HUD + audio | Working (block/FX-sprite art, HUD bars, cue tones) |
 | Host unit tests | `make test` — **497 passed / 0 failed** |
 | Device tests (Ardens) | boot 4, assets 30, audio 14, parity 660 — all PASS |
-| Perf gate (`monhun-ardu-8v7`) | **PASS — closed.** plane 146 Hz (≥135), logic 48 Hz (≥45), render max 6008 µs (≤7407), tick 972 µs, RAM free 478 B |
+| Perf gate (`monhun-ardu-8v7`) | **PASS — closed.** plane 156 Hz (≥135), logic 52 Hz (≥45), render max 3984 µs (≤7407), tick 976 µs, RAM free 489 B |
 | Shipping build | flash **27672 / 29696 B** (93%), RAM **1941 / 2560 B** (619 free) |
 | FX data image | **12466 B** of 16 MB used |
 
@@ -114,8 +114,8 @@ images/**/*.png ──tools/text2bmp.py────────► font sheets �
 ### Hardware / cadence
 
 - `L4_Triplane` + `ABG_TIMER1` + `ABG_SYNC_PARK_ROW` (`src/common.hpp`).
-- Measured under load (bench): **146 Hz plane sweep, 48 Hz logic**, render max
-  6008 µs/plane, logic tick 972 µs, 478 B free RAM. Mock runs 60 Hz; tick order
+- Measured under load (bench): **156 Hz plane sweep, 52 Hz logic**, render max
+  3984 µs/plane, logic tick 976 µs, 489 B free RAM. Mock runs 60 Hz; tick order
   is equivalent.
 - Debug overlay `DEBUG_HURTBOXES=1` (hold A+B to toggle). Off by default; the
   overlay build is flash-tight and only for development.
@@ -165,12 +165,13 @@ Notes:
 
 ## Challenges / known issues
 
-1. **Perf resolved, headroom watched.** `drawArena()`'s per-dot signed modulo
-   field (~6044 µs/plane) was replaced with incremental counters plus a
-   `MAX_FX_DRAW=6` render-side effect cap (`80bbfb0`): profiler share of
-   `mh::blk` fell 29.24% → 4.36%, plane rate 82 → 146 Hz, logic 27 → 48 Hz.
-   Remaining top costs are `ArduboyG paint` and `main` overhead; any new
-   feature must fit flash (2024 B free) and keep the perf gates green.
+1. **Perf resolved, headroom watched.** Two render fixes landed:
+   `drawArena()`'s per-dot signed modulo field (~6044 µs/plane) became
+   incremental counters plus a `MAX_FX_DRAW=6` render-side effect cap
+   (`80bbfb0`), and `blk()`'s `fillRect`/`drawFastVLine` path was replaced with
+   direct masked framebuffer writes (`816767d`) — render max 13312 → 3984 µs,
+   plane 82 → 156 Hz, logic 27 → 52 Hz, profiler `mh::blk` share 29% → 3.6%.
+   Any new feature must fit flash (~2016 B free) and keep the perf gates green.
 2. **Flash headroom** is thin: shipping 27672/29696 B (2024 B free). The
    `DEBUG_HURTBOXES=1` and `test_perf` images sit at 99% — any new feature must
    budget flash, prefer FX data.
