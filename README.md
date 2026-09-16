@@ -13,9 +13,10 @@ port of a browser prototype (`mock/`), verified tick-for-tick against it.
 | Vertical-slice sim | Ported + parity-verified (20 scenes / 1269 ticks / 660 device asserts) |
 | Device render + HUD + audio | Working (block/FX-sprite art, HUD bars, cue tones) |
 | Host unit tests | `make test` — **497 passed / 0 failed** |
-| Device tests (Ardens) | boot 4, assets 30, audio 14, parity 660 — all PASS |
+| Device tests (Ardens) | boot 4, assets 30, audio 14, parity 660, perf 5 — all PASS |
 | Perf gate (`monhun-ardu-8v7`) | **PASS — closed.** plane 156 Hz (≥135), logic 52 Hz (≥45), render max 3984 µs (≤7407), tick 976 µs, RAM free 489 B |
-| Shipping build | flash **27672 / 29696 B** (93%), RAM **1941 / 2560 B** (619 free) |
+| Perf tooling | Headless Ardens profiler dump (`profiledump=<path>`, local patch) + on-device cycle bench (`test_perf`) |
+| Shipping build | flash **27680 / 29696 B** (93%), RAM **1941 / 2560 B** (619 free) |
 | FX data image | **12466 B** of 16 MB used |
 
 Speculative gameplay status: combat (sword / flail / gunshield), monster FSM,
@@ -179,7 +180,7 @@ Notes:
    2494 B used; moved to PROGMEM (MCU flash) via `progmem.hpp` → 1888 B. Audio
    added timers/state → 1941 B. FX sprite data stays on the cart, so RAM grew
    little through the art pass, but the margin is ~600 B.
-4. **CX accuracy vs speed**: the sim is parity-locked to the mock by 660 device
+4. **Mock accuracy vs speed**: the sim is parity-locked to the mock by 660 device
    asserts. Any future tuning change must either update the mock + fixtures in
    the same commit or be expressed as render/parameter-only changes.
 5. **FX/OLED SPI sharing**: all FX reads must stay inside the
@@ -195,8 +196,8 @@ Notes:
 ## Design decisions (recorded in bd)
 
 - **Grayscale mode**: keep `L4_Triplane` + `ABG_TIMER1` + park row; accept
-  plane-bound cadence (52 Hz logic / 156 Hz render). Revisit only if the perf
-  gate stays red after renderer fixes. (`monhun-ardu-b3t`)
+  plane-bound cadence (measured 156 Hz plane / 52 Hz logic under load).
+  (`monhun-ardu-b3t`)
 - **World**: scrolling camera (mock parity). FX has ample room for map growth;
   a single-screen pen would mean retuning sim extents and monster ranges away
   from mock truth. (`monhun-ardu-kpi`)
@@ -230,6 +231,11 @@ output.md           most recent worker report (scratch, overwritten per task)
 
 ## Beads / tracker
 
-Work is tracked with `bd` (epic `monhun-ardu-kt7`). Remaining open items:
-`8v7` perf gate (blocked by the render-hotspot fix), `vx2` real art (human),
-`1to` feel playtest (human), `qyb` EEPROM save (deferred).
+Work is tracked with `bd` (epic `monhun-ardu-kt7`). Everything autonomous is
+closed, including the perf chain: `kt7.1` PROGMEM/RAM, `kt7.2` FX assets,
+`kt7.3` arena hotspot, `kt7.4` redundant black fills, `kt7.5` fast rect fill,
+and the gates `b3t`/`kpi`/`8v7`. Remaining:
+
+- `vx2` — real 4-shade art pass (human)
+- `1to` — device feel playtest + tuning (human)
+- `qyb` — EEPROM save (deferred, out of slice)
