@@ -7,6 +7,7 @@
 #include "shells_test.hpp"
 #include "world_test.hpp"
 #include "art_dims_test.hpp"
+#include "sin_test.hpp"
 
 int main() {
     TestRunner runner;
@@ -17,6 +18,7 @@ int main() {
     ShellSuite(runner);
     WorldSuite(runner);
     artdimstest::ArtDimsSuite(runner);
+    SinSuite(runner);
     runner.printSummary();
     return runner.fail() ? 1 : 0;
 }

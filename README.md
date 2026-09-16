@@ -12,11 +12,11 @@ port of a browser prototype (`mock/`), verified tick-for-tick against it.
 |---|---|
 | Vertical-slice sim | Ported + parity-verified (20 scenes / 1269 ticks / 660 device asserts) |
 | Device render + HUD + audio | Working (block/FX-sprite art, HUD bars, cue tones) |
-| Host unit tests | `make test` — **497 passed / 0 failed** |
+| Host unit tests | `make test` — **1281 passed / 0 failed** |
 | Device tests (Ardens) | boot 4, assets 30, audio 14, parity 660, perf 5 — all PASS |
-| Perf gate (`monhun-ardu-8v7`) | **PASS — closed.** plane 156 Hz (≥135), logic 52 Hz (≥45), render max 4736 µs (≤7407), tick 988 µs, RAM free 493 B |
+| Perf gate (`monhun-ardu-8v7`) | **PASS — closed.** plane 156 Hz (≥135), logic 52 Hz (≥45), render max 4676 µs (≤7407), tick 988 µs, RAM free 495 B |
 | Perf tooling | Headless Ardens profiler dump (`profiledump=<path>`, local patch) + on-device cycle bench (`test_perf`) |
-| Shipping build | flash **26644 / 29696 B** (90%), RAM **1941 / 2560 B** (619 free) |
+| Shipping build | flash **26444 / 29696 B** (89%), RAM **1941 / 2560 B** (619 free) |
 | FX data image | **12466 B** of 16 MB used |
 
 Speculative gameplay status: combat (sword / flail / gunshield), monster FSM,
@@ -187,17 +187,19 @@ Notes:
    (`80bbfb0`), and `blk()`'s `fillRect`/`drawFastVLine` path was replaced with
    direct masked framebuffer writes (`816767d`) — render max 13312 → 3984 µs,
    plane 82 → 156 Hz, logic 27 → 52 Hz, profiler `mh::blk` share 29% → 3.6%.
-   Any new feature must fit flash (3052 B free) and keep the perf gates green.
-2. **Flash headroom** is thin: shipping 26644/29696 B (3052 B free) after the
-   content-table offload (`42n.1`-`42n.4`; `.text` 26598 + `.data` 46). The
-   310 B of hot LUTs (`mh::SIN256` 256 B, `fp::DIR8` 32 B,
-   `mh::MH_MASK_TOP/BOT` 16 B, `mh::RING6` 6 B) stay in MCU flash by decision
-   (`monhun-ardu-42n.5`): FX per-access reads measured ~150 cycles (~9 µs,
-   20-35x an LPM) and a SIN256 RAM cache would breach the 300 B free-RAM gate.
-   The epic's ≤26600 B line is 44 B below the current tree; the sanctioned fix
-   is the in-flash quarter-wave SIN256 shrink (191 B, bit-identical),
-   `monhun-ardu-42n.7`. Any new feature must still budget flash, prefer FX data;
-   debug-only code (`DEBUG_HURTBOXES`) must stay behind compile-time flags.
+   Any new feature must fit flash (3252 B free) and keep the perf gates green.
+2. **Flash headroom**: shipping 26444/29696 B (3252 B free) after the
+   content-table offload (`42n.1`-`42n.4`) and the sine-LUT shrink
+   (`42n.7`; `.text` 26398 + `.data` 46). The 119 B of hot LUTs (`mh::SIN65`
+   65 B, `fp::DIR8` 32 B, `mh::MH_MASK_TOP/BOT` 16 B, `mh::RING6` 6 B) stay in
+   MCU flash by decision (`monhun-ardu-42n.5`): FX per-access reads measured
+   ~150 cycles (~9 µs, 20-35x an LPM) and a SIN65 RAM cache would breach the
+   300 B free-RAM gate. The epic's ≤26600 B line is cleared by 156 B. The
+   65-entry quarter-wave SIN65 table + quadrant sign folding (`42n.7`) is
+   bit-identical to the old 256-byte table (pinned by the exhaustive host
+   suite `tst/sin_test.hpp`). Any new feature must still budget flash, prefer
+   FX data; debug-only code (`DEBUG_HURTBOXES`) must stay behind compile-time
+   flags.
 3. **RAM history**: constant tables originally sat in AVR `.rodata` (RAM) at
    2494 B used; moved to PROGMEM (MCU flash) via `progmem.hpp` → 1888 B. Audio
    added timers/state → 1941 B. FX sprite data stays on the cart, so RAM grew
@@ -236,15 +238,16 @@ Notes:
   code and PROGMEM tables only. (`monhun-ardu-kt7.2`)
 - **Audio**: procedural one-shot tones (ArduboyTones), edge-diffed from sim
   state — no audio calls inside core logic. (`monhun-ardu-6zc`)
-- **Hot LUTs + procedural primitives** (`monhun-ardu-42n.5`): `mh::SIN256`,
-  `fp::DIR8`, `mh::MH_MASK_TOP/BOT`, `mh::RING6` (310 B total) stay in MCU flash
-  as a documented exception — measured FX cost is ~150 cycles/access (~20-35x
-  an LPM, worst plane +~580 µs if all were moved) and a SIN256 RAM cache would
-  breach the 300 B free-RAM gate. Arena dot field/border, HUD bars/reload bar
-  and the `DEBUG_HURTBOXES` wire stay procedural; only sprite-like art moved to
-  FX (`42n.3`). If the epic flash line needs the 44 B, shrink SIN256 in place to
-  a 65-entry quarter-wave table + sign folding (`monhun-ardu-42n.7`), never
-  offload it per-access.
+- **Hot LUTs + procedural primitives** (`monhun-ardu-42n.5`): sine (`mh::SIN65`
+  65 B after the `42n.7` quarter-wave shrink), `fp::DIR8`, `mh::MH_MASK_TOP/BOT`,
+  `mh::RING6` (119 B total) stay in MCU flash as a documented exception —
+  measured FX cost is ~150 cycles/access (~20-35x an LPM, worst plane +~580 µs
+  if all were moved) and a sine RAM cache would breach the 300 B free-RAM gate.
+  Arena dot field/border, HUD bars/reload bar and the `DEBUG_HURTBOXES` wire
+  stay procedural; only sprite-like art moved to FX (`42n.3`). The
+  256 B `mh::SIN256` table was replaced in place by the 65-entry quarter-wave
+  table + quadrant sign folding (`monhun-ardu-42n.7`, -200 B shipping,
+  bit-identical); never offload the sine LUT per-access.
 
 ---
 

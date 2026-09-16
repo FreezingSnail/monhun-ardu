@@ -10,6 +10,7 @@
 #include "common.hpp"
 #include "fxdata.h"
 #include "core/world.hpp"
+#include "core/sin256.hpp"          // 256 B sine LUT -> 65 B quarter wave + sign folding (42n.7)
 #include "generated/art_dims.hpp"   // frame layout + core dims for the FX sheets
 
 #ifndef DEBUG_HURTBOXES
@@ -128,23 +129,8 @@ static inline int32_t mulQ4(int32_t a, int32_t b) {
     return (a * b + 8) >> 4;
 }
 
-// 256-step sine, Q4 fixed point (-16..16). cos(a) = SIN256[(a+64)&255].
-static const int8_t MH_PROGMEM SIN256[256] = {
-    0,   0,   1,   1,   2,   2,   2,   3,   3,   4,   4,   4,   5,   5,   5,   6,   6,   6,   7,   7,   8,   8,   8,   9,   9,   9,   10,  10,  10,  10,  11,  11,  11,  12,  12,  12,  12,
-    13,  13,  13,  13,  14,  14,  14,  14,  14,  14,  15,  15,  15,  15,  15,  15,  15,  16,  16,  16,  16,  16,  16,  16,  16,  16,  16,  16,  16,  16,  16,  16,  16,  16,  16,  16,  16,
-    16,  15,  15,  15,  15,  15,  15,  15,  14,  14,  14,  14,  14,  14,  13,  13,  13,  13,  12,  12,  12,  12,  11,  11,  11,  10,  10,  10,  10,  9,   9,   9,   8,   8,   8,   7,   7,
-    6,   6,   6,   5,   5,   5,   4,   4,   4,   3,   3,   2,   2,   2,   1,   1,   0,   0,   0,   -1,  -1,  -2,  -2,  -2,  -3,  -3,  -4,  -4,  -4,  -5,  -5,  -5,  -6,  -6,  -6,  -7,  -7,
-    -8,  -8,  -8,  -9,  -9,  -9,  -10, -10, -10, -10, -11, -11, -11, -12, -12, -12, -12, -13, -13, -13, -13, -14, -14, -14, -14, -14, -14, -15, -15, -15, -15, -15, -15, -15, -16, -16, -16,
-    -16, -16, -16, -16, -16, -16, -16, -16, -16, -16, -16, -16, -16, -16, -16, -16, -16, -16, -15, -15, -15, -15, -15, -15, -15, -14, -14, -14, -14, -14, -14, -13, -13, -13, -13, -12, -12,
-    -12, -12, -11, -11, -11, -10, -10, -10, -10, -9,  -9,  -9,  -8,  -8,  -8,  -7,  -7,  -6,  -6,  -6,  -5,  -5,  -5,  -4,  -4,  -4,  -3,  -3,  -2,  -2,  -2,  -1,  -1,  0,
-};
-
-static inline int16_t sin256(uint8_t a) {
-    return mhPgmReadI8(&SIN256[a]);
-}
-static inline int16_t cos256(uint8_t a) {
-    return mhPgmReadI8(&SIN256[static_cast<uint8_t>(a + 64)]);
-}
+// 256-step sine, Q4 fixed point (-16..16). See core/sin256.hpp for the
+// 65-entry quarter-wave table + quadrant folding (42n.7); cos(a) = sin(a+64).
 
 // Mock radian rates folded into 256-units-per-turn steps (x40.7437/rad):
 // 0.35 rad -> 14, 0.55 -> 22, 0.30 -> 12, 1.7 -> 69, 2.3 -> 94 units/tick.
