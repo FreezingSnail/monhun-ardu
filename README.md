@@ -14,9 +14,9 @@ port of a browser prototype (`mock/`), verified tick-for-tick against it.
 | Device render + HUD + audio | Working (block/FX-sprite art, HUD bars, cue tones) |
 | Host unit tests | `make test` — **497 passed / 0 failed** |
 | Device tests (Ardens) | boot 4, assets 30, audio 14, parity 660, perf 5 — all PASS |
-| Perf gate (`monhun-ardu-8v7`) | **PASS — closed.** plane 156 Hz (≥135), logic 52 Hz (≥45), render max 3984 µs (≤7407), tick 976 µs, RAM free 489 B |
+| Perf gate (`monhun-ardu-8v7`) | **PASS — closed.** plane 156 Hz (≥135), logic 52 Hz (≥45), render max 4736 µs (≤7407), tick 988 µs, RAM free 493 B |
 | Perf tooling | Headless Ardens profiler dump (`profiledump=<path>`, local patch) + on-device cycle bench (`test_perf`) |
-| Shipping build | flash **27680 / 29696 B** (93%), RAM **1941 / 2560 B** (619 free) |
+| Shipping build | flash **26644 / 29696 B** (90%), RAM **1941 / 2560 B** (619 free) |
 | FX data image | **12466 B** of 16 MB used |
 
 Speculative gameplay status: combat (sword / flail / gunshield), monster FSM,
@@ -122,7 +122,7 @@ images/**/*.png ──tools/convert-sprite.py──► fxdata/*/Sprites.txt ─�
 
 - `L4_Triplane` + `ABG_TIMER1` + `ABG_SYNC_PARK_ROW` (`src/common.hpp`).
 - Measured under load (bench): **156 Hz plane sweep, 52 Hz logic**, render max
-  3984 µs/plane, logic tick 976 µs, 489 B free RAM. Mock runs 60 Hz; tick order
+  4736 µs/plane, logic tick 988 µs, 493 B free RAM. Mock runs 60 Hz; tick order
   is equivalent.
 - Debug overlay `DEBUG_HURTBOXES=1` (hold A+B to toggle). Off by default; the
   overlay build is flash-tight and only for development.
@@ -187,10 +187,17 @@ Notes:
    (`80bbfb0`), and `blk()`'s `fillRect`/`drawFastVLine` path was replaced with
    direct masked framebuffer writes (`816767d`) — render max 13312 → 3984 µs,
    plane 82 → 156 Hz, logic 27 → 52 Hz, profiler `mh::blk` share 29% → 3.6%.
-   Any new feature must fit flash (~2016 B free) and keep the perf gates green.
-2. **Flash headroom** is thin: shipping 27680/29696 B (2016 B free). The
-   `DEBUG_HURTBOXES=1` and `test_perf` images sit at 99% — any new feature must
-   budget flash, prefer FX data.
+   Any new feature must fit flash (3052 B free) and keep the perf gates green.
+2. **Flash headroom** is thin: shipping 26644/29696 B (3052 B free) after the
+   content-table offload (`42n.1`-`42n.4`; `.text` 26598 + `.data` 46). The
+   310 B of hot LUTs (`mh::SIN256` 256 B, `fp::DIR8` 32 B,
+   `mh::MH_MASK_TOP/BOT` 16 B, `mh::RING6` 6 B) stay in MCU flash by decision
+   (`monhun-ardu-42n.5`): FX per-access reads measured ~150 cycles (~9 µs,
+   20-35x an LPM) and a SIN256 RAM cache would breach the 300 B free-RAM gate.
+   The epic's ≤26600 B line is 44 B below the current tree; the sanctioned fix
+   is the in-flash quarter-wave SIN256 shrink (191 B, bit-identical),
+   `monhun-ardu-42n.7`. Any new feature must still budget flash, prefer FX data;
+   debug-only code (`DEBUG_HURTBOXES`) must stay behind compile-time flags.
 3. **RAM history**: constant tables originally sat in AVR `.rodata` (RAM) at
    2494 B used; moved to PROGMEM (MCU flash) via `progmem.hpp` → 1888 B. Audio
    added timers/state → 1941 B. FX sprite data stays on the cart, so RAM grew
@@ -199,12 +206,21 @@ Notes:
    asserts. Any future tuning change must either update the mock + fixtures in
    the same commit or be expressed as render/parameter-only changes.
 5. **FX/OLED SPI sharing**: all FX reads must stay inside the
-   enable/park/disable bracket; reads measured at ≤255 µs, so fine at current
-   rates, but it constrains where asset reads can happen.
+   enable/park/disable bracket; per-access cost measured at ~150 cycles (~9 µs
+   at 16 MHz: 4-byte seek command at 8 MHz SPI + `readEnd`; static count from
+   the `avr-objdump` disassembly of `FX::seekData`/`readEnd`, cross-checked with
+   the Ardens headless profiler), ~20-35x an LPM. That per-access cost is why
+   the hot LUTs stay in MCU flash (`monhun-ardu-42n.5`) and why asset reads may
+   only run between plane blits, never during the paint.
 6. **Parity fixes discovered real bugs**: hitstop gating, projectile cull
    boundary (int px vs 1/16 px), and missing player hurt sparks were fixed in
    core to match the mock; the mock itself had an isqrt seed bug and a
    projectile-speed double-scaling bug, both fixed (`6c9371e`, `4ac3f5b`).
+7. **HUD bars are invisible on device** (known bug, `monhun-ardu-7y3`): `blk()`
+   clamps every rect to y >= HUD_H, but `drawHud()` draws its divider at y=7 and
+   the HP / stamina / monster / reload bars at rows 2..6, so those calls return
+   without painting; only the FX-glyph text shows. Fixing it re-adds ~16
+   MH_MASK page reads/plane when the bars render.
 
 ---
 
@@ -220,6 +236,15 @@ Notes:
   code and PROGMEM tables only. (`monhun-ardu-kt7.2`)
 - **Audio**: procedural one-shot tones (ArduboyTones), edge-diffed from sim
   state — no audio calls inside core logic. (`monhun-ardu-6zc`)
+- **Hot LUTs + procedural primitives** (`monhun-ardu-42n.5`): `mh::SIN256`,
+  `fp::DIR8`, `mh::MH_MASK_TOP/BOT`, `mh::RING6` (310 B total) stay in MCU flash
+  as a documented exception — measured FX cost is ~150 cycles/access (~20-35x
+  an LPM, worst plane +~580 µs if all were moved) and a SIN256 RAM cache would
+  breach the 300 B free-RAM gate. Arena dot field/border, HUD bars/reload bar
+  and the `DEBUG_HURTBOXES` wire stay procedural; only sprite-like art moved to
+  FX (`42n.3`). If the epic flash line needs the 44 B, shrink SIN256 in place to
+  a 65-entry quarter-wave table + sign folding (`monhun-ardu-42n.7`), never
+  offload it per-access.
 
 ---
 
