@@ -15,13 +15,11 @@ inline void test_boot(FxTest &test) {
     mh::Game g;
     mh::initGame(g, mh::W_SWORD);
     const int32_t startX = g.player.x;
-    const mh::Input inp = { 1, 0, false, false };
+    const mh::Input inp = {1, 0, false, false};
     for (int i = 0; i < 16; ++i) {
         mh::stepPlayer(g, inp);
     }
-    test.expectEq(static_cast<uint32_t>(g.player.x),
-                  static_cast<uint32_t>(startX + 18),
-                  F("boot move 16 ticks right"));
+    test.expectEq(static_cast<uint32_t>(g.player.x), static_cast<uint32_t>(startX + 18), F("boot move 16 ticks right"));
     test.expectEq(static_cast<uint32_t>(g.tick), 16, F("boot tick count"));
 
     mh::Game w;

@@ -16,4 +16,4 @@ SpacesBeforeTrailingComments: 3
 AllowShortEnumsOnASingleLine: false
 
 # use \n instead of \r\n
-UseCRLF: true
+UseCRLF: false

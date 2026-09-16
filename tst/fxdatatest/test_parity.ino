@@ -7,4 +7,6 @@ void setup() {
     parity::test_parity(test);
     test.report(F("parity_test"));
 }
-void loop() { exit(0); }
+void loop() {
+    exit(0);
+}

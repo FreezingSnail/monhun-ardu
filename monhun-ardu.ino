@@ -33,18 +33,20 @@ mh::AudioState s_audio;
 // Runtime toggle inside the debug build: hold A+B for 30 ticks to flip. The
 // buttons still reach the sim unchanged (run() never consumes them); A+B is
 // only *observed* here, so normal input cannot be eaten by the overlay.
-static bool    s_wire = true;
+static bool s_wire = true;
 static uint8_t s_wireHold = 0;
 
-static void pollDebugToggle(const mh::Input& in) {
+static void pollDebugToggle(const mh::Input &in) {
     if (in.a && in.b) {
-        if (s_wireHold < 30) s_wireHold++;
-        if (s_wireHold == 30) s_wire = !s_wire;
+        if (s_wireHold < 30)
+            s_wireHold++;
+        if (s_wireHold == 30)
+            s_wire = !s_wire;
     } else {
         s_wireHold = 0;
     }
 }
-#endif // DEBUG_HURTBOXES
+#endif   // DEBUG_HURTBOXES
 
 void setup() {
     // Serial.begin(9600);
@@ -64,14 +66,12 @@ void setup() {
 // whole core advances atomically between planes. pollButtons() already ran.
 void run() {
     mh::Input in;
-    in.mx = (arduboy.pressed(RIGHT_BUTTON) ? 1 : 0)
-          - (arduboy.pressed(LEFT_BUTTON)  ? 1 : 0);
-    in.my = (arduboy.pressed(DOWN_BUTTON)  ? 1 : 0)
-          - (arduboy.pressed(UP_BUTTON)    ? 1 : 0);
-    in.a  = arduboy.pressed(A_BUTTON);
-    in.b  = arduboy.pressed(B_BUTTON);
+    in.mx = (arduboy.pressed(RIGHT_BUTTON) ? 1 : 0) - (arduboy.pressed(LEFT_BUTTON) ? 1 : 0);
+    in.my = (arduboy.pressed(DOWN_BUTTON) ? 1 : 0) - (arduboy.pressed(UP_BUTTON) ? 1 : 0);
+    in.a = arduboy.pressed(A_BUTTON);
+    in.b = arduboy.pressed(B_BUTTON);
 #if DEBUG_HURTBOXES
-    pollDebugToggle(in); // observes A+B; does not consume input from stepGame
+    pollDebugToggle(in);   // observes A+B; does not consume input from stepGame
 #endif
     mh::stepGame(g, in);
     mh::audioUpdate(s_audio, g);

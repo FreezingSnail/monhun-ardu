@@ -3,9 +3,11 @@
 
 void setup() {
     fxTestSetup();
-    arduboy.startGray(); // the asset read brackets on waitForNextPlane
+    arduboy.startGray();   // the asset read brackets on waitForNextPlane
     FxTest test;
     test_assets(test);
     test.report(F("asset_test"));
 }
-void loop() { exit(0); }
+void loop() {
+    exit(0);
+}

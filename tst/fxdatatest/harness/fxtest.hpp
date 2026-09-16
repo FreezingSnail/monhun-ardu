@@ -11,8 +11,7 @@ struct FxTest {
     uint16_t passCount = 0;
     uint16_t failCount = 0;
 
-    void expectEq(uint32_t actual, uint32_t expected,
-                  const __FlashStringHelper *label) {
+    void expectEq(uint32_t actual, uint32_t expected, const __FlashStringHelper *label) {
         if (actual == expected) {
             ++passCount;
             return;
@@ -27,8 +26,7 @@ struct FxTest {
         Serial.println(expected);
     }
 
-    void expectEqIdx(uint32_t actual, uint32_t expected,
-                     const __FlashStringHelper *label, uint8_t index) {
+    void expectEqIdx(uint32_t actual, uint32_t expected, const __FlashStringHelper *label, uint8_t index) {
         if (actual == expected) {
             ++passCount;
             return;
@@ -66,13 +64,16 @@ struct FxTest {
         Serial.print(F("\" fixture=\""));
         for (uint8_t index = 0; index < bytes; ++index) {
             const char value = static_cast<char>(pgm_read_byte(expected + index));
-            if (value == '\0') break;
+            if (value == '\0')
+                break;
             Serial.print(value);
         }
         Serial.println(F("\""));
     }
 
-    bool ok() const { return failCount == 0; }
+    bool ok() const {
+        return failCount == 0;
+    }
 
     void report(const __FlashStringHelper *suite) {
         Serial.print(suite);

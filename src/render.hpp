@@ -26,30 +26,30 @@ namespace spr {
 // 16x16 player body. Weapon overlays stay procedural: aim (fx/fy) and reach are
 // dynamic and routinely exceed the 16x16 frame.
 constexpr uint8_t PLAYER_NORMAL = 0;
-constexpr uint8_t PLAYER_DODGE  = 1;
+constexpr uint8_t PLAYER_DODGE = 1;
 
 // 32x24 monster: four states facing east, then the same four facing west.
-constexpr uint8_t MON_IDLE    = 0;
+constexpr uint8_t MON_IDLE = 0;
 constexpr uint8_t MON_RECOVER = 1;
-constexpr uint8_t MON_FLASH   = 2;
-constexpr uint8_t MON_DEAD    = 3;
-constexpr uint8_t MON_WEST    = 4;
+constexpr uint8_t MON_FLASH = 2;
+constexpr uint8_t MON_DEAD = 3;
+constexpr uint8_t MON_WEST = 4;
 
 // 20x40 pole (20x36 art, padded): black-eyed head normal / hit flash.
 constexpr uint8_t POLE_NORMAL = 0;
-constexpr uint8_t POLE_FLASH  = 1;
+constexpr uint8_t POLE_FLASH = 1;
 
 // 4x4 spark, light gray / white.
-constexpr uint8_t SPARK_LIGHT  = 0;
+constexpr uint8_t SPARK_LIGHT = 0;
 constexpr uint8_t SPARK_BRIGHT = 1;
-} // namespace spr
+}   // namespace spr
 
 // Cull fully off-screen sprites before paying the FX seek, then blit on the
 // current plane. Max sheet size is 32x40, so these bounds are conservative.
 static inline void sprDraw(uint24_t img, int32_t x, int32_t y, uint16_t frame) {
-    if (x <= -32 || x >= mh::SCREEN_W || y <= -40 || y >= mh::SCREEN_H) return;
-    SpritesU::drawPlusMaskFX(static_cast<int16_t>(x), static_cast<int16_t>(y),
-                             img, frame);
+    if (x <= -32 || x >= mh::SCREEN_W || y <= -40 || y >= mh::SCREEN_H)
+        return;
+    SpritesU::drawPlusMaskFX(static_cast<int16_t>(x), static_cast<int16_t>(y), img, frame);
 }
 
 /* ------------------------------------------------------------------ art */
@@ -83,25 +83,18 @@ static inline int32_t mulQ4(int32_t a, int32_t b) {
 
 // 256-step sine, Q4 fixed point (-16..16). cos(a) = SIN256[(a+64)&255].
 static const int8_t MH_PROGMEM SIN256[256] = {
-      0,  0,  1,  1,  2,  2,  2,  3,  3,  4,  4,  4,  5,  5,  5,  6,
-      6,  6,  7,  7,  8,  8,  8,  9,  9,  9, 10, 10, 10, 10, 11, 11,
-     11, 12, 12, 12, 12, 13, 13, 13, 13, 14, 14, 14, 14, 14, 14, 15,
-     15, 15, 15, 15, 15, 15, 16, 16, 16, 16, 16, 16, 16, 16, 16, 16,
-     16, 16, 16, 16, 16, 16, 16, 16, 16, 16, 16, 15, 15, 15, 15, 15,
-     15, 15, 14, 14, 14, 14, 14, 14, 13, 13, 13, 13, 12, 12, 12, 12,
-     11, 11, 11, 10, 10, 10, 10,  9,  9,  9,  8,  8,  8,  7,  7,  6,
-      6,  6,  5,  5,  5,  4,  4,  4,  3,  3,  2,  2,  2,  1,  1,  0,
-      0,  0, -1, -1, -2, -2, -2, -3, -3, -4, -4, -4, -5, -5, -5, -6,
-     -6, -6, -7, -7, -8, -8, -8, -9, -9, -9,-10,-10,-10,-10,-11,-11,
-    -11,-12,-12,-12,-12,-13,-13,-13,-13,-14,-14,-14,-14,-14,-14,-15,
-    -15,-15,-15,-15,-15,-15,-16,-16,-16,-16,-16,-16,-16,-16,-16,-16,
-    -16,-16,-16,-16,-16,-16,-16,-16,-16,-16,-16,-15,-15,-15,-15,-15,
-    -15,-15,-14,-14,-14,-14,-14,-14,-13,-13,-13,-13,-12,-12,-12,-12,
-    -11,-11,-11,-10,-10,-10,-10, -9, -9, -9, -8, -8, -8, -7, -7, -6,
-     -6, -6, -5, -5, -5, -4, -4, -4, -3, -3, -2, -2, -2, -1, -1,  0,
+    0,   0,   1,   1,   2,   2,   2,   3,   3,   4,   4,   4,   5,   5,   5,   6,   6,   6,   7,   7,   8,   8,   8,   9,   9,   9,   10,  10,  10,  10,  11,  11,  11,  12,  12,  12,  12,
+    13,  13,  13,  13,  14,  14,  14,  14,  14,  14,  15,  15,  15,  15,  15,  15,  15,  16,  16,  16,  16,  16,  16,  16,  16,  16,  16,  16,  16,  16,  16,  16,  16,  16,  16,  16,  16,
+    16,  15,  15,  15,  15,  15,  15,  15,  14,  14,  14,  14,  14,  14,  13,  13,  13,  13,  12,  12,  12,  12,  11,  11,  11,  10,  10,  10,  10,  9,   9,   9,   8,   8,   8,   7,   7,
+    6,   6,   6,   5,   5,   5,   4,   4,   4,   3,   3,   2,   2,   2,   1,   1,   0,   0,   0,   -1,  -1,  -2,  -2,  -2,  -3,  -3,  -4,  -4,  -4,  -5,  -5,  -5,  -6,  -6,  -6,  -7,  -7,
+    -8,  -8,  -8,  -9,  -9,  -9,  -10, -10, -10, -10, -11, -11, -11, -12, -12, -12, -12, -13, -13, -13, -13, -14, -14, -14, -14, -14, -14, -15, -15, -15, -15, -15, -15, -15, -16, -16, -16,
+    -16, -16, -16, -16, -16, -16, -16, -16, -16, -16, -16, -16, -16, -16, -16, -16, -16, -16, -15, -15, -15, -15, -15, -15, -15, -14, -14, -14, -14, -14, -14, -13, -13, -13, -13, -12, -12,
+    -12, -12, -11, -11, -11, -10, -10, -10, -10, -9,  -9,  -9,  -8,  -8,  -8,  -7,  -7,  -6,  -6,  -6,  -5,  -5,  -5,  -4,  -4,  -4,  -3,  -3,  -2,  -2,  -2,  -1,  -1,  0,
 };
 
-static inline int16_t sin256(uint8_t a) { return mhPgmReadI8(&SIN256[a]); }
+static inline int16_t sin256(uint8_t a) {
+    return mhPgmReadI8(&SIN256[a]);
+}
 static inline int16_t cos256(uint8_t a) {
     return mhPgmReadI8(&SIN256[static_cast<uint8_t>(a + 64)]);
 }
@@ -115,13 +108,13 @@ constexpr uint8_t ANG_MONSTER_STUN = 14;
 constexpr uint8_t ANG_SHAKE_X = 69;
 constexpr uint8_t ANG_SHAKE_Y = 94;
 // 6-ring offsets: i*60deg in 256/turn units (42.667 -> rounded).
-static const uint8_t MH_PROGMEM RING6[6] = { 0, 43, 85, 128, 171, 213 };
+static const uint8_t MH_PROGMEM RING6[6] = {0, 43, 85, 128, 171, 213};
 
 // Page masks for the direct framebuffer rect fill. MH_MASK_TOP[top] has bits
 // top..7 set, MH_MASK_BOT[bot] bits 0..bot; a page slice mask is the AND of the
 // two. Tables avoid AVR variable-shift loops (`0xFF << n` lowers to a loop).
-static const uint8_t MH_PROGMEM MH_MASK_TOP[8] = { 0xFF,0xFE,0xFC,0xF8,0xF0,0xE0,0xC0,0x80 };
-static const uint8_t MH_PROGMEM MH_MASK_BOT[8] = { 0x01,0x03,0x07,0x0F,0x1F,0x3F,0x7F,0xFF };
+static const uint8_t MH_PROGMEM MH_MASK_TOP[8] = {0xFF, 0xFE, 0xFC, 0xF8, 0xF0, 0xE0, 0xC0, 0x80};
+static const uint8_t MH_PROGMEM MH_MASK_BOT[8] = {0x01, 0x03, 0x07, 0x0F, 0x1F, 0x3F, 0x7F, 0xFF};
 
 // Clip a block to the screen arena band and paint it. shade 0 clears the pixels
 // on the current plane (mock black bodies mask what is under them). Nothing is
@@ -137,13 +130,19 @@ static const uint8_t MH_PROGMEM MH_MASK_BOT[8] = { 0x01,0x03,0x07,0x0F,0x1F,0x3F
 // only bounds work needed; writes stay inside [0,1024). Render runs between
 // waitForNextPlane() calls, never during the plane blit.
 __attribute__((noinline)) static void blk(int32_t x, int32_t y, int32_t w, int32_t h, uint8_t shade) {
-    if (w <= 0 || h <= 0) return;
+    if (w <= 0 || h <= 0)
+        return;
     int32_t x0 = x, y0 = y, x1 = x + w, y1 = y + h;
-    if (x0 < 0) x0 = 0;
-    if (y0 < mh::HUD_H) y0 = mh::HUD_H;
-    if (x1 > mh::SCREEN_W) x1 = mh::SCREEN_W;
-    if (y1 > mh::SCREEN_H) y1 = mh::SCREEN_H;
-    if (x0 >= x1 || y0 >= y1) return;
+    if (x0 < 0)
+        x0 = 0;
+    if (y0 < mh::HUD_H)
+        y0 = mh::HUD_H;
+    if (x1 > mh::SCREEN_W)
+        x1 = mh::SCREEN_W;
+    if (y1 > mh::SCREEN_H)
+        y1 = mh::SCREEN_H;
+    if (x0 >= x1 || y0 >= y1)
+        return;
 
     // Clamped, so every coord now fits a byte and pages 0..7.
     const uint8_t col = arduboy.colour(shade);
@@ -154,19 +153,22 @@ __attribute__((noinline)) static void blk(int32_t x, int32_t y, int32_t w, int32
     const uint8_t p0 = static_cast<uint8_t>(ya >> 3);
     const uint8_t p1 = static_cast<uint8_t>(yb >> 3);
     const uint8_t count = static_cast<uint8_t>(xb - xa);
-    uint8_t* p = arduboy.getBuffer() + static_cast<uint16_t>(p0) * 128 + xa;
+    uint8_t *p = arduboy.getBuffer() + static_cast<uint16_t>(p0) * 128 + xa;
     uint8_t top = static_cast<uint8_t>(ya & 7);
     uint8_t page = p0;
     for (;;) {
         const uint8_t bot = (page == p1) ? static_cast<uint8_t>(yb & 7) : 7;
         uint8_t mask = mhPgmReadU8(&MH_MASK_TOP[top]) & mhPgmReadU8(&MH_MASK_BOT[bot]);
         if (col) {
-            for (uint8_t i = 0; i < count; i++) p[i] |= mask;
+            for (uint8_t i = 0; i < count; i++)
+                p[i] |= mask;
         } else {
             mask = static_cast<uint8_t>(~mask);
-            for (uint8_t i = 0; i < count; i++) p[i] &= mask;
+            for (uint8_t i = 0; i < count; i++)
+                p[i] &= mask;
         }
-        if (page == p1) break;
+        if (page == p1)
+            break;
         p += 128;
         ++page;
         top = 0;
@@ -180,8 +182,7 @@ __attribute__((noinline)) static void blk(int32_t x, int32_t y, int32_t w, int32
 static inline int16_t textPut(uint24_t sheet, int32_t x, int32_t y, char c) {
     const uint8_t code = static_cast<uint8_t>(c);
     if (code < 128 && x > -4 && x < mh::SCREEN_W)
-        SpritesU::drawPlusMaskFX(static_cast<int16_t>(x), static_cast<int16_t>(y),
-                                 sheet, FRAME(code));
+        SpritesU::drawPlusMaskFX(static_cast<int16_t>(x), static_cast<int16_t>(y), sheet, FRAME(code));
     return static_cast<int16_t>(x + 4);
 }
 
@@ -195,7 +196,10 @@ static void drawNumber(int32_t x, int32_t y, int16_t value, uint8_t shade) {
     if (v == 0) {
         buf[n++] = 0;
     } else {
-        while (v > 0 && n < 5) { buf[n++] = static_cast<uint8_t>(v % 10); v /= 10; }
+        while (v > 0 && n < 5) {
+            buf[n++] = static_cast<uint8_t>(v % 10);
+            v /= 10;
+        }
     }
     for (uint8_t i = 0; i < n; i++)
         textPut(sheet, x + i * 4, y, static_cast<char>('0' + buf[n - 1 - i]));
@@ -209,21 +213,24 @@ static void drawNumber(int32_t x, int32_t y, int16_t value, uint8_t shade) {
 // coord advances by its fixed step with a single conditional wrap (step is
 // always < the modulus, so one subtract bounds it). Integer-only, no float.
 static void drawArena(int16_t camX, int16_t camY) {
-    uint8_t phase = 0;          // i % 3
-    int16_t wx = 0;             // (i * 53) % WORLD_W
-    int16_t wy = 0;             // (i * 29) % WORLD_H
+    uint8_t phase = 0;   // i % 3
+    int16_t wx = 0;      // (i * 53) % WORLD_W
+    int16_t wy = 0;      // (i * 29) % WORLD_H
     for (int16_t i = 0; i < 260; i++) {
         if (phase != 0) {
             const int16_t sx = static_cast<int16_t>(wx - camX);
             const int16_t sy = static_cast<int16_t>(wy - camY + mh::HUD_H);
             if (sx >= 0 && sx < mh::SCREEN_W && sy >= mh::HUD_H && sy < mh::SCREEN_H)
-                arduboy.drawPixel(sx, sy, 1); // single dark-gray dot, no blk clip
+                arduboy.drawPixel(sx, sy, 1);   // single dark-gray dot, no blk clip
         }
-        if (++phase >= 3) phase = 0;
+        if (++phase >= 3)
+            phase = 0;
         wx += 53;
-        if (wx >= mh::WORLD_W) wx -= mh::WORLD_W;
+        if (wx >= mh::WORLD_W)
+            wx -= mh::WORLD_W;
         wy += 29;
-        if (wy >= mh::WORLD_H) wy -= mh::WORLD_H;
+        if (wy >= mh::WORLD_H)
+            wy -= mh::WORLD_H;
     }
     const int32_t lx = -camX;
     const int32_t ly = static_cast<int32_t>(mh::HUD_H) - camY;
@@ -235,7 +242,7 @@ static void drawArena(int16_t camX, int16_t camY) {
 
 // Mock drawPole(): base post, ring bands, head, eye hole, ground plate, all
 // baked into the 20x40 (20x36 art) FX sprite; hit flash selects the head plane.
-static void drawPole(const mh::Pole& pole, int16_t camX, int16_t camY) {
+static void drawPole(const mh::Pole &pole, int16_t camX, int16_t camY) {
     const int32_t x = static_cast<int32_t>(pole.rect.x) - camX;
     const int32_t y = static_cast<int32_t>(pole.rect.y) - camY + mh::HUD_H;
     const uint8_t f = pole.hitFlash > 0 ? spr::POLE_FLASH : spr::POLE_NORMAL;
@@ -244,8 +251,8 @@ static void drawPole(const mh::Pole& pole, int16_t camX, int16_t camY) {
 
 // Mock drawMonster(): dead heap, feet, body, head + eyes, stun sparkle, and the
 // windup/attack telegraph box.
-static void drawMonster(const mh::Game& g, int16_t camX, int16_t camY) {
-    const mh::Monster& m = g.monster;
+static void drawMonster(const mh::Game &g, int16_t camX, int16_t camY) {
+    const mh::Monster &m = g.monster;
     const int32_t x = rndPx(m.x, m.subX) - camX;
     const int32_t y = rndPx(m.y, m.subY) - camY + mh::HUD_H;
     const int32_t w = m.w;
@@ -253,24 +260,26 @@ static void drawMonster(const mh::Game& g, int16_t camX, int16_t camY) {
 
     // Body, feet, head and eyes are baked per state/facing into the sprite;
     // recover dims the body, windup flash and hit flash whiten it.
-    const bool flashing = (m.state == mh::MS_WINDUP) &&
-                          (((m.windupMax - m.t) / 4) % 2 == 0);
+    const bool flashing = (m.state == mh::MS_WINDUP) && (((m.windupMax - m.t) / 4) % 2 == 0);
     uint8_t state = spr::MON_IDLE;
-    if (m.state == mh::MS_RECOVER) state = spr::MON_RECOVER;
-    if (m.hitFlash > 0 || flashing) state = spr::MON_FLASH;
-    if (m.state == mh::MS_DEAD) state = spr::MON_DEAD;
+    if (m.state == mh::MS_RECOVER)
+        state = spr::MON_RECOVER;
+    if (m.hitFlash > 0 || flashing)
+        state = spr::MON_FLASH;
+    if (m.state == mh::MS_DEAD)
+        state = spr::MON_DEAD;
     const uint8_t f = static_cast<uint8_t>(state + (m.fx >= 0 ? 0 : spr::MON_WEST));
     sprDraw(fxmonster, x, y, FRAME(f));
-    if (m.state == mh::MS_DEAD) return;
+    if (m.state == mh::MS_DEAD)
+        return;
 
     if (m.stun > 0) {
         const uint8_t a = static_cast<uint8_t>(static_cast<uint32_t>(g.tick) * ANG_MONSTER_STUN);
-        blk(x + w / 2 + mulQ4(cos256(a), 9),
-            y - 3 + mulQ4(sin256(a), 2), 2, 2, 2);
+        blk(x + w / 2 + mulQ4(cos256(a), 9), y - 3 + mulQ4(sin256(a), 2), 2, 2, 2);
     }
 
     if (m.state == mh::MS_WINDUP || m.state == mh::MS_ATTACK) {
-        const mh::MonsterAttack* a = m.atk;
+        const mh::MonsterAttack *a = m.atk;
         if (a) {
             const int32_t reach = mh::monsterAttackReach(a);
             const int32_t ax = x + w / 2 + (((int32_t)m.fx * reach) >> 4);
@@ -290,27 +299,27 @@ static void drawMonster(const mh::Game& g, int16_t camX, int16_t camY) {
 
 // Mock drawPlayer(): shadow, body, weapon-specific silhouette, i-frame flicker
 // and stun sparkle. Sword arc / parry, flail chain + whirl ring, gun plate.
-static void drawPlayer(const mh::Game& g, int16_t camX, int16_t camY) {
-    const mh::Player& p = g.player;
+static void drawPlayer(const mh::Game &g, int16_t camX, int16_t camY) {
+    const mh::Player &p = g.player;
     const int32_t x = rndPx(p.x, p.subX) - camX;
     const int32_t y = rndPx(p.y, p.subY) - camY + mh::HUD_H;
     const int32_t cx = x + 8;
     const int32_t cy = y + 8;
 
     // Shadow + body from the FX sheet; dodge dims the body one shade.
-    const uint8_t bodyFrame = (p.state == mh::PS_DODGE) ? spr::PLAYER_DODGE
-                                                        : spr::PLAYER_NORMAL;
+    const uint8_t bodyFrame = (p.state == mh::PS_DODGE) ? spr::PLAYER_DODGE : spr::PLAYER_NORMAL;
     sprDraw(fxplayer, x, y, FRAME(bodyFrame));
 
     if (g.weapon == mh::W_SWORD) {
         if (p.state == mh::PS_ATTACK || p.state == mh::PS_SPECIAL) {
-            const mh::Attack* a = p.atk;
+            const mh::Attack *a = p.atk;
             if (a) {
                 const int16_t startup = mh::attackStartup(a);
                 const int16_t active = mh::attackActive(a);
                 const uint8_t phase = p.t < startup ? 0 : (p.t < startup + active ? 1 : 2);
                 int32_t reach = mh::attackReach(a);
-                if (phase != 1) reach = reach * 6 / 10; // mock 0.6 arc
+                if (phase != 1)
+                    reach = reach * 6 / 10;   // mock 0.6 arc
                 const int32_t hx = cx + (((int32_t)p.fx * reach) >> 4);
                 const int32_t hy = cy + (((int32_t)p.fy * reach) >> 4);
                 const int32_t hw = mh::attackHw(a);
@@ -337,20 +346,19 @@ static void drawPlayer(const mh::Game& g, int16_t camX, int16_t camY) {
             const uint8_t ba = static_cast<uint8_t>(p.whirlTick * ANG_WHIRL_BALL);
             blk(cx + mulQ4(cos256(ba), 20) - 2, cy + mulQ4(sin256(ba), 14) - 2, 4, 4, 3);
         } else if (p.state == mh::PS_ATTACK || p.state == mh::PS_SPECIAL) {
-            const mh::Attack* a = p.atk;
+            const mh::Attack *a = p.atk;
             if (a) {
                 const int16_t startup = mh::attackStartup(a);
                 const int16_t active = mh::attackActive(a);
                 const uint8_t phase = p.t < startup ? 0 : (p.t < startup + active ? 1 : 2);
                 int32_t reach = mh::attackReach(a);
-                if (phase != 1) reach = reach / 2; // mock 0.5 chain
+                if (phase != 1)
+                    reach = reach / 2;   // mock 0.5 chain
                 for (int32_t i = 1; i <= 3; i++) {
                     const int32_t rr = (reach * i) >> 2;
-                    blk(cx + (((int32_t)p.fx * rr) >> 4), cy + (((int32_t)p.fy * rr) >> 4),
-                        1, 1, 2);
+                    blk(cx + (((int32_t)p.fx * rr) >> 4), cy + (((int32_t)p.fy * rr) >> 4), 1, 1, 2);
                 }
-                blk(cx + (((int32_t)p.fx * reach) >> 4) - 2,
-                    cy + (((int32_t)p.fy * reach) >> 4) - 2, 4, 4, 3);
+                blk(cx + (((int32_t)p.fx * reach) >> 4) - 2, cy + (((int32_t)p.fy * reach) >> 4) - 2, 4, 4, 3);
             }
         } else {
             blk(cx + ((p.fx * 4) >> 4), cy + ((p.fy * 4) >> 4), 1, 1, 2);
@@ -360,7 +368,7 @@ static void drawPlayer(const mh::Game& g, int16_t camX, int16_t camY) {
             blk(x - 2, y + 2, 1, 12, 2);
             blk(x + p.w + 1, y + 2, 1, 12, 2);
         }
-    } else { // gunshield
+    } else {   // gunshield
         const bool guard = (p.stance == mh::ST_GUARD);
         const int32_t shx = cx + ((p.fx * 5) >> 4);
         const int32_t shy = cy + ((p.fy * 5) >> 4);
@@ -369,10 +377,12 @@ static void drawPlayer(const mh::Game& g, int16_t camX, int16_t camY) {
         if (p.state == mh::PS_SHOVE) {
             blk(shx + ((p.fx * 4) >> 4) - 5, shy + ((p.fy * 4) >> 4) - 7, 10, 14, 3);
         }
-        if (p.reload > 0) blk(x + 3, y - 3, 10, 2, 2);
+        if (p.reload > 0)
+            blk(x + 3, y - 3, 10, 2, 2);
     }
 
-    if (p.iT > 0 && (g.tick % 4) < 2) blk(x + 6, y + 3, 4, 1, 0);
+    if (p.iT > 0 && (g.tick % 4) < 2)
+        blk(x + 6, y + 3, 4, 1, 0);
     if (p.state == mh::PS_STUN) {
         const uint8_t a = static_cast<uint8_t>(static_cast<uint32_t>(g.tick) * ANG_PLAYER_STUN);
         blk(cx + mulQ4(cos256(a), 7), y - 2 + mulQ4(sin256(a), 2), 2, 2, 3);
@@ -380,9 +390,9 @@ static void drawPlayer(const mh::Game& g, int16_t camX, int16_t camY) {
 }
 
 // Mock drawProjectiles(): 3-puff trail then ball (rim/core/base) or pellet.
-static void drawProjectiles(const mh::Game& g, int16_t camX, int16_t camY) {
+static void drawProjectiles(const mh::Game &g, int16_t camX, int16_t camY) {
     for (int16_t i = 0; i < g.projN; i++) {
-        const mh::Projectile& pr = g.proj[i];
+        const mh::Projectile &pr = g.proj[i];
         const int32_t x = pr.x - camX;
         const int32_t y = pr.y - camY + mh::HUD_H;
         const int32_t bx = (pr.vx * 2) >> 4;
@@ -395,8 +405,10 @@ static void drawProjectiles(const mh::Game& g, int16_t camX, int16_t camY) {
         const int32_t hw = pr.w >> 1;
         const int32_t hh = pr.h >> 1;
         // Ball (7x8) / scatter (4x8) sheets; art occupies the top 7x6 / 4x4.
-        if (pr.heavy) sprDraw(fxball, x - hw, y - hh, FRAME(0));
-        else          sprDraw(fxscatter, x - hw, y - hh, FRAME(0));
+        if (pr.heavy)
+            sprDraw(fxball, x - hw, y - hh, FRAME(0));
+        else
+            sprDraw(fxscatter, x - hw, y - hh, FRAME(0));
     }
 }
 
@@ -408,10 +420,10 @@ static void drawProjectiles(const mh::Game& g, int16_t camX, int16_t camY) {
 // Core sim is untouched: every effect still ticks and expires as before.
 constexpr int16_t MAX_FX_DRAW = 6;
 
-static void drawEffects(const mh::Game& g, int16_t camX, int16_t camY) {
+static void drawEffects(const mh::Game &g, int16_t camX, int16_t camY) {
     const int16_t first = g.fxN > MAX_FX_DRAW ? g.fxN - MAX_FX_DRAW : 0;
     for (int16_t i = first; i < g.fxN; i++) {
-        const mh::Effect& e = g.fx[i];
+        const mh::Effect &e = g.fx[i];
         const int16_t r = e.life - e.t;
         if (e.text) {
             const int32_t x = e.x - camX;
@@ -444,7 +456,8 @@ static void drawEffects(const mh::Game& g, int16_t camX, int16_t camY) {
 
 // Solid 1 px border (hurt boxes).
 static void wireSolid(int32_t x, int32_t y, int32_t w, int32_t h) {
-    if (w < 1 || h < 1) return;
+    if (w < 1 || h < 1)
+        return;
     blk(x, y, w, 1, 3);
     blk(x, y + h - 1, w, 1, 3);
     blk(x, y, 1, h, 3);
@@ -453,7 +466,8 @@ static void wireSolid(int32_t x, int32_t y, int32_t w, int32_t h) {
 
 // Dotted 1 px border (hit boxes): every other pixel on each edge.
 static void wireDot(int32_t x, int32_t y, int32_t w, int32_t h) {
-    if (w < 1 || h < 1) return;
+    if (w < 1 || h < 1)
+        return;
     for (int32_t i = 0; i < w; i += 2) {
         blk(x + i, y, 1, 1, 3);
         blk(x + i, y + h - 1, 1, 1, 3);
@@ -464,17 +478,16 @@ static void wireDot(int32_t x, int32_t y, int32_t w, int32_t h) {
     }
 }
 
-static void drawDebug(const mh::Game& g, int16_t camX, int16_t camY) {
+static void drawDebug(const mh::Game &g, int16_t camX, int16_t camY) {
     const int32_t ox = -camX;
     const int32_t oy = -camY + mh::HUD_H;
-    const mh::Player& p = g.player;
+    const mh::Player &p = g.player;
 
     // Hurt boxes (solid): player body, then the live target hurt rect (monster
     // body in hunt, training pole in train) as activeTarget() would report.
     wireSolid(p.x + ox, p.y + oy, p.w, p.h);
     if (g.target.alive)
-        wireSolid(g.target.rect.x + ox, g.target.rect.y + oy,
-                  g.target.rect.w, g.target.rect.h);
+        wireSolid(g.target.rect.x + ox, g.target.rect.y + oy, g.target.rect.w, g.target.rect.h);
 
     // Active player melee hit box (dotted): the sim's meleeHitbox() rect, so
     // the wire matches the frame the overlap test actually runs against.
@@ -485,9 +498,8 @@ static void drawDebug(const mh::Game& g, int16_t camX, int16_t camY) {
 
     // Monster windup/attack hit box (dotted), same reach/facing projection and
     // hw/hh the monster hit test uses; the windup outline is the telegraph.
-    if (g.mode == mh::MODE_HUNT && g.monster.atk &&
-        (g.monster.state == mh::MS_WINDUP || g.monster.state == mh::MS_ATTACK)) {
-        const mh::Monster& m = g.monster;
+    if (g.mode == mh::MODE_HUNT && g.monster.atk && (g.monster.state == mh::MS_WINDUP || g.monster.state == mh::MS_ATTACK)) {
+        const mh::Monster &m = g.monster;
         const int32_t reach = mh::monsterAttackReach(m.atk);
         const int32_t hx = m.x + (m.w >> 1) + (((int32_t)m.fx * reach) >> 4);
         const int32_t hy = m.y + (m.h >> 1) + (((int32_t)m.fy * reach) >> 4);
@@ -498,7 +510,7 @@ static void drawDebug(const mh::Game& g, int16_t camX, int16_t camY) {
 
     // Live shell/projectile hit rects (dotted), exact pr.w x pr.h collision box.
     for (int16_t i = 0; i < g.projN; i++) {
-        const mh::Projectile& pr = g.proj[i];
+        const mh::Projectile &pr = g.proj[i];
         wireDot(pr.x - (pr.w >> 1) + ox, pr.y - (pr.h >> 1) + oy, pr.w, pr.h);
     }
 
@@ -511,15 +523,16 @@ static void drawDebug(const mh::Game& g, int16_t camX, int16_t camY) {
 
     // Hit-spark markers (small white plus) at live non-text effects.
     for (int16_t i = 0; i < g.fxN; i++) {
-        const mh::Effect& e = g.fx[i];
-        if (e.text || e.t >= e.life) continue;
+        const mh::Effect &e = g.fx[i];
+        if (e.text || e.t >= e.life)
+            continue;
         const int32_t sx = e.x + ox;
         const int32_t sy = e.y + oy;
         blk(sx, sy - 1, 1, 3, 3);
         blk(sx - 1, sy, 3, 1, 3);
     }
 }
-#endif // DEBUG_HURTBOXES
+#endif   // DEBUG_HURTBOXES
 
 /* ------------------------------------------------------------------- hud */
 
@@ -538,40 +551,48 @@ static inline int16_t hudPut(int16_t x, char c) {
 
 static uint8_t hudDigits(int32_t v) {
     uint8_t n = 1;
-    while (v >= 10) { v /= 10; n++; }
+    while (v >= 10) {
+        v /= 10;
+        n++;
+    }
     return n;
 }
 
 // Print a non-negative value as exactly `digits` digits (leading zeros).
 static int16_t hudNum(int16_t x, int32_t v, uint8_t digits) {
-    if (digits > 5) digits = 5;
+    if (digits > 5)
+        digits = 5;
     char b[5];
     for (int8_t i = static_cast<int8_t>(digits - 1); i >= 0; i--) {
         b[i] = static_cast<char>('0' + v % 10);
         v /= 10;
     }
-    for (uint8_t i = 0; i < digits; i++) x = hudPut(x, b[i]);
+    for (uint8_t i = 0; i < digits; i++)
+        x = hudPut(x, b[i]);
     return x;
 }
 
 // Mock bar(): dark back/border, inner fill width round((w-2) * ratio).
-static void hudBar(int32_t x, int32_t y, int32_t w, int32_t h,
-                   int32_t num, int32_t den, uint8_t shade) {
+static void hudBar(int32_t x, int32_t y, int32_t w, int32_t h, int32_t num, int32_t den, uint8_t shade) {
     blk(x, y, w, h, 1);
-    if (den <= 0 || num <= 0) return;
-    if (num > den) num = den;
+    if (den <= 0 || num <= 0)
+        return;
+    if (num > den)
+        num = den;
     int32_t fw = ((w - 2) * num + den / 2) / den;
-    if (fw > w - 2) fw = w - 2;
-    if (fw > 0) blk(x + 1, y + 1, fw, h - 2, shade);
+    if (fw > w - 2)
+        fw = w - 2;
+    if (fw > 0)
+        blk(x + 1, y + 1, fw, h - 2, shade);
 }
 
-static void drawHud(const mh::Game& g) {
-    const mh::Player& p = g.player;
+static void drawHud(const mh::Game &g) {
+    const mh::Player &p = g.player;
 
     // No strip background fill: ArduboyG waitForNextPlane(BLACK) wipes the
     // framebuffer black before each plane, and blk() clamps the arena band to
     // y >= HUD_H anyway, so a y=0 HUD wipe was a no-op.
-    blk(0, mh::HUD_H - 1, mh::SCREEN_W, 1, 1);    // divider at the arena edge
+    blk(0, mh::HUD_H - 1, mh::SCREEN_W, 1, 1);   // divider at the arena edge
 
     hudBar(1, 2, 28, 4, p.hp, p.hpMax, 3);        // player HP (white)
     hudBar(29, 2, 16, 4, p.stam, p.stamMax, 2);   // stamina (light gray)
@@ -580,24 +601,34 @@ static void drawHud(const mh::Game& g) {
     // the mode marker (device-only, the mock implied it via pole vs beast).
     int16_t x = 46;
     if (g.weapon == mh::W_SWORD) {
-        x = hudPut(x, 'S'); x = hudPut(x, 'W'); x = hudPut(x, 'D');
+        x = hudPut(x, 'S');
+        x = hudPut(x, 'W');
+        x = hudPut(x, 'D');
     } else if (g.weapon == mh::W_FLAIL) {
-        x = hudPut(x, 'F'); x = hudPut(x, 'L'); x = hudPut(x, 'A');
+        x = hudPut(x, 'F');
+        x = hudPut(x, 'L');
+        x = hudPut(x, 'A');
     } else {
-        x = hudPut(x, 'G'); x = hudPut(x, 'U'); x = hudPut(x, 'N');
+        x = hudPut(x, 'G');
+        x = hudPut(x, 'U');
+        x = hudPut(x, 'N');
     }
     x = hudPut(x, g.mode == mh::MODE_TRAIN ? 'T' : 'H');
 
-    if (g.weapon == mh::W_GUN) {                  // shell count + reload
+    if (g.weapon == mh::W_GUN) {   // shell count + reload
         x = 67;
         if (p.reload > 0) {
-            hudPut(x, 'R'); hudPut(x, 'L'); hudPut(x, 'D');
-            const mh::ShellDef* sh =
-                mh::weaponShell(&mh::WEAPON_DEFS[g.weapon], p.shell);
+            hudPut(x, 'R');
+            hudPut(x, 'L');
+            hudPut(x, 'D');
+            const mh::ShellDef *sh = mh::weaponShell(&mh::WEAPON_DEFS[g.weapon], p.shell);
             const int16_t rmax = mh::shellReload(sh);
             if (rmax > 0) {
                 int32_t bw = (12 * (rmax - p.reload) + rmax / 2) / rmax;
-                if (bw < 1) bw = 1; else if (bw > 12) bw = 12;
+                if (bw < 1)
+                    bw = 1;
+                else if (bw > 12)
+                    bw = 12;
                 blk(67, 6, bw, 1, 2);
             }
         } else {
@@ -606,11 +637,13 @@ static void drawHud(const mh::Game& g) {
         }
     }
 
-    if (g.mode == mh::MODE_TRAIN) {               // train total + DPS
+    if (g.mode == mh::MODE_TRAIN) {   // train total + DPS
         int32_t total = g.train.total;
-        if (total > 9999) total = 9999;
+        if (total > 9999)
+            total = 9999;
         int32_t dps = mh::trainDps(g);
-        if (dps > 999) dps = 999;
+        if (dps > 999)
+            dps = 999;
         const uint8_t nt = hudDigits(total);
         const uint8_t nd = hudDigits(dps);
         x = static_cast<int16_t>(127 - 4 * (nt + nd + 2));
@@ -618,7 +651,7 @@ static void drawHud(const mh::Game& g) {
         x = hudNum(x, total, nt);
         x = hudPut(x, 'D');
         hudNum(x, dps, nd);
-    } else {                                      // monster HP (hunt)
+    } else {   // monster HP (hunt)
         hudBar(82, 2, 44, 3, g.monster.hp, g.monster.hpMax, 3);
     }
 }
@@ -633,12 +666,18 @@ static void drawHud(const mh::Game& g) {
 //
 // `wire` only has an effect when DEBUG_HURTBOXES is compiled in; shipping builds
 // pass false and the overlay is preprocessed out.
-static void renderScene(const mh::Game& g, bool wire) {
+static void renderScene(const mh::Game &g, bool wire) {
     // Camera clamp to world bounds; also guards against an unclamped Game.
     int16_t camX = g.camX;
     int16_t camY = g.camY;
-    if (camX < 0) camX = 0; else if (camX > mh::CAM_MAX_X) camX = mh::CAM_MAX_X;
-    if (camY < 0) camY = 0; else if (camY > mh::CAM_MAX_Y) camY = mh::CAM_MAX_Y;
+    if (camX < 0)
+        camX = 0;
+    else if (camX > mh::CAM_MAX_X)
+        camX = mh::CAM_MAX_X;
+    if (camY < 0)
+        camY = 0;
+    else if (camY > mh::CAM_MAX_Y)
+        camY = mh::CAM_MAX_Y;
 
     // Mock g.shake has no Game field yet (freeze is not gated/decayed), so the
     // render derives an equivalent tick-based int offset from the decaying hit
@@ -646,29 +685,31 @@ static void renderScene(const mh::Game& g, bool wire) {
     // TODO(hitstop bead): replace with a real Game::shake value.
     int16_t shakeX = 0;
     int16_t shakeY = 0;
-    const int16_t amp = g.monster.hitFlash > g.pole.hitFlash ? g.monster.hitFlash
-                                                             : g.pole.hitFlash;
+    const int16_t amp = g.monster.hitFlash > g.pole.hitFlash ? g.monster.hitFlash : g.pole.hitFlash;
     if (amp > 0) {
         const uint8_t a1 = static_cast<uint8_t>(static_cast<uint32_t>(g.tick) * ANG_SHAKE_X);
         const uint8_t a2 = static_cast<uint8_t>(static_cast<uint32_t>(g.tick) * ANG_SHAKE_Y);
-        shakeX = static_cast<int16_t>(mulQ4(sin256(a1), amp));            // mock sin(tick*1.7)*shake
-        shakeY = static_cast<int16_t>(mulQ4(cos256(a2), (amp * 7 + 5) / 10)); // *0.7, round
+        shakeX = static_cast<int16_t>(mulQ4(sin256(a1), amp));                  // mock sin(tick*1.7)*shake
+        shakeY = static_cast<int16_t>(mulQ4(cos256(a2), (amp * 7 + 5) / 10));   // *0.7, round
     }
     const int16_t ecX = static_cast<int16_t>(camX - shakeX);
     const int16_t ecY = static_cast<int16_t>(camY - shakeY);
 
     drawArena(ecX, ecY);
-    if (g.mode == mh::MODE_TRAIN) drawPole(g.pole, ecX, ecY);
-    else drawMonster(g, ecX, ecY);
+    if (g.mode == mh::MODE_TRAIN)
+        drawPole(g.pole, ecX, ecY);
+    else
+        drawMonster(g, ecX, ecY);
     drawPlayer(g, ecX, ecY);
     drawProjectiles(g, ecX, ecY);
     drawEffects(g, ecX, ecY);
 #if DEBUG_HURTBOXES
-    if (wire) drawDebug(g, ecX, ecY);
+    if (wire)
+        drawDebug(g, ecX, ecY);
 #else
     (void)wire;
 #endif
     drawHud(g);
 }
 
-} // namespace mh
+}   // namespace mh

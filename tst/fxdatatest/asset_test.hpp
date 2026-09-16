@@ -25,9 +25,7 @@ inline void test_assets(FxTest &test) {
     test.expectEq(h, 8, F("scatter height"));
 
     static const uint8_t expected[24] = {
-        15, 15, 15, 15, 15, 15, 15, 15,
-        15, 15, 15, 15, 15, 15, 15, 15,
-         0, 15,  6, 15,  6, 15,  0, 15,
+        15, 15, 15, 15, 15, 15, 15, 15, 15, 15, 15, 15, 15, 15, 15, 15, 0, 15, 6, 15, 6, 15, 0, 15,
     };
     uint8_t blob[24];
     FX::seekData(fxscatter + 2);

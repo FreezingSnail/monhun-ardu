@@ -7,4 +7,6 @@ void setup() {
     audio_test::test_audio(test);
     test.report(F("test_audio"));
 }
-void loop() { exit(0); }
+void loop() {
+    exit(0);
+}

@@ -7,4 +7,6 @@ void setup() {
     perf::test_perf(test);
     test.report(F("perf_test"));
 }
-void loop() { exit(0); }
+void loop() {
+    exit(0);
+}

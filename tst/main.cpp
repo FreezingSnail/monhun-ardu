@@ -8,13 +8,13 @@
 #include "world_test.hpp"
 
 int main() {
-  TestRunner runner;
-  FpSuite(runner);
-  InputSuite(runner);
-  PlayerSuite(runner);
-  MonsterSuite(runner);
-  ShellSuite(runner);
-  WorldSuite(runner);
-  runner.printSummary();
-  return runner.fail() ? 1 : 0;
+    TestRunner runner;
+    FpSuite(runner);
+    InputSuite(runner);
+    PlayerSuite(runner);
+    MonsterSuite(runner);
+    ShellSuite(runner);
+    WorldSuite(runner);
+    runner.printSummary();
+    return runner.fail() ? 1 : 0;
 }
