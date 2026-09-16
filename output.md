@@ -1,91 +1,146 @@
-# monhun-ardu-42n.6 — Gate: re-verify flash/RAM/perf/parity after data offload + art translation
+# monhun-ardu-6zb.1 — Core+mock: demo monster variants (`MONSTER_DEFS` on FX, `initMonster(kind)`)
 
-Independent re-run of the full gate at the wave tip (HEAD `9851902`, clean tree),
-covering children `42n.1` (tables → FX cart), `42n.2` (overlay/effect sheets),
-`42n.3` (render from FX sheets), `42n.4` (manifest + gen-check), `42n.5`
-(hot-LUT keep decision) and `42n.7` (quarter-wave SIN65). Every command below
-was run fresh by the gate; no output from earlier workers was trusted.
+Status: **DONE** — all acceptance checks green, tree left dirty (no commit/push).
+HEAD at start/finish: `1e27a38` (wave 42n closed, clean tree). Working tree now
+contains only this bead's changes.
 
-## Environment / HEAD
+Correction applied on orchestrator review: HEAVY `atkDist` 40 → **24**. The
+split rule is `dist > atkDist ? lunge : sweep` (negative = never lunge), so a
+lower threshold *widens* the lunge band: HEAVY lunges 25..41 px (inside the
+unchanged `dist < 42` engage gate) and sweeps at 24 and below — "mostly lunge".
+
+## What changed
+
+Roster (mock = source of truth, core mirrors it):
+
+| kind | variant | w | h | hp | spd | atkDist | chooseAttack |
+|---|---|---|---|---|---|---|---|
+| 0 | LUNGE (legacy/parity default) | 32 | 24 | 200 | 5 | 32 | lunge iff `dist > 32` |
+| 1 | SWEEP | 28 | 22 | 150 | 7 | -1 | never lunges (always sweep) |
+| 2 | HEAVY | 40 | 28 | 320 | 3 | 24 | lunge iff `dist > 24` → band 25..41 under the `dist < 42` gate |
+
+- `src/core/game.hpp`: `MonsterDef { int8_t kind; int16_t w, h, hp, spd, atkDist; }`
+  (AVR `static_assert(sizeof == 11)`), `MONSTER_DEFS[3]` host array + FX
+  fake-pointer shim (`FxMonsterDefsRom`), six `monsterDef*` accessors via
+  `mhFxRead*`. `Game` gains `int8_t monsterKind`.
+- `src/core/fxmem.hpp`: `MH_FX_MONSTER_DEFS_ADDR` (reads `mhMonsterDefs` label).
+- `tools/gen-fxtables.cpp`: field-by-field serializer `putMonsterDef` (asserted
+  11 B), writes `fxdata/tables/monsterdefs.bin` (33 B total, asserted). No value
+  assertions in the tool — it serializes whatever the table holds.
+- `fxdata/fxdata.txt`: `raw_t mhMonsterDefs = "tables/monsterdefs.bin"` appended
+  after the existing tables (all prior cart addresses unchanged).
+- `src/core/monster.hpp`: `initMonster(g, kind = 0)` reads w/h/hp/spd from the
+  def and keeps x=200, y=40, t=90, cd=140, face W, circleDir 1; out-of-range
+  kinds clamp to 0. `chooseAttack(g, dist)` threshold = `monsterDefAtkDist(def)`
+  (negative ⇒ sweep).
+- `src/core/world.hpp`: `newGame(g, weapon, mode, monsterKind = 0)`;
+  `withWeapon`/`resetHunt` preserve `g.monsterKind`.
+- `mock/game.js`: `MONSTER_DEFS` object + `initMonster(g, kind)`; `newGame(weapon,
+  mode, monsterIndex = 0)` returns a game with `monsterIndex`; `chooseAttack(g,
+  dist)` reads the def; `withWeapon`/`resetHunt`/boot K-key preserve the index;
+  exports `MONSTER_DEFS`.
+- `tools/fxdump.cpp`: monster w/h read from `MONSTER_DEFS[MON_LUNGE]` (same 32/24
+  numbers — no duplicated literals; art output unchanged).
+- Tests: `mock/game.test.js` +4 tests (HEAVY band 25..41, sweep at 0/10/24,
+  boundary 24/25); `tst/monster_test.hpp` +5 test blocks (roster values, per-kind
+  spawn, threshold variants incl. 41/30/25 lunge and 24 sweep, kind
+  preservation); `tst/fxdatatest/data_test.hpp` +MonsterDef
+  size/stride/offset/value checks.
+
+Default kind 0 is byte-for-byte today's spawn and `chooseAttack` split.
+
+## 1. `node --test mock/game.test.js` — green
 
 ```
-$ git status
-On branch main
-Your branch is ahead of 'origin/main' by 41 commits.
-nothing to commit, working tree clean
-$ git log --oneline -8
-9851902 quarter-wave SIN256 + exhaustive host check (monhun-ardu-42n.7)
-d9a0a5c record hot-LUT keep decision + refreshed status (monhun-ardu-42n.5)
-dbdabe2 image/fxdata manifest + make gen-check, drop orphans (monhun-ardu-42n.4)
-4e332f0 render overlays/effects from FX sheets; exact-size telegraphs (monhun-ardu-42n.3)
-9ed4285 author overlay/effect block sheets + dims drift guard (monhun-ardu-42n.2)
-f0595a5 move weapon/monster tables to FX cart (monhun-ardu-42n.1)
-7762ac7 add clang-format pre-commit hook with make hooks/format
-ef40bae style: apply clang-format baseline across repo
+✔ monster variants: roster + spawn stats per def, default is legacy LUNGE (…)
+✔ monster variants: SWEEP never lunges, HEAVY lunges past 24 (…)
+✔ monster variants: weapon swap and reset keep the chosen beast (…)
+✔ monster variants: train mode with HEAVY keeps the pole path intact (…)
+ℹ tests 24
+ℹ suites 0
+ℹ pass 24
+ℹ fail 0
+ℹ cancelled 0
+ℹ skipped 0
+ℹ todo 0
+ℹ duration_ms 88.338208
 ```
 
-## 1. `make gen` twice — deterministic
-
-md5 of the regenerated artifacts before run 1, after run 1, after run 2:
+## 2. Parity fixtures byte-identical
 
 ```
-fxdata/fxdata.bin   fe8fb7c181a055965ecd6b020d73c865  (all three)
-src/fxdata.h        205df177038ec3418caaee59a986201f  (all three)
-fxdata/fxdata.h     205df177038ec3418caaee59a986201f  (all three)
+$ node tools/gen-parity-fixtures.js && git diff --stat tst/fxdatatest/parity_fixtures.hpp
+wrote tst/fxdatatest/parity_fixtures.hpp
+scenes=20 ticks=1269 snapshots=32 cpFields=20
+parity_diff_lines=0
 ```
 
-`git status --porcelain` was empty after the second run (and after run 1):
-tracked generated artifacts are byte-stable. Run 1 tail:
+Empty diff — fixture file untouched, so nothing was committed/changed there.
+
+## 3. `make gen` deterministic + `make gen-check` PASS
+
+Artifact md5s identical across two consecutive `make gen` runs after the
+correction:
 
 ```
-gen-art: wrote 17 block sheets (11 overlay/effect icons) + 2 font sheets
-gen-art: pixel check OK (19 sheets, disk-exact)
-gen-fxtables: fxdata/tables/weapondefs.bin (540 B), fxdata/tables/monsterattacks.bin (34 B)
-Saving 21090 bytes FX data to fxdata/fxdata-data.bin
-fxdata_manifest: fxdata/manifest.json up to date (19 images, 5 inputs, 5 outputs)
+fxdata/tables/monsterdefs.bin   d2676200bb15844dbacd0820d97c98a8  (×2)
+fxdata/fxdata.bin               645cb6cb33ecb5223eb5b5e9f1e5da76  (×2)
+src/fxdata.h                    bbdce9da67c7c6fc253c37bb6b9eaaca  (×2)
+```
+
+```
+gen-fxtables: fxdata/tables/weapondefs.bin (540 B), fxdata/tables/monsterattacks.bin (34 B), fxdata/tables/monsterdefs.bin (33 B)
+fxdata_manifest: fxdata/manifest.json up to date (19 images, 6 inputs, 5 outputs)
 gen.sh: FX data + src/fxdata.h regenerated
+fxdata_manifest: PASS (30 generated artifacts unchanged)
 ```
 
-## 2. `make gen-check` + `make test-tools`
+Blob bytes (`fxdata/tables/monsterdefs.bin`, packed AVR order
+`kind,w,h,hp,spd,atkDist`):
 
 ```
-fxdata_manifest: PASS (29 generated artifacts unchanged)
-exit=0
+00000000: 0020 0018 00c8 0005 0020 0001 1c00 1600  . ....... ......
+00000010: 9600 0700 ffff 0228 001c 0040 0103 0018  .......(...@....
+00000020: 00
 ```
 
-```
-Ran 15 tests in 0.968s
-OK
-exit=0
-```
+LUNGE 00 (kind) 0020=32 0018=24 00c8=200 0005=5 0020=32;
+SWEEP 01 001c=28 0016=22 0096=150 0007=7 ffff=-1;
+HEAVY 02 0028=40 001c=28 0140=320 0003=3 **0018=24**.
 
-## 3. `make build` — flash / RAM
-
-```
-Sketch uses 26444 bytes (89%) of program storage space. Maximum is 29696 bytes.
-Global variables use 1941 bytes (75%) of dynamic memory, leaving 619 bytes for local variables. Maximum is 2560 bytes.
-```
-
-`avr-size -A dist/monhun-ardu.ino.elf`: `.text 26398 + .data 46 = 26444` flash;
-`.data 46 + .bss 1895 = 1941` RAM. `.text` alone is 26398 B.
-
-| metric | pre-wave (kt7.5) | after 42n.4 | expected | measured | bar | verdict |
-|---|---|---|---|---|---|---|
-| flash used | 27680 B | 26644 B | 26444 B | **26444 B** | ≤ 26600 B | **PASS** (156 B margin) |
-| RAM used | 1941 B | 1941 B | 1941 B | **1941 B** | ≤ 2560 B, ≥ 300 free | **PASS** (619 free) |
-
-## 4. `make test` — host
+## 4. `make test` — host 1337/0
 
 ```
 ========== Total Counts ==========
-Total Passed: 1281
+Total Passed: 1337
 Total Failed: 0
 ```
 
-1281/0 (bar: 0 failed; baseline 497/0 → +784, from the exhaustive SIN65/SIN256
-suite and the FX-table/data suites). No variance across runs.
+Baseline 1281/0 → +56 checks. New monster coverage: roster table values,
+`initMonster` per kind (incl. clamped/legacy default), chooseAttack variants
+(HEAVY lunge at 41/30/25, sweep at 24; SWEEP never lunges; LUNGE legacy 33/32
+split), withWeapon/resetHunt preservation. No failures.
 
-## 5. `make fxtest-headless` — device suites (Ardens present)
+## 5. `make build` — flash/RAM delta
+
+```
+Sketch uses 26512 bytes (89%) of program storage space. Maximum is 29696 bytes.
+Global variables use 1942 bytes (75%) of dynamic memory, leaving 618 bytes for local variables. Maximum is 2560 bytes.
+```
+
+`avr-size -A dist/monhun-ardu.ino.elf`: `.text 26466 + .data 46 = 26512` flash;
+`.data 46 + .bss 1896 = 1942` RAM.
+
+| metric | baseline (42n.6) | now | delta | budget |
+|---|---|---|---|---|
+| flash | 26444 B | **26512 B** | **+68 B** | 29696 (3184 free) |
+| RAM | 1941 B | **1942 B** | **+1 B** | 2560 (618 free) |
+
+The 33 B MonsterDef blob itself lives on the FX cart, not MCU flash: the +68 B
+is the field-read/init/choose code. Cart `FX_DATA_BYTES` 21090 → 21123 (+33 B).
+The atkDist value change (40 → 24) is data on the cart and costs no extra flash.
+
+## 6. `make fxtest-headless` — device suites (Ardens present)
 
 ```
 === test_assets ===
@@ -101,7 +156,7 @@ test_boot PASSED=4 FAILED=0
 P
 test_boot: PASS
 === test_data ===
-data_test PASSED=194 FAILED=0
+data_test PASSED=221 FAILED=0
 P
 test_data: PASS
 === test_parity ===
@@ -109,174 +164,63 @@ parity_test PASSED=660 FAILED=0
 P
 test_parity: PASS
 === test_perf ===
-B pUs=6386 pHz=156 lHz=52 lTk=988 rMx=4676 rAv=4476 ram=495
+B pUs=6383 pHz=156 lHz=52 lTk=988 rMx=4676 rAv=4476 ram=494
 perf_test PASSED=5 FAILED=0
 P
 test_perf: PASS
 ```
 
-Every suite ended in a bare `P`; no `F`; assets 254/0 (baseline 30/0 — new
-overlay/effect sheets), data 194/0 is the new FX-table suite. Ardens was
-present; nothing faked or skipped.
+`test_data` 194/0 → **221/0** (+27): `sizeof(MonsterDef)==11`, stride 11/22,
+field offsets 0/1/3/5/7/9, and all 18 per-variant values read back through the
+shipping FX accessors (HEAVY atkDist now asserts 24). `parity_test` unchanged
+**660/0** (default kind). Every suite ends in a bare `P`; no `F`; Ardens was
+present, nothing faked.
 
-### test_perf determinism — three fresh runs, byte-identical
-
-```
-run 1 (fxtest-headless): B pUs=6386 pHz=156 lHz=52 lTk=988 rMx=4676 rAv=4476 ram=495
-run 2 (direct)         : B pUs=6386 pHz=156 lHz=52 lTk=988 rMx=4676 rAv=4476 ram=495
-run 3 (direct)         : B pUs=6386 pHz=156 lHz=52 lTk=988 rMx=4676 rAv=4476 ram=495
-```
-
-Zero run-to-run variance on every field, matching `42n.7`'s section-4
-measurement exactly.
-
-| gate | budget | pre-wave (kt7.5) | measured | verdict |
-|---|---|---|---|---|
-| render max | ≤ 7407 µs | 3984 µs | **4676 µs** | **PASS** (2731 µs margin) |
-| plane rate | ≥ 135 Hz | 156 Hz | **156 Hz** | **PASS** |
-| logic tick | ≤ 19230 µs | 976 µs | **988 µs** | **PASS** |
-| logic rate | ≥ 45 Hz | 52 Hz | **52 Hz** | **PASS** |
-| free RAM | ≥ 300 B | 489 B | **495 B** | **PASS** |
-
-## 6. `avr-nm` — moved tables gone, hot LUTs as decided
+## 7. `avr-nm` — MonsterDef placement on device
 
 ```
-$ avr-nm --print-size --size-sort --radix=d dist/monhun-ardu.ino.elf | grep -iE 'WEAPON_DEFS|MONSTER_ATTACKS'
-(no output; exit 1 — no symbol in any section)
-$ ... | grep -iE 'sin'
-00000172 00000065 t _ZN2mhL5SIN65E       # mh::SIN65, 65 B PROGMEM
-00004096 00000054 t _ZN2mhL6sin256Eh      # mh::sin256(unsigned char), 54 B code
-$ ... | grep -E 'DIR8|MH_MASK|RING6'
-00000278 00000032 t _ZN2fpL4DIR8E         # 32 B
-00000237 00000008 t _ZN2mhL11MH_MASK_BOTE # 8 B
-00000245 00000008 t _ZN2mhL11MH_MASK_TOPE # 8 B
-00000418 00000006 t _ZN2mhL5RING6E        # 6 B
+$ avr-nm --print-size --size-sort --radix=d dist/monhun-ardu.ino.elf | grep -iE "MONSTER_DEFS|MonsterDef"
+(no output; exit 1 — no host array/blob symbol in any section)
+$ avr-nm --print-size --size-sort --radix=d dist/monhun-ardu.ino.elf | grep -E "mhFxRead|seekData|readEnd"
+00002828 00000012 t _ZN2FX7readEndEv
+00005460 00000012 t _ZN2mh10mhFxReadU8EPKh
+00002876 00000024 t _ZN2FX8seekDataEu6uint24
+00005432 00000028 t _ZN2mh11mhFxReadU16EPKj
 ```
 
-Evidence: `mh::WEAPON_DEFS` (was 540 B) and `mh::MONSTER_ATTACKS` (was 34 B)
-are absent from the ELF entirely; the 256-byte `mh::SIN256` array is gone and
-only the 65-byte `mh::SIN65` table plus the `sin256` folding helper (54 B code)
-remain. Residual in-flash hot LUTs are exactly the `42n.5` decision set —
-`SIN65 65 + DIR8 32 + MH_MASK_TOP/BOT 16 + RING6 6 = 119 B` — no hot-LUT
-policy violation. The moved tables + `mhWeaponDefs`/`mhMonsterAttacks` raw
-blobs live on the cart (`fxdata/tables/weapondefs.bin` 540 B,
-`monsterattacks.bin` 34 B) and are exercised by `test_data` (194/0).
-
-## 7. Ardens headless profiler dump (shipping ELF, 3000 ms)
+`src/fxdata.h` (generated) places the blob at `mhMonsterDefs = 0x005262`
+(0x005240 + 34 B of monsterattacks), and the cart image carries it verbatim:
 
 ```
-$ARDENS headless=3000 display=ssd1306 fxport=d1 profiledump=build/profiler-42n6.txt \
-  file=dist/monhun-ardu.ino.elf file=fxdata/fxdata.bin
+$ dd if=fxdata/fxdata.bin bs=1 skip=$((0x5262)) count=33 | cmp - fxdata/tables/monsterdefs.bin
+cart blob at 0x5262 == monsterdefs.bin (33 B)
 ```
 
-AFTER (this gate):
+The old host `MONSTER_DEFS` array (33 B) is absent from flash; only the 58 B of
+`mhFxReadU8/U16` accessor code plus `FX::seekData`/`readEnd` touch the cart.
 
-```
-cycles 25856018  cycles_with_sleep 48000217  cpu_active_pct 53.9
-hotspots  count     pct    begin  end    name
-          7161772  14.92  0x0cd8 0x0d0c abg_detail::ArduboyG_Common<...>::paint(...)
-          4752397   9.90  0x2efa 0x65ba main
-          1755811   3.66  0x18c2 0x1bc4 SpritesU::drawPlusMaskFX(int, int, uint24, unsigned int)
-          1557885   3.25  0x0d0c 0x0e9a mh::blk(long, long, long, long, unsigned char)
-           547272   1.14  0x0b0c 0x0b18 FX::readEnd()
-           299765   0.62  0x0b54 0x0b62 FX::writeByte(unsigned char)
-           206656   0.43  0x2dee 0x2e82 __vector_23
-           184139   0.38  0x0e9a 0x1000 mh::hudBar(...)
-           184125   0.38  0x1d2e 0x2804 mh::drawPlayer(mh::Game const&, int, int)
-           160276   0.33  0x0c98 0x0cc8 micros
-```
+## Interpretation notes
 
-BEFORE (pre-wave baseline, kt7.5 AFTER section, shipping ELF):
+- Split rule (both core and mock): `atkDist >= 0 && dist > atkDist ? lunge :
+  sweep` — kind 0 keeps the literal legacy `dist > 32`; SWEEP (`-1`) never
+  lunges; HEAVY (`24`) lunges across 25..41, i.e. "mostly lunge" within the
+  `dist < 42` engage gate. Boundary checks: 24 → sweep, 25 → lunge.
+- `tools/gen-fxtables.cpp` has no per-value expectations to update; the blob is
+  serialized from the single `MONSTER_DEFS` table, so the 24 is asserted only by
+  the host/device suites and the md5-verified blob.
 
-```
-cycles 25360131  cycles_with_sleep 48000002  cpu_active_pct 52.8
-          7161772  14.92  paint
-          4713629   9.82  main
-          1718517   3.58  mh::blk
-          1279997   2.67  SpritesU::drawPlusMaskFX
-           331561   0.69  FX::readEnd()
-```
+## Blockers
 
-Delta (pre-wave → now):
+None. Ardens was present and all device suites ran for real (no BLOCKED path).
 
-| symbol | pre-wave | now | change |
-|---|---|---|---|
-| total active cycles | 25.36 M | 25.86 M | +2.0% |
-| cpu_active | 52.8% | 53.9% | +1.1 pp |
-| `paint` (plane-blit floor) | 7161772 | 7161772 | 0 |
-| `main` | 4713629 | 4752397 | +0.8% |
-| `SpritesU::drawPlusMaskFX` | 1279997 | 1755811 | **+37.2%** |
-| `mh::blk` | 1718517 | 1557885 | **-9.3%** |
-| `FX::readEnd()` | 331561 | 547272 | **+65.1%** |
-| `FX::writeByte` | — | 299765 | new (0.62%) |
+## Files changed (tree left dirty; no commit/push per instructions)
 
-Interpretation: the ~2% total-cycle increase is the price of `42n.3`'s art
-translation — overlay/effect and telegraph pixels now come from FX sheets via
-`SpritesU::drawPlusMaskFX` (+0.48 M cycles) with the corresponding cart-read
-overhead (`FX::readEnd` +0.22 M, `FX::writeByte` +0.30 M). `mh::blk` fell 9.3%
-(sprite-like overlays no longer drawn as procedural rects); `paint` (the
-ArduboyG plane blit, outside the render scene) is byte-identical and remains
-the fixed floor. All of it stays inside the inviolable budgets (render max
-4676 ≤ 7407 µs). Note vs the epic's "previous or better numbers" phrasing:
-render max/avg are ~17%/16% above the kt7.5 pre-wave line (+692/+634 µs) but
-equal-or-better than every measurement taken during the wave (42n.7 section-4
-line 6386/4676/4476/495 matches exactly). Recorded as a deviation, cause = the
-FX-sheet reads themselves; no core/sim change.
-
-## 8. `bd list` — wave closure
-
-```
-○ monhun-ardu-42n   [epic] (open, parent)
-└── ○ monhun-ardu-42n.6  Gate: ... (this gate)
-○ monhun-ardu-kt7   [epic] (open, parent)
-├── ○ monhun-ardu-vx2  Device: real 4-shade sprite art pass (human)
-├── ○ monhun-ardu-1to  Gate: device feel playtest + tuning pass (human)
-└── ○ monhun-ardu-qyb  Device: EEPROM save (deferred)
-○ monhun-ardu-7y3   [bug] HUD bars/divider clipped by blk() clamp
-Total: 7 issues (7 open, 0 in progress)
-```
-
-All six wave children (`42n.1`–`42n.5`, `42n.7`) are closed; only the two
-epics, this gate, and the known follow-ups (`7y3` HUD clamp, `vx2`, `1to`,
-`qyb`) remain open.
-
-## Acceptance-criteria mapping
-
-| criterion | evidence | result |
-|---|---|---|
-| all suites PASS with exact tails | §4 host 1281/0, §5 device boot 4/0, assets 254/0, audio 14/0, parity 660/0, data 194/0, perf 5/0, all `P` | **PASS** |
-| perf budgets PASS | §5 table: rMx 4676≤7407, pHz 156≥135, lHz 52≥45, ram 495≥300 | **PASS** |
-| perf deterministic | §5 three runs byte-identical | **PASS** |
-| shipping flash ≤ 26600 B (or documented shortfall) | §3: 26444 B, 156 B margin; avr-size/avr-nm evidence | **PASS** |
-| no moved table remains a PROGMEM array | §6: `WEAPON_DEFS`/`MONSTER_ATTACKS`/`SIN256` absent; LUT set = 119 B decision set | **PASS** |
-| profiler before/after recorded | §7 | **PASS** |
-| gen determinism + manifest | §1 (§1 md5 ×3 identical, clean tree), §2 gen-check 29 artifacts | **PASS** |
-| output.md updated | this file | **PASS** |
-
-### Deviations (documented, none gate-failing)
-
-1. **Render cost rose vs pre-wave** (rMx 3984 → 4676 µs, rAv 3842 → 4476 µs,
-   pUs 6379 → 6386, lTk 976 → 988; pHz/lHz unchanged). Cause: `42n.3` FX-sheet
-   reads (profiler §7). Within budget with 2731 µs margin; epic phrase
-   "perf gate PASS at previous or better numbers" is only satisfied against
-   the in-wave measurements, not the kt7.5 line. No follow-up needed unless a
-   future bead wants the margin back.
-2. **Assets suite 30 → 254 / new data suite 194** — expected consequence of
-   `42n.2`/`42n.4`/`42n.1`; counts recorded as the new baseline.
-3. **README refresh**: status snapshot rows updated to the verified truth
-   (device counts, FX data 21090 B from `src/fxdata.h` `FX_DATA_BYTES`,
-   perf numbers, `7y3` follow-up) — see "Files changed".
-
-## Files changed (tree left dirty; no commit/push per gate instructions)
-
-- `README.md` — status snapshot rows (device suites, perf numbers, FX data
-  size, follow-ups), cadence line, `make test` assert count, `test_data`
-  tier bullet.
-- `output.md` — this gate report.
-
-## Verdict
-
-**PASS** on every gate bar. Flash 26444/29696 B (156 B under the ≤26600 B epic
-line), RAM 1941/2560 B (619 free), host 1281/0, device boot 4/0 · assets 254/0 ·
-audio 14/0 · parity 660/0 · data 194/0 · perf 5/0, gen determinism and manifest
-green, moved tables confirmed off MCU flash. Gate closed.
+- `src/core/game.hpp`, `src/core/fxmem.hpp`, `src/core/monster.hpp`,
+  `src/core/world.hpp`
+- `mock/game.js`, `mock/game.test.js`
+- `tools/gen-fxtables.cpp`, `tools/fxdump.cpp`, `fxdata/fxdata.txt`
+- `tst/monster_test.hpp`, `tst/fxdatatest/data_test.hpp`
+- generated (committed artifacts regenerated by `make gen`): `src/fxdata.h`,
+  `fxdata/fxdata.h`, `fxdata/fxdata.bin`, `fxdata/fxdata-data.bin`,
+  `fxdata/manifest.json`, new `fxdata/tables/monsterdefs.bin`
+- `output.md` (this report)

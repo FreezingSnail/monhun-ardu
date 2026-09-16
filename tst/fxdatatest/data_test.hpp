@@ -30,6 +30,7 @@ inline void test_data(FxTest &test) {
     test.expectEq(sizeof(ShellDef), 15, F("sizeof ShellDef"));
     test.expectEq(sizeof(WeaponDef), 180, F("sizeof WeaponDef"));
     test.expectEq(sizeof(MonsterAttack), 17, F("sizeof MonsterAttack"));
+    test.expectEq(sizeof(MonsterDef), 11, F("sizeof MonsterDef"));
 
     const WeaponDef *w0 = &WEAPON_DEFS[0];
     const WeaponDef *w1 = &WEAPON_DEFS[1];
@@ -37,6 +38,8 @@ inline void test_data(FxTest &test) {
     test.expectEq(off(w0, w1), 180, F("weapon stride 1"));
     test.expectEq(off(w0, w2), 360, F("weapon stride 2"));
     test.expectEq(off(&MONSTER_ATTACKS[0], &MONSTER_ATTACKS[1]), 17, F("monster stride"));
+    test.expectEq(off(&MONSTER_DEFS[0], &MONSTER_DEFS[1]), 11, F("monsterdef stride 1"));
+    test.expectEq(off(&MONSTER_DEFS[0], &MONSTER_DEFS[2]), 22, F("monsterdef stride 2"));
     test.expectEq(off(&w0->attacks[0], &w0->attacks[1]), 23, F("attack stride"));
     test.expectEq(off(&w0->branches[0], &w0->branches[1]), 27, F("branch stride"));
     test.expectEq(off(&w0->shells[0], &w0->shells[1]), 15, F("shell stride"));
@@ -83,6 +86,14 @@ inline void test_data(FxTest &test) {
     test.expectEq(off(ma, &ma->reach), 11, F("monster.reach off"));
     test.expectEq(off(ma, &ma->hw), 13, F("monster.hw off"));
     test.expectEq(off(ma, &ma->hh), 15, F("monster.hh off"));
+
+    const MonsterDef *md = &MONSTER_DEFS[0];
+    test.expectEq(off(md, &md->kind), 0, F("monsterdef.kind off"));
+    test.expectEq(off(md, &md->w), 1, F("monsterdef.w off"));
+    test.expectEq(off(md, &md->h), 3, F("monsterdef.h off"));
+    test.expectEq(off(md, &md->hp), 5, F("monsterdef.hp off"));
+    test.expectEq(off(md, &md->spd), 7, F("monsterdef.spd off"));
+    test.expectEq(off(md, &md->atkDist), 9, F("monsterdef.atkDist off"));
 
     // ------------------------------------------ sword values (mock/game.js)
     test.expectEq(weaponId(w0), W_SWORD, F("sword id"));
@@ -277,6 +288,31 @@ inline void test_data(FxTest &test) {
     test.expectEq(monsterAttackReach(m1), 17, F("sweep reach"));
     test.expectEq(monsterAttackHw(m1), 32, F("sweep hw"));
     test.expectEq(monsterAttackHh(m1), 24, F("sweep hh"));
+
+    // ---------------------------- monster roster (mock/game.js, 6zb.1)
+    const MonsterDef *md0 = &MONSTER_DEFS[0];
+    test.expectEq(monsterDefKind(md0), MON_LUNGE, F("lunge def kind"));
+    test.expectEq(monsterDefW(md0), 32, F("lunge def w"));
+    test.expectEq(monsterDefH(md0), 24, F("lunge def h"));
+    test.expectEq(monsterDefHp(md0), 200, F("lunge def hp"));
+    test.expectEq(monsterDefSpd(md0), 5, F("lunge def spd"));
+    test.expectEq(monsterDefAtkDist(md0), 32, F("lunge def atkDist"));
+
+    const MonsterDef *md1 = &MONSTER_DEFS[1];
+    test.expectEq(monsterDefKind(md1), MON_SWEEP, F("sweep def kind"));
+    test.expectEq(monsterDefW(md1), 28, F("sweep def w"));
+    test.expectEq(monsterDefH(md1), 22, F("sweep def h"));
+    test.expectEq(monsterDefHp(md1), 150, F("sweep def hp"));
+    test.expectEq(monsterDefSpd(md1), 7, F("sweep def spd"));
+    test.expectEq(monsterDefAtkDist(md1), -1, F("sweep def atkDist"));
+
+    const MonsterDef *md2 = &MONSTER_DEFS[2];
+    test.expectEq(monsterDefKind(md2), MON_HEAVY, F("heavy def kind"));
+    test.expectEq(monsterDefW(md2), 40, F("heavy def w"));
+    test.expectEq(monsterDefH(md2), 28, F("heavy def h"));
+    test.expectEq(monsterDefHp(md2), 320, F("heavy def hp"));
+    test.expectEq(monsterDefSpd(md2), 3, F("heavy def spd"));
+    test.expectEq(monsterDefAtkDist(md2), 24, F("heavy def atkDist"));
 }
 
 }   // namespace data

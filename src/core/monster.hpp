@@ -97,16 +97,23 @@ static void monsterOnStun(Game &g, int ticks) {
 }
 
 // Spawn the hunt beast and wire it into Game::target. Call after initGame().
-static void initMonster(Game &g) {
+// kind selects MONSTER_DEFS[3] (monhun-ardu-6zb roster); size/hp/spd come from
+// the def and every other field keeps its published value. Kind 0 is the
+// legacy LUNGE beast: byte-for-byte the pre-roster spawn.
+static void initMonster(Game &g, int8_t kind = 0) {
+    if (kind < 0 || kind > 2)
+        kind = 0;
+    g.monsterKind = kind;
+    const MonsterDef *def = &MONSTER_DEFS[kind];
     Monster &m = g.monster;
     m.x = 200;
     m.y = 40;
-    m.w = 32;
-    m.h = 24;
+    m.w = monsterDefW(def);
+    m.h = monsterDefH(def);
     m.subX = 0;
     m.subY = 0;
-    m.hp = 200;
-    m.hpMax = 200;
+    m.hp = monsterDefHp(def);
+    m.hpMax = monsterDefHp(def);
     m.state = MS_IDLE;
     m.t = 90;
     m.cd = 140;
@@ -119,7 +126,7 @@ static void initMonster(Game &g) {
     m.hitFlash = 0;
     m.stun = 0;
     m.circleDir = 1;
-    m.spd = 5;
+    m.spd = monsterDefSpd(def);
     g.over = OVER_NONE;
     g.target.onHit = monsterOnHit;
     g.target.onShove = monsterOnShove;
@@ -127,8 +134,12 @@ static void initMonster(Game &g) {
     syncMonsterTarget(g);
 }
 
-static void chooseAttack(Monster &m, int32_t dist) {
-    m.atk = dist > 32 ? &MONSTER_ATTACKS[0] : &MONSTER_ATTACKS[1];   // lunge / sweep
+// Lunge/sweep split comes from the roster def: kind 0 (atkDist 32) is the
+// legacy "lunge beyond 32 px" rule; a negative atkDist (SWEEP) never lunges.
+static void chooseAttack(Game &g, int32_t dist) {
+    Monster &m = g.monster;
+    const int16_t atkDist = monsterDefAtkDist(&MONSTER_DEFS[g.monsterKind]);
+    m.atk = (atkDist >= 0 && dist > atkDist) ? &MONSTER_ATTACKS[0] : &MONSTER_ATTACKS[1];   // lunge / sweep
     m.state = MS_WINDUP;
     m.t = monsterAttackWindup(m.atk);
     m.windupMax = m.t;
@@ -260,7 +271,7 @@ static void updateMonster(Game &g) {
             fp::addMove(m, static_cast<int16_t>(fp::dir8X(si) * m.circleDir), static_cast<int16_t>(fp::dir8Y(si) * m.circleDir), (m.spd * 8) / 10);
         }
         if (m.cd <= 0 && dist < 42)
-            chooseAttack(m, dist);
+            chooseAttack(g, dist);
         break;
     case MS_WINDUP:
         m.t--;

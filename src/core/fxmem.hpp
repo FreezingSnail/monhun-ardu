@@ -25,6 +25,7 @@ namespace mh {
 // Blob base offsets (fxdata-build.py labels); blob stays < 64 KB.
 constexpr uint16_t MH_FX_WEAPON_DEFS_ADDR = static_cast<uint16_t>(mhWeaponDefs);
 constexpr uint16_t MH_FX_MONSTER_ATTACKS_ADDR = static_cast<uint16_t>(mhMonsterAttacks);
+constexpr uint16_t MH_FX_MONSTER_DEFS_ADDR = static_cast<uint16_t>(mhMonsterDefs);
 
 // Typed field readers. The address is a fake pointer into the FX image; the
 // value is fetched as little-endian bytes, matching the packed AVR struct

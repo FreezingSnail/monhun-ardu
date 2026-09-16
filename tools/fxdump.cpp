@@ -85,9 +85,9 @@ int main() {
     }
     printf("  },\n");
     printf("  \"monster\": {");
-    putNum("w", 32);
+    putNum("w", monsterDefW(&MONSTER_DEFS[MON_LUNGE]));
     printf(", ");
-    putNum("h", 24);
+    putNum("h", monsterDefH(&MONSTER_DEFS[MON_LUNGE]));
     printf("},\n");
     // Same numbers as src/render.hpp draws (whirl ring orbit 20/14) and the
     // sim's circleRectOverlap radius; documented here so the sheet layout in

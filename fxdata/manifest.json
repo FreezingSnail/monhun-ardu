@@ -171,14 +171,20 @@
     },
     {
       "path": "fxdata/fxdata.txt",
-      "sha256": "97045824fc90b73843a18ff4282f1d5340022d9f60a33f853b5d95f8aa3dd6ce",
-      "size": 364
+      "sha256": "d884c0733f4c3a6689826d29e8ce5d1db0c9b6483220eeffea054b9f9c2c4aa9",
+      "size": 427
     },
     {
       "path": "fxdata/tables/monsterattacks.bin",
       "sha256": "9e1c191636d5b5f954a10c046c389e7b3a9a592198e5feecbc3b05e1e13f1061",
       "size": 34,
       "symbol": "mhMonsterAttacks"
+    },
+    {
+      "path": "fxdata/tables/monsterdefs.bin",
+      "sha256": "d2f70ccf4a109ebc5b94b2addc350a8defda012c217dee6bfcf4f919a8dd6182",
+      "size": 33,
+      "symbol": "mhMonsterDefs"
     },
     {
       "path": "fxdata/tables/weapondefs.bin",
@@ -190,23 +196,23 @@
   "outputs": [
     {
       "path": "fxdata/fxdata-data.bin",
-      "sha256": "acfbe091205f56c5111f0e92fd69df79c495499a54111ed5b502fad027b2f500",
-      "size": 21090
+      "sha256": "b455a8fb3f31fddfef5c4157636802582b87580cd6792b47a72f24efe6a05f85",
+      "size": 21123
     },
     {
       "path": "fxdata/fxdata.bin",
-      "sha256": "255cff1c2462742db38455ccfa179fb8f95165726fe812f898ec6c9817381231",
+      "sha256": "8ca6639b662b3a3217d9125b50a19df006a11f3517e95fdd6604d449da80f4cc",
       "size": 21248
     },
     {
       "path": "fxdata/fxdata.h",
-      "sha256": "419e026d2a84f4b210181b92537bb95747523fec5521643eb5f9e18ce07b16eb",
-      "size": 1134
+      "sha256": "d0189acea3721e1d5aea3a15ad1d4fcf97ced1e2c683cd82a821fbf04ebad7a6",
+      "size": 1179
     },
     {
       "path": "src/fxdata.h",
-      "sha256": "419e026d2a84f4b210181b92537bb95747523fec5521643eb5f9e18ce07b16eb",
-      "size": 1134
+      "sha256": "d0189acea3721e1d5aea3a15ad1d4fcf97ced1e2c683cd82a821fbf04ebad7a6",
+      "size": 1179
     },
     {
       "path": "src/generated/art_dims.hpp",

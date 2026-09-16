@@ -5,6 +5,7 @@
 // crit zone, stun->recover, knockback ints, and the player-hit routing.
 #include "test.hpp"
 #include "../src/core/monster.hpp"
+#include "../src/core/world.hpp"   // newGame / withWeapon / resetHunt
 
 using namespace mh;
 
@@ -73,14 +74,118 @@ void MonsterSuite(TestRunner &runner) {
         Test t("chooseAttack: lunge beyond 32px, sweep inside");
         Game g;
         newHunt(g);
-        chooseAttack(g.monster, 33);
+        chooseAttack(g, 33);
         t.assert(g.monster.atk->kind, MK_LUNGE, "dist 33 -> lunge");
         t.assert(g.monster.state, MS_WINDUP, "windup state");
         t.assert(g.monster.t, 40, "lunge tell 40");
         t.assert(g.monster.windupMax, 40, "windupMax recorded");
-        chooseAttack(g.monster, 32);
+        chooseAttack(g, 32);
         t.assert(g.monster.atk->kind, MK_SWEEP, "dist 32 -> sweep");
         t.assert(g.monster.t, 48, "sweep tell 48");
+        suite.addTest(t);
+    }
+
+    {
+        Test t("MONSTER_DEFS roster matches the demo contract");
+        t.assert(MONSTER_DEFS[0].kind, MON_LUNGE, "lunge kind");
+        t.assert(MONSTER_DEFS[0].w, 32, "lunge w");
+        t.assert(MONSTER_DEFS[0].h, 24, "lunge h");
+        t.assert(MONSTER_DEFS[0].hp, 200, "lunge hp");
+        t.assert(MONSTER_DEFS[0].spd, 5, "lunge spd");
+        t.assert(MONSTER_DEFS[0].atkDist, 32, "lunge atkDist");
+        t.assert(MONSTER_DEFS[1].kind, MON_SWEEP, "sweep kind");
+        t.assert(MONSTER_DEFS[1].w, 28, "sweep w");
+        t.assert(MONSTER_DEFS[1].h, 22, "sweep h");
+        t.assert(MONSTER_DEFS[1].hp, 150, "sweep hp");
+        t.assert(MONSTER_DEFS[1].spd, 7, "sweep spd");
+        t.assert(MONSTER_DEFS[1].atkDist, -1, "sweep atkDist never lunges");
+        t.assert(MONSTER_DEFS[2].kind, MON_HEAVY, "heavy kind");
+        t.assert(MONSTER_DEFS[2].w, 40, "heavy w");
+        t.assert(MONSTER_DEFS[2].h, 28, "heavy h");
+        t.assert(MONSTER_DEFS[2].hp, 320, "heavy hp");
+        t.assert(MONSTER_DEFS[2].spd, 3, "heavy spd");
+        t.assert(MONSTER_DEFS[2].atkDist, 24, "heavy atkDist");
+        suite.addTest(t);
+    }
+
+    {
+        Test t("initMonster(kind): size/hp/spd from def, legacy fields intact");
+        Game g;
+        newGame(g, W_SWORD, MODE_HUNT, MON_SWEEP);
+        Monster &m = g.monster;
+        t.assert(g.monsterKind, MON_SWEEP, "kind recorded");
+        t.assert(m.w, 28, "sweep width");
+        t.assert(m.h, 22, "sweep height");
+        t.assert(m.hp, 150, "sweep hp");
+        t.assert(m.hpMax, 150, "sweep hpMax");
+        t.assert(m.spd, 7, "sweep pursue speed");
+        t.assert(m.x, 200, "spawn x");
+        t.assert(m.y, 40, "spawn y");
+        t.assert(m.t, 90, "idle timer 90");
+        t.assert(m.cd, 140, "cooldown 140");
+        t.assert(m.fx, -fp::FP, "faces W");
+        t.assert(m.fy, 0, "facing flat");
+        t.assert(m.circleDir, 1, "circle dir right");
+        t.assert(m.state, MS_IDLE, "starts idle");
+        t.assert(g.target.rect.w, 28, "hurt box synced");
+
+        Game g2;
+        newGame(g2, W_SWORD, MODE_HUNT, MON_HEAVY);
+        t.assert(g2.monsterKind, MON_HEAVY, "heavy kind recorded");
+        t.assert(g2.monster.w, 40, "heavy width");
+        t.assert(g2.monster.h, 28, "heavy height");
+        t.assert(g2.monster.hp, 320, "heavy hp");
+        t.assert(g2.monster.spd, 3, "heavy speed");
+
+        Game g3;
+        newGame(g3, W_SWORD, MODE_HUNT);   // default kind 0 = legacy beast
+        t.assert(g3.monsterKind, MON_LUNGE, "default kind 0");
+        t.assert(g3.monster.w, 32, "legacy width");
+        t.assert(g3.monster.hp, 200, "legacy hp");
+        t.assert(g3.monster.spd, 5, "legacy speed");
+        suite.addTest(t);
+    }
+
+    {
+        Test t("chooseAttack variants: SWEEP never lunges, HEAVY split at 24");
+        Game g;
+        newGame(g, W_SWORD, MODE_HUNT, MON_SWEEP);
+        Monster &m = g.monster;
+        for (int32_t d = 10; d <= 41; d += 11) {
+            chooseAttack(g, d);
+            t.assert(m.atk->kind, MK_SWEEP, "sweep def never lunges");
+        }
+        Game g2;
+        newGame(g2, W_SWORD, MODE_HUNT, MON_HEAVY);
+        Monster &h = g2.monster;
+        chooseAttack(g2, 41);
+        t.assert(h.atk->kind, MK_LUNGE, "heavy lunges at 41 (gate < 42)");
+        chooseAttack(g2, 30);
+        t.assert(h.atk->kind, MK_LUNGE, "heavy lunges at 30");
+        chooseAttack(g2, 25);
+        t.assert(h.atk->kind, MK_LUNGE, "heavy lunges at 25");
+        chooseAttack(g2, 24);
+        t.assert(h.atk->kind, MK_SWEEP, "heavy sweeps at 24");
+        Game g3;
+        newGame(g3, W_SWORD, MODE_HUNT, MON_LUNGE);
+        chooseAttack(g3, 33);
+        t.assert(g3.monster.atk->kind, MK_LUNGE, "legacy lunges at 33");
+        chooseAttack(g3, 32);
+        t.assert(g3.monster.atk->kind, MK_SWEEP, "legacy sweeps at 32");
+        suite.addTest(t);
+    }
+
+    {
+        Test t("withWeapon/resetHunt preserve the chosen beast kind");
+        Game g;
+        newGame(g, W_SWORD, MODE_HUNT, MON_HEAVY);
+        withWeapon(g, W_FLAIL);
+        t.assert(g.monsterKind, MON_HEAVY, "swap keeps kind");
+        t.assert(g.monster.w, 40, "swap keeps heavy body");
+        t.assert(g.monster.hp, 320, "swap keeps heavy hp");
+        resetHunt(g);
+        t.assert(g.monsterKind, MON_HEAVY, "reset keeps kind");
+        t.assert(g.monster.hp, 320, "reset keeps heavy hp");
         suite.addTest(t);
     }
 

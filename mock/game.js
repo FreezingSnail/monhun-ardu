@@ -179,8 +179,18 @@ const MONSTER_ATTACKS = {
   sweep: { kind: 'sweep', windup: 48, active: 12, recover: 60, dmg: 9, reach: 17, hw: 32, hh: 24 },
 };
 
-function newGame(weaponIndex, mode) {
-  return {
+// Demo beast roster (bead monhun-ardu-6zb.1). Index 0 (lunge) is the legacy
+// parity default: its def reproduces the values newGame() used to hardcode.
+// atkDist is the lunge/sweep split distance; negative = never lunge (always
+// sweep).
+const MONSTER_DEFS = [
+  { kind: 'lunge', w: 32, h: 24, hp: 200, spd: 5, atkDist: 32 },
+  { kind: 'sweep', w: 28, h: 22, hp: 150, spd: 7, atkDist: -1 },
+  { kind: 'heavy', w: 40, h: 28, hp: 320, spd: 3, atkDist: 24 },
+];
+
+function newGame(weaponIndex, mode, monsterIndex = 0) {
+  const g = {
     tick: 0,
     freeze: 0,
     shake: 0,
@@ -189,6 +199,7 @@ function newGame(weaponIndex, mode) {
     prevB: false,
     weapon: weaponIndex | 0,
     mode: mode === 'train' ? 'train' : 'hunt',
+    monsterIndex: monsterIndex | 0,
     cam: { x: 0, y: 0 },
     train: { total: 0, last: 0, events: [] },
     pole: { x: 140, y: 40, w: 20, h: 36, hitFlash: 0 },
@@ -223,6 +234,39 @@ function newGame(weaponIndex, mode) {
     projectiles: [],
     effects: [],
   };
+  initMonster(g, g.monsterIndex);
+  return g;
+}
+
+// Spawn stats from MONSTER_DEFS[kind]; every other field keeps its published
+// value (legacy kind 0 spawn, byte-for-byte).
+function initMonster(g, kind = 0) {
+  let k = kind | 0;
+  if (k < 0 || k >= MONSTER_DEFS.length) k = 0;
+  const def = MONSTER_DEFS[k];
+  const m = g.monster;
+  m.x = 200;
+  m.y = 40;
+  m.w = def.w;
+  m.h = def.h;
+  m.subX = 0;
+  m.subY = 0;
+  m.hp = def.hp;
+  m.hpMax = def.hp;
+  m.state = 'idle';
+  m.t = 90;
+  m.cd = 140;
+  m.face = { x: -FP, y: 0 };
+  m.atk = null;
+  m.lvx = 0;
+  m.lvy = 0;
+  m.windupMax = 0;
+  m.hitFlash = 0;
+  m.stun = 0;
+  m.circleDir = 1;
+  m.spd = def.spd;
+  g.monsterIndex = k;
+  return m;
 }
 
 /* ------------------------------------------------------------------ step */
@@ -694,7 +738,7 @@ function updateMonster(g) {
         const s = DIR8[(di + 2) & 7];
         addMove(m, s.x * m.circleDir, s.y * m.circleDir, (m.spd * 8) / 10 | 0);
       }
-      if (m.cd <= 0 && dist < 42) chooseAttack(m, dist);
+      if (m.cd <= 0 && dist < 42) chooseAttack(g, dist);
       break;
     case 'windup':
       m.t--;
@@ -724,8 +768,12 @@ function updateMonster(g) {
   pushApart(g);
 }
 
-function chooseAttack(m, dist) {
-  m.atk = dist > 32 ? MONSTER_ATTACKS.lunge : MONSTER_ATTACKS.sweep;
+// Lunge/sweep split comes from the roster def: kind 0 (atkDist 32) is the
+// legacy "lunge beyond 32px" rule; negative atkDist (sweep) never lunges.
+function chooseAttack(g, dist) {
+  const m = g.monster;
+  const def = MONSTER_DEFS[g.monsterIndex];
+  m.atk = def.atkDist >= 0 && dist > def.atkDist ? MONSTER_ATTACKS.lunge : MONSTER_ATTACKS.sweep;
   m.state = 'windup';
   m.t = m.atk.windup;
   m.windupMax = m.atk.windup;
@@ -1420,13 +1468,13 @@ function wire(ctx, x, y, w, h, color) {
 
 /* ------------------------------------------------------------------ boot */
 
-// weapon swap and reset keep the current area (hunt stays hunt, train stays train)
+// weapon swap and reset keep the current area and the chosen beast
 function withWeapon(game, weaponIndex) {
-  return newGame(weaponIndex, game.mode);
+  return newGame(weaponIndex, game.mode, game.monsterIndex);
 }
 
 function resetHunt(game) {
-  return newGame(game.weapon, game.mode);
+  return newGame(game.weapon, game.mode, game.monsterIndex);
 }
 
 function boot() {
@@ -1454,7 +1502,7 @@ function boot() {
     } else if (e.code === 'KeyR') {
       game = resetHunt(game);
     } else if (e.code === 'KeyK') {
-      game = newGame(weaponIndex, game.mode === 'hunt' ? 'train' : 'hunt');
+      game = newGame(weaponIndex, game.mode === 'hunt' ? 'train' : 'hunt', game.monsterIndex);
     } else if (e.code === 'KeyQ') {
       const p = game.player;
       p.shell = p.shell === 'ball' ? 'scatter' : 'ball';
@@ -1501,7 +1549,7 @@ function boot() {
 if (typeof module !== 'undefined' && module.exports) {
   module.exports = {
     newGame, step, render, withWeapon, resetHunt, isqrt,
-    WEAPON_DEFS, MONSTER_ATTACKS,
+    WEAPON_DEFS, MONSTER_ATTACKS, MONSTER_DEFS,
     W, H, ARENA_H, HOLD_TICKS, SHADES, WORLD_W, WORLD_H, FP,
   };
 }

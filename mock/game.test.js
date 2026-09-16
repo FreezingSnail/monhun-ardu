@@ -20,6 +20,19 @@ function park(g) {
   return m;
 }
 
+// Place the beast at a given center-to-center distance from the player, primed
+// to pick an attack on the next tick (pursue state, cooldown expired).
+function placeAtDistance(g, d) {
+  const p = g.player;
+  const m = g.monster;
+  m.state = 'pursue';
+  m.t = 0;
+  m.cd = 0;
+  m.x = p.x + (p.w >> 1) + d - (m.w >> 1);
+  m.y = p.y + (p.h >> 1) - (m.h >> 1);
+  return m;
+}
+
 test('idle hunt runs without crashing, monster engages, player survives', () => {
   const g = G.newGame(0);
   ticks(g, 240);
@@ -272,4 +285,93 @@ test('all three weapon starts are valid', () => {
     ticks(g, 60);
     assert.equal(g.over, null);
   }
+});
+
+test('monster variants: roster + spawn stats per def, default is legacy LUNGE', () => {
+  assert.equal(G.MONSTER_DEFS.length, 3);
+  assert.deepEqual(G.MONSTER_DEFS.map(d => d.atkDist), [32, -1, 24]);
+  const want = [
+    { w: 32, h: 24, hp: 200, spd: 5 },
+    { w: 28, h: 22, hp: 150, spd: 7 },
+    { w: 40, h: 28, hp: 320, spd: 3 },
+  ];
+  for (let i = 0; i < want.length; i++) {
+    const g = G.newGame(0, 'hunt', i);
+    const m = g.monster;
+    assert.equal(g.monsterIndex, i, 'kind index recorded');
+    assert.equal(m.w, want[i].w, 'w ' + i);
+    assert.equal(m.h, want[i].h, 'h ' + i);
+    assert.equal(m.hp, want[i].hp, 'hp ' + i);
+    assert.equal(m.hpMax, want[i].hp, 'hpMax ' + i);
+    assert.equal(m.spd, want[i].spd, 'spd ' + i);
+    assert.equal(m.x, 200);
+    assert.equal(m.y, 40);
+    assert.equal(m.t, 90);
+    assert.equal(m.cd, 140);
+    assert.equal(m.state, 'idle');
+  }
+  const d = G.newGame(0);
+  assert.equal(d.monsterIndex, 0, 'newGame defaults to LUNGE');
+  assert.equal(d.monster.w, 32);
+  assert.equal(d.monster.hp, 200);
+});
+
+test('monster variants: SWEEP never lunges, HEAVY lunges past 24', () => {
+  const sweep = G.newGame(0, 'hunt', 1);
+  for (const d of [10, 33, 41]) {
+    const m = placeAtDistance(sweep, d);
+    G.step(sweep, inp({}));
+    assert.equal(m.atk.kind, 'sweep', 'sweep variant at dist ' + d);
+  }
+
+  // HEAVY atkDist 24 with the pursue engage gate at dist < 42: lunge band
+  // 25..41, sweep at 24 and below. A lower atkDist widens the lunge band.
+  for (let d = 25; d <= 41; d++) {
+    const g = G.newGame(0, 'hunt', 2);
+    const m = placeAtDistance(g, d);
+    G.step(g, inp({}));
+    assert.equal(m.atk.kind, 'lunge', 'heavy lunges at dist ' + d);
+  }
+  for (const d of [0, 10, 24]) {
+    const g = G.newGame(0, 'hunt', 2);
+    const m = placeAtDistance(g, d);
+    G.step(g, inp({}));
+    assert.equal(m.atk.kind, 'sweep', 'heavy sweeps at dist ' + d);
+  }
+
+  const lunge = G.newGame(0);
+  placeAtDistance(lunge, 33);
+  G.step(lunge, inp({}));
+  assert.equal(lunge.monster.atk.kind, 'lunge', 'legacy lunge at 33');
+  const inside = G.newGame(0);
+  placeAtDistance(inside, 32);
+  G.step(inside, inp({}));
+  assert.equal(inside.monster.atk.kind, 'sweep', 'legacy sweep at 32');
+});
+
+test('monster variants: weapon swap and reset keep the chosen beast', () => {
+  let g = G.newGame(0, 'hunt', 2);
+  g = G.withWeapon(g, 1);
+  assert.equal(g.monsterIndex, 2, 'swap keeps kind');
+  assert.equal(g.monster.w, 40);
+  assert.equal(g.monster.hp, 320);
+  g = G.resetHunt(g);
+  assert.equal(g.monsterIndex, 2, 'reset keeps kind');
+  assert.equal(g.monster.hp, 320);
+});
+
+test('monster variants: train mode with HEAVY keeps the pole path intact', () => {
+  const g = G.newGame(0, 'train', 2);
+  assert.equal(g.monsterIndex, 2);
+  const mx = g.monster.x;
+  const my = g.monster.y;
+  g.pole.x = g.player.x + 20;
+  g.pole.y = g.player.y;
+  G.step(g, inp({ a: true }));
+  ticks(g, 20);
+  assert.ok(g.train.total > 0, 'pole should take damage');
+  ticks(g, 200);
+  assert.equal(g.monster.x, mx, 'beast must not move in train mode');
+  assert.equal(g.monster.y, my);
+  assert.equal(g.player.hp, 100, 'nothing can hurt player in train mode');
 });

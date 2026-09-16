@@ -59,27 +59,30 @@ static const Rect *activeTargetRect(const Game &g) {
     return g.target.alive ? &g.target.rect : nullptr;
 }
 
-// Mock newGame(weapon, mode): a fresh world in the requested area.
-static void newGame(Game &g, int8_t weapon, int8_t mode) {
+// Mock newGame(weapon, mode, monsterIndex): a fresh world in the requested
+// area with the chosen beast variant (0 = legacy LUNGE, the parity default).
+static void newGame(Game &g, int8_t weapon, int8_t mode, int8_t monsterKind = 0) {
     initGame(g, weapon);
     g.camX = 0;
     g.camY = 0;
-    initMonster(g);
+    initMonster(g, monsterKind);
     initWorld(g, mode);
     updateActiveTarget(g);
 }
 
-// Mock withWeapon(): swap the weapon but stay in the current area. Prototype
-// bug fix: the mock's newGame defaults to hunt, so a naive swap dropped train.
+// Mock withWeapon(): swap the weapon but stay in the current area and keep the
+// chosen beast. Prototype bug fix: the mock's newGame defaults to hunt, so a
+// naive swap dropped train.
 static void withWeapon(Game &g, int8_t weapon) {
-    newGame(g, weapon, g.mode);
+    newGame(g, weapon, g.mode, g.monsterKind);
 }
 
 // Mock resetHunt() / the R key: restart the current area with the current
-// weapon, preserving both. Device bead: bind R to resetHunt(g) — it is NOT the
-// same as newGame() (which would reset the area to hunt).
+// weapon, preserving weapon, area and beast. Device bead: bind R to
+// resetHunt(g) — it is NOT the same as newGame() (which would reset the area
+// to hunt).
 static void resetHunt(Game &g) {
-    newGame(g, g.weapon, g.mode);
+    newGame(g, g.weapon, g.mode, g.monsterKind);
 }
 
 // One full tick in mock step() order: tick++, input edges, camera, then the

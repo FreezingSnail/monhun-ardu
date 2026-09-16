@@ -414,6 +414,60 @@ inline int16_t monsterAttackHh(const MonsterAttack *a) {
     return mhFxReadI16(&a->hh);
 }
 
+// Monster roster (bead monhun-ardu-6zb.1): the three demo beast variants.
+// Index 0 (LUNGE) is the legacy parity default: its def reproduces the values
+// initMonster() used to hardcode. atkDist is the lunge/sweep split distance;
+// a negative value means "never lunge" (SWEEP always sweeps).
+enum MonsterKind : int8_t {
+    MON_LUNGE = 0,
+    MON_SWEEP = 1,
+    MON_HEAVY = 2
+};
+struct MonsterDef {
+    int8_t kind;
+    int16_t w, h, hp, spd, atkDist;
+};
+
+// On AVR the roster lives on the FX cart as one packed 33 B blob (bead
+// monhun-ardu-6zb.1), addressed through the same fake-pointer shim as
+// WEAPON_DEFS / MONSTER_ATTACKS.
+#if defined(__AVR__)
+static_assert(sizeof(MonsterDef) == 11, "MonsterDef must match packed FX blob size");
+
+struct FxMonsterDefsRom {
+    const MonsterDef &operator[](int16_t i) const {
+        return *reinterpret_cast<const MonsterDef *>(static_cast<uint16_t>(MH_FX_MONSTER_DEFS_ADDR + sizeof(MonsterDef) * i));
+    }
+};
+constexpr FxMonsterDefsRom MONSTER_DEFS = {};
+#else
+MH_PROGMEM const MonsterDef MONSTER_DEFS[3] = {
+    {MON_LUNGE, 32, 24, 200, 5, 32},
+    {MON_SWEEP, 28, 22, 150, 7, -1},
+    {MON_HEAVY, 40, 28, 320, 3, 24},
+};
+#endif   // __AVR__
+
+// ----------------------------------------------- MONSTER_DEFS cart accessors
+inline int8_t monsterDefKind(const MonsterDef *d) {
+    return mhFxReadI8(&d->kind);
+}
+inline int16_t monsterDefW(const MonsterDef *d) {
+    return mhFxReadI16(&d->w);
+}
+inline int16_t monsterDefH(const MonsterDef *d) {
+    return mhFxReadI16(&d->h);
+}
+inline int16_t monsterDefHp(const MonsterDef *d) {
+    return mhFxReadI16(&d->hp);
+}
+inline int16_t monsterDefSpd(const MonsterDef *d) {
+    return mhFxReadI16(&d->spd);
+}
+inline int16_t monsterDefAtkDist(const MonsterDef *d) {
+    return mhFxReadI16(&d->atkDist);
+}
+
 enum MState : int8_t {
     MS_IDLE = 0,
     MS_PURSUE,
@@ -446,6 +500,7 @@ struct Game {
     int8_t weapon;
     int8_t over;          // Over: 0 none, 1 win, 2 lose
     int8_t mode;          // Mode: hunt or train (hrd)
+    int8_t monsterKind;   // MonsterKind: chosen demo beast variant (6zb)
     int16_t camX, camY;   // camera top-left in world px (mock g.cam), updated in world.hpp
     bool prevA, prevB;
     Player player;

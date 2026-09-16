@@ -5,7 +5,7 @@
 //
 // Deterministic: fixed traversal, little-endian bytes, no timestamps. Output
 // sizes are asserted per struct (WeaponDef 180, Attack 23, Branch 27, ShellDef
-// 15, MonsterAttack 17) and per file (540 / 34).
+// 15, MonsterAttack 17, MonsterDef 11) and per file (540 / 34 / 33).
 //
 // Usage: gen-fxtables [outdir]   (default: fxdata/tables)
 
@@ -25,6 +25,7 @@ namespace {
 
 constexpr size_t WEAPON_DEFS_BYTES = 540;
 constexpr size_t MONSTER_ATTACKS_BYTES = 34;
+constexpr size_t MONSTER_DEFS_BYTES = 33;
 
 std::vector<uint8_t> g_bytes;
 
@@ -115,6 +116,17 @@ void putMonsterAttack(const MonsterAttack &a) {
     require(g_bytes.size() - start == 17, "MonsterAttack size");
 }
 
+void putMonsterDef(const MonsterDef &d) {
+    const size_t start = g_bytes.size();
+    putI8(d.kind);
+    putI16(d.w);
+    putI16(d.h);
+    putI16(d.hp);
+    putI16(d.spd);
+    putI16(d.atkDist);
+    require(g_bytes.size() - start == 11, "MonsterDef size");
+}
+
 void writeFile(const std::string &path, const std::vector<uint8_t> &bytes) {
     FILE *f = fopen(path.c_str(), "wb");
     if (f == nullptr) {
@@ -148,6 +160,13 @@ int main(int argc, char **argv) {
     require(g_bytes.size() == MONSTER_ATTACKS_BYTES, "monsterattacks total");
     writeFile(outDir + "monsterattacks.bin", g_bytes);
 
-    printf("gen-fxtables: %sweapondefs.bin (%zu B), %smonsterattacks.bin (%zu B)\n", outDir.c_str(), WEAPON_DEFS_BYTES, outDir.c_str(), MONSTER_ATTACKS_BYTES);
+    g_bytes.clear();
+    for (int m = 0; m < 3; m++)
+        putMonsterDef(MONSTER_DEFS[m]);
+    require(g_bytes.size() == MONSTER_DEFS_BYTES, "monsterdefs total");
+    writeFile(outDir + "monsterdefs.bin", g_bytes);
+
+    printf("gen-fxtables: %sweapondefs.bin (%zu B), %smonsterattacks.bin (%zu B), %smonsterdefs.bin (%zu B)\n", outDir.c_str(), WEAPON_DEFS_BYTES, outDir.c_str(), MONSTER_ATTACKS_BYTES,
+           outDir.c_str(), MONSTER_DEFS_BYTES);
     return 0;
 }
