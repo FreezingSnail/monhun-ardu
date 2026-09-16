@@ -18,12 +18,18 @@
 // exact same header is compiled into the on-device perf bench, so the numbers
 // there describe this loop's real render path.
 #include "src/render.hpp"
+#include "src/menu.hpp"   // draws through render.hpp (textPut/blk) + MenuState
 
 decltype(arduboy) arduboy;
 
 // Single game state. The core is header-only and shared verbatim with the host
 // tests; the device loop only samples input, steps it, and reads it for draw.
 mh::Game g;
+
+// Opening menu (bead monhun-ardu-6zb.2): boot lands here. While active it owns
+// every input edge; the sim and audio are not stepped. A starts the chosen
+// scene, and after a win/lose the same state re-opens with the picks kept.
+mh::MenuState s_menu;
 
 // Audio cue edge detector. Driven from run() after stepGame(); reads Game only
 // (no core changes). Muted at compile time with -DMH_AUDIO=0.
@@ -62,24 +68,49 @@ void setup() {
     mh::newGame(g, mh::W_SWORD, mh::MODE_HUNT);
 }
 
-// One logic tick. Called only from needsUpdate() (never mid-plane), so the
-// whole core advances atomically between planes. pollButtons() already ran.
-void run() {
+// One input sample per logic tick, shared by the menu and the sim. The menu
+// owns its own edge flags (MenuState::prevA/prevB); while the sim runs,
+// menuReturnStep() keeps those same flags current, so the post-game A edge
+// needs no second edge rule here.
+static mh::Input sampleInput() {
     mh::Input in;
     in.mx = (arduboy.pressed(RIGHT_BUTTON) ? 1 : 0) - (arduboy.pressed(LEFT_BUTTON) ? 1 : 0);
     in.my = (arduboy.pressed(DOWN_BUTTON) ? 1 : 0) - (arduboy.pressed(UP_BUTTON) ? 1 : 0);
     in.a = arduboy.pressed(A_BUTTON);
     in.b = arduboy.pressed(B_BUTTON);
+    return in;
+}
+
+// One logic tick. Called only from needsUpdate() (never mid-plane), so the
+// whole core advances atomically between planes. pollButtons() already ran.
+void run() {
+    const mh::Input in = sampleInput();
 #if DEBUG_HURTBOXES
     pollDebugToggle(in);   // observes A+B; does not consume input from stepGame
 #endif
+    if (s_menu.active) {
+        // Menu tick: no stepGame, no audio (the new game re-latches the audio
+        // snapshot on its tick 0). A starts the picked loadout and drops out.
+        if (mh::menuStep(s_menu, in) == mh::MENU_START) {
+            mh::menuStart(g, s_menu);
+            s_menu.active = false;
+        }
+        return;
+    }
     mh::stepGame(g, in);
     mh::audioUpdate(s_audio, g);
+    if (mh::menuReturnStep(s_menu, g.over != mh::OVER_NONE, in))
+        s_menu.active = true;   // picks preserved until reboot
 }
 
 // Full block-art scene (arena, target, player, shells, effects, HUD). Read-only:
 // render never mutates Game; the three plane passes composite one L4 image.
+// While the menu is up it replaces the scene (same per-plane call discipline).
 void render() {
+    if (s_menu.active) {
+        mh::drawMenu(s_menu);
+        return;
+    }
 #if DEBUG_HURTBOXES
     mh::renderScene(g, s_wire);
 #else

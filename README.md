@@ -12,12 +12,12 @@ port of a browser prototype (`mock/`), verified tick-for-tick against it.
 |---|---|
 | Vertical-slice sim | Ported + parity-verified (20 scenes / 1269 ticks / 660 device asserts) |
 | Device render + HUD + audio | Working (block/FX-sprite art, cue tones; HUD text/FX glyphs — bars clipped, `7y3`) |
-| Host unit tests | `make test` — **1281 passed / 0 failed** |
-| Device tests (Ardens) | boot 4, assets 254, audio 14, parity 660, data 194, perf 5 — all PASS |
-| Perf gate (`monhun-ardu-8v7`, re-verified `42n.6`) | **PASS.** plane 156 Hz (≥135), logic 52 Hz (≥45), render max 4676 µs (≤7407), tick 988 µs, RAM free 495 B |
+| Host unit tests | `make test` — **1433 passed / 0 failed** |
+| Device tests (Ardens) | boot 4, assets 254, audio 14, menu 39, parity 660, data 221, perf 5 — all PASS |
+| Perf gate (`monhun-ardu-8v7`, re-verified `42n.6`) | **PASS.** plane 156 Hz (≥135), logic 52 Hz (≥45), render max 4676 µs (≤7407), tick 988 µs, RAM free 494 B |
 | Perf tooling | Headless Ardens profiler dump (`profiledump=<path>`, local patch) + on-device cycle bench (`test_perf`) |
-| Shipping build | flash **26444 / 29696 B** (89%), RAM **1941 / 2560 B** (619 free) |
-| FX data image | **21090 B** of 16 MB used |
+| Shipping build | flash **28116 / 29696 B** (94%), RAM **1946 / 2560 B** (614 free) |
+| FX data image | **21123 B** of 16 MB used |
 
 Speculative gameplay status: combat (sword / flail / gunshield), monster FSM,
 training pole + DPS mode, camera/world clamps, HUD, audio cues all in place.
@@ -59,8 +59,13 @@ directly in 1/16-px units and integrated by straight addition.
 ### Device layer
 
 - `monhun-ardu.ino` — plane loop, input sampling, `stepGame()` + `audioUpdate()`
-  in `run()`, `renderScene()` in `render()`. FX reads happen inside
-  `FX::enableOLED()` / `waitForNextPlane()` / `FX::disableOLED()`.
+  in `run()`, `renderScene()` in `render()`. Boots into the opening menu; while
+  it is active the sim/audio are skipped and `drawMenu()` replaces the scene.
+  FX reads happen inside `FX::enableOLED()` / `waitForNextPlane()` /
+  `FX::disableOLED()`.
+- `src/menu_state.hpp` — host-testable menu FSM (`MenuState`/`menuStep`, pick →
+  mode/kind mapping, post-over return edge); no Arduino.h.
+- `src/menu.hpp` — menu render (FX glyph rows + selection underline), per plane.
 - `src/render.hpp` — whole render path (also compiled into the perf bench so
   measured numbers describe the real loop). Arena, target, player, shells,
   effects, HUD.
@@ -87,7 +92,7 @@ images/**/*.png ──tools/convert-sprite.py──► fxdata/*/Sprites.txt ─�
   bitmap arrays in MCU flash or RAM.
 - Current blobs: `fxmonster`, `fxplayer`, `fxpole`, `fxball`, `fxscatter`,
   `fxspark`, `fxfontw`, `fxfontg`, the overlay/effect sheets and the two raw
-  content tables (`mhWeaponDefs`, `mhMonsterAttacks`) — 21090 B total.
+  content tables (`mhWeaponDefs`, `mhMonsterAttacks`) — 21123 B total.
 - Regenerate with `make gen` (or `./tools/gen.sh`); bins are tracked despite
   `*.bin` being gitignored (force-added) so device tests are reproducible.
 - `fxdata/manifest.json` (tracked) pins sha256+size for every source image,
@@ -124,18 +129,54 @@ images/**/*.png ──tools/convert-sprite.py──► fxdata/*/Sprites.txt ─�
 
 - `L4_Triplane` + `ABG_TIMER1` + `ABG_SYNC_PARK_ROW` (`src/common.hpp`).
 - Measured under load (bench): **156 Hz plane sweep, 52 Hz logic**, render max
-  4676 µs/plane, logic tick 988 µs, 495 B free RAM. Mock runs 60 Hz; tick order
+  4676 µs/plane, logic tick 988 µs, 494 B free RAM. Mock runs 60 Hz; tick order
   is equivalent.
 - Debug overlay `DEBUG_HURTBOXES=1` (hold A+B to toggle). Off by default; the
   overlay build is flash-tight and only for development.
 
 ---
 
+## Controls
+
+### Opening menu (boot)
+
+| Input | Action |
+|---|---|
+| LEFT / RIGHT | cycle weapon: SWD (sword) / FLS (flail) / GUN (gunshield) |
+| UP / DOWN | cycle target: LUNGE / SWEEP / HEAVY beast, or POLE |
+| A | start the selected scene |
+
+Picks wrap in both directions. Targets LUNGE/SWEEP/HEAVY start the matching
+beast variant in hunt mode; POLE starts train mode (the static pole, no beast).
+After a win or loss, A returns to the menu with the picks kept until reboot.
+While the menu is up the sim and audio are not stepped.
+
+### Target roster (`MONSTER_DEFS`, FX cart blob)
+
+| Target | Mode | Size | HP | Spd | Attack |
+|---|---|---|---|---|---|
+| LUNGE | hunt | 32x24 | 200 | 5 | lunges beyond 32 px (legacy parity default) |
+| SWEEP | hunt | 28x22 | 150 | 7 | never lunges (always sweep) |
+| HEAVY | hunt | 40x28 | 320 | 3 | lunges inside 24 px |
+| POLE | train | 20x40 | — | — | static target, head zone = top 16 px |
+
+### In game (hunt / train)
+
+| Input | Action |
+|---|---|
+| D-pad | move |
+| A | attack (in a stance: stance special) |
+| B tap | dodge (sword) / deflect (flail) / shove (gunshield) |
+| B hold ~11 ticks | enter stance (parry / whirl / guard); release exits |
+
+
+---
+
 ## Commands
 
 ```sh
-make test               # host unit tests (1281 asserts)
-make fxtest-headless    # Ardens device tests (boot/assets/audio/parity/data/perf)
+make test               # host unit tests (1433 asserts)
+make fxtest-headless    # Ardens device tests (boot/assets/audio/menu/parity/data/perf)
 make build              # compile shipping sketch (output in dist/)
 make debug              # build, then open Ardens debugger (ELF + DWARF) with FX image
 make mini               # compile for Arduboy Mini FQBN
@@ -189,23 +230,25 @@ Notes:
    (`80bbfb0`), and `blk()`'s `fillRect`/`drawFastVLine` path was replaced with
    direct masked framebuffer writes (`816767d`) — render max 13312 → 3984 µs,
    plane 82 → 156 Hz, logic 27 → 52 Hz, profiler `mh::blk` share 29% → 3.6%.
-   Any new feature must fit flash (3252 B free) and keep the perf gates green.
-2. **Flash headroom**: shipping 26444/29696 B (3252 B free) after the
-   content-table offload (`42n.1`-`42n.4`) and the sine-LUT shrink
-   (`42n.7`; `.text` 26398 + `.data` 46). The 119 B of hot LUTs (`mh::SIN65`
+   Any new feature must fit flash (1580 B free) and keep the perf gates green.
+2. **Flash headroom**: shipping 28116/29696 B (1580 B free) after the
+   content-table offload (`42n.1`-`42n.4`), the sine-LUT shrink (`42n.7`; the
+   65 B quarter-wave table + sign fold) and the opening menu (`6zb.2`, +1604 B
+   for the menu state machine, FX-glyph render and the runtime monster-kind
+   start path). The 119 B of hot LUTs (`mh::SIN65`
    65 B, `fp::DIR8` 32 B, `mh::MH_MASK_TOP/BOT` 16 B, `mh::RING6` 6 B) stay in
    MCU flash by decision (`monhun-ardu-42n.5`): FX per-access reads measured
    ~150 cycles (~9 µs, 20-35x an LPM) and a SIN65 RAM cache would breach the
-   300 B free-RAM gate. The epic's ≤26600 B line is cleared by 156 B. The
-   65-entry quarter-wave SIN65 table + quadrant sign folding (`42n.7`) is
-   bit-identical to the old 256-byte table (pinned by the exhaustive host
-   suite `tst/sin_test.hpp`). Any new feature must still budget flash, prefer
-   FX data; debug-only code (`DEBUG_HURTBOXES`) must stay behind compile-time
-   flags.
+   300 B free-RAM gate. The 65-entry quarter-wave SIN65 table + quadrant sign
+   folding (`42n.7`) is bit-identical to the old 256-byte table (pinned by the
+   exhaustive host suite `tst/sin_test.hpp`). Any new feature must still budget
+   flash, prefer FX data; debug-only code (`DEBUG_HURTBOXES`) must stay behind
+   compile-time flags.
 3. **RAM history**: constant tables originally sat in AVR `.rodata` (RAM) at
    2494 B used; moved to PROGMEM (MCU flash) via `progmem.hpp` → 1888 B. Audio
-   added timers/state → 1941 B. FX sprite data stays on the cart, so RAM grew
-   little through the art pass, but the margin is ~600 B.
+   added timers/state → 1941 B; the opening menu's 5 B `MenuState` → 1946 B. FX
+   sprite data stays on the cart, so RAM grew little through the art pass, but
+   the margin is ~600 B.
 4. **Mock accuracy vs speed**: the sim is parity-locked to the mock by 660 device
    asserts. Any future tuning change must either update the mock + fixtures in
    the same commit or be expressed as render/parameter-only changes.
@@ -259,6 +302,8 @@ Notes:
 monhun-ardu.ino     device sketch (plane loop, input, run/render wiring)
 src/core/           host-testable sim (no Arduino.h)
 src/render.hpp      device render path (also in perf bench)
+src/menu_state.hpp  opening-menu FSM (host-testable)
+src/menu.hpp        opening-menu render (per plane)
 src/audio.hpp       tone cue detector
 src/external/       ArduboyG, SpritesU, SpritesABC
 src/fxdata.h        generated FX offset constants
