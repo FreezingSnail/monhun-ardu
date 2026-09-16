@@ -140,9 +140,17 @@ for source view, symbols, globals, call stack) + `fxdata/fxdata.bin`
 Also available there:
 - **CPU profiler** — instruction-level inclusive CPU load and raw cycle counts,
   hotspot list, annotations on source/disassembly. Open via the debugger menu
-  (Profiler) or set `open_profiler=1` in `Ardens.ini` (already enabled on this
-  machine). Used to locate `drawArena`'s modulo cost; the perf-fix bead
-  (`monhun-ardu-kt7.3`) captures its output as evidence.
+  (Profiler) or set `open_profiler=1` in `Ardens.ini`. **Headless dump** (no
+  window, scriptable/agent-readable):
+  ```sh
+  "$ARDENS" headless=3000 display=ssd1306 fxport=d1 \
+      profiledump=build/profiler.txt \
+      file=dist/monhun-ardu.ino.elf file=fxdata/fxdata.bin
+  ```
+  Writes tab-separated `count/pct/begin/end/symbol` rows (top 50, sorted) plus
+  total cycles and CPU-active %. Requires the ELF from `make build`. Note: the
+  `profiledump` parameter is a local Ardens patch (uncommitted in
+  `~/code/Ardens/src/headless.cpp` as of this writing).
 - **Auto-breaks**: stack overflow, null deref, out-of-bounds, SPI write
   collision, FX busy access — useful when touching render/FX code.
 - Snapshots (`F4`), display screenshots (`F2`), GIF recording (`F3`).
