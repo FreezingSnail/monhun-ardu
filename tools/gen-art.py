@@ -7,17 +7,32 @@ sprite sheet laid out left-to-right, one frame per tile; heights are multiples
 of 8 to satisfy the converter. Palette maps 1:1 onto the L4 triplane levels:
 
     transparent -> mask 0 (nothing drawn)
-    black       -> shade 0 (no plane)
+    black       -> shade 0 (no plane): opaque eraser pixel (mask 1, data 0)
     dark gray   -> shade 1 (plane 0)
     light gray  -> shade 2 (plane 1)
     white       -> shade 3 (plane 2)
 
 tools/convert-sprite.py (shades=4) turns each sheet into the 2-byte-header
 plus-mask triplane blob that SpritesU::drawPlusMaskFX reads.
-"""
-import os
 
-from PIL import Image, ImageDraw
+Overlay/effect sheets (bead monhun-ardu-42n.2) are authored from the core table
+dimensions dumped by tools/fxdump.cpp: attack hw/hh, monster attack hw/hh and
+whirl orbit radii are never duplicated here. Block coordinates come straight
+from the current blk() draw calls in src/render.hpp (the exact shapes the mock
+paints) with the core dims substituted, so the PNG is pixel-exact by
+construction. Every sheet is checked back: sheet dims must match the derived
+frame size, every blk rect must land in the typed plane, and every pixel outside
+the declared rects must stay transparent. `--dump` prints the ASCII evidence.
+
+The same run writes src/generated/art_dims.hpp: per-frame core dimensions and
+frame layout for the render bead + the host dims-drift test (tst/art_dims_test.hpp).
+"""
+import argparse
+import json
+import os
+import sys
+
+from PIL import Image
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 ROOT = os.path.dirname(HERE)
@@ -28,11 +43,19 @@ DARK = (85, 85, 85, 255)
 LIGHT = (170, 170, 170, 255)
 WHITE = (255, 255, 255, 255)
 
+SHADES = (BLACK, DARK, LIGHT, WHITE)
+SHADE_NAMES = ("black", "dark", "light", "white")
+
 
 def rect(img, x, y, w, h, color):
     if w <= 0 or h <= 0:
         return
-    ImageDraw.Draw(img).rectangle([x, y, x + w - 1, y + h - 1], fill=color)
+    if x < 0 or y < 0 or x + w > img.size[0] or y + h > img.size[1]:
+        raise SystemExit("gen-art: block (%d,%d,%d,%d) outside %s canvas" % (x, y, w, h, img.size))
+    px = img.load()
+    for yy in range(y, y + h):
+        for xx in range(x, x + w):
+            px[xx, yy] = color
 
 
 def new(w, h):
@@ -45,6 +68,240 @@ def strip(frames, w, h):
     for i, frame in enumerate(frames):
         sheet.paste(frame, (i * w, 0))
     return sheet
+
+
+# ------------------------------------------------------------------ dims JSON
+
+
+class DimsError(Exception):
+    pass
+
+
+class Dims:
+    """fxdump JSON with attribute access and cycle-safe resolution of `!ref`."""
+
+    def __init__(self, raw):
+        self.raw = raw
+
+    def __getattr__(self, key):
+        try:
+            value = self.raw[key]
+        except KeyError:
+            raise AttributeError(key) from None
+        return self._resolve(value)
+
+    def _resolve(self, value, seen=()):
+        if isinstance(value, Dims):
+            return value
+        if isinstance(value, dict) and set(value) == {"!ref"}:
+            ref = value["!ref"]
+            if ref in seen:
+                raise DimsError("cyclic !ref chain: %s" % " -> ".join(seen + (ref,)))
+            return self._resolve(self.raw[ref], seen + (ref,))
+        if isinstance(value, dict):
+            return Dims({k: self._resolve(v, seen) for k, v in value.items()})
+        if isinstance(value, list):
+            return [self._resolve(v, seen) for v in value]
+        return value
+
+
+def load_dims(path):
+    with open(path, "r", encoding="utf-8") as f:
+        return Dims(json.load(f))
+
+
+# --------------------------------------------------- fxdump-backed dimensions
+
+
+def attack_boxes(dims):
+    """Per-sheet core dims from fxdump, keyed by sheet id."""
+    sword, flail, gun = dims.weapons
+    return {
+        "slash": [(sword.attacks[i].hw, sword.attacks[i].hh) for i in range(3)]
+        + [(sword.special.hw, sword.special.hh)],
+        "reaches": {
+            "slash": [sword.attacks[i].reach for i in range(3)] + [sword.special.reach],
+            "chain": [flail.attacks[i].reach for i in range(3)] + [flail.special.reach],
+        },
+        "ripspecial": (sword.special.hw, sword.special.hh),
+        "monster": {
+            "lunge": (dims.monsterAttacks.lunge.hw, dims.monsterAttacks.lunge.hh),
+            "sweep": (dims.monsterAttacks.sweep.hw, dims.monsterAttacks.sweep.hh),
+        },
+        "gun_boxes": [(gun.attacks[i].hw, gun.attacks[i].hh) for i in range(3)],
+    }
+
+
+def sheet_size(rects):
+    """Smallest frame containing every rect (extent max - origin min per axis)."""
+    max_x = max(x + w for _, x, y, w, h, _ in rects)
+    max_y = max(y + h for _, x, y, w, h, _ in rects)
+    min_x = min(0, min(x for _, x, y, w, h, _ in rects))
+    min_y = min(0, min(y for _, x, y, w, h, _ in rects))
+    return min_x, min_y, max_x, max_y
+
+
+# --------------------------------------------------------------- mock shapes
+# Each shape is a blk() rect from src/render.hpp / mock/game.js translated to a
+# frame-local origin. `box` marks the hit box rect the dims test re-derives
+# from the core tables; the others are composite decorations (cores, rims,
+# bars). Blocks are (color, dx, dy, w, h). `reaches` records the core reach
+# each frame bakes (used by the dims test's reach drift check).
+#
+# Anchor convention (documented for the render bead):
+#   "box top-left"   frame origin == hit box top-left; box drawn at (pad, pad)
+#   "box centre"     frame origin == hit box centre; box centred in the frame
+#   "player centre"  frame origin == player centre (cx, cy)
+#   "player top-left" frame origin == player top-left (x, y)
+#   "plate centre"   frame origin == shield centre (shx, shy)
+#   "bar centre"     frame origin == reload bar centre (x + 8, y - 2)
+#   "dot top-left"   frame origin == the dot's top-left
+
+
+def icon_defs(dims):
+    d = attack_boxes(dims)
+    lunge, sweep = d["monster"]["lunge"], d["monster"]["sweep"]
+    reaches = d["reaches"]
+
+    def slash_frame(hw, hh):
+        px = (24 - hw) // 2
+        py = (24 - hh) // 2
+        blocks = [(LIGHT, px, py, hw, hh)]
+        if hw > 4 and hh > 4:
+            blocks.append((WHITE, px + 2, py + 2, 4, 4))
+        return blocks
+
+    chain_frames = []
+    # Frames bake the combo reaches (19/21/24), 1 px dots at rr=(reach*i)>>2
+    # with the mock's truncating tip; the special throw (reach 32) spawns the
+    # fxchip ball instead of a chain dot, so no frame is needed for it.
+    for reach in dict.fromkeys(reaches["chain"][:3]):
+        blocks = []
+        for i in (1, 2, 3):
+            rr = (reach * i) >> 2
+            blocks.append((DARK, 20 + rr, 8, 1, 1))
+        chain_frames.append(blocks)
+
+    return [
+        {"id": "slash", "w": 24, "h": 24, "anchor": "box top-left",
+         "reaches": reaches["slash"],
+         "frames": [slash_frame(hw, hh) for hw, hh in d["slash"]]},
+        {"id": "ripspecial", "w": 24, "h": 24, "anchor": "box top-left",
+         "reaches": [dims.weapons[0].special.reach],
+         "frames": [[(LIGHT, 0, 0, d["ripspecial"][0] + 4, d["ripspecial"][1] + 4)]]},
+        {"id": "parry", "w": 24, "h": 16, "anchor": "player centre",
+         "frames": [[(WHITE, 11, 0, 2, 14), (LIGHT, 9, 2, 6, 2)]]},
+        {"id": "chain", "w": 40, "h": 16, "anchor": "player centre",
+         "reaches": reaches["chain"], "frames": chain_frames},
+        {"id": "whirl", "w": 8, "h": 4, "anchor": "dot top-left",
+         "frames": [[(LIGHT, 0, 0, 2, 2)], [(WHITE, 0, 0, 4, 4)]]},
+        {"id": "deflect", "w": 24, "h": 16, "anchor": "player top-left",
+         "frames": [[(LIGHT, 2, 2, 1, 12), (LIGHT, 21, 2, 1, 12)]]},
+        {"id": "guard", "w": 12, "h": 16, "anchor": "plate centre",
+         "frames": [[(LIGHT, 1, 1, 10, 14), (BLACK, 5, 1, 2, 14)],
+                    [(WHITE, 1, 1, 10, 14)],
+                    [(WHITE, 0, 1, 10, 14)]]},
+        {"id": "reload", "w": 10, "h": 8, "anchor": "bar centre",
+         "frames": [[(LIGHT, 0, 3, 10, 2)]]},
+        {"id": "erase", "w": 4, "h": 16, "anchor": "player top-left",
+         "frames": [[(BLACK, 0, 0, 4, 1)]]},
+        {"id": "trail", "w": 4, "h": 4, "anchor": "puff top-left",
+         "frames": [[(LIGHT, 0, 0, 2, 2)], [(DARK, 0, 0, 2, 2)]]},
+        {"id": "telegraph", "w": 32, "h": 24, "anchor": "box centre",
+         "frames": [[(DARK, (32 - lunge[0]) // 2, (24 - lunge[1]) // 2, lunge[0], lunge[1]),
+                     (LIGHT, 15, 11, 2, 2)],
+                    [(LIGHT, (32 - sweep[0]) // 2, (24 - sweep[1]) // 2, sweep[0], sweep[1]),
+                     (WHITE, 14, 10, 4, 4)]]},
+        {"id": "chip", "w": 8, "h": 8, "anchor": "chip top-left",
+         "frames": [[(WHITE, 0, 0, 4, 4)]]},
+    ]
+
+
+# Existing block sheets (kept byte-stable; the chip sheet also carries the
+# flail's 4x4 white head so the overlay pass reuses one small sheet).
+def player_frames():
+    """16x16 body+shadow only; weapon overlays live on the overlay sheets."""
+    frames = []
+    for body in (WHITE, LIGHT):   # normal shade3, dodge shade2
+        img = new(16, 16)
+        rect(img, 2, 15, 12, 1, DARK)   # shadow
+        rect(img, 5, 1, 6, 6, body)     # head
+        rect(img, 4, 7, 8, 6, body)     # torso
+        rect(img, 5, 13, 2, 2, body)    # legs
+        rect(img, 9, 13, 2, 2, body)
+        frames.append(img)
+    return frames
+
+
+def monster_frame(body, head, east, dead=False):
+    img = new(32, 24)
+    if dead:
+        rect(img, 0, 16, 32, 8, DARK)
+        rect(img, 12, 14, 8, 4, LIGHT)
+        return img
+    rect(img, 2, 23, 28, 1, BLACK)          # ground shadow
+    for i in range(4):
+        rect(img, 3 + i * 8, 21, 3, 3, BLACK)   # feet
+    rect(img, 2, 4, 28, 14, body)
+    rect(img, 6, 1, 20, 6, body)
+    head_x = 22 if east else 0
+    rect(img, head_x, 6, 10, 12, head)
+    rect(img, head_x + (7 if east else 1), 13, 2, 2, BLACK)   # face-side eye
+    rect(img, head_x + 4, 9, 2, 2, BLACK)
+    return img
+
+
+def monster_frames():
+    # 0..3 facing east (head right), 4..7 facing west (head left)
+    states = [
+        (DARK, WHITE),   # idle / attack
+        (LIGHT, LIGHT),  # recover
+        (WHITE, WHITE),  # windup flash / hit flash
+    ]
+    frames = []
+    for east in (True, False):
+        for body, head in states:
+            frames.append(monster_frame(body, head, east))
+        frames.append(monster_frame(DARK, WHITE, east, dead=True))
+    return frames
+
+
+def pole_frame(flash):
+    img = new(20, 40)   # 20x36 art, padded to a multiple of 8
+    rect(img, 2, 12, 16, 24, DARK)
+    for band in (20, 27, 34):
+        rect(img, 2, band, 16, 1, BLACK)
+    rect(img, 0, 0, 20, 16, WHITE if flash else LIGHT)
+    rect(img, 8, 5, 4, 4, BLACK)
+    rect(img, 0, 34, 20, 2, BLACK)
+    return img
+
+
+def ball_frame():
+    img = new(7, 8)   # 7x6 art, padded
+    rect(img, 0, 0, 7, 6, LIGHT)
+    rect(img, 1, 1, 5, 4, WHITE)
+    rect(img, 0, 4, 7, 1, BLACK)
+    return img
+
+
+def scatter_frame():
+    img = new(4, 8)   # 4x4 art, padded so the tile has transparency (plus-mask)
+    rect(img, 0, 0, 4, 4, LIGHT)
+    rect(img, 1, 1, 2, 2, WHITE)
+    return img
+
+
+SPARK = [0b0100, 0b1110, 0b0111, 0b0010]
+
+
+def spark_frame(color):
+    img = new(4, 4)
+    for row, bits in enumerate(SPARK):
+        for col in range(4):
+            if bits & (0b1000 >> col):
+                rect(img, col, row, 1, 1, color)
+    return img
 
 
 # --------------------------------------------------------------- mock FONT
@@ -110,122 +367,274 @@ def font_sheet(color):
     return sheet
 
 
-# --------------------------------------------------------------- drawPlayer
+# ------------------------------------------------------- authored sheet table
 
-def player_frames():
-    """16x16 body+shadow only; weapon overlays stay procedural (reach and aim
-    are dynamic and exceed the 16x16 frame)."""
+
+def render_icon(defn):
     frames = []
-    for body in (WHITE, LIGHT):  # normal shade3, dodge shade2
-        img = new(16, 16)
-        rect(img, 2, 15, 12, 1, DARK)   # shadow
-        rect(img, 5, 1, 6, 6, body)     # head
-        rect(img, 4, 7, 8, 6, body)     # torso
-        rect(img, 5, 13, 2, 2, body)    # legs
-        rect(img, 9, 13, 2, 2, body)
+    for blocks in defn["frames"]:
+        img = new(defn["w"], defn["h"])
+        for color, dx, dy, w, h in blocks:
+            rect(img, dx, dy, w, h, color)
         frames.append(img)
-    return frames
+    return strip(frames, defn["w"], defn["h"])
 
 
-# -------------------------------------------------------------- drawMonster
-
-def monster_frame(body, head, east, dead=False):
-    img = new(32, 24)
-    if dead:
-        rect(img, 0, 16, 32, 8, DARK)
-        rect(img, 12, 14, 8, 4, LIGHT)
-        return img
-    rect(img, 2, 23, 28, 1, BLACK)          # ground shadow
-    for i in range(4):
-        rect(img, 3 + i * 8, 21, 3, 3, BLACK)  # feet
-    rect(img, 2, 4, 28, 14, body)
-    rect(img, 6, 1, 20, 6, body)
-    head_x = 22 if east else 0
-    rect(img, head_x, 6, 10, 12, head)
-    rect(img, head_x + (7 if east else 1), 13, 2, 2, BLACK)  # face-side eye
-    rect(img, head_x + 4, 9, 2, 2, BLACK)
-    return img
+def render_all(dims):
+    icons = icon_defs(dims)
+    sheets = {}
+    for d in icons:
+        sheets[d["id"]] = render_icon(d)
+    sheets["player"] = strip(player_frames(), 16, 16)
+    sheets["monster"] = strip(monster_frames(), 32, 24)
+    sheets["pole"] = strip([pole_frame(False), pole_frame(True)], 20, 40)
+    sheets["ball"] = strip([ball_frame()], 7, 8)
+    sheets["scatter"] = strip([scatter_frame()], 4, 8)
+    sheets["spark"] = strip([spark_frame(LIGHT), spark_frame(WHITE)], 4, 4)
+    sheets["fontw"] = font_sheet(WHITE)
+    sheets["fontg"] = font_sheet(LIGHT)
+    return icons, sheets
 
 
-def monster_frames():
-    # 0..3 facing east (head right), 4..7 facing west (head left)
-    states = [
-        (DARK, WHITE),   # idle / attack
-        (LIGHT, LIGHT),  # recover
-        (WHITE, WHITE),  # windup flash / hit flash
-    ]
-    frames = []
-    for east in (True, False):
-        for body, head in states:
-            frames.append(monster_frame(body, head, east))
-        frames.append(monster_frame(DARK, WHITE, east, dead=True))
-    return frames
+def png_name(fname):
+    stem, ext = os.path.splitext(fname)
+    body, dims = stem.rsplit("_", 1)
+    return body, tuple(int(v) for v in dims.split("x"))
 
 
-# ---------------------------------------------------------------- drawPole
-
-def pole_frame(flash):
-    img = new(20, 40)  # 20x36 art, padded to a multiple of 8
-    rect(img, 2, 12, 16, 24, DARK)
-    for band in (20, 27, 34):
-        rect(img, 2, band, 16, 1, BLACK)
-    rect(img, 0, 0, 20, 16, WHITE if flash else LIGHT)
-    rect(img, 8, 5, 4, 4, BLACK)
-    rect(img, 0, 34, 20, 2, BLACK)
-    return img
+# ------------------------------------------------------------ self-checking
 
 
-# -------------------------------------------------------- projectiles / fx
+def check_sheets(icons, sheets):
+    """Assert every frame is exactly the declared rects on an empty canvas."""
+    failures = []
+    for d in icons:
+        sheet = sheets[d["id"]]
+        w, h, n = d["w"], d["h"], len(d["frames"])
+        if sheet.size != (w * n, h):
+            failures.append("%s: sheet %sx%s, want %sx%s" % (d["id"], sheet.size[0], sheet.size[1], w * n, h))
+            continue
+        spx = sheet.load()
+        for fi, blocks in enumerate(d["frames"]):
+            # Reference = the declared blk() calls composited in order (a later
+            # rect may paint over an earlier one: the white core sits on the
+            # slash box, matching the mock's draw order).
+            ref = new(w, h)
+            for color, dx, dy, bw, bh in blocks:
+                rect(ref, dx, dy, bw, bh, color)
+            rpx = ref.load()
+            for yy in range(h):
+                for xx in range(w):
+                    got = spx[fi * w + xx, yy]
+                    want = rpx[xx, yy]
+                    if got != want:
+                        failures.append("%s frame %d (%d,%d): got %s want %s" % (d["id"], fi, xx, yy, got, want))
+    if failures:
+        for f in failures[:20]:
+            print("gen-art: PIXEL CHECK FAIL: %s" % f, file=sys.stderr)
+        raise SystemExit("gen-art: %d pixel-check failures" % len(failures))
 
-def ball_frame():
-    img = new(7, 8)  # 7x6 art, padded
-    rect(img, 0, 0, 7, 6, LIGHT)
-    rect(img, 1, 1, 5, 4, WHITE)
-    rect(img, 0, 4, 7, 1, BLACK)
-    return img
+
+def sheet_filename(body, img, icons):
+    """name_WxH.png where WxH is the FRAME size (convert-sprite's tile), not the
+    full strip width: the existing pipeline reads the frame dims from the name."""
+    by_id = {d["id"]: d for d in icons}
+    d = by_id.get(body)
+    if d is not None:
+        return "fx%s_%dx%d.png" % (body, d["w"], d["h"])
+    if body == "player":
+        return "fxplayer_16x16.png"
+    if body == "monster":
+        return "fxmonster_32x24.png"
+    if body == "pole":
+        return "fxpole_20x40.png"
+    if body == "ball":
+        return "fxball_7x8.png"
+    if body == "scatter":
+        return "fxscatter_4x8.png"
+    if body == "spark":
+        return "fxspark_4x4.png"
+    if body == "fontw":
+        return "fxfontw_4x8.png"
+    if body == "fontg":
+        return "fxfontg_4x8.png"
+    raise SystemExit("gen-art: no filename rule for sheet %s" % body)
 
 
-def scatter_frame():
-    img = new(4, 8)  # 4x4 art, padded so the tile has transparency (plus-mask)
-    rect(img, 0, 0, 4, 4, LIGHT)
-    rect(img, 1, 1, 2, 2, WHITE)
-    return img
+def check_disk(sheets, icons):
+    """Re-read every written PNG and compare it pixel-for-pixel."""
+    blocks_dir = os.path.join(ROOT, "images", "blocks")
+    fonts_dir = os.path.join(ROOT, "images", "fonts")
+    for body, img in sheets.items():
+        directory = fonts_dir if body in ("fontw", "fontg") else blocks_dir
+        path = os.path.join(directory, sheet_filename(body, img, icons))
+        disk = Image.open(path).convert("RGBA")
+        if disk.size != img.size:
+            raise SystemExit("gen-art: %s on disk %s, want %s" % (path, disk.size, img.size))
+        if disk.tobytes() != img.tobytes():
+            raise SystemExit("gen-art: %s on disk differs from authored pixels" % path)
 
 
-SPARK = [0b0100, 0b1110, 0b0111, 0b0010]
+def ascii_dump(sheets, icons):
+    """Compact ASCII of every authored sheet (evidence for output.md)."""
+    by_id = {d["id"]: d for d in icons}
+    chars = {CLEAR: ".", BLACK: "K", DARK: "g", LIGHT: "l", WHITE: "W"}
+    lines = []
+    for body in sorted(sheets):
+        img = sheets[body]
+        d = by_id.get(body, {})
+        w, h, n = d.get("w", img.size[0]), d.get("h", img.size[1]), len(d.get("frames", [])) or 1
+        lines.append("%s  frame %dx%d  frames %d  size %dx%d" %
+                     (body, w, h, img.size[0] // w, img.size[0], img.size[1]))
+        px = img.load()
+        for yy in range(img.size[1]):
+            row = "".join(chars[px[xx, yy]] for xx in range(img.size[0]))
+            if len(row) > 100:
+                row = row[:100] + "..."
+            lines.append("  " + row)
+        lines.append("")
+    return "\n".join(lines)
 
 
-def spark_frame(color):
-    img = new(4, 4)
-    for row, bits in enumerate(SPARK):
-        for col in range(4):
-            if bits & (0b1000 >> col):
-                rect(img, col, row, 1, 1, color)
-    return img
+# ------------------------------------------------------- generated dims header
+
+
+def emit_dims_header(dims, icons, path):
+    d = attack_boxes(dims)
+    by_id = {i["id"]: i for i in icons}
+    L = []
+    L.append("// Generated by tools/gen-art.py from tools/fxdump.cpp (make gen).")
+    L.append("// Do not edit: tuning hw/hh/reach in src/core/game.hpp changes this file,")
+    L.append("// and tst/art_dims_test.hpp fails until `make gen` regenerates it.")
+    L.append("#pragma once")
+    L.append("")
+    L.append("#include <stdint.h>")
+    L.append("")
+    L.append("namespace art_dims {")
+    L.append("")
+    for weapon in dims.weapons:
+        name = weapon.name
+        for i, atk in enumerate(weapon.attacks):
+            L.append("constexpr int16_t %s_atk%d_hw = %d;" % (name, i, atk.hw))
+            L.append("constexpr int16_t %s_atk%d_hh = %d;" % (name, i, atk.hh))
+            L.append("constexpr int16_t %s_atk%d_reach = %d;" % (name, i, atk.reach))
+        sp = weapon.special
+        L.append("constexpr int16_t %s_special_hw = %d;" % (name, sp.hw))
+        L.append("constexpr int16_t %s_special_hh = %d;" % (name, sp.hh))
+        L.append("constexpr int16_t %s_special_reach = %d;" % (name, sp.reach))
+    L.append("")
+    lunge = dims.monsterAttacks.lunge
+    sweep = dims.monsterAttacks.sweep
+    L.append("constexpr int16_t monster_lunge_hw = %d;" % lunge.hw)
+    L.append("constexpr int16_t monster_lunge_hh = %d;" % lunge.hh)
+    L.append("constexpr int16_t monster_lunge_reach = %d;" % lunge.reach)
+    L.append("constexpr int16_t monster_sweep_hw = %d;" % sweep.hw)
+    L.append("constexpr int16_t monster_sweep_hh = %d;" % sweep.hh)
+    L.append("constexpr int16_t monster_sweep_reach = %d;" % sweep.reach)
+    L.append("constexpr int16_t monster_w = %d;" % dims.monster.w)
+    L.append("constexpr int16_t monster_h = %d;" % dims.monster.h)
+    L.append("")
+    L.append("constexpr int16_t whirl_orbit_rx = %d;" % dims.whirl.rx)
+    L.append("constexpr int16_t whirl_orbit_ry = %d;" % dims.whirl.ry)
+    L.append("constexpr int16_t whirl_radius = %d;" % dims.whirl.r)
+    L.append("")
+
+    # Per-sheet frame layout. frame_w/frame_h are the uniform sheet frame size;
+    # `anchor` is the blk() origin the frame's top-left maps to (see render.hpp).
+    L.append("// Sheet frame layout (uniform frame per sheet, left-to-right strip).")
+    for d in icons:
+        L.append("constexpr uint8_t %s_frame_w = %d;" % (d["id"], d["w"]))
+        L.append("constexpr uint8_t %s_frame_h = %d;" % (d["id"], d["h"]))
+        L.append("constexpr uint8_t %s_frames = %d;" % (d["id"], len(d["frames"])))
+    L.append("")
+
+    # Slash boxes: the rect (box_w x box_h) centred in the slash frame with the
+    # white core. The dims test re-derives these from the core accessors.
+    sw = by_id["slash"]["w"]
+    sh = by_id["slash"]["h"]
+    L.append("// Sword slash boxes: core hw x hh centred in the slash frame; the white")
+    L.append("// core sits at the centre, the riposte rim (hw+4 x hh+4) at 0,0.")
+    L.append("constexpr uint8_t slash_pad_x = %d;" % ((sw - 20) // 2))
+    L.append("constexpr uint8_t slash_pad_y = %d;" % ((sh - 16) // 2))
+    L.append("constexpr uint8_t slash_core_pad = 2;")
+    L.append("constexpr uint8_t slash_riposte_pad = 2;")
+    L.append("")
+
+    # Telegraph boxes: hit box centred in the frame (same size as the monster
+    # hurt box) with the flash core at its centre.
+    L.append("// Telegraph: hit box centred in the frame, bright core at centre.")
+    for name, atk in (("lunge", lunge), ("sweep", sweep)):
+        L.append("constexpr uint8_t telegraph_%s_x = %d;" % (name, (32 - atk.hw) // 2))
+        L.append("constexpr uint8_t telegraph_%s_y = %d;" % (name, (24 - atk.hh) // 2))
+    L.append("")
+
+    L.append("// Whirl dot frames in fxwhirl (per-frame white extras at the orbit).")
+    L.append("constexpr uint8_t whirl_dot_frame = 0;")
+    L.append("constexpr uint8_t whirl_ball_frame = 1;")
+    L.append("")
+    L.append("}   // namespace art_dims")
+
+    with open(path, "w", encoding="utf-8") as f:
+        f.write("\n".join(L) + "\n")
 
 
 # -------------------------------------------------------------------- main
 
+
+def clean_stale(directory, expected):
+    """Drop generated fx*_WxH.png sheets that are no longer authored, so a
+    renamed/removed sheet cannot linger in images/ (the manifest bead finds
+    files by name; orphans would be picked up by the converter)."""
+    for name in os.listdir(directory):
+        if name in expected:
+            continue
+        if name.startswith("fx") and name.endswith(".png"):
+            os.remove(os.path.join(directory, name))
+            print("gen-art: removed stale %s" % os.path.join(directory, name))
+
+
 def main():
+    parser = argparse.ArgumentParser(description="Author monhun-ardu FX sprite sheets.")
+    parser.add_argument("--dims", help="fxdump JSON (default: run build/fxdump)")
+    parser.add_argument("--dump", action="store_true", help="print ASCII pixel dump")
+    args = parser.parse_args()
+
+    if args.dims:
+        dims = load_dims(args.dims)
+    else:
+        import subprocess
+
+        out = subprocess.run([os.path.join(ROOT, "build", "fxdump")], capture_output=True, text=True, check=True)
+        dims = Dims(json.loads(out.stdout))
+
     blocks = os.path.join(ROOT, "images", "blocks")
     fonts = os.path.join(ROOT, "images", "fonts")
+    gen_dir = os.path.join(ROOT, "src", "generated")
     os.makedirs(blocks, exist_ok=True)
     os.makedirs(fonts, exist_ok=True)
+    os.makedirs(gen_dir, exist_ok=True)
 
-    strip(player_frames(), 16, 16).save(os.path.join(blocks, "fxplayer_16x16.png"))
-    strip(monster_frames(), 32, 24).save(os.path.join(blocks, "fxmonster_32x24.png"))
-    strip([pole_frame(False), pole_frame(True)], 20, 40).save(
-        os.path.join(blocks, "fxpole_20x40.png"))
-    strip([ball_frame()], 7, 8).save(os.path.join(blocks, "fxball_7x8.png"))
-    strip([scatter_frame()], 4, 8).save(
-        os.path.join(blocks, "fxscatter_4x8.png"))
-    strip([spark_frame(LIGHT), spark_frame(WHITE)], 4, 4).save(
-        os.path.join(blocks, "fxspark_4x4.png"))
+    icons, sheets = render_all(dims)
+    check_sheets(icons, sheets)
 
-    font_sheet(WHITE).save(os.path.join(fonts, "fxfontw_4x8.png"))
-    font_sheet(LIGHT).save(os.path.join(fonts, "fxfontg_4x8.png"))
+    block_names = {sheet_filename(b, img, icons) for b, img in sheets.items() if b not in ("fontw", "fontg")}
+    font_names = {sheet_filename(b, img, icons) for b, img in sheets.items() if b in ("fontw", "fontg")}
+    clean_stale(blocks, block_names)
+    clean_stale(fonts, font_names)
 
-    print("gen-art: wrote images/blocks (6 sheets) and images/fonts (2 sheets)")
+    for body, img in sheets.items():
+        directory = fonts if body in ("fontw", "fontg") else blocks
+        img.save(os.path.join(directory, sheet_filename(body, img, icons)))
+    check_disk(sheets, icons)
+
+    emit_dims_header(dims, icons, os.path.join(gen_dir, "art_dims.hpp"))
+
+    n_icons = len(icons)
+    print("gen-art: wrote %d block sheets (%d overlay/effect icons) + 2 font sheets" %
+          (len(sheets) - 2, n_icons))
+    print("gen-art: pixel check OK (%d sheets, disk-exact)" % len(sheets))
+    if args.dump:
+        print(ascii_dump(sheets, icons))
 
 
 if __name__ == "__main__":

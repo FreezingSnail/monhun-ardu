@@ -6,16 +6,28 @@ using uint24_t = __uint24;
 
 // Initialize FX hardware using  FX::begin(FX_DATA_PAGE); in the setup() function.
 
-constexpr uint16_t FX_DATA_PAGE  = 0xffcd;
-constexpr uint24_t FX_DATA_BYTES = 13040;
+constexpr uint16_t FX_DATA_PAGE  = 0xffb5;
+constexpr uint24_t FX_DATA_BYTES = 19124;
 
-constexpr uint24_t fxmonster = 0x000000;
-constexpr uint24_t fxpole = 0x001202;
-constexpr uint24_t fxspark = 0x0016B4;
-constexpr uint24_t fxball = 0x0016E6;
-constexpr uint24_t fxplayer = 0x001712;
-constexpr uint24_t fxscatter = 0x001894;
-constexpr uint24_t fxfontg = 0x0018AE;
-constexpr uint24_t fxfontw = 0x0024B0;
-constexpr uint24_t mhWeaponDefs = 0x0030B2;
-constexpr uint24_t mhMonsterAttacks = 0x0032CE;
+constexpr uint24_t fxdeflect = 0x000000;
+constexpr uint24_t fxparry = 0x000122;
+constexpr uint24_t fxmonster = 0x000244;
+constexpr uint24_t fxchain = 0x001446;
+constexpr uint24_t fxchip = 0x0019E8;
+constexpr uint24_t fxpole = 0x001A1A;
+constexpr uint24_t fxguard = 0x001ECC;
+constexpr uint24_t fxspark = 0x00207E;
+constexpr uint24_t fxball = 0x0020B0;
+constexpr uint24_t fxtrail = 0x0020DC;
+constexpr uint24_t fxwhirl = 0x00210E;
+constexpr uint24_t fxplayer = 0x002170;
+constexpr uint24_t fxripspecial = 0x0022F2;
+constexpr uint24_t fxslash = 0x0024A4;
+constexpr uint24_t fxtelegraph = 0x002B66;
+constexpr uint24_t fxreload = 0x002FE8;
+constexpr uint24_t fxscatter = 0x003026;
+constexpr uint24_t fxerase = 0x003040;
+constexpr uint24_t fxfontg = 0x003072;
+constexpr uint24_t fxfontw = 0x003C74;
+constexpr uint24_t mhWeaponDefs = 0x004876;
+constexpr uint24_t mhMonsterAttacks = 0x004A92;

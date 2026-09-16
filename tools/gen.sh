@@ -4,18 +4,30 @@
 # fxdata/fxdata.bin + fxdata/fxdata-data.bin and copy the header to src/.
 set -e
 
-# Author source PNGs from mock/game.js shapes + FONT (deterministic).
-python3 tools/gen-art.py
+# Dump the core table dimensions (attack hw/hh/reach, monster hw/hh, whirl
+# radii) as JSON for gen-art.py. Host g++; the dumper includes the same
+# src/core/game.hpp the firmware uses, so art never duplicates a number.
+mkdir -p build
+g++ -std=c++17 -O2 -w tools/fxdump.cpp -o build/fxdump
+./build/fxdump > build/fxdump.json
+
+# Author source PNGs from mock/game.js shapes + FONT (deterministic). The
+# overlay/effect sheets are derived from build/fxdump.json; the same run emits
+# src/generated/art_dims.hpp for the render bead + the host dims-drift test.
+python3 tools/gen-art.py --dims build/fxdump.json
 
 # Serialize the core content tables (weapon/monster) to packed AVR-layout
 # little-endian blobs. Host g++; deterministic output, asserted sizes.
-mkdir -p build fxdata/tables
+mkdir -p fxdata/tables
 g++ -std=c++17 -O2 -w tools/gen-fxtables.cpp -o build/gen-fxtables
 ./build/gen-fxtables fxdata/tables
 
 # Convert each sprite directory into a Sprites.txt of uint8_t plus-mask blobs.
-# convert-sprite.py resolves paths relative to tools/, hence the ../ prefixes.
+# convert-sprite.py appends to Sprites.txt (it does not truncate), so a sheet
+# renamed in gen-art.py would leave a stale symbol behind: remove the generated
+# files first. convert-sprite.py resolves paths relative to tools/, hence ../.
 mkdir -p fxdata/blocks fxdata/fonts
+rm -f fxdata/blocks/Sprites.txt fxdata/fonts/Sprites.txt
 python3 tools/convert-sprite.py ../images/blocks -s 4 -o ../fxdata/blocks/
 python3 tools/convert-sprite.py ../images/fonts -s 4 -o ../fxdata/fonts/
 

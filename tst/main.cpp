@@ -6,6 +6,7 @@
 #include "monster_test.hpp"
 #include "shells_test.hpp"
 #include "world_test.hpp"
+#include "art_dims_test.hpp"
 
 int main() {
     TestRunner runner;
@@ -15,6 +16,7 @@ int main() {
     MonsterSuite(runner);
     ShellSuite(runner);
     WorldSuite(runner);
+    artdimstest::ArtDimsSuite(runner);
     runner.printSummary();
     return runner.fail() ? 1 : 0;
 }
