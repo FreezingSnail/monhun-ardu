@@ -1,98 +1,77 @@
-# monhun-ardu-8v7 — Gate: device perf bench (plane rate, logic Hz, RAM)
+# monhun-ardu-kt7.3 — Render: fix arena modulo hotspot + effect cap
 
 ## Bead
-`monhun-ardu-8v7` (slice of epic `monhun-ardu-kt7`). Worst-case on-device bench:
-plane rate, logic rate, free RAM, render/logic/FX cost, measured with a
-permanent `tst/fxdatatest/test_perf.ino`. Budgets come from the bead design
-(logic >= 45 Hz, planes stable ~135 Hz, RAM >= 300 B free, render/FX inside the
-plane budget).
+`monhun-ardu-kt7.3` (slice of epic `monhun-ardu-kt7`). Fixes the render hotspot
+that made the device perf gate `monhun-ardu-8v7` fail: render 13312 us/plane vs
+<= 7407 budget, plane 82 Hz vs >= 135, logic 27 Hz vs >= 45. Render-only: core
+sim and parity fixtures untouched.
 
 ## Files
-- added `src/render.hpp` — the block-art renderer (sprites/art/HUD/scene) lifted
-  verbatim out of `monhun-ardu.ino` so the perf bench times the **real** shipping
-  render path instead of a drifting copy. Pure move: release build is
-  byte-identical (flash 27672 / RAM 1941 before and after). Core sim untouched.
-- changed `monhun-ardu.ino` — drops the moved render body, includes
-  `src/render.hpp`, `render()` now calls `mh::renderScene(g, wire)`. The
-  `DEBUG_HURTBOXES` overlay and `pollDebugToggle()` stay in the sketch.
-- added `tst/fxdatatest/perf_test.hpp` — on-device bench: worst-case scene
-  (max-effect hunt + pole train), shipping-loop timing, stack-painted RAM
-  watermark, budget gates. Integer-only timing via `micros()` (Timer0 /64,
-  independent of ArduboyG TIMER1 / ArduboyTones TIMER3).
-- added `tst/fxdatatest/test_perf.ino` — harness entry, picked up by the
-  `test_*.ino` wildcard.
+- changed `src/render.hpp` — render-only:
+  - `drawArena()`: the three per-dot signed 16-bit modulos (`(i*7)%3`,
+    `(i*53)%WORLD_W`, `(i*29)%WORLD_H`) are gone. `(i*7)%3 == i%3` becomes a
+    3-phase counter; the world coords are walked with incremental counters
+    (`+53`/`+29` with one conditional wrap, since each step is < its modulus).
+    The 1x1 dots now call `arduboy.drawPixel()` directly instead of `blk()` (the
+    bounds test is already exact, so the redundant clip is skipped). Dot
+    positions are mathematically identical: `wx`/`wy` at iteration `i` equal
+    `i*53 % 256` / `i*29 % 112`, and skip is `i % 3 == 0`. Integer-only.
+  - `drawEffects()`: render-side cap `MAX_FX_DRAW = 6`. The mock has **no** cap
+    (unbounded `effects[]`); the device core caps at `MAX_EFFECTS = 12`, but the
+    transient worst case (6 simultaneous damage numbers, each 2-3 FX glyph
+    reads, + sparks) was the remaining render bottleneck. Only the newest 6
+    effects are painted now. Sim semantics unchanged: every effect still ticks
+    and expires in core; the cap is presentation-only.
 - changed `output.md`.
 
-## Method / caveats
-- Measured on the Ardens cycle-accurate ATmega32u4 model (`make fxtest-headless`).
-  No physical unit was attached; the bead's "not emulator" pitfall could not be
-  honoured literally. Numbers are CPU cycles from the modelled timers, so the
-  absolute us are cycle counts, not wall clock.
-- Plane rate = achieved shipping-loop rate (bracket + render + logic/3), i.e.
-  the actual display refresh under load. The flat TIMER1 plane ISR rate is
-  ~160 Hz (bare `waitForNextPlane` = 6228 us).
-- Free RAM measured by painting unused SRAM and scanning for the deepest SP
-  inside the render call tree, not from `loop()`.
-- Audio cue playback is excluded from the bench image (flash: the full render
-  stack + sim + Serial already need ~27.7 KB of 29.7 KB, so ArduboyTones cannot
-  fit). `audioUpdate()`'s real edge-detect path still runs and is timed; only
-  the one-shot tone() arming is out. Cue playback is covered by `test_audio`.
-
-## Measured numbers (Ardens, ATmega32u4 @16 MHz)
-Test output line:
-`B pUs=12087 pHz=82 lHz=27 lTk=988 rMx=13312 rAv=10624 ram=472`
-
-| quantity | value |
-|---|---|
-| plane period under load | **12087 us** -> **82 Hz** |
-| logic rate under load | **27 Hz** (plane-bound: planes/3) |
-| logic tick max (in-loop) | **988 us** (0.062 logic frame) |
-| logic tick isolated (avg/max) | 288 / 316 us |
-| render in-loop avg / max | **10624 / 13312 us** |
-| render isolated, base hunt | 6614 us |
-| render isolated, base train (pole) | 7638 us |
-| render isolated, bead scene (3 shells + 6 sparks) hunt | 7790 us |
-| render isolated, stress hunt (3 shells + 12 fx) | 10558 us |
-| render isolated, stress train | 10355 us |
-| free RAM at deepest SP | **472 B** (test image; shipping ~443 B) |
-| FX asset read: 32x24 monster sprite | 255 us avg / 264 max |
-| FX asset read: 4x8 font glyph | 47 us |
-| FX enable/disable bracket overhead | < 4 us (below micros resolution) |
-| `drawArena` alone | **6044 us/plane** |
-
-### Hotspot found (instrument-only, not fixed)
-`drawArena()` (~6044 us of the ~6614 us base plane) evaluates three **signed
-16-bit modulo** expressions per iteration (`(i*7)%3`, `(i*53)%WORLD_W`,
-`(i*29)%WORLD_H`) over 260 dots. On AVR these lower to `__divmodhi4`; the dot
-loop is the single dominant render cost. This is the reason even the *base*
-scene sits at ~6.6 ms (just over the 6.4 ms nominal plane), and why any added
-FX pressure drops the loop below 135 Hz.
-
-## Budget table (bead thresholds)
-| gate | budget | measured | result |
-|---|---|---|---|
-| render max fits 1/135 s | <= 7407 us | 13312 us | **FAIL** |
-| plane rate | >= 135 Hz | 82 Hz | **FAIL** |
-| logic tick fits one logic frame (3 planes) | <= 19230 us | 988 us | PASS |
-| logic rate | >= 45 Hz | 27 Hz | **FAIL** |
-| free RAM | >= 300 B | 472 B | PASS |
-| FX asset read fits plane budget | <= 7407 us | 255 us | PASS |
-
-FAIL bitmask from the test: `13` = render (bit 0) + plane rate (bit 2) + logic
-rate (bit 3). Logic-rate failure is a consequence of the render overrun (logic
-is bound to the 1:3 plane cadence), not of the logic tick itself.
-
-## Flash / RAM
-Shipping (`make build`, unchanged by the extraction):
+## Profiler evidence (Ardens headless, `profiledump`, 3000 ms)
+Command (from repo root, after `make build`):
 ```
-Sketch uses 27672 bytes (93%) of program storage space. Maximum is 29696 bytes.
-Global variables use 1941 bytes (75%) of dynamic memory, leaving 619 bytes for local variables. Maximum is 2560 bytes.
+Ardens headless=3000 display=ssd1306 fxport=d1 profiledump=build/profiler.txt \
+  file=dist/monhun-ardu.ino.elf file=fxdata/fxdata.bin
 ```
-Bench image (`test_perf`, tight by design — full render + sim + Serial):
+
+### BEFORE (HEAD `114b8f0`)
 ```
-Sketch uses 29594 bytes (99%) of program storage space. Maximum is 29696 bytes.
-Global variables use 1912 bytes (74%) of dynamic memory, leaving 648 bytes for local variables. Maximum is 2560 bytes.
+cycles 48000936  cycles_with_sleep 48000936  cpu_active_pct 100.0
+hotspots	count	pct	begin	end	name
+14037605	29.24	0x0fc6	0x111c	mh::blk(long, long, long, long, unsigned char) (.part.11)
+ 5718340	11.91	0x111c	0x1150	abg_detail::...ArduboyG_Common...::paint(...)
+ 1532782	 3.19	0x331c	0x6a86	main
+ 1024592	 2.13	0x1b64	0x1e66	SpritesU::drawPlusMaskFX(int, int, uint24, unsigned int)
 ```
+
+### AFTER
+```
+cycles 27005017  cycles_with_sleep 48000574  cpu_active_pct 56.3
+hotspots	count	pct	begin	end	name
+ 7161772	14.92	0x112a	0x115e	abg_detail::...ArduboyG_Common...::paint(...)
+ 5101749	10.63	0x332a	0x6aa0	main
+ 2092942	 4.36	0x0ff2	0x112a	mh::blk(long, long, long, long, unsigned char) (.part.11)
+ 1281239	 2.67	0x1b72	0x1e74	SpritesU::drawPlusMaskFX(int, int, uint24, unsigned int)
+  768842	 1.60	0x0fc6	0x0ff2	Arduboy2Base::drawPixel(int, int, unsigned char) (.part.1)
+```
+
+Share collapse: `mh::blk` **29.24% -> 4.36%** (absolute 14.04 M -> 2.09 M cycles),
+total active cycles **48.0 M -> 27.0 M** (cpu_active 100% -> 56.3%). The arena dot
+field no longer calls `__divmodhi4`, and it regressed out of the top-3 hotspots.
+`paint` (the ArduboyG plane blit, outside the render scene) is now #1 and
+unchanged in absolute terms (7.16 M) — the fixed floor.
+
+## Perf gate (test_perf, Ardens cycle-accurate update)
+`B pUs=6839 pHz=146 lHz=48 lTk=972 rMx=6008 rAv=5335 ram=478` — no `F` line;
+`perf_test PASSED=5 FAILED=0`.
+
+| gate | budget | before | after | result |
+|---|---|---|---|---|
+| render max fits 1/135 s | <= 7407 us | 13312 us | **6008 us** | PASS |
+| plane rate | >= 135 Hz | 82 Hz | **146 Hz** | PASS |
+| logic tick fits one logic frame | <= 19230 us | 988 us | 972 us | PASS |
+| logic rate | >= 45 Hz | 27 Hz | **48 Hz** | PASS |
+| free RAM | >= 300 B | 472 B | 478 B | PASS |
+
+Test-tail line printed deterministically across repeat runs (same `B` line each
+time).
 
 ## Test tails
 `make test` (host C++17):
@@ -104,43 +83,35 @@ Total Failed: 0
 
 `make fxtest-headless` (Ardens):
 ```
-=== test_assets ===
-asset_test PASSED=30 FAILED=0
-P
-test_assets: PASS
-=== test_audio ===
-test_audio PASSED=14 FAILED=0
-P
-test_audio: PASS
-=== test_boot ===
-test_boot PASSED=4 FAILED=0
-P
-test_boot: PASS
-=== test_parity ===
-parity_test PASSED=660 FAILED=0
-P
-test_parity: PASS
-=== test_perf ===
-B pUs=12087 pHz=82 lHz=27 lTk=988 rMx=13312 rAv=10624 ram=472
-F 13
-perf_test PASSED=0 FAILED=5
-F
-test_perf: FAIL
-make[1]: *** [fxtest-run] Error 1
+asset_test PASSED=30 FAILED=0  -> test_assets: PASS
+test_audio PASSED=14 FAILED=0  -> test_audio: PASS
+test_boot PASSED=4 FAILED=0    -> test_boot: PASS
+parity_test PASSED=660 FAILED=0 -> test_parity: PASS
+B pUs=6839 pHz=146 lHz=48 lTk=972 rMx=6008 rAv=5335 ram=478
+perf_test PASSED=5 FAILED=0    -> test_perf: PASS
 ```
 
-## Follow-up notes (gameplay NOT retuned)
-1. `drawArena()` signed-modulo dot field is the root cause of the base render
-   cost (~6 ms/plane). A renderer-only fix (unsigned/bit ops or a precomputed
-   dot table) would free ~4-5 ms of the plane budget without touching sim
-   semantics.
-2. Worst-case simultaneous FX (max effect/projectile counts + damage-number
-   glyphs) drops the loop to ~82 Hz; damage-number text is the most expensive
-   effect (one FX glyph read per digit).
-3. The `DEBUG_HURTBOXES` overlay build overflows flash (already true before this
-   bead); only the debug build is affected.
+## Flash / RAM
+Shipping (`make build`, render-only change):
+```
+Sketch uses 27698 bytes (93%) of program storage space. Maximum is 29696 bytes.
+Global variables use 1941 bytes (75%) of dynamic memory, leaving 619 bytes for local variables. Maximum is 2560 bytes.
+```
+Bench image (`test_perf`):
+```
+Sketch uses 29646 bytes (99%) of program storage space. Maximum is 29696 bytes.
+Global variables use 1912 bytes (74%) of dynamic memory, leaving 648 bytes for local variables. Maximum is 2560 bytes.
+```
+Flash +26 B shipping, +16 B bench vs the pre-fix build; both fit.
 
-## Result
-**Budgets FAIL.** Per bead instructions the gate is not retuned; follow-ups are
-above. `monhun-ardu-8v7` is left **OPEN** with blockers (render/plane/logic-rate
-budgets) so the feel gate (`monhun-ardu-1to`) can decide.
+## Notes / semantics
+- Dot pattern is unchanged (same 260-dot sequence, same skip, same coords); the
+  optimization is a pure algebraic rewrite. No golden render test exists in the
+  suite, so equivalence is by construction.
+- `MAX_FX_DRAW = 6` is presentation-only and documented in-code; the mock has no
+  equivalent cap, so this is the render-side cap the bead authorised. It only
+  affects the transient overload case (>6 simultaneous effects); normal play is
+  unaffected.
+- No core/sim change; `tools/gen-parity-fixtures.js` fixtures and
+  `tst/fxdatatest/parity_test.hpp` stay byte-identical (660 pass).
+- No float/double anywhere in the change.

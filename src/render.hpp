@@ -162,15 +162,28 @@ static void drawNumber(int32_t x, int32_t y, int16_t value, uint8_t shade) {
 }
 
 // Mock drawArena(): deterministic 1 px dots + world border.
+// The mock's three per-dot signed 16-bit modulos (i*7%3, i*53%WORLD_W,
+// i*29%WORLD_H) lower to __divmodhi4 on AVR and dominated the plane budget, so
+// the dot field is walked with incremental counters instead. They produce the
+// exact same dot positions: (i*7)%3 == i%3 (a 3-phase counter), and each world
+// coord advances by its fixed step with a single conditional wrap (step is
+// always < the modulus, so one subtract bounds it). Integer-only, no float.
 static void drawArena(int16_t camX, int16_t camY) {
+    uint8_t phase = 0;          // i % 3
+    int16_t wx = 0;             // (i * 53) % WORLD_W
+    int16_t wy = 0;             // (i * 29) % WORLD_H
     for (int16_t i = 0; i < 260; i++) {
-        if ((i * 7) % 3 == 0) continue;
-        const int16_t wx = static_cast<int16_t>((i * 53) % mh::WORLD_W);
-        const int16_t wy = static_cast<int16_t>((i * 29) % mh::WORLD_H);
-        const int16_t sx = static_cast<int16_t>(wx - camX);
-        const int16_t sy = static_cast<int16_t>(wy - camY + mh::HUD_H);
-        if (sx < 0 || sx >= mh::SCREEN_W || sy < mh::HUD_H || sy >= mh::SCREEN_H) continue;
-        blk(sx, sy, 1, 1, 1);
+        if (phase != 0) {
+            const int16_t sx = static_cast<int16_t>(wx - camX);
+            const int16_t sy = static_cast<int16_t>(wy - camY + mh::HUD_H);
+            if (sx >= 0 && sx < mh::SCREEN_W && sy >= mh::HUD_H && sy < mh::SCREEN_H)
+                arduboy.drawPixel(sx, sy, 1); // single dark-gray dot, no blk clip
+        }
+        if (++phase >= 3) phase = 0;
+        wx += 53;
+        if (wx >= mh::WORLD_W) wx -= mh::WORLD_W;
+        wy += 29;
+        if (wy >= mh::WORLD_H) wy -= mh::WORLD_H;
     }
     const int32_t lx = -camX;
     const int32_t ly = static_cast<int32_t>(mh::HUD_H) - camY;
@@ -348,8 +361,16 @@ static void drawProjectiles(const mh::Game& g, int16_t camX, int16_t camY) {
 }
 
 // Mock drawEffects(): 4-point spark, or a rising damage number.
+// Render-side cap: the mock has no cap (unbounded array) and the device core
+// caps at MAX_EFFECTS, but the transient worst case (several simultaneous
+// damage-number glyphs + sparks) is the render bottleneck — each damage number
+// is 2-3 FX glyph reads. Only the newest MAX_FX_DRAW effects are painted.
+// Core sim is untouched: every effect still ticks and expires as before.
+constexpr int16_t MAX_FX_DRAW = 6;
+
 static void drawEffects(const mh::Game& g, int16_t camX, int16_t camY) {
-    for (int16_t i = 0; i < g.fxN; i++) {
+    const int16_t first = g.fxN > MAX_FX_DRAW ? g.fxN - MAX_FX_DRAW : 0;
+    for (int16_t i = first; i < g.fxN; i++) {
         const mh::Effect& e = g.fx[i];
         const int16_t r = e.life - e.t;
         if (e.text) {
