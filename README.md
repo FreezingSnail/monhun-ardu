@@ -14,14 +14,14 @@ port of a browser prototype (`mock/`), verified tick-for-tick against it.
 | Device render + HUD + audio | Working (block/FX-sprite art, HUD bars, cue tones) |
 | Host unit tests | `make test` — **497 passed / 0 failed** |
 | Device tests (Ardens) | boot 4, assets 30, audio 14, parity 660 — all PASS |
-| Perf gate (`monhun-ardu-8v7`) | **FAIL — open.** Render/plane 13312 µs vs ≤ 7407; plane 82 Hz vs ≥ 135; logic 27 Hz vs ≥ 45 |
+| Perf gate (`monhun-ardu-8v7`) | **PASS — closed.** plane 146 Hz (≥135), logic 48 Hz (≥45), render max 6008 µs (≤7407), tick 972 µs, RAM free 478 B |
 | Shipping build | flash **27672 / 29696 B** (93%), RAM **1941 / 2560 B** (619 free) |
 | FX data image | **12466 B** of 16 MB used |
 
 Speculative gameplay status: combat (sword / flail / gunshield), monster FSM,
 training pole + DPS mode, camera/world clamps, HUD, audio cues all in place.
-Not yet done: real art pass (`vx2`, human), feel tuning (`1to`, human),
-EEPROM save (`qyb`, deferred).
+Perf-verified on device. Remaining: real art pass (`vx2`, human), feel tuning
+(`1to`, human), EEPROM save (`qyb`, deferred).
 
 ---
 
@@ -114,8 +114,9 @@ images/**/*.png ──tools/text2bmp.py────────► font sheets �
 ### Hardware / cadence
 
 - `L4_Triplane` + `ABG_TIMER1` + `ABG_SYNC_PARK_ROW` (`src/common.hpp`).
-- 156 Hz plane sweep; logic steps once per `arduboy.needsUpdate()` → **~52 Hz
-  logic** at idle (mock runs 60 Hz; tick order is equivalent).
+- Measured under load (bench): **146 Hz plane sweep, 48 Hz logic**, render max
+  6008 µs/plane, logic tick 972 µs, 478 B free RAM. Mock runs 60 Hz; tick order
+  is equivalent.
 - Debug overlay `DEBUG_HURTBOXES=1` (hold A+B to toggle). Off by default; the
   overlay build is flash-tight and only for development.
 
@@ -164,14 +165,12 @@ Notes:
 
 ## Challenges / known issues
 
-1. **Perf gate failing (`8v7`, P1 follow-up).**
-   `drawArena()` spends **~6044 µs/plane** on three signed 16-bit modulo
-   expressions per dot (`__divmodhi4`) across 260 dots — the dominant cost even
-   in the base scene. Combined with worst-case FX load, the plane rate drops to
-   **82 Hz**. Renderer-only fixes (unsigned/bit ops or a precomputed dot table)
-   are projected to free 4–5 ms without touching sim semantics.
-   Effect-count caps for worst-case scenes are a second lever; damage-number
-   glyphs (one FX read per digit) are the most expensive effect.
+1. **Perf resolved, headroom watched.** `drawArena()`'s per-dot signed modulo
+   field (~6044 µs/plane) was replaced with incremental counters plus a
+   `MAX_FX_DRAW=6` render-side effect cap (`80bbfb0`): profiler share of
+   `mh::blk` fell 29.24% → 4.36%, plane rate 82 → 146 Hz, logic 27 → 48 Hz.
+   Remaining top costs are `ArduboyG paint` and `main` overhead; any new
+   feature must fit flash (2024 B free) and keep the perf gates green.
 2. **Flash headroom** is thin: shipping 27672/29696 B (2024 B free). The
    `DEBUG_HURTBOXES=1` and `test_perf` images sit at 99% — any new feature must
    budget flash, prefer FX data.
