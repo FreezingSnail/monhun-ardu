@@ -1,0 +1,84 @@
+{
+  "generator": "tools/fxdata_manifest.py",
+  "images": [
+    {
+      "declaration": "fxdata/blocks/Sprites.txt",
+      "path": "images/blocks/baz_2x2.png",
+      "sha256": "50bffe65889a27379cb6c8d199a0246e0277af64f062c5d2fcba2698e2438c43",
+      "size": 72,
+      "symbol": "baz"
+    },
+    {
+      "declaration": "fxdata/blocks/Sprites.txt",
+      "path": "images/blocks/foo_4x4.png",
+      "sha256": "97f0265e8ec4a8efde6f5822c40d4228b72a3cb52c04046dbf48f24ef560915d",
+      "size": 73,
+      "symbol": "foo"
+    },
+    {
+      "declaration": "fxdata/fonts/Sprites.txt",
+      "path": "images/fonts/bar_4x8.png",
+      "sha256": "ef509e8da72f344541274fc6ad25fa2e276592fa0fb33b066a19268bf2a6cfba",
+      "size": 73,
+      "symbol": "bar"
+    }
+  ],
+  "inputs": [
+    {
+      "path": "fxdata/blocks/Sprites.txt",
+      "sha256": "adf4f545842c5c06444583d376cfc44c6780e036b15aea1cb56632400d54276a",
+      "size": 70,
+      "symbols": [
+        "baz",
+        "foo"
+      ]
+    },
+    {
+      "path": "fxdata/fonts/Sprites.txt",
+      "sha256": "e0ee6a1ca753ff0cab1b9636affc8196b6a5e420f238e1703db086c580b3117b",
+      "size": 35,
+      "symbols": [
+        "bar"
+      ]
+    },
+    {
+      "path": "fxdata/fxdata.txt",
+      "sha256": "8d4ac83c4b96cae8af4dea741514944ba52212ea3be9aa3a66e2a8f661410624",
+      "size": 173
+    },
+    {
+      "path": "fxdata/tables/testdata.bin",
+      "sha256": "13a397b462f7eabfc8c69c345c06eb70da0c55fee9ba05a4693829bad12d369b",
+      "size": 26,
+      "symbol": "mhTestData"
+    }
+  ],
+  "outputs": [
+    {
+      "path": "fxdata/fxdata-data.bin",
+      "sha256": "67855cf79747668f1b08ef55f1526cb3fe509eb5d67bc69fea0588bb11bf078e",
+      "size": 29
+    },
+    {
+      "path": "fxdata/fxdata.bin",
+      "sha256": "38feb54790b417ef879bf2e3dfe7d2044f20ebf8588935deee8d69d76a04168a",
+      "size": 17
+    },
+    {
+      "path": "fxdata/fxdata.h",
+      "sha256": "c231d0d016e577d7372cd482f7f70e17a837f5903405affe875646c27e4df5d2",
+      "size": 130
+    },
+    {
+      "path": "src/fxdata.h",
+      "sha256": "b042ae69b54dce02c2a1c941372b2f17c17bbdfe68820d7e160369bea5b58591",
+      "size": 140
+    },
+    {
+      "path": "src/generated/art_dims.hpp",
+      "sha256": "8401731e707607dc1a870194f93989b4dbd897c472b2402122e573fe4638aee1",
+      "size": 127
+    }
+  ],
+  "schema_version": 1
+}

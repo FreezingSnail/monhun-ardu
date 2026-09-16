@@ -9,6 +9,7 @@ build/*
 !fxdata/fxdata.bin
 !fxdata/fxdata-data.bin
 !fxdata/tables/*.bin
+!tools/tests/fixtures/**/*.bin
 .DS_Store
 1.8.6
 libraries

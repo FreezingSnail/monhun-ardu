@@ -1,0 +1,218 @@
+{
+  "generator": "tools/fxdata_manifest.py",
+  "images": [
+    {
+      "declaration": "fxdata/blocks/Sprites.txt",
+      "path": "images/blocks/fxball_7x8.png",
+      "sha256": "37d9cf09f6aa0fe9d32a80aa9978c97ca7982a7f7aefb5e4ed67d8fe6871de2c",
+      "size": 106,
+      "symbol": "fxball"
+    },
+    {
+      "declaration": "fxdata/blocks/Sprites.txt",
+      "path": "images/blocks/fxchip_8x8.png",
+      "sha256": "8e6684e36e1b34201b83c8cf5518cbff3946189494951fcb1a1d131ebb248e64",
+      "size": 99,
+      "symbol": "fxchip"
+    },
+    {
+      "declaration": "fxdata/blocks/Sprites.txt",
+      "path": "images/blocks/fxdeflect_24x16.png",
+      "sha256": "e8dbb409a7c05e3e21b096c2be0f26fce042671921cb292001b20a28dee11a94",
+      "size": 98,
+      "symbol": "fxdeflect"
+    },
+    {
+      "declaration": "fxdata/blocks/Sprites.txt",
+      "path": "images/blocks/fxerase_4x16.png",
+      "sha256": "d868b8bfedd84d6245cb0678e37d010b9764ed7a8db87f08f55ca70cb771acd4",
+      "size": 75,
+      "symbol": "fxerase"
+    },
+    {
+      "declaration": "fxdata/blocks/Sprites.txt",
+      "path": "images/blocks/fxguard_12x16.png",
+      "sha256": "96ee0149e1f36f35eed661b24fb7a173c8354dafcfe040978247e7b631357a7c",
+      "size": 139,
+      "symbol": "fxguard"
+    },
+    {
+      "declaration": "fxdata/blocks/Sprites.txt",
+      "path": "images/blocks/fxmonster_32x24.png",
+      "sha256": "cf54429e76b67a3d5920ea2112d160c806cfe00af64772f10d400f0feb77a8c9",
+      "size": 386,
+      "symbol": "fxmonster"
+    },
+    {
+      "declaration": "fxdata/blocks/Sprites.txt",
+      "path": "images/blocks/fxparry_24x16.png",
+      "sha256": "5bbd303e860aef3fa8f557da3a7fa7e0fe49c95da54df89c86fb29d5206198c3",
+      "size": 111,
+      "symbol": "fxparry"
+    },
+    {
+      "declaration": "fxdata/blocks/Sprites.txt",
+      "path": "images/blocks/fxplayer_16x16.png",
+      "sha256": "c302f14c6031b3a2b643086c0356fc30b03053e2d788ea554553ecf93d5d026d",
+      "size": 164,
+      "symbol": "fxplayer"
+    },
+    {
+      "declaration": "fxdata/blocks/Sprites.txt",
+      "path": "images/blocks/fxpole_20x40.png",
+      "sha256": "d172833db2505addac85c3855ee8211e646bb387ca42dfd65ec3fddf3636fdc4",
+      "size": 226,
+      "symbol": "fxpole"
+    },
+    {
+      "declaration": "fxdata/blocks/Sprites.txt",
+      "path": "images/blocks/fxreload_10x8.png",
+      "sha256": "f67f01e2aa3f6ba5525aa99420c18e8433135a9d244162313602635eb20b89fd",
+      "size": 82,
+      "symbol": "fxreload"
+    },
+    {
+      "declaration": "fxdata/blocks/Sprites.txt",
+      "path": "images/blocks/fxripspecial_24x24.png",
+      "sha256": "72dcc5c4e9a6b6832a1bd0451f7daadb8faaf6b168af63da20cc2e1d01fa599e",
+      "size": 106,
+      "symbol": "fxripspecial"
+    },
+    {
+      "declaration": "fxdata/blocks/Sprites.txt",
+      "path": "images/blocks/fxscatter_4x8.png",
+      "sha256": "44b147cd16c73056787f2337179afb7e96ed3a078a879541a6c7bd35d014c23a",
+      "size": 93,
+      "symbol": "fxscatter"
+    },
+    {
+      "declaration": "fxdata/blocks/Sprites.txt",
+      "path": "images/blocks/fxslash_32x32.png",
+      "sha256": "630034450d41f2e4fb5b26b92340a63affa93f8b4cb1438f60510d87c1570feb",
+      "size": 244,
+      "symbol": "fxslash"
+    },
+    {
+      "declaration": "fxdata/blocks/Sprites.txt",
+      "path": "images/blocks/fxspark_4x4.png",
+      "sha256": "04cb12e159412a30be1dc11fa9997ddc7e9814cbd139598831a2d9ff7fcb37a7",
+      "size": 104,
+      "symbol": "fxspark"
+    },
+    {
+      "declaration": "fxdata/blocks/Sprites.txt",
+      "path": "images/blocks/fxtelegraph_32x24.png",
+      "sha256": "9346ee91a03356c4d6b523aaaeba29fa3980b464d399c35d286061559ef73457",
+      "size": 216,
+      "symbol": "fxtelegraph"
+    },
+    {
+      "declaration": "fxdata/blocks/Sprites.txt",
+      "path": "images/blocks/fxtrail_4x4.png",
+      "sha256": "2cb3afe6d52fb80222055b4457c91c664af2d0b9de8178e541f8b02e6e225ab6",
+      "size": 86,
+      "symbol": "fxtrail"
+    },
+    {
+      "declaration": "fxdata/blocks/Sprites.txt",
+      "path": "images/blocks/fxwhirl_8x4.png",
+      "sha256": "6f9a150ec478e205e92da314017efa2a02083b5985929aa0756562876fdb0186",
+      "size": 113,
+      "symbol": "fxwhirl"
+    },
+    {
+      "declaration": "fxdata/fonts/Sprites.txt",
+      "path": "images/fonts/fxfontg_4x8.png",
+      "sha256": "baaf9980ddbd8b30d8e96fab278313d34308892eaf86b629aba06eb390a5b530",
+      "size": 397,
+      "symbol": "fxfontg"
+    },
+    {
+      "declaration": "fxdata/fonts/Sprites.txt",
+      "path": "images/fonts/fxfontw_4x8.png",
+      "sha256": "8ef1a2c430cbdd49c2ed7239022e84b758af8a7660db4c69f0352cadb6847ffc",
+      "size": 392,
+      "symbol": "fxfontw"
+    }
+  ],
+  "inputs": [
+    {
+      "path": "fxdata/blocks/Sprites.txt",
+      "sha256": "f0f308c2ac6afe3d4e63fabf3d98a206a46e2c44fed1fd10f00e8f0ae60962a5",
+      "size": 75940,
+      "symbols": [
+        "fxdeflect",
+        "fxparry",
+        "fxmonster",
+        "fxchip",
+        "fxpole",
+        "fxguard",
+        "fxspark",
+        "fxball",
+        "fxtrail",
+        "fxwhirl",
+        "fxplayer",
+        "fxripspecial",
+        "fxtelegraph",
+        "fxreload",
+        "fxscatter",
+        "fxerase",
+        "fxslash"
+      ]
+    },
+    {
+      "path": "fxdata/fonts/Sprites.txt",
+      "sha256": "f4f9ad00d560715137f29ceed3e0c31335e12a8b314f2711649218126ba57c7f",
+      "size": 32336,
+      "symbols": [
+        "fxfontg",
+        "fxfontw"
+      ]
+    },
+    {
+      "path": "fxdata/fxdata.txt",
+      "sha256": "97045824fc90b73843a18ff4282f1d5340022d9f60a33f853b5d95f8aa3dd6ce",
+      "size": 364
+    },
+    {
+      "path": "fxdata/tables/monsterattacks.bin",
+      "sha256": "9e1c191636d5b5f954a10c046c389e7b3a9a592198e5feecbc3b05e1e13f1061",
+      "size": 34,
+      "symbol": "mhMonsterAttacks"
+    },
+    {
+      "path": "fxdata/tables/weapondefs.bin",
+      "sha256": "498d362c9cbbad5512d8d9e9238340b3fe8b8352b9acaf09c600ce525f87591b",
+      "size": 540,
+      "symbol": "mhWeaponDefs"
+    }
+  ],
+  "outputs": [
+    {
+      "path": "fxdata/fxdata-data.bin",
+      "sha256": "acfbe091205f56c5111f0e92fd69df79c495499a54111ed5b502fad027b2f500",
+      "size": 21090
+    },
+    {
+      "path": "fxdata/fxdata.bin",
+      "sha256": "255cff1c2462742db38455ccfa179fb8f95165726fe812f898ec6c9817381231",
+      "size": 21248
+    },
+    {
+      "path": "fxdata/fxdata.h",
+      "sha256": "419e026d2a84f4b210181b92537bb95747523fec5521643eb5f9e18ce07b16eb",
+      "size": 1134
+    },
+    {
+      "path": "src/fxdata.h",
+      "sha256": "419e026d2a84f4b210181b92537bb95747523fec5521643eb5f9e18ce07b16eb",
+      "size": 1134
+    },
+    {
+      "path": "src/generated/art_dims.hpp",
+      "sha256": "d14dbb32e5ad82d91d1d5450e693fe003d687e066c38ae905560b677a7dd0857",
+      "size": 5392
+    }
+  ],
+  "schema_version": 1
+}

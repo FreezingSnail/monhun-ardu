@@ -71,9 +71,9 @@ directly in 1/16-px units and integrated by straight addition.
 ### FX asset pipeline (all assets live on the FX chip)
 
 ```
-images/**/*.png ──tools/convert-sprite.py──► Sprites.txt ──┐
-images/**/*.png ──tools/text2bmp.py────────► font sheets ──┤
-                                                           ▼
+mock/game.js + core dims ──tools/gen-art.py──► images/**/*.png
+images/**/*.png ──tools/convert-sprite.py──► fxdata/*/Sprites.txt ──┐
+                                                                    ▼
                      fxdata/fxdata.txt ─► tools/gen.sh ─► fxdata-build.py
                                                            │
                               src/fxdata.h (offsets) ◄─────┤
@@ -89,6 +89,12 @@ images/**/*.png ──tools/text2bmp.py────────► font sheets �
   `fxspark`, `fxfontw`, `fxfontg` (12466 B total).
 - Regenerate with `make gen` (or `./tools/gen.sh`); bins are tracked despite
   `*.bin` being gitignored (force-added) so device tests are reproducible.
+- `fxdata/manifest.json` (tracked) pins sha256+size for every source image,
+  fxdata declaration and generated artifact; `tools/fxdata_manifest.py --check`
+  verifies it read-only and `make gen-check` re-runs the pipeline and fails if
+  any generated artifact changes (staleness or nondeterminism).
+- `make test-tools` runs the Python unittest suite in `tools/tests/`
+  (manifest orphan/missing/malformed/staleness fixtures).
 - Fonts are drawn from the FX cart (vendored `Font4x6` was deleted after the
   asset pass; it cost ~3 KB of flash).
 
@@ -231,8 +237,8 @@ tst/                host suites + main
 tst/fxdatatest/     Ardens device tests + harness
 fxdata/             fxdata.txt, generated bins (tracked)
 images/             source PNGs (blocks, fonts)
-tools/              convert-sprite.py, text2bmp.py, gen.sh, gen-art.py,
-                    gen-parity-fixtures.js
+tools/              gen-art.py, gen.sh, convert-sprite.py, fxdata_manifest.py,
+                    gen-parity-fixtures.js, tests/ (tooling unittests)
 mock/               JS prototype (source of truth) + node tests
 dist/               compile output
 output.md           most recent worker report (scratch, overwritten per task)

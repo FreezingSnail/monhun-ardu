@@ -1,0 +1,5 @@
+include "blocks/Sprites.txt"
+include "fonts/Sprites.txt"
+
+// Fixture payload: packed table blob standing in for the content tables.
+raw_t mhTestData = "tables/testdata.bin"

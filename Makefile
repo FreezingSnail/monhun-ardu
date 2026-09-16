@@ -1,4 +1,4 @@
-.PHONY :  full build mini gen debug hooks format test fxtest fxtest-headless fxtest-headless-preflight fxtest-build fxtest-run
+.PHONY :  full build mini gen gen-check debug hooks format test test-tools fxtest fxtest-headless fxtest-headless-preflight fxtest-build fxtest-run
 
 # Common compiler flags
 CXX_FLAGS = -std=c++17 -I/src -w -O0 -g3
@@ -28,6 +28,15 @@ mini:
 gen:
 	./tools/gen.sh
 
+# Staleness + determinism gate: snapshot every generated artifact, re-run the
+# single generation entry (tools/gen.sh), and fail if any artifact changed.
+# gen.sh itself records fxdata/manifest.json after validating the
+# image<->fxdata declaration mapping, so a stale manifest fails here too.
+gen-check:
+	@python3 tools/fxdata_manifest.py --snapshot build/gen-check.snapshot.json
+	@$(MAKE) --no-print-directory gen
+	@python3 tools/fxdata_manifest.py --verify-snapshot build/gen-check.snapshot.json && rm -f build/gen-check.snapshot.json
+
 # Install the repo git hooks (.githooks/pre-commit runs clang-format on staged
 # C/C++ files and restages them). Idempotent; run once per clone.
 hooks:
@@ -51,6 +60,10 @@ debug: build
 
 test:
 	$(call run_test,,$(TEST_FLAGS),$(TEST_SOURCES))
+
+# Python tooling tests (unittest suite co-located under tools/tests/).
+test-tools:
+	python3 -m unittest discover -s tools/tests -p 'test_*.py' -v
 
 test-debug:
 	$(call run_test,$(DEBUG_FLAGS),$(TEST_FLAGS),$(TEST_SOURCES))

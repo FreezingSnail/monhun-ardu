@@ -35,4 +35,11 @@ python3 tools/convert-sprite.py ../images/fonts -s 4 -o ../fxdata/fonts/
 python3 Arduboy-Python-Utilities/fxdata-build.py fxdata/fxdata.txt
 cp fxdata/fxdata.h src/fxdata.h
 
+# Record deterministic image<->fxdata provenance: every images/**/*.png must be
+# declared exactly once by an included fxdata/*/Sprites.txt and every declared
+# symbol must have an image. Validation runs first, then the manifest is
+# replaced atomically; `make gen-check` fails if this file (or any other
+# generated artifact) changed.
+python3 tools/fxdata_manifest.py
+
 echo "gen.sh: FX data + src/fxdata.h regenerated"
