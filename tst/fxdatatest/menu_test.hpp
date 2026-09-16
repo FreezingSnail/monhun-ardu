@@ -1,9 +1,10 @@
 #pragma once
-// On-device suite for src/menu_state.hpp (bead monhun-ardu-6zb.2): a scripted
-// nav + A-edge sequence through menuStep, the pick -> newGame mapping through
-// the real AVR core (FX-cart MONSTER_DEFS), and the post-over return edge. Same
-// semantics as tst/menu_test.hpp, compiled here to pin the device build of the
-// menu glue and the cart-backed monster kinds it selects.
+// On-device suite for src/menu_state.hpp (beads monhun-ardu-6zb.2, 6zb.4): a
+// scripted tap + hold nav sequence through menuStep (debounced d-pad), the A
+// edge, the pick -> newGame mapping through the real AVR core (FX-cart
+// MONSTER_DEFS), and the post-over return edge + nav reset. Same semantics as
+// tst/menu_test.hpp, compiled here to pin the device build of the menu glue and
+// the cart-backed monster kinds it selects.
 
 #include "harness/fxtest.hpp"
 #include "src/menu_state.hpp"
@@ -29,29 +30,66 @@ inline void test_menu(FxTest &test) {
     test.expectEq(static_cast<uint32_t>(m.active), 1, F("menu boot active"));
     test.expectEq(static_cast<uint32_t>(menuStep(m, idle)), MENU_NONE, F("menu idle silent"));
 
-    // ---- scripted nav: weapon right x3 wraps, one left wraps back to GUN
+    // ---- taps: weapon right x3 wraps, one left wraps back to GUN
     menuStep(m, right);
+    menuStep(m, idle);   // release, so the next call is a fresh press
     test.expectEq(static_cast<uint32_t>(m.weapon), 1, F("nav right 1"));
     menuStep(m, right);
+    menuStep(m, idle);
     test.expectEq(static_cast<uint32_t>(m.weapon), 2, F("nav right 2"));
     menuStep(m, right);
+    menuStep(m, idle);
     test.expectEq(static_cast<uint32_t>(m.weapon), 0, F("nav weapon wrap fwd"));
     menuStep(m, left);
+    menuStep(m, idle);
     test.expectEq(static_cast<uint32_t>(m.weapon), 2, F("nav weapon wrap back"));
 
-    // ---- target down x3 reaches POLE, x4 wraps to LUNGE, up wraps back
+    // ---- taps: target down x3 reaches POLE, x4 wraps to LUNGE, up wraps back
     menuStep(m, down);
+    menuStep(m, idle);
     test.expectEq(static_cast<uint32_t>(m.target), 1, F("nav down 1"));
     menuStep(m, down);
+    menuStep(m, idle);
     test.expectEq(static_cast<uint32_t>(m.target), 2, F("nav down 2"));
     menuStep(m, down);
+    menuStep(m, idle);
     test.expectEq(static_cast<uint32_t>(m.target), 3, F("nav down 3 pole"));
     menuStep(m, down);
+    menuStep(m, idle);
     test.expectEq(static_cast<uint32_t>(m.target), 0, F("nav target wrap fwd"));
     menuStep(m, up);
+    menuStep(m, idle);
     test.expectEq(static_cast<uint32_t>(m.target), 3, F("nav target wrap back"));
 
-    // ---- A edge fires START once per press (picks now GUN + POLE)
+    // ---- debounce: press steps once, hold waits DELAY, then repeats REPEAT
+    menuStep(m, right);   // weapon 2 -> 0 (immediate)
+    test.expectEq(static_cast<uint32_t>(m.weapon), 0, F("hold press step"));
+    for (uint8_t i = 0; i < MENU_NAV_DELAY - 1; i++)
+        menuStep(m, right);
+    test.expectEq(static_cast<uint32_t>(m.weapon), 0, F("hold before delay"));
+    menuStep(m, right);   // delay expires: second step
+    test.expectEq(static_cast<uint32_t>(m.weapon), 1, F("hold at delay step"));
+    for (uint8_t i = 0; i < MENU_NAV_REPEAT - 1; i++)
+        menuStep(m, right);
+    test.expectEq(static_cast<uint32_t>(m.weapon), 1, F("hold between repeats"));
+    menuStep(m, right);   // repeat step
+    test.expectEq(static_cast<uint32_t>(m.weapon), 2, F("hold repeat step"));
+    menuStep(m, idle);   // release resets; pick kept
+    test.expectEq(static_cast<uint32_t>(m.weapon), 2, F("hold release keeps"));
+    menuStep(m, right);
+    test.expectEq(static_cast<uint32_t>(m.weapon), 0, F("tap after release immediate"));
+
+    // ---- reversal is immediate and re-arms the delay
+    menuStep(m, left);
+    test.expectEq(static_cast<uint32_t>(m.weapon), 2, F("reversal immediate"));
+    for (uint8_t i = 0; i < MENU_NAV_DELAY - 1; i++)
+        menuStep(m, left);
+    test.expectEq(static_cast<uint32_t>(m.weapon), 2, F("reversal restart held"));
+    menuStep(m, left);
+    test.expectEq(static_cast<uint32_t>(m.weapon), 1, F("reversal after delay"));
+    menuStep(m, idle);   // release the axis so later picks start fresh
+
+    // ---- A edge fires START once per press (picks now FLS + POLE)
     test.expectEq(static_cast<uint32_t>(menuStep(m, a)), MENU_START, F("A edge start"));
     for (uint8_t i = 0; i < 4; i++)
         test.expectEq(static_cast<uint32_t>(menuStep(m, a)), MENU_NONE, F("A held no repeat"));
@@ -61,7 +99,7 @@ inline void test_menu(FxTest &test) {
     // stack copies overflow the AVR stack in setup().
     static Game g;
     menuStart(g, m);
-    test.expectEq(static_cast<uint32_t>(g.weapon), W_GUN, F("start pole weapon"));
+    test.expectEq(static_cast<uint32_t>(g.weapon), W_FLAIL, F("start pole weapon"));
     test.expectEq(static_cast<uint32_t>(g.mode), MODE_TRAIN, F("start pole mode"));
     test.expectEq(static_cast<uint32_t>(g.monsterKind), MON_LUNGE, F("start pole kind 0"));
 
@@ -102,6 +140,22 @@ inline void test_menu(FxTest &test) {
     test.expectEq(static_cast<uint32_t>(p.weapon), W_FLAIL, F("kept pick weapon"));
     test.expectEq(static_cast<uint32_t>(p.target), MON_HEAVY, F("kept pick target"));
     test.expectEq(static_cast<uint32_t>(menuStep(p, a)), MENU_NONE, F("return A not restarted"));
+
+    // ---- return clears the hold state: a held d-pad cannot skip picks
+    MenuState n;
+    menuStep(n, right);   // SWD -> FLS, timer armed
+    for (uint8_t i = 0; i < MENU_NAV_DELAY - 1; i++)
+        menuStep(n, right);
+    test.expectEq(static_cast<uint32_t>(n.navXTimer), 1, F("nav-reset timer mid-hold"));
+    test.expectEq(static_cast<uint32_t>(menuReturnStep(n, true, a)), 1, F("nav-reset returns"));
+    test.expectEq(static_cast<uint32_t>(n.navXTimer), 0, F("nav-reset timer clear"));
+    menuStep(n, right);   // still held on re-entry: one immediate step only
+    test.expectEq(static_cast<uint32_t>(n.weapon), 2, F("nav-reset holds count"));
+    for (uint8_t i = 0; i < MENU_NAV_DELAY - 1; i++)
+        menuStep(n, right);
+    test.expectEq(static_cast<uint32_t>(n.weapon), 2, F("nav-reset fresh delay"));
+    menuStep(n, right);
+    test.expectEq(static_cast<uint32_t>(n.weapon), 0, F("nav-reset fresh repeat"));
 }
 
 }   // namespace menu

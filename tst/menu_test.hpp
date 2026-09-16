@@ -1,8 +1,9 @@
 #pragma once
-// Host unit tests for src/menu_state.hpp — opening-menu nav wrap, A-edge START
-// exactly once, pick -> mode/kind mapping and the post-game return edge. The
-// menu is device glue (mock/game.js has no menu); the sim mapping it applies is
-// core newGame(), which world_test/monster_test already pin separately.
+// Host unit tests for src/menu_state.hpp — opening-menu debounced nav (tap vs
+// hold), A-edge START exactly once, pick -> mode/kind mapping and the post-game
+// return edge. The menu is device glue (mock/game.js has no menu); the sim
+// mapping it applies is core newGame(), which world_test/monster_test already
+// pin separately.
 #include "test.hpp"
 #include "../src/menu_state.hpp"
 
@@ -17,12 +18,19 @@ const Input MT_UP = Input{0, -1, false, false};
 const Input MT_DOWN = Input{0, 1, false, false};
 const Input MT_A = Input{0, 0, true, false};
 
+// Tap helper: press then release, so every call is a fresh press (immediate
+// step) rather than a continuation of a held direction.
+inline void menuTap(MenuState &m, const Input &dir) {
+    menuStep(m, dir);
+    menuStep(m, MT_IDLE);
+}
+
 }   // namespace menutest
 
 using namespace menutest;
 
 void MenuSuite(TestRunner &runner) {
-    TestSuite suite("Opening menu: nav, start edge, pick mapping (src/menu_state.hpp)");
+    TestSuite suite("Opening menu: debounced nav, start edge, pick mapping (src/menu_state.hpp)");
 
     {
         Test t("boot defaults: SWD/LUNGE, active, idle tick is silent");
@@ -36,38 +44,106 @@ void MenuSuite(TestRunner &runner) {
     }
 
     {
-        Test t("LEFT/RIGHT cycle weapon 0..2 and wrap both ways");
+        Test t("taps cycle weapon 0..2 and wrap both ways (one step per press)");
         MenuState m;
-        menuStep(m, MT_RIGHT);
+        menuTap(m, MT_RIGHT);
         t.assert(m.weapon, 1, "right: SWD -> FLS");
-        menuStep(m, MT_RIGHT);
+        menuTap(m, MT_RIGHT);
         t.assert(m.weapon, 2, "right: FLS -> GUN");
-        menuStep(m, MT_RIGHT);
+        menuTap(m, MT_RIGHT);
         t.assert(m.weapon, 0, "right wraps GUN -> SWD");
-        menuStep(m, MT_LEFT);
+        menuTap(m, MT_LEFT);
         t.assert(m.weapon, 2, "left wraps SWD -> GUN");
-        menuStep(m, MT_LEFT);
+        menuTap(m, MT_LEFT);
         t.assert(m.weapon, 1, "left: GUN -> FLS");
         t.assert(m.target, 0, "weapon nav leaves target alone");
         suite.addTest(t);
     }
 
     {
-        Test t("UP/DOWN cycle target 0..3 (beasts then pole) and wrap both ways");
+        Test t("taps cycle target 0..3 (beasts then pole) and wrap both ways");
         MenuState m;
-        menuStep(m, MT_DOWN);
+        menuTap(m, MT_DOWN);
         t.assert(m.target, 1, "down: LUNGE -> SWEEP");
-        menuStep(m, MT_DOWN);
+        menuTap(m, MT_DOWN);
         t.assert(m.target, 2, "down: SWEEP -> HEAVY");
-        menuStep(m, MT_DOWN);
+        menuTap(m, MT_DOWN);
         t.assert(m.target, 3, "down: HEAVY -> POLE");
-        menuStep(m, MT_DOWN);
+        menuTap(m, MT_DOWN);
         t.assert(m.target, 0, "down wraps POLE -> LUNGE");
-        menuStep(m, MT_UP);
+        menuTap(m, MT_UP);
         t.assert(m.target, 3, "up wraps LUNGE -> POLE");
-        menuStep(m, MT_UP);
+        menuTap(m, MT_UP);
         t.assert(m.target, 2, "up: POLE -> HEAVY");
         t.assert(m.weapon, 0, "target nav leaves weapon alone");
+        suite.addTest(t);
+    }
+
+    {
+        Test t("hold waits MENU_NAV_DELAY then repeats every MENU_NAV_REPEAT");
+        MenuState m;
+        // Fresh press: immediate step, then DELAY-1 continuation ticks hold.
+        menuStep(m, MT_RIGHT);
+        t.assert(m.weapon, 1, "press steps immediately");
+        for (uint8_t i = 0; i < MENU_NAV_DELAY - 1; i++) {
+            menuStep(m, MT_RIGHT);
+            t.assert(m.weapon, 1, "held before delay: no repeat");
+        }
+        menuStep(m, MT_RIGHT);
+        t.assert(m.weapon, 2, "delay tick fires second step");
+        // Then one step every REPEAT ticks.
+        for (uint8_t i = 0; i < MENU_NAV_REPEAT - 1; i++) {
+            menuStep(m, MT_RIGHT);
+            t.assert(m.weapon, 2, "between repeats: no step");
+        }
+        menuStep(m, MT_RIGHT);
+        t.assert(m.weapon, 0, "first repeat after REPEAT ticks");
+        for (uint8_t i = 0; i < MENU_NAV_REPEAT - 1; i++)
+            menuStep(m, MT_RIGHT);
+        menuStep(m, MT_RIGHT);
+        t.assert(m.weapon, 1, "second repeat after REPEAT ticks");
+        // Release resets: the next press steps immediately, not on a stale timer.
+        menuStep(m, MT_IDLE);
+        t.assert(m.weapon, 1, "release keeps the pick");
+        t.assert(m.navX, 0, "release clears last direction");
+        t.assert(m.navXTimer, 0, "release clears hold timer");
+        menuStep(m, MT_RIGHT);
+        t.assert(m.weapon, 2, "fresh press after release steps immediately");
+        suite.addTest(t);
+    }
+
+    {
+        Test t("direction reversal steps immediately and re-arms the delay");
+        MenuState m;
+        menuStep(m, MT_RIGHT);   // immediate: FLS
+        for (uint8_t i = 0; i < 5; i++)
+            menuStep(m, MT_RIGHT);   // still held, well before DELAY
+        menuStep(m, MT_LEFT);
+        t.assert(m.weapon, 0, "reversal steps immediately");
+        for (uint8_t i = 0; i < MENU_NAV_DELAY - 1; i++)
+            menuStep(m, MT_LEFT);
+        t.assert(m.weapon, 0, "reversed hold still waits DELAY");
+        menuStep(m, MT_LEFT);
+        t.assert(m.weapon, 2, "reversed hold repeats after DELAY");
+        suite.addTest(t);
+    }
+
+    {
+        Test t("axes debounce independently (held X repeats while Y taps)");
+        MenuState m;
+        menuStep(m, MT_RIGHT);   // x armed for DELAY, immediate step
+        for (uint8_t i = 0; i < MENU_NAV_DELAY - 1; i++)
+            menuStep(m, MT_RIGHT);
+        const Input diagonal = Input{1, 1, false, false};
+        menuStep(m, diagonal);   // x delay expires the same tick y taps
+        t.assert(m.weapon, 2, "held x repeats on schedule");
+        t.assert(m.target, 1, "fresh y tap steps same tick");
+        for (uint8_t i = 0; i < MENU_NAV_DELAY - 1; i++)
+            menuStep(m, diagonal);
+        t.assert(m.target, 1, "y hold waits its own DELAY");
+        menuStep(m, diagonal);
+        t.assert(m.target, 2, "y repeats after its DELAY");
+        t.assert(m.navX > 0 && m.navY > 0, true, "both axes still armed");
         suite.addTest(t);
     }
 
@@ -134,9 +210,9 @@ void MenuSuite(TestRunner &runner) {
     {
         Test t("picks survive the return round trip; the return A does not restart");
         MenuState m;
-        menuStep(m, MT_RIGHT);   // FLS
-        menuStep(m, MT_DOWN);
-        menuStep(m, MT_DOWN);   // HEAVY
+        menuTap(m, MT_RIGHT);   // FLS
+        menuTap(m, MT_DOWN);
+        menuTap(m, MT_DOWN);   // HEAVY
         t.assert(menuStep(m, MT_A), MENU_START, "start picked loadout");
         Game g;
         menuStart(g, m);
@@ -151,6 +227,31 @@ void MenuSuite(TestRunner &runner) {
         t.assert(menuStep(m, MT_A), MENU_NONE, "held return A does not restart");
         t.assert(menuStep(m, MT_IDLE), MENU_NONE, "release after return");
         t.assert(menuStep(m, MT_A), MENU_START, "fresh A press starts again");
+        suite.addTest(t);
+    }
+
+    {
+        Test t("return-to-menu resets nav timers (held dpad cannot skip)");
+        MenuState m;
+        // Hold RIGHT through the sim and the over screen: ax timer is mid-hold.
+        menuStep(m, MT_RIGHT);
+        for (uint8_t i = 0; i < MENU_NAV_DELAY - 1; i++)
+            menuStep(m, MT_RIGHT);
+        t.assert(m.navXTimer, 1, "x timer nearly expired before the return");
+        t.assert(menuReturnStep(m, true, MT_A), true, "over + A returns");
+        t.assert(m.navX, 0, "return clears last direction");
+        t.assert(m.navXTimer, 0, "return clears hold timer");
+        // Re-entry with RIGHT still held: exactly one immediate step, then the
+        // fresh DELAY applies. Without the reset the old timer would have fired
+        // a repeat on the very first menu tick.
+        menuStep(m, MT_RIGHT);
+        t.assert(m.weapon, 2, "re-entry with held dpad steps once");
+        for (uint8_t i = 0; i < MENU_NAV_DELAY - 1; i++) {
+            menuStep(m, MT_RIGHT);
+            t.assert(m.weapon, 2, "fresh hold waits DELAY after re-entry");
+        }
+        menuStep(m, MT_RIGHT);
+        t.assert(m.weapon, 0, "fresh hold repeats after DELAY");
         suite.addTest(t);
     }
 

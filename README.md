@@ -12,11 +12,11 @@ port of a browser prototype (`mock/`), verified tick-for-tick against it.
 |---|---|
 | Vertical-slice sim | Ported + parity-verified (20 scenes / 1269 ticks / 660 device asserts) |
 | Device render + HUD + audio | Working (block/FX-sprite art, cue tones; HUD text/FX glyphs — bars clipped, `7y3`) |
-| Host unit tests | `make test` — **1433 passed / 0 failed** |
-| Device tests (Ardens) | boot 4, assets 254, audio 14, menu 39, parity 660, data 221, perf 5 — all PASS |
+| Host unit tests | `make test` — **1490 passed / 0 failed** |
+| Device tests (Ardens) | boot 4, assets 254, audio 14, menu 55, parity 660, data 221, perf 5 — all PASS |
 | Perf gate (`monhun-ardu-8v7`, re-verified `42n.6`) | **PASS.** plane 156 Hz (≥135), logic 52 Hz (≥45), render max 4676 µs (≤7407), tick 988 µs, RAM free 494 B |
 | Perf tooling | Headless Ardens profiler dump (`profiledump=<path>`, local patch) + on-device cycle bench (`test_perf`) |
-| Shipping build | flash **28116 / 29696 B** (94%), RAM **1946 / 2560 B** (614 free) |
+| Shipping build | flash **28132 / 29696 B** (94%), RAM **1950 / 2560 B** (610 free) |
 | FX data image | **21123 B** of 16 MB used |
 
 Speculative gameplay status: combat (sword / flail / gunshield), monster FSM,
@@ -146,10 +146,15 @@ images/**/*.png ──tools/convert-sprite.py──► fxdata/*/Sprites.txt ─�
 | UP / DOWN | cycle target: LUNGE / SWEEP / HEAVY beast, or POLE |
 | A | start the selected scene |
 
-Picks wrap in both directions. Targets LUNGE/SWEEP/HEAVY start the matching
-beast variant in hunt mode; POLE starts train mode (the static pole, no beast).
-After a win or loss, A returns to the menu with the picks kept until reboot.
-While the menu is up the sim and audio are not stepped.
+D-pad nav is debounced: a tap moves exactly one pick (immediate on the direction
+change), while holding waits ~300 ms (16 logic ticks) and then repeats every
+~115 ms (6 ticks). Reversing steps at once; releasing resets the hold timer; a
+re-entry after win/loss resets it too, so a held d-pad cannot skip picks. A stays
+edge-based: one start per press. Picks wrap in both directions. Targets
+LUNGE/SWEEP/HEAVY start the matching beast variant in hunt mode; POLE starts
+train mode (the static pole, no beast). After a win or loss, A returns to the
+menu with the picks kept until reboot. While the menu is up the sim and audio are
+not stepped.
 
 ### Target roster (`MONSTER_DEFS`, FX cart blob)
 
@@ -175,7 +180,7 @@ While the menu is up the sim and audio are not stepped.
 ## Commands
 
 ```sh
-make test               # host unit tests (1433 asserts)
+make test               # host unit tests (1490 asserts)
 make fxtest-headless    # Ardens device tests (boot/assets/audio/menu/parity/data/perf)
 make build              # compile shipping sketch (output in dist/)
 make debug              # build, then open Ardens debugger (ELF + DWARF) with FX image
@@ -231,11 +236,12 @@ Notes:
    direct masked framebuffer writes (`816767d`) — render max 13312 → 3984 µs,
    plane 82 → 156 Hz, logic 27 → 52 Hz, profiler `mh::blk` share 29% → 3.6%.
    Any new feature must fit flash (1580 B free) and keep the perf gates green.
-2. **Flash headroom**: shipping 28116/29696 B (1580 B free) after the
+2. **Flash headroom**: shipping 28132/29696 B (1564 B free) after the
    content-table offload (`42n.1`-`42n.4`), the sine-LUT shrink (`42n.7`; the
-   65 B quarter-wave table + sign fold) and the opening menu (`6zb.2`, +1604 B
+   65 B quarter-wave table + sign fold), the opening menu (`6zb.2`, +1604 B
    for the menu state machine, FX-glyph render and the runtime monster-kind
-   start path). The 119 B of hot LUTs (`mh::SIN65`
+   start path) and d-pad nav debounce (`6zb.4`, +16 B for the per-axis hold
+   timers). The 119 B of hot LUTs (`mh::SIN65`
    65 B, `fp::DIR8` 32 B, `mh::MH_MASK_TOP/BOT` 16 B, `mh::RING6` 6 B) stay in
    MCU flash by decision (`monhun-ardu-42n.5`): FX per-access reads measured
    ~150 cycles (~9 µs, 20-35x an LPM) and a SIN65 RAM cache would breach the
@@ -246,9 +252,9 @@ Notes:
    compile-time flags.
 3. **RAM history**: constant tables originally sat in AVR `.rodata` (RAM) at
    2494 B used; moved to PROGMEM (MCU flash) via `progmem.hpp` → 1888 B. Audio
-   added timers/state → 1941 B; the opening menu's 5 B `MenuState` → 1946 B. FX
-   sprite data stays on the cart, so RAM grew little through the art pass, but
-   the margin is ~600 B.
+   added timers/state → 1941 B; the opening menu's 5 B `MenuState` → 1946 B; its
+   per-axis nav hold state (`6zb.4`) → 1950 B. FX sprite data stays on the cart,
+   so RAM grew little through the art pass, but the margin is ~600 B.
 4. **Mock accuracy vs speed**: the sim is parity-locked to the mock by 660 device
    asserts. Any future tuning change must either update the mock + fixtures in
    the same commit or be expressed as render/parameter-only changes.
