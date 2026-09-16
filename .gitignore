@@ -6,6 +6,9 @@ build/*
 *.eep
 *.elf
 *.bin
+!fxdata/fxdata.bin
+!fxdata/fxdata-data.bin
+!fxdata/tables/*.bin
 .DS_Store
 1.8.6
 libraries

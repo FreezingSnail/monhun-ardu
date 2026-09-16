@@ -10,6 +10,7 @@
 #include "progmem.hpp"
 #include "fp.hpp"
 #include "input.hpp"
+#include "fxmem.hpp"   // FX cart offsets + mhFxRead* field readers (identity on host)
 
 namespace mh {
 
@@ -111,9 +112,25 @@ struct WeaponDef {
     ShellDef shells[2];
 };
 
-// In flash on AVR (540 B, was SRAM). Host keeps the plain array so
-// player_test.hpp / shells_test.hpp field reads stay unchanged. Core code
-// reads fields through the accessors below.
+// On AVR the table lives on the FX cart as one packed 540 B blob (bead
+// monhun-ardu-42n.1): the shim below exposes the same `WEAPON_DEFS[i]` /
+// `&WEAPON_DEFS[i]` syntax, but every element is a fake 16-bit pointer into
+// the cart's address space (the fxdata.h blob offset). Nothing dereferences it
+// on MCU; the accessors read fields through mhFxRead*. The host keeps the
+// plain array so player_test.hpp / shells_test.hpp field reads stay unchanged.
+#if defined(__AVR__)
+static_assert(sizeof(Attack) == 23, "Attack must match packed FX blob size");
+static_assert(sizeof(Branch) == 27, "Branch must match packed FX blob size");
+static_assert(sizeof(ShellDef) == 15, "ShellDef must match packed FX blob size");
+static_assert(sizeof(WeaponDef) == 180, "WeaponDef must match packed FX blob size");
+
+struct FxWeaponDefsRom {
+    const WeaponDef &operator[](int16_t i) const {
+        return *reinterpret_cast<const WeaponDef *>(static_cast<uint16_t>(MH_FX_WEAPON_DEFS_ADDR + sizeof(WeaponDef) * i));
+    }
+};
+constexpr FxWeaponDefsRom WEAPON_DEFS = {};
+#else
 MH_PROGMEM const WeaponDef WEAPON_DEFS[3] = {
     // sword: fast taps, dodge (i-frames), parry stance + riposte special
     {
@@ -146,20 +163,22 @@ MH_PROGMEM const WeaponDef WEAPON_DEFS[3] = {
         {{2, 28, 35, 7, 6, 70, 6, 1}, {5, 7, 42, 4, 4, 30, 5, 3}},
     },
 };
+#endif   // __AVR__
 
-// ------------------------------------------------ WEAPON_DEFS flash accessors
+// ------------------------------------------------ WEAPON_DEFS cart accessors
 // Every field read goes through one of these, so the same core code works with
-// the table in host RAM (make test) or AVR flash. Sub-objects are addressed as
-// `&d->attacks[i]` etc.; per-field readers then load exactly one value.
+// the table in host RAM (make test) or on the FX cart (AVR). Sub-objects are
+// addressed as `&d->attacks[i]` etc.; per-field readers then load exactly one
+// value (plain deref on host, a cart read via mhFxRead* on AVR).
 
 inline int8_t weaponId(const WeaponDef *d) {
-    return mhPgmReadI8(&d->id);
+    return mhFxReadI8(&d->id);
 }
 inline int16_t weaponSpd(const WeaponDef *d) {
-    return mhPgmReadI16(&d->spd);
+    return mhFxReadI16(&d->spd);
 }
 inline bool weaponCanCancel(const WeaponDef *d) {
-    return mhPgmReadBool(&d->canCancel);
+    return mhFxReadBool(&d->canCancel);
 }
 inline const Attack *weaponAttack(const WeaponDef *d, int16_t i) {
     return &d->attacks[i];
@@ -175,81 +194,81 @@ inline const ShellDef *weaponShell(const WeaponDef *d, int16_t i) {
 }
 
 inline int16_t attackStartup(const Attack *a) {
-    return mhPgmReadI16(&a->startup);
+    return mhFxReadI16(&a->startup);
 }
 inline int16_t attackActive(const Attack *a) {
-    return mhPgmReadI16(&a->active);
+    return mhFxReadI16(&a->active);
 }
 inline int16_t attackRecover(const Attack *a) {
-    return mhPgmReadI16(&a->recover);
+    return mhFxReadI16(&a->recover);
 }
 inline int16_t attackDmg(const Attack *a) {
-    return mhPgmReadI16(&a->dmg);
+    return mhFxReadI16(&a->dmg);
 }
 inline int16_t attackReach(const Attack *a) {
-    return mhPgmReadI16(&a->reach);
+    return mhFxReadI16(&a->reach);
 }
 inline int16_t attackHw(const Attack *a) {
-    return mhPgmReadI16(&a->hw);
+    return mhFxReadI16(&a->hw);
 }
 inline int16_t attackHh(const Attack *a) {
-    return mhPgmReadI16(&a->hh);
+    return mhFxReadI16(&a->hh);
 }
 inline int16_t attackStam(const Attack *a) {
-    return mhPgmReadI16(&a->stam);
+    return mhFxReadI16(&a->stam);
 }
 inline int16_t attackLunge(const Attack *a) {
-    return mhPgmReadI16(&a->lunge);
+    return mhFxReadI16(&a->lunge);
 }
 inline int16_t attackPush(const Attack *a) {
-    return mhPgmReadI16(&a->push);
+    return mhFxReadI16(&a->push);
 }
 inline int8_t attackEffect(const Attack *a) {
-    return mhPgmReadI8(&a->effect);
+    return mhFxReadI8(&a->effect);
 }
 inline bool attackShell(const Attack *a) {
-    return mhPgmReadBool(&a->shell);
+    return mhFxReadBool(&a->shell);
 }
 inline int8_t attackId(const Attack *a) {
-    return mhPgmReadI8(&a->id);
+    return mhFxReadI8(&a->id);
 }
 
 inline int8_t branchStage(const Branch *b) {
-    return mhPgmReadI8(&b->stage);
+    return mhFxReadI8(&b->stage);
 }
 inline int8_t branchStance(const Branch *b) {
-    return mhPgmReadI8(&b->stance);
+    return mhFxReadI8(&b->stance);
 }
 inline int16_t branchAutoT(const Branch *b) {
-    return mhPgmReadI16(&b->autoT);
+    return mhFxReadI16(&b->autoT);
 }
 inline const Attack *branchAtk(const Branch *b) {
     return &b->atk;
 }
 
 inline int16_t shellCount(const ShellDef *s) {
-    return mhPgmReadI16(&s->count);
+    return mhFxReadI16(&s->count);
 }
 inline int16_t shellDmg(const ShellDef *s) {
-    return mhPgmReadI16(&s->dmg);
+    return mhFxReadI16(&s->dmg);
 }
 inline int16_t shellSpeedF(const ShellDef *s) {
-    return mhPgmReadI16(&s->speedF);
+    return mhFxReadI16(&s->speedF);
 }
 inline int16_t shellW(const ShellDef *s) {
-    return mhPgmReadI16(&s->w);
+    return mhFxReadI16(&s->w);
 }
 inline int16_t shellH(const ShellDef *s) {
-    return mhPgmReadI16(&s->h);
+    return mhFxReadI16(&s->h);
 }
 inline int16_t shellReload(const ShellDef *s) {
-    return mhPgmReadI16(&s->reload);
+    return mhFxReadI16(&s->reload);
 }
 inline int16_t shellStam(const ShellDef *s) {
-    return mhPgmReadI16(&s->stam);
+    return mhFxReadI16(&s->stam);
 }
 inline int8_t shellPellets(const ShellDef *s) {
-    return mhPgmReadI8(&s->pellets);
+    return mhFxReadI8(&s->pellets);
 }
 
 struct Game;
@@ -346,40 +365,53 @@ struct MonsterAttack {
     int16_t windup, active, recover, speedF, dmg, reach, hw, hh;
 };
 
-// In flash on AVR (34 B, was SRAM). monster_test.hpp still reads the plain
-// host array field-by-field; core code uses the accessors below.
+// On AVR the table lives on the FX cart as one packed 34 B blob (bead
+// monhun-ardu-42n.1), addressed through the same fake-pointer shim as
+// WEAPON_DEFS. monster_test.hpp still reads the plain host array
+// field-by-field; core code uses the accessors below.
+#if defined(__AVR__)
+static_assert(sizeof(MonsterAttack) == 17, "MonsterAttack must match packed FX blob size");
+
+struct FxMonsterAttacksRom {
+    const MonsterAttack &operator[](int16_t i) const {
+        return *reinterpret_cast<const MonsterAttack *>(static_cast<uint16_t>(MH_FX_MONSTER_ATTACKS_ADDR + sizeof(MonsterAttack) * i));
+    }
+};
+constexpr FxMonsterAttacksRom MONSTER_ATTACKS = {};
+#else
 MH_PROGMEM const MonsterAttack MONSTER_ATTACKS[2] = {
     {MK_LUNGE, 40, 10, 55, 34, 12, 12, 24, 22},
     {MK_SWEEP, 48, 12, 60, 0, 9, 17, 32, 24},
 };
+#endif   // __AVR__
 
-// --------------------------------------------- MONSTER_ATTACKS flash accessors
+// --------------------------------------------- MONSTER_ATTACKS cart accessors
 inline int8_t monsterAttackKind(const MonsterAttack *a) {
-    return mhPgmReadI8(&a->kind);
+    return mhFxReadI8(&a->kind);
 }
 inline int16_t monsterAttackWindup(const MonsterAttack *a) {
-    return mhPgmReadI16(&a->windup);
+    return mhFxReadI16(&a->windup);
 }
 inline int16_t monsterAttackActive(const MonsterAttack *a) {
-    return mhPgmReadI16(&a->active);
+    return mhFxReadI16(&a->active);
 }
 inline int16_t monsterAttackRecover(const MonsterAttack *a) {
-    return mhPgmReadI16(&a->recover);
+    return mhFxReadI16(&a->recover);
 }
 inline int16_t monsterAttackSpeedF(const MonsterAttack *a) {
-    return mhPgmReadI16(&a->speedF);
+    return mhFxReadI16(&a->speedF);
 }
 inline int16_t monsterAttackDmg(const MonsterAttack *a) {
-    return mhPgmReadI16(&a->dmg);
+    return mhFxReadI16(&a->dmg);
 }
 inline int16_t monsterAttackReach(const MonsterAttack *a) {
-    return mhPgmReadI16(&a->reach);
+    return mhFxReadI16(&a->reach);
 }
 inline int16_t monsterAttackHw(const MonsterAttack *a) {
-    return mhPgmReadI16(&a->hw);
+    return mhFxReadI16(&a->hw);
 }
 inline int16_t monsterAttackHh(const MonsterAttack *a) {
-    return mhPgmReadI16(&a->hh);
+    return mhFxReadI16(&a->hh);
 }
 
 enum MState : int8_t {

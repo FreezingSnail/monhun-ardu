@@ -7,6 +7,12 @@ set -e
 # Author source PNGs from mock/game.js shapes + FONT (deterministic).
 python3 tools/gen-art.py
 
+# Serialize the core content tables (weapon/monster) to packed AVR-layout
+# little-endian blobs. Host g++; deterministic output, asserted sizes.
+mkdir -p build fxdata/tables
+g++ -std=c++17 -O2 -w tools/gen-fxtables.cpp -o build/gen-fxtables
+./build/gen-fxtables fxdata/tables
+
 # Convert each sprite directory into a Sprites.txt of uint8_t plus-mask blobs.
 # convert-sprite.py resolves paths relative to tools/, hence the ../ prefixes.
 mkdir -p fxdata/blocks fxdata/fonts
