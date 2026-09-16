@@ -1,0 +1,47 @@
+#!/bin/sh
+# clang-format staged C/C++ files and restage them before the commit.
+#
+# Install with:  make hooks   (sets core.hooksPath=.githooks)
+# Override the binary with CLANG_FORMAT=/path/to/clang-format.
+#
+# Skips vendored (src/external, Arduboy-Python-Utilities) and generated files
+# (src/fxdata.h, fxdata/fxdata.h, tst/fxdatatest/parity_fixtures.hpp), and any
+# non-C-family path. Never blocks a commit unless clang-format itself fails.
+
+set -eu
+
+CLANG_FORMAT="${CLANG_FORMAT:-clang-format}"
+if ! command -v "$CLANG_FORMAT" >/dev/null 2>&1; then
+    echo "pre-commit: $CLANG_FORMAT not found; skipping formatting" >&2
+    exit 0
+fi
+
+staged=$(git diff --cached --name-only --diff-filter=ACM || true)
+[ -n "$staged" ] || exit 0
+
+if ! git diff --quiet -- .clang-format; then
+    echo "pre-commit: warning: .clang-format has unstaged changes; formatting uses the staged/worktree copy" >&2
+fi
+
+old_ifs=$IFS
+IFS='
+'
+for f in $staged; do
+    [ -n "$f" ] || continue
+    case "$f" in
+        src/external/*|Arduboy-Python-Utilities/*) continue ;;
+        src/fxdata.h|fxdata/fxdata.h|tst/fxdatatest/parity_fixtures.hpp) continue ;;
+    esac
+    case "$f" in
+        *.h|*.hpp|*.hh|*.hxx|*.c|*.cc|*.cpp|*.cxx|*.ino) ;;
+        *) continue ;;
+    esac
+    [ -f "$f" ] || continue
+
+    if ! "$CLANG_FORMAT" --style=file "$f" | cmp -s - "$f"; then
+        "$CLANG_FORMAT" -i --style=file "$f"
+        git add -- "$f"
+        echo "pre-commit: clang-format updated $f"
+    fi
+done
+IFS=$old_ifs

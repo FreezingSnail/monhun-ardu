@@ -1,4 +1,4 @@
-.PHONY :  full build mini gen debug test fxtest fxtest-headless fxtest-headless-preflight fxtest-build fxtest-run
+.PHONY :  full build mini gen debug hooks format test fxtest fxtest-headless fxtest-headless-preflight fxtest-build fxtest-run
 
 # Common compiler flags
 CXX_FLAGS = -std=c++17 -I/src -w -O0 -g3
@@ -27,6 +27,19 @@ mini:
 
 gen:
 	./tools/gen.sh
+
+# Install the repo git hooks (.githooks/pre-commit runs clang-format on staged
+# C/C++ files and restages them). Idempotent; run once per clone.
+hooks:
+	git config core.hooksPath .githooks
+	chmod +x .githooks/pre-commit
+	@echo "git hooks installed (core.hooksPath=.githooks)"
+
+# Format all tracked C-family sources, skipping vendored and generated files.
+FORMAT_SKIP = ^(src/external|Arduboy-Python-Utilities)/|^(src/fxdata\.h|fxdata/fxdata\.h|tst/fxdatatest/parity_fixtures\.hpp)$$
+format:
+	@git ls-files '*.hpp' '*.cpp' '*.h' '*.ino' | grep -vE '$(FORMAT_SKIP)' | xargs clang-format -i --style=file
+	@echo "clang-format: done"
 
 # Launch the Ardens debugger GUI with the shipping build + FX image.
 # Uses the ELF (DWARF debug info: source view, symbols, globals), not the hex.

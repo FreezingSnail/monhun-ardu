@@ -132,6 +132,8 @@ make build              # compile shipping sketch (output in dist/)
 make debug              # build, then open Ardens debugger (ELF + DWARF) with FX image
 make mini               # compile for Arduboy Mini FQBN
 make gen                # regenerate FX assets + fxdata.h/bin from images/
+make hooks              # install git hooks (clang-format pre-commit), once per clone
+make format             # format all tracked C-family sources
 ```
 
 `make debug` launches Ardens on `dist/monhun-ardu.ino.elf` (DWARF debug info
@@ -158,9 +160,16 @@ Also available there:
 - Snapshots (`F4`), display screenshots (`F2`), GIF recording (`F3`).
 
 Notes:
-- `build`, `mini`, `gen`, `test`, `fxtest*` are all `.PHONY`, so `make build`
-  always recompiles even when `build/` (host tests, staged fxtests) exists.
+- `build`, `mini`, `gen`, `debug`, `hooks`, `format`, `test`, `fxtest*` are all
+  `.PHONY`, so `make build` always recompiles even when `build/` (host tests,
+  staged fxtests) exists.
 - `make build` does not tolerate a stale `dist/`; it overwrites as needed.
+- **Formatting**: `.clang-format` (LLVM base, 4-space, 200 col, LF) defines the
+  style. `make hooks` sets `core.hooksPath=.githooks`; the pre-commit hook runs
+  `clang-format` on staged C/C++/`.ino` files and restages them. Vendored
+  (`src/external`, `Arduboy-Python-Utilities`) and generated files
+  (`src/fxdata.h`, `fxdata/fxdata.h`, `tst/fxdatatest/parity_fixtures.hpp`) are
+  skipped. Override the binary with `CLANG_FORMAT=/path/to/clang-format`.
 
 ---
 
