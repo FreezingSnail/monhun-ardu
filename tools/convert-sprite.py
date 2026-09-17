@@ -94,7 +94,7 @@ def convert_header(fname, sym, shades=2, sw=None, sh=None, num=None):
 
 
 def parse_filename(filename):
-    name, rest = filename.split('_')
+    name, rest = filename.rsplit('_', 1)
     dimensions, _ = rest.split('.')
     width, height = dimensions.split('x')
     return name, int(width), int(height)

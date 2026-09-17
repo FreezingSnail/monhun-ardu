@@ -33,10 +33,11 @@ python3 tools/gen-combat.py
 # convert-sprite.py appends to Sprites.txt (it does not truncate), so a sheet
 # renamed in gen-art.py would leave a stale symbol behind: remove the generated
 # files first. convert-sprite.py resolves paths relative to tools/, hence ../.
-mkdir -p fxdata/blocks fxdata/fonts
-rm -f fxdata/blocks/Sprites.txt fxdata/fonts/Sprites.txt
+mkdir -p fxdata/blocks fxdata/fonts fxdata/menu
+rm -f fxdata/blocks/Sprites.txt fxdata/fonts/Sprites.txt fxdata/menu/Sprites.txt
 python3 tools/convert-sprite.py ../images/blocks -s 4 -o ../fxdata/blocks/
 python3 tools/convert-sprite.py ../images/fonts -s 4 -o ../fxdata/fonts/
+python3 tools/convert-sprite.py ../images/menu -s 4 -o ../fxdata/menu/
 
 # Pack the FX image and emit the generated header.
 python3 Arduboy-Python-Utilities/fxdata-build.py fxdata/fxdata.txt

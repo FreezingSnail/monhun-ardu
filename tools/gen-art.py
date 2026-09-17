@@ -24,6 +24,13 @@ construction. Every sheet is checked back: sheet dims must match the derived
 frame size, every blk rect must land in the typed plane, and every pixel outside
 the declared rects must stay transparent. `--dump` prints the ASCII evidence.
 
+The opening-menu sheets (images/menu/, bead monhun-ardu-zza) are authored from
+the same GLYPHS table as the font sheets, so the baked pixels are provably the
+font glyphs the old textPut(fxfontw/fxfontg) layout drew. check_menu_identity()
+cross-compares every menu glyph cell against the authored font sheet; the font
+sheets stay on the MCU-independent side because the HUD still textPuts from
+them.
+
 The same run writes src/generated/art_dims.hpp: per-frame core dimensions and
 frame layout for the render bead + the host dims-drift test (tst/art_dims_test.hpp).
 """
@@ -360,6 +367,100 @@ def font_sheet(color):
     return sheet
 
 
+# ------------------------------------------------------ opening-menu sheets
+# Bead monhun-ardu-zza: the old MCU layout (textPut on fxfontw/fxfontg + the
+# blk() underline) is baked into two FX sheets. Every glyph pixel comes from
+# the same GLYPHS table the font sheets are authored from, so the bake is the
+# font glyphs moved, not redrawn. The underlines are the shade-3 blk() rows.
+
+def text_blocks(x, y, text, color):
+    """blk() rects for `text` on the 4 px glyph lane: 4x8 tile per char, glyph
+    at cols 0..2 / rows 0..4, advance 4 px (mock drawText scale 1)."""
+    blocks = []
+    for i, ch in enumerate(text):
+        for row, bits in enumerate(GLYPHS[ch]):
+            for col in range(3):
+                if bits & (4 >> col):
+                    blocks.append((color, x + i * 4 + col, y + row, 1, 1))
+    return blocks
+
+
+# (x, y, text, color) of every static element, in the old draw order. The
+# underlined selected option is NOT here: it comes from the sel tiles.
+MENU_ELEMENTS = (
+    (42, 10, "MONHUN DEMO", WHITE),   # (128 - 11*4) / 2, title
+    (4, 22, "WEAPON", LIGHT),
+    (4, 34, "TARGET", LIGHT),
+    (36, 22, "SWD", LIGHT),
+    (52, 22, "FLS", LIGHT),
+    (68, 22, "GUN", LIGHT),
+    (36, 34, "LUNGE", LIGHT),
+    (60, 34, "SWEEP", LIGHT),
+    (84, 34, "HEAVY", LIGHT),
+    (36, 44, "RAVAGER", LIGHT),
+    (68, 44, "POLE", LIGHT),
+    (4, 56, "A START", WHITE),
+)
+
+# Selected-option order: weapons 0..2, then targets 0..4 (design order, which
+# is also the old wrap order: LUNGE/SWEEP/HEAVY then RAVAGER/POLE).
+MENU_OPTIONS = ("SWD", "FLS", "GUN", "LUNGE", "SWEEP", "HEAVY", "RAVAGER", "POLE")
+
+
+def menu_defs():
+    """bg: one 128x64 frame of static content (transparent everywhere else).
+    sel: eight 28x16 tiles, glyphs at local (0,0) and the white underline
+    (len*4-1 px, the old blk row) at local row 9; the spare rows 10..15 stay
+    transparent. Height must be a multiple of 8 for the plus-mask blitter."""
+    bg = []
+    for x, y, text, color in MENU_ELEMENTS:
+        bg += text_blocks(x, y, text, color)
+    frames = []
+    for name in MENU_OPTIONS:
+        # Underline 1 px under the 8 px glyph tile (old MENU_UNDERLINE_DY = 9).
+        frames.append(text_blocks(0, 0, name, WHITE) + [(WHITE, 0, 9, len(name) * 4 - 1, 1)])
+    return [
+        {"id": "menu_bg", "w": 128, "h": 64, "anchor": "screen top-left", "frames": [bg]},
+        {"id": "menu_sel", "w": 28, "h": 16, "anchor": "option top-left", "frames": frames},
+    ]
+
+
+def check_menu_identity(sheets):
+    """Cross-check the bake against the authored font sheets: every menu glyph
+    cell (4x8, the tile textPut() blits) must be pixel-identical to the
+    fxfontw/fxfontg sheet tile for the same character, and the cells must be
+    transparent outside the glyph. This is the pixel-oracle link between the
+    menu sheets and the font source."""
+    fontw = sheets["fontw"].load()
+    fontg = sheets["fontg"].load()
+    bg = sheets["menu_bg"].load()
+    sel = sheets["menu_sel"].load()
+    failures = []
+    for x, y, text, color in MENU_ELEMENTS:
+        font = fontw if color == WHITE else fontg
+        for i, ch in enumerate(text):
+            ox = x + i * 4
+            for row in range(8):
+                for col in range(4):
+                    got = bg[ox + col, y + row]
+                    want = font[ord(ch) * 4 + col, row]
+                    if got != want:
+                        failures.append("menu_bg (%d,%d) %r: got %s want %s" % (ox + col, y + row, ch, got, want))
+    for fi, name in enumerate(MENU_OPTIONS):
+        for i, ch in enumerate(name):
+            ox = fi * 28 + i * 4
+            for row in range(8):
+                for col in range(4):
+                    got = sel[ox + col, row]
+                    want = fontw[ord(ch) * 4 + col, row]
+                    if got != want:
+                        failures.append("menu_sel frame %d (%d,%d) %r: got %s want %s" % (fi, ox + col, row, ch, got, want))
+    if failures:
+        for f in failures[:20]:
+            print("gen-art: MENU IDENTITY FAIL: %s" % f, file=sys.stderr)
+        raise SystemExit("gen-art: %d menu identity failures" % len(failures))
+
+
 # ------------------------------------------------------- authored sheet table
 
 
@@ -375,8 +476,9 @@ def render_icon(defn):
 
 def render_all(dims):
     icons = icon_defs(dims)
+    menu = menu_defs()
     sheets = {}
-    for d in icons:
+    for d in icons + menu:
         sheets[d["id"]] = render_icon(d)
     sheets["player"] = strip(player_frames(), 16, 16)
     sheets["monster"] = strip(monster_frames(), 32, 24)
@@ -386,7 +488,7 @@ def render_all(dims):
     sheets["spark"] = strip([spark_frame(LIGHT), spark_frame(WHITE)], 4, 4)
     sheets["fontw"] = font_sheet(WHITE)
     sheets["fontg"] = font_sheet(LIGHT)
-    return icons, sheets
+    return icons, menu, sheets
 
 
 def png_name(fname):
@@ -431,6 +533,10 @@ def check_sheets(icons, sheets):
 def sheet_filename(body, img, icons):
     """name_WxH.png where WxH is the FRAME size (convert-sprite's tile), not the
     full strip width: the existing pipeline reads the frame dims from the name."""
+    if body == "menu_bg":
+        return "mh_menu_bg_128x64.png"
+    if body == "menu_sel":
+        return "mh_menu_sel_28x16.png"
     by_id = {d["id"]: d for d in icons}
     d = by_id.get(body)
     if d is not None:
@@ -454,12 +560,19 @@ def sheet_filename(body, img, icons):
     raise SystemExit("gen-art: no filename rule for sheet %s" % body)
 
 
+def sheet_kind(body):
+    """Generated-PNG directory for one sheet body."""
+    if body in ("fontw", "fontg"):
+        return "fonts"
+    if body in ("menu_bg", "menu_sel"):
+        return "menu"
+    return "blocks"
+
+
 def check_disk(sheets, icons):
     """Re-read every written PNG and compare it pixel-for-pixel."""
-    blocks_dir = os.path.join(ROOT, "images", "blocks")
-    fonts_dir = os.path.join(ROOT, "images", "fonts")
     for body, img in sheets.items():
-        directory = fonts_dir if body in ("fontw", "fontg") else blocks_dir
+        directory = os.path.join(ROOT, "images", sheet_kind(body))
         path = os.path.join(directory, sheet_filename(body, img, icons))
         disk = Image.open(path).convert("RGBA")
         if disk.size != img.size:
@@ -588,14 +701,14 @@ def emit_dims_header(dims, icons, path):
 # -------------------------------------------------------------------- main
 
 
-def clean_stale(directory, expected):
-    """Drop generated fx*_WxH.png sheets that are no longer authored, so a
+def clean_stale(directory, expected, prefix):
+    """Drop generated <prefix>*_WxH.png sheets that are no longer authored, so a
     renamed/removed sheet cannot linger in images/ (the manifest bead finds
     files by name; orphans would be picked up by the converter)."""
     for name in os.listdir(directory):
         if name in expected:
             continue
-        if name.startswith("fx") and name.endswith(".png"):
+        if name.startswith(prefix) and name.endswith(".png"):
             os.remove(os.path.join(directory, name))
             print("gen-art: removed stale %s" % os.path.join(directory, name))
 
@@ -614,34 +727,38 @@ def main():
         out = subprocess.run([os.path.join(ROOT, "build", "fxdump")], capture_output=True, text=True, check=True)
         dims = Dims(json.loads(out.stdout))
 
-    blocks = os.path.join(ROOT, "images", "blocks")
-    fonts = os.path.join(ROOT, "images", "fonts")
+    dirs = {"blocks": os.path.join(ROOT, "images", "blocks"),
+            "fonts": os.path.join(ROOT, "images", "fonts"),
+            "menu": os.path.join(ROOT, "images", "menu")}
     gen_dir = os.path.join(ROOT, "src", "generated")
-    os.makedirs(blocks, exist_ok=True)
-    os.makedirs(fonts, exist_ok=True)
+    for directory in dirs.values():
+        os.makedirs(directory, exist_ok=True)
     os.makedirs(gen_dir, exist_ok=True)
 
-    icons, sheets = render_all(dims)
-    check_sheets(icons, sheets)
+    icons, menu, sheets = render_all(dims)
+    defs = icons + menu
+    check_sheets(defs, sheets)
+    check_menu_identity(sheets)
 
-    block_names = {sheet_filename(b, img, icons) for b, img in sheets.items() if b not in ("fontw", "fontg")}
-    font_names = {sheet_filename(b, img, icons) for b, img in sheets.items() if b in ("fontw", "fontg")}
-    clean_stale(blocks, block_names)
-    clean_stale(fonts, font_names)
+    names = {kind: set() for kind in dirs}
+    for body, img in sheets.items():
+        names[sheet_kind(body)].add(sheet_filename(body, img, defs))
+    clean_stale(dirs["blocks"], names["blocks"], "fx")
+    clean_stale(dirs["fonts"], names["fonts"], "fx")
+    clean_stale(dirs["menu"], names["menu"], "mh_menu")
 
     for body, img in sheets.items():
-        directory = fonts if body in ("fontw", "fontg") else blocks
-        img.save(os.path.join(directory, sheet_filename(body, img, icons)))
-    check_disk(sheets, icons)
+        img.save(os.path.join(dirs[sheet_kind(body)], sheet_filename(body, img, defs)))
+    check_disk(sheets, defs)
 
     emit_dims_header(dims, icons, os.path.join(gen_dir, "art_dims.hpp"))
 
-    n_icons = len(icons)
-    print("gen-art: wrote %d block sheets (%d overlay/effect icons) + 2 font sheets" %
-          (len(sheets) - 2, n_icons))
-    print("gen-art: pixel check OK (%d sheets, disk-exact)" % len(sheets))
+    n_blocks = len(sheets) - 2 - len(menu)
+    print("gen-art: wrote %d block sheets (%d overlay/effect icons) + 2 font sheets + %d menu sheets" %
+          (n_blocks, len(icons), len(menu)))
+    print("gen-art: pixel check OK (%d sheets, disk-exact; menu matches the font source)" % len(sheets))
     if args.dump:
-        print(ascii_dump(sheets, icons))
+        print(ascii_dump(sheets, defs))
 
 
 if __name__ == "__main__":

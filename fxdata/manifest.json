@@ -133,6 +133,20 @@
       "sha256": "8ef1a2c430cbdd49c2ed7239022e84b758af8a7660db4c69f0352cadb6847ffc",
       "size": 392,
       "symbol": "fxfontw"
+    },
+    {
+      "declaration": "fxdata/menu/Sprites.txt",
+      "path": "images/menu/mh_menu_bg_128x64.png",
+      "sha256": "58cb477377efade355b86cd3d7d1d81c30558a09412eadce4fa0d2c009440f1f",
+      "size": 635,
+      "symbol": "mh_menu_bg"
+    },
+    {
+      "declaration": "fxdata/menu/Sprites.txt",
+      "path": "images/menu/mh_menu_sel_28x16.png",
+      "sha256": "26f6e98f9168f8a859153637e91e7a69b089d264159d5eea1852148dd78982f3",
+      "size": 379,
+      "symbol": "mh_menu_sel"
     }
   ],
   "inputs": [
@@ -196,8 +210,17 @@
     },
     {
       "path": "fxdata/fxdata.txt",
-      "sha256": "45d8b0acd9dc76b9ad99f2ac7fcbf393fedb7a68f011b2469ae11c2474882f96",
-      "size": 816
+      "sha256": "214552df97600213849bcf32ea831145643371e00b601be21be187e7befd8757",
+      "size": 843
+    },
+    {
+      "path": "fxdata/menu/Sprites.txt",
+      "sha256": "208d88057b4756f86db790de8f5cc7f0fb66ff360260e71a32a1b08b9ea94107",
+      "size": 46455,
+      "symbols": [
+        "mh_menu_sel",
+        "mh_menu_bg"
+      ]
     },
     {
       "path": "fxdata/tables/combat.bin",
@@ -227,18 +250,18 @@
   "outputs": [
     {
       "path": "fxdata/fxdata-data.bin",
-      "sha256": "810bc75fcef05d7de6387ac163c3f63bd37f4523bbd5bfe625a5f71a3296e54d",
-      "size": 21768
+      "sha256": "51aac5612391dbe15054bd0f99ce802db9ac6d87b713deab5b2ad2e9114faa4c",
+      "size": 30604
     },
     {
       "path": "fxdata/fxdata.bin",
-      "sha256": "a968a220a81a2e4d4fa8917238deb8f4fab89912b6f8f94fc1d3a1ebad918fad",
-      "size": 22016
+      "sha256": "d8d218bb7982293977ec872bd71139df8ee82424caf5cfc4e34f89dc3e7b6da5",
+      "size": 30720
     },
     {
       "path": "fxdata/fxdata.h",
-      "sha256": "d5e3b57cb167dfa4cb58d1fa389740fdda7fe3f5d937b6435fe64ce7ae7a307f",
-      "size": 1219
+      "sha256": "2163f9dea81ed92b510adfe33691692681b8578b526d52d61008364d5923b8c4",
+      "size": 1304
     },
     {
       "path": "fxdata/tables/combat.bin",
@@ -247,8 +270,8 @@
     },
     {
       "path": "src/fxdata.h",
-      "sha256": "d5e3b57cb167dfa4cb58d1fa389740fdda7fe3f5d937b6435fe64ce7ae7a307f",
-      "size": 1219
+      "sha256": "2163f9dea81ed92b510adfe33691692681b8578b526d52d61008364d5923b8c4",
+      "size": 1304
     },
     {
       "path": "src/generated/art_dims.hpp",
