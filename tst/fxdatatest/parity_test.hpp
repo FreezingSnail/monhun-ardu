@@ -115,16 +115,20 @@ static uint16_t hashState(const Game &g) {
     h = mix(h, m.stun);
     h = mix(h, m.circleDir);
     h = mix(h, m.spd);
+    // Monster attack scalars: migration A reads them from the RAM cache
+    // (identity = Monster::atkIdx), which mirrors the fixture's m.atk fields.
+    // kind is the fixture's MODO (0 lunge / 1 sweep); the cache exposes the
+    // move type, so the LUNGE move type maps back to kind 0.
     int32_t mKd = 0, mWu = 0, mAc = 0, mRc = 0, mDm = 0, mRe = 0, mHw = 0, mHh = 0;
-    if (m.atk) {
-        mKd = monsterAttackKind(m.atk);
-        mWu = monsterAttackWindup(m.atk);
-        mAc = monsterAttackActive(m.atk);
-        mRc = monsterAttackRecover(m.atk);
-        mDm = monsterAttackDmg(m.atk);
-        mRe = monsterAttackReach(m.atk);
-        mHw = monsterAttackHw(m.atk);
-        mHh = monsterAttackHh(m.atk);
+    if (m.atkIdx != COMBAT_NO_ATTACK) {
+        mKd = (g.combat.attack.moveType == MOVE_LUNGE) ? MK_LUNGE : MK_SWEEP;
+        mWu = g.combat.attack.windup;
+        mAc = g.combat.attack.active;
+        mRc = g.combat.attack.recover;
+        mDm = g.combat.attack.dmg;
+        mRe = g.combat.attack.win.box.ox;
+        mHw = g.combat.attack.win.box.w;
+        mHh = g.combat.attack.win.box.h;
     }
     h = mix(h, mKd);
     h = mix(h, mWu);
@@ -298,7 +302,12 @@ static void test_parity(FxTest &test) {
         g.monster.fx = mhPgmReadI16(&parity_fx::overrides[o + 5]);
         g.monster.fy = mhPgmReadI16(&parity_fx::overrides[o + 6]);
         const int16_t kind = mhPgmReadI16(&parity_fx::overrides[o + 7]);
-        g.monster.atk = (kind >= 0) ? &MONSTER_ATTACKS[kind] : nullptr;
+        // Fixture records the mock's attack kind (MODO) only; every scene runs
+        // the legacy LUNGE creature, whose authored list is [lunge, sweep].
+        if (kind >= 0)
+            monsterAttackSet(g, kind == MK_LUNGE ? combat::ATTACK_LUNGE_LUNGE : combat::ATTACK_LUNGE_SWEEP);
+        else
+            g.monster.atkIdx = COMBAT_NO_ATTACK;
         g.pole.rect.x = mhPgmReadI16(&parity_fx::overrides[o + 8]);
         g.pole.rect.y = mhPgmReadI16(&parity_fx::overrides[o + 9]);
         updateActiveTarget(g);

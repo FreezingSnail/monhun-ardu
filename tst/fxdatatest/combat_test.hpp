@@ -17,6 +17,8 @@
 // bitfield + value helpers, while every other path reads real records.
 #include "harness/fxtest.hpp"
 #include "src/core/combat.hpp"
+#include "src/core/monster.hpp"       // migration A: sim consumes the attack cache
+#include "src/core/projectiles.hpp"   // addEffect (playerHurt side)
 #include "src/generated/combat_expect.hpp"
 
 #include <stdint.h>
@@ -269,6 +271,42 @@ inline void test_combat(FxTest &test) {
     test.expectEq(badAtk, 0, F("bad attack id -> attack 0"));
     test.expectEq(g.combat.attack.winIdx, combat::WINDOW_HEAVY_LUNGE_0, F("fallback window"));
 
+    // --------------------------------- sim attack path consumes the cache
+    // (migration A / ljj.3): attack start loads the identity + first window
+    // once; the windup and active ticks then perform zero cart reads.
+    initGame(g, W_SWORD);
+    initMonster(g, MON_LUNGE);
+    before = mhFxReadCount;
+    const uint8_t simAtk = monsterAttackSet(g, combat::ATTACK_LUNGE_LUNGE);
+    const uint16_t simAtkReads = static_cast<uint16_t>(mhFxReadCount - before);
+    test.expectEq(simAtk, combat::ATTACK_LUNGE_LUNGE, F("sim attack set"));
+    test.expectEq(simAtkReads <= 24, 1, F("sim attack start <= 24 reads"));
+    test.expectEq(g.monster.atkIdx, combat::ATTACK_LUNGE_LUNGE, F("sim attack identity"));
+    test.expectEq(g.monster.winRemain, 0, F("sim single window"));
+
+    g.monster.state = MS_WINDUP;
+    g.monster.t = 2;
+    g.monster.windupMax = 2;
+    before = mhFxReadCount;
+    updateMonster(g);   // tell tick 1
+    updateMonster(g);   // tell tick 2 -> startMonsterAttack (cache only)
+    const uint16_t windupReads = static_cast<uint16_t>(mhFxReadCount - before);
+    test.expectEq(g.monster.state, MS_ATTACK, F("windup releases to attack"));
+    test.expectEq(windupReads, 0, F("windup ticks read-free"));
+
+    g.monster.x = 224;   // far from the player: no contact, no new decision
+    g.monster.y = 40;
+    before = mhFxReadCount;
+    for (uint8_t i = 0; i < 5; i++)
+        updateMonster(g);
+    const uint16_t activeReads = static_cast<uint16_t>(mhFxReadCount - before);
+    test.expectEq(activeReads, 0, F("active ticks read-free"));
+
+    before = mhFxReadCount;
+    attackWindowLoad(g, combat::WINDOW_LUNGE_SWEEP_0);
+    const uint16_t windowReads = static_cast<uint16_t>(mhFxReadCount - before);
+    test.expectEq(windowReads <= 8, 1, F("window switch <= 8 reads"));
+
     // ------------------------------------- steady-state per-tick read gate
     before = mhFxReadCount;
     for (uint16_t i = 0; i < 256; i++)
@@ -285,7 +323,13 @@ inline void test_combat(FxTest &test) {
     Serial.print(F(" hit="));
     Serial.print(hitReads);
     Serial.print(F(" tick256="));
-    Serial.println(tickReads);
+    Serial.print(tickReads);
+    Serial.print(F(" simAtk="));
+    Serial.print(simAtkReads);
+    Serial.print(F(" simTk="));
+    Serial.print(static_cast<uint16_t>(windupReads + activeReads));
+    Serial.print(F(" winSw="));
+    Serial.println(windowReads);
 }
 
 }   // namespace combatcheck

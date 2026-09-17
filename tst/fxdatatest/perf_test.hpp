@@ -131,7 +131,7 @@ MH_NI static void primeHunt(Game &g) {
     m.subY = 4;
     m.hp = 120;
     m.state = MS_ATTACK;
-    m.atk = &MONSTER_ATTACKS[0];
+    monsterAttackSet(g, combat::ATTACK_LUNGE_LUNGE);
     m.stun = 12;
     m.hitFlash = 4;
     m.fx = 16;

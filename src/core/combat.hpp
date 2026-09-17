@@ -15,8 +15,12 @@
 // live RAM caches (CombatState in Game) keep per-tick reads at zero. Part
 // multipliers are resolved natively at hit time, never in a per-tick loop.
 //
-// No behavior wiring in this bead: game render/sim stays untouched; shipping
-// flash drops every function here through LTO until migrations reference it.
+// Migration A (bead monhun-ardu-ljj.3) wires the monster lunge/sweep through
+// the attack cache: chooseAttack loads the attack + first window, the per-tick
+// FSM consumes CombatState and performs zero cart reads, and render/debug draw
+// the telegraph from the same cached window scalars. Behavior stays
+// byte-identical; the migrations that follow (stages/pattern interpreter)
+// reuse the same read layer.
 //
 // Cache budget (docs section 9): CombatProfile 22 B + CombatAttackCache 21 B +
 // runtime 7 B = 50 B on AVR.
@@ -59,6 +63,14 @@ enum PredOp : uint8_t {
     PRED_LE = 1,
     PRED_EQ = 2
 };
+// Move kinds (tools/gen-combat.py MOVE_TYPES). Migration A consumes none/lunge;
+// charge/hop are schema-reserved for later interpreter work.
+enum MoveType : uint8_t {
+    MOVE_NONE = 0,
+    MOVE_LUNGE = 1,
+    MOVE_CHARGE = 2,
+    MOVE_HOP = 3
+};
 enum GuardPlayer : uint8_t {
     GUARD_PLAYER_ATTACKING = 0x01
 };
@@ -74,6 +86,8 @@ constexpr uint8_t COMBAT_STAGE_FLAG_SPEED_MUL = 0x04;
 constexpr uint8_t COMBAT_MAX_PARTS = 8;
 constexpr uint8_t COMBAT_STAGE_MAX = 3;
 constexpr uint8_t COMBAT_NO_PART = 0xFF;
+// Monster::atkIdx sentinel: no attack cached (init / dead / test clear).
+constexpr uint8_t COMBAT_NO_ATTACK = 0xFF;
 
 // --------------------------------------------------------- value structs
 // Plain value mirrors of the blob records (field order = packed ABI order).
@@ -282,6 +296,10 @@ inline CombatCreature combatCreatureRead(uint8_t i) {
 
 inline uint8_t combatCreatureProfileIdx(uint8_t i) {
     return combatReadU8(static_cast<uint16_t>(combat::CREATURES_OFF + i * combat::CREATURE_SIZE + MH_COMBAT_FIELD(detail::PkCreature, profileIdx)));
+}
+
+inline uint8_t combatCreatureFirstAttack(uint8_t i) {
+    return combatReadU8(static_cast<uint16_t>(combat::CREATURES_OFF + i * combat::CREATURE_SIZE + MH_COMBAT_FIELD(detail::PkCreature, firstAttack)));
 }
 
 inline CombatProfile combatProfileRead(uint8_t i) {
@@ -555,6 +573,10 @@ inline uint8_t combatCreatureProfileIdx(uint8_t i) {
     return combat_data::CREATURES[i].profileIdx;
 }
 
+inline uint8_t combatCreatureFirstAttack(uint8_t i) {
+    return combat_data::CREATURES[i].firstAttack;
+}
+
 inline CombatProfile combatProfileRead(uint8_t i) {
     const combat_data::Profile &p = combat_data::PROFILES[i];
     CombatProfile v;
@@ -801,6 +823,20 @@ inline CombatStep combatStepRead(uint8_t i) {
 #endif   // __AVR__
 
 // ======================================================= cache lifecycle
+// creatureCacheReset: identity + runtime caches with no record reads. Migration
+// A spawn (initMonster) uses this: attacks only need the creature index (whose
+// authored list slot 0/1 is the lunge/sweep), so the profile read burst stays
+// out of shipping flash until the pattern interpreter lands (migration C).
+inline void creatureCacheReset(Game &g, uint8_t creatureId) {
+    g.combat.creature = creatureId;
+    g.combat.stages = 0;
+    g.combat.patternIdx = 0;
+    g.combat.stepIdx = 0;
+    g.combat.stepT = 0;
+    g.combat.stagger = 0;
+    g.combat.attack = CombatAttackCache{};
+}
+
 // creatureLoad: read the creature's profile index + the full profile record
 // into the Game cache (spawn burst; bad ids fall back to creature 0). Part
 // stages and the pattern cursor reset to intact/idle. The attack cache is
@@ -809,14 +845,8 @@ inline uint8_t creatureLoad(Game &g, uint8_t creatureId) {
     if (creatureId >= combat::CREATURES_COUNT)
         creatureId = 0;
     const uint8_t profileIdx = combatCreatureProfileIdx(creatureId);
-    g.combat.creature = creatureId;
+    creatureCacheReset(g, creatureId);
     g.combat.profile = combatProfileRead(profileIdx);
-    g.combat.stages = 0;
-    g.combat.patternIdx = 0;
-    g.combat.stepIdx = 0;
-    g.combat.stepT = 0;
-    g.combat.stagger = 0;
-    g.combat.attack = CombatAttackCache{};
     return creatureId;
 }
 

@@ -38,7 +38,12 @@ void CombatSuite(TestRunner &runner) {
             t.assert(c.hp, h.hp, "creature hp");
             t.assert(c.spawnX, h.spawnX, "creature spawnX");
             t.assert(c.spawnY, h.spawnY, "creature spawnY");
+            t.assert(combatCreatureFirstAttack(i), h.firstAttack, "creature firstAttack accessor");
         }
+        // Migration A scaffold: slot 0 of every shipped creature is its lunge.
+        t.assert(combatCreatureFirstAttack(combat_data::CREATURE_LUNGE), combat_data::ATTACK_LUNGE_LUNGE, "lunge creature first attack");
+        t.assert(combatCreatureFirstAttack(combat_data::CREATURE_SWEEP), combat_data::ATTACK_SWEEP_LUNGE, "sweep creature first attack");
+        t.assert(combatCreatureFirstAttack(combat_data::CREATURE_HEAVY), combat_data::ATTACK_HEAVY_LUNGE, "heavy creature first attack");
         suite.addTest(t);
     }
 
@@ -118,6 +123,7 @@ void CombatSuite(TestRunner &runner) {
             const CombatAttackValue a = combatAttackRead(i);
             const combat_data::Attack &h = combat_data::ATTACKS[i];
             t.assert(a.moveType, h.moveType, "attack moveType");
+            t.assert(combatAttackMoveType(i), h.moveType, "attack moveType accessor");
             t.assert(a.moveSpeedF, h.moveSpeedF, "attack moveSpeedF");
             t.assert(a.moveDx, h.moveDx, "attack moveDx");
             t.assert(a.moveDy, h.moveDy, "attack moveDy");

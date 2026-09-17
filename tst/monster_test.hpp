@@ -71,16 +71,18 @@ void MonsterSuite(TestRunner &runner) {
     }
 
     {
-        Test t("chooseAttack: lunge beyond 32px, sweep inside");
+        Test t("chooseAttack: lunge beyond 32px, sweep inside (cache identity)");
         Game g;
         newHunt(g);
         chooseAttack(g, 33);
-        t.assert(g.monster.atk->kind, MK_LUNGE, "dist 33 -> lunge");
+        t.assert(g.monster.atkIdx, combat::ATTACK_LUNGE_LUNGE, "dist 33 -> lunge");
+        t.assert(g.combat.attack.moveType, MOVE_LUNGE, "lunge cache moveType");
         t.assert(g.monster.state, MS_WINDUP, "windup state");
         t.assert(g.monster.t, 40, "lunge tell 40");
         t.assert(g.monster.windupMax, 40, "windupMax recorded");
         chooseAttack(g, 32);
-        t.assert(g.monster.atk->kind, MK_SWEEP, "dist 32 -> sweep");
+        t.assert(g.monster.atkIdx, combat::ATTACK_LUNGE_SWEEP, "dist 32 -> sweep");
+        t.assert(g.combat.attack.moveType, MOVE_NONE, "sweep cache moveType");
         t.assert(g.monster.t, 48, "sweep tell 48");
         suite.addTest(t);
     }
@@ -153,25 +155,25 @@ void MonsterSuite(TestRunner &runner) {
         Monster &m = g.monster;
         for (int32_t d = 10; d <= 41; d += 11) {
             chooseAttack(g, d);
-            t.assert(m.atk->kind, MK_SWEEP, "sweep def never lunges");
+            t.assert(m.atkIdx, combat::ATTACK_SWEEP_SWEEP, "sweep def never lunges");
         }
         Game g2;
         newGame(g2, W_SWORD, MODE_HUNT, MON_HEAVY);
         Monster &h = g2.monster;
         chooseAttack(g2, 41);
-        t.assert(h.atk->kind, MK_LUNGE, "heavy lunges at 41 (gate < 42)");
+        t.assert(h.atkIdx, combat::ATTACK_HEAVY_LUNGE, "heavy lunges at 41 (gate < 42)");
         chooseAttack(g2, 30);
-        t.assert(h.atk->kind, MK_LUNGE, "heavy lunges at 30");
+        t.assert(h.atkIdx, combat::ATTACK_HEAVY_LUNGE, "heavy lunges at 30");
         chooseAttack(g2, 25);
-        t.assert(h.atk->kind, MK_LUNGE, "heavy lunges at 25");
+        t.assert(h.atkIdx, combat::ATTACK_HEAVY_LUNGE, "heavy lunges at 25");
         chooseAttack(g2, 24);
-        t.assert(h.atk->kind, MK_SWEEP, "heavy sweeps at 24");
+        t.assert(h.atkIdx, combat::ATTACK_HEAVY_SWEEP, "heavy sweeps at 24");
         Game g3;
         newGame(g3, W_SWORD, MODE_HUNT, MON_LUNGE);
         chooseAttack(g3, 33);
-        t.assert(g3.monster.atk->kind, MK_LUNGE, "legacy lunges at 33");
+        t.assert(g3.monster.atkIdx, combat::ATTACK_LUNGE_LUNGE, "legacy lunges at 33");
         chooseAttack(g3, 32);
-        t.assert(g3.monster.atk->kind, MK_SWEEP, "legacy sweeps at 32");
+        t.assert(g3.monster.atkIdx, combat::ATTACK_LUNGE_SWEEP, "legacy sweeps at 32");
         suite.addTest(t);
     }
 
@@ -190,11 +192,79 @@ void MonsterSuite(TestRunner &runner) {
     }
 
     {
+        Test t("chooseAttack caches the shipped window scalars (migration A)");
+        Game g;
+        newHunt(g);
+        chooseAttack(g, 33);
+        const CombatAttackCache &ac = g.combat.attack;
+        t.assert(g.monster.winRemain, 0, "lunge declares one window");
+        t.assert(ac.windup, 40, "cache windup");
+        t.assert(ac.active, 10, "cache active");
+        t.assert(ac.recover, 55, "cache recover");
+        t.assert(ac.dmg, 12, "cache dmg");
+        t.assert(ac.moveSpeedF, 34, "cache speedF");
+        t.assert(ac.winIdx, combat::WINDOW_LUNGE_LUNGE_0, "cache first window");
+        t.assert(ac.win.t0, 0, "window t0");
+        t.assert(ac.win.t1, 10, "window t1");
+        t.assert(ac.win.box.ox, 12, "window ox");
+        t.assert(ac.win.box.oy, 0, "window oy");
+        t.assert(ac.win.box.w, 24, "window w");
+        t.assert(ac.win.box.h, 22, "window h");
+        t.assert(ac.win.dmgMul, 100, "window dmgMul");
+
+        chooseAttack(g, 32);
+        t.assert(g.combat.attack.winIdx, combat::WINDOW_LUNGE_SWEEP_0, "sweep window cached");
+        t.assert(g.combat.attack.win.box.ox, 17, "sweep window ox");
+        t.assert(g.combat.attack.win.box.w, 32, "sweep window w");
+        t.assert(g.combat.attack.win.box.h, 24, "sweep window h");
+        t.assert(g.combat.attack.dmg, 9, "sweep dmg cached");
+        suite.addTest(t);
+    }
+
+    {
+        Test t("hit test consumes the cached window (switch flips miss to hit)");
+        Game g;
+        newHunt(g);
+        Monster &m = g.monster;
+        monsterAttackSet(g, combat::ATTACK_LUNGE_LUNGE);
+        m.x = 0;
+        m.y = 0;
+        m.fx = 16;
+        m.fy = 0;   // centre (16,12), lunge box x16..40
+        g.player.x = 41;
+        g.player.y = 4;
+        g.player.w = 16;
+        g.player.h = 16;
+        t.assert(monsterHitsPlayer(g), 0, "lunge window misses at x41");
+        attackWindowLoad(g, combat::WINDOW_LUNGE_SWEEP_0);   // sweep box x17..49
+        t.assert(monsterHitsPlayer(g), 1, "widened cached window hits at x41");
+        suite.addTest(t);
+    }
+
+    {
+        Test t("multi-window refresh path: next contiguous window reloads once");
+        Game g;
+        newHunt(g);
+        Monster &m = g.monster;
+        monsterAttackSet(g, combat::ATTACK_LUNGE_LUNGE);
+        t.assert(m.winRemain, 0, "single-window attack has no pending window");
+        m.winRemain = 1;   // synthetic multi-window state
+        m.t = 11;          // past the lunge window t1 == 10
+        monsterWindowNext(g);
+        t.assert(g.combat.attack.winIdx, combat::WINDOW_LUNGE_SWEEP_0, "next window loaded");
+        t.assert(g.combat.attack.win.box.ox, 17, "next window box swapped");
+        t.assert(m.winRemain, 0, "pending window consumed");
+        monsterWindowNext(g);
+        t.assert(g.combat.attack.winIdx, combat::WINDOW_LUNGE_SWEEP_0, "no further reload");
+        suite.addTest(t);
+    }
+
+    {
         Test t("windup tell counts down 40 ticks, then attack starts");
         Game g;
         newHunt(g);
         Monster &m = g.monster;
-        m.atk = &MONSTER_ATTACKS[0];
+        monsterAttackSet(g, combat::ATTACK_LUNGE_LUNGE);
         m.state = MS_WINDUP;
         m.t = 40;
         m.windupMax = 40;
@@ -215,7 +285,7 @@ void MonsterSuite(TestRunner &runner) {
         Game g;
         newHunt(g);
         Monster &m = g.monster;
-        m.atk = &MONSTER_ATTACKS[1];
+        monsterAttackSet(g, combat::ATTACK_LUNGE_SWEEP);
         m.state = MS_ATTACK;
         m.t = 0;
         m.x = 10;
@@ -308,22 +378,22 @@ void MonsterSuite(TestRunner &runner) {
         Game g;
         newHunt(g);
         Monster &m = g.monster;
-        m.atk = &MONSTER_ATTACKS[0];
+        monsterAttackSet(g, combat::ATTACK_LUNGE_LUNGE);
         m.fx = 16;
         m.fy = 0;
-        startMonsterAttack(m);
+        startMonsterAttack(g);
         t.assert(m.state, MS_ATTACK, "attack entered");
         t.assert(m.lvx, 34, "E lunge 34");
         t.assert(m.lvy, 0, "E lunge flat");
         m.fx = 11;
         m.fy = 11;
-        startMonsterAttack(m);
+        startMonsterAttack(g);
         t.assert(m.lvx, 23, "SE lunge integer trunc (11*34)>>4");
         t.assert(m.lvy, 23, "SE lunge y");
-        m.atk = &MONSTER_ATTACKS[1];
+        monsterAttackSet(g, combat::ATTACK_LUNGE_SWEEP);
         m.fx = 16;
         m.fy = 0;
-        startMonsterAttack(m);
+        startMonsterAttack(g);
         t.assert(m.lvx, 0, "sweep stationary");
         t.assert(m.lvy, 0, "sweep stationary y");
         suite.addTest(t);
@@ -334,7 +404,7 @@ void MonsterSuite(TestRunner &runner) {
         Game g;
         newHunt(g);
         Monster &m = g.monster;
-        m.atk = &MONSTER_ATTACKS[0];
+        monsterAttackSet(g, combat::ATTACK_LUNGE_LUNGE);
         m.state = MS_ATTACK;
         m.t = 0;
         m.lvx = 34;
@@ -375,7 +445,7 @@ void MonsterSuite(TestRunner &runner) {
         newHunt(g);
         Monster &m = g.monster;
         m.state = MS_WINDUP;
-        m.atk = &MONSTER_ATTACKS[0];
+        monsterAttackSet(g, combat::ATTACK_LUNGE_LUNGE);
         m.t = 30000;
         m.x = g.player.x + 8;
         m.y = g.player.y + 4;
@@ -397,7 +467,7 @@ void MonsterSuite(TestRunner &runner) {
         m.x = g.player.x + 20;
         m.y = g.player.y;
         m.state = MS_ATTACK;
-        m.atk = &MONSTER_ATTACKS[1];
+        monsterAttackSet(g, combat::ATTACK_LUNGE_SWEEP);
         m.t = 0;
         hunt(g, 10);
         t.assert(g.player.hp, 91, "sweep 9 dmg lands once");

@@ -384,6 +384,16 @@ struct CombatWindow {
     uint8_t dmgMul;
 };
 
+// Face-relative box offset (docs section 3): the box centre sits at (ox, oy)
+// in the facing frame, so its world offset is the DIR8 rotation of (ox, oy).
+// With oy == 0 this is exactly the legacy scalar reach projection
+// (((fx * reach) >> 4) / ((fy * reach) >> 4)), so shipped windows stay
+// identical.
+inline void combatFaceOffset(int16_t fx, int16_t fy, const CombatBox &b, int32_t &dx, int32_t &dy) {
+    dx = ((static_cast<int32_t>(fx) * b.ox) - (static_cast<int32_t>(fy) * b.oy)) >> 4;
+    dy = ((static_cast<int32_t>(fy) * b.ox) + (static_cast<int32_t>(fx) * b.oy)) >> 4;
+}
+
 // Attack scalar cache + the currently loaded window. Read once at attack start
 // (~16 FX reads), refreshed only when the interpreter switches windows;
 // per-tick code consumes this cache and performs no cart reads.
@@ -545,8 +555,13 @@ struct Monster : fp::FpBody {
     MState state;
     int16_t t, cd;
     int16_t fx, fy;   // 1/16 unit facing vector
-    const MonsterAttack *atk;
-    int16_t lvx, lvy;   // lunge velocity (1/16 px per tick)
+    // Attack identity + cache link (migration A): the global attack index the
+    // combat loader cached in Game::combat.attack, COMBAT_NO_ATTACK when none.
+    // Replaces the old MONSTER_ATTACKS pointer; render/debug read this plus the
+    // cached window scalars, never a table pointer.
+    uint8_t atkIdx;
+    uint8_t winRemain;   // windows remaining after the cached one (multi-window)
+    int16_t lvx, lvy;    // lunge velocity (1/16 px per tick)
     int16_t windupMax, hitFlash, stun, circleDir, spd;
 };
 

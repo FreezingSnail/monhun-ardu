@@ -3,6 +3,12 @@
 // updateMonster / chooseAttack / startMonsterAttack / monsterHitsPlayer /
 // playerHit / damageMonster / knockMonsterAway / pushApart.
 //
+// Migration A (bead monhun-ardu-ljj.3): attack selection loads the attack's
+// scalars + current window from the combat blob into Game::combat.attack
+// (Monster::atkIdx is the identity) and the per-tick FSM consumes only the RAM
+// cache, so windup/active ticks issue zero cart reads. The window box is the
+// single source for the hit test and (in render.hpp) the telegraph.
+//
 // The beast plugs into Game::target so the player FSM resolves melee against it
 // (and the training-pole bead, hrd, plugs in the same way). Tick order mirrors
 // the mock: player first, then monster, then the push-apart correction.
@@ -10,8 +16,43 @@
 
 #include <stdint.h>
 #include "player.hpp"
+#include "combat.hpp"   // attack/window cache loaders (migration A)
 
 namespace mh {
+
+// Roster variant -> creature record. The blob is sorted by creature id, so the
+// demo roster order (LUNGE/SWEEP/HEAVY) and the creature indices differ.
+static uint8_t monsterCreatureId(int8_t kind) {
+    switch (kind) {
+    case MON_SWEEP:
+        return combat::CREATURE_SWEEP;
+    case MON_HEAVY:
+        return combat::CREATURE_HEAVY;
+    default:
+        return combat::CREATURE_LUNGE;
+    }
+}
+
+// Load an attack's scalars + first window into the cache and record the stable
+// identity on the monster. ~16 cart reads; the only attack-start read burst.
+static uint8_t monsterAttackSet(Game &g, uint8_t attackIdx) {
+    const uint8_t loaded = attackLoad(g, attackIdx);
+    g.monster.atkIdx = loaded;
+    const uint8_t windows = combatAttackWindowCount(loaded);
+    g.monster.winRemain = (windows > 0) ? static_cast<uint8_t>(windows - 1) : 0;
+    return loaded;
+}
+
+// Multi-window attacks (docs section 5): once the cached window's t1 is past,
+// refresh the next contiguous window. Shipped attacks declare one window, so
+// winRemain stays 0 and this path never issues a cart read.
+static void monsterWindowNext(Game &g) {
+    Monster &m = g.monster;
+    if (m.winRemain > 0 && static_cast<uint16_t>(m.t) > g.combat.attack.win.t1) {
+        attackWindowLoad(g, static_cast<uint8_t>(g.combat.attack.winIdx + 1));
+        m.winRemain--;
+    }
+}
 
 // Keep Game::target (the live hurt box + callbacks) in step with the beast.
 static void syncMonsterTarget(Game &g) {
@@ -99,11 +140,14 @@ static void monsterOnStun(Game &g, int ticks) {
 // Spawn the hunt beast and wire it into Game::target. Call after initGame().
 // kind selects MONSTER_DEFS[3] (monhun-ardu-6zb roster); size/hp/spd come from
 // the def and every other field keeps its published value. Kind 0 is the
-// legacy LUNGE beast: byte-for-byte the pre-roster spawn.
+// legacy LUNGE beast: byte-for-byte the pre-roster spawn. The combat caches
+// are reset to this creature's identity; the attack cache stays empty until
+// chooseAttack loads one.
 static void initMonster(Game &g, int8_t kind = 0) {
     if (kind < 0 || kind > 2)
         kind = 0;
     g.monsterKind = kind;
+    creatureCacheReset(g, monsterCreatureId(kind));
     const MonsterDef *def = &MONSTER_DEFS[kind];
     Monster &m = g.monster;
     m.x = 200;
@@ -119,7 +163,8 @@ static void initMonster(Game &g, int8_t kind = 0) {
     m.cd = 140;
     m.fx = -fp::FP;
     m.fy = 0;   // face W
-    m.atk = nullptr;
+    m.atkIdx = COMBAT_NO_ATTACK;
+    m.winRemain = 0;
     m.lvx = 0;
     m.lvy = 0;
     m.windupMax = 0;
@@ -134,23 +179,28 @@ static void initMonster(Game &g, int8_t kind = 0) {
     syncMonsterTarget(g);
 }
 
-// Lunge/sweep split comes from the roster def: kind 0 (atkDist 32) is the
-// legacy "lunge beyond 32 px" rule; a negative atkDist (SWEEP) never lunges.
+// Lunge/sweep split still comes from the roster def (migration C replaces this
+// with pattern guards). The chosen attack is the creature's authored list entry
+// (slot 0 lunge, slot 1 sweep for all three shipped beasts), loaded through the
+// combat loader: attack scalars + first window land in the RAM cache.
 static void chooseAttack(Game &g, int32_t dist) {
     Monster &m = g.monster;
     const int16_t atkDist = monsterDefAtkDist(&MONSTER_DEFS[g.monsterKind]);
-    m.atk = (atkDist >= 0 && dist > atkDist) ? &MONSTER_ATTACKS[0] : &MONSTER_ATTACKS[1];   // lunge / sweep
+    const uint8_t slot = (atkDist >= 0 && dist > atkDist) ? 0 : 1;   // lunge / sweep
+    monsterAttackSet(g, static_cast<uint8_t>(combatCreatureFirstAttack(g.combat.creature) + slot));
     m.state = MS_WINDUP;
-    m.t = monsterAttackWindup(m.atk);
+    m.t = g.combat.attack.windup;
     m.windupMax = m.t;
 }
 
-static void startMonsterAttack(Monster &m) {
-    const MonsterAttack *a = m.atk;
+// Attack release: lunge velocity comes from the cached move scalars; every
+// other move type stays native/stationary in migration A.
+static void startMonsterAttack(Game &g) {
+    Monster &m = g.monster;
     m.state = MS_ATTACK;
     m.t = 0;
-    if (monsterAttackKind(a) == MK_LUNGE) {
-        const int16_t speedF = monsterAttackSpeedF(a);
+    if (g.combat.attack.moveType == MOVE_LUNGE) {
+        const int16_t speedF = g.combat.attack.moveSpeedF;
         m.lvx = (m.fx * speedF) >> 4;
         m.lvy = (m.fy * speedF) >> 4;
     } else {
@@ -159,18 +209,22 @@ static void startMonsterAttack(Monster &m) {
     }
 }
 
-static bool monsterHitsPlayer(const Game &g, const MonsterAttack *a) {
+// Hit-window overlap from the cached window (docs section 5): the box centre is
+// the body centre plus the face-relative offset, size is the window box. The
+// window is tested inclusive [t0, t1] with t 1-based (incremented before tests,
+// spike 1c contract).
+static bool monsterHitsPlayer(const Game &g) {
     const Monster &m = g.monster;
-    const int16_t reach = monsterAttackReach(a);
-    const int16_t hw = monsterAttackHw(a);
-    const int16_t hh = monsterAttackHh(a);
-    const int32_t cx = m.x + (m.w >> 1) + ((m.fx * reach) >> 4);
-    const int32_t cy = m.y + (m.h >> 1) + ((m.fy * reach) >> 4);
+    const CombatWindow &w = g.combat.attack.win;
+    int32_t dx, dy;
+    combatFaceOffset(m.fx, m.fy, w.box, dx, dy);
+    const int32_t cx = m.x + (m.w >> 1) + dx;
+    const int32_t cy = m.y + (m.h >> 1) + dy;
     Rect r;
-    r.x = static_cast<int16_t>(cx - (hw >> 1));
-    r.y = static_cast<int16_t>(cy - (hh >> 1));
-    r.w = hw;
-    r.h = hh;
+    r.x = static_cast<int16_t>(cx - (w.box.w >> 1));
+    r.y = static_cast<int16_t>(cy - (w.box.h >> 1));
+    r.w = w.box.w;
+    r.h = w.box.h;
     const Player &p = g.player;
     Rect pr;
     pr.x = p.x;
@@ -276,23 +330,28 @@ static void updateMonster(Game &g) {
     case MS_WINDUP:
         m.t--;
         if (m.t <= 0)
-            startMonsterAttack(m);
+            startMonsterAttack(g);
         break;
     case MS_ATTACK: {
-        const MonsterAttack *a = m.atk;
-        const int16_t active = monsterAttackActive(a);
+        // Migration A: every per-tick read comes from the RAM cache. The only
+        // mid-attack cart access is the multi-window refresh (shipped attacks
+        // declare one window, so it never fires today).
+        const int16_t active = static_cast<int16_t>(g.combat.attack.active);
+        const int16_t recover = static_cast<int16_t>(g.combat.attack.recover);
         m.t++;
-        if (monsterAttackKind(a) == MK_LUNGE && m.t <= active)
+        if (g.combat.attack.moveType == MOVE_LUNGE && m.t <= active)
             fp::addVel(m, m.lvx, m.lvy);
-        if (m.t <= active && monsterHitsPlayer(g, a)) {
-            playerHurt(g, monsterAttackDmg(a), m.fx, m.fy);
+        monsterWindowNext(g);
+        const uint16_t t16 = static_cast<uint16_t>(m.t);
+        if (t16 >= g.combat.attack.win.t0 && t16 <= g.combat.attack.win.t1 && monsterHitsPlayer(g)) {
+            playerHurt(g, g.combat.attack.dmg, m.fx, m.fy);
             if (p.hp <= 0) {
                 p.hp = 0;
                 if (g.over == OVER_NONE)
                     g.over = OVER_LOSE;
             }
         }
-        if (m.t > active + monsterAttackRecover(a)) {
+        if (m.t > active + recover) {
             m.state = MS_PURSUE;
             m.cd = static_cast<int16_t>(55 + (g.tick % 40));
             m.circleDir = (g.tick % 2) ? 1 : -1;

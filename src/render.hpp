@@ -329,15 +329,17 @@ static void drawMonster(const mh::Game &g, int16_t camX, int16_t camY) {
     }
 
     if (m.state == mh::MS_WINDUP || m.state == mh::MS_ATTACK) {
-        const mh::MonsterAttack *a = m.atk;
-        if (a) {
-            const int32_t reach = mh::monsterAttackReach(a);
-            const int32_t ax = x + w / 2 + (((int32_t)m.fx * reach) >> 4);
-            const int32_t ay = y + h / 2 + (((int32_t)m.fy * reach) >> 4);
-            // Frame by state (MS_WINDUP vs MS_ATTACK) and attack kind: the
-            // mock's windup box is shade 1 with a 2x2 light core, the attack
-            // box shade 2 with a 4x4 white core, for both lunge and sweep.
-            const bool lunge = mh::monsterAttackKind(a) == mh::MK_LUNGE;
+        if (m.atkIdx != mh::COMBAT_NO_ATTACK) {
+            // Telegraph consumes the RAM window cache (migration A): same
+            // face-relative centre and size the hit test uses, so no cart read
+            // happens during paint. Frame by state (MS_WINDUP vs MS_ATTACK) and
+            // move type: the mock's windup box is shade 1 with a 2x2 light core,
+            // the attack box shade 2 with a 4x4 white core, for both attacks.
+            int32_t dx, dy;
+            mh::combatFaceOffset(m.fx, m.fy, g.combat.attack.win.box, dx, dy);
+            const int32_t ax = x + w / 2 + dx;
+            const int32_t ay = y + h / 2 + dy;
+            const bool lunge = g.combat.attack.moveType == mh::MOVE_LUNGE;
             const uint8_t f = static_cast<uint8_t>((lunge ? spr::TELE_LUNGE_WINDUP : spr::TELE_SWEEP_WINDUP) + (m.state == mh::MS_WINDUP ? 0 : 1));
             sprDraw(fxtelegraph, ax - 16, ay - 12, FRAME(f));
         }
@@ -567,15 +569,16 @@ static void drawDebug(const mh::Game &g, int16_t camX, int16_t camY) {
         wireDot(hit.x + ox, hit.y + oy, hit.w, hit.h);
     }
 
-    // Monster windup/attack hit box (dotted), same reach/facing projection and
-    // hw/hh the monster hit test uses; the windup outline is the telegraph.
-    if (g.mode == mh::MODE_HUNT && g.monster.atk && (g.monster.state == mh::MS_WINDUP || g.monster.state == mh::MS_ATTACK)) {
+    // Monster windup/attack hit box (dotted), same face-relative window centre
+    // and size the monster hit test uses; the windup outline is the telegraph.
+    if (g.mode == mh::MODE_HUNT && g.monster.atkIdx != mh::COMBAT_NO_ATTACK && (g.monster.state == mh::MS_WINDUP || g.monster.state == mh::MS_ATTACK)) {
         const mh::Monster &m = g.monster;
-        const int32_t reach = mh::monsterAttackReach(m.atk);
-        const int32_t hx = m.x + (m.w >> 1) + (((int32_t)m.fx * reach) >> 4);
-        const int32_t hy = m.y + (m.h >> 1) + (((int32_t)m.fy * reach) >> 4);
-        const int32_t hw = mh::monsterAttackHw(m.atk);
-        const int32_t hh = mh::monsterAttackHh(m.atk);
+        int32_t dx, dy;
+        mh::combatFaceOffset(m.fx, m.fy, g.combat.attack.win.box, dx, dy);
+        const int32_t hx = m.x + (m.w >> 1) + dx;
+        const int32_t hy = m.y + (m.h >> 1) + dy;
+        const int32_t hw = g.combat.attack.win.box.w;
+        const int32_t hh = g.combat.attack.win.box.h;
         wireDot(hx - (hw >> 1) + ox, hy - (hh >> 1) + oy, hw, hh);
     }
 
