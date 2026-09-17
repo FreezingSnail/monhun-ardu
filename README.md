@@ -12,12 +12,12 @@ port of a browser prototype (`mock/`), verified tick-for-tick against it.
 |---|---|
 | Vertical-slice sim | Ported + parity-verified (20 scenes / 1269 ticks / 660 device asserts) |
 | Device render + HUD + audio | Working (block/FX-sprite art, cue tones; HUD text/FX glyphs + bars — `7y3` clamp fixed) |
-| Host unit tests | `make test` — **2716 passed / 0 failed** |
-| Device tests (Ardens) | boot 4, assets 254, audio 14, menu 55, hud 17, parity 660, data 221, combat 157, perf 5 — all PASS |
-| Perf gate (`monhun-ardu-8v7`, re-verified `42n.6` + `7y3` + `ljj.2`) | **PASS.** plane 156 Hz (≥135), logic 52 Hz (≥45), render max 5056 µs (≤7407), tick 988 µs, RAM free 417 B |
+| Host unit tests | `make test` — **3117 passed / 0 failed** |
+| Device tests (Ardens) | boot 4, assets 254, audio 14, menu 59, hud 17, parity 660, data 221, combat 195, perf 5 — all PASS |
+| Perf gate (`monhun-ardu-8v7`, re-verified `42n.6` + `7y3` + `ljj.2` + `ljj.7`) | **PASS.** plane 156 Hz (≥135), logic 52 Hz (≥45), render max 5040 µs (≤7407), tick 984 µs, RAM free 408 B |
 | Perf tooling | Headless Ardens profiler dump (`profiledump=<path>`, local patch) + on-device cycle bench (`test_perf`) |
-| Shipping build | flash **28378 / 29696 B** (96%), RAM **2000 / 2560 B** (560 free) |
-| FX data image | **21622 B** of 16 MB used |
+| Shipping build | flash **29400 / 29696 B** (99%), RAM **2018 / 2560 B** (542 free) |
+| FX data image | **21768 B** of 16 MB used |
 
 Speculative gameplay status: combat (sword / flail / gunshield), monster FSM,
 training pole + DPS mode, camera/world clamps, HUD, audio cues all in place.
