@@ -206,7 +206,7 @@ void PlayerSuite(TestRunner &runner) {
         rec.reset();
         tapB(g);
         t.assert(g.player.atk->id, ATK_POINTBLANK, "pointblank id");
-        t.assert(g.player.shells[0], 1, "ball consumed 2 -> 1");
+        t.assert(g.player.shells[0], 2, "demo: ammo unlimited (stays 2)");
         t.assert(g.player.reload, 45, "branch reload set");
         stepN(g, 8);
         t.assert(rec.hits, 1, "pointblank connects");
@@ -400,12 +400,12 @@ void PlayerSuite(TestRunner &runner) {
         initGame(g, W_GUN);
         holdToStance(g);
         stepN(g, 1, Input{0, 0, true, true});   // A press while holding B
-        t.assert(g.player.shells[0], 1, "ball consumed 2 -> 1");
+        t.assert(g.player.shells[0], 2, "demo: ammo unlimited (no consume)");
         t.assert(g.player.reload, 70, "ball reload started");
         t.assert(g.lastShot, 1, "shot recorded for hrd");
         stepN(g, 1, Input{0, 0, false, true});   // release A, reload ticks to 69
         stepN(g, 1, Input{0, 0, true, true});    // A again during reload
-        t.assert(g.player.shells[0], 1, "no consume while reloading");
+        t.assert(g.player.shells[0], 2, "no consume while reloading");
         suite.addTest(t);
     }
 

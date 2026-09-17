@@ -148,14 +148,14 @@ void ShellSuite(TestRunner &runner) {
     }
 
     {
-        Test t("guard+A consumes a ball, spawns a projectile + muzzle, reloads");
+        Test t("guard+A fires a ball, demo ammo stays full, reloads");
         Game g;
         initGame(g, W_GUN);
         initHuntWorld(g);
         holdGuard(g);
         t.assert(g.player.stance, ST_GUARD, "guard entered");
         fireA(g);
-        t.assert(g.player.shells[0], 1, "ball consumed");
+        t.assert(g.player.shells[0], 2, "demo: ammo unlimited (stays 2)");
         t.assert(g.player.reload, 70, "ball reload armed");
         t.assert(g.projN, 1, "one ball projectile");
         t.assert(g.proj[0].heavy, 1, "ball is heavy");
@@ -170,7 +170,7 @@ void ShellSuite(TestRunner &runner) {
     }
 
     {
-        Test t("reload timer blocks a second shot");
+        Test t("reload timer blocks a second shot, ammo stays full");
         Game g;
         initGame(g, W_GUN);
         initHuntWorld(g);
@@ -178,32 +178,40 @@ void ShellSuite(TestRunner &runner) {
         fireA(g);
         releaseA(g);
         fireA(g);
-        t.assert(g.player.shells[0], 1, "no extra ball consumed");
+        t.assert(g.player.shells[0], 2, "no consume: ammo unlimited");
         t.assert(g.projN, 1, "no extra projectile");
         suite.addTest(t);
     }
 
     {
-        Test t("shell consumption empties the clip, then blocks");
+        Test t("demo unlimited ammo: shots stay paced by reload; empty clip still blocks");
         Game g;
         initGame(g, W_GUN);
         initHuntWorld(g);
         holdGuard(g);
         fireA(g);
         t.assert(g.projN, 1, "shot 1");
-        t.assert(g.player.shells[0], 1, "one ball left");
+        t.assert(g.player.shells[0], 2, "ammo stays full after shot 1");
         releaseA(g);
         idleGuard(g, 70);   // reload 70 -> 0, guard held
         t.assert(g.player.reload, 0, "reload cleared");
         g.projN = 0;   // ignore in-flight culling; assert ammo/spawn only
         fireA(g);
-        t.assert(g.player.shells[0], 0, "clip empty");
+        t.assert(g.player.shells[0], 2, "ammo stays full after shot 2");
         t.assert(g.projN, 1, "shot 2");
         releaseA(g);
         idleGuard(g, 70);
         g.projN = 0;
         fireA(g);
-        t.assert(g.player.shells[0], 0, "still empty");
+        t.assert(g.player.shells[0], 2, "ammo stays full after shot 3");
+        t.assert(g.projN, 1, "shot 3");
+        releaseA(g);
+        idleGuard(g, 70);
+        // Safety gate: a manually emptied clip still cannot fire.
+        g.player.shells[0] = 0;
+        g.projN = 0;
+        fireA(g);
+        t.assert(g.player.shells[0], 0, "manually emptied clip stays empty");
         t.assert(g.projN, 0, "empty clip cannot fire");
         suite.addTest(t);
     }
@@ -338,7 +346,7 @@ void ShellSuite(TestRunner &runner) {
         t.assert(g.player.state, PS_ATTACK, "pointblank started");
         t.assertNotNull(g.player.atk, "pointblank attack set");
         t.assert(g.player.atk->id, ATK_POINTBLANK, "pointblank id");
-        t.assert(g.player.shells[0], shells0 - 1, "pointblank consumes a ball");
+        t.assert(g.player.shells[0], shells0, "demo: ammo unlimited (no consume)");
         t.assert(g.player.reload, 45, "pointblank reload 45");
         t.assert(g.lastShot, 0, "pointblank spawns no projectile (mock parity)");
         t.assert(g.projN, 0, "no projectile from pointblank");

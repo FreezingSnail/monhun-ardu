@@ -256,7 +256,7 @@ static bool tryBranch(Game &g, const WeaponDef *def, const Input &inp) {
     if (attackShell(atk)) {
         if (p.shells[0] <= 0)
             return false;
-        p.shells[0]--;
+        // Demo: ammo unlimited (no decrement here either); reload still arms.
         p.reload = 45;
     }
     p.stam -= atkStam;
@@ -383,7 +383,9 @@ static void stanceSpecial(Game &g, const WeaponDef *def) {
         if (p.shells[p.shell] <= 0 || p.stam < stam)
             return;
         p.stam -= stam;
-        p.shells[p.shell]--;
+        // Demo: ammo is unlimited (the magazine count stays at max); the
+        // per-shot reload timer still paces the gun. The shell-count check
+        // above stays as a safety gate for manually emptied mags.
         p.reload = shellReload(sh);
         fireShell(g, p, sh);
     }

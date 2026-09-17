@@ -557,7 +557,7 @@ function tryBranch(g, def, inp) {
   if (p.stam < atk.stam) return false;
   if (atk.shell) {
     if (p.shells.ball <= 0) return false;
-    p.shells.ball--;
+    // Demo: ammo unlimited (no decrement); reload still arms.
     p.reload = 45;
   }
   p.stam -= atk.stam;
@@ -655,7 +655,7 @@ function stanceSpecial(g, def) {
     const sh = def.shells[p.shell];
     if (p.shells[p.shell] <= 0 || p.stam < sh.stam) return;
     p.stam -= sh.stam;
-    p.shells[p.shell]--;
+    // Demo: ammo unlimited (magazine stays at max); reload timer still paces.
     p.reload = sh.reload;
     fireShell(g, p, sh);
   }
