@@ -12,11 +12,11 @@ port of a browser prototype (`mock/`), verified tick-for-tick against it.
 |---|---|
 | Vertical-slice sim | Ported + parity-verified (20 scenes / 1269 ticks / 660 device asserts) |
 | Device render + HUD + audio | Working (block/FX-sprite art, cue tones; HUD text/FX glyphs + bars — `7y3` clamp fixed) |
-| Host unit tests | `make test` — **1490 passed / 0 failed** |
-| Device tests (Ardens) | boot 4, assets 254, audio 14, menu 55, hud 17, parity 660, data 221, perf 5 — all PASS |
-| Perf gate (`monhun-ardu-8v7`, re-verified `42n.6` + `7y3`) | **PASS.** plane 156 Hz (≥135), logic 52 Hz (≥45), render max 5056 µs (≤7407), tick 988 µs, RAM free 467 B |
+| Host unit tests | `make test` — **2716 passed / 0 failed** |
+| Device tests (Ardens) | boot 4, assets 254, audio 14, menu 55, hud 17, parity 660, data 221, combat 157, perf 5 — all PASS |
+| Perf gate (`monhun-ardu-8v7`, re-verified `42n.6` + `7y3` + `ljj.2`) | **PASS.** plane 156 Hz (≥135), logic 52 Hz (≥45), render max 5056 µs (≤7407), tick 988 µs, RAM free 417 B |
 | Perf tooling | Headless Ardens profiler dump (`profiledump=<path>`, local patch) + on-device cycle bench (`test_perf`) |
-| Shipping build | flash **28378 / 29696 B** (96%), RAM **1950 / 2560 B** (610 free) |
+| Shipping build | flash **28378 / 29696 B** (96%), RAM **2000 / 2560 B** (560 free) |
 | FX data image | **21622 B** of 16 MB used |
 
 Speculative gameplay status: combat (sword / flail / gunshield), monster FSM,
@@ -49,6 +49,7 @@ mock/game.js ──port──► src/core/*.hpp ──shared verbatim──► h
 | `monster.hpp` | Monster FSM, attack cycle, windup, hit resolution, `pushApart` |
 | `projectiles.hpp` | Shells (`ball`/`scatter`), effects, training pole, damage numbers, `trainDps`, `stepWorld` |
 | `world.hpp` | Screen geometry constants, camera (int px, clamped), mode handling (hunt/train), `newGame`, `withWeapon`, `resetHunt`, `stepGame` |
+| `combat.hpp` | Combat blob loader (`ljj.2`): one production reader over the generated `combat_data.hpp` (host) / `mhCombat` blob (AVR), `creatureLoad`/`attackLoad` caches in `Game::combat` (50 B), guard eval with deterministic tick-derived chance, damage/stagger routing, part stages. No behavior wiring yet (migrations `ljj.3`–`.5`) |
 | `input.hpp` | Edge flags + B-hold detection (`aP`, `bP`, `bR`, `bHeld`), no Arduino headers |
 | `progmem.hpp` | Portable flash-read shim: `MH_PROGMEM` + typed `mhPgmRead*`; identity on host |
 
@@ -100,8 +101,11 @@ data/skeletons.json + data/creatures/*.json ──tools/gen-combat.py──►�
   §11). The blob is a `raw_t mhCombat` section of the one FX image (never a
   second flashable image); `combat_meta.hpp` carries VERSION/SIZE and the
   per-record offsets the loader uses, `combat_data.hpp` is the host mirror and
-  `combat_expect.hpp` pins sizes, spot values and the blob sha256. Data ships
-  packed but unread until migration beads `monhun-ardu-ljj.3-.5`.
+  `combat_expect.hpp` pins sizes, spot values and the blob sha256.
+  `src/core/combat.hpp` is the production loader (host structs / AVR
+  `mhFxRead*`), exercised by `tst/combat_test.hpp`,
+  `tst/combat_pack_test.hpp` and the Ardens `test_combat`; the game itself
+  still runs the legacy FSM until migrations `ljj.3`–`.5` wire it in.
 - Current blobs: `fxmonster`, `fxplayer`, `fxpole`, `fxball`, `fxscatter`,
   `fxspark`, `fxfontw`, `fxfontg`, the overlay/effect sheets and the raw
   content tables (`mhWeaponDefs`, `mhMonsterAttacks`, `mhMonsterDefs`,
@@ -132,8 +136,9 @@ data/skeletons.json + data/creatures/*.json ──tools/gen-combat.py──►�
    - `test_boot` — boots, camera pin
    - `test_assets` — reads FX blobs inside the OLED bracket, checks plane bytes
    - `test_audio` — cue-map asserts with real tones
-   - `test_data` — FX-cart weapon/monster tables match the mock values and packed layout
-   - `test_parity` — replays mock-generated traces tick-by-tick vs core
+    - `test_data` — FX-cart weapon/monster tables match the mock values and packed layout
+    - `test_combat` — combat blob loader: header/spot values, cross-refs, guard eval, damage routing, cache read counts
+    - `test_parity` — replays mock-generated traces tick-by-tick vs core
    - `test_hud` — pins HUD bar/divider framebuffer bytes + world-clip control
    - `test_perf` — cycle-based bench + budget gates
    - Fixtures for parity are generated with
@@ -146,7 +151,8 @@ data/skeletons.json + data/creatures/*.json ──tools/gen-combat.py──►�
 
 - `L4_Triplane` + `ABG_TIMER1` + `ABG_SYNC_PARK_ROW` (`src/common.hpp`).
 - Measured under load (bench): **156 Hz plane sweep, 52 Hz logic**, render max
-  5056 µs/plane, logic tick 988 µs, 467 B free RAM. Mock runs 60 Hz; tick order
+  5056 µs/plane, logic tick 988 µs, 417 B free RAM (the `ljj.2` combat loader
+  cache reserves 50 B until migrations use it). Mock runs 60 Hz; tick order
   is equivalent.
 - Debug overlay `DEBUG_HURTBOXES=1` (hold A+B to toggle). Off by default; the
   overlay build is flash-tight and only for development.
@@ -197,8 +203,8 @@ not stepped.
 ## Commands
 
 ```sh
-make test               # host unit tests (1490 asserts)
-make fxtest-headless    # Ardens device tests (boot/assets/audio/menu/parity/data/perf)
+make test               # host unit tests (2716 asserts)
+make fxtest-headless    # Ardens device tests (boot/assets/audio/menu/parity/data/combat/perf)
 make build              # compile shipping sketch (output in dist/)
 make debug              # build, then open Ardens debugger (ELF + DWARF) with FX image
 make mini               # compile for Arduboy Mini FQBN
@@ -252,13 +258,14 @@ Notes:
    (`80bbfb0`), and `blk()`'s `fillRect`/`drawFastVLine` path was replaced with
    direct masked framebuffer writes (`816767d`) — render max 13312 → 3984 µs,
    plane 82 → 156 Hz, logic 27 → 52 Hz, profiler `mh::blk` share 29% → 3.6%.
-   Any new feature must fit flash (1580 B free) and keep the perf gates green.
-2. **Flash headroom**: shipping 28132/29696 B (1564 B free) after the
+   Any new feature must fit flash (1318 B free) and keep the perf gates green.
+2. **Flash headroom**: shipping 28378/29696 B (1318 B free) after the
    content-table offload (`42n.1`-`42n.4`), the sine-LUT shrink (`42n.7`; the
    65 B quarter-wave table + sign fold), the opening menu (`6zb.2`, +1604 B
    for the menu state machine, FX-glyph render and the runtime monster-kind
-   start path) and d-pad nav debounce (`6zb.4`, +16 B for the per-axis hold
-   timers). The 119 B of hot LUTs (`mh::SIN65`
+   start path), d-pad nav debounce (`6zb.4`, +16 B for the per-axis hold
+   timers) and the combat blob pipeline (`ljj.1`; blob is FX data, shipping
+   flash unchanged). The 119 B of hot LUTs (`mh::SIN65`
    65 B, `fp::DIR8` 32 B, `mh::MH_MASK_TOP/BOT` 16 B, `mh::RING6` 6 B) stay in
    MCU flash by decision (`monhun-ardu-42n.5`): FX per-access reads measured
    ~150 cycles (~9 µs, 20-35x an LPM) and a SIN65 RAM cache would breach the
@@ -270,8 +277,10 @@ Notes:
 3. **RAM history**: constant tables originally sat in AVR `.rodata` (RAM) at
    2494 B used; moved to PROGMEM (MCU flash) via `progmem.hpp` → 1888 B. Audio
    added timers/state → 1941 B; the opening menu's 5 B `MenuState` → 1946 B; its
-   per-axis nav hold state (`6zb.4`) → 1950 B. FX sprite data stays on the cart,
-   so RAM grew little through the art pass, but the margin is ~600 B.
+   per-axis nav hold state (`6zb.4`) → 1950 B; the `ljj.2` combat loader caches
+   in `Game::combat` (22 B profile + 21 B attack/window + 7 B runtime = 50 B)
+   → 2000 B. FX sprite data stays on the cart, so RAM grew little through the
+   art pass, but the margin is ~560 B.
 4. **Mock accuracy vs speed**: the sim is parity-locked to the mock by 660 device
    asserts. Any future tuning change must either update the mock + fixtures in
    the same commit or be expressed as render/parameter-only changes.

@@ -1,0 +1,457 @@
+#pragma once
+// Host pack-parity suite for the combat blob (bead monhun-ardu-ljj.2).
+//
+// Reads fxdata/tables/combat.bin from disk (make test runs from the repo root),
+// verifies the pinned sha256 from src/generated/combat_expect.hpp, the header
+// (magic/version/flags/counts), section tiling, that every per-record offset in
+// combat_meta.hpp lands on the right record, and decodes every record from the
+// packed bytes and compares it against the generated host structs. This is the
+// host half of the "one loader" chain: blob == host structs == loader values.
+#include "test.hpp"
+#include "../src/core/combat.hpp"
+#include "../src/generated/combat_expect.hpp"
+
+#include <fstream>
+#include <iterator>
+#include <stdint.h>
+#include <string.h>
+#include <vector>
+
+using namespace mh;
+
+namespace {
+
+// ------------------------------------------------------------- sha256
+// Small self-contained SHA-256 (FIPS 180-4). The test self-checks it against
+// the published "abc" vector before trusting it for the blob hash.
+struct Sha256 {
+    uint32_t state[8];
+    uint64_t bitlen;
+    uint8_t data[64];
+    uint32_t datalen;
+
+    static uint32_t rotr(uint32_t x, uint32_t n) {
+        return (x >> n) | (x << (32 - n));
+    }
+
+    void init() {
+        state[0] = 0x6a09e667;
+        state[1] = 0xbb67ae85;
+        state[2] = 0x3c6ef372;
+        state[3] = 0xa54ff53a;
+        state[4] = 0x510e527f;
+        state[5] = 0x9b05688c;
+        state[6] = 0x1f83d9ab;
+        state[7] = 0x5be0cd19;
+        bitlen = 0;
+        datalen = 0;
+    }
+
+    void transform(const uint8_t *chunk) {
+        static const uint32_t k[64] = {
+            0x428a2f98, 0x71374491, 0xb5c0fbcf, 0xe9b5dba5, 0x3956c25b, 0x59f111f1, 0x923f82a4, 0xab1c5ed5, 0xd807aa98, 0x12835b01, 0x243185be, 0x550c7dc3, 0x72be5d74,
+            0x80deb1fe, 0x9bdc06a7, 0xc19bf174, 0xe49b69c1, 0xefbe4786, 0x0fc19dc6, 0x240ca1cc, 0x2de92c6f, 0x4a7484aa, 0x5cb0a9dc, 0x76f988da, 0x983e5152, 0xa831c66d,
+            0xb00327c8, 0xbf597fc7, 0xc6e00bf3, 0xd5a79147, 0x06ca6351, 0x14292967, 0x27b70a85, 0x2e1b2138, 0x4d2c6dfc, 0x53380d13, 0x650a7354, 0x766a0abb, 0x81c2c92e,
+            0x92722c85, 0xa2bfe8a1, 0xa81a664b, 0xc24b8b70, 0xc76c51a3, 0xd192e819, 0xd6990624, 0xf40e3585, 0x106aa070, 0x19a4c116, 0x1e376c08, 0x2748774c, 0x34b0bcb5,
+            0x391c0cb3, 0x4ed8aa4a, 0x5b9cca4f, 0x682e6ff3, 0x748f82ee, 0x78a5636f, 0x84c87814, 0x8cc70208, 0x90befffa, 0xa4506ceb, 0xbef9a3f7, 0xc67178f2,
+        };
+        uint32_t m[64];
+        for (uint32_t i = 0, j = 0; i < 16; i++, j += 4)
+            m[i] = static_cast<uint32_t>(chunk[j] << 24) | (chunk[j + 1] << 16) | (chunk[j + 2] << 8) | chunk[j + 3];
+        for (uint32_t i = 16; i < 64; i++) {
+            const uint32_t s0 = rotr(m[i - 15], 7) ^ rotr(m[i - 15], 18) ^ (m[i - 15] >> 3);
+            const uint32_t s1 = rotr(m[i - 2], 17) ^ rotr(m[i - 2], 19) ^ (m[i - 2] >> 10);
+            m[i] = m[i - 16] + s0 + m[i - 7] + s1;
+        }
+        uint32_t a = state[0], b = state[1], c = state[2], d = state[3];
+        uint32_t e = state[4], f = state[5], g = state[6], h = state[7];
+        for (uint32_t i = 0; i < 64; i++) {
+            const uint32_t s1 = rotr(e, 6) ^ rotr(e, 11) ^ rotr(e, 25);
+            const uint32_t ch = (e & f) ^ (~e & g);
+            const uint32_t t1 = h + s1 + ch + k[i] + m[i];
+            const uint32_t s0 = rotr(a, 2) ^ rotr(a, 13) ^ rotr(a, 22);
+            const uint32_t maj = (a & b) ^ (a & c) ^ (b & c);
+            const uint32_t t2 = s0 + maj;
+            h = g;
+            g = f;
+            f = e;
+            e = d + t1;
+            d = c;
+            c = b;
+            b = a;
+            a = t1 + t2;
+        }
+        state[0] += a;
+        state[1] += b;
+        state[2] += c;
+        state[3] += d;
+        state[4] += e;
+        state[5] += f;
+        state[6] += g;
+        state[7] += h;
+    }
+
+    void update(const uint8_t *input, size_t len) {
+        for (size_t i = 0; i < len; i++) {
+            data[datalen++] = input[i];
+            if (datalen == 64) {
+                transform(data);
+                bitlen += 512;
+                datalen = 0;
+            }
+        }
+    }
+
+    void final(uint8_t hash[32]) {
+        uint32_t i = datalen;
+        if (datalen < 56) {
+            data[i++] = 0x80;
+            while (i < 56)
+                data[i++] = 0;
+        } else {
+            data[i++] = 0x80;
+            while (i < 64)
+                data[i++] = 0;
+            transform(data);
+            memset(data, 0, 56);
+        }
+        bitlen += static_cast<uint64_t>(datalen) * 8;
+        for (uint32_t j = 0; j < 8; j++)
+            data[63 - j] = static_cast<uint8_t>(bitlen >> (j * 8));
+        transform(data);
+        for (i = 0; i < 4; i++) {
+            for (uint32_t j = 0; j < 8; j++)
+                hash[i + j * 4] = static_cast<uint8_t>((state[j] >> (24 - i * 8)) & 0xFF);
+        }
+    }
+};
+
+inline uint8_t b8(const std::vector<uint8_t> &v, size_t off) {
+    return v[off];
+}
+inline int8_t bi8(const std::vector<uint8_t> &v, size_t off) {
+    return static_cast<int8_t>(v[off]);
+}
+inline uint16_t b16(const std::vector<uint8_t> &v, size_t off) {
+    return static_cast<uint16_t>(v[off] | (static_cast<uint16_t>(v[off + 1]) << 8));
+}
+
+// Section + named-offset table (mirrors combat_meta.hpp names).
+struct MetaRecord {
+    const char *name;
+    uint16_t off;
+    uint16_t sectionOff;
+    uint8_t idx;
+    uint8_t size;
+    uint16_t count;
+};
+
+}   // namespace
+
+void CombatPackSuite(TestRunner &runner) {
+    TestSuite suite("Combat blob pack parity (fxdata/tables/combat.bin vs generated headers)");
+
+    {
+        Test t("sha256 reference vector");
+        Sha256 sha;
+        sha.init();
+        sha.update(reinterpret_cast<const uint8_t *>("abc"), 3);
+        uint8_t digest[32];
+        sha.final(digest);
+        static const uint8_t want[32] = {
+            0xba, 0x78, 0x16, 0xbf, 0x8f, 0x01, 0xcf, 0xea, 0x41, 0x41, 0x40, 0xde, 0x5d, 0xae, 0x22, 0x23,
+            0xb0, 0x03, 0x61, 0xa3, 0x96, 0x17, 0x7a, 0x9c, 0xb4, 0x10, 0xff, 0x61, 0xf2, 0x00, 0x15, 0xad,
+        };
+        t.assert(memcmp(digest, want, sizeof(want)), 0, "sha256('abc')");
+        suite.addTest(t);
+    }
+
+    std::ifstream in("fxdata/tables/combat.bin", std::ios::binary);
+    if (!in) {
+        Test t("fxdata/tables/combat.bin opens from repo root");
+        t.assert(0, 1, "combat.bin readable");
+        suite.addTest(t);
+        runner.addTestSuite(suite);
+        return;
+    }
+    const std::vector<uint8_t> blob((std::istreambuf_iterator<char>(in)), std::istreambuf_iterator<char>());
+
+    {
+        Test t("blob size + header (magic/version/flags/counts) + sha256");
+        t.assert(blob.size(), combat_expect::BLOB_SIZE, "file size vs expect");
+        t.assert(blob.size(), combat::SIZE, "file size vs meta");
+        t.assert(blob.size(), combat_data::BLOB_SIZE, "file size vs host data");
+        t.assert(b8(blob, 0), 0x43, "magic lo ('C')");
+        t.assert(b8(blob, 1), 0x4D, "magic hi ('M')");
+        t.assert(b16(blob, 0), 0x4D43, "magic u16");
+        t.assert(b8(blob, 2), combat::VERSION, "version");
+        t.assert(b8(blob, 3), combat::FLAGS, "flags");
+        t.assert(combat_expect::BLOB_SIZE, combat::SIZE, "expect blob size");
+        t.assert(combat_data::VERSION, combat::VERSION, "host data version");
+
+        // Header counts: 14 little-endian u16 after magic/version/flags.
+        t.assert(b16(blob, 4), combat::CREATURES_COUNT, "count creatures");
+        t.assert(b16(blob, 6), combat::PROFILES_COUNT, "count profiles");
+        t.assert(b16(blob, 8), combat::SKELETONS_COUNT, "count skeletons");
+        t.assert(b16(blob, 10), combat::PARTS_COUNT, "count parts");
+        t.assert(b16(blob, 12), combat::STAGES_COUNT, "count stages");
+        t.assert(b16(blob, 14), combat::ANCHORS_COUNT, "count anchors");
+        t.assert(b16(blob, 16), combat::ELEMS_COUNT, "count elems");
+        t.assert(b16(blob, 18), combat::REFS_COUNT, "count refs");
+        t.assert(b16(blob, 20), combat::ATTACKS_COUNT, "count attacks");
+        t.assert(b16(blob, 22), combat::WINDOWS_COUNT, "count windows");
+        t.assert(b16(blob, 24), combat::PATTERNS_COUNT, "count patterns");
+        t.assert(b16(blob, 26), combat::GUARDS_COUNT, "count guards");
+        t.assert(b16(blob, 28), combat::PREDICATES_COUNT, "count predicates");
+        t.assert(b16(blob, 30), combat::STEPS_COUNT, "count steps");
+
+        // Sections tile the blob with no gaps or padding.
+        t.assert(combat::CREATURES_OFF, combat::HEADER_SIZE, "creatures start after header");
+        t.assert(combat::PROFILES_OFF, combat::CREATURES_OFF + combat::CREATURE_SIZE * combat::CREATURES_COUNT, "creatures tile");
+        t.assert(combat::SKELETONS_OFF, combat::PROFILES_OFF + combat::PROFILE_SIZE * combat::PROFILES_COUNT, "profiles tile");
+        t.assert(combat::PARTS_OFF, combat::SKELETONS_OFF + combat::SKELETON_SIZE * combat::SKELETONS_COUNT, "skeletons tile");
+        t.assert(combat::STAGES_OFF, combat::PARTS_OFF + combat::PART_SIZE * combat::PARTS_COUNT, "parts tile");
+        t.assert(combat::ANCHORS_OFF, combat::STAGES_OFF + combat::STAGE_SIZE * combat::STAGES_COUNT, "stages tile");
+        t.assert(combat::ELEMS_OFF, combat::ANCHORS_OFF + combat::ANCHOR_SIZE * combat::ANCHORS_COUNT, "anchors tile");
+        t.assert(combat::REFS_OFF, combat::ELEMS_OFF + combat::ELEM_SIZE * combat::ELEMS_COUNT, "elems tile");
+        t.assert(combat::ATTACKS_OFF, combat::REFS_OFF + combat::REF_SIZE * combat::REFS_COUNT, "refs tile");
+        t.assert(combat::WINDOWS_OFF, combat::ATTACKS_OFF + combat::ATTACK_SIZE * combat::ATTACKS_COUNT, "attacks tile");
+        t.assert(combat::PATTERNS_OFF, combat::WINDOWS_OFF + combat::WINDOW_SIZE * combat::WINDOWS_COUNT, "windows tile");
+        t.assert(combat::GUARDS_OFF, combat::PATTERNS_OFF + combat::PATTERN_SIZE * combat::PATTERNS_COUNT, "patterns tile");
+        t.assert(combat::PREDICATES_OFF, combat::GUARDS_OFF + combat::GUARD_SIZE * combat::GUARDS_COUNT, "guards tile");
+        t.assert(combat::STEPS_OFF, combat::PREDICATES_OFF + combat::PREDICATE_SIZE * combat::PREDICATES_COUNT, "predicates tile");
+        t.assert(combat::STEPS_OFF + combat::STEP_SIZE * combat::STEPS_COUNT, combat::SIZE, "steps end at blob size");
+
+        Sha256 sha;
+        sha.init();
+        sha.update(blob.data(), blob.size());
+        uint8_t digest[32];
+        sha.final(digest);
+        t.assert(memcmp(digest, combat_expect::BLOB_SHA256, sizeof(digest)), 0, "blob sha256");
+        suite.addTest(t);
+    }
+
+    {
+        Test t("every generated record offset lands on the right record");
+        static const MetaRecord records[] = {
+            {"CREATURE_HEAVY", combat::CREATURE_HEAVY_OFF, combat::CREATURES_OFF, combat::CREATURE_HEAVY, combat::CREATURE_SIZE, combat::CREATURES_COUNT},
+            {"CREATURE_LUNGE", combat::CREATURE_LUNGE_OFF, combat::CREATURES_OFF, combat::CREATURE_LUNGE, combat::CREATURE_SIZE, combat::CREATURES_COUNT},
+            {"CREATURE_SWEEP", combat::CREATURE_SWEEP_OFF, combat::CREATURES_OFF, combat::CREATURE_SWEEP, combat::CREATURE_SIZE, combat::CREATURES_COUNT},
+            {"PROFILE_HEAVY", combat::PROFILE_HEAVY_OFF, combat::PROFILES_OFF, 0, combat::PROFILE_SIZE, combat::PROFILES_COUNT},
+            {"PROFILE_LUNGE", combat::PROFILE_LUNGE_OFF, combat::PROFILES_OFF, 1, combat::PROFILE_SIZE, combat::PROFILES_COUNT},
+            {"PROFILE_SWEEP", combat::PROFILE_SWEEP_OFF, combat::PROFILES_OFF, 2, combat::PROFILE_SIZE, combat::PROFILES_COUNT},
+            {"SKELETON_QUAD_28X22", combat::SKELETON_QUAD_28X22_OFF, combat::SKELETONS_OFF, combat::SKELETON_QUAD_28X22, combat::SKELETON_SIZE, combat::SKELETONS_COUNT},
+            {"SKELETON_QUAD_32X24", combat::SKELETON_QUAD_32X24_OFF, combat::SKELETONS_OFF, combat::SKELETON_QUAD_32X24, combat::SKELETON_SIZE, combat::SKELETONS_COUNT},
+            {"SKELETON_QUAD_40X28", combat::SKELETON_QUAD_40X28_OFF, combat::SKELETONS_OFF, combat::SKELETON_QUAD_40X28, combat::SKELETON_SIZE, combat::SKELETONS_COUNT},
+            {"PART_QUAD_28X22_BODY", combat::PART_QUAD_28X22_BODY_OFF, combat::PARTS_OFF, combat::PART_QUAD_28X22_BODY, combat::PART_SIZE, combat::PARTS_COUNT},
+            {"PART_QUAD_32X24_BODY", combat::PART_QUAD_32X24_BODY_OFF, combat::PARTS_OFF, combat::PART_QUAD_32X24_BODY, combat::PART_SIZE, combat::PARTS_COUNT},
+            {"PART_QUAD_40X28_BODY", combat::PART_QUAD_40X28_BODY_OFF, combat::PARTS_OFF, combat::PART_QUAD_40X28_BODY, combat::PART_SIZE, combat::PARTS_COUNT},
+            {"ANCHOR_QUAD_28X22_ORIGIN", combat::ANCHOR_QUAD_28X22_ORIGIN_OFF, combat::ANCHORS_OFF, 0, combat::ANCHOR_SIZE, combat::ANCHORS_COUNT},
+            {"ANCHOR_QUAD_28X22_HEAD", combat::ANCHOR_QUAD_28X22_HEAD_OFF, combat::ANCHORS_OFF, 1, combat::ANCHOR_SIZE, combat::ANCHORS_COUNT},
+            {"ANCHOR_QUAD_32X24_ORIGIN", combat::ANCHOR_QUAD_32X24_ORIGIN_OFF, combat::ANCHORS_OFF, 2, combat::ANCHOR_SIZE, combat::ANCHORS_COUNT},
+            {"ANCHOR_QUAD_32X24_HEAD", combat::ANCHOR_QUAD_32X24_HEAD_OFF, combat::ANCHORS_OFF, 3, combat::ANCHOR_SIZE, combat::ANCHORS_COUNT},
+            {"ANCHOR_QUAD_40X28_ORIGIN", combat::ANCHOR_QUAD_40X28_ORIGIN_OFF, combat::ANCHORS_OFF, 4, combat::ANCHOR_SIZE, combat::ANCHORS_COUNT},
+            {"ANCHOR_QUAD_40X28_HEAD", combat::ANCHOR_QUAD_40X28_HEAD_OFF, combat::ANCHORS_OFF, 5, combat::ANCHOR_SIZE, combat::ANCHORS_COUNT},
+            {"ATTACK_HEAVY_LUNGE", combat::ATTACK_HEAVY_LUNGE_OFF, combat::ATTACKS_OFF, combat::ATTACK_HEAVY_LUNGE, combat::ATTACK_SIZE, combat::ATTACKS_COUNT},
+            {"ATTACK_HEAVY_SWEEP", combat::ATTACK_HEAVY_SWEEP_OFF, combat::ATTACKS_OFF, combat::ATTACK_HEAVY_SWEEP, combat::ATTACK_SIZE, combat::ATTACKS_COUNT},
+            {"ATTACK_LUNGE_LUNGE", combat::ATTACK_LUNGE_LUNGE_OFF, combat::ATTACKS_OFF, combat::ATTACK_LUNGE_LUNGE, combat::ATTACK_SIZE, combat::ATTACKS_COUNT},
+            {"ATTACK_LUNGE_SWEEP", combat::ATTACK_LUNGE_SWEEP_OFF, combat::ATTACKS_OFF, combat::ATTACK_LUNGE_SWEEP, combat::ATTACK_SIZE, combat::ATTACKS_COUNT},
+            {"ATTACK_SWEEP_LUNGE", combat::ATTACK_SWEEP_LUNGE_OFF, combat::ATTACKS_OFF, combat::ATTACK_SWEEP_LUNGE, combat::ATTACK_SIZE, combat::ATTACKS_COUNT},
+            {"ATTACK_SWEEP_SWEEP", combat::ATTACK_SWEEP_SWEEP_OFF, combat::ATTACKS_OFF, combat::ATTACK_SWEEP_SWEEP, combat::ATTACK_SIZE, combat::ATTACKS_COUNT},
+            {"WINDOW_HEAVY_LUNGE_0", combat::WINDOW_HEAVY_LUNGE_0_OFF, combat::WINDOWS_OFF, combat::WINDOW_HEAVY_LUNGE_0, combat::WINDOW_SIZE, combat::WINDOWS_COUNT},
+            {"WINDOW_HEAVY_SWEEP_0", combat::WINDOW_HEAVY_SWEEP_0_OFF, combat::WINDOWS_OFF, combat::WINDOW_HEAVY_SWEEP_0, combat::WINDOW_SIZE, combat::WINDOWS_COUNT},
+            {"WINDOW_LUNGE_LUNGE_0", combat::WINDOW_LUNGE_LUNGE_0_OFF, combat::WINDOWS_OFF, combat::WINDOW_LUNGE_LUNGE_0, combat::WINDOW_SIZE, combat::WINDOWS_COUNT},
+            {"WINDOW_LUNGE_SWEEP_0", combat::WINDOW_LUNGE_SWEEP_0_OFF, combat::WINDOWS_OFF, combat::WINDOW_LUNGE_SWEEP_0, combat::WINDOW_SIZE, combat::WINDOWS_COUNT},
+            {"WINDOW_SWEEP_LUNGE_0", combat::WINDOW_SWEEP_LUNGE_0_OFF, combat::WINDOWS_OFF, combat::WINDOW_SWEEP_LUNGE_0, combat::WINDOW_SIZE, combat::WINDOWS_COUNT},
+            {"WINDOW_SWEEP_SWEEP_0", combat::WINDOW_SWEEP_SWEEP_0_OFF, combat::WINDOWS_OFF, combat::WINDOW_SWEEP_SWEEP_0, combat::WINDOW_SIZE, combat::WINDOWS_COUNT},
+            {"PATTERN_HEAVY_P_LUNGE", combat::PATTERN_HEAVY_P_LUNGE_OFF, combat::PATTERNS_OFF, combat::PATTERN_HEAVY_P_LUNGE, combat::PATTERN_SIZE, combat::PATTERNS_COUNT},
+            {"PATTERN_HEAVY_P_SWEEP", combat::PATTERN_HEAVY_P_SWEEP_OFF, combat::PATTERNS_OFF, combat::PATTERN_HEAVY_P_SWEEP, combat::PATTERN_SIZE, combat::PATTERNS_COUNT},
+            {"PATTERN_LUNGE_P_LUNGE", combat::PATTERN_LUNGE_P_LUNGE_OFF, combat::PATTERNS_OFF, combat::PATTERN_LUNGE_P_LUNGE, combat::PATTERN_SIZE, combat::PATTERNS_COUNT},
+            {"PATTERN_LUNGE_P_SWEEP", combat::PATTERN_LUNGE_P_SWEEP_OFF, combat::PATTERNS_OFF, combat::PATTERN_LUNGE_P_SWEEP, combat::PATTERN_SIZE, combat::PATTERNS_COUNT},
+            {"PATTERN_SWEEP_P_SWEEP", combat::PATTERN_SWEEP_P_SWEEP_OFF, combat::PATTERNS_OFF, combat::PATTERN_SWEEP_P_SWEEP, combat::PATTERN_SIZE, combat::PATTERNS_COUNT},
+            {"GUARD_HEAVY_P_LUNGE", combat::GUARD_HEAVY_P_LUNGE_OFF, combat::GUARDS_OFF, combat::GUARD_HEAVY_P_LUNGE, combat::GUARD_SIZE, combat::GUARDS_COUNT},
+            {"GUARD_HEAVY_P_SWEEP", combat::GUARD_HEAVY_P_SWEEP_OFF, combat::GUARDS_OFF, combat::GUARD_HEAVY_P_SWEEP, combat::GUARD_SIZE, combat::GUARDS_COUNT},
+            {"GUARD_LUNGE_P_LUNGE", combat::GUARD_LUNGE_P_LUNGE_OFF, combat::GUARDS_OFF, combat::GUARD_LUNGE_P_LUNGE, combat::GUARD_SIZE, combat::GUARDS_COUNT},
+            {"GUARD_LUNGE_P_SWEEP", combat::GUARD_LUNGE_P_SWEEP_OFF, combat::GUARDS_OFF, combat::GUARD_LUNGE_P_SWEEP, combat::GUARD_SIZE, combat::GUARDS_COUNT},
+            {"GUARD_SWEEP_P_SWEEP", combat::GUARD_SWEEP_P_SWEEP_OFF, combat::GUARDS_OFF, combat::GUARD_SWEEP_P_SWEEP, combat::GUARD_SIZE, combat::GUARDS_COUNT},
+            {"STEP_HEAVY_P_LUNGE_0", combat::STEP_HEAVY_P_LUNGE_0_OFF, combat::STEPS_OFF, combat::STEP_HEAVY_P_LUNGE_0, combat::STEP_SIZE, combat::STEPS_COUNT},
+            {"STEP_HEAVY_P_SWEEP_0", combat::STEP_HEAVY_P_SWEEP_0_OFF, combat::STEPS_OFF, combat::STEP_HEAVY_P_SWEEP_0, combat::STEP_SIZE, combat::STEPS_COUNT},
+            {"STEP_LUNGE_P_LUNGE_0", combat::STEP_LUNGE_P_LUNGE_0_OFF, combat::STEPS_OFF, combat::STEP_LUNGE_P_LUNGE_0, combat::STEP_SIZE, combat::STEPS_COUNT},
+            {"STEP_LUNGE_P_SWEEP_0", combat::STEP_LUNGE_P_SWEEP_0_OFF, combat::STEPS_OFF, combat::STEP_LUNGE_P_SWEEP_0, combat::STEP_SIZE, combat::STEPS_COUNT},
+            {"STEP_SWEEP_P_SWEEP_0", combat::STEP_SWEEP_P_SWEEP_0_OFF, combat::STEPS_OFF, combat::STEP_SWEEP_P_SWEEP_0, combat::STEP_SIZE, combat::STEPS_COUNT},
+        };
+        for (const MetaRecord &r : records) {
+            t.assert(r.off, static_cast<int>(r.sectionOff) + r.idx * r.size, std::string("offset ") + r.name);
+            t.assert((r.off - r.sectionOff) % r.size, 0, std::string("align ") + r.name);
+            t.assertLessThan(r.off, static_cast<int>(r.sectionOff) + r.count * r.size, std::string("inside ") + r.name);
+        }
+        suite.addTest(t);
+    }
+
+    {
+        Test t("packed records decode to the generated host structs");
+        for (uint8_t i = 0; i < combat::CREATURES_COUNT; i++) {
+            const size_t o = static_cast<size_t>(combat::CREATURES_OFF) + i * combat::CREATURE_SIZE;
+            const combat_data::Creature &h = combat_data::CREATURES[i];
+            t.assert(b8(blob, o + 0), h.skeletonIdx, "blob creature skeletonIdx");
+            t.assert(b8(blob, o + 1), h.profileIdx, "blob creature profileIdx");
+            t.assert(b8(blob, o + 2), h.firstPart, "blob creature firstPart");
+            t.assert(b8(blob, o + 3), h.partCount, "blob creature partCount");
+            t.assert(b8(blob, o + 4), h.firstAttack, "blob creature firstAttack");
+            t.assert(b8(blob, o + 5), h.attackCount, "blob creature attackCount");
+            t.assert(b8(blob, o + 6), h.firstPattern, "blob creature firstPattern");
+            t.assert(b8(blob, o + 7), h.patternCount, "blob creature patternCount");
+            t.assert(b8(blob, o + 8), h.w, "blob creature w");
+            t.assert(b8(blob, o + 9), h.h, "blob creature h");
+            t.assert(b8(blob, o + 10), h.spd, "blob creature spd");
+            t.assert(b16(blob, o + 11), h.hp, "blob creature hp");
+            t.assert(b16(blob, o + 13), h.spawnX, "blob creature spawnX");
+            t.assert(b16(blob, o + 15), h.spawnY, "blob creature spawnY");
+        }
+        for (uint8_t i = 0; i < combat::PROFILES_COUNT; i++) {
+            const size_t o = static_cast<size_t>(combat::PROFILES_OFF) + i * combat::PROFILE_SIZE;
+            const combat_data::Profile &h = combat_data::PROFILES[i];
+            t.assert(b8(blob, o + 0), h.engageDist, "blob profile engageDist");
+            t.assert(b8(blob, o + 1), h.keepDist, "blob profile keepDist");
+            t.assert(b8(blob, o + 2), h.attackDist, "blob profile attackDist");
+            t.assert(b8(blob, o + 3), h.circleNum, "blob profile circleNum");
+            t.assert(b8(blob, o + 4), h.circleDen, "blob profile circleDen");
+            t.assert(b8(blob, o + 5), h.retreatNum, "blob profile retreatNum");
+            t.assert(b8(blob, o + 6), h.retreatDen, "blob profile retreatDen");
+            t.assert(b8(blob, o + 7), h.staggerMax, "blob profile staggerMax");
+            t.assert(b8(blob, o + 8), h.staggerDecay, "blob profile staggerDecay");
+            t.assert(b8(blob, o + 9), h.partCount, "blob profile partCount");
+            t.assert(b16(blob, o + 10), h.cdBase, "blob profile cdBase");
+            t.assert(b16(blob, o + 12), h.cdJitter, "blob profile cdJitter");
+            t.assert(b16(blob, o + 14), h.spawnT, "blob profile spawnT");
+            t.assert(b16(blob, o + 16), h.spawnCd, "blob profile spawnCd");
+            t.assert(b16(blob, o + 18), h.stunRecoverT, "blob profile stunRecoverT");
+            t.assert(b16(blob, o + 20), h.staggerRecoverT, "blob profile staggerRecoverT");
+        }
+        for (uint8_t i = 0; i < combat::SKELETONS_COUNT; i++) {
+            const size_t o = static_cast<size_t>(combat::SKELETONS_OFF) + i * combat::SKELETON_SIZE;
+            const combat_data::Skeleton &h = combat_data::SKELETONS[i];
+            t.assert(b8(blob, o + 0), h.firstPart, "blob skeleton firstPart");
+            t.assert(b8(blob, o + 1), h.partCount, "blob skeleton partCount");
+            t.assert(b8(blob, o + 2), h.firstAnchor, "blob skeleton firstAnchor");
+            t.assert(b8(blob, o + 3), h.anchorCount, "blob skeleton anchorCount");
+        }
+        for (uint8_t i = 0; i < combat::PARTS_COUNT; i++) {
+            const size_t o = static_cast<size_t>(combat::PARTS_OFF) + i * combat::PART_SIZE;
+            const combat_data::Part &h = combat_data::PARTS[i];
+            t.assert(bi8(blob, o + 0), h.box.ox, "blob part box.ox");
+            t.assert(bi8(blob, o + 1), h.box.oy, "blob part box.oy");
+            t.assert(b8(blob, o + 2), h.box.w, "blob part box.w");
+            t.assert(b8(blob, o + 3), h.box.h, "blob part box.h");
+            t.assert(b8(blob, o + 4), h.dmgMul, "blob part dmgMul");
+            t.assert(b8(blob, o + 5), h.bodyShare, "blob part bodyShare");
+            t.assert(b8(blob, o + 6), h.breakTypes, "blob part breakTypes");
+            t.assert(b8(blob, o + 7), h.hurtOn, "blob part hurtOn");
+            t.assert(b8(blob, o + 8), h.physSlash, "blob part physSlash");
+            t.assert(b8(blob, o + 9), h.physBlunt, "blob part physBlunt");
+            t.assert(b8(blob, o + 10), h.physShot, "blob part physShot");
+            t.assert(b8(blob, o + 11), h.firstStage, "blob part firstStage");
+            t.assert(b8(blob, o + 12), h.stageCount, "blob part stageCount");
+            t.assert(b8(blob, o + 13), h.firstElem, "blob part firstElem");
+            t.assert(b8(blob, o + 14), h.elemCount, "blob part elemCount");
+            t.assert(b16(blob, o + 15), h.hp, "blob part hp");
+            t.assert(b8(blob, o + 17), h.flags, "blob part flags");
+        }
+        for (uint8_t i = 0; i < combat::ATTACKS_COUNT; i++) {
+            const size_t o = static_cast<size_t>(combat::ATTACKS_OFF) + i * combat::ATTACK_SIZE;
+            const combat_data::Attack &h = combat_data::ATTACKS[i];
+            t.assert(b8(blob, o + 0), h.moveType, "blob attack moveType");
+            t.assert(b8(blob, o + 1), h.moveSpeedF, "blob attack moveSpeedF");
+            t.assert(bi8(blob, o + 2), h.moveDx, "blob attack moveDx");
+            t.assert(bi8(blob, o + 3), h.moveDy, "blob attack moveDy");
+            t.assert(b8(blob, o + 4), h.facing, "blob attack facing");
+            t.assert(b8(blob, o + 5), h.phys, "blob attack phys");
+            t.assert(b8(blob, o + 6), h.elem, "blob attack elem");
+            t.assert(b8(blob, o + 7), h.onHitEffect, "blob attack onHitEffect");
+            t.assert(bi8(blob, o + 8), h.onHitPush, "blob attack onHitPush");
+            t.assert(b8(blob, o + 9), h.onHitStun, "blob attack onHitStun");
+            t.assert(b8(blob, o + 10), h.stagger, "blob attack stagger");
+            t.assert(b8(blob, o + 11), h.cue, "blob attack cue");
+            t.assert(b8(blob, o + 12), h.firstWindow, "blob attack firstWindow");
+            t.assert(b8(blob, o + 13), h.windowCount, "blob attack windowCount");
+            t.assert(b16(blob, o + 14), h.windup, "blob attack windup");
+            t.assert(b16(blob, o + 16), h.active, "blob attack active");
+            t.assert(b16(blob, o + 18), h.recover, "blob attack recover");
+            t.assert(b16(blob, o + 20), h.dmg, "blob attack dmg");
+        }
+        for (uint8_t i = 0; i < combat::WINDOWS_COUNT; i++) {
+            const size_t o = static_cast<size_t>(combat::WINDOWS_OFF) + i * combat::WINDOW_SIZE;
+            const combat_data::Window &h = combat_data::WINDOWS[i];
+            t.assert(b16(blob, o + 0), h.t0, "blob window t0");
+            t.assert(b16(blob, o + 2), h.t1, "blob window t1");
+            t.assert(bi8(blob, o + 4), h.box.ox, "blob window box.ox");
+            t.assert(bi8(blob, o + 5), h.box.oy, "blob window box.oy");
+            t.assert(b8(blob, o + 6), h.box.w, "blob window box.w");
+            t.assert(b8(blob, o + 7), h.box.h, "blob window box.h");
+            t.assert(b8(blob, o + 8), h.dmgMul, "blob window dmgMul");
+            t.assert(b8(blob, o + 9), 0, "blob window reserved flags");
+        }
+        for (uint8_t i = 0; i < combat::PATTERNS_COUNT; i++) {
+            const size_t o = static_cast<size_t>(combat::PATTERNS_OFF) + i * combat::PATTERN_SIZE;
+            const combat_data::Pattern &h = combat_data::PATTERNS[i];
+            t.assert(b8(blob, o + 0), h.firstStep, "blob pattern firstStep");
+            t.assert(b8(blob, o + 1), h.stepCount, "blob pattern stepCount");
+            t.assert(b8(blob, o + 2), h.guardIdx, "blob pattern guardIdx");
+        }
+        for (uint8_t i = 0; i < combat::GUARDS_COUNT; i++) {
+            const size_t o = static_cast<size_t>(combat::GUARDS_OFF) + i * combat::GUARD_SIZE;
+            const combat_data::Guard &h = combat_data::GUARDS[i];
+            t.assert(b8(blob, o + 0), h.minDist, "blob guard minDist");
+            t.assert(b8(blob, o + 1), h.maxDist, "blob guard maxDist");
+            t.assert(b8(blob, o + 2), h.hpLo, "blob guard hpLo");
+            t.assert(b8(blob, o + 3), h.hpHi, "blob guard hpHi");
+            t.assert(b8(blob, o + 4), h.playerFlags, "blob guard playerFlags");
+            t.assert(b8(blob, o + 5), h.cooldown, "blob guard cooldown");
+            t.assert(b8(blob, o + 6), h.chance, "blob guard chance");
+            t.assert(b8(blob, o + 7), h.firstPartPred, "blob guard firstPartPred");
+            t.assert(b8(blob, o + 8), h.partPredCount, "blob guard partPredCount");
+        }
+        for (uint8_t i = 0; i < combat::STEPS_COUNT; i++) {
+            const size_t o = static_cast<size_t>(combat::STEPS_OFF) + i * combat::STEP_SIZE;
+            const combat_data::Step &h = combat_data::STEPS[i];
+            t.assert(b8(blob, o + 0), h.kind, "blob step kind");
+            t.assert(b8(blob, o + 1), h.ref, "blob step ref");
+            t.assert(b8(blob, o + 2), h.after, "blob step after");
+            t.assert(b8(blob, o + 3), h.chance, "blob step chance");
+        }
+        for (uint8_t i = 0; i < combat::ANCHORS_COUNT; i++) {
+            const size_t o = static_cast<size_t>(combat::ANCHORS_OFF) + i * combat::ANCHOR_SIZE;
+            t.assert(bi8(blob, o + 0), combat_data::ANCHORS[i].ox, "blob anchor ox");
+            t.assert(bi8(blob, o + 1), combat_data::ANCHORS[i].oy, "blob anchor oy");
+        }
+        suite.addTest(t);
+    }
+
+    {
+        Test t("blob spot values match combat_expect.hpp");
+        t.assert(b16(blob, static_cast<size_t>(combat::CREATURE_HEAVY_OFF) + 11), combat_expect::CREATURE_HEAVY_HP, "expect heavy hp");
+        t.assert(b8(blob, static_cast<size_t>(combat::CREATURE_HEAVY_OFF) + 10), combat_expect::CREATURE_HEAVY_SPD, "expect heavy spd");
+        t.assert(b8(blob, static_cast<size_t>(combat::CREATURE_HEAVY_OFF) + 8), combat_expect::CREATURE_HEAVY_W, "expect heavy w");
+        t.assert(b8(blob, static_cast<size_t>(combat::CREATURE_HEAVY_OFF) + 9), combat_expect::CREATURE_HEAVY_H, "expect heavy h");
+        t.assert(b16(blob, static_cast<size_t>(combat::CREATURE_LUNGE_OFF) + 11), combat_expect::CREATURE_LUNGE_HP, "expect lunge hp");
+        t.assert(b8(blob, static_cast<size_t>(combat::CREATURE_LUNGE_OFF) + 10), combat_expect::CREATURE_LUNGE_SPD, "expect lunge spd");
+        t.assert(b16(blob, static_cast<size_t>(combat::CREATURE_SWEEP_OFF) + 11), combat_expect::CREATURE_SWEEP_HP, "expect sweep hp");
+        t.assert(b8(blob, static_cast<size_t>(combat::CREATURE_SWEEP_OFF) + 10), combat_expect::CREATURE_SWEEP_SPD, "expect sweep spd");
+        t.assert(b16(blob, static_cast<size_t>(combat::ATTACK_HEAVY_LUNGE_OFF) + 14), combat_expect::ATTACK_HEAVY_LUNGE_WINDUP, "expect heavy lunge windup");
+        t.assert(b16(blob, static_cast<size_t>(combat::ATTACK_HEAVY_LUNGE_OFF) + 16), combat_expect::ATTACK_HEAVY_LUNGE_ACTIVE, "expect heavy lunge active");
+        t.assert(b16(blob, static_cast<size_t>(combat::ATTACK_HEAVY_LUNGE_OFF) + 18), combat_expect::ATTACK_HEAVY_LUNGE_RECOVER, "expect heavy lunge recover");
+        t.assert(b16(blob, static_cast<size_t>(combat::ATTACK_HEAVY_LUNGE_OFF) + 20), combat_expect::ATTACK_HEAVY_LUNGE_DMG, "expect heavy lunge dmg");
+        t.assert(b16(blob, static_cast<size_t>(combat::ATTACK_LUNGE_LUNGE_OFF) + 14), combat_expect::ATTACK_LUNGE_LUNGE_WINDUP, "expect lunge windup");
+        t.assert(b16(blob, static_cast<size_t>(combat::ATTACK_LUNGE_LUNGE_OFF) + 16), combat_expect::ATTACK_LUNGE_LUNGE_ACTIVE, "expect lunge active");
+        t.assert(b16(blob, static_cast<size_t>(combat::ATTACK_LUNGE_LUNGE_OFF) + 18), combat_expect::ATTACK_LUNGE_LUNGE_RECOVER, "expect lunge recover");
+        t.assert(b16(blob, static_cast<size_t>(combat::ATTACK_LUNGE_LUNGE_OFF) + 20), combat_expect::ATTACK_LUNGE_LUNGE_DMG, "expect lunge dmg");
+        t.assert(b8(blob, static_cast<size_t>(combat::GUARD_HEAVY_P_LUNGE_OFF) + 0), combat_expect::PATTERN_HEAVY_P_LUNGE_MIN_DIST, "expect heavy minDist");
+        t.assert(b8(blob, static_cast<size_t>(combat::GUARD_HEAVY_P_LUNGE_OFF) + 1), combat_expect::PATTERN_HEAVY_P_LUNGE_MAX_DIST, "expect heavy maxDist");
+        t.assert(b8(blob, static_cast<size_t>(combat::GUARD_LUNGE_P_LUNGE_OFF) + 0), combat_expect::PATTERN_LUNGE_P_LUNGE_MIN_DIST, "expect lunge minDist");
+        t.assert(b8(blob, static_cast<size_t>(combat::GUARD_LUNGE_P_LUNGE_OFF) + 1), combat_expect::PATTERN_LUNGE_P_LUNGE_MAX_DIST, "expect lunge maxDist");
+        t.assert(b8(blob, static_cast<size_t>(combat::GUARD_SWEEP_P_SWEEP_OFF) + 6), combat_expect::PATTERN_SWEEP_P_SWEEP_CHANCE, "expect sweep chance");
+        suite.addTest(t);
+    }
+
+    runner.addTestSuite(suite);
+}

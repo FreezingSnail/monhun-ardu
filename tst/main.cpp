@@ -9,6 +9,8 @@
 #include "art_dims_test.hpp"
 #include "sin_test.hpp"
 #include "menu_test.hpp"
+#include "combat_test.hpp"
+#include "combat_pack_test.hpp"
 
 int main() {
     TestRunner runner;
@@ -21,6 +23,8 @@ int main() {
     artdimstest::ArtDimsSuite(runner);
     SinSuite(runner);
     MenuSuite(runner);
+    CombatSuite(runner);
+    CombatPackSuite(runner);
     runner.printSummary();
     return runner.fail() ? 1 : 0;
 }

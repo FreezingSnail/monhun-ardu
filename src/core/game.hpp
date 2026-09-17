@@ -354,6 +354,61 @@ struct Player : fp::FpBody, fp::FpStam {
     void init(int8_t weapon);
 };
 
+// --------------------------------------- combat loader caches (ljj.2)
+// Live RAM caches for src/core/combat.hpp. The cache types live here (not in
+// combat.hpp) because Game stores them by value and combat.hpp includes
+// game.hpp; keeping them next to Player/Monster/Target is the same layering.
+// Sizes are the design contract (docs/creature-framework.md section 9):
+// profile 22 B + attack 21 B + runtime 7 B = 50 B on AVR, no bulk table loads.
+// Compact/packed by construction on AVR (byte fields, uint16 alignment 1).
+
+struct CombatBox {
+    int8_t ox, oy;
+    uint8_t w, h;
+};
+
+// Full profile record mirror (16 fields, blob ABI order). Read whole at spawn
+// and cached; the interpreter consumes the cache at decision time.
+struct CombatProfile {
+    uint8_t engageDist, keepDist, attackDist;
+    uint8_t circleNum, circleDen, retreatNum, retreatDen;
+    uint8_t staggerMax, staggerDecay, partCount;
+    uint16_t cdBase, cdJitter, spawnT, spawnCd, stunRecoverT, staggerRecoverT;
+};
+
+// One hit window (blob ABI order minus the reserved flags byte, which the
+// loader does not cache: always 0 today and never read).
+struct CombatWindow {
+    uint16_t t0, t1;
+    CombatBox box;
+    uint8_t dmgMul;
+};
+
+// Attack scalar cache + the currently loaded window. Read once at attack start
+// (~16 FX reads), refreshed only when the interpreter switches windows;
+// per-tick code consumes this cache and performs no cart reads.
+struct CombatAttackCache {
+    uint16_t windup, active, recover, dmg;
+    uint8_t moveType, moveSpeedF;
+    uint8_t facing;
+    uint8_t winIdx;   // index of the cached window in the WINDOWS section
+    CombatWindow win;
+};
+
+// Combat runtime state: which creature was loaded, 2-bit part stages for up to
+// 8 effective parts (saturating; parts beyond slot 7 are not stage-tracked),
+// and the pattern step cursor (stepIdx + 256-tick countdown stepT).
+struct CombatState {
+    CombatProfile profile;      // 22 B AVR
+    CombatAttackCache attack;   // 21 B AVR
+    uint8_t creature;           // index into CREATURES
+    uint16_t stages;            // 2 bits x 8 parts, 0 = intact
+    uint8_t patternIdx;
+    uint8_t stepIdx;
+    uint8_t stepT;     // 8-bit countdown: step `after`/WAIT ticks cap at 255
+    uint8_t stagger;   // stagger meter accumulator (profile.staggerMax = 0 -> unused)
+};
+
 // Monster attack table — byte-for-byte port of mock/game.js MONSTER_ATTACKS.
 // speedF only applies to the lunge; sweep is stationary.
 enum MKind : int8_t {
@@ -515,6 +570,7 @@ struct Game {
     Effect fx[MAX_EFFECTS];
     Pole pole;
     TrainStats train;
+    CombatState combat;   // combat loader caches (ljj.2, 50 B AVR)
 };
 
 }   // namespace mh
