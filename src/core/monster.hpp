@@ -16,6 +16,17 @@
 // hits resolve the creature's hurtbox list via combatResolveBodyHit (single
 // body part on the shipped 3; all multipliers 100, so damage is unchanged).
 //
+// Migration C (bead monhun-ardu-ljj.5): the hardcoded FSM literals and the
+// lunge/sweep split are gone. initMonster caches the whole creature profile
+// (spawn timers included); updateMonster consumes only those RAM scalars and
+// the ordered pattern list (first matching guard wins; attack steps load the
+// attack through the combat loader, WAIT/after delays run in PURSUE, chance is
+// tick-derived). A stagger meter (disabled while profile.staggerMax == 0) and
+// a STAGGER state are wired but inert for the shipped 3. The observable
+// interrupt order is verbatim: hitFlash-- -> dead return -> face/dist ->
+// stun check -> state machine; pushApart/clamp/deflect-parry stuns stay
+// native.
+//
 // The beast plugs into Game::target so the player FSM resolves melee against it
 // (and the training-pole bead, hrd, plugs in the same way). Tick order mirrors
 // the mock: player first, then monster, then the push-apart correction.
@@ -42,11 +53,16 @@ static uint8_t monsterCreatureId(int8_t kind) {
 
 // Load an attack's scalars + first window into the cache and record the stable
 // identity on the monster. ~16 cart reads; the only attack-start read burst.
+// Multi-window attacks (combat::HAS_MULTI_WINDOW) track the pending windows;
+// single-window data folds the bookkeeping away (winRemain stays 0).
 static uint8_t monsterAttackSet(Game &g, uint8_t attackIdx) {
     const uint8_t loaded = attackLoad(g, attackIdx);
     g.monster.atkIdx = loaded;
-    const uint8_t windows = combatAttackWindowCount(loaded);
-    g.monster.winRemain = (windows > 0) ? static_cast<uint8_t>(windows - 1) : 0;
+    if (combat::HAS_MULTI_WINDOW) {
+        const uint8_t windows = combatAttackWindowCount(loaded);
+        g.monster.winRemain = (windows > 0) ? static_cast<uint8_t>(windows - 1) : 0;
+    }
+    // else: single-window data never reads winRemain (refresh gated below).
     return loaded;
 }
 
@@ -120,9 +136,29 @@ static void damageMonster(Game &g, int16_t dmg, int16_t hx, int16_t hy) {
     }
 }
 
+// Stagger meter (docs section 7): accumulates a hit's stagger x part/stage
+// mods; at threshold the creature cancels its pattern into STAGGER for
+// profile.staggerRecoverT and the meter resets. Wired but inert on the shipped
+// 3 (profile.staggerMax 0), so the interpreter and hit paths stay unchanged
+// until a creature opts in.
+static void monsterStaggerAdd(Game &g, uint8_t amount) {
+    const uint16_t total = static_cast<uint16_t>(g.combat.stagger) + amount;
+    g.combat.stagger = (total > 255) ? 255 : static_cast<uint8_t>(total);
+    if (g.combat.stagger < g.combat.profile.staggerMax)
+        return;
+    g.combat.stagger = 0;
+    g.combat.patternIdx = COMBAT_NO_PATTERN;   // cancel the active pattern
+    g.combat.stepIdx = 0;
+    g.combat.stepT = 0;
+    Monster &m = g.monster;
+    m.state = MS_STAGGER;
+    m.t = static_cast<int16_t>(g.combat.profile.staggerRecoverT);
+}
+
 // Target::onHit — player melee landed: resolve the part (migration B), then
-// damage, trip stun, knockback. The part multiplier chain is all-100 on the
-// shipped data, so the routed number equals the raw attack damage exactly.
+// damage, stagger, trip stun, knockback. The part multiplier chain is all-100
+// on the shipped data, so the routed number equals the raw attack damage
+// exactly.
 static void monsterOnHit(Game &g, int dmg, int hx, int hy, int push, int effect) {
     Monster &m = g.monster;
     if (m.state == MS_DEAD)
@@ -133,6 +169,12 @@ static void monsterOnHit(Game &g, int dmg, int hx, int hy, int push, int effect)
     damageMonster(g, static_cast<int16_t>(hit.dmg), static_cast<int16_t>(hx), static_cast<int16_t>(hy));
     if (m.state == MS_DEAD)
         return;
+    // Stagger meter (docs section 7). profile.staggerMax == 0 on the shipped 3
+    // (combat::HAS_STAGGER false), so the guard folds the whole meter out; part
+    // stage stagger (combat::STAGES_COUNT) is the part-break interrupt channel
+    // once stages exist, like every other stage-gated path.
+    if (combat::HAS_STAGGER && combat::STAGES_COUNT > 0 && g.combat.profile.staggerMax > 0)
+        monsterStaggerAdd(g, combatPartStaggerNow(g, hit.partIdx));
     if (effect == 1 && m.stun < 70)
         m.stun = 70;   // trip
     if (push)
@@ -152,19 +194,17 @@ static void monsterOnStun(Game &g, int ticks) {
 }
 
 // Spawn the hunt beast and wire it into Game::target. Call after initGame().
-// kind selects MONSTER_DEFS[3] (monhun-ardu-6zb roster); the body box comes
-// from the creature's skeleton body part and hp/spd/spawn from the creature
-// record in the combat blob (migration B). Kind 0 is the legacy LUNGE beast:
-// byte-for-byte the pre-roster spawn (all three records hold those values).
-// The combat caches are reset to this creature's identity; the attack cache
-// stays empty until chooseAttack loads one.
+// kind selects the roster creature (monhun-ardu-6zb); the body box comes from
+// the creature's skeleton body part, hp/spd/spawn + spawn timers from the
+// creature record and cached profile (migrations B/C). Kind 0 is the legacy
+// LUNGE beast: byte-for-byte the pre-roster spawn (all three records hold
+// those values). The combat caches are reset to this creature's identity; the
+// attack cache stays empty until the pattern interpreter loads one.
 static void initMonster(Game &g, int8_t kind = 0) {
     if (kind < 0 || kind > 2)
         kind = 0;
     g.monsterKind = kind;
-    creatureCacheReset(g, monsterCreatureId(kind));
-    const uint8_t creatureId = g.combat.creature;
-    combatCreatureBodyBox(creatureId, g.combat.body, g.combat.bodyFirst, g.combat.bodyCount);
+    const uint8_t creatureId = creatureLoad(g, monsterCreatureId(kind));
     const CombatSpawn spawn = combatCreatureSpawnRead(creatureId);
     Monster &m = g.monster;
     m.x = static_cast<int16_t>(spawn.x);
@@ -176,8 +216,8 @@ static void initMonster(Game &g, int8_t kind = 0) {
     m.hp = static_cast<int16_t>(spawn.hp);
     m.hpMax = m.hp;
     m.state = MS_IDLE;
-    m.t = 90;
-    m.cd = 140;
+    m.t = static_cast<int16_t>(g.combat.profile.spawnT);
+    m.cd = static_cast<int16_t>(g.combat.profile.spawnCd);
     m.fx = -fp::FP;
     m.fy = 0;   // face W
     m.atkIdx = COMBAT_NO_ATTACK;
@@ -196,18 +236,131 @@ static void initMonster(Game &g, int8_t kind = 0) {
     syncMonsterTarget(g);
 }
 
-// Lunge/sweep split still comes from the roster def (migration C replaces this
-// with pattern guards). The chosen attack is the creature's authored list entry
-// (slot 0 lunge, slot 1 sweep for all three shipped beasts), loaded through the
-// combat loader: attack scalars + first window land in the RAM cache.
-static void chooseAttack(Game &g, int32_t dist) {
+// ------------------------------------------------- migration C interpreter
+// The creature's ordered pattern list from the blob drives attack selection.
+// Guards are evaluated through the combat loader (inclusive integer ranges,
+// hp band, player flags, deterministic tick-derived chance; docs section 6).
+// Source order is semantic: the first matching guard wins. profile.staggerMax
+// == 0 (shipped 3) keeps the stagger meter inert.
+
+// Guard probe for one pattern. Dist-only guards (combat::HAS_SIMPLE_GUARDS,
+// the shipped 3) are one u16 cart read + a min/max compare; complex guards
+// (hp band, player flags, cooldown, part predicates, chance) fall back to the
+// loader's full evaluator (~10 cart accesses, tick-derived chance). Generic
+// path stays compiled when data uses it.
+static bool patternGuardFull(Game &g, uint8_t patternIdx, uint8_t dist) {
+    const Monster &m = g.monster;
+    CombatGuardInput in;
+    in.dist = dist;
+    in.hpPct = (m.hpMax > 0) ? static_cast<uint8_t>((static_cast<uint32_t>(m.hp) * 100u) / static_cast<uint16_t>(m.hpMax)) : 0;
+    in.playerFlags = 0;   // player-state guards land with the T2 VM
+    in.tick = static_cast<uint16_t>(g.tick);
+    in.sinceUse = 0xFFFF;   // cooldown guards: profile cd gates decisions today
+    in.stepIdx = 0;
+    return combatGuardPasses(g, patternIdx, in);
+}
+
+static bool patternGuardOk(Game &g, uint8_t patternIdx, int32_t dist) {
+    const uint8_t d = static_cast<uint8_t>(dist < 0 ? 0 : (dist > 255 ? 255 : dist));
+    if (combat::HAS_SIMPLE_GUARDS) {
+        // chooseAttack only probes indices below the creature's pattern count,
+        // so the guard record is always in range (generator-validated).
+        const uint16_t range = combatPatternGuardRangeRead(patternIdx);
+        return d >= static_cast<uint8_t>(range & 0xFF) && d <= static_cast<uint8_t>(range >> 8);
+    }
+    return patternGuardFull(g, patternIdx, d);
+}
+
+// Advance the active pattern cursor. Called once per PURSUE tick: stepT
+// counts down (WAIT merges ticks+after into one delay; an ATK step's `after`
+// is the PURSUE pause before the next step), then the step at stepIdx runs.
+// ATK loads the attack through the combat loader and enters WINDUP; chance
+// fail skips the step immediately; the last step clears the cursor. Bounded
+// by stepCount: every iteration advances stepIdx. The delay / WAIT / chance
+// branches fold away while the data declares no such records.
+static void patternStepsGeneric(Game &g) {
+    CombatState &c = g.combat;
     Monster &m = g.monster;
-    const int16_t atkDist = monsterDefAtkDist(&MONSTER_DEFS[g.monsterKind]);
-    const uint8_t slot = (atkDist >= 0 && dist > atkDist) ? 0 : 1;   // lunge / sweep
-    monsterAttackSet(g, static_cast<uint8_t>(combatCreatureFirstAttack(g.combat.creature) + slot));
+    for (;;) {
+        if (c.patternIdx == COMBAT_NO_PATTERN)
+            return;
+        if (combat::HAS_WAIT_STEPS || combat::HAS_STEP_AFTER) {
+            if (c.stepT > 0) {
+                c.stepT--;
+                if (c.stepT > 0)
+                    return;
+            }
+        }
+        if (c.stepIdx >= combatPatternStepCount(c.patternIdx)) {
+            c.patternIdx = COMBAT_NO_PATTERN;
+            return;
+        }
+        const CombatStep s = combatStepRead(static_cast<uint8_t>(combatPatternFirstStep(c.patternIdx) + c.stepIdx));
+        const uint8_t stepIdx = c.stepIdx;
+        c.stepIdx++;
+        if (combat::HAS_WAIT_STEPS || combat::HAS_STEP_AFTER)
+            c.stepT = s.after;
+        if (combat::HAS_WAIT_STEPS && s.kind == STEP_WAIT) {
+            const uint16_t wait = static_cast<uint16_t>(s.ref + s.after);
+            c.stepT = (wait > 255) ? 255 : static_cast<uint8_t>(wait);
+            return;
+        }
+        if (combat::HAS_STEP_CHANCE && !combatChancePasses(static_cast<uint16_t>(g.tick), c.creature, c.patternIdx, stepIdx, s.chance))
+            continue;   // skip immediately; `after` still delays the next step
+        monsterAttackSet(g, s.ref);
+        m.state = MS_WINDUP;
+        m.t = static_cast<int16_t>(g.combat.attack.windup);
+        m.windupMax = m.t;
+        if (c.stepT == 0 && c.stepIdx >= combatPatternStepCount(c.patternIdx))
+            c.patternIdx = COMBAT_NO_PATTERN;
+        return;
+    }
+}
+
+// Single-step, no-delay, always-hit patterns (the shipped 5): the pattern
+// completes the moment its only step fires, so the cursor never survives the
+// call (stepT stays 0, patternIdx clears; the next choice resets stepIdx).
+static void patternStepsSingle(Game &g) {
+    CombatState &c = g.combat;
+    if (c.patternIdx == COMBAT_NO_PATTERN)
+        return;
+    const uint8_t ref = combatStepRef(combatPatternFirstStep(c.patternIdx));
+    c.patternIdx = COMBAT_NO_PATTERN;
+    c.stepT = 0;
+    monsterAttackSet(g, ref);
+    Monster &m = g.monster;
     m.state = MS_WINDUP;
-    m.t = g.combat.attack.windup;
+    m.t = static_cast<int16_t>(g.combat.attack.windup);
     m.windupMax = m.t;
+}
+
+static void patternSteps(Game &g) {
+    if (!combat::HAS_MULTI_STEP && !combat::HAS_WAIT_STEPS && !combat::HAS_STEP_AFTER && !combat::HAS_STEP_CHANCE)
+        patternStepsSingle(g);
+    else
+        patternStepsGeneric(g);
+}
+
+// Attack decision (PURSUE, cd <= 0 && dist < profile.attackDist): scan the
+// creature's patterns in source order and run the first whose guard passes.
+// No guard matching leaves the beast pursuing (cd stays <= 0, retried next
+// tick); shipped guards cover every dist so this never fires today.
+static void chooseAttack(Game &g, int32_t dist) {
+    const uint16_t head = combatCreaturePatternHeadRead(g.combat.creature);
+    const uint8_t first = static_cast<uint8_t>(head & 0xFF);
+    const uint8_t count = static_cast<uint8_t>(head >> 8);
+    for (uint8_t i = 0; i < count; i++) {
+        const uint8_t patternIdx = static_cast<uint8_t>(first + i);
+        if (!patternGuardOk(g, patternIdx, dist))
+            continue;
+        g.combat.patternIdx = patternIdx;
+        if (combat::HAS_MULTI_STEP || combat::HAS_WAIT_STEPS || combat::HAS_STEP_AFTER || combat::HAS_STEP_CHANCE) {
+            g.combat.stepIdx = 0;
+            g.combat.stepT = 0;
+        }   // single-step data: patternStepsSingle owns the cursor writes
+        patternSteps(g);
+        return;
+    }
 }
 
 // Attack release: lunge velocity comes from the cached move scalars; every
@@ -302,6 +455,7 @@ static void pushApart(Game &g) {
 static void updateMonster(Game &g) {
     Monster &m = g.monster;
     Player &p = g.player;
+    const CombatProfile &pr = g.combat.profile;
 
     if (m.hitFlash > 0)
         m.hitFlash--;
@@ -320,7 +474,7 @@ static void updateMonster(Game &g) {
         m.stun--;
         if (m.stun == 0) {
             m.state = MS_RECOVER;
-            m.t = 24;
+            m.t = static_cast<int16_t>(pr.stunRecoverT);
         }
         return;
     }
@@ -333,15 +487,17 @@ static void updateMonster(Game &g) {
         break;
     case MS_PURSUE:
         m.cd--;
-        if (dist > 36) {
+        if (dist > pr.engageDist) {
             fp::addMove(m, m.fx, m.fy, m.spd);
-        } else if (dist < 24) {
-            fp::addMove(m, -m.fx, -m.fy, (m.spd * 6) / 10);
+        } else if (dist < pr.keepDist) {
+            fp::addMove(m, -m.fx, -m.fy, static_cast<int16_t>((m.spd * pr.retreatNum) / pr.retreatDen));
         } else {
             const int8_t si = static_cast<int8_t>((di + 2) & 7);   // perpendicular circle
-            fp::addMove(m, static_cast<int16_t>(fp::dir8X(si) * m.circleDir), static_cast<int16_t>(fp::dir8Y(si) * m.circleDir), (m.spd * 8) / 10);
+            fp::addMove(m, static_cast<int16_t>(fp::dir8X(si) * m.circleDir), static_cast<int16_t>(fp::dir8Y(si) * m.circleDir), static_cast<int16_t>((m.spd * pr.circleNum) / pr.circleDen));
         }
-        if (m.cd <= 0 && dist < 42)
+        if (g.combat.patternIdx != COMBAT_NO_PATTERN)
+            patternSteps(g);
+        else if (m.cd <= 0 && dist < pr.attackDist)
             chooseAttack(g, dist);
         break;
     case MS_WINDUP:
@@ -350,15 +506,16 @@ static void updateMonster(Game &g) {
             startMonsterAttack(g);
         break;
     case MS_ATTACK: {
-        // Migration A: every per-tick read comes from the RAM cache. The only
-        // mid-attack cart access is the multi-window refresh (shipped attacks
-        // declare one window, so it never fires today).
+        // Every per-tick read comes from the RAM cache. The only mid-attack
+        // cart access is the multi-window refresh (shipped attacks declare one
+        // window, so it never fires today).
         const int16_t active = static_cast<int16_t>(g.combat.attack.active);
         const int16_t recover = static_cast<int16_t>(g.combat.attack.recover);
         m.t++;
         if (g.combat.attack.moveType == MOVE_LUNGE && m.t <= active)
             fp::addVel(m, m.lvx, m.lvy);
-        monsterWindowNext(g);
+        if (combat::HAS_MULTI_WINDOW)
+            monsterWindowNext(g);
         const uint16_t t16 = static_cast<uint16_t>(m.t);
         if (t16 >= g.combat.attack.win.t0 && t16 <= g.combat.attack.win.t1 && monsterHitsPlayer(g)) {
             playerHurt(g, g.combat.attack.dmg, m.fx, m.fy);
@@ -370,7 +527,8 @@ static void updateMonster(Game &g) {
         }
         if (m.t > active + recover) {
             m.state = MS_PURSUE;
-            m.cd = static_cast<int16_t>(55 + (g.tick % 40));
+            const uint16_t jitter = pr.cdJitter;
+            m.cd = static_cast<int16_t>(pr.cdBase + (jitter ? static_cast<uint16_t>(g.tick) % jitter : 0));
             m.circleDir = (g.tick % 2) ? 1 : -1;
         }
         break;
@@ -379,7 +537,18 @@ static void updateMonster(Game &g) {
         m.t--;
         if (m.t <= 0) {
             m.state = MS_PURSUE;
-            m.cd = 55;
+            m.cd = static_cast<int16_t>(pr.cdBase);
+        }
+        break;
+    case MS_STAGGER:
+        // Inert on the shipped 3 (profile.staggerMax 0, combat::HAS_STAGGER
+        // false); same release as stun. Generic path returns with stagger data.
+        if (!combat::HAS_STAGGER)
+            break;
+        m.t--;
+        if (m.t <= 0) {
+            m.state = MS_PURSUE;
+            m.cd = static_cast<int16_t>(pr.cdBase);
         }
         break;
     default:

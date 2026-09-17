@@ -1298,6 +1298,51 @@ def emit_data_header(model, compiled):
     return "\n".join(lines)
 
 
+def data_facts(model):
+    """Compile-time capabilities of the compiled data (emitted as constexpr bools).
+
+    The shipping interpreter keeps the full generic paths, but folds away the
+    machinery the current data never reaches (plain `if` on a constexpr bool;
+    gcc 7.3/gnu++11, no `if constexpr`). Each fact is true iff at least one
+    shipped record uses the feature, so a future creature opts back in by
+    adding data and re-running gen-combat.py.
+    """
+    has_stagger = any(c["profile"]["staggerMax"] > 0 for c in model["creatures"])
+    has_wait_steps = False
+    has_step_after = False
+    has_step_chance = False
+    has_multi_step = False
+    has_multi_window = False
+    simple_guards = True
+    for creature in model["creatures"]:
+        for attack in creature["attacks"]:
+            if len(attack["windows"]) > 1:
+                has_multi_window = True
+        for pattern in creature["patterns"]:
+            guard = pattern["guard"]
+            if guard["hpLo"] != 0 or guard["hpHi"] != 100 or guard["playerFlags"] != 0 \
+                    or guard["cooldown"] != 0 or guard["chance"] != 100 or guard["parts"]:
+                simple_guards = False
+            if len(pattern["steps"]) > 1:
+                has_multi_step = True
+            for step in pattern["steps"]:
+                if step["kind"] == STEP_WAIT:
+                    has_wait_steps = True
+                if step["after"]:
+                    has_step_after = True
+                if step["kind"] == STEP_ATK and step["chance"] != 100:
+                    has_step_chance = True
+    return {
+        "HAS_STAGGER": has_stagger,
+        "HAS_WAIT_STEPS": has_wait_steps,
+        "HAS_STEP_AFTER": has_step_after,
+        "HAS_STEP_CHANCE": has_step_chance,
+        "HAS_MULTI_STEP": has_multi_step,
+        "HAS_MULTI_WINDOW": has_multi_window,
+        "HAS_SIMPLE_GUARDS": simple_guards,
+    }
+
+
 def emit_meta_header(model, compiled):
     lines = []
     app = lines.append
@@ -1318,6 +1363,12 @@ def emit_meta_header(model, compiled):
     app("constexpr uint8_t FLAGS = 0x%02X;" % FLAGS)
     app("constexpr uint16_t SIZE = %d;" % len(compiled["blob"]))
     app("constexpr uint16_t HEADER_SIZE = %d;" % HEADER_SIZE)
+    app("")
+    app("// Data facts: true when the shipped blob uses the feature. The interpreter")
+    app("// still implements every path; a false fact lets the shipping build drop")
+    app("// the unused machinery (constant-folded `if`, no C++17 `if constexpr`).")
+    for name, value in sorted(data_facts(model).items()):
+        app("constexpr bool %s = %s;" % (name, "true" if value else "false"))
     app("")
     for section in SECTION_ORDER:
         app("constexpr uint16_t %s_OFF = %d;" % (section, compiled["section_off"][section]))

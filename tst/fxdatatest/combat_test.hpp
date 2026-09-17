@@ -283,7 +283,9 @@ inline void test_combat(FxTest &test) {
         test.expectEq(g.target.rect.w, g.combat.body.w, F("target rect w from box"));
         test.expectEq(g.target.rect.x, g.monster.x, F("target rect x at box origin"));
         test.expectEq(g.combat.stages, 0, F("spawn stages intact"));
-        test.expectEq(initReads <= 24, 1, F("initMonster burst <= 24 reads"));
+        // Migration C: the spawn burst also caches the whole profile record
+        // (loader model: creature record + profile + skeleton body box <= 40).
+        test.expectEq(initReads <= 40, 1, F("initMonster burst <= 40 reads"));
 
         // Landed player hit resolves the creature's hurtbox list (one body
         // part on the shipped 3; multipliers all 100 -> damage unchanged).

@@ -281,7 +281,7 @@ void CombatSuite(TestRunner &runner) {
         t.assert(g.combat.body.w, 32, "cache body box w");
         t.assert(g.combat.body.h, 24, "cache body box h");
         t.assert(g.combat.stages, 0, "stages start intact");
-        t.assert(g.combat.patternIdx, 0, "pattern cursor reset");
+        t.assert(g.combat.patternIdx, COMBAT_NO_PATTERN, "pattern cursor reset");
         t.assert(g.combat.stepIdx, 0, "step cursor reset");
         t.assert(g.combat.stepT, 0, "step timer reset");
         t.assert(g.combat.stagger, 0, "stagger reset");

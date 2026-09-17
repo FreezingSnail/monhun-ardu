@@ -88,6 +88,8 @@ constexpr uint8_t COMBAT_STAGE_MAX = 3;
 constexpr uint8_t COMBAT_NO_PART = 0xFF;
 // Monster::atkIdx sentinel: no attack cached (init / dead / test clear).
 constexpr uint8_t COMBAT_NO_ATTACK = 0xFF;
+// CombatState::patternIdx sentinel: no pattern cursor active.
+constexpr uint8_t COMBAT_NO_PATTERN = 0xFF;
 
 // --------------------------------------------------------- value structs
 // Plain value mirrors of the blob records (field order = packed ABI order).
@@ -258,7 +260,26 @@ static_assert(sizeof(PkStep) == combat::STEP_SIZE, "step ABI drift");
 // read adjacent bytes as one u16, so these pairs must stay contiguous.
 static_assert(offsetof(PkSkeleton, partCount) == offsetof(PkSkeleton, firstPart) + 1, "skeleton head pair must stay adjacent");
 static_assert(offsetof(PkPart, boxW) == offsetof(PkPart, boxOx) + 2, "part box pairs must stay adjacent");
-static_assert(sizeof(CombatProfile) == 22, "profile cache must stay 22 B");
+// attackLoad's scalar burst (migration C): moveType/moveSpeedF and
+// firstWindow/windowCount are leading byte pairs and windup..dmg is one
+// contiguous 8 B quad in the packed record.
+static_assert(offsetof(PkAttack, moveSpeedF) == offsetof(PkAttack, moveType) + 1, "attack move pair must stay adjacent");
+static_assert(offsetof(PkAttack, windowCount) == offsetof(PkAttack, firstWindow) + 1, "attack window pair must stay adjacent");
+static_assert(offsetof(PkAttack, dmg) == offsetof(PkAttack, windup) + 6, "attack timing quad must stay contiguous");
+static_assert(offsetof(PkWindow, boxOx) == offsetof(PkWindow, t1) + 2, "window cache prefix must stay contiguous");
+// chooseAttack's pattern head: firstPattern/patternCount are one adjacent pair.
+static_assert(offsetof(PkCreature, patternCount) == offsetof(PkCreature, firstPattern) + 1, "pattern head pair must stay adjacent");
+// Bulk-read cache mirrors (migration C): these caches are byte-identical to
+// their packed blob records, so the profile/guard/step/pattern reads fetch the
+// whole record with one mhFxReadBytes transaction instead of field by field.
+static_assert(sizeof(CombatGuard) == 9, "guard cache must stay 9 B");
+static_assert(sizeof(CombatStep) == 4, "step cache must stay 4 B");
+static_assert(sizeof(CombatPattern) == 3, "pattern cache must stay 3 B");
+static_assert(offsetof(CombatProfile, partCount) == offsetof(PkProfile, partCount), "profile mirror drift");
+static_assert(offsetof(CombatProfile, cdBase) == offsetof(PkProfile, cdBase), "profile mirror drift");
+static_assert(offsetof(CombatGuard, partPredCount) == offsetof(PkGuard, partPredCount), "guard mirror drift");
+static_assert(offsetof(CombatStep, chance) == offsetof(PkStep, chance), "step mirror drift");
+static_assert(offsetof(CombatPattern, guardIdx) == offsetof(PkPattern, guardIdx), "pattern mirror drift");
 static_assert(sizeof(CombatWindow) == 9, "window cache must stay 9 B");
 static_assert(sizeof(CombatAttackCache) == 21, "attack cache must stay 21 B");
 static_assert(sizeof(CombatState) == 56, "CombatState must stay 56 B (body box + hurtbox-list head added in migration B)");
@@ -275,6 +296,10 @@ inline int8_t combatReadI8(uint16_t off) {
 }
 inline uint16_t combatReadU16(uint16_t off) {
     return mhFxReadU16(reinterpret_cast<const uint16_t *>(combatCartAddr(off)));
+}
+// Bulk per-record fetch: one transaction into a byte-identical cache mirror.
+inline void combatReadBytes(uint16_t off, void *dst, uint16_t n) {
+    mhFxReadBytes(reinterpret_cast<const void *>(combatCartAddr(off)), static_cast<uint8_t *>(dst), n);
 }
 
 }   // namespace detail
@@ -313,6 +338,20 @@ inline uint8_t combatCreatureFirstAttack(uint8_t i) {
     return combatReadU8(static_cast<uint16_t>(combat::CREATURES_OFF + i * combat::CREATURE_SIZE + MH_COMBAT_FIELD(detail::PkCreature, firstAttack)));
 }
 
+inline uint8_t combatCreatureFirstPattern(uint8_t i) {
+    return combatReadU8(static_cast<uint16_t>(combat::CREATURES_OFF + i * combat::CREATURE_SIZE + MH_COMBAT_FIELD(detail::PkCreature, firstPattern)));
+}
+
+inline uint8_t combatCreaturePatternCount(uint8_t i) {
+    return combatReadU8(static_cast<uint16_t>(combat::CREATURES_OFF + i * combat::CREATURE_SIZE + MH_COMBAT_FIELD(detail::PkCreature, patternCount)));
+}
+
+// Packed firstPattern | patternCount<<8: the two adjacent bytes in one cart
+// access (chooseAttack's decision head).
+inline uint16_t combatCreaturePatternHeadRead(uint8_t i) {
+    return combatReadU16(static_cast<uint16_t>(combat::CREATURES_OFF + i * combat::CREATURE_SIZE + MH_COMBAT_FIELD(detail::PkCreature, firstPattern)));
+}
+
 inline uint8_t combatCreatureSkeletonIdx(uint8_t i) {
     return combatReadU8(static_cast<uint16_t>(combat::CREATURES_OFF + i * combat::CREATURE_SIZE + MH_COMBAT_FIELD(detail::PkCreature, skeletonIdx)));
 }
@@ -335,26 +374,17 @@ inline CombatSpawn combatCreatureSpawnRead(uint8_t i) {
     return v;
 }
 
+// Profile is a byte-identical 22 B mirror: one bulk read at spawn (migration C
+// caches the whole record the interpreter consumes).
 inline CombatProfile combatProfileRead(uint8_t i) {
-    const uint16_t b = static_cast<uint16_t>(combat::PROFILES_OFF + i * combat::PROFILE_SIZE);
     CombatProfile v;
-    v.engageDist = combatReadU8(b + MH_COMBAT_FIELD(detail::PkProfile, engageDist));
-    v.keepDist = combatReadU8(b + MH_COMBAT_FIELD(detail::PkProfile, keepDist));
-    v.attackDist = combatReadU8(b + MH_COMBAT_FIELD(detail::PkProfile, attackDist));
-    v.circleNum = combatReadU8(b + MH_COMBAT_FIELD(detail::PkProfile, circleNum));
-    v.circleDen = combatReadU8(b + MH_COMBAT_FIELD(detail::PkProfile, circleDen));
-    v.retreatNum = combatReadU8(b + MH_COMBAT_FIELD(detail::PkProfile, retreatNum));
-    v.retreatDen = combatReadU8(b + MH_COMBAT_FIELD(detail::PkProfile, retreatDen));
-    v.staggerMax = combatReadU8(b + MH_COMBAT_FIELD(detail::PkProfile, staggerMax));
-    v.staggerDecay = combatReadU8(b + MH_COMBAT_FIELD(detail::PkProfile, staggerDecay));
-    v.partCount = combatReadU8(b + MH_COMBAT_FIELD(detail::PkProfile, partCount));
-    v.cdBase = combatReadU16(b + MH_COMBAT_FIELD(detail::PkProfile, cdBase));
-    v.cdJitter = combatReadU16(b + MH_COMBAT_FIELD(detail::PkProfile, cdJitter));
-    v.spawnT = combatReadU16(b + MH_COMBAT_FIELD(detail::PkProfile, spawnT));
-    v.spawnCd = combatReadU16(b + MH_COMBAT_FIELD(detail::PkProfile, spawnCd));
-    v.stunRecoverT = combatReadU16(b + MH_COMBAT_FIELD(detail::PkProfile, stunRecoverT));
-    v.staggerRecoverT = combatReadU16(b + MH_COMBAT_FIELD(detail::PkProfile, staggerRecoverT));
+    detail::combatReadBytes(static_cast<uint16_t>(combat::PROFILES_OFF + i * combat::PROFILE_SIZE), &v, sizeof(v));
     return v;
+}
+
+// Bulk variant that fills the Game cache in place (spawn: no 22 B copy).
+inline void combatProfileLoad(Game &g, uint8_t i) {
+    detail::combatReadBytes(static_cast<uint16_t>(combat::PROFILES_OFF + i * combat::PROFILE_SIZE), &g.combat.profile, sizeof(g.combat.profile));
 }
 
 inline CombatSkeleton combatSkeletonRead(uint8_t i) {
@@ -539,25 +569,17 @@ inline uint8_t combatAttackWindowCount(uint8_t i) {
     return combatReadU8(static_cast<uint16_t>(combat::ATTACKS_OFF + i * combat::ATTACK_SIZE + MH_COMBAT_FIELD(detail::PkAttack, windowCount)));
 }
 
+// Window cache is a byte-identical 9 B prefix of the packed record (t0, t1,
+// box, dmgMul; the record's trailing flags byte is not cached): one bulk read.
 inline CombatWindow combatWindowRead(uint8_t i) {
-    const uint16_t b = static_cast<uint16_t>(combat::WINDOWS_OFF + i * combat::WINDOW_SIZE);
     CombatWindow v;
-    v.t0 = combatReadU16(b + MH_COMBAT_FIELD(detail::PkWindow, t0));
-    v.t1 = combatReadU16(b + MH_COMBAT_FIELD(detail::PkWindow, t1));
-    v.box.ox = combatReadI8(b + MH_COMBAT_FIELD(detail::PkWindow, boxOx));
-    v.box.oy = combatReadI8(b + MH_COMBAT_FIELD(detail::PkWindow, boxOy));
-    v.box.w = combatReadU8(b + MH_COMBAT_FIELD(detail::PkWindow, boxW));
-    v.box.h = combatReadU8(b + MH_COMBAT_FIELD(detail::PkWindow, boxH));
-    v.dmgMul = combatReadU8(b + MH_COMBAT_FIELD(detail::PkWindow, dmgMul));
+    detail::combatReadBytes(static_cast<uint16_t>(combat::WINDOWS_OFF + i * combat::WINDOW_SIZE), &v, sizeof(v));
     return v;
 }
 
 inline CombatPattern combatPatternRead(uint8_t i) {
-    const uint16_t b = static_cast<uint16_t>(combat::PATTERNS_OFF + i * combat::PATTERN_SIZE);
     CombatPattern v;
-    v.firstStep = combatReadU8(b + MH_COMBAT_FIELD(detail::PkPattern, firstStep));
-    v.stepCount = combatReadU8(b + MH_COMBAT_FIELD(detail::PkPattern, stepCount));
-    v.guardIdx = combatReadU8(b + MH_COMBAT_FIELD(detail::PkPattern, guardIdx));
+    detail::combatReadBytes(static_cast<uint16_t>(combat::PATTERNS_OFF + i * combat::PATTERN_SIZE), &v, sizeof(v));
     return v;
 }
 
@@ -571,38 +593,36 @@ inline uint8_t combatPatternStepCount(uint8_t i) {
     return combatReadU8(static_cast<uint16_t>(combat::PATTERNS_OFF + i * combat::PATTERN_SIZE + MH_COMBAT_FIELD(detail::PkPattern, stepCount)));
 }
 
+// Dist-only guard probe (combat::HAS_SIMPLE_GUARDS): minDist/maxDist are the
+// guard record's leading byte pair, so the range is one u16 cart read. Complex
+// guards go through combatGuardPasses instead.
+inline uint16_t combatPatternGuardRangeRead(uint8_t i) {
+    const uint8_t guardIdx = combatPatternGuardIdx(i);
+    return combatReadU16(static_cast<uint16_t>(combat::GUARDS_OFF + guardIdx * combat::GUARD_SIZE));
+}
+
 inline CombatGuard combatGuardRead(uint8_t i) {
-    const uint16_t b = static_cast<uint16_t>(combat::GUARDS_OFF + i * combat::GUARD_SIZE);
     CombatGuard v;
-    v.minDist = combatReadU8(b + MH_COMBAT_FIELD(detail::PkGuard, minDist));
-    v.maxDist = combatReadU8(b + MH_COMBAT_FIELD(detail::PkGuard, maxDist));
-    v.hpLo = combatReadU8(b + MH_COMBAT_FIELD(detail::PkGuard, hpLo));
-    v.hpHi = combatReadU8(b + MH_COMBAT_FIELD(detail::PkGuard, hpHi));
-    v.playerFlags = combatReadU8(b + MH_COMBAT_FIELD(detail::PkGuard, playerFlags));
-    v.cooldown = combatReadU8(b + MH_COMBAT_FIELD(detail::PkGuard, cooldown));
-    v.chance = combatReadU8(b + MH_COMBAT_FIELD(detail::PkGuard, chance));
-    v.firstPartPred = combatReadU8(b + MH_COMBAT_FIELD(detail::PkGuard, firstPartPred));
-    v.partPredCount = combatReadU8(b + MH_COMBAT_FIELD(detail::PkGuard, partPredCount));
+    detail::combatReadBytes(static_cast<uint16_t>(combat::GUARDS_OFF + i * combat::GUARD_SIZE), &v, sizeof(v));
     return v;
 }
 
 inline CombatPredicate combatPredicateRead(uint8_t i) {
-    const uint16_t b = static_cast<uint16_t>(combat::PREDICATES_OFF + i * combat::PREDICATE_SIZE);
     CombatPredicate v;
-    v.partIdx = combatReadU8(b + MH_COMBAT_FIELD(detail::PkPredicate, partIdx));
-    v.op = combatReadU8(b + MH_COMBAT_FIELD(detail::PkPredicate, op));
-    v.stage = combatReadU8(b + MH_COMBAT_FIELD(detail::PkPredicate, stage));
+    detail::combatReadBytes(static_cast<uint16_t>(combat::PREDICATES_OFF + i * combat::PREDICATE_SIZE), &v, sizeof(v));
     return v;
 }
 
 inline CombatStep combatStepRead(uint8_t i) {
-    const uint16_t b = static_cast<uint16_t>(combat::STEPS_OFF + i * combat::STEP_SIZE);
     CombatStep v;
-    v.kind = combatReadU8(b + MH_COMBAT_FIELD(detail::PkStep, kind));
-    v.ref = combatReadU8(b + MH_COMBAT_FIELD(detail::PkStep, ref));
-    v.after = combatReadU8(b + MH_COMBAT_FIELD(detail::PkStep, after));
-    v.chance = combatReadU8(b + MH_COMBAT_FIELD(detail::PkStep, chance));
+    detail::combatReadBytes(static_cast<uint16_t>(combat::STEPS_OFF + i * combat::STEP_SIZE), &v, sizeof(v));
     return v;
+}
+
+// Single-field step read (single-step interpreter fast path): one byte, no
+// 4 B stack mirror.
+inline uint8_t combatStepRef(uint8_t i) {
+    return combatReadU8(static_cast<uint16_t>(combat::STEPS_OFF + i * combat::STEP_SIZE + static_cast<uint16_t>(offsetof(detail::PkStep, ref))));
 }
 
 #undef MH_COMBAT_FIELD
@@ -635,6 +655,19 @@ inline uint8_t combatCreatureProfileIdx(uint8_t i) {
 
 inline uint8_t combatCreatureFirstAttack(uint8_t i) {
     return combat_data::CREATURES[i].firstAttack;
+}
+
+inline uint8_t combatCreatureFirstPattern(uint8_t i) {
+    return combat_data::CREATURES[i].firstPattern;
+}
+
+inline uint8_t combatCreaturePatternCount(uint8_t i) {
+    return combat_data::CREATURES[i].patternCount;
+}
+
+inline uint16_t combatCreaturePatternHeadRead(uint8_t i) {
+    const combat_data::Creature &c = combat_data::CREATURES[i];
+    return static_cast<uint16_t>(static_cast<uint16_t>(c.firstPattern) | (static_cast<uint16_t>(c.patternCount) << 8));
 }
 
 inline uint8_t combatCreatureSkeletonIdx(uint8_t i) {
@@ -679,6 +712,10 @@ inline CombatProfile combatProfileRead(uint8_t i) {
     v.stunRecoverT = p.stunRecoverT;
     v.staggerRecoverT = p.staggerRecoverT;
     return v;
+}
+
+inline void combatProfileLoad(Game &g, uint8_t i) {
+    g.combat.profile = combatProfileRead(i);
 }
 
 inline CombatSkeleton combatSkeletonRead(uint8_t i) {
@@ -891,6 +928,11 @@ inline uint8_t combatPatternStepCount(uint8_t i) {
     return combat_data::PATTERNS[i].stepCount;
 }
 
+inline uint16_t combatPatternGuardRangeRead(uint8_t i) {
+    const combat_data::Guard &gu = combat_data::GUARDS[combat_data::PATTERNS[i].guardIdx];
+    return static_cast<uint16_t>(static_cast<uint16_t>(gu.minDist) | (static_cast<uint16_t>(gu.maxDist) << 8));
+}
+
 inline CombatGuard combatGuardRead(uint8_t i) {
     const combat_data::Guard &g = combat_data::GUARDS[i];
     CombatGuard v;
@@ -923,6 +965,10 @@ inline CombatStep combatStepRead(uint8_t i) {
     v.after = s.after;
     v.chance = s.chance;
     return v;
+}
+
+inline uint8_t combatStepRef(uint8_t i) {
+    return combat_data::STEPS[i].ref;
 }
 
 #endif   // __AVR__
@@ -965,7 +1011,7 @@ inline void creatureCacheReset(Game &g, uint8_t creatureId) {
     g.combat.bodyFirst = 0;
     g.combat.bodyCount = 0;
     g.combat.stages = 0;
-    g.combat.patternIdx = 0;
+    g.combat.patternIdx = COMBAT_NO_PATTERN;
     g.combat.stepIdx = 0;
     g.combat.stepT = 0;
     g.combat.stagger = 0;
@@ -981,7 +1027,7 @@ inline uint8_t creatureLoad(Game &g, uint8_t creatureId) {
         creatureId = 0;
     const uint8_t profileIdx = combatCreatureProfileIdx(creatureId);
     creatureCacheReset(g, creatureId);
-    g.combat.profile = combatProfileRead(profileIdx);
+    combatProfileLoad(g, profileIdx);
     // Migration B: the hurtbox-list head (skeleton parts) + body box cache, so
     // a loader-only caller resolves hits without extra cart reads.
     combatCreatureBodyBox(creatureId, g.combat.body, g.combat.bodyFirst, g.combat.bodyCount);
@@ -1002,6 +1048,20 @@ inline void attackWindowLoad(Game &g, uint8_t windowIdx) {
 inline uint8_t attackLoad(Game &g, uint8_t attackIdx) {
     if (attackIdx >= combat::ATTACKS_COUNT)
         attackIdx = 0;
+#ifdef __AVR__
+    // Scalar burst in four cart accesses: the moveType/moveSpeedF byte pair,
+    // facing, the firstWindow/windowCount pair, and the contiguous u16 quad
+    // windup..dmg. Cache field order is ABI-pinned to the packed record by the
+    // static_asserts at the top of this file.
+    const uint16_t b = static_cast<uint16_t>(combat::ATTACKS_OFF + attackIdx * combat::ATTACK_SIZE);
+    const uint16_t mv = combatReadU16(b + static_cast<uint16_t>(offsetof(detail::PkAttack, moveType)));
+    g.combat.attack.moveType = static_cast<uint8_t>(mv & 0xFF);
+    g.combat.attack.moveSpeedF = static_cast<uint8_t>(mv >> 8);
+    g.combat.attack.facing = combatReadU8(b + static_cast<uint16_t>(offsetof(detail::PkAttack, facing)));
+    const uint16_t fw = combatReadU16(b + static_cast<uint16_t>(offsetof(detail::PkAttack, firstWindow)));
+    detail::combatReadBytes(static_cast<uint16_t>(b + offsetof(detail::PkAttack, windup)), &g.combat.attack.windup, 8);
+    attackWindowLoad(g, static_cast<uint8_t>(fw & 0xFF));
+#else
     g.combat.attack.windup = combatAttackWindup(attackIdx);
     g.combat.attack.active = combatAttackActive(attackIdx);
     g.combat.attack.recover = combatAttackRecover(attackIdx);
@@ -1010,6 +1070,7 @@ inline uint8_t attackLoad(Game &g, uint8_t attackIdx) {
     g.combat.attack.moveSpeedF = combatAttackMoveSpeedF(attackIdx);
     g.combat.attack.facing = combatAttackFacing(attackIdx);
     attackWindowLoad(g, combatAttackFirstWindow(attackIdx));
+#endif
     return attackIdx;
 }
 

@@ -544,7 +544,8 @@ enum MState : int8_t {
     MS_WINDUP,
     MS_ATTACK,
     MS_RECOVER,
-    MS_DEAD
+    MS_DEAD,
+    MS_STAGGER   // appended: parity fixtures hash the legacy 0..5 values
 };
 enum Over : int8_t {
     OVER_NONE = 0,

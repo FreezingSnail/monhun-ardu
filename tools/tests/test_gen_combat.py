@@ -233,6 +233,25 @@ class GenCombatTests(unittest.TestCase):
 
     # ----------------------------------------------------------- blob ABI
 
+    def test_data_facts_match_fixture(self):
+        # The interpreter gates generic machinery on these constexpr bools, so a
+        # wrong fact silently changes shipping behaviour. The clean fixture has
+        # a stagger meter, a WAIT step, a step `after`, a two-step pattern, a
+        # player-flag guard and one window; no multi-window attack.
+        self.assert_succeeds(self.compile())
+        text = self.read(META_REL)
+        facts = dict(re.findall(r"^constexpr bool ([A-Z0-9_]+) = (true|false);$", text, re.M))
+        expected = {
+            "HAS_STAGGER": "true",
+            "HAS_WAIT_STEPS": "true",
+            "HAS_STEP_AFTER": "true",
+            "HAS_STEP_CHANCE": "false",
+            "HAS_MULTI_STEP": "true",
+            "HAS_MULTI_WINDOW": "false",
+            "HAS_SIMPLE_GUARDS": "false",
+        }
+        self.assertEqual(facts, expected)
+
     def test_blob_header_matches_meta(self):
         self.assert_succeeds(self.compile())
         blob = self.blob()

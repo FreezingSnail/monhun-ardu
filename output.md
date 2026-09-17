@@ -1,79 +1,88 @@
-# monhun-ardu-ljj.4 — Migration B: skeleton hurt/collide boxes replace hardcoded w/h
+# monhun-ardu-ljj.5 — Migration C: profile + pattern interpreter replaces the monster FSM
 
 Status: **DONE**. Tree left dirty for the orchestrator (no commit, no push).
-Base HEAD: `011e2d7` (ljj.3). Design source: `docs/creature-framework.md`
-§§4, 9, 11. Behavior byte-identical: the beast's body geometry, spawn stats and
-part routing now come from the combat blob (skeleton → body part → box, creature
-record → hp/spd/spawn), and the shipped data reproduces today's hardcoded
-LUNGE 32x24 / SWEEP 28x22 / HEAVY 40x28 exactly. No data, mock, generated or
-fixture bytes changed.
+Base HEAD: `b7da58a` (ljj.4) + the cancelled migration-C working tree, finished
+here. Behavior byte-identical: parity fixtures regenerate with an empty diff.
 
 ## Deliverables
 
-1. **`src/core/combat.hpp`** — loader additions (both host + AVR paths):
-   - Accessors `combatCreatureSkeletonIdx`, `combatCreatureFirstPart`,
-     `combatCreaturePartCount`, `combatSkeletonFirstPart`,
-     `combatSkeletonPartCount`, `combatSkeletonHeadRead` (packed
-     `firstPart | partCount<<8`, one cart access) and `combatPartBoxRead`
-     (`ox/oy` and `w/h` as two adjacent-byte u16 cart accesses; pinned by new
-     `static_assert` adjacency checks).
-   - `CombatSpawn` + `combatCreatureSpawnRead` (hp/x/y + spd in one burst).
-   - `combatCreatureBodyBox(id, box, firstPart, partCount)` and a 2-arg
-     convenience overload: the hurt/collide box is the creature's skeleton body
-     part, with creature-0 fallback for bad ids.
-   - `creatureCacheReset` clears the new caches; `creatureLoad` also caches the
-     body box + list head (loader-only callers/tests).
-   - `CombatBodyHit` + `combatResolveBodyHit(g, base)`: shipping hit-time
-     resolver over the cached hurtbox list. Two FX reads per landed hit
-     (`hurtOn`, `dmgMul`), no per-tick reads. All shipped multipliers are 100,
-     so the routed damage is the base value unchanged; `combatResolveHit`
-     (stage-aware reference path) is unchanged and still exercised by the
-     host/device suites.
-2. **`src/core/game.hpp`** — `CombatState` gains the spawn cache:
-   `CombatBox body` (4 B), `bodyFirst`/`bodyCount` (2 B); AVR `static_assert`
-   now pins 56 B.
-3. **`src/core/monster.hpp`** —
-   `initMonster`: `combatCreatureBodyBox` → `g.combat.body/bodyFirst/bodyCount`,
-   `combatCreatureSpawnRead` → `m.x/m.y/m.hp/hpMax/m.spd` (all shipped values
-   identical: 200/40, 200/150/320, 5/7/3), `m.w/m.h` from the box.
-   `syncMonsterTarget`, `pushApart`, `monsterHitsPlayer` consume the box via
-   `m.w/m.h` (collide box == body box today). `monsterOnHit` resolves the part
-   (single body part on the shipped 3) and routes `hit.dmg`.
-4. **`src/core/projectiles.hpp`** — player shell hits on the beast route through
-   `monsterOnHit` (same part resolution path as melee; identical damage).
-5. **`src/render.hpp`** — `DEBUG_HURTBOXES` wire draws the creature's part box
-   from `g.combat.body` (hunt) and the window/telegraph centre from the same
-   cache; body sprite anchor/shadow path untouched.
-6. **Part stage state** stays allocated/disabled exactly as ljj.2 left it:
-   `STAGES_COUNT == 0`, `CombatState::stages` reset to 0 at spawn (pinned by
-   host + device tests).
-7. **Tests** — `tst/combat_test.hpp` (+67): body-box/spawn accessors vs
-   `combat_data.hpp`, pinned shipped sizes, bad-id fallback, hurtbox-list
-   resolution vectors, `creatureLoad` cache. `tst/monster_test.hpp` (+35):
-   box/stats provenance, cached list head, target rect from box, part routing.
-   `tst/fxdatatest/combat_test.hpp` (+55): real blob box/spawn reads, per-call
-   read-count gates (box ≤8, spawn burst ≤24, landed hit ≤16), cached-list and
-   target-rect checks; final bare `P`.
+1. **`tools/gen-combat.py`** — emits data facts into
+   `src/generated/combat_meta.hpp`, computed from the compiled model:
+   `HAS_STAGGER`, `HAS_WAIT_STEPS`, `HAS_STEP_AFTER`, `HAS_STEP_CHANCE`,
+   `HAS_MULTI_STEP`, `HAS_MULTI_WINDOW`, `HAS_SIMPLE_GUARDS` (shipped values:
+   all false except `HAS_SIMPLE_GUARDS = true`). Each fact is true iff at least
+   one shipped record uses the feature, so adding data re-compiles the generic
+   path; the interpreter keeps the full feature set.
+2. **`src/core/combat.hpp`** — ABI-pinned burst reads and a dist-only guard
+   probe:
+   - `combatPatternGuardRangeRead`: minDist/maxDist are the guard record's
+     leading byte pair, so a simple guard is one u16 cart read.
+   - `combatProfileLoad` fills the Game cache in place (no 22 B by-value copy);
+     device `combatWindowRead` bulk-reads the 9 B cache mirror; device
+     `attackLoad` bursts moveType/moveSpeedF, facing, firstWindow/windowCount
+     and the contiguous windup..dmg quad; `combatStepRef` is a single-byte step
+     read; `combatCreaturePatternHeadRead` packs firstPattern|patternCount.
+   - New `static_assert` adjacency pins for every burst offset.
+3. **`src/core/monster.hpp`** — gating of unreached machinery behind the
+   constexpr facts (plain `if`, C++11-safe), with the generic paths intact:
+   - `patternGuardOk` splits into `patternGuardFull` (loader evaluator: hp
+     band, player flags, cooldown, predicates, tick chance) and a simple path
+     (one cart read + inclusive min/max compare) selected by
+     `HAS_SIMPLE_GUARDS`.
+   - `patternSteps` splits into `patternStepsGeneric` (cursor/stepT/WAIT/after/
+     chance) and `patternStepsSingle` (single-step, no-delay, always-hit fast
+     path) selected by `HAS_MULTI_STEP`/`HAS_WAIT_STEPS`/`HAS_STEP_AFTER`/
+     `HAS_STEP_CHANCE`.
+   - `monsterWindowNext` call gated by `HAS_MULTI_WINDOW` (plus winRemain
+     bookkeeping); `monsterStaggerAdd` call and the `MS_STAGGER` case gated by
+     `HAS_STAGGER`. The generic functions remain compiled when flags are true;
+     on the shipped data the linker drops them (`avr-nm` proof below).
+4. **`tst/fxdatatest/boot_test.hpp`** — scoped the first `mh::Game` so both
+   753 B games are not live at once. The migration-C inlining grew the boot
+   test's AVR frame past the ~1.37 KB below the stack; the overflow silently
+   corrupted globals (no serial, Ardens "no serial" FAIL). Scoping fixed it
+   with no assertion changes (PASSED=4 FAILED=0).
+5. **`tools/tests/test_gen_combat.py`** — new
+   `test_data_facts_match_fixture` pins the emitted flag set for the
+   fully-featured fixture (stagger/WAIT/after/multi-step/player guard true,
+   multi-window false), so a wrong fact cannot silently change behavior.
 
-## Budget / design notes (deliberate, recorded)
+## Flash/RAM budget
 
-- **Shipping resolver is single-part** (cached list head). The shipped 3
-  declare exactly one body part per skeleton, so selection over the list is
-  trivially the head; the per-part rule (highest final multiplier, tie → lowest
-  part id) and stage/phys/elem/bodyShare chain land with the first multi-part
-  creature (`combatResolveHit` already models them and remains host/device
-  tested). This was forced by flash: test_perf (the binding sketch) had only
-  280 B of headroom total.
-- Flash trims made along the way: box/spawn reads packed into adjacent-byte u16
-  cart accesses, one skeleton-head read instead of two, no `CombatHitResult`
-  (12 B) marshalling on the shipping path.
-- **test_perf is now at 29686/29696 (10 B free)** — it builds and runs, but
-  migration C should recover the 2474 B FSM before adding flash. This is the
-  one tight spot of this bead.
+Shipping build (`make build`, arduboy-fx, --optimize-for-debug):
 
-## Evidence
+```
+Sketch uses 29314 bytes (98%) of program storage space. Maximum is 29696 bytes.
+Global variables use 2006 bytes (78%) of dynamic memory, leaving 554 bytes for local variables. Maximum is 2560 bytes.
+```
 
-### 1. Parity fixtures byte-identical (hard gate)
+- vs `b7da58a` baseline **29332 B**: **−18 B**; headroom **382 B** (gate ≥300).
+- vs pre-framework **28378 B**: +936 B (the 499 B combat blob now lives in the
+  FX image, not the sketch; measured against 28378+499 = 28877 the net
+  interpreter/loader cost is +437 B — reported as measured, not spun).
+- RAM unchanged at 2006 B (CombatState still 56 B per `static_assert`).
+
+Per-stage measurements (each a full rebuild):
+
+| stage | flash | saved |
+|---|---|---|
+| cancelled-run starting point | 30440 | — |
+| data facts + guard/step/window/stagger gating | 29632 | −808 |
+| single-step pattern fast path (`HAS_MULTI_STEP`) | 29572 | −60 |
+| profile load-in-place + window bulk + attack burst | 29360 | −212 |
+| winRemain else removal + guard bounds removal | 29354 | −6 |
+| stepIdx=1 removal | 29348 | −6 |
+| chooseAttack cursor-init gating | 29338 | −10 |
+| `combatStepRef` single-byte step read | 29324 | −14 |
+| `combatCreaturePatternHeadRead` u16 pair | 29314 | −10 |
+| **total saved** | | **−1126** |
+
+## Verification (exact tails)
+
+1. `make build` — see block above (`29314` / RAM `2006`). Baseline rebuilt at
+   `b7da58a` in a clean worktree for the comparison: `29332` / RAM `2006`.
+
+2. Parity fixtures (hard gate):
 
 ```
 $ node tools/gen-parity-fixtures.js && git diff --stat tst/fxdatatest/parity_fixtures.hpp
@@ -82,7 +91,7 @@ scenes=20 ticks=1269 snapshots=32 cpFields=20
 (empty diff)
 ```
 
-### 2. Host + device suites
+3. Host suite:
 
 ```
 $ make test
@@ -90,79 +99,102 @@ Total Passed: 2848
 Total Failed: 0
 ```
 
-```
-$ make fxtest-headless
-=== test_assets ===   asset_test PASSED=254 FAILED=0     -> PASS
-=== test_audio ===    test_audio PASSED=14 FAILED=0      -> PASS
-=== test_boot ===     test_boot PASSED=4 FAILED=0        -> PASS
-=== test_combat ===   combat_test PASSED=195 FAILED=0    -> PASS
-=== test_data ===     data_test PASSED=221 FAILED=0      -> PASS
-=== test_hud ===      test_hud PASSED=17 FAILED=0        -> PASS
-=== test_menu ===     menu_test PASSED=55 FAILED=0       -> PASS
-=== test_parity ===   parity_test PASSED=660 FAILED=0    -> PASS
-=== test_perf ===     perf_test PASSED=5 FAILED=0        -> PASS
-```
-
-test_combat tail (final bare `P`):
+4. `make fxtest-headless` (Ardens, all 10 sketches) — exit 0:
 
 ```
-C reads spawn=21 attack=15 guard=10 hit=9 tick256=0 simAtk=16 simTk=0 winSw=7
+=== test_assets ===
+asset_test PASSED=254 FAILED=0
+P
+test_assets: PASS
+=== test_audio ===
+test_audio PASSED=14 FAILED=0
+P
+test_audio: PASS
+=== test_boot ===
+test_boot PASSED=4 FAILED=0
+P
+test_boot: PASS
+=== test_combat ===
+C reads spawn=6 attack=5 guard=2 hit=9 tick256=0 simAtk=5 simTk=0 winSw=1
 combat_test PASSED=195 FAILED=0
 P
 test_combat: PASS
-```
-
-test_parity tail:
-
-```
+=== test_data ===
+data_test PASSED=221 FAILED=0
+P
+test_data: PASS
+=== test_hud ===
+test_hud PASSED=17 FAILED=0
+P
+test_hud: PASS
+=== test_menu ===
+menu_test PASSED=55 FAILED=0
+P
+test_menu: PASS
+=== test_parity ===
 parity_test PASSED=660 FAILED=0
 P
 test_parity: PASS
+=== test_perf ===
+B pUs=6383 pHz=156 lHz=52 lTk=984 rMx=5040 rAv=4800 ram=416
+perf_test PASSED=5 FAILED=0
+P
+test_perf: PASS
 ```
 
-### 3. Perf B line vs baseline
+   B-line gates: `rMx=5040 <= 7407`, `pHz=156 >= 135`, `lHz=52 >= 45`,
+   `ram=416 >= 300` — all pass. Image sizes: parity 29478 B (218 free), perf
+   29684 B (12 free) — perf **links** (it had 10 B free before this bead).
+   Combat read-count gates unchanged: spawn=6, attack=5, guard=2, hit=9,
+   256-tick steady state=0.
+
+5. `make gen-check`:
 
 ```
-baseline: B pUs=6383 pHz=156 lHz=52 lTk=988 rMx=5040 rAv=4800 ram=422
-current:  B pUs=6381 pHz=156 lHz=52 lTk=984 rMx=5040 rAv=4800 ram=411
-gates:    rMx<=7407 PASS   pHz>=135 PASS   lHz>=45 PASS   ram>=300 PASS
-```
-
-(`pUs`/`lTk` delta is noise from the smaller spawn burst; all gates green.)
-
-### 4. Flash / RAM delta
-
-```
-shipping   : 29332 / 29696  (baseline 29062)  -> +270 B, 364 B free
-test_perf  : 29686 / 29696  (baseline 29416)  -> +270 B,  10 B free
-global RAM : 2006 / 2560    (baseline 2000)   -> +6 B (CombatState 50 -> 56 B)
-perf free  : ram=411 (baseline 422, gate >= 300)
-```
-
-### 5. Generation gate
-
-```
-$ make gen-check
-fxdata_manifest: fxdata/manifest.json up to date (19 images, 11 inputs, 9 outputs)
 gen.sh: FX data + src/fxdata.h regenerated
 fxdata_manifest: PASS (34 generated artifacts unchanged)
 ```
 
-## Files changed (uncommitted)
+6. Tooling suite including the new flag-pinning test:
 
 ```
- src/core/combat.hpp            | 181 ++++++++++++++++++++++++++++++++++++++++-
- src/core/game.hpp              |  15 ++--
- src/core/monster.hpp           |  57 ++++++++-----
- src/core/projectiles.hpp       |   2 +-
- src/render.hpp                 |  18 ++--
- tst/combat_test.hpp            |  67 ++++++++++++++++
- tst/fxdatatest/combat_test.hpp |  55 +++++++++++++
- tst/monster_test.hpp           |  35 ++++++++-
- 8 files changed, 395 insertions(+), 35 deletions(-)
+$ make test-tools
+Ran 44 tests in 2.451s
+OK
 ```
 
-## Blockers
+7. avr-nm / objdump evidence (shipping ELF):
 
-None. Watch item for the next bead: test_perf flash headroom is 10 B — migration
-C (FSM removal, 2474 B recoverable) should land before any further feature code.
+```
+$ avr-nm -C --size-sort -S dist/monhun-ardu.ino.elf | grep -E " [tT] mh::"
+0000188a 0000011c t mh::patternStepsSingle(mh::Game&) [clone .constprop.29]
+0000166a 00000220 t mh::initMonster(mh::Game&, signed char) [clone .constprop.34]
+00001c00 00000328 t mh::monsterOnHit(mh::Game&, int, int, int, int, int)
+...
+
+$ avr-nm -C dist/monhun-ardu.ino.elf | grep -cE \
+  "combatGuardPasses|combatChanceRoll|combatChancePasses|monsterWindowNext|monsterStaggerAdd|combatPartStaggerNow|combatGuardRead|combatPredicateRead"
+0        # every gated helper was dropped from the shipped image
+
+$ grep -nE "dist > (36|24|42)|55 \+ \(g\.tick % 40\)|% 40|m\.t = 90|m\.cd = 140|m\.t = 24" src/core/monster.hpp
+none     # old FSM literals are gone from the source
+```
+
+   `avr-objdump -dl` attributes shipped code to the interpreter, e.g.
+   `patternStepsSingle` at 0x188a reads the cached cursor and the pattern/step
+   cart records through the loader (`monster.hpp:323-329`,
+   `combat.hpp:590/625`), and the updateMonster lines (230-540) emit the
+   profile-driven FSM. `avr-size -A`: `.text 29260`, `.data 54`, `.bss 1952`.
+
+## Notes / honest limits
+
+- The generic paths are not deleted: setting any data fact true recompiles the
+  corresponding full machinery (loader guard evaluator, WAIT/after/chance step
+  loop, multi-window refresh, stagger meter). Host tests still exercise the
+  generic helpers (`combatGuardPasses`, `combatChancePasses`, predicates,
+  `monsterWindowNext` with a synthetic winRemain, etc.).
+- `fxdata/manifest.json` changed as a generated-artifact consequence of the new
+  `combat_meta.hpp` constants; `make gen-check` passes after regeneration.
+- test_perf now links with 12 B free; the interpreter is within the shipping
+  budget with 382 B headroom, so this is the tightest image, not the shipping
+  sketch.

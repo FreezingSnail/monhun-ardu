@@ -16,6 +16,17 @@ constexpr uint8_t FLAGS = 0x00;
 constexpr uint16_t SIZE = 499;
 constexpr uint16_t HEADER_SIZE = 32;
 
+// Data facts: true when the shipped blob uses the feature. The interpreter
+// still implements every path; a false fact lets the shipping build drop
+// the unused machinery (constant-folded `if`, no C++17 `if constexpr`).
+constexpr bool HAS_MULTI_STEP = false;
+constexpr bool HAS_MULTI_WINDOW = false;
+constexpr bool HAS_SIMPLE_GUARDS = true;
+constexpr bool HAS_STAGGER = false;
+constexpr bool HAS_STEP_AFTER = false;
+constexpr bool HAS_STEP_CHANCE = false;
+constexpr bool HAS_WAIT_STEPS = false;
+
 constexpr uint16_t CREATURES_OFF = 32;
 constexpr uint16_t CREATURES_COUNT = 3;
 constexpr uint16_t PROFILES_OFF = 83;

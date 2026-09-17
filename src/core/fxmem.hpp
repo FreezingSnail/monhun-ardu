@@ -83,6 +83,15 @@ MH_FX_PURE inline bool mhFxReadBool(const bool *p) {
 }
 #undef MH_FX_PURE
 
+// Bulk per-record fetch (combat loader decision reads, migration C): one seek
+// transaction, n byte reads. The typed readers above stay the default for
+// hot-path scalars; this exists for small fixed-size records whose RAM cache
+// mirror is byte-identical to the packed blob record (one cart access, not n).
+inline void mhFxReadBytes(const void *p, uint8_t *dst, uint16_t n) {
+    MH_FX_COUNT_READ();
+    FX::readDataBytes(static_cast<uint24_t>(reinterpret_cast<uintptr_t>(p)), dst, n);
+}
+
 }   // namespace mh
 
 #else
@@ -103,6 +112,12 @@ inline int16_t mhFxReadI16(const int16_t *p) {
 }
 inline bool mhFxReadBool(const bool *p) {
     return *p;
+}
+
+inline void mhFxReadBytes(const void *p, uint8_t *dst, uint16_t n) {
+    const uint8_t *src = static_cast<const uint8_t *>(p);
+    for (uint16_t i = 0; i < n; i++)
+        dst[i] = src[i];
 }
 
 }   // namespace mh

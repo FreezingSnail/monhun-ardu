@@ -262,8 +262,8 @@
     },
     {
       "path": "src/generated/combat_meta.hpp",
-      "sha256": "3dc33117f4ae3327fc4e47e4475cb2ccf8c3255f0b517e400053434d3aadc193",
-      "size": 6103
+      "sha256": "605631976ad31e11bacaefa45d5af55cb5e09a6332521ec7a44b2e503f5d125e",
+      "size": 6602
     }
   ],
   "schema_version": 1
