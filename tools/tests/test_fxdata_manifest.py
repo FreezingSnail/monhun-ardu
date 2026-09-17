@@ -67,7 +67,7 @@ class FxdataManifestTests(unittest.TestCase):
         before = self.read("fxdata", "manifest.json")
         result = self.check()
         self.assertEqual(result.returncode, 0, result.stderr)
-        self.assertIn("PASS (3 images, 4 inputs, 5 outputs", result.stdout)
+        self.assertIn("PASS (3 images, 4 inputs, 6 outputs", result.stdout)
         self.assertEqual(before, self.read("fxdata", "manifest.json"))
         manifest = json.loads(before)
         images = {entry["symbol"]: entry for entry in manifest["images"]}
@@ -155,13 +155,23 @@ class FxdataManifestTests(unittest.TestCase):
             paths = [entry["path"] for entry in manifest[section]]
             self.assertEqual(paths, sorted(paths), section)
 
+    def test_data_json_tracked_as_input(self):
+        os.makedirs(self.path("data", "creatures"), exist_ok=True)
+        self.write("data/creatures/beast.json", '{"id": "beast"}\n')
+        os.remove(self.manifest)
+        result = run_tool("--root", self.case)
+        self.assertEqual(result.returncode, 0, result.stderr)
+        manifest = json.loads(self.read("fxdata", "manifest.json"))
+        self.assertIn("data/creatures/beast.json",
+                      [entry["path"] for entry in manifest["inputs"]])
+
     def test_snapshot_verify_detects_changed_artifact(self):
         snap = self.path("build", "snapshot.json")
         result = run_tool("--root", self.case, "--snapshot", snap)
         self.assertEqual(result.returncode, 0, result.stderr)
         result = run_tool("--root", self.case, "--verify-snapshot", snap)
         self.assertEqual(result.returncode, 0, result.stderr)
-        self.assertIn("PASS (12 generated artifacts unchanged)", result.stdout)
+        self.assertIn("PASS (13 generated artifacts unchanged)", result.stdout)
         self.write("src/fxdata.h", "// edited\n")
         result = run_tool("--root", self.case, "--verify-snapshot", snap)
         self.assert_fails(result, "stale generated artifact: src/fxdata.h")

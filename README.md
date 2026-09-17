@@ -17,7 +17,7 @@ port of a browser prototype (`mock/`), verified tick-for-tick against it.
 | Perf gate (`monhun-ardu-8v7`, re-verified `42n.6` + `7y3`) | **PASS.** plane 156 Hz (≥135), logic 52 Hz (≥45), render max 5056 µs (≤7407), tick 988 µs, RAM free 467 B |
 | Perf tooling | Headless Ardens profiler dump (`profiledump=<path>`, local patch) + on-device cycle bench (`test_perf`) |
 | Shipping build | flash **28378 / 29696 B** (96%), RAM **1950 / 2560 B** (610 free) |
-| FX data image | **21123 B** of 16 MB used |
+| FX data image | **21622 B** of 16 MB used |
 
 Speculative gameplay status: combat (sword / flail / gunshield), monster FSM,
 training pole + DPS mode, camera/world clamps, HUD, audio cues all in place.
@@ -79,6 +79,10 @@ directly in 1/16-px units and integrated by straight addition.
 mock/game.js + core dims ──tools/gen-art.py──► images/**/*.png
 images/**/*.png ──tools/convert-sprite.py──► fxdata/*/Sprites.txt ──┐
                                                                     ▼
+data/skeletons.json + data/creatures/*.json ──tools/gen-combat.py──►│
+        ├─► fxdata/tables/combat.bin ──────────────────────────────┤
+        └─► src/generated/combat_{data,meta,expect}.hpp            │
+                                                                    ▼
                      fxdata/fxdata.txt ─► tools/gen.sh ─► fxdata-build.py
                                                            │
                               src/fxdata.h (offsets) ◄─────┤
@@ -90,17 +94,29 @@ images/**/*.png ──tools/convert-sprite.py──► fxdata/*/Sprites.txt ─�
   `FRAME(x) = x*3 + arduboy.currentPlane()`.
 - MCU flash holds only `src/fxdata.h` offset constants and code. No glyph or
   bitmap arrays in MCU flash or RAM.
+- Creature combat data is authored as JSON under `data/` and compiled by
+  `tools/gen-combat.py` into the packed blob + generated headers described in
+  `docs/creature-framework.md` (blob format §8, schema §§3-7, reference values
+  §11). The blob is a `raw_t mhCombat` section of the one FX image (never a
+  second flashable image); `combat_meta.hpp` carries VERSION/SIZE and the
+  per-record offsets the loader uses, `combat_data.hpp` is the host mirror and
+  `combat_expect.hpp` pins sizes, spot values and the blob sha256. Data ships
+  packed but unread until migration beads `monhun-ardu-ljj.3-.5`.
 - Current blobs: `fxmonster`, `fxplayer`, `fxpole`, `fxball`, `fxscatter`,
-  `fxspark`, `fxfontw`, `fxfontg`, the overlay/effect sheets and the two raw
-  content tables (`mhWeaponDefs`, `mhMonsterAttacks`) — 21123 B total.
+  `fxspark`, `fxfontw`, `fxfontg`, the overlay/effect sheets and the raw
+  content tables (`mhWeaponDefs`, `mhMonsterAttacks`, `mhMonsterDefs`,
+  `mhCombat`) — 21622 B total.
 - Regenerate with `make gen` (or `./tools/gen.sh`); bins are tracked despite
   `*.bin` being gitignored (force-added) so device tests are reproducible.
 - `fxdata/manifest.json` (tracked) pins sha256+size for every source image,
-  fxdata declaration and generated artifact; `tools/fxdata_manifest.py --check`
-  verifies it read-only and `make gen-check` re-runs the pipeline and fails if
-  any generated artifact changes (staleness or nondeterminism).
-- `make test-tools` runs the Python unittest suite in `tools/tests/`
-  (manifest orphan/missing/malformed/staleness fixtures).
+  JSON source, fxdata declaration and generated artifact;
+  `tools/fxdata_manifest.py --check` verifies it read-only and `make gen-check`
+  re-runs the pipeline and fails if any generated artifact changes (staleness
+  or nondeterminism).
+- `make test-tools` runs the Python unittest suites in `tools/tests/`
+  (manifest orphan/missing/malformed/staleness fixtures; gen-combat schema
+  errors, id/ref errors, integer-only rejection, size limits, determinism,
+  dump smoke, blob-ABI spot checks).
 - Fonts are drawn from the FX cart (vendored `Font4x6` was deleted after the
   asset pass; it cost ~3 KB of flash).
 
@@ -320,13 +336,17 @@ src/menu.hpp        opening-menu render (per plane)
 src/audio.hpp       tone cue detector
 src/external/       ArduboyG, SpritesU, SpritesABC
 src/fxdata.h        generated FX offset constants
+src/generated/      generated combat headers (data/meta/expect) + art dims
+data/               creature combat JSON (skeletons + one file per creature)
+docs/               creature-framework.md (combat blob/schema/reference values)
 src/common.hpp      hardware config + FRAME macros
 tst/                host suites + main
 tst/fxdatatest/     Ardens device tests + harness
 fxdata/             fxdata.txt, generated bins (tracked)
 images/             source PNGs (blocks, fonts)
-tools/              gen-art.py, gen.sh, convert-sprite.py, fxdata_manifest.py,
-                    gen-parity-fixtures.js, tests/ (tooling unittests)
+tools/              gen-art.py, gen-combat.py, gen.sh, convert-sprite.py,
+                    fxdata_manifest.py, gen-parity-fixtures.js, tests/ (tooling
+                    unittests)
 mock/               JS prototype (source of truth) + node tests
 dist/               compile output
 output.md           most recent worker report (scratch, overwritten per task)

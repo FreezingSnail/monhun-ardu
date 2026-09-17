@@ -1,165 +1,211 @@
-# monhun-ardu-7y3 — HUD bars/divider clipped by blk() arena-band clamp
+# monhun-ardu-ljj.1 — Tools: gen-combat.py + single-image FX pipeline
 
-Status: **DONE** (tree dirty, not committed; Ardens device suite green incl. new
-`test_hud`).
+Status: **DONE**. Tree left dirty for the orchestrator (no commit, no push).
+Base HEAD: `f5cdb8b`. Design source: `docs/creature-framework.md` (blob §8,
+schema §§3-7, reference values §11). No game/flash behavior touched: the blob
+is packed but unused.
 
-## Root cause
+## Deliverables
 
-`blk()` clamped every rect to the arena band (`y0 < HUD_H -> y0 = HUD_H`), but
-`drawHud()` targets rows 2..7: divider `blk(0,7,128,1)`, `hudBar(1,2,28,4)` /
-`hudBar(29,2,16,4)`, monster `hudBar(82,2,44,3)`, gun reload `blk(67,6,bw,1)`.
-All of them returned before touching the framebuffer. HUD text is sprite-based
-(FX glyphs) and was unaffected, which is why only the text showed.
+1. **`data/skeletons.json` + `data/creatures/{lunge,sweep,heavy}.json`** —
+   shipped 3 beasts per doc §11 exactly. `quad_32x24`/`quad_28x22`/`quad_40x28`
+   each carry their body part so migration B can read w/h from the skeleton
+   byte-identically; stats w/h/hp/spd come from `MONSTER_DEFS` (200/5, 150/7,
+   320/3), spawn (200,40) all. Attacks lunge `{windup40, active10, recover55,
+   dmg12, move lunge speedF34, window ox12 oy0 w24 h22}` and sweep `{48,12,60,
+   move none, dmg9, window ox17 oy0 w32 h24}`, windows `t0=0..t1=active`.
+   Profile all three: engage36 keep24 attack42 circle8/10 retreat6/10 cdBase55
+   cdJitter40 spawnT90 spawnCd140 stunRecover24. Patterns: LUNGE `p_lunge`
+   minDist33 → lunge, `p_sweep` maxDist32 → sweep; HEAVY minDist25 / maxDist24;
+   SWEEP has **no** lunge pattern (`p_sweep` match-all).
+2. **`tools/gen-combat.py`** (Python 3, stdlib only):
+   - strict schema validation: unknown/missing keys, integer-only quantized
+     fields (floats **and bools** rejected), ranges, phys/elem enum membership,
+     stage thresholds strictly descending, window `0 <= t0 <= t1 <= active`,
+     guard ordering (`minDist<=maxDist`, `hpBand` lo<=hi), pattern step refs
+     resolve to creature-local attack ids, part predicates resolve, stage
+     disable/enable attack refs resolve, duplicate local ids, local-namespace
+     rules (skeleton/part/anchor/creature global or owner-scoped), u8/u16 size
+     limits (255 records/section, u16 offsets).
+   - deterministic pack: creatures sorted by id, per-creature attack/window/
+     pattern/step source order preserved, little-endian explicit u8/u16, no
+     padding, fixed section order.
+   - outputs + `--dump` listing mode; `--root DIR` for fixture tests.
+3. **`fxdata/fxdata.txt`**: `raw_t mhCombat = "tables/combat.bin"`; `tools/gen.sh`
+   runs `gen-combat.py` before `fxdata-build.py`; `make gen` deterministic.
+4. **Manifest**: `tools/fxdata_manifest.py` now tracks `data/**/*.json` inputs
+   and `fxdata/tables/combat.bin` as an output (the three `src/generated`
+   headers are already covered by `OUTPUT_GLOBS`); canonical JSON unchanged.
+5. **`tools/tests/test_gen_combat.py`** (unittest) + co-located
+   `tools/tests/fixtures/gen_combat/clean/` (skeleton + one creature with a
+   part override, stages, phys/elem multipliers, guard predicate, ATK+WAIT
+   steps): 27 cases — schema errors, id/ref errors, integer-only, size limits,
+   determinism, dump smoke, and byte-level blob ABI checks against
+   `combat_meta.hpp`.
+6. **README** pipeline section + docs cross-ref; repo layout updated;
+   `Makefile FORMAT_SKIP` and `.githooks/pre-commit` now skip `src/generated/`
+   (generated headers stay out of clang-format churn).
 
-## Fix (src/render.hpp)
+## Blob ABI (499 B, sha256 `fe41b01e71a22c3e2c83dc9c6770929ffd7a2531f245c11d735e0f60bbc39994`)
 
-Byte-identical rasterizer factored into `blkClamp(x, y, w, h, shade, minY)` (one
-new `minY` parameter replacing the hardcoded `HUD_H` clamp) with two thin
-wrappers:
+Header 32 B: `magic u16 0x4D43` (bytes `43 4D`), `version u8 1`, `flags u8 0`,
+then 14 little-endian `u16` counts. Section order:
+`creatures, profiles, skeletons, parts, stages, anchors, elems, refs, attacks,
+windows, patterns, guards, predicates, steps`.
 
-- `blk(...)` = `blkClamp(..., mh::HUD_H)` — world/arena, unchanged clip (the
-  arena's vertical borders must still not paint rows 0..7 when camY > 0).
-- `hudBlk(...)` = `blkClamp(..., 0)` — HUD strip, rows 0..7 paintable.
+Actual section offsets/counts for the shipped data:
 
-Only HUD call sites switched to `hudBlk`: divider, `hudBar` back + fill, gun
-reload bar. All world call sites (drawArena, DEBUG wire, menu underline) still
-use `blk()`. No other behavior change.
+| Section | Off | Count | Record | Size |
+|---|---|---|---|---|
+| header | 0 | – | – | 32 |
+| creatures | 32 | 3 | creature | 17 |
+| profiles | 83 | 3 | profile | 22 |
+| skeletons | 149 | 3 | skeleton | 4 |
+| parts | 161 | 3 | part | 18 |
+| stages | 215 | 0 | stage | 10 |
+| anchors | 215 | 6 | anchor | 2 |
+| elems | 227 | 0 | elem | 2 |
+| refs | 227 | 0 | ref | 1 |
+| attacks | 227 | 6 | attack | 22 |
+| windows | 359 | 6 | window | 10 |
+| patterns | 419 | 5 | pattern | 3 |
+| guards | 434 | 5 | guard | 9 |
+| predicates | 479 | 0 | predicate | 3 |
+| steps | 479 | 5 | step | 4 |
 
-## Files changed
+Record field layouts are documented byte-for-byte in the `gen-combat.py`
+docstring and generated header comments. Global indices: creatures sorted by
+id (`heavy=0, lunge=1, sweep=2`), attacks/windows/patterns/guards/steps in
+source order per creature; `GUARD_x = PATTERN_x` (1:1); part predicates are
+`u8 partIdx` into the global part list (skeleton parts first, then per-creature
+overrides). `combat_data.hpp` carries the host mirror (structs + `std::array`
+sections + index constants); `combat_expect.hpp` pins record sizes, per-creature
+spot values and the blob sha256; `combat_meta.hpp` carries `MAGIC/VERSION/FLAGS/
+SIZE/HEADER_SIZE`, per-section offsets/counts and per-record offsets
+(`*_OFF`) + indices. Generated headers compile clean host-side with
+`g++ -std=c++17 -Wall -Wextra`.
 
-- `src/render.hpp` — blk -> blkClamp + blk/hudBlk wrappers; 5 HUD call sites.
-- `tst/fxdatatest/hud_test.hpp` — new device framebuffer suite (17 asserts).
-- `tst/fxdatatest/test_hud.ino` — new test entry (harness/fxtest.hpp, bare P/F).
-- `README.md` — challenge item 7 rewritten; status/perf/build numbers refreshed.
+Single FX image: `mhCombat = 0x005283`, `FX_DATA_BYTES = 21622` (was 21123);
+still one `fxdata/fxdata.bin`, `combat.bin` never flashed separately.
 
-No commit, no push; `git status` shows only these 4 paths (2 modified, 2 new).
+## Verification (exact tails)
 
-## Flash / RAM delta (`make build`)
-
-Baseline: flash 28132/29696 B, RAM 1950/2560 B.
-After fix: flash **28378/29696 B (95%)**, RAM **1950/2560 B** (610 free).
-Delta: **+246 B flash, +0 B RAM** — fits, no gate change.
-
-## 1. `make test` (host) — 0 failed
+### 1. `make gen` twice — second run leaves everything unchanged
 
 ```
-Total Passed: 1490
-Total Failed: 0
+$ git status --porcelain | sort > build/final-run1.status
+$ make gen > build/final-gen.log 2>&1
+$ git status --porcelain | sort > build/final-run2.status
+$ diff build/final-run1.status build/final-run2.status
+PASS: second make gen leaves all tracked/untracked state unchanged
 ```
 
-## 2. `make build` — fits
+Second-run gen-combat tail (all outputs byte-identical, written only on change):
+
+```
+gen-combat: 3 creatures, 6 attacks, 6 windows, 5 patterns, 5 steps, 3 skeletons, 3 parts, 499 B, sha256 fe41b01e71a22c3e2c83dc9c6770929ffd7a2531f245c11d735e0f60bbc39994
+gen-combat: fxdata/tables/combat.bin (unchanged)
+gen-combat: src/generated/combat_data.hpp (unchanged)
+gen-combat: src/generated/combat_meta.hpp (unchanged)
+gen-combat: src/generated/combat_expect.hpp (unchanged)
+fxdata_manifest: fxdata/manifest.json up to date (19 images, 11 inputs, 9 outputs)
+```
+
+Blob size **499 B**; record sizes **creature 17, profile 22, skeleton 4, part
+18, stage 10, anchor 2, elem 2, ref 1, attack 22, window 10, pattern 3, guard 9,
+predicate 3, step 4** (header 32).
+
+### 2. `make gen-check` PASS + `make test-tools` PASS
+
+```
+fxdata_manifest: PASS (34 generated artifacts unchanged)
+```
+
+```
+Ran 43 tests in 2.650s
+
+OK
+```
+
+(16 manifest tests + 27 gen-combat tests.)
+
+### 3. `make build` — shipping flash/RAM unchanged
 
 ```
 Sketch uses 28378 bytes (95%) of program storage space. Maximum is 29696 bytes.
 Global variables use 1950 bytes (76%) of dynamic memory, leaving 610 bytes for local variables. Maximum is 2560 bytes.
 ```
 
-## 3. `make fxtest-headless` (Ardens) — all suites PASS
-
 ```
-=== test_assets ===
-asset_test PASSED=254 FAILED=0
-P
-test_assets: PASS
-=== test_audio ===
-test_audio PASSED=14 FAILED=0
-P
-test_audio: PASS
-=== test_boot ===
-test_boot PASSED=4 FAILED=0
-P
-test_boot: PASS
-=== test_data ===
-data_test PASSED=221 FAILED=0
-P
-test_data: PASS
-=== test_hud ===
-test_hud PASSED=17 FAILED=0
-P
-test_hud: PASS
-=== test_menu ===
-menu_test PASSED=55 FAILED=0
-P
-test_menu: PASS
-=== test_parity ===
-parity_test PASSED=660 FAILED=0
-P
-test_parity: PASS
-=== test_perf ===
-B pUs=6389 pHz=156 lHz=52 lTk=988 rMx=5056 rAv=4809 ram=467
-perf_test PASSED=5 FAILED=0
-P
-test_perf: PASS
+.text                       28324         0
+.data                          54   8388864
+.bss                         1896   8388918
 ```
 
-Perf vs baseline `B pUs=6383 pHz=156 lHz=52 lTk=988 rMx=4676 rAv=4476 ram=494`:
+flash = 28378, RAM = 1950 — identical to the pinned baseline (data is packed
+but unused).
 
-| metric | baseline | now | budget | result |
-|---|---|---|---|---|
-| pHz | 156 | 156 | >= 135 | PASS |
-| lHz | 52 | 52 | >= 45 | PASS |
-| rMx | 4676 | 5056 | <= 7407 | PASS |
-| lTk | 988 | 988 | — | — |
-| ram | 494 | 467 | >= 300 | PASS |
-
-The render delta (+380 µs max, +333 µs avg) is the expected cost of the HUD
-shapes now actually rasterizing: ~16 extra MH_MASK page reads/plane for the
-divider/bar/reload `blk` loops). FX is untouched. Ardens present at
-`~/code/Ardens/...`, no BLOCKED fallback needed.
-
-## 4. `make gen-check` — PASS
+### 4. `python3 tools/gen-combat.py --dump` — sample (lunge)
 
 ```
-fxdata_manifest: fxdata/manifest.json up to date (19 images, 6 inputs, 5 outputs)
-gen.sh: FX data + src/fxdata.h regenerated
-fxdata_manifest: PASS (30 generated artifacts unchanged)
+creature lunge (skeleton quad_32x24, stats w32 h24 hp200 spd5, spawn 200,40)
+  attack lunge: windup40 active10 recover55 dmg12 move lunge(34) windows 1
+    window 0: t[0,10] box(12,0,24,22) dmgMul 100
+  attack sweep: windup48 active12 recover60 dmg9 move none windows 1
+    window 0: t[0,12] box(17,0,32,24) dmgMul 100
+  pattern p_lunge: guard minDist33 maxDist255 hp[0,100] player0x00 cd0 chance100
+    step 0: ATK lunge.lunge after0 chance100
+  pattern p_sweep: guard minDist0 maxDist32 hp[0,100] player0x00 cd0 chance100
+    step 0: ATK lunge.sweep after0 chance100
 ```
 
-## 5. Evidence summary — exact buffer bytes pinned by `test_hud`
+### 5. Negative tests — schema errors rejected
 
-Setup: `newGame(W_GUN, MODE_HUNT)`, hp=hpMax, stam=stamMax, monster hp=hpMax,
-`reload=35` (ball shell reload 70 -> bar width `(12*35+35)/70 = 6`); render via
-the real `renderScene(g, false)`; buffer layout pixel(x,y) =
-`buf[(y>>3)*128 + x]`, bit `y&7`.
+```
+gen-combat: error: data/creatures/beast.json.attacks[0].windows[0]: window ends outside the active phase: t1 9 > active 6
+gen-combat: error: data/creatures/beast.json.attacks[0]: windup: expected an integer, got 20.0
+gen-combat: error: data/creatures/beast.json.attacks[0]: phys: unknown value 'FIRE' (want one of BLUNT, SHOT, SLASH)
+gen-combat: FAIL (3 errors)
+```
 
-Plane 0 (all shades 1..3 set; divider adds bit 7 across the strip):
+Other covered examples (each asserted by a unit test): bools rejected, range
+overflow, stage thresholds ascending, inverted windows, inverted guard,
+unknown step/skeleton/part refs, duplicate local/creature/skeleton ids, id
+length, part override colliding with a skeleton part, 256-window size limit.
 
-| shape | coords | pinned bytes/bits | result |
-|---|---|---|---|
-| divider | y=7, x=0..127 | bit 7 set every column | 128/128 lit |
-| player HP bar | x=1..28, rows 2..5 + divider | byte `0xBC` (0x3C back/fill + 0x80) | 28/28 |
-| stamina bar | x=29..44, rows 2..5 + divider | byte `0xBC` | 16/16 |
-| monster HP bar (hunt) | x=82..125, rows 2..4 + divider | byte `0x9C` | 44/44 |
-| gun reload bar | x=67..72, y=6 | bit 6 set | 6/6 |
+### 6. `make test` — host suite unaffected
 
-Plane 1 (shade 1 clears, shades 2/3 set — isolates the fills from the backs):
+```
+Total Passed: 1490
+Total Failed: 0
+```
 
-| shape | coords | pinned bytes/bits | result |
-|---|---|---|---|
-| player HP fill | x=2..27, rows 3..4 | exact byte `0x18` | 26/26 |
-| stamina fill | x=30..43, rows 3..4 | exact byte `0x18` | 14/14 |
-| monster HP fill | x=83..124, row 3 | exact byte `0x08` | 42/42 |
-| reload bar (shade 2) | x=67..72, y=6 | bit 6 set | 6/6 |
-| HP back edges x=1,x=28, divider y=7 | | bit clear | 0 lit (cleared) |
+## Files changed / added
 
-Negative control (world path still clips): `blk(10, 0, 20, 16, 3)` leaves page 0
-(rows 0..7) at x=10..29 all `0x00` (20/20) and paints page 1 (rows 8..15) all
-`0xFF` (20/20) — no HUD spill. Positive control: `hudBlk(10, 0, 20, 2, 3)` sets
-page 0 x=10..29 to `0x03` (20/20) and leaves page 1 at `0x00` (20/20).
+Modified: `.githooks/pre-commit`, `Makefile`, `README.md`, `fxdata/fxdata.txt`,
+`fxdata/fxdata.bin`, `fxdata/fxdata-data.bin`, `fxdata/fxdata.h`,
+`src/fxdata.h`, `fxdata/manifest.json`, `tools/gen.sh`,
+`tools/fxdata_manifest.py`, `tools/tests/test_fxdata_manifest.py`,
+`tools/tests/fixtures/fxdata_manifest/clean/fxdata/manifest.json`.
+Added: `data/skeletons.json`, `data/creatures/{lunge,sweep,heavy}.json`,
+`tools/gen-combat.py`, `tools/tests/test_gen_combat.py`,
+`tools/tests/fixtures/gen_combat/**`, `fxdata/tables/combat.bin`,
+`src/generated/combat_{data,meta,expect}.hpp`,
+`tools/tests/fixtures/fxdata_manifest/clean/fxdata/tables/combat.bin`.
 
-Bug-catch proof: with `hudBlk` temporarily re-clamped to `HUD_H` (simulating the
-pre-fix code; HEAD's `blk` does not even declare `hudBlk`), `test_hud` FAILED 10
-asserts (divider, all three bar backs, all three fills, both reload checks, the
-`hudBlk` positive control) and reported F; the world-clip negative control still
-passed. Suite is permanent, lives in `tst/fxdatatest/`, no /tmp, no scripting
-harness.
+## Notes for beads 2-5
 
-## 6. README
-
-Challenge item 7 rewritten: bug, root cause, the blkClamp/blk/hudBlk split, the
-`test_hud` framebuffer evidence and the 4676 -> 5056 µs / 494 -> 467 B perf
-trade; status snapshot refreshed (flash 28378, device tests + hud 17, perf
-gate line), device-test list gains `test_hud`, hardware/cadence numbers updated.
+- Offsets in `combat_meta.hpp` are absolute within the `mhCombat` raw_t
+  section; on AVR `mhCombat + offset` is the record address. u16 offsets are
+  valid while the blob stays < 64 KB (generator hard-fails otherwise).
+- Windows are inclusive with `t` 1-based, and shipped windows are `t0=0,
+  t1=active` so `t=1..active` all match (spike parity contract).
+- `lungeSplit` is expressed only as pattern guards (`minDist`/`maxDist`), never
+  a profile sentinel; pattern order is semantic first-match.
+- `profile.partCount` is the effective part count (skeleton + overrides); the
+  creature's own overrides start at `creature.firstPart/partCount`.
+- Host loader should read `combat_data.hpp` structs; device loader should read
+  the blob via offsets — both are final ABI here.
 
 ## Blockers
 

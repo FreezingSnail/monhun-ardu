@@ -137,6 +137,26 @@
   ],
   "inputs": [
     {
+      "path": "data/creatures/heavy.json",
+      "sha256": "d95f85bd09d608bbe188165d9b6fd9d2d8fbe5fd27ec7d963195b959b851dac0",
+      "size": 1703
+    },
+    {
+      "path": "data/creatures/lunge.json",
+      "sha256": "9f3612e3ca3ca200db041ac7f5b07e1d523d1e42f63c14190a25036a3a46a3c7",
+      "size": 1703
+    },
+    {
+      "path": "data/creatures/sweep.json",
+      "sha256": "22aaaa0f84746be4b7af792f3a7b63dddc61e408fc5f04c5cd538c7ca6f907d5",
+      "size": 1547
+    },
+    {
+      "path": "data/skeletons.json",
+      "sha256": "fce9cf4595c25cb562d68f29c9e1a8435c99ce7fa0562f4b603f0683f1743c89",
+      "size": 1336
+    },
+    {
       "path": "fxdata/blocks/Sprites.txt",
       "sha256": "f0f308c2ac6afe3d4e63fabf3d98a206a46e2c44fed1fd10f00e8f0ae60962a5",
       "size": 75940,
@@ -171,8 +191,14 @@
     },
     {
       "path": "fxdata/fxdata.txt",
-      "sha256": "d884c0733f4c3a6689826d29e8ce5d1db0c9b6483220eeffea054b9f9c2c4aa9",
-      "size": 427
+      "sha256": "45d8b0acd9dc76b9ad99f2ac7fcbf393fedb7a68f011b2469ae11c2474882f96",
+      "size": 816
+    },
+    {
+      "path": "fxdata/tables/combat.bin",
+      "sha256": "fe41b01e71a22c3e2c83dc9c6770929ffd7a2531f245c11d735e0f60bbc39994",
+      "size": 499,
+      "symbol": "mhCombat"
     },
     {
       "path": "fxdata/tables/monsterattacks.bin",
@@ -196,28 +222,48 @@
   "outputs": [
     {
       "path": "fxdata/fxdata-data.bin",
-      "sha256": "b455a8fb3f31fddfef5c4157636802582b87580cd6792b47a72f24efe6a05f85",
-      "size": 21123
+      "sha256": "7e26e8ab7c6efbca06ba8a631abefcd27c8d79337c083d6a39004adcc542011d",
+      "size": 21622
     },
     {
       "path": "fxdata/fxdata.bin",
-      "sha256": "8ca6639b662b3a3217d9125b50a19df006a11f3517e95fdd6604d449da80f4cc",
-      "size": 21248
+      "sha256": "7dc27478a3d9c32c876ecaa504d607151cf09bbf818aa3ebef4eef99d230fc32",
+      "size": 21760
     },
     {
       "path": "fxdata/fxdata.h",
-      "sha256": "d0189acea3721e1d5aea3a15ad1d4fcf97ced1e2c683cd82a821fbf04ebad7a6",
-      "size": 1179
+      "sha256": "00a0a74f388af9e4209beac302274b19c6666bbafe09072d2b13a87cb00c86cc",
+      "size": 1219
+    },
+    {
+      "path": "fxdata/tables/combat.bin",
+      "sha256": "fe41b01e71a22c3e2c83dc9c6770929ffd7a2531f245c11d735e0f60bbc39994",
+      "size": 499
     },
     {
       "path": "src/fxdata.h",
-      "sha256": "d0189acea3721e1d5aea3a15ad1d4fcf97ced1e2c683cd82a821fbf04ebad7a6",
-      "size": 1179
+      "sha256": "00a0a74f388af9e4209beac302274b19c6666bbafe09072d2b13a87cb00c86cc",
+      "size": 1219
     },
     {
       "path": "src/generated/art_dims.hpp",
       "sha256": "d14dbb32e5ad82d91d1d5450e693fe003d687e066c38ae905560b677a7dd0857",
       "size": 5392
+    },
+    {
+      "path": "src/generated/combat_data.hpp",
+      "sha256": "aa1a8c86ec6f827fd7aaf70e80dbe3803a16074dfa8bcda2293eb580960ae2cd",
+      "size": 6520
+    },
+    {
+      "path": "src/generated/combat_expect.hpp",
+      "sha256": "0209a7c994d02b867e8b2f25d7e513a9905bad3cd25faf2700d8cea22fb37253",
+      "size": 3059
+    },
+    {
+      "path": "src/generated/combat_meta.hpp",
+      "sha256": "3dc33117f4ae3327fc4e47e4475cb2ccf8c3255f0b517e400053434d3aadc193",
+      "size": 6103
     }
   ],
   "schema_version": 1

@@ -1,0 +1,76 @@
+{
+  "id": "beast",
+  "skeleton": "beast_16x12",
+  "stats": { "w": 16, "h": 12, "hp": 80, "spd": 4, "spawnX": 100, "spawnY": 32 },
+  "profile": {
+    "engageDist": 30,
+    "keepDist": 18,
+    "attackDist": 36,
+    "circleNum": 8,
+    "circleDen": 10,
+    "retreatNum": 6,
+    "retreatDen": 10,
+    "cdBase": 40,
+    "cdJitter": 20,
+    "spawnT": 60,
+    "spawnCd": 90,
+    "stunRecoverT": 20,
+    "staggerMax": 40,
+    "staggerDecay": 1,
+    "staggerRecoverT": 15
+  },
+  "parts": [
+    {
+      "id": "tail",
+      "box": { "ox": -6, "oy": 4, "w": 8, "h": 4 },
+      "dmgMul": 150,
+      "physMul": { "SLASH": 150, "BLUNT": 75 },
+      "elemMul": { "FIRE": 200 },
+      "hp": 30,
+      "bodyShare": 40,
+      "breakTypes": ["SLASH"],
+      "hurtOn": true,
+      "stages": [
+        { "at": 50, "stagger": 20, "disableAttacks": ["jab"], "cue": "part_break" },
+        { "at": 0, "dmgMulOverride": 200, "hurtOn": false, "enableAttacks": ["jab"] }
+      ]
+    }
+  ],
+  "attacks": [
+    {
+      "id": "jab",
+      "windup": 20,
+      "active": 6,
+      "recover": 30,
+      "dmg": 7,
+      "phys": "SLASH",
+      "elem": "FIRE",
+      "move": { "type": "lunge", "speedF": 20 },
+      "facing": "track",
+      "windows": [
+        { "t0": 0, "t1": 6, "box": { "ox": 8, "oy": 0, "w": 12, "h": 10 }, "dmgMul": 100 }
+      ],
+      "onHit": { "effect": "trip", "push": 2, "stun": 4 },
+      "stagger": 10,
+      "cue": "windup"
+    }
+  ],
+  "patterns": [
+    {
+      "id": "p_jab",
+      "guard": {
+        "minDist": 0,
+        "maxDist": 36,
+        "hpBand": [0, 100],
+        "parts": { "tail": ">=1" },
+        "player": { "attacking": true },
+        "cooldown": 0,
+        "chance": 100
+      },
+      "steps": [
+        { "atk": "jab", "after": 2 },
+        { "wait": 5, "after": 0 }
+      ]
+    }
+  ]
+}

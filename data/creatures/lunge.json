@@ -1,0 +1,70 @@
+{
+  "id": "lunge",
+  "skeleton": "quad_32x24",
+  "stats": { "w": 32, "h": 24, "hp": 200, "spd": 5, "spawnX": 200, "spawnY": 40 },
+  "profile": {
+    "engageDist": 36,
+    "keepDist": 24,
+    "attackDist": 42,
+    "circleNum": 8,
+    "circleDen": 10,
+    "retreatNum": 6,
+    "retreatDen": 10,
+    "cdBase": 55,
+    "cdJitter": 40,
+    "spawnT": 90,
+    "spawnCd": 140,
+    "stunRecoverT": 24,
+    "staggerMax": 0,
+    "staggerDecay": 0,
+    "staggerRecoverT": 0
+  },
+  "attacks": [
+    {
+      "id": "lunge",
+      "windup": 40,
+      "active": 10,
+      "recover": 55,
+      "dmg": 12,
+      "phys": "BLUNT",
+      "elem": "NONE",
+      "move": { "type": "lunge", "speedF": 34 },
+      "facing": "track",
+      "windows": [
+        { "t0": 0, "t1": 10, "box": { "ox": 12, "oy": 0, "w": 24, "h": 22 }, "dmgMul": 100 }
+      ],
+      "onHit": { "effect": "none", "push": 0, "stun": 0 },
+      "stagger": 0,
+      "cue": "windup"
+    },
+    {
+      "id": "sweep",
+      "windup": 48,
+      "active": 12,
+      "recover": 60,
+      "dmg": 9,
+      "phys": "BLUNT",
+      "elem": "NONE",
+      "move": { "type": "none" },
+      "facing": "track",
+      "windows": [
+        { "t0": 0, "t1": 12, "box": { "ox": 17, "oy": 0, "w": 32, "h": 24 }, "dmgMul": 100 }
+      ],
+      "onHit": { "effect": "none", "push": 0, "stun": 0 },
+      "stagger": 0,
+      "cue": "windup"
+    }
+  ],
+  "patterns": [
+    {
+      "id": "p_lunge",
+      "guard": { "minDist": 33, "maxDist": 255, "hpBand": [0, 100], "chance": 100 },
+      "steps": [ { "atk": "lunge", "after": 0 } ]
+    },
+    {
+      "id": "p_sweep",
+      "guard": { "maxDist": 32, "chance": 100 },
+      "steps": [ { "atk": "sweep", "after": 0 } ]
+    }
+  ]
+}

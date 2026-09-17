@@ -49,8 +49,15 @@ OUTPUT_PATHS = (
     "fxdata/fxdata-data.bin",
     "fxdata/fxdata.h",
     "src/fxdata.h",
+    "fxdata/tables/combat.bin",
 )
 OUTPUT_GLOBS = ("src/generated/**/*",)
+
+# JSON sources compiled into generated artifacts (tools/gen-combat.py reads
+# data/skeletons.json + data/creatures/*.json and emits fxdata/tables/combat.bin
+# and the three src/generated/combat_*.hpp headers). Tracked as manifest inputs
+# so a content edit without a regen fails make gen-check.
+DATA_GLOBS = ("data/**/*.json",)
 
 IMAGE_RE = re.compile(r"^([A-Za-z_][A-Za-z0-9_]*)_(\d+)x(\d+)\.png$")
 SPRITES_DECL_RE = re.compile(r"^uint8_t\s+([A-Za-z_][A-Za-z0-9_]*)\s*\[\s*\]\s*=\s*\{?$")
@@ -194,6 +201,11 @@ def scan(root):
                           % (FXDATA_REL, symbol, target))
             continue
         inputs.append(file_entry(root, target, symbol=symbol))
+    for pattern in DATA_GLOBS:
+        for path in glob.glob(os.path.join(root, pattern), recursive=True):
+            if not os.path.isfile(path):
+                continue
+            inputs.append(file_entry(root, _rel(root, path)))
     inputs.sort(key=lambda entry: entry["path"])
 
     symbol_images = {}

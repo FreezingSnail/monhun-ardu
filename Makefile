@@ -45,7 +45,7 @@ hooks:
 	@echo "git hooks installed (core.hooksPath=.githooks)"
 
 # Format all tracked C-family sources, skipping vendored and generated files.
-FORMAT_SKIP = ^(src/external|Arduboy-Python-Utilities)/|^(src/fxdata\.h|fxdata/fxdata\.h|tst/fxdatatest/parity_fixtures\.hpp)$$
+FORMAT_SKIP = ^(src/external|src/generated|Arduboy-Python-Utilities)/|^(src/fxdata\.h|fxdata/fxdata\.h|tst/fxdatatest/parity_fixtures\.hpp)$$
 format:
 	@git ls-files '*.hpp' '*.cpp' '*.h' '*.ino' | grep -vE '$(FORMAT_SKIP)' | xargs clang-format -i --style=file
 	@echo "clang-format: done"

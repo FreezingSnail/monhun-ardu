@@ -5,8 +5,9 @@
 # Override the binary with CLANG_FORMAT=/path/to/clang-format.
 #
 # Skips vendored (src/external, Arduboy-Python-Utilities) and generated files
-# (src/fxdata.h, fxdata/fxdata.h, tst/fxdatatest/parity_fixtures.hpp), and any
-# non-C-family path. Never blocks a commit unless clang-format itself fails.
+# (src/generated, src/fxdata.h, fxdata/fxdata.h, tst/fxdatatest/parity_fixtures.hpp),
+# and any non-C-family path. Never blocks a commit unless clang-format itself
+# fails.
 
 set -eu
 
@@ -29,7 +30,7 @@ IFS='
 for f in $staged; do
     [ -n "$f" ] || continue
     case "$f" in
-        src/external/*|Arduboy-Python-Utilities/*) continue ;;
+        src/external/*|src/generated/*|Arduboy-Python-Utilities/*) continue ;;
         src/fxdata.h|fxdata/fxdata.h|tst/fxdatatest/parity_fixtures.hpp) continue ;;
     esac
     case "$f" in

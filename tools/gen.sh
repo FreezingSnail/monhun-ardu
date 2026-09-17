@@ -22,6 +22,13 @@ mkdir -p fxdata/tables
 g++ -std=c++17 -O2 -w tools/gen-fxtables.cpp -o build/gen-fxtables
 ./build/gen-fxtables fxdata/tables
 
+# Compile the creature combat JSON (data/skeletons.json + data/creatures/*.json)
+# into the packed blob + generated headers. Schema-validated, deterministic;
+# runs before fxdata-build.py so the raw_t mhCombat payload exists. The blob is
+# a build intermediate: it is packed into the one fxdata/fxdata.bin, never
+# flashed separately.
+python3 tools/gen-combat.py
+
 # Convert each sprite directory into a Sprites.txt of uint8_t plus-mask blobs.
 # convert-sprite.py appends to Sprites.txt (it does not truncate), so a sheet
 # renamed in gen-art.py would leave a stale symbol behind: remove the generated

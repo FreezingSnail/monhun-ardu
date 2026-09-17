@@ -8,6 +8,13 @@ raw_t mhWeaponDefs = "tables/weapondefs.bin"
 raw_t mhMonsterAttacks = "tables/monsterattacks.bin"
 raw_t mhMonsterDefs = "tables/monsterdefs.bin"
 
+// Creature combat blob (bead monhun-ardu-ljj.1): data/skeletons.json +
+// data/creatures/*.json compiled by tools/gen-combat.py into the layout from
+// docs/creature-framework.md section 8 (header + fixed-size record arrays,
+// little-endian, no padding). Offsets land in combat_meta.hpp; packed but not
+// yet read at runtime (migration beads 3-5).
+raw_t mhCombat = "tables/combat.bin"
+
 
 
 
