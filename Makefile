@@ -19,11 +19,20 @@ endef
 
 full: gen build
 
+# Shipping size flags (monhun-ardu checkpoint review, section 10): -mrelax is
+# link-time instruction relaxation, -mcall-prologues shares function
+# prologue/epilogue code. Measured -620 B total (29400 -> 28780), perf rMx
+# +24 us (5064 vs 7407 budget), parity 660/660, perf suite 5/5. Shipping-only:
+# the Ardens fxtest sketches keep the stock flags so their numbers stay stable.
+SIZE_FLAGS = --build-property compiler.cpp.extra_flags="-mcall-prologues -mrelax" \
+    --build-property compiler.c.extra_flags="-mrelax" \
+    --build-property compiler.c.elf.extra_flags="-mrelax"
+
 build:
-	arduino-cli compile --fqbn "arduboy-homemade:avr:arduboy-fx" --optimize-for-debug  --output-dir dist
+	arduino-cli compile --fqbn "arduboy-homemade:avr:arduboy-fx" --optimize-for-debug  --output-dir dist $(SIZE_FLAGS)
 
 mini:
-	arduino-cli compile --fqbn "arduboy-homemade:avr:arduboy-mini" --optimize-for-debug  --output-dir dist
+	arduino-cli compile --fqbn "arduboy-homemade:avr:arduboy-mini" --optimize-for-debug  --output-dir dist $(SIZE_FLAGS)
 
 gen:
 	./tools/gen.sh
