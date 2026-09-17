@@ -1,4 +1,4 @@
-.PHONY :  full build mini gen gen-check debug hooks format test test-tools fxtest fxtest-headless fxtest-headless-preflight fxtest-build fxtest-run
+.PHONY :  full build mini gen gen-check size debug hooks format test test-tools testvm testvm-debug fxtest fxtest-headless fxtest-headless-preflight fxtest-build fxtest-run
 
 # Common compiler flags
 CXX_FLAGS = -std=c++17 -I/src -w -O0 -g3
@@ -36,6 +36,20 @@ gen-check:
 	@python3 tools/fxdata_manifest.py --snapshot build/gen-check.snapshot.json
 	@$(MAKE) --no-print-directory gen
 	@python3 tools/fxdata_manifest.py --verify-snapshot build/gen-check.snapshot.json && rm -f build/gen-check.snapshot.json
+	@cmp -s fxdata/fxdata.h src/fxdata.h || { echo "gen-check: FAIL header copy drift (fxdata/fxdata.h != src/fxdata.h); run make gen" >&2; exit 1; }
+
+# Whole-image size report (LTO makes per-symbol math useless; measure the ELF):
+# .text/.data/.bss, flash/RAM headroom, and the compile-time data facts that
+# gate the optional combat machinery (monhun-ardu-ljj.* pattern).
+AVR_SIZE ?= $(firstword $(wildcard $(HOME)/Library/Arduino15/packages/arduino/tools/avr-gcc/*/bin/avr-size) avr-size)
+size: build
+	@elf=dist/monhun-ardu.ino.elf; \
+	$(AVR_SIZE) -A "$$elf" | awk ' \
+	    $$1==".text"{t=$$2} $$1==".data"{d=$$2} $$1==".bss"{b=$$2} \
+	    END { flash=t+d; ram=d+b; \
+	          printf "size: .text=%d .data=%d .bss=%d\n", t, d, b; \
+	          printf "size: flash=%d/%d (%d free)  ram=%d/2560\n", flash, 29696, 29696-flash, ram }'
+	@printf 'size: data facts: '; grep -E '^constexpr bool ' src/generated/combat_meta.hpp | sed 's/constexpr bool //; s/ = /:/; s/;//' | tr '\n' ' '; echo
 
 # Install the repo git hooks (.githooks/pre-commit runs clang-format on staged
 # C/C++ files and restages them). Idempotent; run once per clone.
@@ -86,6 +100,10 @@ FXDATA_BIN    ?= fxdata/fxdata.bin
 FXTEST_BUILD_DIR ?= build/fxtest
 FXTEST_INOS   = $(wildcard tst/fxdatatest/test_*.ino)
 FXTEST_NAMES  = $(basename $(notdir $(FXTEST_INOS)))
+# Iterate one suite: `make fxtest-headless FXTEST_ONLY=test_combat` (full gate
+# stays the default; the filter is for the inner dev loop).
+FXTEST_ONLY   ?=
+FXTEST_RUN    = $(if $(strip $(FXTEST_ONLY)),$(filter $(FXTEST_ONLY),$(FXTEST_NAMES)),$(FXTEST_NAMES))
 
 fxtest: fxtest-headless
 
@@ -103,7 +121,7 @@ fxtest-headless-preflight:
 
 fxtest-build:
 	@set -e; \
-	for ino in $(FXTEST_NAMES); do \
+	for ino in $(FXTEST_RUN); do \
 		stage="$(FXTEST_BUILD_DIR)/$$ino"; \
 		rm -rf "$$stage"; \
 		mkdir -p "$$stage"; \
@@ -119,7 +137,7 @@ fxtest-build:
 
 fxtest-run:
 	@failed=0; \
-	for name in $(FXTEST_NAMES); do \
+	for name in $(FXTEST_RUN); do \
 		stage="$(FXTEST_BUILD_DIR)/$$name"; \
 		echo "=== $$name ==="; \
 		cp -f "$(FXDATA_BIN)" "$$stage/fxdata.bin"; \

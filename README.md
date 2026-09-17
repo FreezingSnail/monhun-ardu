@@ -217,8 +217,11 @@ not stepped.
 ## Commands
 
 ```sh
-make test               # host unit tests (2716 asserts)
+make test               # host unit tests (3117 asserts)
 make fxtest-headless    # Ardens device tests (boot/assets/audio/menu/parity/data/combat/perf)
+                        #   single suite: make fxtest-headless FXTEST_ONLY=test_combat
+make size               # whole-image flash/RAM report + compile-time data facts
+make gen-check          # regen determinism + generated header sync
 make build              # compile shipping sketch (output in dist/)
 make debug              # build, then open Ardens debugger (ELF + DWARF) with FX image
 make mini               # compile for Arduboy Mini FQBN
@@ -226,6 +229,9 @@ make gen                # regenerate FX assets + fxdata.h/bin from images/
 make hooks              # install git hooks (clang-format pre-commit), once per clone
 make format             # format all tracked C-family sources
 ```
+
+Workflow conventions (budget spikes, data facts, generated-artifact rules,
+render review checklist) live in `docs/dev-flow.md`.
 
 `make debug` launches Ardens on `dist/monhun-ardu.ino.elf` (DWARF debug info
 for source view, symbols, globals, call stack) + `fxdata/fxdata.bin`
