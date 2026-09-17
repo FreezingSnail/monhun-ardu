@@ -8,7 +8,7 @@
 
 namespace combat_expect {
 
-constexpr uint16_t BLOB_SIZE = 499;
+constexpr uint16_t BLOB_SIZE = 634;
 constexpr uint8_t ANCHOR_SIZE = 2;
 constexpr uint8_t ATTACK_SIZE = 22;
 constexpr uint8_t CREATURE_SIZE = 17;
@@ -50,6 +50,19 @@ constexpr uint16_t ATTACK_LUNGE_LUNGE_DMG = 12;
 constexpr uint8_t PATTERN_LUNGE_P_LUNGE_MIN_DIST = 33;
 constexpr uint8_t PATTERN_LUNGE_P_LUNGE_MAX_DIST = 255;
 constexpr uint8_t PATTERN_LUNGE_P_LUNGE_CHANCE = 100;
+constexpr uint16_t CREATURE_RAVAGER_HP = 260;
+constexpr uint8_t CREATURE_RAVAGER_SPD = 6;
+constexpr uint8_t CREATURE_RAVAGER_W = 32;
+constexpr uint8_t CREATURE_RAVAGER_H = 24;
+constexpr uint8_t CREATURE_RAVAGER_ATTACKS = 2;
+constexpr uint8_t CREATURE_RAVAGER_PATTERNS = 2;
+constexpr uint16_t ATTACK_RAVAGER_BITE_WINDUP = 36;
+constexpr uint16_t ATTACK_RAVAGER_BITE_ACTIVE = 8;
+constexpr uint16_t ATTACK_RAVAGER_BITE_RECOVER = 45;
+constexpr uint16_t ATTACK_RAVAGER_BITE_DMG = 10;
+constexpr uint8_t PATTERN_RAVAGER_P_SWEEP_MIN_DIST = 0;
+constexpr uint8_t PATTERN_RAVAGER_P_SWEEP_MAX_DIST = 24;
+constexpr uint8_t PATTERN_RAVAGER_P_SWEEP_CHANCE = 100;
 constexpr uint16_t CREATURE_SWEEP_HP = 150;
 constexpr uint8_t CREATURE_SWEEP_SPD = 7;
 constexpr uint8_t CREATURE_SWEEP_W = 28;
@@ -64,12 +77,12 @@ constexpr uint8_t PATTERN_SWEEP_P_SWEEP_MIN_DIST = 0;
 constexpr uint8_t PATTERN_SWEEP_P_SWEEP_MAX_DIST = 255;
 constexpr uint8_t PATTERN_SWEEP_P_SWEEP_CHANCE = 100;
 
-// sha256 of fxdata/tables/combat.bin: fe41b01e71a22c3e2c83dc9c6770929ffd7a2531f245c11d735e0f60bbc39994
+// sha256 of fxdata/tables/combat.bin: 9fd2797434356b13ef13c8e085aebcc835e05e9673b4a3594271c44fb41707eb
 constexpr uint8_t BLOB_SHA256[32] = {
-    0xFE, 0x41, 0xB0, 0x1E, 0x71, 0xA2, 0x2C, 0x3E,
-    0x2C, 0x83, 0xDC, 0x9C, 0x67, 0x70, 0x92, 0x9F,
-    0xFD, 0x7A, 0x25, 0x31, 0xF2, 0x45, 0xC1, 0x1D,
-    0x73, 0x5E, 0x0F, 0x60, 0xBB, 0xC3, 0x99, 0x94,
+    0x9F, 0xD2, 0x79, 0x74, 0x34, 0x35, 0x6B, 0x13,
+    0xEF, 0x13, 0xC8, 0xE0, 0x85, 0xAE, 0xBC, 0xC8,
+    0x35, 0xE0, 0x5E, 0x96, 0x73, 0xB4, 0xA3, 0x59,
+    0x42, 0x71, 0xC4, 0x4F, 0xB4, 0x17, 0x07, 0xEB,
 };
 
 }   // namespace combat_expect

@@ -58,13 +58,13 @@ struct Stat {
 
 #define MH_NI __attribute__((noinline))
 
-static inline void hit(Stat &s, uint32_t v) {
+__attribute__((noinline)) static void hit(Stat &s, uint32_t v) {
     s.sum += v;
     if (v > s.max)
         s.max = v;
     ++s.n;
 }
-static inline uint32_t avg(const Stat &s) {
+__attribute__((noinline)) static uint32_t avg(const Stat &s) {
     return s.n ? s.sum / s.n : 0;
 }
 

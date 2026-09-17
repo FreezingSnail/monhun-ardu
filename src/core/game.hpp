@@ -10,7 +10,8 @@
 #include "progmem.hpp"
 #include "fp.hpp"
 #include "input.hpp"
-#include "fxmem.hpp"   // FX cart offsets + mhFxRead* field readers (identity on host)
+#include "fxmem.hpp"                      // FX cart offsets + mhFxRead* field readers (identity on host)
+#include "../generated/combat_meta.hpp"   // data facts (HAS_PARTS) size the part caches
 
 namespace mh {
 
@@ -367,6 +368,12 @@ struct CombatBox {
     uint8_t w, h;
 };
 
+// Part stage bits are 2 per part; up to 8 effective parts are tracked (docs
+// section 4). The live part caches (pools + boxes) are sized by the data fact,
+// so a build with no part pools pays one placeholder slot instead of eight.
+constexpr uint8_t COMBAT_MAX_PARTS = 8;
+constexpr uint8_t COMBAT_PART_SLOTS = combat::HAS_PARTS ? COMBAT_MAX_PARTS : 1;
+
 // Full profile record mirror (16 fields, blob ABI order). Read whole at spawn
 // and cached; the interpreter consumes the cache at decision time.
 struct CombatProfile {
@@ -388,10 +395,15 @@ struct CombatWindow {
 // in the facing frame, so its world offset is the DIR8 rotation of (ox, oy).
 // With oy == 0 this is exactly the legacy scalar reach projection
 // (((fx * reach) >> 4) / ((fy * reach) >> 4)), so shipped windows stay
-// identical.
+// identical. combatFacePoint is the same rotation for arbitrary (not int8)
+// offsets: part boxes rotate their centre, which can exceed the int8 range.
+inline void combatFacePoint(int16_t fx, int16_t fy, int32_t ox, int32_t oy, int32_t &dx, int32_t &dy) {
+    dx = ((static_cast<int32_t>(fx) * ox) - (static_cast<int32_t>(fy) * oy)) >> 4;
+    dy = ((static_cast<int32_t>(fy) * ox) + (static_cast<int32_t>(fx) * oy)) >> 4;
+}
+
 inline void combatFaceOffset(int16_t fx, int16_t fy, const CombatBox &b, int32_t &dx, int32_t &dy) {
-    dx = ((static_cast<int32_t>(fx) * b.ox) - (static_cast<int32_t>(fy) * b.oy)) >> 4;
-    dy = ((static_cast<int32_t>(fy) * b.ox) + (static_cast<int32_t>(fx) * b.oy)) >> 4;
+    combatFacePoint(fx, fy, b.ox, b.oy, dx, dy);
 }
 
 // Attack scalar cache + the currently loaded window. Read once at attack start
@@ -410,14 +422,28 @@ struct CombatAttackCache {
 // stages for up to 8 effective parts (saturating; parts beyond slot 7 are not
 // stage-tracked), and the pattern step cursor (stepIdx + 256-tick countdown
 // stepT).
+//
+// ljj.6 adds the live part caches for the first breakable-part creature
+// (docs section 4): effective part ordinals run skeleton parts first, then the
+// creature override list (bodyFirst/bodyCount and overFirst/overCount are the
+// two global lists); partHp[k] is the remaining pool (0 = no pool) and
+// partsHurt the facing-independent hurt envelope of all part rects (union over
+// the 8 facings, anchor-relative to m.x/m.y), so the per-tick target sync is
+// four stores and hit resolution/render rotate one box for the current facing.
+// The arrays exist only when the shipped blob declares pools/stages
+// (combat::HAS_PARTS); otherwise they fold to 1 slot.
 struct CombatState {
     CombatProfile profile;      // 22 B AVR
     CombatAttackCache attack;   // 21 B AVR
     CombatBox body;             // 4 B AVR: skeleton body part box (spawn cache)
     uint8_t bodyFirst;          // hurtbox-list head (skeleton parts)
     uint8_t bodyCount;
-    uint8_t creature;   // index into CREATURES
-    uint16_t stages;    // 2 bits x 8 parts, 0 = intact
+    uint8_t overFirst;   // per-creature part override list head
+    uint8_t overCount;
+    uint8_t creature;                     // index into CREATURES
+    uint16_t stages;                      // 2 bits x 8 parts, 0 = intact
+    uint16_t partHp[COMBAT_PART_SLOTS];   // live part pools (0 = no pool)
+    CombatBox partsHurt;                  // union of part rects over all facings
     uint8_t patternIdx;
     uint8_t stepIdx;
     uint8_t stepT;     // 8-bit countdown: step `after`/WAIT ticks cap at 255
@@ -491,7 +517,8 @@ inline int16_t monsterAttackHh(const MonsterAttack *a) {
 enum MonsterKind : int8_t {
     MON_LUNGE = 0,
     MON_SWEEP = 1,
-    MON_HEAVY = 2
+    MON_HEAVY = 2,
+    MON_RAVAGER = 3   // ljj.6: first breakable-part creature (data/creatures/ravager.json)
 };
 struct MonsterDef {
     int8_t kind;
@@ -511,10 +538,11 @@ struct FxMonsterDefsRom {
 };
 constexpr FxMonsterDefsRom MONSTER_DEFS = {};
 #else
-MH_PROGMEM const MonsterDef MONSTER_DEFS[3] = {
+MH_PROGMEM const MonsterDef MONSTER_DEFS[4] = {
     {MON_LUNGE, 32, 24, 200, 5, 32},
     {MON_SWEEP, 28, 22, 150, 7, -1},
     {MON_HEAVY, 40, 28, 320, 3, 24},
+    {MON_RAVAGER, 32, 24, 260, 6, 24},
 };
 #endif   // __AVR__
 

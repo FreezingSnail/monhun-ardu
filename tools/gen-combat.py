@@ -1308,21 +1308,41 @@ def data_facts(model):
     adding data and re-running gen-combat.py.
     """
     has_stagger = any(c["profile"]["staggerMax"] > 0 for c in model["creatures"])
+    has_hit_stagger = False
     has_wait_steps = False
     has_step_after = False
     has_step_chance = False
     has_multi_step = False
     has_multi_window = False
     simple_guards = True
+    has_guard_hp = False
+    has_guard_player = False
+    has_guard_cooldown = False
+    has_guard_chance = False
+    has_guard_parts = False
+    has_parts = any(part["hp"] > 0 or part["stages"] for skeleton in model["skeletons"] for part in skeleton["parts"])
+    has_parts = has_parts or any(part["hp"] > 0 or part["stages"] for creature in model["creatures"] for part in creature["parts"])
     for creature in model["creatures"]:
         for attack in creature["attacks"]:
             if len(attack["windows"]) > 1:
                 has_multi_window = True
+            if attack["stagger"]:
+                has_hit_stagger = True
         for pattern in creature["patterns"]:
             guard = pattern["guard"]
             if guard["hpLo"] != 0 or guard["hpHi"] != 100 or guard["playerFlags"] != 0 \
                     or guard["cooldown"] != 0 or guard["chance"] != 100 or guard["parts"]:
                 simple_guards = False
+            if guard["hpLo"] != 0 or guard["hpHi"] != 100:
+                has_guard_hp = True
+            if guard["playerFlags"] != 0:
+                has_guard_player = True
+            if guard["cooldown"] != 0:
+                has_guard_cooldown = True
+            if guard["chance"] != 100:
+                has_guard_chance = True
+            if guard["parts"]:
+                has_guard_parts = True
             if len(pattern["steps"]) > 1:
                 has_multi_step = True
             for step in pattern["steps"]:
@@ -1334,12 +1354,19 @@ def data_facts(model):
                     has_step_chance = True
     return {
         "HAS_STAGGER": has_stagger,
+        "HAS_HIT_STAGGER": has_hit_stagger,
         "HAS_WAIT_STEPS": has_wait_steps,
         "HAS_STEP_AFTER": has_step_after,
         "HAS_STEP_CHANCE": has_step_chance,
         "HAS_MULTI_STEP": has_multi_step,
         "HAS_MULTI_WINDOW": has_multi_window,
         "HAS_SIMPLE_GUARDS": simple_guards,
+        "HAS_PARTS": has_parts,
+        "HAS_GUARD_HP": has_guard_hp,
+        "HAS_GUARD_PLAYER": has_guard_player,
+        "HAS_GUARD_COOLDOWN": has_guard_cooldown,
+        "HAS_GUARD_CHANCE": has_guard_chance,
+        "HAS_GUARD_PARTS": has_guard_parts,
     }
 
 

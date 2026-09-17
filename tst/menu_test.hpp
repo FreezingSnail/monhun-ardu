@@ -61,20 +61,22 @@ void MenuSuite(TestRunner &runner) {
     }
 
     {
-        Test t("taps cycle target 0..3 (beasts then pole) and wrap both ways");
+        Test t("taps cycle target 0..4 (beasts, ravager, pole) and wrap both ways");
         MenuState m;
         menuTap(m, MT_DOWN);
         t.assert(m.target, 1, "down: LUNGE -> SWEEP");
         menuTap(m, MT_DOWN);
         t.assert(m.target, 2, "down: SWEEP -> HEAVY");
         menuTap(m, MT_DOWN);
-        t.assert(m.target, 3, "down: HEAVY -> POLE");
+        t.assert(m.target, 3, "down: HEAVY -> RAVAGER");
+        menuTap(m, MT_DOWN);
+        t.assert(m.target, 4, "down: RAVAGER -> POLE");
         menuTap(m, MT_DOWN);
         t.assert(m.target, 0, "down wraps POLE -> LUNGE");
         menuTap(m, MT_UP);
-        t.assert(m.target, 3, "up wraps LUNGE -> POLE");
+        t.assert(m.target, 4, "up wraps LUNGE -> POLE");
         menuTap(m, MT_UP);
-        t.assert(m.target, 2, "up: POLE -> HEAVY");
+        t.assert(m.target, 3, "up: POLE -> RAVAGER");
         t.assert(m.weapon, 0, "target nav leaves weapon alone");
         suite.addTest(t);
     }
@@ -168,12 +170,12 @@ void MenuSuite(TestRunner &runner) {
     }
 
     {
-        Test t("pick -> mode/kind mapping (targets 0..2 hunt, 3 pole)");
+        Test t("pick -> mode/kind mapping (targets 0..3 hunt, 4 pole)");
         MenuState m;
-        for (int8_t target = 0; target < 4; target++) {
+        for (int8_t target = 0; target < 5; target++) {
             m.target = target;
-            t.assert(menuMode(m), target == 3 ? MODE_TRAIN : MODE_HUNT, "mode by target");
-            t.assert(menuMonsterKind(m), target <= 2 ? target : 0, "kind by target");
+            t.assert(menuMode(m), target == 4 ? MODE_TRAIN : MODE_HUNT, "mode by target");
+            t.assert(menuMonsterKind(m), target < 4 ? target : 0, "kind by target");
         }
         suite.addTest(t);
     }
@@ -181,15 +183,15 @@ void MenuSuite(TestRunner &runner) {
     {
         Test t("menuStart applies weapon + mode + kind to Game");
         for (int8_t weapon = 0; weapon < 3; weapon++) {
-            for (int8_t target = 0; target < 4; target++) {
+            for (int8_t target = 0; target < 5; target++) {
                 MenuState m;
                 m.weapon = weapon;
                 m.target = target;
                 Game g;
                 menuStart(g, m);
                 t.assert(g.weapon, weapon, "start weapon");
-                t.assert(g.mode, target == 3 ? MODE_TRAIN : MODE_HUNT, "start mode");
-                t.assert(g.monsterKind, target <= 2 ? target : 0, "start kind");
+                t.assert(g.mode, target == 4 ? MODE_TRAIN : MODE_HUNT, "start mode");
+                t.assert(g.monsterKind, target < 4 ? target : 0, "start kind");
             }
         }
         suite.addTest(t);

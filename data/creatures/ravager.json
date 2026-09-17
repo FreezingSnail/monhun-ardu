@@ -1,0 +1,71 @@
+{
+  "id": "ravager",
+  "skeleton": "quad_32x24",
+  "stats": { "w": 32, "h": 24, "hp": 260, "spd": 6, "spawnX": 200, "spawnY": 40 },
+  "profile": {
+    "engageDist": 36,
+    "keepDist": 24,
+    "attackDist": 42,
+    "circleNum": 8,
+    "circleDen": 10,
+    "retreatNum": 6,
+    "retreatDen": 10,
+    "cdBase": 50,
+    "cdJitter": 30,
+    "spawnT": 90,
+    "spawnCd": 120,
+    "stunRecoverT": 24,
+    "staggerMax": 0,
+    "staggerDecay": 0,
+    "staggerRecoverT": 0
+  },
+  "parts": [],
+  "attacks": [
+    {
+      "id": "bite",
+      "windup": 36,
+      "active": 8,
+      "recover": 45,
+      "dmg": 10,
+      "phys": "BLUNT",
+      "elem": "NONE",
+      "move": { "type": "lunge", "speedF": 30 },
+      "facing": "track",
+      "windows": [
+        { "t0": 0, "t1": 8, "box": { "ox": 13, "oy": 0, "w": 22, "h": 18 }, "dmgMul": 100 }
+      ],
+      "onHit": { "effect": "none", "push": 0, "stun": 0 },
+      "stagger": 0,
+      "cue": "windup"
+    },
+    {
+      "id": "tail_sweep",
+      "windup": 48,
+      "active": 12,
+      "recover": 60,
+      "dmg": 9,
+      "phys": "BLUNT",
+      "elem": "NONE",
+      "move": { "type": "none" },
+      "facing": "track",
+      "windows": [
+        { "t0": 0, "t1": 12, "box": { "ox": 20, "oy": 0, "w": 26, "h": 22 }, "dmgMul": 100 }
+      ],
+      "onHit": { "effect": "none", "push": 0, "stun": 0 },
+      "stagger": 0,
+      "cue": "windup"
+    }
+  ],
+  "patterns": [
+    {
+      "id": "p_sweep",
+      "guard": { "maxDist": 24, "chance": 100 },
+      "steps": [ { "atk": "tail_sweep", "after": 0 } ]
+    },
+    {
+      "id": "p_bite",
+      "guard": { "minDist": 25, "chance": 100 },
+      "steps": [ { "atk": "bite", "after": 0 } ]
+    }
+  ]
+}

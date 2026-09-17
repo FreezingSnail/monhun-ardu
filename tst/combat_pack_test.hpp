@@ -239,7 +239,7 @@ void CombatPackSuite(TestRunner &runner) {
             {"CREATURE_SWEEP", combat::CREATURE_SWEEP_OFF, combat::CREATURES_OFF, combat::CREATURE_SWEEP, combat::CREATURE_SIZE, combat::CREATURES_COUNT},
             {"PROFILE_HEAVY", combat::PROFILE_HEAVY_OFF, combat::PROFILES_OFF, 0, combat::PROFILE_SIZE, combat::PROFILES_COUNT},
             {"PROFILE_LUNGE", combat::PROFILE_LUNGE_OFF, combat::PROFILES_OFF, 1, combat::PROFILE_SIZE, combat::PROFILES_COUNT},
-            {"PROFILE_SWEEP", combat::PROFILE_SWEEP_OFF, combat::PROFILES_OFF, 2, combat::PROFILE_SIZE, combat::PROFILES_COUNT},
+            {"PROFILE_SWEEP", combat::PROFILE_SWEEP_OFF, combat::PROFILES_OFF, 3, combat::PROFILE_SIZE, combat::PROFILES_COUNT},
             {"SKELETON_QUAD_28X22", combat::SKELETON_QUAD_28X22_OFF, combat::SKELETONS_OFF, combat::SKELETON_QUAD_28X22, combat::SKELETON_SIZE, combat::SKELETONS_COUNT},
             {"SKELETON_QUAD_32X24", combat::SKELETON_QUAD_32X24_OFF, combat::SKELETONS_OFF, combat::SKELETON_QUAD_32X24, combat::SKELETON_SIZE, combat::SKELETONS_COUNT},
             {"SKELETON_QUAD_40X28", combat::SKELETON_QUAD_40X28_OFF, combat::SKELETONS_OFF, combat::SKELETON_QUAD_40X28, combat::SKELETON_SIZE, combat::SKELETONS_COUNT},

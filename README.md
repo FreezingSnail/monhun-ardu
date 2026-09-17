@@ -104,12 +104,14 @@ data/skeletons.json + data/creatures/*.json ──tools/gen-combat.py──►�
   `combat_expect.hpp` pins sizes, spot values and the blob sha256.
   `src/core/combat.hpp` is the production loader (host structs / AVR
   `mhFxRead*`), exercised by `tst/combat_test.hpp`,
-  `tst/combat_pack_test.hpp` and the Ardens `test_combat`; the game itself
-  still runs the legacy FSM until migrations `ljj.3`–`.5` wire it in.
+  `tst/combat_pack_test.hpp` and the Ardens `test_combat`; the game runs the
+  pattern interpreter from migrations `ljj.3`–`.5`, and `data/creatures/
+  ravager.json` is the first creature with a breakable part (pool + stages +
+  pattern-swap guard, `ljj.6`).
 - Current blobs: `fxmonster`, `fxplayer`, `fxpole`, `fxball`, `fxscatter`,
   `fxspark`, `fxfontw`, `fxfontg`, the overlay/effect sheets and the raw
   content tables (`mhWeaponDefs`, `mhMonsterAttacks`, `mhMonsterDefs`,
-  `mhCombat`) — 21622 B total.
+  `mhCombat`) — 22719 B total.
 - Regenerate with `make gen` (or `./tools/gen.sh`); bins are tracked despite
   `*.bin` being gitignored (force-added) so device tests are reproducible.
 - `fxdata/manifest.json` (tracked) pins sha256+size for every source image,
@@ -120,7 +122,19 @@ data/skeletons.json + data/creatures/*.json ──tools/gen-combat.py──►�
 - `make test-tools` runs the Python unittest suites in `tools/tests/`
   (manifest orphan/missing/malformed/staleness fixtures; gen-combat schema
   errors, id/ref errors, integer-only rejection, size limits, determinism,
-  dump smoke, blob-ABI spot checks).
+  dump smoke, blob-ABI spot checks; contact-sheet determinism/layout).
+- Authoring review without flashing:
+  - `python3 tools/gen-combat.py --dump` validates the JSON and prints the
+    compiled model (per-creature stats, attacks, windows, patterns and guards)
+    without writing any artifact — the fast schema/id cross-ref check while
+    tuning numbers.
+  - `python3 tools/contact_sheet.py [--creature <id>] [--out build/x.png]`
+    renders `data/skeletons.json` + `data/creatures/*.json` to a PNG contact
+    sheet under `build/` (never committed): a tick timeline per attack
+    (windup/active/recover shading, window spans) plus one 1:1 preview per hit
+    window showing the body box and the window box, so a multi-window arc,
+    part box or timing change can be reviewed as a picture. `--dump` prints a
+    downsampled ASCII view for text evidence.
 - Fonts are drawn from the FX cart (vendored `Font4x6` was deleted after the
   asset pass; it cost ~3 KB of flash).
 

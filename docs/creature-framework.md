@@ -98,6 +98,11 @@ body += out * bodyShare / 100
 
 - `hp: 0` = no pool (legacy body part). No parts at all = legacy single-hurtbox
   path (used by the shipped 3 during migration).
+- Part boxes are face-relative **origins**: the world rect is the body anchor
+  plus the DIR8 rotation of `(ox, oy)`, box `w x h` stays axis-aligned (the
+  body box `{0,0,w,h}` is therefore the fixed body rect for every facing).
+  Attack windows are face-relative **centres** (section 5) — the two conventions
+  coexist because the body box is its own anchor.
 - `breakTypes` gates break progress only; wrong-type damage still applies
   (physMul still scales it).
 - Stages are ordered by `at` (remaining-hp thresholds); ship with 2, schema

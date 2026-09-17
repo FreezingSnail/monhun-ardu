@@ -44,7 +44,7 @@ inline void test_menu(FxTest &test) {
     menuStep(m, idle);
     test.expectEq(static_cast<uint32_t>(m.weapon), 2, F("nav weapon wrap back"));
 
-    // ---- taps: target down x3 reaches POLE, x4 wraps to LUNGE, up wraps back
+    // ---- taps: target down x4 reaches POLE, x5 wraps to LUNGE, up wraps back
     menuStep(m, down);
     menuStep(m, idle);
     test.expectEq(static_cast<uint32_t>(m.target), 1, F("nav down 1"));
@@ -53,13 +53,16 @@ inline void test_menu(FxTest &test) {
     test.expectEq(static_cast<uint32_t>(m.target), 2, F("nav down 2"));
     menuStep(m, down);
     menuStep(m, idle);
-    test.expectEq(static_cast<uint32_t>(m.target), 3, F("nav down 3 pole"));
+    test.expectEq(static_cast<uint32_t>(m.target), 3, F("nav down 3 ravager"));
+    menuStep(m, down);
+    menuStep(m, idle);
+    test.expectEq(static_cast<uint32_t>(m.target), 4, F("nav down 4 pole"));
     menuStep(m, down);
     menuStep(m, idle);
     test.expectEq(static_cast<uint32_t>(m.target), 0, F("nav target wrap fwd"));
     menuStep(m, up);
     menuStep(m, idle);
-    test.expectEq(static_cast<uint32_t>(m.target), 3, F("nav target wrap back"));
+    test.expectEq(static_cast<uint32_t>(m.target), 4, F("nav target wrap back"));
 
     // ---- debounce: press steps once, hold waits DELAY, then repeats REPEAT
     menuStep(m, right);   // weapon 2 -> 0 (immediate)
@@ -121,6 +124,14 @@ inline void test_menu(FxTest &test) {
     menuStart(g, s);
     test.expectEq(static_cast<uint32_t>(g.monsterKind), MON_SWEEP, F("start sweep kind"));
     test.expectEq(static_cast<uint32_t>(g.monster.hpMax), 150, F("sweep hp from cart"));
+
+    // ---- RAVAGER -> hunt, cart def 32x24 / 260 hp (ljj.6 target slot 3)
+    MenuState rv;
+    rv.target = MON_RAVAGER;
+    menuStart(g, rv);
+    test.expectEq(static_cast<uint32_t>(g.monsterKind), MON_RAVAGER, F("start ravager kind"));
+    test.expectEq(static_cast<uint32_t>(g.monster.hpMax), 260, F("ravager hp from cart"));
+    test.expectEq(static_cast<uint32_t>(g.monster.w), 32, F("ravager w from cart"));
 
     // ---- return edge: over+ A only, exactly once per press
     MenuState r;

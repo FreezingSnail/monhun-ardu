@@ -240,6 +240,10 @@ def monster_frame(body, head, east, dead=False):
     return img
 
 
+# ---- breakable-part overlay (ljj.6 / parts budget bead): the tail sheet was
+# deferred with the parts pass. Re-add with the framework when parts ship.
+
+
 def monster_frames():
     # 0..3 facing east (head right), 4..7 facing west (head left)
     states = [

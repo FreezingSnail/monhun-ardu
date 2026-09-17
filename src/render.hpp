@@ -308,6 +308,9 @@ static void drawMonster(const mh::Game &g, int16_t camX, int16_t camY) {
     const int32_t w = m.w;
     const int32_t h = m.h;
 
+    // ljj.6 scope: breakable-part overlay is deferred (parts budget bead);
+    // the ravager ships patterns-only, so HAS_PARTS is false and this block is
+    // compiled out. Re-enable with the tail art when the parts pass lands.
     // Body, feet, head and eyes are baked per state/facing into the sprite;
     // recover dims the body, windup flash and hit flash whiten it.
     const bool flashing = (m.state == mh::MS_WINDUP) && (((m.windupMax - m.t) / 4) % 2 == 0);

@@ -22,7 +22,7 @@ enum MenuAction : int8_t {
 
 struct MenuState {
     int8_t weapon = 0;    // WeaponId 0..2 (SWD/FLS/GUN)
-    int8_t target = 0;    // 0..2 beast kind, 3 = training pole
+    int8_t target = 0;    // 0..3 beast kind (lunge/sweep/heavy/ravager), 4 = training pole
     bool active = true;   // boot into the menu
     bool prevA = false;   // menu-owned edges (see menuReturnStep)
     bool prevB = false;
@@ -33,8 +33,8 @@ struct MenuState {
 };
 
 constexpr int8_t MENU_WEAPON_COUNT = 3;
-constexpr int8_t MENU_TARGET_COUNT = 4;
-constexpr int8_t MENU_POLE_TARGET = 3;
+constexpr int8_t MENU_TARGET_COUNT = 5;
+constexpr int8_t MENU_POLE_TARGET = 4;
 
 // D-pad repeat: a fresh direction steps immediately, a held one waits
 // MENU_NAV_DELAY ticks (~300 ms at the measured 52 Hz logic rate) before the
@@ -99,15 +99,15 @@ inline MenuAction menuStep(MenuState &m, const Input &in) {
     return aP ? MENU_START : MENU_NONE;
 }
 
-// Pick -> sim mapping: targets 0..2 select the beast kind in hunt mode, target
-// 3 the training pole in train mode. Single source of truth for the sketch and
+// Pick -> sim mapping: targets 0..3 select the beast kind in hunt mode, target
+// 4 the training pole in train mode. Single source of truth for the sketch and
 // both suites.
 inline int8_t menuMode(const MenuState &m) {
     return m.target == MENU_POLE_TARGET ? MODE_TRAIN : MODE_HUNT;
 }
 
 inline int8_t menuMonsterKind(const MenuState &m) {
-    return m.target <= 2 ? m.target : 0;   // the pole has no beast
+    return m.target < MENU_POLE_TARGET ? m.target : 0;   // the pole has no beast
 }
 
 // Start the chosen scene from the menu picks.

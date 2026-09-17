@@ -46,6 +46,8 @@ static uint8_t monsterCreatureId(int8_t kind) {
         return combat::CREATURE_SWEEP;
     case MON_HEAVY:
         return combat::CREATURE_HEAVY;
+    case MON_RAVAGER:
+        return combat::CREATURE_RAVAGER;
     default:
         return combat::CREATURE_LUNGE;
     }
@@ -80,9 +82,21 @@ static void monsterWindowNext(Game &g) {
 // Keep Game::target (the live hurt box + callbacks) in step with the beast.
 // Migration B: m.w/m.h are the cached skeleton body box (initMonster), so the
 // hurt rect mirrors the blob-loaded geometry; m.x/m.y is the body anchor.
+// ljj.6: a creature with per-creature parts (tail) grows the hurt rect to the
+// cached union of its part rects, so melee/projectiles can reach the appendage.
+// The union is rebuilt only when the facing changed (combatPartRectsRefresh
+// reads the face-relative boxes); per-tick cost is four stores.
 static void syncMonsterTarget(Game &g) {
     Monster &m = g.monster;
     g.target.alive = (m.state != MS_DEAD);
+    if (combat::HAS_PARTS && (g.combat.bodyCount + g.combat.overCount) > 1) {
+        const CombatBox &h = g.combat.partsHurt;
+        g.target.rect.x = static_cast<int16_t>(m.x + h.ox);
+        g.target.rect.y = static_cast<int16_t>(m.y + h.oy);
+        g.target.rect.w = h.w;
+        g.target.rect.h = h.h;
+        return;
+    }
     g.target.rect.x = m.x;
     g.target.rect.y = m.y;
     g.target.rect.w = m.w;
@@ -155,15 +169,31 @@ static void monsterStaggerAdd(Game &g, uint8_t amount) {
     m.t = static_cast<int16_t>(g.combat.profile.staggerRecoverT);
 }
 
-// Target::onHit — player melee landed: resolve the part (migration B), then
-// damage, stagger, trip stun, knockback. The part multiplier chain is all-100
-// on the shipped data, so the routed number equals the raw attack damage
-// exactly.
+// Player hit physical type (ljj.6 part multipliers): the v1 weapon table has
+// no phys column, so the weapon identity is the single mapping point. Sword
+// slashes, flail blunts, gunshot/pointblank counts as SHOT (player attacks
+// carry no element in v1).
+static uint8_t playerPhys(const Game &g) {
+    if (g.weapon == W_SWORD)
+        return PHYS_SLASH;
+    if (g.weapon == W_FLAIL)
+        return PHYS_BLUNT;
+    return PHYS_SHOT;
+}
+
+// Target::onHit — player hit landed: resolve the hurt part (multi-part
+// creatures route through the cached part list + pools; the shipped 3 stay on
+// the single-body path), then damage, stagger, trip stun, knockback.
 static void monsterOnHit(Game &g, int dmg, int hx, int hy, int push, int effect) {
     Monster &m = g.monster;
     if (m.state == MS_DEAD)
         return;
-    const CombatBodyHit hit = combatResolveBodyHit(g, dmg);
+    CombatBodyHit hit;
+    if (combat::HAS_PARTS && (g.combat.bodyCount + g.combat.overCount) > 1) {
+        hit = combatPartHitResolve(g, dmg, playerPhys(g), static_cast<int16_t>(hx), static_cast<int16_t>(hy));
+    } else {
+        hit = combatResolveBodyHit(g, dmg);
+    }
     if (hit.partIdx == COMBAT_NO_PART)
         return;
     damageMonster(g, static_cast<int16_t>(hit.dmg), static_cast<int16_t>(hx), static_cast<int16_t>(hy));
@@ -173,7 +203,7 @@ static void monsterOnHit(Game &g, int dmg, int hx, int hy, int push, int effect)
     // (combat::HAS_STAGGER false), so the guard folds the whole meter out; part
     // stage stagger (combat::STAGES_COUNT) is the part-break interrupt channel
     // once stages exist, like every other stage-gated path.
-    if (combat::HAS_STAGGER && combat::STAGES_COUNT > 0 && g.combat.profile.staggerMax > 0)
+    if (combat::HAS_HIT_STAGGER && combat::STAGES_COUNT > 0 && g.combat.profile.staggerMax > 0)
         monsterStaggerAdd(g, combatPartStaggerNow(g, hit.partIdx));
     if (effect == 1 && m.stun < 70)
         m.stun = 70;   // trip
@@ -201,7 +231,7 @@ static void monsterOnStun(Game &g, int ticks) {
 // those values). The combat caches are reset to this creature's identity; the
 // attack cache stays empty until the pattern interpreter loads one.
 static void initMonster(Game &g, int8_t kind = 0) {
-    if (kind < 0 || kind > 2)
+    if (kind < 0 || kind > MON_RAVAGER)
         kind = 0;
     g.monsterKind = kind;
     const uint8_t creatureId = creatureLoad(g, monsterCreatureId(kind));
@@ -252,7 +282,11 @@ static bool patternGuardFull(Game &g, uint8_t patternIdx, uint8_t dist) {
     const Monster &m = g.monster;
     CombatGuardInput in;
     in.dist = dist;
-    in.hpPct = (m.hpMax > 0) ? static_cast<uint8_t>((static_cast<uint32_t>(m.hp) * 100u) / static_cast<uint16_t>(m.hpMax)) : 0;
+    // hpPct needs a 32-bit divide; only computed when a shipped guard bands on
+    // creature HP (combat::HAS_GUARD_HP), same folding convention as the rest.
+    in.hpPct = 0;
+    if (combat::HAS_GUARD_HP)
+        in.hpPct = (m.hpMax > 0) ? static_cast<uint8_t>((static_cast<uint32_t>(m.hp) * 100u) / static_cast<uint16_t>(m.hpMax)) : 0;
     in.playerFlags = 0;   // player-state guards land with the T2 VM
     in.tick = static_cast<uint16_t>(g.tick);
     in.sinceUse = 0xFFFF;   // cooldown guards: profile cd gates decisions today
@@ -307,6 +341,10 @@ static void patternStepsGeneric(Game &g) {
         }
         if (combat::HAS_STEP_CHANCE && !combatChancePasses(static_cast<uint16_t>(g.tick), c.creature, c.patternIdx, stepIdx, s.chance))
             continue;   // skip immediately; `after` still delays the next step
+        // Part-stage attack gating (ljj.6): a crossed stage can disable an
+        // attack (docs section 4); data with no parts/stages folds this out.
+        if (combat::HAS_PARTS && combatAttackDisabled(g, s.ref))
+            continue;
         monsterAttackSet(g, s.ref);
         m.state = MS_WINDUP;
         m.t = static_cast<int16_t>(g.combat.attack.windup);
@@ -327,6 +365,8 @@ static void patternStepsSingle(Game &g) {
     const uint8_t ref = combatStepRef(combatPatternFirstStep(c.patternIdx));
     c.patternIdx = COMBAT_NO_PATTERN;
     c.stepT = 0;
+    if (combat::HAS_PARTS && combatAttackDisabled(g, ref))
+        return;   // stage-disabled step: cursor cleared, decision retries
     monsterAttackSet(g, ref);
     Monster &m = g.monster;
     m.state = MS_WINDUP;
@@ -469,6 +509,12 @@ static void updateMonster(Game &g) {
     const int8_t di = fp::dirIndexFromDelta(dx, dy);
     m.fx = fp::dir8X(di);
     m.fy = fp::dir8Y(di);
+
+    // Stagger meter decay (docs section 7). Shipped 3: fact false, folded out.
+    if (combat::HAS_STAGGER && g.combat.stagger > 0) {
+        const uint8_t decay = pr.staggerDecay;
+        g.combat.stagger = (g.combat.stagger > decay) ? static_cast<uint8_t>(g.combat.stagger - decay) : 0;
+    }
 
     if (m.stun > 0) {
         m.stun--;

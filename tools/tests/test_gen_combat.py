@@ -243,12 +243,19 @@ class GenCombatTests(unittest.TestCase):
         facts = dict(re.findall(r"^constexpr bool ([A-Z0-9_]+) = (true|false);$", text, re.M))
         expected = {
             "HAS_STAGGER": "true",
+            "HAS_HIT_STAGGER": "true",
             "HAS_WAIT_STEPS": "true",
             "HAS_STEP_AFTER": "true",
             "HAS_STEP_CHANCE": "false",
             "HAS_MULTI_STEP": "true",
             "HAS_MULTI_WINDOW": "false",
             "HAS_SIMPLE_GUARDS": "false",
+            "HAS_PARTS": "true",
+            "HAS_GUARD_HP": "false",
+            "HAS_GUARD_PLAYER": "true",
+            "HAS_GUARD_COOLDOWN": "false",
+            "HAS_GUARD_CHANCE": "false",
+            "HAS_GUARD_PARTS": "true",
         }
         self.assertEqual(facts, expected)
 
