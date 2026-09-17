@@ -405,14 +405,19 @@ struct CombatAttackCache {
     CombatWindow win;
 };
 
-// Combat runtime state: which creature was loaded, 2-bit part stages for up to
-// 8 effective parts (saturating; parts beyond slot 7 are not stage-tracked),
-// and the pattern step cursor (stepIdx + 256-tick countdown stepT).
+// Combat runtime state: which creature was loaded, the creature's body part
+// box (migration B: hurt/collide geometry read once at spawn), 2-bit part
+// stages for up to 8 effective parts (saturating; parts beyond slot 7 are not
+// stage-tracked), and the pattern step cursor (stepIdx + 256-tick countdown
+// stepT).
 struct CombatState {
     CombatProfile profile;      // 22 B AVR
     CombatAttackCache attack;   // 21 B AVR
-    uint8_t creature;           // index into CREATURES
-    uint16_t stages;            // 2 bits x 8 parts, 0 = intact
+    CombatBox body;             // 4 B AVR: skeleton body part box (spawn cache)
+    uint8_t bodyFirst;          // hurtbox-list head (skeleton parts)
+    uint8_t bodyCount;
+    uint8_t creature;   // index into CREATURES
+    uint16_t stages;    // 2 bits x 8 parts, 0 = intact
     uint8_t patternIdx;
     uint8_t stepIdx;
     uint8_t stepT;     // 8-bit countdown: step `after`/WAIT ticks cap at 255

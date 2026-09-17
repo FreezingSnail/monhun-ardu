@@ -243,6 +243,61 @@ inline void test_combat(FxTest &test) {
     r = combatResolveHit(g, 12, PHYS_BLUNT, ELEM_NONE, 100, 0, hits, 0);
     test.expectEq(r.partIdx, COMBAT_NO_PART, F("no candidates -> no part"));
 
+    // ------------------------------------- body box + spawn (migration B)
+    {
+        CombatBox bb = {9, 9, 9, 9};
+        before = mhFxReadCount;
+        const bool boxOk = combatCreatureBodyBox(combat::CREATURE_LUNGE, bb);
+        const uint16_t boxReads = static_cast<uint16_t>(mhFxReadCount - before);
+        test.expectEq(boxOk, 1, F("lunge body box readable"));
+        test.expectEq(bb.ox, 0, F("lunge box ox"));
+        test.expectEq(bb.oy, 0, F("lunge box oy"));
+        test.expectEq(bb.w, combat_expect::CREATURE_LUNGE_W, F("lunge box w"));
+        test.expectEq(bb.h, combat_expect::CREATURE_LUNGE_H, F("lunge box h"));
+        test.expectEq(boxReads <= 8, 1, F("body box <= 8 reads"));
+
+        combatCreatureBodyBox(combat::CREATURE_SWEEP, bb);
+        test.expectEq(bb.w, combat_expect::CREATURE_SWEEP_W, F("sweep box w"));
+        test.expectEq(bb.h, combat_expect::CREATURE_SWEEP_H, F("sweep box h"));
+        combatCreatureBodyBox(combat::CREATURE_HEAVY, bb);
+        test.expectEq(bb.w, combat_expect::CREATURE_HEAVY_W, F("heavy box w"));
+        test.expectEq(bb.h, combat_expect::CREATURE_HEAVY_H, F("heavy box h"));
+
+        const CombatSpawn sp = combatCreatureSpawnRead(combat::CREATURE_LUNGE);
+        test.expectEq(sp.hp, combat_expect::CREATURE_LUNGE_HP, F("spawn hp"));
+        test.expectEq(sp.spd, combat_expect::CREATURE_LUNGE_SPD, F("spawn spd"));
+        test.expectEq(sp.x, 200, F("spawn x"));
+        test.expectEq(sp.y, 40, F("spawn y"));
+
+        before = mhFxReadCount;
+        initMonster(g, MON_HEAVY);
+        const uint16_t initReads = static_cast<uint16_t>(mhFxReadCount - before);
+        test.expectEq(g.monster.w, combat_expect::CREATURE_HEAVY_W, F("spawn width from box"));
+        test.expectEq(g.monster.h, combat_expect::CREATURE_HEAVY_H, F("spawn height from box"));
+        test.expectEq(g.monster.hp, combat_expect::CREATURE_HEAVY_HP, F("spawn hp from record"));
+        test.expectEq(g.monster.spd, combat_expect::CREATURE_HEAVY_SPD, F("spawn spd from record"));
+        test.expectEq(g.combat.body.w, g.monster.w, F("cached body box w"));
+        test.expectEq(g.combat.body.h, g.monster.h, F("cached body box h"));
+        test.expectEq(g.combat.bodyFirst, combat::PART_QUAD_40X28_BODY, F("cached hurtbox head"));
+        test.expectEq(g.combat.bodyCount, 1, F("cached hurtbox count"));
+        test.expectEq(g.target.rect.w, g.combat.body.w, F("target rect w from box"));
+        test.expectEq(g.target.rect.x, g.monster.x, F("target rect x at box origin"));
+        test.expectEq(g.combat.stages, 0, F("spawn stages intact"));
+        test.expectEq(initReads <= 24, 1, F("initMonster burst <= 24 reads"));
+
+        // Landed player hit resolves the creature's hurtbox list (one body
+        // part on the shipped 3; multipliers all 100 -> damage unchanged).
+        creatureLoad(g, combat::CREATURE_LUNGE);
+        before = mhFxReadCount;
+        const CombatBodyHit bodyHit = combatResolveBodyHit(g, 12);
+        const uint16_t bodyHitReads = static_cast<uint16_t>(mhFxReadCount - before);
+        test.expectEq(bodyHit.partIdx, combat::PART_QUAD_32X24_BODY, F("body hit part"));
+        test.expectEq(bodyHit.dmg, 12, F("body hit damage unchanged"));
+        test.expectEq(bodyHit.mul, 100, F("body hit multiplier neutral"));
+
+        test.expectEq(bodyHitReads <= 16, 1, F("body hit <= 16 reads"));
+    }
+
     // ------------------------------------------- break-stage transition
     test.expectEq(combatStageCross(0, 30, 30), 1, F("stage cross at threshold"));
     test.expectEq(combatStageCross(0, 31, 30), 0, F("stage holds above threshold"));

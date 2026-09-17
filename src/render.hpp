@@ -556,11 +556,18 @@ static void drawDebug(const mh::Game &g, int16_t camX, int16_t camY) {
     const int32_t oy = -camY + mh::HUD_H;
     const mh::Player &p = g.player;
 
-    // Hurt boxes (solid): player body, then the live target hurt rect (monster
-    // body in hunt, training pole in train) as activeTarget() would report.
+    // Hurt boxes (solid): player body, then the creature's cached skeleton body
+    // part in hunt (migration B: part boxes from g.combat.body, not w/h
+    // literals) or the training-pole hurt rect in train.
     wireSolid(p.x + ox, p.y + oy, p.w, p.h);
-    if (g.target.alive)
+    if (g.mode == mh::MODE_HUNT) {
+        if (g.target.alive) {
+            const mh::CombatBox &b = g.combat.body;
+            wireSolid(g.monster.x + b.ox + ox, g.monster.y + b.oy + oy, b.w, b.h);
+        }
+    } else if (g.target.alive) {
         wireSolid(g.target.rect.x + ox, g.target.rect.y + oy, g.target.rect.w, g.target.rect.h);
+    }
 
     // Active player melee hit box (dotted): the sim's meleeHitbox() rect, so
     // the wire matches the frame the overlap test actually runs against.
@@ -573,10 +580,11 @@ static void drawDebug(const mh::Game &g, int16_t camX, int16_t camY) {
     // and size the monster hit test uses; the windup outline is the telegraph.
     if (g.mode == mh::MODE_HUNT && g.monster.atkIdx != mh::COMBAT_NO_ATTACK && (g.monster.state == mh::MS_WINDUP || g.monster.state == mh::MS_ATTACK)) {
         const mh::Monster &m = g.monster;
+        const mh::CombatBox &b = g.combat.body;
         int32_t dx, dy;
         mh::combatFaceOffset(m.fx, m.fy, g.combat.attack.win.box, dx, dy);
-        const int32_t hx = m.x + (m.w >> 1) + dx;
-        const int32_t hy = m.y + (m.h >> 1) + dy;
+        const int32_t hx = m.x + b.ox + (b.w >> 1) + dx;
+        const int32_t hy = m.y + b.oy + (b.h >> 1) + dy;
         const int32_t hw = g.combat.attack.win.box.w;
         const int32_t hh = g.combat.attack.win.box.h;
         wireDot(hx - (hw >> 1) + ox, hy - (hh >> 1) + oy, hw, hh);

@@ -9,6 +9,13 @@
 // cache, so windup/active ticks issue zero cart reads. The window box is the
 // single source for the hit test and (in render.hpp) the telegraph.
 //
+// Migration B (bead monhun-ardu-ljj.4): body geometry comes from the combat
+// blob. initMonster reads the creature's skeleton body part into
+// Game::combat.body and the creature record's hp/spd/spawn scalars; m.w/m.h,
+// Target::rect and the collide box all mirror that cached box. Landed player
+// hits resolve the creature's hurtbox list via combatResolveBodyHit (single
+// body part on the shipped 3; all multipliers 100, so damage is unchanged).
+//
 // The beast plugs into Game::target so the player FSM resolves melee against it
 // (and the training-pole bead, hrd, plugs in the same way). Tick order mirrors
 // the mock: player first, then monster, then the push-apart correction.
@@ -55,6 +62,8 @@ static void monsterWindowNext(Game &g) {
 }
 
 // Keep Game::target (the live hurt box + callbacks) in step with the beast.
+// Migration B: m.w/m.h are the cached skeleton body box (initMonster), so the
+// hurt rect mirrors the blob-loaded geometry; m.x/m.y is the body anchor.
 static void syncMonsterTarget(Game &g) {
     Monster &m = g.monster;
     g.target.alive = (m.state != MS_DEAD);
@@ -111,12 +120,17 @@ static void damageMonster(Game &g, int16_t dmg, int16_t hx, int16_t hy) {
     }
 }
 
-// Target::onHit — player melee landed: damage, trip stun, knockback.
+// Target::onHit — player melee landed: resolve the part (migration B), then
+// damage, trip stun, knockback. The part multiplier chain is all-100 on the
+// shipped data, so the routed number equals the raw attack damage exactly.
 static void monsterOnHit(Game &g, int dmg, int hx, int hy, int push, int effect) {
     Monster &m = g.monster;
     if (m.state == MS_DEAD)
         return;
-    damageMonster(g, static_cast<int16_t>(dmg), static_cast<int16_t>(hx), static_cast<int16_t>(hy));
+    const CombatBodyHit hit = combatResolveBodyHit(g, dmg);
+    if (hit.partIdx == COMBAT_NO_PART)
+        return;
+    damageMonster(g, static_cast<int16_t>(hit.dmg), static_cast<int16_t>(hx), static_cast<int16_t>(hy));
     if (m.state == MS_DEAD)
         return;
     if (effect == 1 && m.stun < 70)
@@ -138,26 +152,29 @@ static void monsterOnStun(Game &g, int ticks) {
 }
 
 // Spawn the hunt beast and wire it into Game::target. Call after initGame().
-// kind selects MONSTER_DEFS[3] (monhun-ardu-6zb roster); size/hp/spd come from
-// the def and every other field keeps its published value. Kind 0 is the
-// legacy LUNGE beast: byte-for-byte the pre-roster spawn. The combat caches
-// are reset to this creature's identity; the attack cache stays empty until
-// chooseAttack loads one.
+// kind selects MONSTER_DEFS[3] (monhun-ardu-6zb roster); the body box comes
+// from the creature's skeleton body part and hp/spd/spawn from the creature
+// record in the combat blob (migration B). Kind 0 is the legacy LUNGE beast:
+// byte-for-byte the pre-roster spawn (all three records hold those values).
+// The combat caches are reset to this creature's identity; the attack cache
+// stays empty until chooseAttack loads one.
 static void initMonster(Game &g, int8_t kind = 0) {
     if (kind < 0 || kind > 2)
         kind = 0;
     g.monsterKind = kind;
     creatureCacheReset(g, monsterCreatureId(kind));
-    const MonsterDef *def = &MONSTER_DEFS[kind];
+    const uint8_t creatureId = g.combat.creature;
+    combatCreatureBodyBox(creatureId, g.combat.body, g.combat.bodyFirst, g.combat.bodyCount);
+    const CombatSpawn spawn = combatCreatureSpawnRead(creatureId);
     Monster &m = g.monster;
-    m.x = 200;
-    m.y = 40;
-    m.w = monsterDefW(def);
-    m.h = monsterDefH(def);
+    m.x = static_cast<int16_t>(spawn.x);
+    m.y = static_cast<int16_t>(spawn.y);
+    m.w = g.combat.body.w;
+    m.h = g.combat.body.h;
     m.subX = 0;
     m.subY = 0;
-    m.hp = monsterDefHp(def);
-    m.hpMax = monsterDefHp(def);
+    m.hp = static_cast<int16_t>(spawn.hp);
+    m.hpMax = m.hp;
     m.state = MS_IDLE;
     m.t = 90;
     m.cd = 140;
@@ -171,7 +188,7 @@ static void initMonster(Game &g, int8_t kind = 0) {
     m.hitFlash = 0;
     m.stun = 0;
     m.circleDir = 1;
-    m.spd = monsterDefSpd(def);
+    m.spd = spawn.spd;
     g.over = OVER_NONE;
     g.target.onHit = monsterOnHit;
     g.target.onShove = monsterOnShove;
@@ -210,15 +227,15 @@ static void startMonsterAttack(Game &g) {
 }
 
 // Hit-window overlap from the cached window (docs section 5): the box centre is
-// the body centre plus the face-relative offset, size is the window box. The
-// window is tested inclusive [t0, t1] with t 1-based (incremented before tests,
-// spike 1c contract).
+// the body box centre plus the face-relative offset, size is the window box.
+// The window is tested inclusive [t0, t1] with t 1-based (incremented before
+// tests, spike 1c contract).
 static bool monsterHitsPlayer(const Game &g) {
     const Monster &m = g.monster;
     const CombatWindow &w = g.combat.attack.win;
     int32_t dx, dy;
     combatFaceOffset(m.fx, m.fy, w.box, dx, dy);
-    const int32_t cx = m.x + (m.w >> 1) + dx;
+    const int32_t cx = m.x + (m.w >> 1) + dx;   // body box centre (migration B)
     const int32_t cy = m.y + (m.h >> 1) + dy;
     Rect r;
     r.x = static_cast<int16_t>(cx - (w.box.w >> 1));
@@ -248,7 +265,7 @@ static void pushApart(Game &g) {
     Rect mr;
     mr.x = m.x;
     mr.y = m.y;
-    mr.w = m.w;
+    mr.w = m.w;   // skeleton body box == collide box (migration B)
     mr.h = m.h;
     if (!pr.overlaps(mr))
         return;

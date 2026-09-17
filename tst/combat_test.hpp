@@ -118,6 +118,69 @@ void CombatSuite(TestRunner &runner) {
     }
 
     {
+        Test t("body box + spawn accessors match combat_data.hpp (migration B)");
+        t.assert(combat::STAGES_COUNT, 0, "shipped stages list empty (stage state disabled)");
+        for (uint8_t i = 0; i < combat::CREATURES_COUNT; i++) {
+            const combat_data::Creature &h = combat_data::CREATURES[i];
+            t.assert(combatCreatureSkeletonIdx(i), h.skeletonIdx, "creature skeletonIdx accessor");
+            t.assert(combatCreatureFirstPart(i), h.firstPart, "creature firstPart accessor");
+            t.assert(combatCreaturePartCount(i), h.partCount, "creature partCount accessor");
+            const CombatSpawn s = combatCreatureSpawnRead(i);
+            t.assert(s.hp, h.hp, "creature spawn hp");
+            t.assert(s.spd, h.spd, "creature spawn spd");
+            t.assert(s.x, h.spawnX, "creature spawn x");
+            t.assert(s.y, h.spawnY, "creature spawn y");
+            const CombatSkeleton sk = combatSkeletonRead(h.skeletonIdx);
+            t.assert(combatSkeletonFirstPart(h.skeletonIdx), sk.firstPart, "skeleton firstPart accessor");
+            t.assert(combatSkeletonPartCount(h.skeletonIdx), sk.partCount, "skeleton partCount accessor");
+            const combat_data::Part &hp = combat_data::PARTS[sk.firstPart];
+            CombatBox box = {0, 0, 0, 0};
+            const bool ok = combatCreatureBodyBox(i, box);
+            t.assert(ok, 1, "body box found");
+            t.assert(box.ox, hp.box.ox, "body box ox");
+            t.assert(box.oy, hp.box.oy, "body box oy");
+            t.assert(box.w, hp.box.w, "body box w");
+            t.assert(box.h, hp.box.h, "body box h");
+            t.assert(box.w, h.w, "body box w == creature w");
+            t.assert(box.h, h.h, "body box h == creature h");
+        }
+        // Pinned shipped sizes (parity contract: LUNGE 32x24, SWEEP 28x22,
+        // HEAVY 40x28).
+        CombatBox box;
+        t.assert(combatCreatureBodyBox(combat_data::CREATURE_LUNGE, box), 1, "lunge body box");
+        t.assert(box.w, 32, "lunge 32x24 w");
+        t.assert(box.h, 24, "lunge 32x24 h");
+        t.assert(combatCreatureBodyBox(combat_data::CREATURE_SWEEP, box), 1, "sweep body box");
+        t.assert(box.w, 28, "sweep 28x22 w");
+        t.assert(box.h, 22, "sweep 28x22 h");
+        t.assert(combatCreatureBodyBox(combat_data::CREATURE_HEAVY, box), 1, "heavy body box");
+        t.assert(box.w, 40, "heavy 40x28 w");
+        t.assert(box.h, 28, "heavy 40x28 h");
+        box = CombatBox{9, 9, 9, 9};
+        t.assert(combatCreatureBodyBox(99, box), 1, "bad id falls back to creature 0");
+        t.assert(box.w, 40, "fallback body box heavy w");
+        suite.addTest(t);
+    }
+
+    {
+        Test t("combatResolveBodyHit: shipped hurtbox list is one body part");
+        const uint8_t kinds[3] = {combat_data::CREATURE_LUNGE, combat_data::CREATURE_SWEEP, combat_data::CREATURE_HEAVY};
+        for (uint8_t i = 0; i < 3; i++) {
+            Game g;
+            creatureLoad(g, kinds[i]);
+            const combat_data::Creature &h = combat_data::CREATURES[kinds[i]];
+            const CombatBodyHit r = combatResolveBodyHit(g, 12);
+            t.assert(r.partIdx, combat_data::SKELETONS[h.skeletonIdx].firstPart, "resolved part idx from skeleton");
+            t.assert(r.mul, 100, "neutral multiplier");
+            t.assert(r.dmg, 12, "part damage unchanged (share 100)");
+        }
+        Game g;
+        creatureLoad(g, combat_data::CREATURE_LUNGE);
+        t.assert(combatResolveBodyHit(g, 0).dmg, 0, "zero base stays zero");
+        suite.addTest(t);
+    }
+
+    {
         Test t("attack + window records match combat_data.hpp");
         for (uint8_t i = 0; i < combat::ATTACKS_COUNT; i++) {
             const CombatAttackValue a = combatAttackRead(i);
@@ -213,6 +276,10 @@ void CombatSuite(TestRunner &runner) {
         t.assert(g.combat.profile.cdJitter, hp.cdJitter, "cache cdJitter");
         t.assert(g.combat.profile.spawnCd, hp.spawnCd, "cache spawnCd");
         t.assert(g.combat.profile.partCount, hp.partCount, "cache partCount");
+        t.assert(g.combat.bodyFirst, combat_data::SKELETONS[combat_data::CREATURES[combat_data::CREATURE_LUNGE].skeletonIdx].firstPart, "cache bodyFirst");
+        t.assert(g.combat.bodyCount, 1, "cache bodyCount");
+        t.assert(g.combat.body.w, 32, "cache body box w");
+        t.assert(g.combat.body.h, 24, "cache body box h");
         t.assert(g.combat.stages, 0, "stages start intact");
         t.assert(g.combat.patternIdx, 0, "pattern cursor reset");
         t.assert(g.combat.stepIdx, 0, "step cursor reset");

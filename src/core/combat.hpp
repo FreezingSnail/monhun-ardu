@@ -23,7 +23,7 @@
 // reuse the same read layer.
 //
 // Cache budget (docs section 9): CombatProfile 22 B + CombatAttackCache 21 B +
-// runtime 7 B = 50 B on AVR.
+// body box 4 B + hurtbox-list head 2 B + runtime 7 B = 56 B on AVR.
 
 #include <stddef.h>
 #include <stdint.h>
@@ -124,6 +124,13 @@ struct CombatStage {
 
 struct CombatAnchor {
     int8_t ox, oy;
+};
+
+// Spawn-scalar projection (migration B): the creature record fields initMonster
+// needs beyond the body box. Read as one burst at spawn.
+struct CombatSpawn {
+    uint16_t hp, x, y;
+    uint8_t spd;
 };
 
 struct CombatElem {
@@ -247,10 +254,14 @@ static_assert(sizeof(PkPattern) == combat::PATTERN_SIZE, "pattern ABI drift");
 static_assert(sizeof(PkGuard) == combat::GUARD_SIZE, "guard ABI drift");
 static_assert(sizeof(PkPredicate) == combat::PREDICATE_SIZE, "predicate ABI drift");
 static_assert(sizeof(PkStep) == combat::STEP_SIZE, "step ABI drift");
+// Packed-pair reads (migration B): combatSkeletonHeadRead and combatPartBoxRead
+// read adjacent bytes as one u16, so these pairs must stay contiguous.
+static_assert(offsetof(PkSkeleton, partCount) == offsetof(PkSkeleton, firstPart) + 1, "skeleton head pair must stay adjacent");
+static_assert(offsetof(PkPart, boxW) == offsetof(PkPart, boxOx) + 2, "part box pairs must stay adjacent");
 static_assert(sizeof(CombatProfile) == 22, "profile cache must stay 22 B");
 static_assert(sizeof(CombatWindow) == 9, "window cache must stay 9 B");
 static_assert(sizeof(CombatAttackCache) == 21, "attack cache must stay 21 B");
-static_assert(sizeof(CombatState) == 50, "CombatState must stay 50 B");
+static_assert(sizeof(CombatState) == 56, "CombatState must stay 56 B (body box + hurtbox-list head added in migration B)");
 
 // Fake cart pointer: the blob lives below 64 KB (generator hard-fails above).
 inline uint16_t combatCartAddr(uint16_t off) {
@@ -302,6 +313,28 @@ inline uint8_t combatCreatureFirstAttack(uint8_t i) {
     return combatReadU8(static_cast<uint16_t>(combat::CREATURES_OFF + i * combat::CREATURE_SIZE + MH_COMBAT_FIELD(detail::PkCreature, firstAttack)));
 }
 
+inline uint8_t combatCreatureSkeletonIdx(uint8_t i) {
+    return combatReadU8(static_cast<uint16_t>(combat::CREATURES_OFF + i * combat::CREATURE_SIZE + MH_COMBAT_FIELD(detail::PkCreature, skeletonIdx)));
+}
+
+inline uint8_t combatCreatureFirstPart(uint8_t i) {
+    return combatReadU8(static_cast<uint16_t>(combat::CREATURES_OFF + i * combat::CREATURE_SIZE + MH_COMBAT_FIELD(detail::PkCreature, firstPart)));
+}
+
+inline uint8_t combatCreaturePartCount(uint8_t i) {
+    return combatReadU8(static_cast<uint16_t>(combat::CREATURES_OFF + i * combat::CREATURE_SIZE + MH_COMBAT_FIELD(detail::PkCreature, partCount)));
+}
+
+inline CombatSpawn combatCreatureSpawnRead(uint8_t i) {
+    const uint16_t b = static_cast<uint16_t>(combat::CREATURES_OFF + i * combat::CREATURE_SIZE);
+    CombatSpawn v;
+    v.spd = combatReadU8(b + MH_COMBAT_FIELD(detail::PkCreature, spd));
+    v.hp = combatReadU16(b + MH_COMBAT_FIELD(detail::PkCreature, hp));
+    v.x = combatReadU16(b + MH_COMBAT_FIELD(detail::PkCreature, spawnX));
+    v.y = combatReadU16(b + MH_COMBAT_FIELD(detail::PkCreature, spawnY));
+    return v;
+}
+
 inline CombatProfile combatProfileRead(uint8_t i) {
     const uint16_t b = static_cast<uint16_t>(combat::PROFILES_OFF + i * combat::PROFILE_SIZE);
     CombatProfile v;
@@ -331,6 +364,33 @@ inline CombatSkeleton combatSkeletonRead(uint8_t i) {
     v.partCount = combatReadU8(b + MH_COMBAT_FIELD(detail::PkSkeleton, partCount));
     v.firstAnchor = combatReadU8(b + MH_COMBAT_FIELD(detail::PkSkeleton, firstAnchor));
     v.anchorCount = combatReadU8(b + MH_COMBAT_FIELD(detail::PkSkeleton, anchorCount));
+    return v;
+}
+
+inline uint8_t combatSkeletonFirstPart(uint8_t i) {
+    return combatReadU8(static_cast<uint16_t>(combat::SKELETONS_OFF + i * combat::SKELETON_SIZE + MH_COMBAT_FIELD(detail::PkSkeleton, firstPart)));
+}
+
+inline uint8_t combatSkeletonPartCount(uint8_t i) {
+    return combatReadU8(static_cast<uint16_t>(combat::SKELETONS_OFF + i * combat::SKELETON_SIZE + MH_COMBAT_FIELD(detail::PkSkeleton, partCount)));
+}
+
+// Packed firstPart | partCount<<8: the two adjacent bytes in one cart access
+// (spawn burst).
+inline uint16_t combatSkeletonHeadRead(uint8_t i) {
+    return combatReadU16(static_cast<uint16_t>(combat::SKELETONS_OFF + i * combat::SKELETON_SIZE + MH_COMBAT_FIELD(detail::PkSkeleton, firstPart)));
+}
+
+inline CombatBox combatPartBoxRead(uint8_t i) {
+    // boxOx/boxOy and boxW/boxH are adjacent byte pairs: two cart accesses.
+    const uint16_t b = static_cast<uint16_t>(combat::PARTS_OFF + i * combat::PART_SIZE);
+    const uint16_t o = combatReadU16(b + MH_COMBAT_FIELD(detail::PkPart, boxOx));
+    const uint16_t w = combatReadU16(b + MH_COMBAT_FIELD(detail::PkPart, boxW));
+    CombatBox v;
+    v.ox = static_cast<int8_t>(o & 0xFF);
+    v.oy = static_cast<int8_t>(o >> 8);
+    v.w = static_cast<uint8_t>(w & 0xFF);
+    v.h = static_cast<uint8_t>(w >> 8);
     return v;
 }
 
@@ -577,6 +637,28 @@ inline uint8_t combatCreatureFirstAttack(uint8_t i) {
     return combat_data::CREATURES[i].firstAttack;
 }
 
+inline uint8_t combatCreatureSkeletonIdx(uint8_t i) {
+    return combat_data::CREATURES[i].skeletonIdx;
+}
+
+inline uint8_t combatCreatureFirstPart(uint8_t i) {
+    return combat_data::CREATURES[i].firstPart;
+}
+
+inline uint8_t combatCreaturePartCount(uint8_t i) {
+    return combat_data::CREATURES[i].partCount;
+}
+
+inline CombatSpawn combatCreatureSpawnRead(uint8_t i) {
+    const combat_data::Creature &c = combat_data::CREATURES[i];
+    CombatSpawn v;
+    v.spd = c.spd;
+    v.hp = c.hp;
+    v.x = c.spawnX;
+    v.y = c.spawnY;
+    return v;
+}
+
 inline CombatProfile combatProfileRead(uint8_t i) {
     const combat_data::Profile &p = combat_data::PROFILES[i];
     CombatProfile v;
@@ -607,6 +689,29 @@ inline CombatSkeleton combatSkeletonRead(uint8_t i) {
     v.firstAnchor = s.firstAnchor;
     v.anchorCount = s.anchorCount;
     return v;
+}
+
+inline uint8_t combatSkeletonFirstPart(uint8_t i) {
+    return combat_data::SKELETONS[i].firstPart;
+}
+
+inline uint8_t combatSkeletonPartCount(uint8_t i) {
+    return combat_data::SKELETONS[i].partCount;
+}
+
+inline CombatBox combatPartBoxRead(uint8_t i) {
+    const combat_data::Part &p = combat_data::PARTS[i];
+    CombatBox v;
+    v.ox = p.box.ox;
+    v.oy = p.box.oy;
+    v.w = p.box.w;
+    v.h = p.box.h;
+    return v;
+}
+
+inline uint16_t combatSkeletonHeadRead(uint8_t i) {
+    const combat_data::Skeleton &s = combat_data::SKELETONS[i];
+    return static_cast<uint16_t>(static_cast<uint16_t>(s.firstPart) | (static_cast<uint16_t>(s.partCount) << 8));
 }
 
 inline CombatPart combatPartRead(uint8_t i) {
@@ -822,6 +927,33 @@ inline CombatStep combatStepRead(uint8_t i) {
 
 #endif   // __AVR__
 
+// ------------------------------------------------------ body box (migration B)
+// combatCreatureBodyBox: the creature's hurt/collide box is its skeleton's
+// first body part (docs sections 4/11; per-creature overrides add parts, not a
+// replacement body). Also returns the skeleton's part list head, so a spawn
+// burst reads skeletonIdx/firstPart/partCount once. Bad ids fall back to
+// creature 0 like creatureLoad. Returns false (outputs untouched) when the
+// skeleton declares no parts.
+inline bool combatCreatureBodyBox(uint8_t creatureId, CombatBox &box, uint8_t &firstPart, uint8_t &partCount) {
+    if (creatureId >= combat::CREATURES_COUNT)
+        creatureId = 0;
+    const uint8_t skeletonIdx = combatCreatureSkeletonIdx(creatureId);
+    const uint16_t head = combatSkeletonHeadRead(skeletonIdx);
+    const uint8_t count = static_cast<uint8_t>(head >> 8);
+    if (count == 0)
+        return false;
+    firstPart = static_cast<uint8_t>(head & 0xFF);
+    partCount = count;
+    box = combatPartBoxRead(firstPart);
+    return true;
+}
+
+// Convenience for callers that only need the box (loader tests, render).
+inline bool combatCreatureBodyBox(uint8_t creatureId, CombatBox &box) {
+    uint8_t firstPart, partCount;
+    return combatCreatureBodyBox(creatureId, box, firstPart, partCount);
+}
+
 // ======================================================= cache lifecycle
 // creatureCacheReset: identity + runtime caches with no record reads. Migration
 // A spawn (initMonster) uses this: attacks only need the creature index (whose
@@ -829,6 +961,9 @@ inline CombatStep combatStepRead(uint8_t i) {
 // out of shipping flash until the pattern interpreter lands (migration C).
 inline void creatureCacheReset(Game &g, uint8_t creatureId) {
     g.combat.creature = creatureId;
+    g.combat.body = CombatBox{0, 0, 0, 0};
+    g.combat.bodyFirst = 0;
+    g.combat.bodyCount = 0;
     g.combat.stages = 0;
     g.combat.patternIdx = 0;
     g.combat.stepIdx = 0;
@@ -847,6 +982,9 @@ inline uint8_t creatureLoad(Game &g, uint8_t creatureId) {
     const uint8_t profileIdx = combatCreatureProfileIdx(creatureId);
     creatureCacheReset(g, creatureId);
     g.combat.profile = combatProfileRead(profileIdx);
+    // Migration B: the hurtbox-list head (skeleton parts) + body box cache, so
+    // a loader-only caller resolves hits without extra cart reads.
+    combatCreatureBodyBox(creatureId, g.combat.body, g.combat.bodyFirst, g.combat.bodyCount);
     return creatureId;
 }
 
@@ -1229,6 +1367,45 @@ inline CombatHitResult combatResolveHit(const Game &g, int32_t base, uint8_t phy
     r.bodyDmg = (body > 0xFFFFu) ? 0xFFFFu : static_cast<uint16_t>(body);
     const uint32_t stag = combatMulPercent(attackStagger, static_cast<uint8_t>(bestMul > 255u ? 255u : bestMul));
     r.stagger = (stag > 255u) ? 255u : static_cast<uint8_t>(stag);
+    return r;
+}
+
+// Shipping body-hit result (migration B): small enough to return in registers
+// on AVR. dmg is the routed damage; mul the winning multiplier percent.
+struct CombatBodyHit {
+    uint8_t partIdx;   // COMBAT_NO_PART when no candidate was hurtable
+    uint8_t mul;
+    uint16_t dmg;
+};
+
+// combatResolveBodyHit: resolve a landed player attack against the creature's
+// hurtbox list. The list head (skeleton parts) is cached at spawn; per-creature
+// override parts merge into it when a creature carries them (none do today --
+// combatAttackDisabled already walks both lists for attack gating). The caller
+// has already gated overlap against the RAM Target::rect, so the cached list is
+// the candidate set.
+//
+// Shipping hit-time path (migration B): two FX reads (hurtOn, dmgMul) on a
+// landed hit only, never per tick. The shipped 3 declare exactly one body part
+// per skeleton, so the cached head is the winning candidate; the per-part
+// selection rule (highest final multiplier, tie -> lowest part id) lands with
+// the first multi-part creature. Every shipped multiplier is 100, so the
+// damage result is the base value unchanged; combatResolveHit above is the
+// stage-aware reference path that applies the section-3 chain and is exercised
+// by the host/device loader suites.
+inline CombatBodyHit combatResolveBodyHit(const Game &g, int32_t base) {
+    CombatBodyHit r;
+    r.partIdx = COMBAT_NO_PART;
+    r.mul = 0;
+    r.dmg = 0;
+
+    const uint8_t partIdx = g.combat.bodyFirst;
+    if (g.combat.bodyCount == 0 || partIdx >= combat::PARTS_COUNT || !combatPartHurtOn(partIdx))
+        return r;
+
+    r.partIdx = partIdx;
+    r.mul = combatPartDmgMul(partIdx);
+    r.dmg = (base <= 0) ? 0 : ((base > 0xFFFF) ? 0xFFFF : static_cast<uint16_t>(base));
     return r;
 }
 

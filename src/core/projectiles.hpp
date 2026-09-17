@@ -224,7 +224,7 @@ static void updateProjectiles(Game &g) {
                 if (g.mode == MODE_TRAIN)
                     damagePole(g, pr.dmg, hx, hy);
                 else
-                    damageMonster(g, pr.dmg, hx, hy);
+                    monsterOnHit(g, pr.dmg, hx, hy, 0, 0);   // migration B: parts resolve
                 removeProjectile(g, i);
                 continue;
             }

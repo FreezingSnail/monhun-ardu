@@ -111,13 +111,17 @@ void MonsterSuite(TestRunner &runner) {
     }
 
     {
-        Test t("initMonster(kind): size/hp/spd from def, legacy fields intact");
+        Test t("initMonster(kind): box + stats from blob (migration B), legacy fields intact");
         Game g;
         newGame(g, W_SWORD, MODE_HUNT, MON_SWEEP);
         Monster &m = g.monster;
         t.assert(g.monsterKind, MON_SWEEP, "kind recorded");
         t.assert(m.w, 28, "sweep width");
         t.assert(m.h, 22, "sweep height");
+        t.assert(g.combat.body.w, 28, "sweep cached box w");
+        t.assert(g.combat.body.h, 22, "sweep cached box h");
+        t.assert(g.combat.body.ox, 0, "sweep cached box ox");
+        t.assert(g.combat.body.oy, 0, "sweep cached box oy");
         t.assert(m.hp, 150, "sweep hp");
         t.assert(m.hpMax, 150, "sweep hpMax");
         t.assert(m.spd, 7, "sweep pursue speed");
@@ -129,13 +133,18 @@ void MonsterSuite(TestRunner &runner) {
         t.assert(m.fy, 0, "facing flat");
         t.assert(m.circleDir, 1, "circle dir right");
         t.assert(m.state, MS_IDLE, "starts idle");
-        t.assert(g.target.rect.w, 28, "hurt box synced");
+        t.assert(g.target.rect.w, 28, "hurt box synced from box");
+        t.assert(g.target.rect.h, 22, "hurt box height from box");
+        t.assert(g.target.rect.x, m.x, "hurt box x at box origin");
+        t.assert(g.target.rect.y, m.y, "hurt box y at box origin");
 
         Game g2;
         newGame(g2, W_SWORD, MODE_HUNT, MON_HEAVY);
         t.assert(g2.monsterKind, MON_HEAVY, "heavy kind recorded");
         t.assert(g2.monster.w, 40, "heavy width");
         t.assert(g2.monster.h, 28, "heavy height");
+        t.assert(g2.combat.body.w, 40, "heavy cached box w");
+        t.assert(g2.combat.body.h, 28, "heavy cached box h");
         t.assert(g2.monster.hp, 320, "heavy hp");
         t.assert(g2.monster.spd, 3, "heavy speed");
 
@@ -143,8 +152,30 @@ void MonsterSuite(TestRunner &runner) {
         newGame(g3, W_SWORD, MODE_HUNT);   // default kind 0 = legacy beast
         t.assert(g3.monsterKind, MON_LUNGE, "default kind 0");
         t.assert(g3.monster.w, 32, "legacy width");
+        t.assert(g3.combat.body.w, 32, "legacy cached box w");
+        t.assert(g3.combat.body.h, 24, "legacy cached box h");
         t.assert(g3.monster.hp, 200, "legacy hp");
         t.assert(g3.monster.spd, 5, "legacy speed");
+        suite.addTest(t);
+    }
+
+    {
+        Test t("body box is the skeleton part box; player hits route through it");
+        Game g;
+        newHunt(g);
+        // Cached box == the blob's skeleton body part for this creature.
+        CombatBox expected;
+        t.assert(combatCreatureBodyBox(monsterCreatureId(MON_LUNGE), expected), 1, "lunge body box readable");
+        t.assert(g.combat.body.w, expected.w, "cached box w from skeleton");
+        t.assert(g.combat.body.h, expected.h, "cached box h from skeleton");
+        t.assert(g.combat.bodyFirst, combatSkeletonFirstPart(combatCreatureSkeletonIdx(g.combat.creature)), "cached hurtbox list head");
+        t.assert(g.combat.bodyCount, 1, "cached hurtbox list count");
+        // A landed melee hit resolves the part; all multipliers are 100, so the
+        // part damage equals the raw attack damage.
+        const CombatBodyHit r = combatResolveBodyHit(g, 12);
+        const uint8_t skeletonIdx = combatCreatureSkeletonIdx(g.combat.creature);
+        t.assert(r.partIdx, combatSkeletonFirstPart(skeletonIdx), "resolved body part idx");
+        t.assert(r.dmg, 12, "part damage unchanged");
         suite.addTest(t);
     }
 
