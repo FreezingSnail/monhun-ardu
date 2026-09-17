@@ -9,6 +9,11 @@ raw_t mhWeaponDefs = "tables/weapondefs.bin"
 raw_t mhMonsterAttacks = "tables/monsterattacks.bin"
 raw_t mhMonsterDefs = "tables/monsterdefs.bin"
 
+// Quarter-wave sine table (bead monhun-ardu-ept): 65 B moved off MCU flash.
+// Emitted by tools/gen-fxtables.cpp from the host SIN65 array; read on device
+// through mhFxReadI8 (render pass only, between plane blits).
+raw_t mhSin65 = "tables/sin65.bin"
+
 // Creature combat blob (bead monhun-ardu-ljj.1): data/skeletons.json +
 // data/creatures/*.json compiled by tools/gen-combat.py into the layout from
 // docs/creature-framework.md section 8 (header + fixed-size record arrays,

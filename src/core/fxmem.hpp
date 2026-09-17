@@ -41,6 +41,7 @@ extern uint16_t mhFxReadCount;
 constexpr uint16_t MH_FX_WEAPON_DEFS_ADDR = static_cast<uint16_t>(mhWeaponDefs);
 constexpr uint16_t MH_FX_MONSTER_ATTACKS_ADDR = static_cast<uint16_t>(mhMonsterAttacks);
 constexpr uint16_t MH_FX_MONSTER_DEFS_ADDR = static_cast<uint16_t>(mhMonsterDefs);
+constexpr uint16_t MH_FX_SIN65_ADDR = static_cast<uint16_t>(mhSin65);   // 65 B quarter-wave sine (monhun-ardu-ept)
 
 // Typed field readers. The address is a fake pointer into the FX image; the
 // value is fetched as little-endian bytes, matching the packed AVR struct

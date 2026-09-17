@@ -210,8 +210,8 @@
     },
     {
       "path": "fxdata/fxdata.txt",
-      "sha256": "214552df97600213849bcf32ea831145643371e00b601be21be187e7befd8757",
-      "size": 843
+      "sha256": "c938bf338b333a2e96efd7140064b64f9d8e61922c0f647a23844dbefc818b44",
+      "size": 1098
     },
     {
       "path": "fxdata/menu/Sprites.txt",
@@ -241,6 +241,12 @@
       "symbol": "mhMonsterDefs"
     },
     {
+      "path": "fxdata/tables/sin65.bin",
+      "sha256": "e02d332986eb46168ede1a0c58548183c3de5195d43d5fd0683ea61064d374bc",
+      "size": 65,
+      "symbol": "mhSin65"
+    },
+    {
       "path": "fxdata/tables/weapondefs.bin",
       "sha256": "498d362c9cbbad5512d8d9e9238340b3fe8b8352b9acaf09c600ce525f87591b",
       "size": 540,
@@ -250,18 +256,18 @@
   "outputs": [
     {
       "path": "fxdata/fxdata-data.bin",
-      "sha256": "51aac5612391dbe15054bd0f99ce802db9ac6d87b713deab5b2ad2e9114faa4c",
-      "size": 30604
+      "sha256": "83943aec1808243940c96635c081d2a1563725e8b5376e67e08b53fd3a414f9c",
+      "size": 30669
     },
     {
       "path": "fxdata/fxdata.bin",
-      "sha256": "d8d218bb7982293977ec872bd71139df8ee82424caf5cfc4e34f89dc3e7b6da5",
+      "sha256": "ea513886b0c5c91914d06fd969be174bf75d4f9dd8e28998a2a738b59600145e",
       "size": 30720
     },
     {
       "path": "fxdata/fxdata.h",
-      "sha256": "2163f9dea81ed92b510adfe33691692681b8578b526d52d61008364d5923b8c4",
-      "size": 1304
+      "sha256": "afd3f77a11a4aec53263e4eb8ed0ef5d8e998f6d67600b948ec80f634b7a3068",
+      "size": 1343
     },
     {
       "path": "fxdata/tables/combat.bin",
@@ -270,8 +276,8 @@
     },
     {
       "path": "src/fxdata.h",
-      "sha256": "2163f9dea81ed92b510adfe33691692681b8578b526d52d61008364d5923b8c4",
-      "size": 1304
+      "sha256": "afd3f77a11a4aec53263e4eb8ed0ef5d8e998f6d67600b948ec80f634b7a3068",
+      "size": 1343
     },
     {
       "path": "src/generated/art_dims.hpp",

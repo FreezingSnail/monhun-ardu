@@ -10,6 +10,7 @@
 // Usage: gen-fxtables [outdir]   (default: fxdata/tables)
 
 #include "../src/core/game.hpp"
+#include "../src/core/sin256.hpp"   // host SIN65 array (monhun-ardu-ept blob source)
 
 #include <stdint.h>
 #include <stdio.h>
@@ -26,6 +27,7 @@ namespace {
 constexpr size_t WEAPON_DEFS_BYTES = 540;
 constexpr size_t MONSTER_ATTACKS_BYTES = 34;
 constexpr size_t MONSTER_DEFS_BYTES = 44;
+constexpr size_t SIN65_BYTES = 65;
 
 std::vector<uint8_t> g_bytes;
 
@@ -166,7 +168,13 @@ int main(int argc, char **argv) {
     require(g_bytes.size() == MONSTER_DEFS_BYTES, "monsterdefs total");
     writeFile(outDir + "monsterdefs.bin", g_bytes);
 
-    printf("gen-fxtables: %sweapondefs.bin (%zu B), %smonsterattacks.bin (%zu B), %smonsterdefs.bin (%zu B)\n", outDir.c_str(), WEAPON_DEFS_BYTES, outDir.c_str(), MONSTER_ATTACKS_BYTES,
-           outDir.c_str(), MONSTER_DEFS_BYTES);
+    g_bytes.clear();
+    for (size_t i = 0; i < SIN65_BYTES; i++)
+        g_bytes.push_back(static_cast<uint8_t>(SIN65[i]));
+    require(g_bytes.size() == SIN65_BYTES, "sin65 total");
+    writeFile(outDir + "sin65.bin", g_bytes);
+
+    printf("gen-fxtables: %sweapondefs.bin (%zu B), %smonsterattacks.bin (%zu B), %smonsterdefs.bin (%zu B), %ssin65.bin (%zu B)\n", outDir.c_str(), WEAPON_DEFS_BYTES, outDir.c_str(),
+           MONSTER_ATTACKS_BYTES, outDir.c_str(), MONSTER_DEFS_BYTES, outDir.c_str(), SIN65_BYTES);
     return 0;
 }
