@@ -658,13 +658,17 @@ static int16_t hudNum(int16_t x, int32_t v, uint8_t digits) {
 }
 
 // Mock bar(): dark back/border, inner fill width round((w-2) * ratio).
+// uint16 arithmetic: (w-2) <= 44 and den <= 320 (generated hp/stam maxima), so
+// the product fits int16 with room to spare; keeps the 32-bit divide helper
+// out of the image.
 static void hudBar(int32_t x, int32_t y, int32_t w, int32_t h, int32_t num, int32_t den, uint8_t shade) {
     hudBlk(x, y, w, h, 1);
     if (den <= 0 || num <= 0)
         return;
     if (num > den)
         num = den;
-    int32_t fw = ((w - 2) * num + den / 2) / den;
+    const uint16_t u16den = static_cast<uint16_t>(den);
+    uint16_t fw = static_cast<uint16_t>(((static_cast<uint16_t>(w - 2) * static_cast<uint16_t>(num)) + u16den / 2) / u16den);
     if (fw > w - 2)
         fw = w - 2;
     if (fw > 0)
@@ -710,7 +714,9 @@ static void drawHud(const mh::Game &g) {
             const mh::ShellDef *sh = mh::weaponShell(&mh::WEAPON_DEFS[g.weapon], p.shell);
             const int16_t rmax = mh::shellReload(sh);
             if (rmax > 0) {
-                int32_t bw = (12 * (rmax - p.reload) + rmax / 2) / rmax;
+                // uint16 narrowing: rmax <= 70 (generated shell data).
+                const uint16_t u16rmax = static_cast<uint16_t>(rmax);
+                uint16_t bw = static_cast<uint16_t>((12 * (u16rmax - static_cast<uint16_t>(p.reload)) + u16rmax / 2) / u16rmax);
                 if (bw < 1)
                     bw = 1;
                 else if (bw > 12)
