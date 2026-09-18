@@ -10,6 +10,10 @@
  *   1/2/3 = sword / flail / gunshield (restarts hunt). Q = swap shell.
  *   H = wireframe: red = hurt box, blue = hit box. T = slow motion, P = pause, R = reset.
  *   K = train area with pole dummy + damage numbers + DPS readout.
+ *   [ / ] = cycle the sheathe-input prototype (default DOWN,DOWN then A+B).
+ *   While stowed the hunter runs at SHEATHE_SPD and A draws into combo hit 1.
+ *   , / . = cycle the combo-debounce profile (browser default HEAVY; HUD
+ *   shows the active lock and countdown).
  *
  * Hardware note: all gameplay math is integer / fixed point, matching what
  * the Arduboy can do. Positions are int pixels, sub-pixel remainders live in
@@ -34,6 +38,86 @@ const WORLD_W = 256;
 const WORLD_H = 112;
 const TICK_MS = 1000 / 60;
 const HOLD_TICKS = 11; // B held this long -> stance (~180ms)
+
+/* ---------------------------------------------- sheathe input prototype
+ * The stow combo is playtest-configurable: press [ / ] in the browser to
+ * cycle variants and read the active one in the top-right HUD. Grammar
+ * candidates (d-pad tap sequence + A/B):
+ *   ab    A+B chord (3t grace). NOTE: collides with stance+A special (A while
+ *         B held), so it stows before the stance special can fire.
+ *   dab   tap Down, then A+B chord within SHEATHE_SEQ_WIN (the requested idea)
+ *   ddab  double-tap Down, then A+B chord
+ *   db    tap Down, then tap B
+ *   dbh   hold Down + hold B to the stance threshold (replaces stance-south)
+ *   dabhold  hold Down + A + B together for SHEATHE_HOLD_TICKS; the A press is
+ *         deferred by CHORD_WIN so B can join (down+A still attacks otherwise)
+ * A combo is only evaluated while the weapon is drawn; when stowed, A is the
+ * draw attack and the combo does nothing.
+ */
+const SHEATHE_SEQ_WIN = 18; // d-pad tap -> chord window (~300ms)
+const CHORD_WIN = 3;        // A/B chord grace (~50ms)
+const SHEATHE_HOLD_TICKS = 8; // Down+A+B must be held this long (~130ms)
+const SHEATHE_SPD = 24;     // 1/16 px per tick while stowed (1.5 px/t run)
+const B_BUFFER = 36;        // B branch tap buffer: bridges recovery + debounce lock
+const A_BUFFER = 10;        // attack input buffer, original (OFF profile)
+const A_BUFFER_DEBOUNCE = 16; // wider buffer under debounce (covers the gap locks)
+const CHARGE_MIN = 14;      // A held this long past the swing -> charge stance
+const CHARGE_L2 = 20;       // extra charge ticks for level 2 (flash on the bar)
+const SHEATHE_VARIANTS = ['ab', 'dab', 'ddab', 'db', 'dbh', 'dabhold'];
+let sheatheVariant = 2;     // default ddab (double-tap down, then A+B)
+
+function getSheatheVariant() {
+  return SHEATHE_VARIANTS[sheatheVariant];
+}
+
+function setSheatheVariant(v) {
+  if (typeof v === 'number' && isFinite(v)) {
+    const n = SHEATHE_VARIANTS.length;
+    sheatheVariant = ((v | 0) % n + n) % n;
+  } else {
+    const i = SHEATHE_VARIANTS.indexOf(v);
+    if (i >= 0) sheatheVariant = i;
+  }
+  return SHEATHE_VARIANTS[sheatheVariant];
+}
+
+/* --------------------------------------------- combo debounce prototype
+ * Recovery after a combo: a completed combo attack locks the next A for
+ * `gap` ticks, the finisher (3rd hit) for `fin` ticks. The chain window only
+ * opens when the lock ends, so one press made too early is dropped and mash
+ * gets a forced beat. Press , / . to cycle profiles; HUD shows the lock.
+ * Module default is OFF so the parity fixtures stay byte-identical until the
+ * tuned profile is ported; boot() arms HEAVY for the browser playtest.
+ */
+const DEBOUNCE_PROFILES = [
+  { name: 'OFF', gap: 0, fin: 0 },
+  { name: 'LIGHT', gap: 3, fin: 12 },
+  { name: 'MED', gap: 6, fin: 18 },
+  { name: 'HEAVY', gap: 9, fin: 24 },
+  { name: 'BRUTAL', gap: 14, fin: 36 },
+];
+let debounceProfile = 0;
+
+function getDebounceProfile() {
+  return DEBOUNCE_PROFILES[debounceProfile];
+}
+
+function setDebounceProfile(v) {
+  if (typeof v === 'number' && isFinite(v)) {
+    const n = DEBOUNCE_PROFILES.length;
+    debounceProfile = ((v | 0) % n + n) % n;
+  } else if (typeof v === 'string') {
+    const i = DEBOUNCE_PROFILES.findIndex((p) => p.name === v.toUpperCase());
+    if (i >= 0) debounceProfile = i;
+  }
+  return DEBOUNCE_PROFILES[debounceProfile];
+}
+
+// Attack input buffer: the original 10 ticks when OFF, wider under debounce so
+// one loose press still survives the gap lock (BRUTAL gap is 14).
+function aBufferTicks() {
+  return getDebounceProfile().gap > 0 ? A_BUFFER_DEBOUNCE : A_BUFFER;
+}
 
 /* ------------------------------------------------- fixed point constants */
 
@@ -152,9 +236,14 @@ const WEAPON_DEFS = [
       { startup: 5, active: 6, recover: 14, dmg: 17, reach: 16, hw: 18, hh: 14, stam: 15 },
     ],
     special: { startup: 4, active: 6, recover: 16, dmg: 24, reach: 18, hw: 20, hh: 16, stam: 20 },
+    // roll attack: A out of a dodge (tier-1 move-set expansion)
+    roll: { id: 'rollslash', startup: 4, active: 5, recover: 10, dmg: 12, reach: 15, hw: 16, hh: 14, stam: 10 },
+    // direction + A: forward thrust opener (combo hit 1 replacement)
+    alt: { id: 'thrust', startup: 6, active: 4, recover: 12, dmg: 14, reach: 22, hw: 10, hh: 10, stam: 12, lunge: 20 },
     branches: [
       { stage: 1, atk: { id: 'stepslash', startup: 3, active: 5, recover: 12, dmg: 12, reach: 18, hw: 14, hh: 12, stam: 10, lunge: 42 } },
       { stage: 2, atk: { id: 'spincut', startup: 5, active: 7, recover: 15, dmg: 20, reach: 12, hw: 28, hh: 26, stam: 16 } },
+      { stage: 3, atk: { id: 'helmsplit', startup: 8, active: 4, recover: 20, dmg: 26, reach: 16, hw: 20, hh: 22, stam: 18 } },
     ],
     canCancel: true,
   },
@@ -168,9 +257,17 @@ const WEAPON_DEFS = [
       { startup: 5, active: 7, recover: 15, dmg: 25, reach: 24, hw: 24, hh: 20, stam: 17 },
     ],
     special: { startup: 4, active: 8, recover: 14, dmg: 27, reach: 32, hw: 14, hh: 18, stam: 22 },
+    roll: { id: 'rollsweep', startup: 4, active: 6, recover: 13, dmg: 15, reach: 20, hw: 24, hh: 16, stam: 10 },
+    alt: { id: 'widesweep', startup: 6, active: 6, recover: 14, dmg: 18, reach: 22, hw: 30, hh: 14, stam: 14 },
+    // held A past the swing -> power swing; level 2 trips the beast
+    charge: [
+      { id: 'chargeslam1', startup: 4, active: 6, recover: 14, dmg: 24, reach: 26, hw: 28, hh: 18, stam: 14 },
+      { id: 'chargeslam2', startup: 5, active: 8, recover: 20, dmg: 36, reach: 28, hw: 34, hh: 24, stam: 22, effect: 'trip' },
+    ],
     branches: [
       { stage: 1, stance: 'whirl', auto: 50 },
       { stage: 2, atk: { id: 'trip', startup: 5, active: 6, recover: 16, dmg: 12, reach: 22, hw: 22, hh: 14, stam: 14, effect: 'trip' } },
+      { stage: 3, atk: { id: 'earthslam', startup: 10, active: 6, recover: 24, dmg: 32, reach: 24, hw: 32, hh: 24, stam: 24, effect: 'trip', push: 12 } },
     ],
     canCancel: false,
   },
@@ -186,12 +283,21 @@ const WEAPON_DEFS = [
     branches: [
       { stage: 1, atk: { id: 'pointblank', startup: 4, active: 5, recover: 16, dmg: 22, reach: 15, hw: 18, hh: 16, stam: 6, shell: true } },
       { stage: 2, atk: { id: 'guardbash', startup: 4, active: 4, recover: 12, dmg: 9, reach: 14, hw: 16, hh: 14, stam: 8, push: 12 } },
+      { stage: 3, atk: { id: 'cannonblast', startup: 6, active: 3, recover: 20, dmg: 30, reach: 16, hw: 24, hh: 18, stam: 16, push: 16 } },
     ],
     canCancel: true,
     shells: {
       ball: { name: 'BALL', count: 2, dmg: 28, speedF: 35, w: 7, h: 6, reload: 70, stam: 6 },
       scatter: { name: 'SCAT', count: 5, dmg: 7, speedF: 42, w: 4, h: 4, reload: 30, pellets: 3, stam: 5 },
     },
+    // shield bash out of a roll: carries the hunter forward (lunge 30)
+    roll: { id: 'shieldbash', startup: 3, active: 4, recover: 12, dmg: 8, reach: 14, hw: 16, hh: 14, stam: 8, push: 10, lunge: 30 },
+    alt: { id: 'shieldcharge', startup: 4, active: 5, recover: 14, dmg: 10, reach: 15, hw: 18, hh: 16, stam: 9, push: 14, lunge: 18 },
+    // held A past the bash -> charged ball (bigger, faster; demo ammo unlimited)
+    chargeShells: [
+      { dmg: 34, speedF: 45, w: 7, h: 6, reload: 70, stam: 12, pellets: 1 },
+      { dmg: 46, speedF: 55, w: 8, h: 8, reload: 70, stam: 18, pellets: 1 },
+    ],
   },
 ];
 
@@ -340,6 +446,14 @@ function newGame(weaponIndex, mode, monsterIndex = 0) {
       hp: 100, hpMax: 100, stam: 100, stamMax: 100, stamSub: 0,
       state: 'idle', t: 0, atk: null, hitDone: false,
       chain: 0, chainWin: 0, aBuffer: 0,
+      // sheathe prototype: stowed flag, d-pad tap-sequence tracker + chord grace
+      sheathed: false, sheatheLatch: false,
+      seqDir: 0, seqT: 0, seq2: false, seqRel: false, chordT: 0, pMy: false,
+      triWait: 0, triT: 0,   // 'dabhold': deferred A press + held 3-button session
+      pA: false, aHold: 0, chargeT: 0, chargeArmed: false,   // charge attack
+      finWin: false,   // combo finisher done: the next B is the stage-3 branch
+      chainLock: 0,   // combo debounce prototype: ticks before A can chain again
+      bBuffer: 0,     // B branch tap buffer (set in recovery / during the lock)
       stance: null, stanceT: 0, stanceAuto: 0, whirlTick: 0,
       throwCd: 0, riposteT: 0,
       bHeld: 0, bReady: false, bLocked: false,
@@ -452,11 +566,51 @@ function updatePlayer(g, inp, aP, bP, bR) {
   if (p.throwCd > 0) p.throwCd--;
   if (p.reload > 0) p.reload--;
   if (p.riposteT > 0) p.riposteT--;
-  if (p.chainWin > 0) {
+  if (getDebounceProfile().gap > 0) {
+    // debounce on: recovery lock first, then the combo window. The window
+    // only ticks in idle, so a chained attack cannot expire its own chain.
+    if (p.chainLock > 0) {
+      p.chainLock--;
+      if (p.chainLock === 0) p.chainWin = 14;   // window opens after the recovery
+    } else if (p.chainWin > 0 && p.state === 'idle') {
+      p.chainWin--;
+      if (p.chainWin === 0) { p.chain = 0; p.finWin = false; }
+    }
+  } else if (p.chainWin > 0) {
     p.chainWin--;
-    if (p.chainWin === 0) p.chain = 0;
+    if (p.chainWin === 0) { p.chain = 0; p.finWin = false; }
   }
   if (p.aBuffer > 0) p.aBuffer--;
+
+  // A press/hold/release: charge attacks build after a swing while A is held
+  // (CHARGE_MIN), then release fires level 1 (or level 2 at CHARGE_L2).
+  const aR = !inp.a && p.pA;
+  p.pA = !!inp.a;
+  p.aHold = inp.a ? Math.min(255, p.aHold + 1) : 0;
+  if (aR) p.chargeArmed = false;
+
+  // sheathe prototype: d-pad tap sequence + chord grace, then the combo check
+  // (consumes the press pair so it cannot also attack/dodge/stance).
+  if (p.chordT > 0) p.chordT--;
+  if (p.seqT > 0) {
+    p.seqT--;
+    if (p.seqT === 0) { p.seqDir = 0; p.seq2 = false; p.seqRel = false; }
+  }
+  const myNow = inp.my > 0;
+  if (myNow && !p.pMy) {              // down press edge
+    if (p.seqDir === 1 && p.seqT > 0) p.seq2 = true;
+    p.seqDir = 1;
+    p.seqT = SHEATHE_SEQ_WIN;
+    p.seqRel = false;
+  }
+  if (!myNow && p.pMy && p.seqT > 0) p.seqRel = true;   // completed tap
+  p.pMy = myNow;
+
+  const sheatheConsumed = sheatheCombo(g, aP, bP, inp);
+  if (!sheatheConsumed) {
+    if (aP && !inp.b) p.chordT = CHORD_WIN;
+    if (bP && !inp.a) p.chordT = CHORD_WIN;
+  }
 
   const draining = p.stance === 'whirl' || p.stance === 'guard';
   if (!draining && p.stam < p.stamMax) {
@@ -464,36 +618,77 @@ function updatePlayer(g, inp, aP, bP, bR) {
     if (p.stamSub >= 16) { p.stamSub -= 16; p.stam = Math.min(p.stamMax, p.stam + 1); }
   }
 
-  // B: release speed picks tap defense vs hold stance
+  // B: release speed picks tap defense vs hold stance. A tap inside attack
+  // recovery or the debounce lock queues the A-B branch (B_BUFFER) so a loose
+  // A A B still combos; it fires when the branch window opens.
+  if (bP && !sheatheConsumed && getDebounceProfile().gap > 0) {
+    const a = p.atk;
+    const inRecovery = p.state === 'attack' && a && p.t >= a.startup + a.active;
+    const inLock = p.state === 'idle' && (p.chain > 0 || p.finWin) && p.chainLock > 0;
+    if (inRecovery || inLock) p.bBuffer = B_BUFFER;
+  }
   if (bP) { p.bHeld = 0; p.bReady = true; }
   if (inp.b && p.bReady) {
     p.bHeld++;
-    if (p.bHeld === HOLD_TICKS && !p.stance && !p.bLocked) enterStance(g, def);
+    if (p.bHeld === HOLD_TICKS && !p.stance && !p.bLocked && !p.sheatheLatch) {
+      if (getSheatheVariant() === 'dbh' && !p.sheathed && p.state === 'idle' && inp.my > 0) {
+        trySheathe(p);   // hold Down + B = stow instead of the south stance
+      } else {
+        enterStance(g, def);
+        p.bBuffer = 0;   // hold wins: drop any queued branch tap
+      }
+    }
   }
   if (bR) {
-    if (p.bHeld < HOLD_TICKS) {
-      if (!tryBranch(g, def, inp)) tapDefense(g, def, inp);
-    } else if (p.stance) {
-      exitStance(p);
+    if (!p.sheatheLatch) {
+      if (p.bHeld < HOLD_TICKS) {
+        if (!tryBranch(g, def, inp) && p.bBuffer === 0) tapDefense(g, def, inp);
+      } else if (p.stance) {
+        exitStance(p);
+        p.bBuffer = 0;
+      }
     }
     p.bReady = false;
     p.bHeld = 0;
     p.bLocked = false;
+    p.sheatheLatch = false;
   }
-
-  // A: attack / stance special
-  if (aP) {
-    if (p.stance) {
-      stanceSpecial(g, def);
-    } else if (p.state === 'idle' || p.chainWin > 0) {
-      startAttack(g, def);
+  if (p.bBuffer > 0 && !inp.b && !p.sheathed) {
+    if (tryBranch(g, def, inp)) {
+      p.bBuffer = 0;   // queued branch fired as soon as the window allowed
     } else {
-      p.aBuffer = 10;
+      p.bBuffer--;
     }
   }
-  if (p.aBuffer > 0 && (p.state === 'idle' || p.chainWin > 0)) {
+
+  // A: attack / stance special (while stowed: draw into combo hit 1).
+  // canAttackNow: the debounce profile attacks only from idle with no lock;
+  // OFF keeps the original chainWin path byte-for-byte (parity fixtures).
+  const canAttackNow =
+    p.chainLock === 0 &&
+    (getDebounceProfile().gap > 0 ? p.state === 'idle' : (p.state === 'idle' || p.chainWin > 0));
+  if (aP && !sheatheConsumed) {
+    if (p.sheathed) {
+      if (p.state === 'idle') {
+        p.sheathed = false;
+        p.chain = 0;
+        p.chainWin = 0;
+        p.aBuffer = 0;
+        startAttack(g, def);
+      }
+    } else if (p.state === 'dodge' || p.state === 'deflect' || p.state === 'shove') {
+      startRollAttack(g, def);
+    } else if (p.stance) {
+      stanceSpecial(g, def);
+    } else if (canAttackNow) {
+      startAttack(g, def, !!(inp.mx || inp.my));
+    } else {
+      p.aBuffer = aBufferTicks();   // buffered: fires when the debounce lock expires
+    }
+  }
+  if (!p.sheathed && p.aBuffer > 0 && canAttackNow) {
     p.aBuffer = 0;
-    startAttack(g, def);
+    startAttack(g, def, !!(inp.mx || inp.my));
   }
 
   switch (p.state) {
@@ -501,10 +696,12 @@ function updatePlayer(g, inp, aP, bP, bR) {
       let mx = inp.mx || 0;
       let my = inp.my || 0;
       if (p.stance === 'parry') { mx = 0; my = 0; }
-      let sp = def.spd;
+      let sp = p.sheathed ? SHEATHE_SPD : def.spd;
       if (p.stance === 'whirl') sp = (sp * 6) / 10 | 0;
       if (p.stance === 'guard') sp = (sp * 4) / 10 | 0;
-      movePlayer(p, mx, my, sp);
+      // guard: strafe with the shield up -- move with the d-pad but keep the
+      // current facing (turn by releasing B, moving, then re-guarding)
+      movePlayer(p, mx, my, sp, p.stance === 'guard');
       applyDrift(p);
       break;
     }
@@ -535,12 +732,19 @@ function updatePlayer(g, inp, aP, bP, bR) {
       if (p.t >= total) {
         if (p.state === 'attack') {
           p.state = 'idle';
+          const finisher = p.chain >= 2;
           p.chain = p.chain < 2 ? p.chain + 1 : 0;
-          p.chainWin = 14;
+          p.finWin = finisher;   // the next B in the window is the stage-3 branch
+          const prof = getDebounceProfile();
+          const lock = prof.gap > 0 ? (finisher ? prof.fin : prof.gap) : 0;
+          p.chainLock = lock;
+          p.chainWin = lock === 0 ? 14 : 0;   // window opens when the lock ends
         } else {
           p.state = 'idle';
           p.chain = 0;
           p.chainWin = 0;
+          p.chainLock = 0;
+          p.finWin = false;
         }
         p.t = 0;
         p.atk = null;
@@ -566,20 +770,38 @@ function updatePlayer(g, inp, aP, bP, bR) {
       if (p.t <= 0) p.state = 'idle';
       break;
     }
+    case 'charge': {
+      // rooted windup; release fires the level-1 or level-2 charge
+      p.chargeT = Math.min(255, p.chargeT + 1);
+      if (aR) {
+        const fired = def.charge ? startChargeAttack(g, def)
+          : def.chargeShells ? fireChargeShot(g, def) : false;
+        if (!fired) p.state = 'idle';
+        p.chargeArmed = false;
+      }
+      applyDrift(p);
+      break;
+    }
     default:
       p.state = 'idle';
+  }
+
+  // held A past the swing -> charge stance (weapons with charge data only)
+  if (p.state === 'idle' && p.chargeArmed && inp.a && p.aHold >= CHARGE_MIN &&
+      (def.charge || def.chargeShells)) {
+    p.state = 'charge';
+    p.chargeT = 0;
   }
 
   if (p.stance) updateStance(g, def);
   clampPlayer(p);
 }
 
-function movePlayer(p, mx, my, spd) {
+function movePlayer(p, mx, my, spd, lockFacing) {
   const i = dirIndexFromInput(mx, my);
   if (i < 0) return;
   const d = DIR8[i];
-  p.fx = d.x;
-  p.fy = d.y;
+  if (!lockFacing) { p.fx = d.x; p.fy = d.y; }
   addMove(p, d.x, d.y, spd);
 }
 
@@ -600,15 +822,155 @@ function applyDrift(p, mult) {
   if (p.vy > -1 && p.vy < 1) p.vy = 0;
 }
 
-function startAttack(g, def) {
+function startAttack(g, def, alt) {
   const p = g.player;
-  const a = def.attacks[Math.min(p.chain, 2)];
+  if (p.sheathed) return;       // draw path clears the flag first
+  if (p.chainLock > 0) return;  // debounce lock gates every attack entry
+  // direction + A replaces combo hit 1 with the weapon's lunge opener
+  const a = (alt && def.alt && p.chain === 0) ? def.alt : def.attacks[Math.min(p.chain, 2)];
   if (p.stam < 1) return;
   p.stam = Math.max(0, p.stam - a.stam);
   p.state = 'attack';
   p.atk = a;
   p.t = 0;
   p.hitDone = false;
+  p.finWin = false;
+  p.chargeArmed = true;   // hold A through this swing -> charge
+  if (a.lunge) {
+    p.vx = (p.fx * a.lunge) >> 4;
+    p.vy = (p.fy * a.lunge) >> 4;
+  }
+}
+
+/* --------------------------------------------------------- sheathe combo */
+
+// Stow the weapon: only from idle (stance idle counts; the stance is dropped).
+// Returns false when the state does not allow it, so the press pair falls
+// through to its normal attack/dodge/stance meaning.
+function trySheathe(p) {
+  if (p.state !== 'idle') return false;
+  if (p.stance) exitStance(p);
+  p.sheathed = true;
+  p.chain = 0;
+  p.chainWin = 0;
+  p.chainLock = 0;   // stowing drops the pending combo recovery
+  p.aBuffer = 0;
+  p.seqDir = 0; p.seqT = 0; p.seq2 = false; p.seqRel = false;
+  p.triWait = 0; p.triT = 0;
+  p.sheatheLatch = true;   // suppress roll/stance until B is released
+  return true;
+}
+
+// Evaluate the active variant. A returns true only when the toggle actually
+// fired; the caller then consumes the A/B press for this tick.
+function sheatheCombo(g, aP, bP, inp) {
+  const p = g.player;
+  if (p.sheathed) return false;   // stowed: A draws, combos do nothing
+  const v = getSheatheVariant();
+
+  if (v === 'dabhold') {
+    // Down + A + B held together. A is deferred CHORD_WIN ticks when down is
+    // held so B can join; a held session stows after SHEATHE_HOLD_TICKS, and
+    // releasing any button cancels it (a still-held A then swings).
+    const all3 = inp.my > 0 && inp.a && inp.b;
+    if (p.triT > 0) {
+      if (!all3) {
+        p.triT = 0;
+        p.sheatheLatch = true;   // eat the stray release so it does not roll
+        if (inp.a) p.aBuffer = aBufferTicks();   // cancelled: deferred A swings
+        return false;
+      }
+      p.triT--;
+      if (p.triT === 0) return trySheathe(p);
+      return true;   // pending: consume A/B so no attack or stance fires
+    }
+    if (all3 && (aP || bP || p.triWait > 0)) {
+      p.triT = SHEATHE_HOLD_TICKS;
+      p.triWait = 0;
+      p.aBuffer = 0;
+      p.bBuffer = 0;
+      return true;
+    }
+    if (aP && inp.my > 0 && !inp.b) {
+      p.triWait = CHORD_WIN;   // defer the down+A attack while B can join
+      return true;
+    }
+    if (p.triWait > 0) {
+      p.triWait--;
+      if (p.triWait === 0) p.aBuffer = aBufferTicks();   // B never joined: attack
+      return true;
+    }
+  }
+
+  const chordA = aP && (inp.b || p.chordT > 0);
+  const seq = p.seqDir === 1 && p.seqT > 0;
+  let hit = false;
+  if (v === 'ab') hit = chordA;
+  else if (v === 'dab') hit = chordA && seq && p.seqRel;
+  else if (v === 'ddab') hit = chordA && p.seq2;
+  else if (v === 'db') hit = bP && seq && p.seqRel;
+  // 'dbh' resolves in the B-hold path (needs bHeld to reach HOLD_TICKS).
+  return hit && trySheathe(p);
+}
+
+/* --------------------------------------------------------- roll attack */
+
+// A out of a dodge (or the gun's evade-shove) cancels into the weapon's roll
+// move; dodge i-frames keep ticking. The gun shield bash carries lunge 30 so
+// it moves the hunter forward; sword/flail roll moves stop in place.
+function startRollAttack(g, def) {
+  const p = g.player;
+  const a = def.roll;
+  if (!a || p.stam < a.stam) return false;
+  p.stam = Math.max(0, p.stam - a.stam);
+  p.state = 'attack';
+  p.atk = a;
+  p.t = 0;
+  p.hitDone = false;
+  p.chain = 0;
+  p.chainWin = 0;
+  p.chainLock = 0;
+  if (a.lunge) {
+    p.vx = (p.fx * a.lunge) >> 4;
+    p.vy = (p.fy * a.lunge) >> 4;
+  }
+  return true;
+}
+
+/* --------------------------------------------------------- charge attack */
+
+// Flail-style charge release: level 1 below CHARGE_L2, level 2 at/above it.
+function startChargeAttack(g, def) {
+  const p = g.player;
+  if (!def.charge) return false;
+  const a = def.charge[p.chargeT >= CHARGE_L2 ? 1 : 0];
+  if (!a || p.stam < a.stam) return false;
+  p.stam = Math.max(0, p.stam - a.stam);
+  p.state = 'attack';
+  p.atk = a;
+  p.t = 0;
+  p.hitDone = false;
+  p.chain = 0;
+  p.chainWin = 0;
+  p.chainLock = 0;
+  p.finWin = false;
+  if (a.lunge) {
+    p.vx = (p.fx * a.lunge) >> 4;
+    p.vy = (p.fy * a.lunge) >> 4;
+  }
+  return true;
+}
+
+// Gun charge release: fires the charged ball (level selects dmg/speed).
+function fireChargeShot(g, def) {
+  const p = g.player;
+  if (!def.chargeShells) return false;
+  const sh = def.chargeShells[p.chargeT >= CHARGE_L2 ? 1 : 0];
+  if (!sh || p.stam < sh.stam) return false;
+  p.stam -= sh.stam;
+  p.reload = sh.reload;
+  fireShell(g, p, sh);
+  return true;
 }
 
 function tapDefense(g, def, inp) {
@@ -628,7 +990,18 @@ function tapDefense(g, def, inp) {
     p.fy = dy;
   }
 
-  if (def.id === 'sword') {
+  if (p.sheathed) {
+    // stowed: every weapon rolls with the sword dodge numbers (MH-style run +
+    // evade while sheathed)
+    if (p.stam < 14) return;
+    p.stam -= 14;
+    p.state = 'dodge';
+    p.t = 16;
+    p.iT = 14;
+    p.vx = (dx * 54) >> 4;
+    p.vy = (dy * 54) >> 4;
+    exitStance(p);
+  } else if (def.id === 'sword') {
     if (p.stam < 14) return;
     p.stam -= 14;
     p.state = 'dodge';
@@ -671,9 +1044,9 @@ function tryBranch(g, def, inp) {
   let stage = 0;
   if (p.state === 'attack' && p.atk) {
     if (p.t < p.atk.startup + p.atk.active) return false; // only from recovery
-    stage = Math.min(p.chain + 1, 2);
+    stage = p.chain < 2 ? p.chain + 1 : 3;
   } else if (p.state === 'idle' && p.chainWin > 0) {
-    stage = p.chain;
+    stage = p.finWin ? 3 : p.chain;   // finisher done: B is the stage-3 branch
   } else {
     return false;
   }
@@ -692,6 +1065,7 @@ function tryBranch(g, def, inp) {
     p.t = 0;
     p.chain = 0;
     p.chainWin = 0;
+    p.finWin = false;
     return true;
   }
 
@@ -709,6 +1083,8 @@ function tryBranch(g, def, inp) {
   p.hitDone = false;
   p.chain = 0;
   p.chainWin = 0;
+  p.finWin = false;
+  p.chargeArmed = false;   // branch attacks do not charge
   if (atk.lunge) {
     p.vx = (p.fx * atk.lunge) >> 4;
     p.vy = (p.fy * atk.lunge) >> 4;
@@ -719,6 +1095,7 @@ function tryBranch(g, def, inp) {
 function enterStance(g, def) {
   const p = g.player;
   if (p.stance) return;
+  if (p.sheathed) { p.bLocked = true; return; }   // no stance while stowed
   if (p.stam < 10) { p.bLocked = true; return; }
   if (p.state !== 'idle' && !(p.state === 'attack' && def.canCancel)) { p.bLocked = true; return; }
   p.stance = def.id === 'sword' ? 'parry' : def.id === 'flail' ? 'whirl' : 'guard';
@@ -1418,7 +1795,16 @@ function drawPlayer(ctx, g, def) {
   ctx.fillRect(x + 5, y + 13, 2, 2);
   ctx.fillRect(x + 9, y + 13, 2, 2);
 
-  if (def.id === 'sword') {
+  if (p.state === 'charge') {
+    // charge meter above the hunter: fills to CHARGE_L2, flashes white at max
+    const frac = Math.min(1, p.chargeT / CHARGE_L2);
+    ctx.fillStyle = SHADES[p.chargeT >= CHARGE_L2 ? 3 : 2];
+    ctx.fillRect(cx - 8, y - 4, Math.max(1, Math.round(16 * frac)), 2);
+  }
+
+  if (p.sheathed) {
+    // stowed: weapon overlay hidden (body + head only)
+  } else if (def.id === 'sword') {
     if (p.state === 'attack' || p.state === 'special') {
       const a = p.atk;
       const phase = p.t < a.startup ? 0 : p.t < a.startup + a.active ? 1 : 2;
@@ -1863,6 +2249,13 @@ function drawOverlays(ctx, g, opts) {
   }
   if (opts.slow) drawText(ctx, 'SLOW', 2, 2, 2, 1);
   if (opts.debug) drawText(ctx, 'DBG', 2, 10, 2, 1);
+  // sheathe + debounce prototype readout (cycle with [ / ] and , / .)
+  const sv = 'SHEATH ' + getSheatheVariant().toUpperCase() + (g.player.sheathed ? ' ON' : ' OFF');
+  drawText(ctx, sv, W - 2 - textWidth(sv, 1), 10, g.player.sheathed ? 3 : 2, 1);
+  const dbg = 'LOCK ' + getDebounceProfile().name
+    + (g.player.chainLock > 0 ? ' ' + g.player.chainLock : '')
+    + (g.player.bBuffer > 0 ? ' B' + g.player.bBuffer : '');
+  drawText(ctx, dbg, W - 2 - textWidth(dbg, 1), 18, (g.player.chainLock > 0 || g.player.bBuffer > 0) ? 3 : 2, 1);
 }
 
 function dimScreen(ctx) {
@@ -1959,6 +2352,7 @@ function boot() {
   const keys = Object.create(null);
   let weaponIndex = 0;
   let game = newGame(weaponIndex);
+  setDebounceProfile('HEAVY');   // browser playtest default (module default stays OFF)
   let paused = false;
   let slow = false;
   let debug = false;
@@ -1986,6 +2380,15 @@ function boot() {
       slow = !slow;
     } else if (e.code === 'KeyH') {
       debug = !debug;
+    } else if (e.code === 'BracketLeft' || e.code === 'BracketRight') {
+      const dir = e.code === 'BracketRight' ? 1 : -1;
+      setSheatheVariant(SHEATHE_VARIANTS.indexOf(getSheatheVariant()) + dir);
+      console.log('sheathe variant -> ' + getSheatheVariant());
+    } else if (e.code === 'Comma' || e.code === 'Period') {
+      const dir = e.code === 'Period' ? 1 : -1;
+      const i = DEBOUNCE_PROFILES.findIndex((p) => p.name === getDebounceProfile().name);
+      setDebounceProfile(i + dir);
+      console.log('debounce profile -> ' + getDebounceProfile().name);
     }
   });
   window.addEventListener('keyup', (e) => { keys[e.code] = false; });
@@ -2029,6 +2432,9 @@ if (typeof module !== 'undefined' && module.exports) {
     zoneHitResolve, zoneContains,
     WEAPON_DEFS, MONSTER_ATTACKS, MONSTER_DEFS, POLE_DEFS,
     POLE_PLAIN, POLE_SEVER, POLE_BREAK, POLE_CRACK,
+    getSheatheVariant, setSheatheVariant, SHEATHE_VARIANTS, SHEATHE_SPD,
+    getDebounceProfile, setDebounceProfile, DEBOUNCE_PROFILES,
+    CHARGE_MIN, CHARGE_L2,
     W, H, ARENA_H, HOLD_TICKS, SHADES, WORLD_W, WORLD_H, FP,
   };
 }

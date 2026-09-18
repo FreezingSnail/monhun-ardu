@@ -746,3 +746,373 @@ test('heavy tail_spin windup holds the locked away body frame (nch.5)', () => {
   m.atk = G.MONSTER_ATTACKS.bite;
   assert.equal(G.monsterSpinFrame(m), -1, 'bite does not rotate the body');
 });
+
+/* ------------------------------------------------- sheathe input prototype
+ * The stow combo is playtest-configurable (SHEATHE_VARIANTS, default 'dab').
+ * Each test pins its variant explicitly so the suite never depends on the
+ * browser-cycle default.
+ */
+
+test('sheathe prototype: tap down then A+B stows, A draws (dab)', () => {
+  G.setSheatheVariant('dab');
+  const g = G.newGame(0);
+  G.step(g, inp({ my: 1 }));
+  G.step(g, inp({}));                    // tap complete
+  G.step(g, inp({ a: true, b: true }));  // chord inside the window
+  assert.equal(g.player.sheathed, true, 'down tap + chord stows');
+  assert.equal(g.player.state, 'idle', 'chord consumed: no attack');
+  assert.equal(g.player.atk, null, 'no swing');
+  G.step(g, inp({}));                    // release B
+  G.step(g, inp({ a: true }));           // A = draw into combo hit 1
+  assert.equal(g.player.sheathed, false, 'A draws the weapon');
+  assert.equal(g.player.state, 'attack', 'draw swings immediately');
+  assert.ok(g.player.atk, 'draw attack runs');
+});
+
+test('sheathe prototype: stale down tap does not stow (dab)', () => {
+  G.setSheatheVariant('dab');
+  const g = G.newGame(0);
+  G.step(g, inp({ my: 1 }));
+  G.step(g, inp({}));
+  ticks(g, 25);                          // window (18t) long gone
+  G.step(g, inp({ a: true, b: true }));
+  assert.equal(g.player.sheathed, false, 'expired sequence does not stow');
+});
+
+test('sheathe prototype: double-tap down then A+B stows (ddab)', () => {
+  G.setSheatheVariant('ddab');
+  const g = G.newGame(0);
+  G.step(g, inp({ my: 1 }));
+  G.step(g, inp({}));
+  G.step(g, inp({ my: 1 }));             // second tap inside the window
+  G.step(g, inp({}));
+  G.step(g, inp({ a: true, b: true }));
+  assert.equal(g.player.sheathed, true, 'double tap + chord stows');
+});
+
+test('sheathe prototype: tap down then B stows instead of rolling (db)', () => {
+  G.setSheatheVariant('db');
+  const g = G.newGame(0);
+  G.step(g, inp({ my: 1 }));
+  G.step(g, inp({}));
+  G.step(g, inp({ b: true }));           // B press fires the combo
+  G.step(g, inp({}));                    // release: no roll
+  assert.equal(g.player.sheathed, true, 'down tap + B stows');
+  assert.equal(g.player.state, 'idle', 'release did not roll');
+});
+
+test('sheathe prototype: hold down+B stows instead of the stance (dbh)', () => {
+  G.setSheatheVariant('dbh');
+  const g = G.newGame(1);
+  ticks(g, 13, { my: 1, b: true });      // hold past HOLD_TICKS
+  assert.equal(g.player.sheathed, true, 'hold down+B stows');
+  assert.equal(g.player.stance, null, 'no whirl stance south');
+});
+
+test('sheathe prototype: raw A+B chord stows; stowed B taps roll (ab)', () => {
+  G.setSheatheVariant('ab');
+  const g = G.newGame(0);
+  G.step(g, inp({ a: true, b: true }));
+  assert.equal(g.player.sheathed, true, 'raw chord stows');
+  G.step(g, inp({}));
+  ticks(g, 13, { b: true });             // hold B while stowed
+  assert.equal(g.player.stance, null, 'no stance while stowed');
+  G.step(g, inp({}));                    // release
+  G.step(g, inp({ b: true }));           // fresh B tap rolls
+  G.step(g, inp({}));
+  assert.equal(g.player.state, 'dodge', 'stowed B tap rolls');
+});
+
+test('sheathe prototype: stowed run outruns the sword walk (ab)', () => {
+  G.setSheatheVariant('ab');
+  const walk = G.newGame(0);
+  ticks(walk, 10, { mx: 1 });
+  const run = G.newGame(0);
+  G.step(run, inp({ a: true, b: true }));
+  G.step(run, inp({}));
+  ticks(run, 10, { mx: 1 });
+  assert.equal(walk.player.x - 96, 11, 'sword walk 18/16 px per tick');
+  assert.equal(run.player.x - 96, 15, 'stowed run 24/16 px per tick');
+});
+
+test('sheathe prototype: stowed player renders without the weapon overlay', () => {
+  G.setSheatheVariant('ab');
+  const g = G.newGame(2);
+  G.step(g, inp({ a: true, b: true }));
+  assert.equal(g.player.sheathed, true, 'stowed for the draw pass');
+  assert.doesNotThrow(() => G.render(stubCtx(), g, { debug: true, slow: true }));
+});
+
+/* --------------------------------------------------- combo debounce prototype
+ * Module default is OFF (parity fixtures), browser boot arms MED. Each test
+ * pins its profile explicitly.
+ */
+
+function waitIdle(g) {
+  for (let i = 0; i < 80 && g.player.state !== 'idle'; i++) G.step(g, inp({}));
+}
+
+// Wait for idle, tap A, run until an attack starts (buffering through the
+// debounce lock when needed). Returns true when an attack started.
+function comboHit(g) {
+  waitIdle(g);
+  G.step(g, inp({ a: true }));
+  for (let i = 0; i < 40 && g.player.state !== 'attack'; i++) G.step(g, inp({}));
+  return g.player.state === 'attack';
+}
+
+test('debounce: OFF keeps the zero-gap buffered chain (fixture default)', () => {
+  G.setDebounceProfile('OFF');
+  const g = G.newGame(0);
+  assert.ok(comboHit(g), 'hit 1 starts');
+  waitIdle(g);
+  assert.equal(g.player.chain, 1, 'chain advanced');
+  assert.equal(g.player.chainLock, 0, 'no lock when off');
+  assert.equal(g.player.chainWin, 14, 'window armed immediately');
+  assert.ok(comboHit(g), 'hit 2 starts from the open window');
+});
+
+test('debounce: gap locks each non-finisher hit, window opens after (med)', () => {
+  G.setDebounceProfile('MED');
+  const g = G.newGame(0);
+  assert.ok(comboHit(g), 'hit 1 starts');
+  waitIdle(g);
+  assert.equal(g.player.chain, 1, 'chain advanced');
+  assert.equal(g.player.chainLock, 6, 'gap lock after hit 1');
+  assert.equal(g.player.chainWin, 0, 'window closed during the lock');
+  G.step(g, inp({ a: true }));
+  assert.equal(g.player.state, 'idle', 'press during the lock is buffered');
+  for (let i = 0; i < 40 && g.player.state !== 'attack'; i++) G.step(g, inp({}));
+  assert.equal(g.player.state, 'attack', 'buffered press fires after the lock');
+});
+
+test('debounce: finisher lock is longer and one early press expires (med)', () => {
+  G.setDebounceProfile('MED');
+  const g = G.newGame(0);
+  assert.ok(comboHit(g), 'hit 1');
+  waitIdle(g);
+  assert.ok(comboHit(g), 'hit 2');
+  waitIdle(g);
+  assert.ok(comboHit(g), 'hit 3');
+  waitIdle(g);
+  assert.equal(g.player.chain, 0, 'finisher resets the chain');
+  assert.equal(g.player.chainLock, 18, 'finisher lock 18');
+  assert.equal(g.player.chainWin, 0, 'window closed');
+  G.step(g, inp({ a: true }));            // aBuffer 16 < lock 18: expires
+  for (let i = 0; i < 30; i++) G.step(g, inp({}));
+  assert.equal(g.player.state, 'idle', 'early single press was dropped');
+  assert.ok(comboHit(g), 'fresh press after the lock restarts the chain');
+});
+
+test('debounce: one loose A press survives the longest gap lock (brutal)', () => {
+  G.setDebounceProfile('BRUTAL');
+  const g = G.newGame(0);
+  assert.ok(comboHit(g), 'hit 1');
+  waitIdle(g);
+  assert.equal(g.player.chainLock, 14, 'brutal gap lock');
+  G.step(g, inp({ a: true }));            // single press at lock start
+  for (let i = 0; i < 40 && g.player.state !== 'attack'; i++) G.step(g, inp({}));
+  assert.equal(g.player.state, 'attack', 'buffered press fires after the long lock');
+});
+
+/* -------------------------------------------------- B branch input buffer */
+
+test('branch buffer: loose A A B still combos through the debounce lock (med)', () => {
+  G.setDebounceProfile('MED');
+  G.setSheatheVariant('ddab');
+  const g = G.newGame(0);
+  assert.ok(comboHit(g), 'hit 1');
+  waitIdle(g);
+  assert.ok(comboHit(g), 'hit 2 running');
+  // run A2 into recovery (startup 3 + active 5 = 8)
+  for (let i = 0; i < 9 && g.player.state === 'attack'; i++) G.step(g, inp({}));
+  G.step(g, inp({ b: true }));                             // tap B in recovery
+  for (let i = 0; i < 8; i++) G.step(g, inp({ b: true })); // hold through completion
+  G.step(g, inp({}));                                      // release during the lock
+  assert.equal(g.player.state, 'idle', 'no roll while the branch is queued');
+  assert.ok(g.player.bBuffer > 0, 'B buffer still pending');
+  for (let i = 0; i < 30 && g.player.state !== 'attack'; i++) G.step(g, inp({}));
+  assert.equal(g.player.state, 'attack', 'queued branch fires when the window opens');
+  assert.equal(g.player.atk.id, 'spincut', 'stage-2 branch runs');
+});
+
+test('branch buffer: early B in startup still dodge-cancels (med)', () => {
+  G.setDebounceProfile('MED');
+  const g = G.newGame(0);
+  assert.ok(comboHit(g), 'hit 1 running');
+  G.step(g, inp({ b: true }));   // t ~2: startup, no branch yet and no buffer
+  G.step(g, inp({}));
+  assert.equal(g.player.state, 'dodge', 'sword dodge-cancel preserved');
+  assert.equal(g.player.bBuffer, 0, 'nothing queued');
+});
+
+test('branch buffer: holding B through recovery still enters the stance (med)', () => {
+  G.setDebounceProfile('MED');
+  const g = G.newGame(0);
+  assert.ok(comboHit(g), 'hit 1 running');
+  for (let i = 0; i < 9 && g.player.state === 'attack'; i++) G.step(g, inp({}));
+  for (let i = 0; i < 13; i++) G.step(g, inp({ b: true }));   // past HOLD_TICKS
+  assert.equal(g.player.stance, 'parry', 'hold still enters parry');
+  assert.equal(g.player.bBuffer, 0, 'release cleared the queue');
+  G.step(g, inp({}));
+  assert.equal(g.player.stance, null, 'release exits the stance');
+});
+
+/* --------------------------------------- sheathe variant: hold Down+A+B */
+
+test('sheathe dabhold: holding Down+A+B stows after the hold window', () => {
+  G.setSheatheVariant('dabhold');
+  const g = G.newGame(0);
+  ticks(g, 1, { my: 1 });
+  G.step(g, inp({ my: 1, a: true }));                 // A deferred, waiting for B
+  G.step(g, inp({ my: 1, a: true, b: true }));        // B joins: session starts
+  assert.equal(g.player.sheathed, false, 'not stowed yet');
+  assert.equal(g.player.state, 'idle', 'A deferred, no attack');
+  ticks(g, 8, { my: 1, a: true, b: true });
+  assert.equal(g.player.sheathed, true, 'held 3-button stows');
+});
+
+test('sheathe dabhold: Down+A without B still swings (deferred attack)', () => {
+  G.setSheatheVariant('dabhold');
+  const g = G.newGame(0);
+  ticks(g, 1, { my: 1 });
+  G.step(g, inp({ my: 1, a: true }));
+  for (let i = 0; i < 10 && g.player.state !== 'attack'; i++) G.step(g, inp({ my: 1, a: true }));
+  assert.equal(g.player.state, 'attack', 'deferred A attacks');
+  assert.equal(g.player.sheathed, false, 'not stowed');
+});
+
+test('sheathe dabhold: releasing B early cancels the stow, A swings', () => {
+  G.setSheatheVariant('dabhold');
+  const g = G.newGame(0);
+  ticks(g, 1, { my: 1 });
+  G.step(g, inp({ my: 1, a: true }));
+  G.step(g, inp({ my: 1, a: true, b: true }));
+  G.step(g, inp({ my: 1, a: true }));                 // B released: session cancels
+  for (let i = 0; i < 10 && g.player.state !== 'attack'; i++) G.step(g, inp({ my: 1, a: true }));
+  assert.equal(g.player.sheathed, false, 'cancelled');
+  assert.equal(g.player.state, 'attack', 'deferred A still swings');
+});
+
+/* --------------------------------------- move-set expansion: roll attacks */
+
+test('roll attack: A out of the evade runs the weapon roll move', () => {
+  for (const [w, id] of [[0, 'rollslash'], [1, 'rollsweep'], [2, 'shieldbash']]) {
+    const g = G.newGame(w);
+    G.step(g, inp({ b: true }));   // tap B: sword dodge / flail deflect / gun shove
+    G.step(g, inp({}));
+    assert.ok(g.player.state === 'dodge' || g.player.state === 'deflect' || g.player.state === 'shove', 'evade state w' + w);
+    G.step(g, inp({ a: true }));
+    assert.equal(g.player.state, 'attack', 'roll attack started w' + w);
+    assert.equal(g.player.atk.id, id, 'roll move id w' + w);
+  }
+});
+
+test('shield bash lunges the hunter forward (lunge 30)', () => {
+  const g = G.newGame(2);
+  G.step(g, inp({ b: true }));   // shove
+  G.step(g, inp({}));
+  const x0 = g.player.x;
+  G.step(g, inp({ a: true }));   // bash, facing east by default
+  assert.equal(g.player.atk.id, 'shieldbash');
+  assert.ok(g.player.vx > 0, 'forward velocity applied');
+  for (let i = 0; i < 8; i++) G.step(g, inp({}));
+  assert.ok(g.player.x > x0, 'bash carried the hunter forward');
+});
+
+test('guard strafe: d-pad moves with locked facing (gun)', () => {
+  const g = G.newGame(2);
+  ticks(g, 4, { mx: 1 });                 // face east
+  assert.equal(g.player.fx, 16, 'facing east');
+  ticks(g, 13, { b: true });              // hold B -> guard
+  assert.equal(g.player.stance, 'guard', 'guard up');
+  const x0 = g.player.x;
+  ticks(g, 16, { mx: -1, b: true });      // strafe west, shield still east
+  assert.equal(g.player.fx, 16, 'facing locked while strafing');
+  assert.ok(g.player.x < x0, 'strafed west');
+});
+
+/* ----------------------------------- move-set expansion: stage-3 finisher */
+
+test('stage-3 finisher: A A A then B runs the finisher branch (all weapons)', () => {
+  G.setDebounceProfile('MED');   // debounce profiles keep the chain through swings
+  for (const [w, id] of [[0, 'helmsplit'], [1, 'earthslam'], [2, 'cannonblast']]) {
+    const g = G.newGame(w);
+    assert.ok(comboHit(g), 'hit 1 w' + w);
+    waitIdle(g);
+    assert.ok(comboHit(g), 'hit 2 w' + w);
+    waitIdle(g);
+    assert.ok(comboHit(g), 'hit 3 w' + w);
+    waitIdle(g);
+    assert.equal(g.player.finWin, true, 'finisher window armed w' + w);
+    assert.equal(g.player.chain, 0, 'chain reset for the finisher w' + w);
+    G.step(g, inp({ b: true }));   // tap B: buffered through the finisher lock
+    G.step(g, inp({}));
+    assert.equal(g.player.bBuffer > 0, true, 'finisher branch queued w' + w);
+    for (let i = 0; i < 60 && g.player.state !== 'attack'; i++) G.step(g, inp({}));
+    assert.equal(g.player.state, 'attack', 'finisher branch runs w' + w);
+    assert.equal(g.player.atk.id, id, 'finisher id w' + w);
+  }
+});
+
+/* ----------------------------------------- move-set expansion: direction + A */
+
+test('direction + A: thrust opener replaces combo hit 1', () => {
+  G.setDebounceProfile('OFF');
+  const g = G.newGame(0);
+  ticks(g, 4, { mx: 1 });                 // face east, moving
+  G.step(g, inp({ mx: 1, a: true }));
+  assert.equal(g.player.state, 'attack', 'thrust runs');
+  assert.equal(g.player.atk.id, 'thrust', 'alt move id');
+  assert.ok(g.player.vx > 0, 'thrust lunges forward');
+});
+
+test('direction + A: mid-combo hits keep the normal combo data', () => {
+  G.setDebounceProfile('OFF');
+  const g = G.newGame(0);
+  ticks(g, 4, { mx: 1 });
+  G.step(g, inp({ mx: 1, a: true }));     // alt hit 1
+  waitIdle(g);
+  G.step(g, inp({ mx: 1, a: true }));     // chain 1 -> normal combo hit 2
+  assert.equal(g.player.state, 'attack', 'hit 2 started');
+  assert.equal(g.player.atk.reach, 13, 'normal combo hit 2 data');
+});
+
+/* -------------------------------------------- move-set expansion: charge */
+
+test('charge: flail hold A past the swing -> level 1, longer hold -> level 2', () => {
+  G.setDebounceProfile('OFF');
+  const g = G.newGame(1);
+  let guard = 0;
+  while (guard++ < 80 && g.player.state !== 'charge') G.step(g, inp({ a: true }));
+  assert.equal(g.player.state, 'charge', 'charge entered after the swing');
+  assert.equal(g.player.chargeT, 0, 'meter starts at 0');
+  G.step(g, inp({}));                     // release right away: level 1
+  assert.equal(g.player.state, 'attack', 'charge swing runs');
+  assert.equal(g.player.atk.id, 'chargeslam1', 'level 1 id');
+
+  const g2 = G.newGame(1);
+  guard = 0;
+  while (guard++ < 80 && g2.player.state !== 'charge') G.step(g2, inp({ a: true }));
+  ticks(g2, G.CHARGE_L2, { a: true });    // hold to max
+  G.step(g2, inp({}));
+  assert.equal(g2.player.atk.id, 'chargeslam2', 'level 2 id');
+});
+
+test('charge: gun release fires the charged ball', () => {
+  G.setDebounceProfile('OFF');
+  const g = G.newGame(2);
+  let guard = 0;
+  while (guard++ < 80 && g.player.state !== 'charge') G.step(g, inp({ a: true }));
+  assert.equal(g.player.state, 'charge', 'gun charge entered');
+  G.step(g, inp({}));
+  assert.ok(g.projectiles.length > 0, 'projectile spawned');
+  assert.equal(g.projectiles[0].dmg, 34, 'level-1 charge ball dmg');
+});
+
+test('charge: weapons without charge data never enter the stance (sword)', () => {
+  G.setDebounceProfile('OFF');
+  const g = G.newGame(0);
+  for (let i = 0; i < 40; i++) G.step(g, inp({ a: true }));
+  assert.notEqual(g.player.state, 'charge', 'sword has no charge');
+});
