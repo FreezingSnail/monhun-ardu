@@ -16,7 +16,7 @@ port of a browser prototype (`mock/`), verified tick-for-tick against it.
 | Device tests (Ardens) | boot 4, assets 262, audio 14, menu 59, hud 17, parity 660, data 221, combat 184, perf 5 — all PASS |
 | Perf gate (`monhun-ardu-8v7`, re-verified `42n.6` + `7y3` + `ljj.2` + `ljj.7` + `cgk`) | **PASS.** plane 153 Hz (≥135), logic 51 Hz (≥45), render max 5392 µs (≤7407), tick 988 µs, RAM free 409 B |
 | Perf tooling | Headless Ardens profiler dump (`profiledump=<path>`, local patch) + on-device cycle bench (`test_perf`) |
-| Shipping build | flash **28242 / 29696 B** (95%), RAM **2029 / 2560 B** (531 free) |
+| Shipping build | flash **25234 / 29696 B** (85%), RAM **1742 / 2560 B** (818 free); USB-free, see below |
 | FX data image | **21768 B** of 16 MB used |
 
 Speculative gameplay status: combat (sword / flail / gunshield), monster FSM,
@@ -80,6 +80,18 @@ directly in 1/16-px units and integrated by straight addition.
 - `src/audio.hpp` — cue detector diffing `Game` edges after `stepGame()`;
   non-blocking one-shot tones via ArduboyTones (Timer3, no Timer1 conflict).
   Mute with `-DMH_AUDIO=0`.
+- **USB-free shipping main** (`monhun-ardu.ino`, `-DMH_NO_USB`): shipping builds
+  compile the sketch's own `main()` so the core archive's `main.cpp.o` is never
+  pulled in — that object is the only thing that calls `USBDevice.attach()` /
+  `serialEventRun()` and drags in the CDC/PluggableUSB stack. The game never uses
+  `Serial`, so this reclaims flash/RAM with no behavior change. `-DMH_NO_USB` is
+  set only by the shipping flags (`Makefile SIZE_FLAGS`, used by
+  `build`/`mini`/`size`/`debug`). The Ardens `fxtest` sketches are compiled by
+  the separate `fxtest-build` arduino-cli invocation with stock flags, so they
+  keep the core main and `captureserial` still works. Consequence: the shipping
+  build has **no USB serial device** (no serial monitor / no OS port while the
+  game runs); uploads go through the Cathy3K bootloader window
+  (`arduino-cli upload` resets into it as usual).
 
 ### FX asset pipeline (all assets live on the FX chip)
 
@@ -324,9 +336,11 @@ Notes:
    (`80bbfb0`), and `blk()`'s `fillRect`/`drawFastVLine` path was replaced with
    direct masked framebuffer writes (`816767d`) — render max 13312 → 3984 µs,
    plane 82 → 156 Hz, logic 27 → 52 Hz, profiler `mh::blk` share 29% → 3.6%.
-   Any new feature must fit flash (1318 B free) and keep the perf gates green.
-2. **Flash headroom**: shipping 28378/29696 B (1318 B free) after the
-   content-table offload (`42n.1`-`42n.4`), the sine-LUT shrink (`42n.7`; the
+   Any new feature must fit flash (4462 B free) and keep the perf gates green.
+2. **Flash headroom**: shipping 25234/29696 B (4462 B free) after the
+   USB-stack removal (`42n.8`: custom USB-free `main()`, -2666 B flash /
+   -140 B RAM, see the device-layer note), the content-table offload
+   (`42n.1`-`42n.4`), the sine-LUT shrink (`42n.7`; the
    65 B quarter-wave table + sign fold), the opening menu (`6zb.2`, +1604 B
    for the menu state machine, FX-glyph render and the runtime monster-kind
    start path), d-pad nav debounce (`6zb.4`, +16 B for the per-axis hold
@@ -346,7 +360,8 @@ Notes:
    per-axis nav hold state (`6zb.4`) → 1950 B; the `ljj.2` combat loader caches
    in `Game::combat` (22 B profile + 21 B attack/window + 7 B runtime = 50 B)
    → 2000 B. FX sprite data stays on the cart, so RAM grew little through the
-   art pass, but the margin is ~560 B.
+   art pass; the USB-stack removal (`42n.8`) then dropped it to **1742 B
+   (818 free)**.
 4. **Mock accuracy vs speed**: the sim is parity-locked to the mock by 660 device
    asserts. Any future tuning change must either update the mock + fixtures in
    the same commit or be expressed as render/parameter-only changes.

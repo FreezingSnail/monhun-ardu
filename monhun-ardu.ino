@@ -201,3 +201,24 @@ void loop() {
     }
     render();
 }
+
+// USB-free entry point for shipping builds (bead monhun-ardu-42n.8). Defining
+// main() in the sketch keeps the core archive's main.cpp.o out of the link; that
+// object is the only thing pulling USBDevice.attach()/serialEventRun and with
+// them the whole CDC/PluggableUSB stack. -DMH_NO_USB is set for the shipping
+// build/mini/size/debug flags only (see Makefile SIZE_FLAGS); the Ardens fxtest
+// sketches keep the stock core main because their harness reads serial back.
+// initVariant() is weak here exactly like the core's, so a variant override
+// still wins. No serialEventRun(): the game never uses Serial.
+#if defined(MH_NO_USB)
+void initVariant() __attribute__((weak));
+void initVariant() {
+}
+int __attribute__((OS_main)) main(void) {
+    init();   // wiring: timers/PWM/ADC; Arduboy lib inits the OLED in setup()
+    initVariant();
+    setup();
+    for (;;)
+        loop();   // no serialEventRun
+}
+#endif

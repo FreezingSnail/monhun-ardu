@@ -22,9 +22,15 @@ full: gen build
 # Shipping size flags (monhun-ardu checkpoint review, section 10): -mrelax is
 # link-time instruction relaxation, -mcall-prologues shares function
 # prologue/epilogue code. Measured -620 B total (29400 -> 28780), perf rMx
-# +24 us (5064 vs 7407 budget), parity 660/660, perf suite 5/5. Shipping-only:
-# the Ardens fxtest sketches keep the stock flags so their numbers stay stable.
-SIZE_FLAGS = --build-property compiler.cpp.extra_flags="-mcall-prologues -mrelax" \
+# +24 us (5064 vs 7407 budget), parity 660/660, perf suite 5/5.
+#
+# -DMH_NO_USB (bead monhun-ardu-42n.8): selects the sketch's own USB-free
+# main() (monhun-ardu.ino) instead of the core's main.cpp, dropping
+# USBDevice/CDC/PluggableUSB from the shipping link. Applied to the shipping
+# compile only (build/mini/size/debug inherit these flags). The Ardens fxtest
+# build (fxtest-build) is a separate arduino-cli invocation with stock flags, so
+# its sketches keep the core main and captureserial still works.
+SIZE_FLAGS = --build-property compiler.cpp.extra_flags="-mcall-prologues -mrelax -DMH_NO_USB" \
     --build-property compiler.c.extra_flags="-mrelax" \
     --build-property compiler.c.elf.extra_flags="-mrelax"
 

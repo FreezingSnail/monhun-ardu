@@ -1,117 +1,106 @@
-# monhun-ardu-6zb.6 — poles on the creature pipeline
+# monhun-ardu-42n.8 — shipping: drop the USB stack via a custom main
 
-**Status: DONE** (option A/D accepted: land at the measured engine cost; the
-content-addition budget requirement is demonstrated by the A/B proof).
+Status: DONE.
 
 ## What changed
 
-Data / generator
-- `data/skeletons.json`: `pole` skeleton (origin 0,0; head 10,8).
-- `data/creatures/{pole,pole_sever,pole_break,pole_crack}.json`: 4 `static`
-  records, art sheet ids 1..4 with zones per the design. `pole`/`pole_sever`
-  head boxes span `{-128,0,255,16}` so the head band is x-independent and
-  reproduces the legacy `hy < rect.y + 16` crit containment (incl. hit centres
-  with hx outside the 20 px body). `pole_break` keeps `{0,0,20,16}` head +
-  `{20,8,8,12}` arm (so the arm is not stolen by the head) and
-  `stats.brokenBody {20,36}`. `pole_crack` head + `{0,18,20,10}` band.
-- `tools/gen-combat.py`: static creatures (optional profile -> inert zeroed,
-  empty/omitted attacks+patterns), creature `flags`(bit0 static)/`sheet`/
-  `brokenBody` (CREATURE 21 -> 25 B), optional zone `hp`/`bodyShare`/`hurtOn`
-  (defaults 0/100/true), expect pins for static/sheet/brokenBody, empty-list
-  guards.
+- `monhun-ardu.ino`: appended a guarded USB-free entry point behind
+  `#if defined(MH_NO_USB)`: weak `initVariant()` + `int __attribute__((OS_main))
+  main(void)` that calls `init(); initVariant(); setup(); for (;;) loop();` with
+  no `serialEventRun()`. Placed after `setup()`/`loop()` so Arduino/Arduboy
+  prototype generation does not clash (compiles clean; no prototype errors).
+- `Makefile`: `-DMH_NO_USB` added to `compiler.cpp.extra_flags` in
+  `SIZE_FLAGS` (shipping only; `build`/`mini`/`size`/`debug` inherit it).
+  Comment updated to document the split: shipping USB-free, `fxtest-build`
+  (separate arduino-cli invocation, stock flags) keeps the core main so
+  `captureserial` still works.
+- `README.md`: device-layer note (USB-free shipping main, consequence: no USB
+  serial device while the game runs; upload via Cathy3K bootloader; fxtest keeps
+  USB), status-snapshot + flash/RAM-history numbers refreshed.
 
-Engine
-- `src/core/combat.hpp`: `combatCreatureFlags/Static/Sheet/BrokenW/BrokenH`;
-  `CombatState.isStatic`; `combatZoneHitResolveAt(g, base, phys, hx, hy, bx, by,
-  fx, fy, gateBreak)` — explicit anchor/facing so a static prop resolves east
-  without touching `g.monster.fx/fy`, and `gateBreak` so a wrong-phys hit lands
-  damage but never drains/breaks the pole zone (beasts keep the old rule via the
-  5-arg `combatZoneHitResolve` wrapper, `gateBreak=false`).
-- `src/core/projectiles.hpp`: `POLE_DEFS`, its 11 accessors and the bespoke
-  drain/break block deleted. `Pole` is now `{rect, hitFlash, kind}` only.
-  `initPoleKind` loads the prop creature through `creatureLoad` and derives the
-  rect from body+spawn; `poleCreatureId` maps kind -> generated creature index.
-  `damagePole` routes through the shared resolve (east facing, `gateBreak=true`),
-  applies `brokenBody` on a fresh break and keeps train stats/freeze/effects.
-- `src/audio.hpp`: break cue reads `g.combat.zoneBroken`.
-- `src/render.hpp`: table-driven `poleSheetById(sheet)` + `poleSheetFrame(sheet,
-  broken, flash)` off the creature record sheet id; `drawPole(Game&,...)` reads
-  `combatCreatureSheet(g.combat.creature)` and `g.combat.zoneBroken`.
-- `src/core/game.hpp`: `Pole::hp/broken` removed; `CombatState` 79 -> 80 B.
-- `tst/fxdatatest/test_parity.ino`: stale `MH_COMBAT_PARTS 0` carve removed (the
-  train pole now uses the shared zone machinery).
+## Size before/after
 
-Tests
-- `tst/shells_test.hpp`, `tst/world_test.hpp`, `tst/menu_test.hpp`,
-  `tst/fxdatatest/menu_test.hpp`, `tst/fxdatatest/audio_test.hpp`: ported to the
-  shared zone cache (`zone[HEAD/APPENDAGE].hp`, `zoneBroken`); coverage kept:
-  crit x1.4 via head dmgMul 140 (incl. hx outside the box), wrong-phys gate
-  (damage lands, no drain/break), pool drain -> break, BREAK rect shrink via
-  brokenBody, DPS, effects.
-- `tst/combat_test.hpp`: new static/sheet/brokenBody/skeleton/zone decode and a
-  shared-resolve static-prop test; counts 8 creatures / 11 zones / 5 skeletons.
-- `tst/combat_pack_test.hpp`: 25 B creature decode incl. flags/sheet/brokenW/H,
-  new record offsets, corrected profile/anchor indices via generated constants.
-- `tools/tests/test_gen_combat.py`: static creature payload test (omitted
-  profile/attacks/patterns, sheet, brokenBody, optional zone defaults, inert
-  profile), dynamic empty-collections rejected, 25 B creature payload, updated
-  missing-profile error message.
+| | flash | RAM (.data+.bss) | free flash |
+|---|---|---|---|
+| before (HEAD 36e9242) | **27900 / 29696** | 1882 | 1796 |
+| after (MH_NO_USB) | **25234 / 29696** | 1742 | **4462** |
 
-## Verification (exact tails)
+Reclaimed: **-2666 B flash**, **-140 B RAM** (.text 27822->25194, .data 78->40,
+.bss 1804->1702). Well above the ~1-2 KB target.
 
-1. `make gen` (x2) + `make gen-check` -> exit 0:
-   `fxdata_manifest: PASS (67 generated artifacts unchanged)`
-2. `make test` -> `Total Passed: 4579  Total Failed: 0`
-3. `make test-tools` -> `Ran 141 tests ... OK`
-4. `node --test mock/game.test.js` -> `tests 34 / pass 34 / fail 0`
-   (mock keeps its local JS pole tables; plain-pole scenes byte-identical)
-5. Device (`FXTEST_ONLY="test_parity test_combat test_menu test_menu_art
-   test_assets test_audio test_data" make fxtest-headless`):
-   ```
-   test_assets   PASSED=256 FAILED=0   PASS
-   test_audio    PASSED=17  FAILED=0   PASS
-   test_combat   PASSED=233 FAILED=0   PASS
-   test_data     PASSED=221 FAILED=0   PASS
-   test_menu_art PASSED=81  FAILED=0   PASS
-   test_menu     PASSED=74  FAILED=0   PASS
-   test_parity   PASSED=660 FAILED=0   PASS   (sketch 29560/29696)
-   ```
-6. Parity regen: `node tools/gen-parity-fixtures.js` -> `parity fixtures EMPTY DIFF`.
-7. `make size`:
-   ```
-   size: .text=27822 .data=78 .bss=1804
-   size: flash=27900/29696 (1796 free)  ram=1882/2560
-   ```
+## Symbol evidence (`avr-nm -C dist/monhun-ardu.ino.elf`)
 
-## Budget / A/B proof
+Shipping ELF, USB/CDC/Serial/PluggableUSB pattern count = **0 matches**.
 
-| build | flash |
-|---|---|
-| c8629d5 (pre-pole) | 27300 |
-| 802b4a6 (baseline now) | 27696 |
-| this change | **27900** (+204) |
-| A/B: +5th pole record reusing sheet 1 | **27900** (unchanged) |
+```
+== dist (shipping, MH_NO_USB) USB/CDC/Serial matches ==
+(none)
+== main symbol ==
+000034da T main
+```
 
-A/B reproduction: added `data/creatures/pole_ab.json` (static, `"sheet": 1`,
-one head zone), `make gen` x2, `make size` = 27900 (identical to the 4-record
-image) -> sheet dispatch and static-creature plumbing add **0 flash per
-record**. Temp record deleted; `grep -r pole_ab data src fxdata` = none, not in
-`git status`; regen restores the same 27900 image.
+Baseline (pre-change, same HEAD) had 17 matches, including `_cdcInterface`,
+`PluggableUSB()`, `serialEventRun`, `Serial_::read/write/...`,
+`vtable for Serial_`, `Serial`, `USB_SendControl(unsigned char, void const*, int)`,
+`SendInterfaces()`, `SendControl()`, `Recv()`. All gone after the change.
 
-The one-time engine cost is the shared-resolve port + the wrong-phys gate
-(+204 vs 802b4a6, +600 vs c8629d5); the reclaim acceptance is waived per the
-owner decision. The data-addition contract (content is cart-only, 0 flash) is
-met.
+`make mini` also compiles with `-DMH_NO_USB` (same 25234/1742; mini ELF
+overwritten in `dist` only transiently, final `dist` rebuilt as the fx shipping
+build).
 
-## Deviations (documented, intentional)
+## fxtest unaffected
 
-- Pole head zone x-span widened to reproduce the legacy x-independent head crit;
-  BREAK/CRACK keep the design's x-bounded head so the arm/band remains the
-  appendage zone.
-- `combatZoneHitResolveAt` gains a `gateBreak` flag so static props honour the
-  legacy "wrong phys: damage lands, no drain/break" gate without changing beast
-  zone behaviour.
-- `test_parity` no longer carves `MH_COMBAT_PARTS 0` (its scene set now includes
-  the shared-zone pole); still fits and is 660/0.
+`fxtest-build` compiles `tst/fxdatatest/test_*.ino` with its own arduino-cli
+invocation and stock flags (no `SIZE_FLAGS`), so it keeps the core main and USB
+CDC. Full `make fxtest-headless` green with serial capture intact (all suites
+end with a bare `P` marker, which requires working serial):
 
-No float, no /tmp, no commit/push.
+```
+test_audio PASS, test_boot PASSED=4, test_combat PASSED=233,
+test_data PASSED=221, test_hub PASSED=57, test_hud PASSED=17,
+test_menu_art PASSED=81, test_menu PASSED=74, test_monster_art PASSED=31,
+test_parity PASSED=660, test_perf PASSED=5 (pUs=6373 pHz=156 lHz=52),
+test_player_art PASSED=111, test_quests PASSED=50, test_screens PASSED=78,
+test_smith PASSED=66  — all PASS
+```
+
+## Boot smoke (Ardens, profiledump path supported)
+
+`build/profiler_after.txt` format matched; Ardens binary advertises
+`profiledump=`. Ran:
+
+```sh
+"$ARDENS" headless=4000 display=ssd1306 fxport=d1 \
+    profiledump=build/profiler-42n8_nousb.txt \
+    file=dist/monhun-ardu.ino.elf file=fxdata/fxdata.bin
+```
+
+Result: **exit 0**, dump written with `cycles=35396006`,
+`cycles_with_sleep=64000005`, `cpu_active_pct=55.3`, 38 hotspot rows including
+`main` (10.47%, 0x34da-0x6076), `ArduboyG ...::paint` (15.70%),
+`SpritesU::drawPlusMaskFX` (3.78%), `mh::blkClamp`, `mh::hudBar` — game executes
+normally. **0** USB/CDC/Serial entries in the dump. Empty serial output is
+expected for this shipping ELF (no USB); the profiledump confirms execution, so
+the `captureserial` fallback was not needed.
+
+## Gates
+
+- `make build` (fx) clean: 25234 B.
+- `make mini` clean: 25234 B.
+- `make size`: flash=25234/29696 (4462 free) ram=1742/2560.
+- `make gen-check`: `fxdata_manifest: PASS (67 generated artifacts unchanged)`.
+- `make test`: Total Passed 4579 / Failed 0.
+- `make test-tools`: 141 tests OK.
+- `node --test mock/game.test.js`: 34/34 pass.
+- parity regen `node tools/gen-parity-fixtures.js`: `tst/fxdatatest/parity_fixtures.hpp`
+  empty diff.
+- `make fxtest-headless`: all 15 suites PASS (serial capture intact).
+
+## Risk callout
+
+With no CDC the OS serial port disappears while the game runs. Uploading still
+works via the Cathy3K bootloader window (`arduino-cli upload` / reset as usual);
+noted in the README device-layer bullet.
+
+No git commit/push. Files touched: `monhun-ardu.ino`, `Makefile`, `README.md`;
+`output.md` this report.
