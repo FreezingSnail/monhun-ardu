@@ -94,10 +94,10 @@ constexpr uint8_t CHIP_BALL = art_dims::chip_ball_frame;
 // Cull fully off-screen sprites before paying the FX seek, then blit on the
 // current plane. Max sheet size is still 32x40 (fxtelegraph 32x24, fxpole
 // 20x40), so these bounds stay conservative.
-static inline void sprDraw(uint24_t img, int32_t x, int32_t y, uint16_t frame) {
+static inline void sprDraw(uint24_t img, int16_t x, int16_t y, uint8_t frame) {
     if (x <= -32 || x >= mh::SCREEN_W || y <= -40 || y >= mh::SCREEN_H)
         return;
-    SpritesU::drawPlusMaskFX(static_cast<int16_t>(x), static_cast<int16_t>(y), img, frame);
+    SpritesU::drawPlusMaskFX(x, y, img, frame);
 }
 
 /* ------------------------------------------------------------------ art */
@@ -120,7 +120,7 @@ static inline void sprDraw(uint24_t img, int32_t x, int32_t y, uint16_t frame) {
 // the HUD-band rect path (hudBlk) so its rows 0..HUD_H-1 are paintable.
 
 // round(v + sub/16): sub is the 1/16 px remainder, matches mock Math.round().
-static inline int16_t rndPx(int16_t v, int16_t sub) {
+static __attribute__((noinline)) int16_t rndPx(int16_t v, int16_t sub) {
     return static_cast<int16_t>((v * 16 + sub + 8) >> 4);
 }
 
@@ -215,13 +215,13 @@ __attribute__((noinline)) static void blkClamp(int32_t x, int32_t y, int32_t w, 
 }
 
 // World/arena rect: clipped below the 8 px HUD strip (y >= HUD_H).
-static inline void blk(int32_t x, int32_t y, int32_t w, int32_t h, uint8_t shade) {
+static inline void blk(int16_t x, int16_t y, int16_t w, int16_t h, uint8_t shade) {
     blkClamp(x, y, w, h, shade, mh::HUD_H);
 }
 
 // HUD-strip rect: rows 0..HUD_H-1 allowed (divider, HP/stamina/monster bars,
 // gun reload bar). See drawHud()/hudBar().
-static inline void hudBlk(int32_t x, int32_t y, int32_t w, int32_t h, uint8_t shade) {
+static inline void hudBlk(int16_t x, int16_t y, int16_t w, int16_t h, uint8_t shade) {
     blkClamp(x, y, w, h, shade, 0);
 }
 
@@ -238,7 +238,7 @@ static inline int16_t textPut(uint24_t sheet, int32_t x, int32_t y, char c) {
 
 // Mock drawText(number, scale 1): digits left-to-right, 4 px advance. crit
 // (shade 3) is white, otherwise light gray, matching the mock's damage colors.
-static void drawNumber(int32_t x, int32_t y, int16_t value, uint8_t shade) {
+static void drawNumber(int16_t x, int16_t y, int16_t value, uint8_t shade) {
     const uint24_t sheet = (shade >= 3) ? fxfontw : fxfontg;
     uint16_t v = value < 0 ? 0 : static_cast<uint16_t>(value);
     uint8_t buf[5];
@@ -364,13 +364,19 @@ static void drawPlayer(const mh::Game &g, int16_t camX, int16_t camY) {
     const uint8_t bodyFrame = (p.state == mh::PS_DODGE) ? spr::PLAYER_DODGE : spr::PLAYER_NORMAL;
     sprDraw(fxplayer, x, y, FRAME(bodyFrame));
 
+    // Shared attack timing (sword and flail read the same startup/active/reach;
+    // the two weapon branches below only scale the reach differently).
+    const mh::Attack *a = (p.state == mh::PS_ATTACK || p.state == mh::PS_SPECIAL) ? p.atk : nullptr;
+    uint8_t phase = 0;
+    if (a) {
+        const int16_t startup = mh::attackStartup(a);
+        const int16_t active = mh::attackActive(a);
+        phase = p.t < startup ? 0 : (p.t < startup + active ? 1 : 2);
+    }
+
     if (g.weapon == mh::W_SWORD) {
-        if (p.state == mh::PS_ATTACK || p.state == mh::PS_SPECIAL) {
-            const mh::Attack *a = p.atk;
-            if (a) {
-                const int16_t startup = mh::attackStartup(a);
-                const int16_t active = mh::attackActive(a);
-                const uint8_t phase = p.t < startup ? 0 : (p.t < startup + active ? 1 : 2);
+        if (a) {
+            {
                 int32_t reach = mh::attackReach(a);
                 if (phase != 1)
                     reach = reach * 6 / 10;   // mock 0.6 arc
@@ -415,11 +421,7 @@ static void drawPlayer(const mh::Game &g, int16_t camX, int16_t camY) {
             const uint8_t ba = static_cast<uint8_t>(p.whirlTick * ANG_WHIRL_BALL);
             sprDraw(fxwhirl, cx + mulQ4(cos256(ba), 20) - 2, cy + mulQ4(sin256(ba), 14) - 2, FRAME(spr::WHIRL_BALL));
         } else if (p.state == mh::PS_ATTACK || p.state == mh::PS_SPECIAL) {
-            const mh::Attack *a = p.atk;
             if (a) {
-                const int16_t startup = mh::attackStartup(a);
-                const int16_t active = mh::attackActive(a);
-                const uint8_t phase = p.t < startup ? 0 : (p.t < startup + active ? 1 : 2);
                 int32_t reach = mh::attackReach(a);
                 if (phase != 1)
                     reach = reach / 2;   // mock 0.5 chain
@@ -661,7 +663,7 @@ static int16_t hudNum(int16_t x, int32_t v, uint8_t digits) {
 // uint16 arithmetic: (w-2) <= 44 and den <= 320 (generated hp/stam maxima), so
 // the product fits int16 with room to spare; keeps the 32-bit divide helper
 // out of the image.
-static void hudBar(int32_t x, int32_t y, int32_t w, int32_t h, int32_t num, int32_t den, uint8_t shade) {
+static void hudBar(int16_t x, int16_t y, int16_t w, int16_t h, int16_t num, int16_t den, uint8_t shade) {
     hudBlk(x, y, w, h, 1);
     if (den <= 0 || num <= 0)
         return;
