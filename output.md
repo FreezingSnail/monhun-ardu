@@ -1,94 +1,102 @@
-# monhun-ardu-e4a — perf: bake HUD marker strip (4 glyph blits -> 1)
+# monhun-ardu-h71 — eqf.4 bake per-facing weapon arcs, drop player trig
 
-Status: DONE. All verifications below pass. No commit/push (orchestrator commits).
+Status: DONE — **spike outcome: NOT WORTH IT. No art baked, tree clean at HEAD.**
+No commit/push (orchestrator commits). Deliverable for this bead is the
+measurement report (bead allows the "not worth it" outcome).
 
-## What changed
+HEAD during the spike: `665db9d perf: bake HUD marker strip, flash 26928 (monhun-ardu-e4a)`.
 
-- `tools/gen-art.py` — new `HUD_WEAPONS=("SWD","FLA","GUN")`, `HUD_MODES=("H","T")`,
-  `hud_defs()` authors six 16x8 strips (frame = weapon*2 + mode) from the same
-  `GLYPHS` table / `text_blocks()` lane as the menu bake; added to `icon_defs()`
-  so `art_dims::hud_frame_w/h/frames` are emitted. New `check_hud_identity()`
-  (menu-oracle pattern) cross-checks every 4x8 cell of every strip against the
-  authored `fxfontw` sheet; called in `main()` after `check_menu_identity()`.
-- `src/render.hpp` — `drawHud()` marker: 4 `hudPut()` calls (12-char if/else +
-  mode char) replaced with one `sprDraw(fxhud, 46, 1, FRAME(wf*2+mf))`; the old
-  "anything but sword/flail reads GUN" mapping and mode `T`/`H` mapping are
-  preserved. `hudPut()`/`hudNum()` stay (gun reload/shell + train readouts).
-- Generated (from `make gen`): `images/blocks/fxhud_16x8.png`,
-  `fxdata/blocks/Sprites.txt`, `fxdata/fxdata{,-data}.bin`, `fxdata/fxdata.h`,
-  `src/fxdata.h`, `fxdata/manifest.json`, `src/generated/art_dims.hpp`.
-  `fxdata/tables/equip.bin` + `src/generated/equip_meta.hpp` re-emitted because
-  the equip blob bakes absolute sheet offsets (`SHEET_OFF_*`) that shift when a
-  new blocks sheet is inserted; all `static_assert`s hold.
+## Question
 
-## Verification
+Remaining `mulQ4(cos256/sin256)` consumers in the render path were thin: whirl
+BALL, player STUN sparkle, monster stun dot, camera SHAKE. Bead context: bake
+the ball/stun as 24-phase sheets (like the 836 ring) if the measured saving
+justifies it; otherwise report and stop.
 
-### 1. gen determinism
-`make gen` x2 then `make gen-check`:
-```
-fxdata_manifest: fxdata/manifest.json up to date (32 images, 40 inputs, 11 outputs)
-gen.sh: FX data + src/fxdata.h regenerated
-fxdata_manifest: PASS (52 generated artifacts unchanged)
-```
+## Spike method
 
-### 2. host + tooling
-- `make test`: `Total Passed: 3119  Total Failed: 0`
-- `make test-tools`: `Ran 81 tests ... OK`
+Scratch-edit `src/render.hpp` only, one variant per build, `make fxtest-headless
+FXTEST_ONLY=test_perf`, read `rMx`. The perf bench scene (`primeHunt`) has the
+player simultaneously in `PS_STUN` + `ST_WHIRL` plus a monster stun dot and
+hit-flash shake, so all remaining consumers are live on the max frame. Each
+build measured in full; `render.hpp` reverted between variants; all numbers
+deterministic with the documented baseline `rMx=5388 rAv=5028 pUs=6501`.
 
-### 3. device suites (`make fxtest-headless`, full)
-```
-test_hud PASSED=17 FAILED=0
-test_parity PASSED=660 FAILED=0
-B pUs=6501 pHz=153 lHz=51 lTk=984 rMx=5388 rAv=5028 ram=418
-perf_test PASSED=5 FAILED=0
-test_player_art PASSED=111 FAILED=0
-asset 254/0  audio 14/0  boot 4/0  combat 195/0  data 221/0  menu 59/0
-```
-`test_hud` 17/0 and `test_player_art` 111/0 UNCHANGED (no golden regen).
+## Measured rMx deltas (us, triplane frame)
 
-### 4. perf (deterministic; re-runs byte-identical)
-Baseline measured on HEAD `src/render.hpp` + the new fxdata (same toolchain):
-`rMx=5496 rAv=5136 pUs=6614` (exactly the bead's stated baseline).
-Baked: `rMx=5388 rAv=5028 pUs=6501`.
-Delta: rMx **-108 us**, rAv -108 us, pUs -113 us (~1.6%).
+| variant (only change) | rMx | Δ |
+|---|---|---|
+| baseline HEAD | 5388 | — |
+| whirl BALL trig -> constant (blit kept) | 5348 | **-40** |
+| player STUN trig -> constant (blit kept) | 5348 | **-40** |
+| BALL+STUN trig -> constant (blits kept) | 5308 | **-80** |
+| monster stun dot trig -> constant | 5348 | -40 |
+| camera SHAKE trig -> constant | 5360 | -28 |
+| all four trig consumers -> constant | 5248 | -140 |
+| BALL full draw removed (partRead+8x4 blit+trig) | 5244 | -144 |
+| STUN full draw removed (partRead+8x4 blit+trig) | 5276 | -112 |
+| BALL+STUN full draw removed | 5124 | -264 |
+| whirl RING blit removed (48x32 triplane, already baked) | 5036 | **-352** |
 
-### 5. size
-`make build` + `make size`:
-```
-Sketch uses 26928 bytes (90%) of program storage space. Maximum is 29696 bytes.
-size: .text=26870 .data=58 .bss=1960
-size: flash=26928/29696 (2768 free)  ram=2018/2560
-```
-Flash 27000 -> 26928 (**-72 B**). Cart: `FX_DATA_BYTES` 123917 -> 124495
-(**+578 B**); `fxdata/fxdata.bin` 124160 -> 124672 (+512 B page-aligned).
-`mhEquip` pinned at `0x000525` (unchanged); new sprite section `fxhud` at
-`0x009DB1`, blocks sections after the raw_t tables, no 16-bit window issue.
+Player path trig alone = 80 us/frame; ball = 40, stun = 40 (≈13 us/plane for
+the cos+sin pair, i.e. ~6.7 us per `sin256` cart byte fetch, paid on all 3
+planes).
 
-## Pixel-identity evidence (gen-art identity check is live)
+## Why the bake loses (the decisive number)
 
-Negative test: temporarily baked the HUD strips in `DARK` instead of `WHITE`;
-`make gen` exited 2 with
-`gen-art: HUD IDENTITY FAIL: hud frame 0 (1,0) 'S': got (85,85,85,255) want (255,255,255,255)`
-(and the rest of the strip). Reverted -> `make gen` + `make gen-check` PASS.
-This proves `check_hud_identity()` actually compares every strip cell against
-`fxfontw`, the same sheet the old `hudPut()`/`textPut()` blitted.
+`partDraw` runs once per plane. A baked phase sheet must be at least the orbit
+bounding box, because the blit origin is the fixed player centre reference:
 
-## Perf analysis (measured, not claimed)
+- Ball orbit = `cx ± 20`, `cy ± 14`, cell 8x4 -> baked cell **48x32**.
+- One 48x32 triplane sprite blit costs **~352 us/frame for the whole ring draw**
+  (measured above: removing the already-baked ring blit saves 352 us). A 48x32
+  `drawPlusMaskFX` streams ~1728 cart bytes (6 pages x 48 x mask+data x 3
+  planes); area/bytes dominate, not the seek.
+- Baking the ball replaces [8x4 blit + 2 trig = ~48 us/plane] with a
+  [48x32 blit = ~117 us/plane] -> net **regression ~+200 us/frame**.
 
-The bake removes 3 of the 4 `drawPlusMaskFX` calls per HUD draw, but the saving
-is only 108 us, not the ~3x156 = ~468-600 us the bead estimated. Each removed
-call = one `FX::seekData` + two header reads (`SpritesU.hpp:894`) + a 4x8 blit.
-The surviving 16-wide blit paints the same total glyph pixels as the four 4-wide
-blits, so the only saved work is 3 seeks + 6 header bytes. 108 us / 3 ~= 36 us
-per seek+header on this path; the ~156 us/blit figure appears to describe a
-larger/cold sprite, not the 4x8 font tile. The win is real and deterministic
-(rMx improved 5496 -> 5388 > the 5496 acceptance bar) but ~an order of magnitude
-below the estimate.
+Precedent: the 836 ring bake was a win only because it collapsed **6 separate
+`partDraw` seeks + 12 `sin256` reads into 1 blit** (7 blits -> 2). The ball and
+stun are already single blits — there is no blit to collapse, so the bake only
+swaps cheap trig for a much larger streaming blit.
+
+Stun orbit = `cx ± 7`, `cy ± 2` -> baked cell 24x8 (1 page, 3 columns): the
+per-part `partRead` seek remains, only the ~13 us/plane of trig is removed, so
+the best case is well under the bead's ~50 us bar and would cost 24 art frames
+plus quantization error. No measurable case clears the bar; the ball case is
+negative.
+
+## Remaining trig consumers in the player/render path (and why)
+
+| consumer | calls/frame | why it stays |
+|---|---|---|
+| whirl BALL orbit | 2 (cos+sin) | single 8x4 blit; a phase sheet needs a 48x32 cell (~+200 us) |
+| player STUN sparkle | 2 | single 8x4 blit; 24x8 bake nets <50 us, not worth the art |
+| monster stun dot | 2 | same single-blit shape as the player sparkle |
+| camera SHAKE | 2 (sin+cos) | **must stay per-frame**: the mock is `sin(tick*1.7)*shake`, `cos(tick*2.3)*0.7*shake` — a continuous, tick-dependent oscillation over the whole scene; it cannot be baked into a finite sheet without a per-tick table, and it is render-wide (this is stated explicitly per the bead acceptance) |
+| whirl RING | 0 | already baked (836) |
+
+`mulQ4` therefore stays in `render.hpp` for the ball/stun/shake/dot consumers.
+
+## Verification (tree-clean branch of acceptance)
+
+Tree clean at HEAD `665db9d` (`git status --short` empty; `git diff` empty).
+
+- `make gen-check`: `fxdata_manifest: PASS (52 generated artifacts unchanged)`.
+- `make test`: `Total Passed: 3119  Total Failed: 0`.
+- `make test-tools`: `Ran 81 tests ... OK`.
+- `make fxtest-headless` (full): all suites PASS —
+  `test_assets 254/0`, `test_audio 14/0`, `test_boot 4/0`, `test_combat 195/0`,
+  `test_data 221/0`, `test_hud 17/0`, `test_menu 59/0`, `test_parity 660/0`,
+  `test_player_art 111/0`, `test_perf 5/0`.
+  Perf line vs current baseline: `B pUs=6501 pHz=153 lHz=51 lTk=984 rMx=5388
+  rAv=5028 ram=418` (matches `rMx=5388 rAv=5028 pUs=6501`).
+- `make size`: `flash=26928/29696 (2768 free)  ram=2018/2560` — unchanged vs
+  the 26928 HEAD baseline (no art, no code delta).
 
 ## Deviations / notes
 
-- No test files changed; no goldens regenerated.
-- `equip_meta.hpp` / `equip.bin` moved because the new blocks sheet shifts baked
-  absolute sheet offsets; this is expected generator output (gen-check
-  deterministic), not a behavior change.
+- No source, art, data, generated file, or test changed. No goldens touched.
+- Spike edits were reverted; every build in the table used the same toolchain
+  and the baseline was re-confirmed after revert.
 - Did not commit, stage, or push.
