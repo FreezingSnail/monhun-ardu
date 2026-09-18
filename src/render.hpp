@@ -72,8 +72,8 @@ constexpr uint8_t SPIN_SOUTH = 3;
 }   // namespace spr
 
 // Cull fully off-screen sprites before paying the FX seek, then blit on the
-// current plane. Max sheet size is 32x40 (fxmonster 32x24, pole variants up to
-// 28x40), so these bounds stay conservative.
+// current plane. Max sheet size is 32x40 (fxmonster 32x24, pole variants
+// 20x40), so these bounds stay conservative.
 static inline void sprDraw(uint24_t img, int16_t x, int16_t y, uint8_t frame) {
     if (x <= -32 || x >= mh::SCREEN_W || y <= -40 || y >= mh::SCREEN_H)
         return;
@@ -312,10 +312,11 @@ static void drawPole(const mh::Game &g, int16_t camX, int16_t camY) {
     const int16_t x = static_cast<int16_t>(pole.rect.x - camX);
     const int16_t y = static_cast<int16_t>(pole.rect.y - camY + mh::HUD_H);
     const uint8_t sheet = mh::combatCreatureSheet(g.combat.creature);
-    // The breakable zone drives the stage: prefer the appendage (BREAK arm /
-    // CRACK band) and fall back to the head (SEVER top block). hpMax == 0 means
-    // no breakable zone, so PLAIN stays on its 2-frame sheet above. Everything
-    // here is cache state -- no per-tick cart reads.
+    // The breakable zone drives the stage: every variant ships one whole-pole
+    // appendage zone, so its pool + broken bit select the horn/stump/band stage;
+    // the head fallback is kept for a hypothetical head-pool prop. hpMax == 0
+    // means no breakable zone, so PLAIN stays on its 2-frame sheet above.
+    // Everything here is cache state -- no per-tick cart reads.
     const mh::CombatZoneCache &za = g.combat.zone[mh::COMBAT_ZONE_APPENDAGE];
     const mh::CombatZoneCache &zh = g.combat.zone[mh::COMBAT_ZONE_HEAD];
     const bool append = za.hpMax != 0;

@@ -237,22 +237,23 @@ inline void test_assets(FxTest &test) {
     blobHeader(fxmonster_sweep, 32, 24, test, F("bull monster sheet w/h"));
     blobHeader(fxmonster_heavy, 32, 24, test, F("longtail monster sheet w/h"));
 
-    // Breakable pole variants (beads monhun-ardu-6zb.5 / 6zb.7): SEVER/CRACK
-    // 20x40, BREAK 28x40. Each variant now ships SIX frames in stage*2 + flash
+    // Breakable pole variants (beads monhun-ardu-6zb.5 / 6zb.7 / 6zb.9): all
+    // three are 20x40 (BREAK's horn replaced the 28-wide side arm). Each ships
+    // SIX frames in stage*2 + flash
     // order (intact, intact-flash, damaged, damaged-flash, broken,
     // broken-flash); PLAIN keeps the legacy 20x40 2-frame fxpole. The packer
     // lays sheets out contiguously, so the distance to the next declared sheet
     // is the blob length: divide out the 2-byte header and the per-frame
     // plus-mask size (5 pages * w * 3 passes * 2 bytes) to pin the count.
     blobHeader(fxpole_sever, 20, 40, test, F("sever pole w/h"));
-    blobHeader(fxpole_break, 28, 40, test, F("break pole w/h"));
+    blobHeader(fxpole_break, 20, 40, test, F("break pole w/h"));
     blobHeader(fxpole_crack, 20, 40, test, F("crack pole w/h"));
     auto poleFrames = [](uint24_t sheet, uint24_t next, uint8_t w) {
         const uint16_t frame_bytes = static_cast<uint16_t>(5 * w * 3 * 2);
         return static_cast<uint32_t>((next - sheet - 2) / frame_bytes);
     };
     test.expectEq(poleFrames(fxpole_sever, fxreload, 20), 6, F("sever 6 frames"));
-    test.expectEq(poleFrames(fxpole_break, fxscatter, 28), 6, F("break 6 frames"));
+    test.expectEq(poleFrames(fxpole_break, fxhud, 20), 6, F("break 6 frames"));
     test.expectEq(poleFrames(fxpole_crack, fxfontg, 20), 6, F("crack 6 frames"));
 
     // Opening menu v2 (beads 2u8 / 4t4): bg + per-row selection tiles, now

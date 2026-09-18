@@ -253,18 +253,20 @@ const MONSTER_ZONES = {
 // src/core/monster.hpp playerPhys().
 const PHYS_BIT_BY_WEAPON = [1, 2, 4];
 
-// Training-pole variants (bead monhun-ardu-6zb.5), mirroring src/core/game.hpp
-// POLE_DEFS: kind 0 PLAIN is the legacy pole (no zone, no break); 1 SEVER is a
-// top block that loses its head crit when broken; 2 BREAK is a side arm whose
-// hurt rect shrinks 28x36 -> 20x36; 3 CRACK is a mid band. All three breakable
-// variants share the monster rule (any weapon drains; breakTypes is the full
-// phys mask, so any weapon breaks). `z` is the zone box relative to the pole
-// rect (w 0 = no zone), pool the drain, breakTypes the required phys mask.
+// Training-pole variants (bead monhun-ardu-6zb.5; whole-pole zone 6zb.9),
+// mirroring src/core/game.hpp POLE_DEFS: kind 0 PLAIN is the legacy pole (no
+// zone, no break, keeps its head crit); 1 SEVER, 2 BREAK and 3 CRACK each
+// carry ONE whole-pole breakable zone (4 px margin) so any landed hit on the
+// post drains, no matter where the attack box centre falls. All three share
+// the monster rule (any weapon drains; breakTypes is the full phys mask).
+// `z` is the zone box relative to the pole rect (w 0 = no zone), pool the
+// drain, breakTypes the required phys mask. Broken art is a stage, not a rect
+// resize, so brokenW/brokenH stay the body size.
 const POLE_DEFS = [
-  { w: 20, h: 36, z: null, pool: 0, breakTypes: 0, brokenW: 20, brokenH: 36, critLost: false },
-  { w: 20, h: 36, z: { x: 0, y: 0, w: 20, h: 16 }, pool: 60, breakTypes: 7, brokenW: 20, brokenH: 36, critLost: true },
-  { w: 28, h: 36, z: { x: 20, y: 8, w: 8, h: 12 }, pool: 40, breakTypes: 7, brokenW: 20, brokenH: 36, critLost: false },
-  { w: 20, h: 36, z: { x: 0, y: 18, w: 20, h: 10 }, pool: 30, breakTypes: 7, brokenW: 20, brokenH: 36, critLost: false },
+  { w: 20, h: 36, z: null, pool: 0, breakTypes: 0, brokenW: 20, brokenH: 36 },
+  { w: 20, h: 36, z: { x: -4, y: -4, w: 28, h: 44 }, pool: 60, breakTypes: 7, brokenW: 20, brokenH: 36 },
+  { w: 20, h: 36, z: { x: -4, y: -4, w: 28, h: 44 }, pool: 40, breakTypes: 7, brokenW: 20, brokenH: 36 },
+  { w: 20, h: 36, z: { x: -4, y: -4, w: 28, h: 44 }, pool: 30, breakTypes: 7, brokenW: 20, brokenH: 36 },
 ];
 
 const POLE_PLAIN = 0;
@@ -1131,9 +1133,9 @@ function updatePole(g) {
 
 function damagePole(g, dmg, hx, hy) {
   const pole = g.pole;
-  const def = POLE_DEFS[pole.kind] || POLE_DEFS[0];
-  let crit = hy < pole.y + 16;
-  if (crit && pole.broken && def.critLost) crit = false;   // SEVER: top gone
+  // PLAIN keeps its x1.4 head crit (its mul-140 head zone, unbreakable).
+  // Variants carry one body-mul whole-pole zone instead, so no hit crits.
+  const crit = pole.kind === 0 && hy < pole.y + 16;
   const total = Math.max(1, (dmg * (crit ? 14 : 10)) / 10 | 0);
   pole.hitFlash = 4;
   g.freeze = Math.max(g.freeze, crit ? 5 : 4);
@@ -1535,6 +1537,12 @@ function poleStage(pole, def) {
 // damaged stage. Contrast-aware placement: BLACK (0) on the LIGHT head/arm,
 // WHITE (3) on the DARK post band.
 const POLE_FRACTURE = [[2, 0], [1, 1], [1, 2], [2, 2], [2, 3], [3, 3], [3, 4]];
+// BREAK's curved horn (tools/gen-art.py _BREAK_HORN mirror): [x, y, w] DARK
+// runs on the head block, all inside the 20 px width.
+const POLE_HORN = [
+  [12, 1, 3], [11, 2, 4], [11, 3, 3], [10, 4, 3], [9, 5, 3], [8, 6, 3],
+  [7, 7, 4], [7, 8, 4], [6, 9, 4], [6, 10, 3], [5, 11, 4], [5, 12, 4],
+];
 function poleFracture(ctx, x, y, chipped, shade) {
   ctx.fillStyle = SHADES[shade];
   for (let i = 0; i < POLE_FRACTURE.length; i++) {
@@ -1609,31 +1617,30 @@ function drawPole(ctx, g) {
       ctx.fillRect(x + 10, y + 37, 1, 1);
     }
   } else if (kind === 2) {
+    // BREAK is a horn you knock off (bead monhun-ardu-6zb.9): a curved DARK
+    // horn on the LIGHT head block, a WHITE fracture marker on the shaft, then
+    // a jagged base stub + the horn on the ground once broken.
     if (stage === 2) {
+      ctx.fillStyle = SHADES[1];            // jagged base stub on the block
+      ctx.fillRect(x + 5, y + 11, 4, 2);
+      ctx.fillRect(x + 6, y + 9, 1, 2);
+      ctx.fillRect(x + 8, y + 10, 1, 1);
       ctx.fillStyle = SHADES[0];
-      ctx.fillRect(x + 18, y + 8, 1, 2);    // sheared arm stub
-      ctx.fillRect(x + 19, y + 10, 1, 2);
-      ctx.fillRect(x + 18, y + 13, 1, 2);
-      ctx.fillRect(x + 19, y + 16, 1, 2);
-      ctx.fillStyle = SHADES[2];            // fallen arm shaft
-      ctx.fillRect(x + 11, y + 36, 9, 2);
-      ctx.fillStyle = SHADES[head];         // hammer head on the ground
-      ctx.fillRect(x + 20, y + 35, 8, 4);
+      ctx.fillRect(x + 5, y + 11, 4, 1);
+      ctx.fillStyle = SHADES[1];            // horn lying on the ground
+      ctx.fillRect(x + 3, y + 36, 9, 3);
+      ctx.fillRect(x + 12, y + 37, 3, 2);
       ctx.fillStyle = SHADES[0];
-      ctx.fillRect(x + 20, y + 35, 8, 1);
-      ctx.fillRect(x + 20, y + 38, 8, 1);
-      ctx.fillRect(x + 24, y + 36, 1, 1);
+      ctx.fillRect(x + 3, y + 36, 9, 1);
+      ctx.fillRect(x + 12, y + 37, 3, 1);
     } else {
-      ctx.fillStyle = SHADES[2];
-      ctx.fillRect(x + 20, y + 8, 8, 12);   // side arm
-      ctx.fillStyle = SHADES[3];
-      ctx.fillRect(x + 21, y + 9, 6, 2);    // hammer head
-      ctx.fillRect(x + 21, y + 16, 6, 2);
-      poleFracture(ctx, x + 22, y + 10, stage === 1, 0);
+      ctx.fillStyle = SHADES[1];            // DARK curved horn on the block
+      for (const [hx0, hy0, hw] of POLE_HORN) ctx.fillRect(x + hx0, y + hy0, hw, 1);
+      poleFracture(ctx, x + 7, y + 5, stage === 1, 3);
       if (stage === 1) {
-        ctx.fillStyle = SHADES[0];
-        ctx.fillRect(x + 20, y + 9, 1, 3);  // extra cracks down the arm
-        ctx.fillRect(x + 26, y + 15, 1, 3);
+        ctx.fillStyle = SHADES[3];
+        ctx.fillRect(x + 6, y + 9, 1, 2);   // extra cracks down the horn
+        ctx.fillRect(x + 11, y + 4, 1, 2);
       }
     }
   } else if (kind === 3) {

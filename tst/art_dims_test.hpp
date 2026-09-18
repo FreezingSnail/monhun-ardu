@@ -596,11 +596,11 @@ void testTailSpin(Test &t) {
 // Beads monhun-ardu-6zb.5 / 6zb.7 / 6zb.8: PLAIN keeps the legacy 2-frame
 // 20x40 sheet; each breakable variant is a 6-frame sheet in stage*2 + flash
 // order (intact, intact-flash, damaged, damaged-flash, broken, broken-flash).
-// The marker is now a neutral 7-px jagged fracture on the actual breakable
-// part -- SEVER on the LIGHT head (BLACK), BREAK on the LIGHT arm (BLACK),
-// CRACK on the DARK band (WHITE) -- so the tests pin position, contrast (the
-// part behind is the opposite shade) and the damaged (5-px chipped) / broken
-// (detached on the ground) stages.
+// The marker is a neutral 7-px jagged fracture on the actual breakable part --
+// SEVER on the LIGHT head (BLACK), BREAK on the DARK horn (WHITE), CRACK on the
+// DARK band (WHITE) -- so the tests pin position, contrast (the part behind is
+// the opposite shade) and the damaged (5-px chipped) / broken (detached on the
+// ground) stages. All three variant sheets are 20x40 (bead 6zb.9).
 void testPoleSheets(Test &t) {
     Blob plain, sever, brk, crack;
     t.assert(parseBlob("fxpole", plain, t), 1, "plain pole blob");
@@ -634,11 +634,22 @@ void testPoleSheets(Test &t) {
         return n;
     };
 
+    // DARK (shade 1) opaque pixels in a rect: mask set, plane0 set, plane1
+    // clear. The BREAK horn is DARK on the LIGHT head, so this counts its ink.
+    auto darkInk = [](const Blob &b, int frame, int x0, int y0, int x1, int y1) {
+        int n = 0;
+        for (int y = y0; y < y1; y++)
+            for (int x = x0; x < x1; x++)
+                if (bitAt(y, pixelMask(b, frame, 0, x, y / 8)) && bitAt(y, pixelData(b, frame, 0, x, y / 8)) && !bitAt(y, pixelData(b, frame, 1, x, y / 8)))
+                    n++;
+        return n;
+    };
+
     const char *const syms[3] = {"fxpole_sever", "fxpole_break", "fxpole_crack"};
     Blob *const blobs[3] = {&sever, &brk, &crack};
     // Fracture marker rect on the breakable part and the shade it must use.
-    const int mbox[3][4] = {{8, 3, 12, 8}, {22, 10, 26, 15}, {8, 19, 12, 24}};
-    const int mshade[3] = {0, 0, 2};   // BLACK on head/arm, WHITE on the band
+    const int mbox[3][4] = {{8, 3, 12, 8}, {7, 5, 11, 10}, {8, 19, 12, 24}};
+    const int mshade[3] = {0, 3, 3};   // BLACK on the head, WHITE on horn/band
     for (int vi = 0; vi < 3; vi++) {
         Blob &b = *blobs[vi];
         const std::string tag = syms[vi];
@@ -671,15 +682,21 @@ void testPoleSheets(Test &t) {
         t.assert(markerInk(b, 2, ms, m[0], m[1], m[2], m[3]), 5, tag + " damaged 5-px marker");
         t.assert(markerInk(b, 4, ms, m[0], m[1], m[2], m[3]), 0, tag + " broken marker gone");
 
-        // Contrast-aware: BLACK ink sits on a LIGHT head/arm, WHITE on the DARK
-        // band. Sample the part beside the marker.
-        if (vi < 2) {
-            const int bx = vi == 0 ? 2 : 20;
-            const int by = vi == 0 ? 2 : 10;
+        // Contrast-aware: BLACK ink sits on the LIGHT SEVER head, WHITE on the
+        // DARK BREAK horn and the DARK CRACK band. Sample the part by the marker.
+        if (vi == 0) {
+            const int bx = 2, by = 2;
             const int page = by / 8;
             t.assert(bitAt(by, pixelMask(b, 0, 0, bx, page)), 1, tag + " marker part opaque");
             t.assert(bitAt(by, pixelData(b, 0, 0, bx, page)), 1, tag + " part non-BLACK");
             t.assert(bitAt(by, pixelData(b, 0, 2, bx, page)), 0, tag + " part LIGHT behind BLACK marker");
+        } else if (vi == 1) {
+            const int bx = 7, by = 11;
+            const int page = by / 8;
+            t.assert(bitAt(by, pixelMask(b, 0, 0, bx, page)), 1, tag + " horn opaque");
+            t.assert(bitAt(by, pixelData(b, 0, 0, bx, page)), 1, tag + " horn non-BLACK");
+            t.assert(bitAt(by, pixelData(b, 0, 1, bx, page)), 0, tag + " DARK horn behind WHITE marker");
+            t.assert(bitAt(by, pixelData(b, 0, 2, bx, page)), 0, tag + " horn not WHITE");
         } else {
             const int by = 24;
             const int page = by / 8;
@@ -703,10 +720,14 @@ void testPoleSheets(Test &t) {
             t.assert(regionInk(b, 4, 0, 0, b.w, 16) > 8, 1, tag + " broken head block kept");
     }
 
-    // BREAK's side arm extends the frame to 28 px and inks columns 20..27 on
-    // the intact frame (the arm against the empty background).
-    t.assert(brk.w, 28, "break pole w 28");
-    t.assert(regionInk(brk, 0, 20, 0, 28, 40) > 0, 1, "break side arm has ink right of the post");
+    // BREAK is a horn (bead 6zb.9): a DARK curved horn on the LIGHT head block
+    // inside the 20 px width, a jagged base stub + the horn on the ground when
+    // broken. No side arm extends the frame any more.
+    t.assert(brk.w, 20, "break pole w 20");
+    t.assert(darkInk(brk, 0, 4, 0, 16, 14) > 20, 1, "break intact horn ink on the block");
+    t.assert(darkInk(brk, 2, 4, 0, 16, 14) > 20, 1, "break damaged horn ink on the block");
+    t.assert(darkInk(brk, 4, 4, 8, 12, 14) > 3, 1, "break broken base stub on the block");
+    t.assert(darkInk(brk, 4, 0, 36, 20, 40) > 5, 1, "break broken horn on the ground");
 }
 
 void ArtDimsSuite(TestRunner &runner) {

@@ -328,21 +328,23 @@ struct Effect {
     int16_t text;
 };
 
-// Training-pole variants (bead monhun-ardu-6zb.6). Kind selects the static
-// creature record loaded through the shared combat loader; the record's zones
-// (head crit, breakable appendage) and stats drive behaviour. The Pole itself
-// only owns its world rect, hit flash timer and the selected variant kind:
-// pool/broken live in the shared Game::combat zone caches (zoneBroken, zone[..].hp)
-// exactly like a beast's, so there is no pole-specific drain/break code.
+// Training-pole variants (bead monhun-ardu-6zb.6; whole-pole zone 6zb.9). Kind
+// selects the static creature record loaded through the shared combat loader;
+// PLAIN carries a crit head zone, each breakable variant ONE whole-pole
+// appendage zone (body-mul 100, 4 px margin) so any landed hit drains. The
+// Pole itself only owns its world rect, hit flash timer and the selected
+// variant kind: pool/broken live in the shared Game::combat zone caches
+// (zoneBroken, zone[..].hp) exactly like a beast's, so there is no
+// pole-specific drain/break code.
 enum PoleKind : int8_t {
     POLE_PLAIN = 0,
-    POLE_SEVER = 1,   // sword-gated top block: breaks -> head crit x1.4 gone
-    POLE_BREAK = 2,   // flail-gated side arm: breaks -> rect 28x36 -> 20x36
-    POLE_CRACK = 3    // shot-gated band: breaks -> cracked band art
+    POLE_SEVER = 1,   // sword: whole-pole pool -> broken horn art
+    POLE_BREAK = 2,   // flail: whole-pole pool -> broken horn art
+    POLE_CRACK = 3    // gun: whole-pole pool -> cracked band art
 };
 
 struct Pole {
-    Rect rect;          // hurt box: plain 20x36 at (140,40); BREAK 28x36 intact
+    Rect rect;          // hurt box: every pole 20x36 at (140,40) (no resize)
     uint8_t hitFlash;   // 4 on hit, decays in updatePole()
     int8_t kind;        // PoleKind (selects the prop creature record)
 };

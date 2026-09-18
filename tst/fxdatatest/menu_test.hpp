@@ -118,27 +118,27 @@ inline void test_menu(FxTest &test) {
     test.expectEq(static_cast<uint32_t>(g.pole.kind), POLE_PLAIN, F("start plain pole"));
     test.expectEq(static_cast<uint32_t>(g.combat.zone[COMBAT_ZONE_HEAD].hp), 0, F("plain pool 0"));
 
-    // ---- target 5 SEVER installs the slash-gated pole (pool 60, rect 20)
+    // ---- target 5 SEVER installs the whole-pole breakable variant (pool 60)
     MenuState sv;
     sv.weapon = W_SWORD;
     sv.target = MENU_POLE_TARGET + POLE_SEVER;
     menuStart(g, sv);
     test.expectEq(static_cast<uint32_t>(g.mode), MODE_TRAIN, F("start sever mode"));
     test.expectEq(static_cast<uint32_t>(g.pole.kind), POLE_SEVER, F("start sever pole"));
-    test.expectEq(static_cast<uint32_t>(g.combat.zone[COMBAT_ZONE_HEAD].hp), 60, F("sever pool 60"));
+    test.expectEq(static_cast<uint32_t>(g.combat.zone[COMBAT_ZONE_APPENDAGE].hp), 60, F("sever pool 60"));
     test.expectEq(static_cast<uint32_t>(g.pole.rect.w), 20, F("sever rect w"));
 
-    // ---- target 6 BREAK installs the blunt-gated pole (pool 40, rect 28)
+    // ---- target 6 BREAK installs the horn variant (pool 40, rect 20)
     MenuState bk;
     bk.weapon = W_FLAIL;
     bk.target = MENU_POLE_TARGET + POLE_BREAK;
     menuStart(g, bk);
     test.expectEq(static_cast<uint32_t>(g.pole.kind), POLE_BREAK, F("start break pole"));
     test.expectEq(static_cast<uint32_t>(g.combat.zone[COMBAT_ZONE_APPENDAGE].hp), 40, F("break pool 40"));
-    test.expectEq(static_cast<uint32_t>(g.pole.rect.w), 28, F("break rect w 28"));
-    test.expectEq(static_cast<uint32_t>(g.target.rect.w), 28, F("break target rect"));
+    test.expectEq(static_cast<uint32_t>(g.pole.rect.w), 20, F("break rect w 20"));
+    test.expectEq(static_cast<uint32_t>(g.target.rect.w), 20, F("break target rect"));
 
-    // ---- target 7 CRACK installs the shot-gated pole (pool 30)
+    // ---- target 7 CRACK installs the whole-pole crack variant (pool 30)
     MenuState ck;
     ck.weapon = W_GUN;
     ck.target = MENU_POLE_TARGET + POLE_CRACK;

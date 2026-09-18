@@ -108,7 +108,9 @@ void CombatSuite(TestRunner &runner) {
         // cgk: the ravager declares head + appendage. 4t4 added the heavy
         // appendage (long tail). 76y added the chicken's lunge head + legs
         // (appendage) zones.
-        t.assert(combat::ZONES_COUNT, 11, "heavy tail + ravager + lunge head/legs + 4 pole zone records");
+        // 6zb.9: each variant carries ONE whole-pole zone (the old per-variant
+        // head zones are gone): plain head + 3 variant appendages = 4 pole zones.
+        t.assert(combat::ZONES_COUNT, 9, "heavy tail + ravager + lunge head/legs + 4 pole zone records");
         t.assert(combat::CREATURES_COUNT, 8, "3 demo beasts + ravager + 4 static poles");
         t.assert(combat::SKELETONS_COUNT, 5, "bull/chicken/longtail/quad + pole");
         t.assert(combat::ATTACKS_COUNT, 8, "3x2 shipped + ravager bite/tail_sweep");
@@ -183,8 +185,10 @@ void CombatSuite(TestRunner &runner) {
         t.assert(combatCreatureSheet(combat_data::CREATURE_POLE_BREAK), 3, "break sheet 3");
         t.assert(combatCreatureSheet(combat_data::CREATURE_POLE_CRACK), 4, "crack sheet 4");
         t.assert(combatCreatureSheet(combat_data::CREATURE_LUNGE), 0, "beast default sheet 0");
-        t.assert(combatCreatureBrokenW(combat_data::CREATURE_POLE_BREAK), 20, "break brokenBody w");
-        t.assert(combatCreatureBrokenH(combat_data::CREATURE_POLE_BREAK), 36, "break brokenBody h");
+        // Whole-pole zones + stage art (bead monhun-ardu-6zb.9): no variant
+        // resizes its hurt rect, so no brokenBody override ships.
+        t.assert(combatCreatureBrokenW(combat_data::CREATURE_POLE_BREAK), 0, "break no brokenBody w");
+        t.assert(combatCreatureBrokenH(combat_data::CREATURE_POLE_BREAK), 0, "break no brokenBody h");
         t.assert(combatCreatureBrokenW(combat_data::CREATURE_POLE), 0, "plain no brokenBody");
         for (uint8_t i = 0; i < combat::CREATURES_COUNT; i++) {
             const CombatCreature c = combatCreatureRead(i);
@@ -213,7 +217,7 @@ void CombatSuite(TestRunner &runner) {
     }
 
     {
-        Test t("pole zone records: crit head, all-weapon breakables, broken overrides");
+        Test t("pole zone records: crit head, one whole-pole breakable per variant");
         const CombatZone ph = combatZoneRead(combat_data::ZONE_POLE_HEAD);
         t.assert(ph.box.ox, -128, "plain head ox (x-independent band)");
         t.assert(ph.box.oy, 0, "plain head oy");
@@ -223,25 +227,35 @@ void CombatSuite(TestRunner &runner) {
         t.assert(ph.hp, 0, "plain head no pool");
         t.assert(ph.breakTypes, 0, "plain head unbreakable");
         const uint8_t anyPhys = PHYS_SLASH | PHYS_BLUNT | PHYS_SHOT;
-        const CombatZone sh = combatZoneRead(combat_data::ZONE_POLE_SEVER_HEAD);
-        t.assert(sh.hp, 60, "sever head pool");
-        t.assert(sh.dmgMul, 140, "sever head dmgMul");
-        t.assert(sh.breakTypes, anyPhys, "sever head any weapon breaks");
-        t.assert(sh.brokenDmgMul, 100, "sever broken override");
-        t.assert(sh.brokenFlags, 0, "sever broken no hurtOff/cue");
+        // Each variant ships exactly one appendage zone: the whole pole with a
+        // 4 px margin, body-mul 100 so the shared resolver drains it on a tie.
+        const CombatZone sa = combatZoneRead(combat_data::ZONE_POLE_SEVER_APPENDAGE);
+        t.assert(sa.box.ox, -4, "sever whole-pole ox");
+        t.assert(sa.box.oy, -4, "sever whole-pole oy");
+        t.assert(sa.box.w, 28, "sever whole-pole w");
+        t.assert(sa.box.h, 44, "sever whole-pole h");
+        t.assert(sa.hp, 60, "sever whole-pole pool");
+        t.assert(sa.dmgMul, 101, "sever whole-pole dmgMul (beats body tie, damage stays base)");
+        t.assert(sa.bodyShare, 100, "sever whole-pole body share");
+        t.assert(sa.breakTypes, anyPhys, "sever any weapon breaks");
+        t.assert(sa.brokenFlags, COMBAT_BROKEN_HURT_OFF, "sever broken hurtOff");
         const CombatZone ba = combatZoneRead(combat_data::ZONE_POLE_BREAK_APPENDAGE);
-        t.assert(ba.box.ox, 20, "break arm ox");
-        t.assert(ba.box.oy, 8, "break arm oy");
-        t.assert(ba.box.w, 8, "break arm w");
-        t.assert(ba.box.h, 12, "break arm h");
-        t.assert(ba.hp, 40, "break arm pool");
-        t.assert(ba.breakTypes, anyPhys, "break arm any weapon breaks");
-        t.assert(ba.brokenFlags, COMBAT_BROKEN_HURT_OFF, "break arm broken hurtOff");
+        t.assert(ba.box.ox, -4, "break whole-pole ox");
+        t.assert(ba.box.oy, -4, "break whole-pole oy");
+        t.assert(ba.box.w, 28, "break whole-pole w");
+        t.assert(ba.box.h, 44, "break whole-pole h");
+        t.assert(ba.hp, 40, "break whole-pole pool");
+        t.assert(ba.dmgMul, 101, "break whole-pole dmgMul (beats body tie, damage stays base)");
+        t.assert(ba.breakTypes, anyPhys, "break any weapon breaks");
+        t.assert(ba.brokenFlags, COMBAT_BROKEN_HURT_OFF, "break broken hurtOff");
         const CombatZone ca = combatZoneRead(combat_data::ZONE_POLE_CRACK_APPENDAGE);
-        t.assert(ca.box.oy, 18, "crack band oy");
-        t.assert(ca.box.h, 10, "crack band h");
-        t.assert(ca.hp, 30, "crack band pool");
-        t.assert(ca.breakTypes, anyPhys, "crack band any weapon breaks");
+        t.assert(ca.box.ox, -4, "crack whole-pole ox");
+        t.assert(ca.box.oy, -4, "crack whole-pole oy");
+        t.assert(ca.box.w, 28, "crack whole-pole w");
+        t.assert(ca.box.h, 44, "crack whole-pole h");
+        t.assert(ca.hp, 30, "crack whole-pole pool");
+        t.assert(ca.dmgMul, 101, "crack whole-pole dmgMul (beats body tie, damage stays base)");
+        t.assert(ca.breakTypes, anyPhys, "crack any weapon breaks");
         suite.addTest(t);
     }
 
@@ -658,6 +672,14 @@ void CombatSuite(TestRunner &runner) {
         g.combat.zone[COMBAT_ZONE_HEAD].dmgMul = 100;
         r = combatZoneHitResolve(g, 10, PHYS_BLUNT, 125, 48);
         t.assert(r.zone, COMBAT_NO_ZONE, "body wins mul tie");
+        // ... a 100 zone never outranks the body; the whole-pole props author
+        // dmgMul 101 (base damage still truncates identically) so every landed
+        // pole hit drains. (The head above still lost the same tie.)
+        g.combat.zone[COMBAT_ZONE_HEAD].dmgMul = 130;
+        g.combat.zone[COMBAT_ZONE_APPENDAGE].dmgMul = 101;
+        r = combatZoneHitResolve(g, 10, PHYS_BLUNT, 95, 52);
+        t.assert(r.zone, COMBAT_ZONE_APPENDAGE, "appendage 101 beats body");
+        t.assert(r.dmg, 4, "101 mul truncates to base x share");
         // Head/appendage tie: overlapping boxes, equal muls -> head wins.
         g.combat.zone[COMBAT_ZONE_HEAD].dmgMul = 130;
         g.combat.zone[COMBAT_ZONE_APPENDAGE].box = g.combat.zone[COMBAT_ZONE_HEAD].box;

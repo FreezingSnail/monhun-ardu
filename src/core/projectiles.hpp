@@ -160,13 +160,15 @@ static int16_t trainDps(const Game &g) {
     return static_cast<int16_t>((sum + 5) / 10);
 }
 
-// Mock damagePole(), now resolved by the shared 3-hitzone code: the head zone
-// (plain/variant) carries dmgMul 140 so a head hit multiplies x1.4 through the
-// same path a beast uses; a breakable zone drains its pool and flips the shared
-// zoneBroken bit. hitFlash 4, freeze crit 5 / body 4, rising damage number
-// (life 26). The prop is static, so the resolver runs with an explicit east
-// facing at the pole rect anchor and never reads g.monster.fx/fy. Returns the
-// exact total applied so train stats and the pool drain agree.
+// Mock damagePole(), resolved by the shared 3-hitzone code: PLAIN's head zone
+// carries dmgMul 140 so a head hit multiplies x1.4 through the same path a
+// beast uses; each breakable variant instead ships one whole-pole appendage
+// zone at body mul 100 that drains on any landed hit and flips the shared
+// zoneBroken bit (no variant crit). hitFlash 4, freeze crit 5 / body 4, rising
+// damage number (life 26). The prop is static, so the resolver runs with an
+// explicit east facing at the pole rect anchor and never reads
+// g.monster.fx/fy. Returns the exact total applied so train stats and the pool
+// drain agree.
 static int16_t damagePole(Game &g, uint8_t dmg, int16_t hx, int16_t hy) {
     Pole &pole = g.pole;
     const uint8_t brokenBefore = g.combat.zoneBroken;

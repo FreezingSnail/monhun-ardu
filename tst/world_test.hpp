@@ -141,17 +141,17 @@ void WorldSuite(TestRunner &runner) {
     }
 
     {
-        Test t("pole variants: target rect follows the kind; BREAK refresh on break");
+        Test t("pole variants: target rect follows the kind; whole-pole break at 20");
         Game g;
         newGame(g, W_SWORD, MODE_TRAIN);
         initPoleKind(g, POLE_BREAK);
-        t.assert(g.pole.rect.w, 28, "break rect w 28");
-        t.assert(g.target.rect.w, 28, "active target refreshed to 28");
-        // Drain the arm (flail blunt) -> the break tick refreshes the target.
+        t.assert(g.pole.rect.w, 20, "break rect w 20");
+        t.assert(g.target.rect.w, 20, "active target refreshed to 20");
+        // Drain the whole-pole zone (flail blunt) at the mid-post play point.
         g.weapon = W_FLAIL;
-        poleOnHit(g, 40, 164, 58, 0, 0);
-        t.assert(g.combat.zoneBroken & COMBAT_ZONE_APPENDAGE_BIT, COMBAT_ZONE_APPENDAGE_BIT, "arm broken");
-        t.assert(g.target.rect.w, 20, "target rect refresh 28 -> 20");
+        poleOnHit(g, 40, static_cast<int16_t>(g.pole.rect.x + 10), static_cast<int16_t>(g.pole.rect.y + 22), 0, 0);
+        t.assert(g.combat.zoneBroken & COMBAT_ZONE_APPENDAGE_BIT, COMBAT_ZONE_APPENDAGE_BIT, "whole pole broken");
+        t.assert(g.target.rect.w, 20, "target rect stays 20");
         // Variant survives withWeapon/resetHunt in train.
         initPoleKind(g, POLE_SEVER);
         withWeapon(g, W_GUN);

@@ -5,13 +5,13 @@
   "sheet": 2,
   "stats": { "w": 20, "h": 36, "hp": 0, "spd": 0, "spawnX": 140, "spawnY": 40 },
   "zones": {
-    "head": {
-      "box": { "ox": -128, "oy": 0, "w": 255, "h": 16 },
-      "dmgMul": 140,
+    "appendage": {
+      "box": { "ox": -4, "oy": -4, "w": 28, "h": 44 },
+      "dmgMul": 101,
       "hp": 60,
       "bodyShare": 100,
       "breakTypes": ["SLASH", "BLUNT", "SHOT"],
-      "broken": { "dmgMul": 100 }
+      "broken": { "hurtOn": false }
     }
   },
   "attacks": [],

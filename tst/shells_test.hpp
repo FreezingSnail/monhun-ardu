@@ -266,17 +266,19 @@ void ShellSuite(TestRunner &runner) {
         t.assert(g.pole.rect.w, 20, "plain rect w");
         initPoleKind(g, POLE_SEVER);
         t.assert(g.pole.kind, POLE_SEVER, "sever kind");
-        t.assert(g.combat.zone[COMBAT_ZONE_HEAD].hp, 60, "sever head pool 60");
-        t.assert(g.combat.zone[COMBAT_ZONE_HEAD].hpMax, 60, "sever head hpMax cached");
+        t.assert(g.combat.zone[COMBAT_ZONE_APPENDAGE].hp, 60, "sever whole-pole pool 60");
+        t.assert(g.combat.zone[COMBAT_ZONE_APPENDAGE].hpMax, 60, "sever pool hpMax cached");
+        t.assert(g.combat.headZone, COMBAT_NO_ZONE, "sever has no crit head zone");
         t.assert(g.pole.rect.w, 20, "sever rect w");
         initPoleKind(g, POLE_BREAK);
-        t.assert(g.combat.zone[COMBAT_ZONE_APPENDAGE].hp, 40, "break arm pool 40");
-        t.assert(g.combat.zone[COMBAT_ZONE_APPENDAGE].hpMax, 40, "break arm hpMax cached");
-        t.assert(g.pole.rect.w, 28, "break rect w 28");
-        t.assert(g.target.rect.w, 28, "break target rect refreshed");
+        t.assert(g.combat.zone[COMBAT_ZONE_APPENDAGE].hp, 40, "break whole-pole pool 40");
+        t.assert(g.combat.zone[COMBAT_ZONE_APPENDAGE].hpMax, 40, "break pool hpMax cached");
+        t.assert(g.combat.headZone, COMBAT_NO_ZONE, "break has no crit head zone");
+        t.assert(g.pole.rect.w, 20, "break rect w 20");
+        t.assert(g.target.rect.w, 20, "break target rect refreshed");
         initPoleKind(g, POLE_CRACK);
-        t.assert(g.combat.zone[COMBAT_ZONE_APPENDAGE].hp, 30, "crack band pool 30");
-        t.assert(g.combat.zone[COMBAT_ZONE_APPENDAGE].hpMax, 30, "crack band hpMax cached");
+        t.assert(g.combat.zone[COMBAT_ZONE_APPENDAGE].hp, 30, "crack whole-pole pool 30");
+        t.assert(g.combat.zone[COMBAT_ZONE_APPENDAGE].hpMax, 30, "crack pool hpMax cached");
         t.assert(g.pole.rect.h, 36, "crack rect h");
         initPoleKind(g, 99);
         t.assert(g.pole.kind, POLE_PLAIN, "out-of-range kind clamps to plain");
@@ -307,44 +309,46 @@ void ShellSuite(TestRunner &runner) {
     }
 
     {
-        Test t("SEVER: sword drains the top zone, breaks, loses head crit");
+        Test t("SEVER: whole-pole zone drains anywhere on the post, no head crit");
         Game g;
         initGame(g, W_SWORD);
         initWorld(g, MODE_TRAIN);
         initPoleKind(g, POLE_SEVER);
-        const int16_t hx = 150, hy = 40 + 8;   // inside the head band
-        poleOnHit(g, 10, hx, hy, 0, 0);        // sword head crit x1.4 -> 14, pool 60 -> 46
-        t.assert(g.combat.zone[COMBAT_ZONE_HEAD].hp, 46, "sever pool drains by the crit total");
-        t.assert(g.combat.zoneBroken & COMBAT_ZONE_HEAD_BIT, 0, "not broken yet");
-        t.assert(g.train.last, 14, "head crit x1.4 intact");
+        const int16_t hx = static_cast<int16_t>(g.pole.rect.x + 10);
+        const int16_t hy = static_cast<int16_t>(g.pole.rect.y + 22);   // mid-post play path
+        poleOnHit(g, 10, hx, hy, 0, 0);                                // body-mul zone: 10, pool 60 -> 50
+        t.assert(g.combat.zone[COMBAT_ZONE_APPENDAGE].hp, 50, "sever pool drains by the hit total");
+        t.assert(g.combat.zoneBroken & COMBAT_ZONE_APPENDAGE_BIT, 0, "not broken yet");
+        t.assert(g.train.last, 10, "mid-post hit x1.0 (no head crit)");
         for (int i = 0; i < 5; i++)
             poleOnHit(g, 10, hx, hy, 0, 0);
-        t.assert(g.combat.zone[COMBAT_ZONE_HEAD].hp, 0, "pool drained");
-        t.assert(g.combat.zoneBroken & COMBAT_ZONE_HEAD_BIT, COMBAT_ZONE_HEAD_BIT, "sever broken");
+        t.assert(g.combat.zone[COMBAT_ZONE_APPENDAGE].hp, 0, "pool drained");
+        t.assert(g.combat.zoneBroken & COMBAT_ZONE_APPENDAGE_BIT, COMBAT_ZONE_APPENDAGE_BIT, "sever broken");
         t.assert(g.pole.rect.w, 20, "sever rect unchanged");
-        poleOnHit(g, 10, hx, hy, 0, 0);   // broken: no head crit now
-        t.assert(g.train.last, 10, "head crit gone after break");
+        poleOnHit(g, 10, hx, hy, 0, 0);   // broken: zone leaves the candidate set
+        t.assert(g.train.last, 10, "body takes the full hit after break");
         suite.addTest(t);
     }
 
     {
-        Test t("BREAK: flail drains the side arm, rect 28->20, burst + freeze");
+        Test t("BREAK: flail drains the whole pole, rect stays 20, burst + freeze");
         Game g;
         initGame(g, W_FLAIL);
         initWorld(g, MODE_TRAIN);
         initPoleKind(g, POLE_BREAK);
-        t.assert(g.pole.rect.w, 28, "break rect starts 28");
-        const int16_t hx = 140 + 24, hy = 40 + 18;   // arm box @20,8 (below the head band)
+        t.assert(g.pole.rect.w, 20, "break rect starts 20");
+        const int16_t hx = static_cast<int16_t>(g.pole.rect.x + 10);
+        const int16_t hy = static_cast<int16_t>(g.pole.rect.y + 22);   // mid-post play path
         g.fxN = 0;
-        poleOnHit(g, 20, hx, hy, 0, 0);   // flail body: pool 40 -> 20
+        poleOnHit(g, 20, hx, hy, 0, 0);   // blast body-mul zone: pool 40 -> 20
         t.assert(g.combat.zone[COMBAT_ZONE_APPENDAGE].hp, 20, "break pool drains on blunt");
         t.assert(g.combat.zoneBroken & COMBAT_ZONE_APPENDAGE_BIT, 0, "not broken yet");
         g.fxN = 0;
         poleOnHit(g, 20, hx, hy, 0, 0);   // pool 20 -> 0 -> break
         t.assert(g.combat.zone[COMBAT_ZONE_APPENDAGE].hp, 0, "pool drained");
         t.assert(g.combat.zoneBroken & COMBAT_ZONE_APPENDAGE_BIT, COMBAT_ZONE_APPENDAGE_BIT, "break broken");
-        t.assert(g.pole.rect.w, 20, "break rect shrinks to 20");
-        t.assert(g.target.rect.w, 20, "target rect refreshed");
+        t.assert(g.pole.rect.w, 20, "break rect stays 20 (horn is a stage, not a resize)");
+        t.assert(g.target.rect.w, 20, "target rect unchanged");
         t.assert(g.freeze, 6, "break freeze 6");
         uint8_t sparks = 0;
         for (int16_t i = 0; i < g.fxN; i++)
@@ -356,24 +360,22 @@ void ShellSuite(TestRunner &runner) {
 
     {
         Test t("all weapons drain + break every breakable pole variant");
-        // Owner direction (6zb.8): no weapon gate. For each variant x weapon,
-        // one heavy hit on the breakable zone must drain the pool and flip the
-        // broken bit. Points are the zone centres relative to the pole rect.
+        // Owner direction (6zb.8): no weapon gate. Each variant carries ONE
+        // whole-pole appendage zone, so a heavy hit at the natural mid-post
+        // centre drains the pool and flips the broken bit for any weapon.
         const int8_t kinds[3] = {POLE_SEVER, POLE_BREAK, POLE_CRACK};
         const uint8_t weapons[3] = {W_SWORD, W_FLAIL, W_GUN};
-        const uint8_t slot[3] = {COMBAT_ZONE_HEAD, COMBAT_ZONE_APPENDAGE, COMBAT_ZONE_APPENDAGE};
-        const uint8_t bit[3] = {COMBAT_ZONE_HEAD_BIT, COMBAT_ZONE_APPENDAGE_BIT, COMBAT_ZONE_APPENDAGE_BIT};
-        const int16_t hx[3] = {150, 164, 150};
-        const int16_t hy[3] = {48, 58, 63};
         for (int ki = 0; ki < 3; ki++) {
             for (int wi = 0; wi < 3; wi++) {
                 Game g;
                 initGame(g, weapons[wi]);
                 initWorld(g, MODE_TRAIN);
                 initPoleKind(g, kinds[ki]);
-                poleOnHit(g, 100, hx[ki], hy[ki], 0, 0);
-                t.assert(g.combat.zone[slot[ki]].hp, 0, "pool drained by any weapon");
-                t.assert(g.combat.zoneBroken & bit[ki], bit[ki], "broken by any weapon");
+                const int16_t hx = static_cast<int16_t>(g.pole.rect.x + 10);
+                const int16_t hy = static_cast<int16_t>(g.pole.rect.y + 22);
+                poleOnHit(g, 100, hx, hy, 0, 0);
+                t.assert(g.combat.zone[COMBAT_ZONE_APPENDAGE].hp, 0, "pool drained by any weapon");
+                t.assert(g.combat.zoneBroken & COMBAT_ZONE_APPENDAGE_BIT, COMBAT_ZONE_APPENDAGE_BIT, "broken by any weapon");
                 t.assert(g.train.total > 0, true, "damage lands");
             }
         }
@@ -381,13 +383,44 @@ void ShellSuite(TestRunner &runner) {
     }
 
     {
-        Test t("CRACK: gun shot drains the mid band and breaks it");
+        Test t("play path: mid-post hit drains + breaks every variant for all weapons");
+        // Acceptance 6zb.9: the landed melee point is the attack-box centre at
+        // mid height (rect.x+10, rect.y+22), NOT the old part boxes. Every
+        // landed hit must drain, then break after ceil(pool/dmg) hits.
+        const int8_t kinds[3] = {POLE_SEVER, POLE_BREAK, POLE_CRACK};
+        const uint8_t pools[3] = {60, 40, 30};
+        const uint8_t weapons[3] = {W_SWORD, W_FLAIL, W_GUN};
+        for (int ki = 0; ki < 3; ki++) {
+            const uint8_t hits = static_cast<uint8_t>((pools[ki] + 9) / 10);   // dmg 10
+            for (int wi = 0; wi < 3; wi++) {
+                Game g;
+                initGame(g, weapons[wi]);
+                initWorld(g, MODE_TRAIN);
+                initPoleKind(g, kinds[ki]);
+                const int16_t hx = static_cast<int16_t>(g.pole.rect.x + 10);
+                const int16_t hy = static_cast<int16_t>(g.pole.rect.y + 22);
+                uint8_t n = 0;
+                while (n < hits && !(g.combat.zoneBroken & COMBAT_ZONE_APPENDAGE_BIT)) {
+                    poleOnHit(g, 10, hx, hy, 0, 0);
+                    n++;
+                }
+                t.assert(g.combat.zone[COMBAT_ZONE_APPENDAGE].hp, 0, "mid-post hit drains the pool");
+                t.assert(g.combat.zoneBroken & COMBAT_ZONE_APPENDAGE_BIT, COMBAT_ZONE_APPENDAGE_BIT, "breaks after enough hits");
+                t.assert(g.train.total, static_cast<int16_t>(hits) * 10, "every landed hit counted");
+            }
+        }
+        suite.addTest(t);
+    }
+
+    {
+        Test t("CRACK: gun shot drains the whole pole and breaks it");
         Game g;
         initGame(g, W_GUN);
         initWorld(g, MODE_TRAIN);
         initPoleKind(g, POLE_CRACK);
         t.assert(g.combat.zone[COMBAT_ZONE_APPENDAGE].hp, 30, "crack pool 30");
-        const int16_t hx = 150, hy = 40 + 23;   // band @0,18 h10, below the head zone
+        const int16_t hx = static_cast<int16_t>(g.pole.rect.x + 10);
+        const int16_t hy = static_cast<int16_t>(g.pole.rect.y + 22);   // mid-post play path
         g.fxN = 0;
         poleOnHit(g, 10, hx, hy, 0, 0);   // 30 -> 20
         poleOnHit(g, 10, hx, hy, 0, 0);   // 20 -> 10

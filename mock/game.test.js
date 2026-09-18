@@ -463,7 +463,7 @@ test('pole variants: defs, initPoleKind and plain parity', () => {
   G.initPoleKind(g, G.POLE_SEVER);
   assert.equal(g.pole.hp, 60, 'sever pool 60');
   G.initPoleKind(g, G.POLE_BREAK);
-  assert.equal(g.pole.w, 28, 'break rect 28 wide');
+  assert.equal(g.pole.w, 20, 'break rect 20 wide (horn is a stage, not a resize)');
   assert.equal(g.pole.hp, 40, 'break pool 40');
   G.initPoleKind(g, G.POLE_CRACK);
   assert.equal(g.pole.hp, 30, 'crack pool 30');
@@ -472,7 +472,7 @@ test('pole variants: defs, initPoleKind and plain parity', () => {
 });
 
 test('pole variants: damage stage from hp/hpMax and broken state', () => {
-  const g = G.newGame(1, 'train');   // BREAK arm (all weapons break it)
+  const g = G.newGame(1, 'train');   // BREAK (all weapons break it)
   G.initPoleKind(g, G.POLE_BREAK);
   const pole = g.pole;
   const def = G.POLE_DEFS[G.POLE_BREAK];
@@ -483,64 +483,60 @@ test('pole variants: damage stage from hp/hpMax and broken state', () => {
   assert.equal(G.poleStage(pole, def), 1, 'half pool damaged');
   pole.hp = 1;
   assert.equal(G.poleStage(pole, def), 1, 'low pool damaged');
-  // Drain through the real hit path; broken wins regardless of pool.
+  // Drain through the real mid-post hit path; broken wins regardless of pool.
   pole.hp = 40;
   pole.broken = 0;
   g.pole.x = 140;
   g.pole.y = 40;
-  G.poleOnHit(g, 20, 164, 58);
+  G.poleOnHit(g, 20, 150, 62);
   assert.equal(pole.hp, 20, 'blunt drains to half');
   assert.equal(G.poleStage(pole, def), 1, 'damaged after one break hit');
-  G.poleOnHit(g, 20, 164, 58);
-  assert.equal(pole.broken, 1, 'arm snapped');
+  G.poleOnHit(g, 20, 150, 62);
+  assert.equal(pole.broken, 1, 'horn snapped off');
   assert.equal(pole.hp, 0);
   assert.equal(G.poleStage(pole, def), 2, 'broken stage after break');
   const p = G.newGame(0, 'train');
   assert.equal(G.poleStage(p.pole, G.POLE_DEFS[0]), 0, 'plain never leaves stage 0');
 });
 
-test('pole variants: sword severs the top, losing the head crit', () => {
+test('pole variants: sword drains the whole pole, no head crit', () => {
   const g = G.newGame(0, 'train');
   G.initPoleKind(g, G.POLE_SEVER);
   const pole = g.pole;
   pole.x = 140;
   pole.y = 40;
-  // zone top block (0,0,20,16); hx/hy are the melee hit centre
-  assert.ok(G.damagePole(g, 10, 150, 48) === 14, 'intact head hit crits x1.4');
+  // Mid-post hit (the natural attack centre): body-mul, no x1.4 crit.
+  assert.equal(G.damagePole(g, 10, 150, 62), 10, 'mid-post hit is body-mul');
   g.train.total = 0;
   g.train.last = 0;
-  for (let i = 0; i < 5; i++) G.poleOnHit(g, 10, 150, 48);
+  for (let i = 0; i < 6; i++) G.poleOnHit(g, 10, 150, 62);
   assert.equal(pole.broken, 1, 'sever breaks');
   assert.equal(pole.w, 20, 'sever rect unchanged');
   assert.equal(pole.hp, 0, 'pool drained');
-  G.poleOnHit(g, 10, 150, 48);
-  assert.equal(g.train.last, 10, 'head crit gone after break');
+  G.poleOnHit(g, 10, 150, 62);
+  assert.equal(g.train.last, 10, 'body hit after break');
 });
 
-test('pole variants: flail breaks the arm and shrinks the rect 28->20', () => {
+test('pole variants: flail breaks the horn; rect stays 20', () => {
   const g = G.newGame(1, 'train');
   G.initPoleKind(g, G.POLE_BREAK);
   const pole = g.pole;
   pole.x = 140;
   pole.y = 40;
-  assert.equal(pole.w, 28, 'arm rect starts 28');
-  // arm zone (20,8,8,12), body band below the 16 px head
-  G.poleOnHit(g, 20, 164, 58);
+  assert.equal(pole.w, 20, 'rect starts 20');
+  G.poleOnHit(g, 20, 150, 62);   // mid-post play point
   assert.equal(pole.hp, 20, 'blunt drains the pool');
   assert.equal(pole.broken, 0);
-  G.poleOnHit(g, 20, 164, 58);
-  assert.equal(pole.broken, 1, 'arm snaps off');
+  G.poleOnHit(g, 20, 150, 62);
+  assert.equal(pole.broken, 1, 'horn snaps off');
   assert.equal(pole.hp, 0);
-  assert.equal(pole.w, 20, 'rect reverts to 20');
+  assert.equal(pole.w, 20, 'rect stays 20');
   assert.equal(pole.h, 36);
   assert.ok(g.freeze >= 6, 'break freeze');
 });
 
 test('pole variants: every weapon drains and breaks each variant', () => {
   const variants = [G.POLE_SEVER, G.POLE_BREAK, G.POLE_CRACK];
-  // Zone centres relative to the pole rect: SEVER top block, BREAK side arm,
-  // CRACK mid band.
-  const hit = [[150, 48], [164, 58], [150, 63]];
   for (let vi = 0; vi < variants.length; vi++) {
     assert.equal(G.POLE_DEFS[variants[vi]].breakTypes, 7, 'variant accepts all phys');
     for (let weapon = 0; weapon < 3; weapon++) {
@@ -548,26 +544,48 @@ test('pole variants: every weapon drains and breaks each variant', () => {
       G.initPoleKind(g, variants[vi]);
       g.pole.x = 140;
       g.pole.y = 40;
-      G.poleOnHit(g, 100, hit[vi][0], hit[vi][1]);
+      G.poleOnHit(g, 100, 150, 62);   // mid-post, not the old part box
       assert.equal(g.pole.hp, 0, `variant ${vi} weapon ${weapon} drains`);
       assert.equal(g.pole.broken, 1, `variant ${vi} weapon ${weapon} breaks`);
     }
   }
 });
 
-test('pole variants: gun cracks the band', () => {
+test('pole variants: play path drains + breaks after ceil(pool/dmg) mid-post hits', () => {
+  const variants = [G.POLE_SEVER, G.POLE_BREAK, G.POLE_CRACK];
+  const pools = [60, 40, 30];
+  for (let vi = 0; vi < variants.length; vi++) {
+    const hits = Math.ceil(pools[vi] / 10);
+    for (let weapon = 0; weapon < 3; weapon++) {
+      const g = G.newGame(weapon, 'train');
+      G.initPoleKind(g, variants[vi]);
+      g.pole.x = 140;
+      g.pole.y = 40;
+      let n = 0;
+      while (n < hits && !g.pole.broken) {
+        G.poleOnHit(g, 10, 150, 62);
+        n++;
+      }
+      assert.equal(g.pole.hp, 0, `variant ${vi} weapon ${weapon} mid-post drains`);
+      assert.equal(g.pole.broken, 1, `variant ${vi} weapon ${weapon} breaks`);
+      assert.equal(g.train.total, hits * 10, `variant ${vi} weapon ${weapon} every hit counted`);
+    }
+  }
+});
+
+test('pole variants: gun drains the whole pole and breaks it', () => {
   const g = G.newGame(2, 'train');
   G.initPoleKind(g, G.POLE_CRACK);
   g.pole.x = 140;
   g.pole.y = 40;
   assert.equal(g.pole.hp, 30);
   const sparks = () => g.effects.filter(e => !e.text).length;
-  G.poleOnHit(g, 10, 150, 63);
-  G.poleOnHit(g, 10, 150, 63);
+  G.poleOnHit(g, 10, 150, 62);
+  G.poleOnHit(g, 10, 150, 62);
   assert.equal(g.pole.broken, 0);
   const before = sparks();
-  G.poleOnHit(g, 10, 150, 63);
-  assert.equal(g.pole.broken, 1, 'band cracked');
+  G.poleOnHit(g, 10, 150, 62);
+  assert.equal(g.pole.broken, 1, 'pole cracked');
   assert.equal(g.pole.hp, 0);
   assert.ok(sparks() - before >= 3, 'break burst');
 });

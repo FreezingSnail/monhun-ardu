@@ -249,6 +249,7 @@ void CombatPackSuite(TestRunner &runner) {
             {"ZONE_POLE_HEAD", combat::ZONE_POLE_HEAD_OFF, combat::ZONES_OFF, combat::ZONE_POLE_HEAD, combat::ZONE_SIZE, combat::ZONES_COUNT},
             {"ZONE_POLE_BREAK_APPENDAGE", combat::ZONE_POLE_BREAK_APPENDAGE_OFF, combat::ZONES_OFF, combat::ZONE_POLE_BREAK_APPENDAGE, combat::ZONE_SIZE, combat::ZONES_COUNT},
             {"ZONE_POLE_CRACK_APPENDAGE", combat::ZONE_POLE_CRACK_APPENDAGE_OFF, combat::ZONES_OFF, combat::ZONE_POLE_CRACK_APPENDAGE, combat::ZONE_SIZE, combat::ZONES_COUNT},
+            {"ZONE_POLE_SEVER_APPENDAGE", combat::ZONE_POLE_SEVER_APPENDAGE_OFF, combat::ZONES_OFF, combat::ZONE_POLE_SEVER_APPENDAGE, combat::ZONE_SIZE, combat::ZONES_COUNT},
             {"ANCHOR_BULL_ORIGIN", combat::ANCHOR_BULL_ORIGIN_OFF, combat::ANCHORS_OFF, 0, combat::ANCHOR_SIZE, combat::ANCHORS_COUNT},
             {"ANCHOR_BULL_HEAD", combat::ANCHOR_BULL_HEAD_OFF, combat::ANCHORS_OFF, 1, combat::ANCHOR_SIZE, combat::ANCHORS_COUNT},
             {"ANCHOR_CHICKEN_ORIGIN", combat::ANCHOR_CHICKEN_ORIGIN_OFF, combat::ANCHORS_OFF, 2, combat::ANCHOR_SIZE, combat::ANCHORS_COUNT},
