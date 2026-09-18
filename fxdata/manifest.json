@@ -242,16 +242,23 @@
     {
       "declaration": "fxdata/menu/Sprites.txt",
       "path": "images/menu/mh_menu_bg_128x64.png",
-      "sha256": "c901048e77ce808f90cd28615dc0485a75828be8eddff41c521fae01585e0ebd",
-      "size": 624,
+      "sha256": "ca908e0905c10ef9a3c7551c5eee37d990daf6f6d16cf364389d1fbd1f8580d9",
+      "size": 854,
       "symbol": "mh_menu_bg"
     },
     {
       "declaration": "fxdata/menu/Sprites.txt",
-      "path": "images/menu/mh_menu_sel_28x16.png",
-      "sha256": "26f6e98f9168f8a859153637e91e7a69b089d264159d5eea1852148dd78982f3",
-      "size": 379,
-      "symbol": "mh_menu_sel"
+      "path": "images/menu/mh_menu_msel_64x8.png",
+      "sha256": "8700a909bc37e6ee1e8aa91fa786c33d4430742b3ead8fa1fe59e543d9b65f6d",
+      "size": 475,
+      "symbol": "mh_menu_msel"
+    },
+    {
+      "declaration": "fxdata/menu/Sprites.txt",
+      "path": "images/menu/mh_menu_wsel_32x8.png",
+      "sha256": "bd7b86716fce526bfee8698a143852143767b20ade34eabb6280558de517872c",
+      "size": 256,
+      "symbol": "mh_menu_wsel"
     }
   ],
   "inputs": [
@@ -522,10 +529,11 @@
     },
     {
       "path": "fxdata/menu/Sprites.txt",
-      "sha256": "6321c65803e8c672d40df0fc4869cda1f6f8fe1a8fb385a860466a8f74c7bbed",
-      "size": 46455,
+      "sha256": "6d7d003679b5eec6917f2b5b31769b35bec880d7a459f42178cfaef70aa52bfa",
+      "size": 45493,
       "symbols": [
-        "mh_menu_sel",
+        "mh_menu_wsel",
+        "mh_menu_msel",
         "mh_menu_bg"
       ]
     },
@@ -537,7 +545,7 @@
     },
     {
       "path": "fxdata/tables/equip.bin",
-      "sha256": "80232dc479c3fc6bde986220a402210858fec68467ab829058713d75f7aebccf",
+      "sha256": "80177cb0a48ba9420e332c598359cfc3ce89935c867ad4c4f67ac3929b68396c",
       "size": 876,
       "symbol": "mhEquip"
     },
@@ -587,18 +595,18 @@
   "outputs": [
     {
       "path": "fxdata/fxdata-data.bin",
-      "sha256": "38c77bdb86acc6a0acfb12edce93aa0272e2c6d35c5e9e3b78de68f01eeec5da",
-      "size": 149907
+      "sha256": "80b4a88ba90aed2b0e81972ed7e737986c7195006ead1100763b5c684dcdad01",
+      "size": 149717
     },
     {
       "path": "fxdata/fxdata.bin",
-      "sha256": "a5a8c2bf808c657eeb9cd1102ad2136b482c9d9bcf72cc6cb818e52e2cbbe24a",
-      "size": 150016
+      "sha256": "a34f0cc68b78091bb561365a61f5c1f2d055188db77581a59d077a5630d4789f",
+      "size": 149760
     },
     {
       "path": "fxdata/fxdata.h",
-      "sha256": "66857feb7db84fc722aff5e658676007a79caed2e2cc98dbd005b9a952de84b6",
-      "size": 2172
+      "sha256": "fc3c71055112bfbd86a0596b2a1e1314fb4e350994ae396fda29e96037538d6f",
+      "size": 2217
     },
     {
       "path": "fxdata/tables/combat.bin",
@@ -607,7 +615,7 @@
     },
     {
       "path": "fxdata/tables/equip.bin",
-      "sha256": "80232dc479c3fc6bde986220a402210858fec68467ab829058713d75f7aebccf",
+      "sha256": "80177cb0a48ba9420e332c598359cfc3ce89935c867ad4c4f67ac3929b68396c",
       "size": 876
     },
     {
@@ -627,8 +635,8 @@
     },
     {
       "path": "src/fxdata.h",
-      "sha256": "66857feb7db84fc722aff5e658676007a79caed2e2cc98dbd005b9a952de84b6",
-      "size": 2172
+      "sha256": "fc3c71055112bfbd86a0596b2a1e1314fb4e350994ae396fda29e96037538d6f",
+      "size": 2217
     },
     {
       "path": "src/generated/art_dims.hpp",
@@ -652,7 +660,7 @@
     },
     {
       "path": "src/generated/equip_meta.hpp",
-      "sha256": "2f2aa5eab6ac2fea268710b227fd9b61763f87ebe62571b00d8269c98d236587",
+      "sha256": "9176a99a9b0966d5326f4f01ca6d6bea8f3f4acccfb72b0a174ffe9cd6a85224",
       "size": 22327
     },
     {

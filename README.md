@@ -205,6 +205,16 @@ pole, no beast). After a win or loss, A returns to the menu with the picks kept
 until reboot; the next A runs `newGame` again, so projectiles/effects/quest
 counters start clean. While the menu is up the sim and audio are not stepped.
 
+Menu v2 (monhun-ardu-2u8) bakes the options into FX sheets: `mh_menu_bg` (the
+title/labels/footer plus the dim light-gray options), `mh_menu_wsel` (three
+32x8 weapon tiles) and `mh_menu_msel` (five 64x8 target tiles). Every option is
+an icon + name — SWD/FLS/GUN on the weapon row, CHICKEN/BULL/LONGTAIL/RAVAGER/
+POLE in a 2-column beast grid — where the monster icons are deterministic 12x6
+reductions of the shipped beast/pole sheets (comb, horns, tail stay readable)
+and the text is glyph-identical to `fxfontw`/`fxfontg` (gen-art
+`check_menu_identity`). The picked weapon and target each draw a bright 1 px
+frame plus cursor arrow; unpicked options stay dim. Footer: `A HUNT`.
+
 ### Hub / quests / smith (shelf code, qs.1–qs.4 — not on the demo path)
 
 The data-driven hub/quests/smith screens and their EEPROM save stay in the tree

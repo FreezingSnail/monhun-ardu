@@ -246,4 +246,11 @@ inline void test_assets(FxTest &test) {
     blobHeader(fxmonster_lunge, 32, 24, test, F("chicken monster sheet w/h"));
     blobHeader(fxmonster_sweep, 32, 24, test, F("bull monster sheet w/h"));
     blobHeader(fxmonster_heavy, 32, 24, test, F("longtail monster sheet w/h"));
+
+    // Opening menu v2 (bead monhun-ardu-2u8): bg + per-row selection tiles.
+    // Header identity only here; the device pixel oracle (tst/fxdatatest/
+    // menu_art_test.hpp) pins the frame/cursor moves and the per-monster icons.
+    blobHeader(mh_menu_bg, 128, 64, test, F("menu bg w/h"));
+    blobHeader(mh_menu_wsel, 32, 8, test, F("menu weapon sel w/h"));
+    blobHeader(mh_menu_msel, 64, 8, test, F("menu monster sel w/h"));
 }

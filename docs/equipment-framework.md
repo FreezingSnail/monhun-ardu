@@ -59,7 +59,7 @@ deferred option for mixed gear; when they land they use the same row layout.
 
 - File name: `<symbol>_<cellW>x<cellH>.png`. The name declares the **cell**
   size; the sheet's pixel width/height give the frame count, packed row-major
-  (the same convention as `mh_menu_sel_28x16.png` = 8 tiles of 28x16). Symbol is
+  (the same convention as `mh_menu_wsel_32x8.png` = 3 tiles of 32x8). Symbol is
   `mh_<slot>_<item>` (e.g. `mh_head_helm_16x16.png` -> symbol `mh_head_helm`);
   cell height must be a multiple of 8 (converter/packer rule).
 - Anchor convention: cell center. body/head/shadow anchor `(8,8)` = player

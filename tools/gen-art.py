@@ -678,10 +678,26 @@ def font_sheet(color):
 
 
 # ------------------------------------------------------ opening-menu sheets
-# Bead monhun-ardu-zza: the old MCU layout (textPut on fxfontw/fxfontg + the
-# blk() underline) is baked into two FX sheets. Every glyph pixel comes from
-# the same GLYPHS table the font sheets are authored from, so the bake is the
-# font glyphs moved, not redrawn. The underlines are the shade-3 blk() rows.
+# Beads monhun-ardu-zza / 2u8: the MCU textPut layout is baked into FX sheets.
+# Every glyph pixel comes from the same GLYPHS table the font sheets are
+# authored from, so the bake is the font glyphs moved, not redrawn, and
+# check_menu_identity() cross-checks every cell against fxfontw/fxfontg.
+#
+# Menu v2 (bead 2u8): each option is an icon + name. The bg carries the dim
+# (light-gray) options; the selected option is covered by its white sel tile
+# (icon + name + bright 1 px frame + a 3x5 cursor arrow at the left). Weapon
+# options live on menu_wsel (three 32x8 tiles), monster options on menu_msel
+# (five 64x8 tiles) so both rows fit 128 px. Tiles are 8 px tall, which lets the
+# weapon row, five monster slots in a 2-column grid and the footer all fit 64.
+#
+# Layout (screen px):
+#   y=2          MONHUN DEMO           (title, white)
+#   y=13 WEAPON  [SWD] [FLS] [GUN]     (weapon row)
+#   y=22 MONSTER
+#   y=29 [CHICKEN] [BULL]              (2 cols at x=0/64, rows 29/38/47)
+#   y=38 [LONGTAIL] [RAVAGER]
+#   y=47 [POLE]
+#   y=56 A HUNT                        (footer)
 
 def text_blocks(x, y, text, color):
     """blk() rects for `text` on the 4 px glyph lane: 4x8 tile per char, glyph
@@ -695,43 +711,155 @@ def text_blocks(x, y, text, color):
     return blocks
 
 
-# (x, y, text, color) of every static element, in the old draw order. The
-# underlined selected option is NOT here: it comes from the sel tiles.
+# Static bg text (screen x, y, text, color). Option names/icons are placed on
+# their cells by menu_defs and checked by check_menu_identity.
 MENU_ELEMENTS = (
-    (42, 10, "MONHUN DEMO", WHITE),   # (128 - 11*4) / 2, title
-    (4, 22, "WEAPON", LIGHT),
-    (4, 34, "TARGET", LIGHT),
-    (36, 22, "SWD", LIGHT),
-    (52, 22, "FLS", LIGHT),
-    (68, 22, "GUN", LIGHT),
-    (36, 34, "LUNGE", LIGHT),
-    (60, 34, "SWEEP", LIGHT),
-    (84, 34, "HEAVY", LIGHT),
-    (36, 44, "RAVAGER", LIGHT),
-    (68, 44, "POLE", LIGHT),
-    (4, 56, "A HUB", WHITE),   # qs.4: A opens the hub, HUNT lives there
+    (42, 2, "MONHUN DEMO", WHITE),   # (128 - 11*4) / 2, title
+    (0, 13, "WEAPON", LIGHT),
+    (0, 22, "MONSTER", LIGHT),
+    (52, 56, "A HUNT", WHITE),       # footer: A starts the picked hunt
 )
 
-# Selected-option order: weapons 0..2, then targets 0..4 (design order, which
-# is also the old wrap order: LUNGE/SWEEP/HEAVY then RAVAGER/POLE).
-MENU_OPTIONS = ("SWD", "FLS", "GUN", "LUNGE", "SWEEP", "HEAVY", "RAVAGER", "POLE")
+MENU_WEAPONS = ("SWD", "FLS", "GUN")                              # weapons 0..2
+MENU_TARGETS = ("CHICKEN", "BULL", "LONGTAIL", "RAVAGER", "POLE")  # targets 0..4
+# Target icon sources, in target order: the demo beast sheets (east idle is
+# frame 0), the legacy ravager sheet, and the pole (normal head).
+MENU_TARGET_SHEETS = ("monster_lunge", "monster_sweep", "monster_heavy", "monster", "pole")
+
+# Option tile geometry (uniform frame per sheet). local x: cursor 0..2, then
+# the frame from x=4; icon at x=6 (8 px weapons / 12 px monsters), a 1 px gap,
+# then the 4 px/char name lane at x=15 / x=19. local y: frame rows 0 and 7, icon
+# rows 1..6, glyphs rows 2..6.
+MENU_W_TILE = 32
+MENU_M_TILE = 64
+MENU_TILE_H = 8
+MENU_FRAME_X = 4
+MENU_ICON_Y = 1
+MENU_W_ICON_X = 6
+MENU_M_ICON_X = 6
+MENU_W_NAME_DX = 15
+MENU_M_NAME_DX = 19
+MENU_NAME_DY = 2
+
+# Screen geometry, mirrored by src/menu.hpp (drawMenu).
+MENU_WEAPON_X = 24
+MENU_WEAPON_STEP = 34
+MENU_WEAPON_Y = 11
+MENU_MON_COLS = (0, 64)
+MENU_MON_ROWS = (29, 38, 47)
+
+# Cursor arrow: a right-pointing triangle in local cols 0..2, rows 2..6.
+MENU_CURSOR = ((0, 2, 1, 1), (0, 3, 2, 1), (0, 4, 3, 1), (0, 5, 2, 1), (0, 6, 1, 1))
+
+# Weapon mini-icons (8x6 local): a crossguard sword, a ball-and-chain flail and
+# a pistol, drawn with the same rect idiom as the overlay sheets.
+WEAPON_ICON_RECTS = (
+    ((3, 0, 2, 3), (1, 3, 6, 1), (3, 4, 2, 2)),                 # SWD
+    ((1, 4, 2, 2), (3, 3, 1, 1), (4, 2, 1, 1), (5, 0, 3, 3)),   # FLS
+    ((0, 1, 6, 1), (0, 2, 4, 2), (1, 4, 2, 2), (6, 0, 2, 1)),   # GUN
+)
 
 
-def menu_defs():
-    """bg: one 128x64 frame of static content (transparent everywhere else).
-    sel: eight 28x16 tiles, glyphs at local (0,0) and the white underline
-    (len*4-1 px, the old blk row) at local row 9; the spare rows 10..15 stay
-    transparent. Height must be a multiple of 8 for the plus-mask blitter."""
+def mask_points(rects):
+    """Rasterize (x, y, w, h) rects to a point list (origin 0,0)."""
+    return [(x, y) for rx, ry, rw, rh in rects for y in range(ry, ry + rh) for x in range(rx, rx + rw)]
+
+
+def mini_points(src, w, h):
+    """Deterministic silhouette reduction of an authored sheet frame to a w x h
+    icon. Each mini pixel covers a source block and inks when any source pixel
+    is body/head ink (DARK/LIGHT/WHITE). BLACK is dropped: it is the ground
+    shadow, the eye and the hoof caps, so the shadow row does not smear across
+    the icon's bottom. The final source row (legacy sheets paint the shadow in
+    DARK there) is skipped for the same reason. The reduction is recomputed in
+    check_menu_identity(), so a menu icon cannot drift from the shipped sheet."""
+    px = src.load()
+    sw, sh = src.size
+    pts = []
+    for my in range(h):
+        y0 = my * (sh - 1) // h
+        y1 = min(sh - 1, max(y0 + 1, (my + 1) * (sh - 1) // h))
+        for mx in range(w):
+            x0 = mx * sw // w
+            x1 = max(x0 + 1, (mx + 1) * sw // w)
+            if any(px[xx, yy] in (DARK, LIGHT, WHITE) for yy in range(y0, y1) for xx in range(x0, x1)):
+                pts.append((mx, my))
+    return pts
+
+
+def icon_blocks(pts, dx, dy, color):
+    return [(color, dx + x, dy + y, 1, 1) for x, y in pts]
+
+
+def frame_blocks(x, y, w, h, color):
+    """1 px open frame outline (no fill: the bg's option shows through)."""
+    return [(color, x, y, w, 1), (color, x, y + h - 1, w, 1),
+            (color, x, y, 1, h), (color, x + w - 1, y, 1, h)]
+
+
+def menu_weapon_cell(i):
+    return (MENU_WEAPON_X + i * MENU_WEAPON_STEP, MENU_WEAPON_Y)
+
+
+def menu_target_cell(i):
+    return (MENU_MON_COLS[i & 1], MENU_MON_ROWS[i >> 1])
+
+
+def menu_source_crop(body):
+    return (20, 40) if body == "pole" else (32, 24)
+
+
+def menu_wmasks():
+    return [mask_points(rects) for rects in WEAPON_ICON_RECTS]
+
+
+def menu_mmasks(sheets):
+    masks = []
+    for body in MENU_TARGET_SHEETS:
+        w, h = menu_source_crop(body)
+        masks.append(mini_points(sheets[body].crop((0, 0, w, h)), 12, 6))
+    return masks
+
+
+def menu_defs(sheets):
+    """bg: one 128x64 frame of static content + the dim option icons/names.
+    menu_wsel: three 32x8 tiles (weapon 0..2). menu_msel: five 64x8 tiles
+    (target 0..4). Each sel tile is the white icon + name, the bright frame and
+    the cursor arrow, so the selected option composites bright over its dim bg
+    copy in one blit per plane."""
+    wmasks = menu_wmasks()
+    mmasks = menu_mmasks(sheets)
+
     bg = []
     for x, y, text, color in MENU_ELEMENTS:
         bg += text_blocks(x, y, text, color)
-    frames = []
-    for name in MENU_OPTIONS:
-        # Underline 1 px under the 8 px glyph tile (old MENU_UNDERLINE_DY = 9).
-        frames.append(text_blocks(0, 0, name, WHITE) + [(WHITE, 0, 9, len(name) * 4 - 1, 1)])
+    for i, name in enumerate(MENU_WEAPONS):
+        x, y = menu_weapon_cell(i)
+        bg += icon_blocks(wmasks[i], x + MENU_W_ICON_X, y + MENU_ICON_Y, LIGHT)
+        bg += text_blocks(x + MENU_W_NAME_DX, y + MENU_NAME_DY, name, LIGHT)
+    for i, name in enumerate(MENU_TARGETS):
+        x, y = menu_target_cell(i)
+        bg += icon_blocks(mmasks[i], x + MENU_M_ICON_X, y + MENU_ICON_Y, LIGHT)
+        bg += text_blocks(x + MENU_M_NAME_DX, y + MENU_NAME_DY, name, LIGHT)
+
+    wframes = []
+    for i, name in enumerate(MENU_WEAPONS):
+        fr = [(WHITE,) + r for r in MENU_CURSOR]
+        fr += frame_blocks(MENU_FRAME_X, 0, MENU_W_TILE - MENU_FRAME_X, MENU_TILE_H, WHITE)
+        fr += icon_blocks(wmasks[i], MENU_W_ICON_X, MENU_ICON_Y, WHITE)
+        fr += text_blocks(MENU_W_NAME_DX, MENU_NAME_DY, name, WHITE)
+        wframes.append(fr)
+    mframes = []
+    for i, name in enumerate(MENU_TARGETS):
+        fr = [(WHITE,) + r for r in MENU_CURSOR]
+        fr += frame_blocks(MENU_FRAME_X, 0, MENU_M_TILE - MENU_FRAME_X, MENU_TILE_H, WHITE)
+        fr += icon_blocks(mmasks[i], MENU_M_ICON_X, MENU_ICON_Y, WHITE)
+        fr += text_blocks(MENU_M_NAME_DX, MENU_NAME_DY, name, WHITE)
+        mframes.append(fr)
     return [
         {"id": "menu_bg", "w": 128, "h": 64, "anchor": "screen top-left", "frames": [bg]},
-        {"id": "menu_sel", "w": 28, "h": 16, "anchor": "option top-left", "frames": frames},
+        {"id": "menu_wsel", "w": MENU_W_TILE, "h": MENU_TILE_H, "anchor": "weapon option top-left", "frames": wframes},
+        {"id": "menu_msel", "w": MENU_M_TILE, "h": MENU_TILE_H, "anchor": "target option top-left", "frames": mframes},
     ]
 
 
@@ -783,35 +911,73 @@ def check_hud_identity(sheets):
 
 
 def check_menu_identity(sheets):
-    """Cross-check the bake against the authored font sheets: every menu glyph
-    cell (4x8, the tile textPut() blits) must be pixel-identical to the
-    fxfontw/fxfontg sheet tile for the same character, and the cells must be
-    transparent outside the glyph. This is the pixel-oracle link between the
-    menu sheets and the font source."""
+    """Cross-check the menu bake against its sources. Every text cell (4x8, the
+    tile textPut() blits) must be pixel-identical to the fxfontw/fxfontg sheet
+    tile for the same character; every option icon must be the deterministic
+    reduction of the shipped sheet frame (menu_mmasks) recoloured white on the
+    sel tiles and light gray in the bg; every sel tile must carry the bright
+    frame outline and the cursor arrow. This is the pixel-oracle link between
+    the menu sheets, the font sheets and the beast/pole sheets."""
     fontw = sheets["fontw"].load()
     fontg = sheets["fontg"].load()
     bg = sheets["menu_bg"].load()
-    sel = sheets["menu_sel"].load()
+    wsel = sheets["menu_wsel"].load()
+    msel = sheets["menu_msel"].load()
+    wmasks = menu_wmasks()
+    mmasks = menu_mmasks(sheets)
     failures = []
-    for x, y, text, color in MENU_ELEMENTS:
-        font = fontw if color == WHITE else fontg
+
+    def check_text(px, ox, oy, text, font, tag, rows=8):
         for i, ch in enumerate(text):
-            ox = x + i * 4
-            for row in range(8):
+            for row in range(rows):
                 for col in range(4):
-                    got = bg[ox + col, y + row]
+                    got = px[ox + i * 4 + col, oy + row]
                     want = font[ord(ch) * 4 + col, row]
                     if got != want:
-                        failures.append("menu_bg (%d,%d) %r: got %s want %s" % (ox + col, y + row, ch, got, want))
-    for fi, name in enumerate(MENU_OPTIONS):
-        for i, ch in enumerate(name):
-            ox = fi * 28 + i * 4
-            for row in range(8):
-                for col in range(4):
-                    got = sel[ox + col, row]
-                    want = fontw[ord(ch) * 4 + col, row]
-                    if got != want:
-                        failures.append("menu_sel frame %d (%d,%d) %r: got %s want %s" % (fi, ox + col, row, ch, got, want))
+                        failures.append("%s (%d,%d) %r: got %s want %s" % (tag, ox + i * 4 + col, oy + row, ch, got, want))
+
+    def check_icon(px, ox, oy, pts, color, box_w, tag):
+        want = set(pts)
+        for my in range(6):
+            for mx in range(box_w):
+                got = px[ox + mx, oy + my]
+                expected = color if (mx, my) in want else CLEAR
+                if got != expected:
+                    failures.append("%s icon (%d,%d): got %s want %s" % (tag, ox + mx, oy + my, got, expected))
+
+    def check_frame(px, fi, tile_w, tag):
+        for lx in range(MENU_FRAME_X, tile_w):
+            for ly in (0, MENU_TILE_H - 1):
+                if px[fi * tile_w + lx, ly] != WHITE:
+                    failures.append("%s frame %d (%d,%d) not white" % (tag, fi, lx, ly))
+        for ly in range(MENU_TILE_H):
+            for lx in (MENU_FRAME_X, tile_w - 1):
+                if px[fi * tile_w + lx, ly] != WHITE:
+                    failures.append("%s frame %d (%d,%d) not white" % (tag, fi, lx, ly))
+        for cx, cy, cw, ch in MENU_CURSOR:
+            for y in range(cy, cy + ch):
+                for x in range(cx, cx + cw):
+                    if px[fi * tile_w + x, y] != WHITE:
+                        failures.append("%s cursor %d (%d,%d) not white" % (tag, fi, x, y))
+
+    for x, y, text, color in MENU_ELEMENTS:
+        check_text(bg, x, y, text, fontw if color == WHITE else fontg, "menu_bg")
+    for i, name in enumerate(MENU_WEAPONS):
+        x, y = menu_weapon_cell(i)
+        check_text(bg, x + MENU_W_NAME_DX, y + MENU_NAME_DY, name, fontg, "menu_bg weapon name")
+        check_icon(bg, x + MENU_W_ICON_X, y + MENU_ICON_Y, wmasks[i], LIGHT, 8, "menu_bg weapon")
+        # The 8 px tile's bottom row is the frame, so only font rows 0..4 (the
+        # glyph cap) are compared at the sel name lane.
+        check_text(wsel, i * MENU_W_TILE + MENU_W_NAME_DX, MENU_NAME_DY, name, fontw, "menu_wsel name", rows=5)
+        check_icon(wsel, i * MENU_W_TILE + MENU_W_ICON_X, MENU_ICON_Y, wmasks[i], WHITE, 8, "menu_wsel")
+        check_frame(wsel, i, MENU_W_TILE, "menu_wsel")
+    for i, name in enumerate(MENU_TARGETS):
+        x, y = menu_target_cell(i)
+        check_text(bg, x + MENU_M_NAME_DX, y + MENU_NAME_DY, name, fontg, "menu_bg target name")
+        check_icon(bg, x + MENU_M_ICON_X, y + MENU_ICON_Y, mmasks[i], LIGHT, 12, "menu_bg target")
+        check_text(msel, i * MENU_M_TILE + MENU_M_NAME_DX, MENU_NAME_DY, name, fontw, "menu_msel name", rows=5)
+        check_icon(msel, i * MENU_M_TILE + MENU_M_ICON_X, MENU_ICON_Y, mmasks[i], WHITE, 12, "menu_msel")
+        check_frame(msel, i, MENU_M_TILE, "menu_msel")
     if failures:
         for f in failures[:20]:
             print("gen-art: MENU IDENTITY FAIL: %s" % f, file=sys.stderr)
@@ -833,16 +999,19 @@ def render_icon(defn):
 
 def render_all(dims):
     icons = icon_defs(dims)
-    menu = menu_defs()
     sheets = {}
-    for d in icons + menu:
-        sheets[d["id"]] = render_icon(d)
+    # Beast/pole sheets first: menu_defs reduces their east idle frame (frame 0)
+    # into the option mini-icons, so the menu art cannot drift from the sheets
+    # it names (check_menu_identity re-derives the same reduction).
     sheets["player"] = strip(player_frames(), 16, 16)
     sheets["monster"] = strip(monster_frames(), 32, 24)
     sheets["monster_lunge"] = strip(chicken_frames(), 32, 24)
     sheets["monster_sweep"] = strip(bull_frames(), 32, 24)
     sheets["monster_heavy"] = strip(longtail_frames(), 32, 24)
     sheets["pole"] = strip([pole_frame(False), pole_frame(True)], 20, 40)
+    menu = menu_defs(sheets)
+    for d in icons + menu:
+        sheets[d["id"]] = render_icon(d)
     sheets["ball"] = strip([ball_frame()], 7, 8)
     sheets["scatter"] = strip([scatter_frame()], 4, 8)
     sheets["spark"] = strip([spark_frame(LIGHT), spark_frame(WHITE)], 4, 4)
@@ -895,8 +1064,10 @@ def sheet_filename(body, img, icons):
     full strip width: the existing pipeline reads the frame dims from the name."""
     if body == "menu_bg":
         return "mh_menu_bg_128x64.png"
-    if body == "menu_sel":
-        return "mh_menu_sel_28x16.png"
+    if body == "menu_wsel":
+        return "mh_menu_wsel_%dx%d.png" % (MENU_W_TILE, MENU_TILE_H)
+    if body == "menu_msel":
+        return "mh_menu_msel_%dx%d.png" % (MENU_M_TILE, MENU_TILE_H)
     by_id = {d["id"]: d for d in icons}
     d = by_id.get(body)
     if d is not None:
@@ -924,7 +1095,7 @@ def sheet_kind(body):
     """Generated-PNG directory for one sheet body."""
     if body in ("fontw", "fontg"):
         return "fonts"
-    if body in ("menu_bg", "menu_sel"):
+    if body in ("menu_bg", "menu_wsel", "menu_msel"):
         return "menu"
     return "blocks"
 
@@ -952,11 +1123,15 @@ def ascii_dump(sheets, icons):
         w, h, n = d.get("w", img.size[0]), d.get("h", img.size[1]), len(d.get("frames", [])) or 1
         lines.append("%s  frame %dx%d  frames %d  size %dx%d" %
                      (body, w, h, img.size[0] // w, img.size[0], img.size[1]))
+        # Menu tiles are the review target (bead 2u8): print them whole (the
+        # widest is the 320 px five-frame msel strip); other sheets keep the
+        # 100 px cap so the font strips stay readable.
+        limit = 320 if body.startswith("menu") else 100
         px = img.load()
         for yy in range(img.size[1]):
             row = "".join(chars[px[xx, yy]] for xx in range(img.size[0]))
-            if len(row) > 100:
-                row = row[:100] + "..."
+            if len(row) > limit:
+                row = row[:limit] + "..."
             lines.append("  " + row)
         lines.append("")
     return "\n".join(lines)
