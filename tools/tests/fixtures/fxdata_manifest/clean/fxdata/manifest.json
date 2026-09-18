@@ -80,6 +80,11 @@
       "size": 8
     },
     {
+      "path": "fxdata/tables/screens.bin",
+      "sha256": "dceb8287d98c55ead5877afc702e730a565af54b6532eed7e41516d755241267",
+      "size": 8
+    },
+    {
       "path": "src/fxdata.h",
       "sha256": "b042ae69b54dce02c2a1c941372b2f17c17bbdfe68820d7e160369bea5b58591",
       "size": 140

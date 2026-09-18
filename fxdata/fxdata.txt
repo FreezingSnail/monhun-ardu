@@ -36,6 +36,13 @@ raw_t mhCombat = "tables/combat.bin"
 // (the eqf.2 part view).
 raw_t mhEquip = "tables/equip.bin"
 
+// Screen data (bead monhun-ardu-cgz): data/screens/*.json compiled by
+// tools/gen-screens.py into the layout from docs/quests-shops.md (header +
+// u16 def offsets + variable ScreenDef/ScreenRow records, little-endian, no
+// padding). Offsets land in screen_meta.hpp; read on device through fxmem.hpp
+// during the screen scan/render pass (src/screens.hpp).
+raw_t mhScreens = "tables/screens.bin"
+
 // Sprite sections: blocks/fonts/menu/equip sheets, addressed with 24-bit
 // SpritesU seeks so they may grow past the tables' 64 KiB window. Equipment
 // sheets stay last (mh_head_bandana...mh_weapon_flail).

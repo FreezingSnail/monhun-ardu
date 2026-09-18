@@ -1,0 +1,9 @@
+{
+  "id": 0,
+  "title": "HUB",
+  "rows": [
+    { "label": "BUY SWORD", "cost": 100, "action": "buy_upgrade", "condition": "zenny", "param": 0 },
+    { "label": "TAKE QUEST", "cost": 0, "action": "take_quest", "condition": "always", "param": 1 },
+    { "label": "LEAVE", "cost": 0, "action": "leave", "condition": "always", "param": 0 }
+  ]
+}

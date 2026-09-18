@@ -55,6 +55,7 @@ OUTPUT_PATHS = (
     "src/fxdata.h",
     "fxdata/tables/combat.bin",
     "fxdata/tables/equip.bin",
+    "fxdata/tables/screens.bin",
 )
 
 OUTPUT_GLOBS = ("src/generated/**/*",)

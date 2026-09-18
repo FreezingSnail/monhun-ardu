@@ -35,6 +35,11 @@ python3 tools/gen-combat.py
 # unused (no render change yet).
 python3 tools/gen-equipment.py
 
+# Screen data (bead monhun-ardu-cgz): compile data/screens/*.json into the
+# packed fxdata/tables/screens.bin blob + src/generated/screen_meta.hpp (screen
+# indices/offsets + action/condition enums). Schema-validated, deterministic.
+python3 tools/gen-screens.py
+
 # Convert each sprite directory into a Sprites.txt of uint8_t plus-mask blobs.
 # convert-sprite.py appends to Sprites.txt (it does not truncate), so a sheet
 # renamed in gen-art.py would leave a stale symbol behind: remove the generated

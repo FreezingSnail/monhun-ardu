@@ -17,7 +17,8 @@ namespace mh {
 
 enum MenuAction : int8_t {
     MENU_NONE = 0,
-    MENU_START
+    MENU_START,   // A: start the picked hunt/train
+    MENU_SCREEN   // B: open the data-driven hub screen (qs.1 stub entry)
 };
 
 struct MenuState {
@@ -85,18 +86,22 @@ inline void menuNavAxis(int8_t &pick, int8_t count, int8_t dir, int8_t &last, ui
 }
 
 // One menu tick: LEFT/RIGHT cycle the weapon, UP/DOWN cycle the target (both
-// wrap), A rising edge reports MENU_START exactly once per press. Navigation is
-// debounced per axis (menuNavAxis): one step per tap, hold delays then repeats.
-// Navigation works while A is held too.
+// wrap), A rising edge reports MENU_START exactly once per press, B rising edge
+// reports MENU_SCREEN (open the hub screen). Navigation is debounced per axis
+// (menuNavAxis): one step per tap, hold delays then repeats. Navigation works
+// while A is held too.
 inline MenuAction menuStep(MenuState &m, const Input &in) {
     menuNavAxis(m.weapon, MENU_WEAPON_COUNT, in.mx, m.navX, m.navXTimer);
     menuNavAxis(m.target, MENU_TARGET_COUNT, in.my, m.navY, m.navYTimer);
 
     bool aP, bP, bR;
     inputEdges(in, m.prevA, m.prevB, aP, bP, bR);
-    (void)bP;
     (void)bR;
-    return aP ? MENU_START : MENU_NONE;
+    if (aP)
+        return MENU_START;
+    if (bP)
+        return MENU_SCREEN;
+    return MENU_NONE;
 }
 
 // Pick -> sim mapping: targets 0..3 select the beast kind in hunt mode, target

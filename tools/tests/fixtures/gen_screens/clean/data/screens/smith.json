@@ -1,0 +1,7 @@
+{
+  "id": 1,
+  "title": "SMITH",
+  "rows": [
+    { "label": "TIER 2", "cost": 250, "action": "buy_upgrade", "condition": "tier", "flags": ["hide_locked"], "param": 1 }
+  ]
+}

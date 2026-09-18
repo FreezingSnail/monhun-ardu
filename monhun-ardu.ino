@@ -18,7 +18,8 @@
 // exact same header is compiled into the on-device perf bench, so the numbers
 // there describe this loop's real render path.
 #include "src/render.hpp"
-#include "src/menu.hpp"   // draws through render.hpp (textPut/blk) + MenuState
+#include "src/menu.hpp"      // draws through render.hpp (textPut/blk) + MenuState
+#include "src/screens.hpp"   // hub/list screens + EEPROM save (qs.1)
 
 decltype(arduboy) arduboy;
 
@@ -34,6 +35,14 @@ mh::MenuState s_menu;
 // Audio cue edge detector. Driven from run() after stepGame(); reads Game only
 // (no core changes). Muted at compile time with -DMH_AUDIO=0.
 mh::AudioState s_audio;
+
+// Persistent save + the data-driven screen state (bead monhun-ardu-cgz). The
+// save loads once in setup(); it is committed only from a hub-screen action
+// (never during a hunt) so EEPROM write cycles stay low. The screen is entered
+// from the opening menu's B edge and returns to it on B / a LEAVE row.
+mh::SaveBlock s_save;
+mh::ScreenState s_screen;
+static const mh::SaveBackend SAVE_BACKEND = {mh::saveEepromRead, mh::saveEepromWrite};
 
 #if DEBUG_HURTBOXES
 // Runtime toggle inside the debug build: hold A+B for 30 ticks to flip. The
@@ -66,6 +75,7 @@ void setup() {
     FX::setCursorRange(0, 32767);
 
     mh::newGame(g, mh::W_SWORD, mh::MODE_HUNT);
+    mh::saveLoad(s_save, SAVE_BACKEND);   // first boot / bad block -> defaults
 }
 
 // One input sample per logic tick, shared by the menu and the sim. The menu
@@ -90,10 +100,38 @@ void run() {
 #endif
     if (s_menu.active) {
         // Menu tick: no stepGame, no audio (the new game re-latches the audio
-        // snapshot on its tick 0). A starts the picked loadout and drops out.
-        if (mh::menuStep(s_menu, in) == mh::MENU_START) {
+        // snapshot on its tick 0). A starts the picked loadout and drops out;
+        // B opens the hub screen stub.
+        const mh::MenuAction act = mh::menuStep(s_menu, in);
+        if (act == mh::MENU_START) {
             mh::menuStart(g, s_menu);
             s_menu.active = false;
+        } else if (act == mh::MENU_SCREEN) {
+            mh::screenEnter(s_screen, screens::SCREEN_HUB, s_save);
+            s_menu.active = false;
+        }
+        return;
+    }
+    if (s_screen.active) {
+        // Screen tick: nav + row actions. A on a leave row (or B) returns to
+        // the menu; a state-changing action commits the save once.
+        const mh::ScreenEvent ev = mh::screenStep(s_screen, in);
+        if (ev == mh::SCREEN_BACK) {
+            s_screen.active = false;
+            s_menu.active = true;
+            return;
+        }
+        if (ev != mh::SCREEN_ACCEPT)
+            return;
+        mh::ScreenRow row;
+        if (mh::screenCursorRow(s_screen, row) && mh::screenCondOk(s_save, row)) {
+            if (row.action == screens::ACTION_LEAVE) {
+                s_screen.active = false;
+                s_menu.active = true;
+                return;
+            }
+            if (mh::screenApplyAction(s_save, row))
+                mh::saveStore(s_save, SAVE_BACKEND);
         }
         return;
     }
@@ -107,6 +145,10 @@ void run() {
 // render never mutates Game; the three plane passes composite one L4 image.
 // While the menu is up it replaces the scene (same per-plane call discipline).
 void render() {
+    if (s_screen.active) {
+        mh::drawScreen(s_screen, s_save);
+        return;
+    }
     if (s_menu.active) {
         mh::drawMenu(s_menu);
         return;
