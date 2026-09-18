@@ -172,7 +172,7 @@ static int16_t damagePole(Game &g, uint8_t dmg, int16_t hx, int16_t hy) {
     const uint8_t brokenBefore = g.combat.zoneBroken;
     CombatBodyHit hit;
     if (ZONES_ENABLED)
-        hit = combatZoneHitResolveAt(g, dmg, playerPhys(g), hx, hy, pole.rect.x, pole.rect.y, fp::FP, 0, true);
+        hit = combatZoneHitResolveAt(g, dmg, playerPhys(g), hx, hy, pole.rect.x, pole.rect.y, fp::FP, 0);
     else
         hit = combatResolveBodyHit(g, dmg);
     const int16_t total = static_cast<int16_t>(hit.dmg);

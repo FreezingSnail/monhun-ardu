@@ -662,11 +662,14 @@ def pole_frame(flash):
     return img
 
 
-# ---- Breakable pole variants (bead monhun-ardu-6zb.5; staged 6zb.7). Each
-# variant is a distinct silhouette with a bold 1x-readable weapon emblem in
-# BLACK on the LIGHT head block and a stage*2 + flash frame layout: intact,
-# intact-flash, damaged, damaged-flash, broken, broken-flash. The broken frame
-# is unmistakable: the severed piece lies ON THE GROUND below the post (the key
+# ---- Breakable pole variants (bead monhun-ardu-6zb.5; staged 6zb.7; markers
+# 6zb.8). Each variant is a distinct silhouette with a neutral 7-px jagged
+# fracture marker on its ACTUAL breakable part -- SEVER on the LIGHT top block
+# (BLACK), BREAK on the LIGHT side arm (BLACK), CRACK on the DARK post band
+# (WHITE) -- so the contrast reads at 1x and the art no longer names a weapon.
+# Frame layout is stage*2 + flash: intact, intact-flash, damaged, damaged-flash,
+# broken, broken-flash. The damaged marker sheds its two far ends + adds extra
+# crack lines; the broken frame keeps the detached piece on the ground (the key
 # 1x read). PLAIN keeps the original two-frame 20x40 sheet (pole_frame)
 # byte-identical for parity; BREAK is 28x40 (side arm) and SEVER/CRACK 20x40.
 # The shared post/bands are drawn at the 20-wide origin; BREAK's post stays 20
@@ -676,17 +679,16 @@ def pole_variant_frames(draw):
     return [draw(stage, flash) for stage in range(3) for flash in (False, True)]
 
 
-def _sever_emblem(img, chipped):
-    # Thick diagonal blade from the upper-left, chipped mid-run when damaged.
-    for i in range(6):
-        if chipped and i in (2, 3):
+# Neutral fracture stamp: a 7-px jagged crack burst in `color`. `chipped`
+# drops the two far-end pixels (5 px) for the damaged stage.
+_FRACTURE = ((2, 0), (1, 1), (1, 2), (2, 2), (2, 3), (3, 3), (3, 4))
+
+
+def _fracture(img, x, y, color, chipped=False):
+    for i, (dx, dy) in enumerate(_FRACTURE):
+        if chipped and i in (0, 6):
             continue
-        rect(img, 3 + i, 2 + i, 3, 1, BLACK)
-    rect(img, 2, 8, 5, 1, BLACK)            # crossguard near the hilt
-    if chipped:
-        rect(img, 14, 2, 1, 4, BLACK)       # crack lines on the head
-        rect(img, 15, 3, 1, 2, BLACK)
-        rect(img, 12, 9, 1, 3, BLACK)
+        rect(img, x + dx, y + dy, 1, 1, color)
 
 
 def pole_sever_frame(stage, flash):
@@ -701,42 +703,26 @@ def pole_sever_frame(stage, flash):
         # severed top block lying on the ground below the post
         rect(img, 1, 36, 12, 4, head)
         rect(img, 1, 36, 12, 1, BLACK)      # cut edge
-        rect(img, 4, 38, 2, 1, BLACK)       # blade remnant
+        rect(img, 4, 38, 2, 1, BLACK)       # fracture remnant
         rect(img, 10, 37, 1, 1, BLACK)
     else:
         rect(img, 2, 12, 16, 24, DARK)      # post
         rect(img, 0, 0, 20, 16, head)       # head block
-        _sever_emblem(img, chipped=(stage == 1))
+        _fracture(img, 8, 3, BLACK, chipped=(stage == 1))
+        if stage == 1:
+            rect(img, 14, 2, 1, 4, BLACK)   # extra cracks on the head
+            rect(img, 15, 3, 1, 2, BLACK)
+            rect(img, 4, 9, 1, 3, BLACK)
     for band in (20, 27, 34):
         rect(img, 2, band, 16, 1, BLACK)
     rect(img, 0, 34, 20, 2, BLACK)          # ground plate
     return img
 
 
-def _break_emblem(img, head, chipped):
-    # Spiked mace ball with a short handle, BLACK on the head block.
-    rect(img, 7, 4, 6, 6, BLACK)            # ball
-    rect(img, 9, 2, 2, 2, BLACK)            # top spike
-    rect(img, 9, 10, 2, 2, BLACK)           # bottom spike
-    rect(img, 5, 6, 2, 2, BLACK)            # left spike
-    if not chipped:
-        rect(img, 13, 6, 2, 2, BLACK)       # right spike (chipped off when hurt)
-    rect(img, 4, 11, 2, 1, BLACK)           # handle
-    rect(img, 3, 12, 2, 1, BLACK)
-    rect(img, 7, 5, 1, 1, head)             # ball sheen
-    if chipped:
-        rect(img, 10, 4, 1, 1, head)        # chipped ball corner
-        rect(img, 11, 8, 2, 1, head)
-
-
 def _break_arm(img):
     rect(img, 20, 8, 8, 12, LIGHT)          # side arm (28 wide with the post)
     rect(img, 21, 9, 6, 2, WHITE)           # hammer head top
     rect(img, 21, 16, 6, 2, WHITE)          # hammer head bottom
-    rect(img, 22, 11, 1, 1, BLACK)          # handle rivets
-    rect(img, 22, 15, 1, 1, BLACK)
-    rect(img, 24, 11, 1, 1, BLACK)          # hammer face rivets
-    rect(img, 24, 15, 1, 1, BLACK)
 
 
 def pole_break_frame(stage, flash):
@@ -744,7 +730,6 @@ def pole_break_frame(stage, flash):
     head = WHITE if flash else LIGHT
     rect(img, 2, 12, 16, 24, DARK)          # post
     rect(img, 0, 0, 20, 16, head)           # head block (survives the break)
-    _break_emblem(img, head, chipped=(stage == 1))
     if stage == 2:
         # sheared arm stub: jagged dark teeth at the post's right edge
         rect(img, 18, 8, 1, 2, BLACK)
@@ -759,32 +744,14 @@ def pole_break_frame(stage, flash):
         rect(img, 24, 36, 1, 1, BLACK)      # rivet
     else:
         _break_arm(img)
+        _fracture(img, 22, 10, BLACK, chipped=(stage == 1))
         if stage == 1:
-            rect(img, 23, 10, 1, 6, BLACK)  # crack down the arm
-            rect(img, 21, 14, 2, 1, BLACK)
+            rect(img, 20, 9, 1, 3, BLACK)   # extra cracks down the arm
+            rect(img, 26, 15, 1, 3, BLACK)
     for band in (20, 27, 34):
         rect(img, 2, band, 16, 1, BLACK)
     rect(img, 0, 34, 20, 2, BLACK)
     return img
-
-
-def _crack_emblem(img, head, chipped):
-    # Gun target: concentric ring + centre dot + tick, BLACK on the head block.
-    rect(img, 6, 3, 8, 1, BLACK)            # outer ring
-    rect(img, 6, 10, 8, 1, BLACK)
-    rect(img, 6, 3, 1, 8, BLACK)
-    rect(img, 13, 3, 1, 8, BLACK)
-    if chipped:
-        rect(img, 6, 3, 3, 1, head)         # chipped ring corner
-    else:
-        rect(img, 9, 1, 2, 2, BLACK)        # top tick
-    rect(img, 8, 5, 4, 1, BLACK)            # inner ring
-    rect(img, 8, 8, 4, 1, BLACK)
-    rect(img, 8, 5, 1, 4, BLACK)
-    rect(img, 11, 5, 1, 4, BLACK)
-    rect(img, 9, 6, 2, 2, BLACK)            # centre dot
-    if chipped:
-        rect(img, 12, 9, 1, 1, head)        # chip on the lower-right ring
 
 
 def pole_crack_frame(stage, flash):
@@ -792,7 +759,6 @@ def pole_crack_frame(stage, flash):
     head = WHITE if flash else LIGHT
     rect(img, 2, 12, 16, 24, DARK)          # post
     rect(img, 0, 0, 20, 16, head)           # head block (survives the break)
-    _crack_emblem(img, head, chipped=(stage == 1))
     if stage == 2:
         # band split: two BLACK chunks with a DARK jagged gap between
         rect(img, 0, 17, 20, 1, BLACK)      # upper band edge
@@ -804,20 +770,15 @@ def pole_crack_frame(stage, flash):
         # band chunk on the ground
         rect(img, 1, 36, 12, 4, head)
         rect(img, 1, 36, 12, 1, BLACK)
-        rect(img, 4, 38, 2, 1, BLACK)       # ring fragment
+        rect(img, 4, 38, 2, 1, BLACK)       # fracture remnant
         rect(img, 10, 37, 1, 1, BLACK)
     else:
         rect(img, 0, 18, 20, 1, BLACK)      # band ring edges (breakable part)
         rect(img, 0, 27, 20, 1, BLACK)
+        _fracture(img, 8, 19, WHITE, chipped=(stage == 1))
         if stage == 1:
-            for x, y in ((2, 19), (5, 20), (8, 19), (11, 21), (14, 20), (17, 19)):
-                rect(img, x, y, 1, 1, BLACK)  # cracked band
-            rect(img, 0, 23, 20, 1, BLACK)
-        else:
-            rect(img, 8, 21, 4, 1, BLACK)   # clean bullseye ring band
-            rect(img, 7, 22, 6, 1, BLACK)
-            rect(img, 8, 23, 4, 1, BLACK)
-            rect(img, 9, 22, 2, 1, WHITE)
+            rect(img, 2, 20, 1, 4, WHITE)   # extra cracks along the band
+            rect(img, 16, 23, 1, 3, WHITE)
     rect(img, 2, 34, 16, 1, BLACK)
     rect(img, 0, 34, 20, 2, BLACK)
     return img

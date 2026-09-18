@@ -1093,12 +1093,11 @@ inline bool combatZoneContains(const Game &g, const CombatBox &b, int16_t hx, in
 // Landed player hit against the 3-hitzone model. The body is implicit and wins
 // ties: a zone candidate replaces it only on a strictly higher final
 // multiplier (tie -> body, then head, then appendage), matching the zone test
-// order. Drained zone pools flip a single broken bit when the hit's phys is in
-// breakTypes. Zero cart reads (all zone scalars were cached at spawn).
-// `gateBreak` makes the pool drain itself require a matching phys (the static
-// prop's legacy "wrong weapon: damage lands, no drain/break" rule); beasts pass
-// false and keep the "breakTypes gates only the broken bit" behaviour.
-inline MH_COMBAT_NI CombatBodyHit combatZoneHitResolveAt(Game &g, int32_t base, uint8_t phys, int16_t hx, int16_t hy, int16_t bx, int16_t by, int16_t fx, int16_t fy, bool gateBreak) {
+// order. Any landed hit drains the zone pool; a drained pool flips a single
+// broken bit when the hit's phys is in breakTypes (the shared monster rule,
+// now also used by static props). Zero cart reads (all zone scalars were cached
+// at spawn).
+inline MH_COMBAT_NI CombatBodyHit combatZoneHitResolveAt(Game &g, int32_t base, uint8_t phys, int16_t hx, int16_t hy, int16_t bx, int16_t by, int16_t fx, int16_t fy) {
     CombatBodyHit r;
     r.zone = COMBAT_NO_ZONE;
     r.mul = 100;
@@ -1138,11 +1137,9 @@ inline MH_COMBAT_NI CombatBodyHit combatZoneHitResolveAt(Game &g, int32_t base, 
 
     CombatZoneCache &z = g.combat.zone[best];
     const uint8_t pct = (out > 255u) ? 255u : static_cast<uint8_t>(out);
-    if (!gateBreak || (phys & z.breakTypes)) {
-        z.hp = (pct < z.hp) ? static_cast<uint8_t>(z.hp - pct) : 0;
-        if (z.hp == 0 && (phys & z.breakTypes)) {
-            g.combat.zoneBroken |= (best == COMBAT_ZONE_HEAD) ? COMBAT_ZONE_HEAD_BIT : COMBAT_ZONE_APPENDAGE_BIT;
-        }
+    z.hp = (pct < z.hp) ? static_cast<uint8_t>(z.hp - pct) : 0;
+    if (z.hp == 0 && (phys & z.breakTypes)) {
+        g.combat.zoneBroken |= (best == COMBAT_ZONE_HEAD) ? COMBAT_ZONE_HEAD_BIT : COMBAT_ZONE_APPENDAGE_BIT;
     }
 
     const uint32_t body = combatMulPercent(out, z.bodyShare);
@@ -1154,7 +1151,7 @@ inline MH_COMBAT_NI CombatBodyHit combatZoneHitResolveAt(Game &g, int32_t base, 
 
 // Beast resolve: anchor/facing come from the live monster record.
 inline CombatBodyHit combatZoneHitResolve(Game &g, int32_t base, uint8_t phys, int16_t hx, int16_t hy) {
-    return combatZoneHitResolveAt(g, base, phys, hx, hy, g.monster.x, g.monster.y, g.monster.fx, g.monster.fy, false);
+    return combatZoneHitResolveAt(g, base, phys, hx, hy, g.monster.x, g.monster.y, g.monster.fx, g.monster.fy);
 }
 
 // combatZoneStagger: the staggerOnHit of the zone a hit landed on (0 for the

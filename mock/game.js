@@ -255,15 +255,16 @@ const PHYS_BIT_BY_WEAPON = [1, 2, 4];
 
 // Training-pole variants (bead monhun-ardu-6zb.5), mirroring src/core/game.hpp
 // POLE_DEFS: kind 0 PLAIN is the legacy pole (no zone, no break); 1 SEVER is a
-// slash-gated top block that loses its head crit when broken; 2 BREAK is a
-// flail-gated side arm whose hurt rect shrinks 28x36 -> 20x36; 3 CRACK is a
-// shot-gated mid band. `z` is the zone box relative to the pole rect (w 0 = no
-// zone), pool the drain, breakTypes the required phys mask.
+// top block that loses its head crit when broken; 2 BREAK is a side arm whose
+// hurt rect shrinks 28x36 -> 20x36; 3 CRACK is a mid band. All three breakable
+// variants share the monster rule (any weapon drains; breakTypes is the full
+// phys mask, so any weapon breaks). `z` is the zone box relative to the pole
+// rect (w 0 = no zone), pool the drain, breakTypes the required phys mask.
 const POLE_DEFS = [
   { w: 20, h: 36, z: null, pool: 0, breakTypes: 0, brokenW: 20, brokenH: 36, critLost: false },
-  { w: 20, h: 36, z: { x: 0, y: 0, w: 20, h: 16 }, pool: 60, breakTypes: 1, brokenW: 20, brokenH: 36, critLost: true },
-  { w: 28, h: 36, z: { x: 20, y: 8, w: 8, h: 12 }, pool: 40, breakTypes: 2, brokenW: 20, brokenH: 36, critLost: false },
-  { w: 20, h: 36, z: { x: 0, y: 18, w: 20, h: 10 }, pool: 30, breakTypes: 4, brokenW: 20, brokenH: 36, critLost: false },
+  { w: 20, h: 36, z: { x: 0, y: 0, w: 20, h: 16 }, pool: 60, breakTypes: 7, brokenW: 20, brokenH: 36, critLost: true },
+  { w: 28, h: 36, z: { x: 20, y: 8, w: 8, h: 12 }, pool: 40, breakTypes: 7, brokenW: 20, brokenH: 36, critLost: false },
+  { w: 20, h: 36, z: { x: 0, y: 18, w: 20, h: 10 }, pool: 30, breakTypes: 7, brokenW: 20, brokenH: 36, critLost: false },
 ];
 
 const POLE_PLAIN = 0;
@@ -1145,8 +1146,8 @@ function damagePole(g, dmg, hx, hy) {
 }
 
 // Zone resolve for breakable poles: point-in-zone (half-open, facing-free) and
-// pool drain only when the player phys is in breakTypes. Pool 0 -> broken, the
-// hurt rect refreshes (BREAK shrinks) and a small spark burst + freeze fires.
+// the shared pool drain (any weapon drains). Pool 0 -> broken, the hurt rect
+// refreshes (BREAK shrinks) and a small spark burst + freeze fires.
 function poleOnHit(g, dmg, hx, hy) {
   const total = damagePole(g, dmg, hx, hy);
   const pole = g.pole;
@@ -1155,7 +1156,6 @@ function poleOnHit(g, dmg, hx, hy) {
   const zx = pole.x + def.z.x;
   const zy = pole.y + def.z.y;
   if (hx < zx || hx >= zx + def.z.w || hy < zy || hy >= zy + def.z.h) return;
-  if (!(PHYS_BIT_BY_WEAPON[g.weapon] & def.breakTypes)) return;
   if (total < pole.hp) { pole.hp -= total; return; }
   pole.hp = 0;
   pole.broken = 1;
@@ -1530,59 +1530,16 @@ function poleStage(pole, def) {
   return 0;
 }
 
-// Bold BLACK weapon emblems on the LIGHT head block (tools/gen-art.py mirror).
-function poleSeverEmblem(ctx, x, y, chipped) {
-  ctx.fillStyle = SHADES[0];
-  for (let i = 0; i < 6; i++) {
-    if (chipped && (i === 2 || i === 3)) continue;
-    ctx.fillRect(x + 3 + i, y + 2 + i, 3, 1);
-  }
-  ctx.fillRect(x + 2, y + 8, 5, 1);
-  if (chipped) {
-    ctx.fillRect(x + 14, y + 2, 1, 4);
-    ctx.fillRect(x + 15, y + 3, 1, 2);
-    ctx.fillRect(x + 12, y + 9, 1, 3);
-  }
-}
-
-function poleBreakEmblem(ctx, x, y, chipped, head) {
-  ctx.fillStyle = SHADES[0];
-  ctx.fillRect(x + 7, y + 4, 6, 6);
-  ctx.fillRect(x + 9, y + 2, 2, 2);
-  ctx.fillRect(x + 9, y + 10, 2, 2);
-  ctx.fillRect(x + 5, y + 6, 2, 2);
-  if (!chipped) ctx.fillRect(x + 13, y + 6, 2, 2);
-  ctx.fillRect(x + 4, y + 11, 2, 1);
-  ctx.fillRect(x + 3, y + 12, 2, 1);
-  ctx.fillStyle = SHADES[head];
-  ctx.fillRect(x + 7, y + 5, 1, 1);
-  if (chipped) {
-    ctx.fillRect(x + 10, y + 4, 1, 1);
-    ctx.fillRect(x + 11, y + 8, 2, 1);
-  }
-}
-
-function poleCrackEmblem(ctx, x, y, chipped, head) {
-  ctx.fillStyle = SHADES[0];
-  ctx.fillRect(x + 6, y + 3, 8, 1);
-  ctx.fillRect(x + 6, y + 10, 8, 1);
-  ctx.fillRect(x + 6, y + 3, 1, 8);
-  ctx.fillRect(x + 13, y + 3, 1, 8);
-  if (chipped) {
-    ctx.fillStyle = SHADES[head];
-    ctx.fillRect(x + 6, y + 3, 3, 1);
-    ctx.fillStyle = SHADES[0];
-  } else {
-    ctx.fillRect(x + 9, y + 1, 2, 2);
-  }
-  ctx.fillRect(x + 8, y + 5, 4, 1);
-  ctx.fillRect(x + 8, y + 8, 4, 1);
-  ctx.fillRect(x + 8, y + 5, 1, 4);
-  ctx.fillRect(x + 11, y + 5, 1, 4);
-  ctx.fillRect(x + 9, y + 6, 2, 2);
-  if (chipped) {
-    ctx.fillStyle = SHADES[head];
-    ctx.fillRect(x + 12, y + 9, 1, 1);
+// Neutral fracture marker (tools/gen-art.py _fracture mirror): a 7-px jagged
+// crack burst in `shade`; chipped drops the two far-end pixels (5 px) for the
+// damaged stage. Contrast-aware placement: BLACK (0) on the LIGHT head/arm,
+// WHITE (3) on the DARK post band.
+const POLE_FRACTURE = [[2, 0], [1, 1], [1, 2], [2, 2], [2, 3], [3, 3], [3, 4]];
+function poleFracture(ctx, x, y, chipped, shade) {
+  ctx.fillStyle = SHADES[shade];
+  for (let i = 0; i < POLE_FRACTURE.length; i++) {
+    if (chipped && (i === 0 || i === 6)) continue;
+    ctx.fillRect(x + POLE_FRACTURE[i][0], y + POLE_FRACTURE[i][1], 1, 1);
   }
 }
 
@@ -1626,13 +1583,19 @@ function drawPole(ctx, g) {
   ctx.fillStyle = SHADES[0];
   for (let i = 0; i < 3; i++) ctx.fillRect(x + 2, y + 20 + i * 7, 16, 1);
 
-  // Head block + weapon emblem (SEVER broken has no head to stand on).
+  // Head block + neutral fracture marker (SEVER broken has no head to stand on).
   if (!(kind === 1 && stage === 2)) {
     ctx.fillStyle = SHADES[head];
     ctx.fillRect(x, y, 20, 16);
-    if (kind === 1) poleSeverEmblem(ctx, x, y, stage === 1);
-    else if (kind === 2) poleBreakEmblem(ctx, x, y, stage === 1, head);
-    else if (kind === 3) poleCrackEmblem(ctx, x, y, stage === 1, head);
+    if (kind === 1) {
+      poleFracture(ctx, x + 8, y + 3, stage === 1, 0);
+      if (stage === 1) {
+        ctx.fillStyle = SHADES[0];
+        ctx.fillRect(x + 14, y + 2, 1, 4);   // extra cracks on the head
+        ctx.fillRect(x + 15, y + 3, 1, 2);
+        ctx.fillRect(x + 4, y + 9, 1, 3);
+      }
+    }
   }
 
   if (kind === 1) {
@@ -1666,14 +1629,11 @@ function drawPole(ctx, g) {
       ctx.fillStyle = SHADES[3];
       ctx.fillRect(x + 21, y + 9, 6, 2);    // hammer head
       ctx.fillRect(x + 21, y + 16, 6, 2);
-      ctx.fillStyle = SHADES[0];
-      ctx.fillRect(x + 22, y + 11, 1, 1);   // rivets
-      ctx.fillRect(x + 22, y + 15, 1, 1);
-      ctx.fillRect(x + 24, y + 11, 1, 1);
-      ctx.fillRect(x + 24, y + 15, 1, 1);
+      poleFracture(ctx, x + 22, y + 10, stage === 1, 0);
       if (stage === 1) {
-        ctx.fillRect(x + 23, y + 10, 1, 6); // crack down the arm
-        ctx.fillRect(x + 21, y + 14, 2, 1);
+        ctx.fillStyle = SHADES[0];
+        ctx.fillRect(x + 20, y + 9, 1, 3);  // extra cracks down the arm
+        ctx.fillRect(x + 26, y + 15, 1, 3);
       }
     }
   } else if (kind === 3) {
@@ -1695,16 +1655,11 @@ function drawPole(ctx, g) {
       ctx.fillStyle = SHADES[0];
       ctx.fillRect(x, y + 18, 20, 1);       // band ring edges
       ctx.fillRect(x, y + 27, 20, 1);
+      poleFracture(ctx, x + 8, y + 19, stage === 1, 3);
       if (stage === 1) {
-        const hits = [[2, 19], [5, 20], [8, 19], [11, 21], [14, 20], [17, 19]];
-        for (const [tx, ty] of hits) ctx.fillRect(x + tx, y + ty, 1, 1);
-        ctx.fillRect(x, y + 23, 20, 1);
-      } else {
-        ctx.fillRect(x + 8, y + 21, 4, 1);  // clean bullseye ring band
-        ctx.fillRect(x + 7, y + 22, 6, 1);
-        ctx.fillRect(x + 8, y + 23, 4, 1);
         ctx.fillStyle = SHADES[3];
-        ctx.fillRect(x + 9, y + 22, 2, 1);
+        ctx.fillRect(x + 2, y + 20, 1, 4);  // extra cracks along the band
+        ctx.fillRect(x + 16, y + 23, 1, 3);
       }
     }
   }

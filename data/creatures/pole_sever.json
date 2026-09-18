@@ -10,7 +10,7 @@
       "dmgMul": 140,
       "hp": 60,
       "bodyShare": 100,
-      "breakTypes": ["SLASH"],
+      "breakTypes": ["SLASH", "BLUNT", "SHOT"],
       "broken": { "dmgMul": 100 }
     }
   },

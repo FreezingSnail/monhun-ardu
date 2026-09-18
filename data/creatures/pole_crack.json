@@ -15,7 +15,7 @@
       "dmgMul": 101,
       "hp": 30,
       "bodyShare": 100,
-      "breakTypes": ["SHOT"],
+      "breakTypes": ["SLASH", "BLUNT", "SHOT"],
       "broken": { "hurtOn": false }
     }
   },

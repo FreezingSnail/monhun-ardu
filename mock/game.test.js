@@ -472,7 +472,7 @@ test('pole variants: defs, initPoleKind and plain parity', () => {
 });
 
 test('pole variants: damage stage from hp/hpMax and broken state', () => {
-  const g = G.newGame(1, 'train');   // flail: blunt-gated BREAK arm
+  const g = G.newGame(1, 'train');   // BREAK arm (all weapons break it)
   G.initPoleKind(g, G.POLE_BREAK);
   const pole = g.pole;
   const def = G.POLE_DEFS[G.POLE_BREAK];
@@ -536,23 +536,23 @@ test('pole variants: flail breaks the arm and shrinks the rect 28->20', () => {
   assert.ok(g.freeze >= 6, 'break freeze');
 });
 
-test('pole variants: wrong phys damages but never drains/breaks', () => {
-  const g = G.newGame(1, 'train');   // flail vs slash-gated SEVER
-  G.initPoleKind(g, G.POLE_SEVER);
-  g.pole.x = 140;
-  g.pole.y = 40;
-  for (let i = 0; i < 20; i++) G.poleOnHit(g, 10, 150, 48);
-  assert.equal(g.pole.hp, 60, 'wrong phys leaves the pool');
-  assert.equal(g.pole.broken, 0, 'never breaks');
-  assert.ok(g.train.total > 0, 'damage still lands');
-  // gun vs blunt-gated BREAK
-  const h = G.newGame(2, 'train');
-  G.initPoleKind(h, G.POLE_BREAK);
-  h.pole.x = 140;
-  h.pole.y = 40;
-  for (let i = 0; i < 20; i++) G.poleOnHit(h, 10, 164, 58);
-  assert.equal(h.pole.hp, 40, 'gun leaves the arm pool');
-  assert.equal(h.pole.broken, 0, 'gun never breaks the arm');
+test('pole variants: every weapon drains and breaks each variant', () => {
+  const variants = [G.POLE_SEVER, G.POLE_BREAK, G.POLE_CRACK];
+  // Zone centres relative to the pole rect: SEVER top block, BREAK side arm,
+  // CRACK mid band.
+  const hit = [[150, 48], [164, 58], [150, 63]];
+  for (let vi = 0; vi < variants.length; vi++) {
+    assert.equal(G.POLE_DEFS[variants[vi]].breakTypes, 7, 'variant accepts all phys');
+    for (let weapon = 0; weapon < 3; weapon++) {
+      const g = G.newGame(weapon, 'train');
+      G.initPoleKind(g, variants[vi]);
+      g.pole.x = 140;
+      g.pole.y = 40;
+      G.poleOnHit(g, 100, hit[vi][0], hit[vi][1]);
+      assert.equal(g.pole.hp, 0, `variant ${vi} weapon ${weapon} drains`);
+      assert.equal(g.pole.broken, 1, `variant ${vi} weapon ${weapon} breaks`);
+    }
+  }
 });
 
 test('pole variants: gun cracks the band', () => {

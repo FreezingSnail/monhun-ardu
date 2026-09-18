@@ -355,26 +355,28 @@ void ShellSuite(TestRunner &runner) {
     }
 
     {
-        Test t("wrong phys: damage lands but the pool never drains/breaks");
-        Game g;
-        initGame(g, W_FLAIL);   // blunt vs SEVER (slash-gated)
-        initWorld(g, MODE_TRAIN);
-        initPoleKind(g, POLE_SEVER);
-        const int16_t hx = 150, hy = 48;
-        for (int i = 0; i < 20; i++)
-            poleOnHit(g, 10, hx, hy, 0, 0);
-        t.assert(g.combat.zone[COMBAT_ZONE_HEAD].hp, 60, "wrong phys leaves the pool untouched");
-        t.assert(g.combat.zoneBroken & COMBAT_ZONE_HEAD_BIT, 0, "wrong phys never breaks");
-        t.assert(g.train.total > 0, true, "damage still lands");
-        // Gun vs BREAK (blunt-gated): same story.
-        Game h;
-        initGame(h, W_GUN);
-        initWorld(h, MODE_TRAIN);
-        initPoleKind(h, POLE_BREAK);
-        for (int i = 0; i < 20; i++)
-            poleOnHit(h, 10, 164, 58, 0, 0);
-        t.assert(h.combat.zone[COMBAT_ZONE_APPENDAGE].hp, 40, "gun leaves the break pool untouched");
-        t.assert(h.combat.zoneBroken & COMBAT_ZONE_APPENDAGE_BIT, 0, "gun never breaks the arm");
+        Test t("all weapons drain + break every breakable pole variant");
+        // Owner direction (6zb.8): no weapon gate. For each variant x weapon,
+        // one heavy hit on the breakable zone must drain the pool and flip the
+        // broken bit. Points are the zone centres relative to the pole rect.
+        const int8_t kinds[3] = {POLE_SEVER, POLE_BREAK, POLE_CRACK};
+        const uint8_t weapons[3] = {W_SWORD, W_FLAIL, W_GUN};
+        const uint8_t slot[3] = {COMBAT_ZONE_HEAD, COMBAT_ZONE_APPENDAGE, COMBAT_ZONE_APPENDAGE};
+        const uint8_t bit[3] = {COMBAT_ZONE_HEAD_BIT, COMBAT_ZONE_APPENDAGE_BIT, COMBAT_ZONE_APPENDAGE_BIT};
+        const int16_t hx[3] = {150, 164, 150};
+        const int16_t hy[3] = {48, 58, 63};
+        for (int ki = 0; ki < 3; ki++) {
+            for (int wi = 0; wi < 3; wi++) {
+                Game g;
+                initGame(g, weapons[wi]);
+                initWorld(g, MODE_TRAIN);
+                initPoleKind(g, kinds[ki]);
+                poleOnHit(g, 100, hx[ki], hy[ki], 0, 0);
+                t.assert(g.combat.zone[slot[ki]].hp, 0, "pool drained by any weapon");
+                t.assert(g.combat.zoneBroken & bit[ki], bit[ki], "broken by any weapon");
+                t.assert(g.train.total > 0, true, "damage lands");
+            }
+        }
         suite.addTest(t);
     }
 

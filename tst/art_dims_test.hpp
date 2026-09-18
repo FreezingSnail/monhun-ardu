@@ -593,12 +593,14 @@ void testTailSpin(Test &t) {
 }
 
 // -------------------------------------------- training-pole variant sheets
-// Beads monhun-ardu-6zb.5 / 6zb.7: PLAIN keeps the legacy 2-frame 20x40 sheet;
-// each breakable variant is a 6-frame sheet in stage*2 + flash order (intact,
-// intact-flash, damaged, damaged-flash, broken, broken-flash). The emblems are
-// pinned by requiring BLACK ink on the LIGHT head block (rows 0..15), and the
-// broken frames by requiring ink in the ground rows (36..39) below the post --
-// a redraw that collapses a stage or drops the severed piece fails here.
+// Beads monhun-ardu-6zb.5 / 6zb.7 / 6zb.8: PLAIN keeps the legacy 2-frame
+// 20x40 sheet; each breakable variant is a 6-frame sheet in stage*2 + flash
+// order (intact, intact-flash, damaged, damaged-flash, broken, broken-flash).
+// The marker is now a neutral 7-px jagged fracture on the actual breakable
+// part -- SEVER on the LIGHT head (BLACK), BREAK on the LIGHT arm (BLACK),
+// CRACK on the DARK band (WHITE) -- so the tests pin position, contrast (the
+// part behind is the opposite shade) and the damaged (5-px chipped) / broken
+// (detached on the ground) stages.
 void testPoleSheets(Test &t) {
     Blob plain, sever, brk, crack;
     t.assert(parseBlob("fxpole", plain, t), 1, "plain pole blob");
@@ -615,9 +617,28 @@ void testPoleSheets(Test &t) {
                 n += bitAt(y, pixelMask(b, frame, 0, x, y / 8));
         return n;
     };
+    // Opaque pixels of a target shade in a rect: shade 0 = BLACK (all data
+    // planes 0), shade 2 = WHITE (data plane 2 set).
+    auto markerInk = [](const Blob &b, int frame, int shade, int x0, int y0, int x1, int y1) {
+        int n = 0;
+        for (int y = y0; y < y1; y++) {
+            for (int x = x0; x < x1; x++) {
+                if (!bitAt(y, pixelMask(b, frame, 0, x, y / 8)))
+                    continue;
+                if (shade == 0)
+                    n += bitAt(y, pixelData(b, frame, 0, x, y / 8)) ? 0 : 1;
+                else
+                    n += bitAt(y, pixelData(b, frame, 2, x, y / 8));
+            }
+        }
+        return n;
+    };
 
     const char *const syms[3] = {"fxpole_sever", "fxpole_break", "fxpole_crack"};
     Blob *const blobs[3] = {&sever, &brk, &crack};
+    // Fracture marker rect on the breakable part and the shade it must use.
+    const int mbox[3][4] = {{8, 3, 12, 8}, {22, 10, 26, 15}, {8, 19, 12, 24}};
+    const int mshade[3] = {0, 0, 2};   // BLACK on head/arm, WHITE on the band
     for (int vi = 0; vi < 3; vi++) {
         Blob &b = *blobs[vi];
         const std::string tag = syms[vi];
@@ -642,10 +663,35 @@ void testPoleSheets(Test &t) {
         t.assert(bytesDiffer(0, 2) > 0, 1, tag + " damaged differs from intact");
         t.assert(bytesDiffer(2, 4) > 0, 1, tag + " broken differs from damaged");
 
-        // Emblem ink on the LIGHT head block for intact + damaged; the broken
-        // frame moves the severed piece to the ground band.
-        t.assert(regionInk(b, 0, 0, 0, b.w, 16) > 8, 1, tag + " intact head emblem ink");
-        t.assert(regionInk(b, 2, 0, 0, b.w, 16) > 8, 1, tag + " damaged head emblem ink");
+        // Neutral fracture marker on the breakable part: 7 px intact, chipped
+        // to 5 px when damaged, gone once the part detaches.
+        const int *m = mbox[vi];
+        const int ms = mshade[vi];
+        t.assert(markerInk(b, 0, ms, m[0], m[1], m[2], m[3]), 7, tag + " intact 7-px marker");
+        t.assert(markerInk(b, 2, ms, m[0], m[1], m[2], m[3]), 5, tag + " damaged 5-px marker");
+        t.assert(markerInk(b, 4, ms, m[0], m[1], m[2], m[3]), 0, tag + " broken marker gone");
+
+        // Contrast-aware: BLACK ink sits on a LIGHT head/arm, WHITE on the DARK
+        // band. Sample the part beside the marker.
+        if (vi < 2) {
+            const int bx = vi == 0 ? 2 : 20;
+            const int by = vi == 0 ? 2 : 10;
+            const int page = by / 8;
+            t.assert(bitAt(by, pixelMask(b, 0, 0, bx, page)), 1, tag + " marker part opaque");
+            t.assert(bitAt(by, pixelData(b, 0, 0, bx, page)), 1, tag + " part non-BLACK");
+            t.assert(bitAt(by, pixelData(b, 0, 2, bx, page)), 0, tag + " part LIGHT behind BLACK marker");
+        } else {
+            const int by = 24;
+            const int page = by / 8;
+            t.assert(bitAt(by, pixelMask(b, 0, 0, 4, page)), 1, tag + " band opaque");
+            t.assert(bitAt(by, pixelData(b, 0, 0, 4, page)), 1, tag + " band non-BLACK");
+            t.assert(bitAt(by, pixelData(b, 0, 1, 4, page)), 0, tag + " DARK band behind WHITE marker");
+        }
+
+        // Every variant keeps a LIGHT head block intact/damaged and moves a
+        // detached piece to the ground band when broken.
+        t.assert(regionInk(b, 0, 0, 0, b.w, 16) > 8, 1, tag + " intact head block ink");
+        t.assert(regionInk(b, 2, 0, 0, b.w, 16) > 8, 1, tag + " damaged head block ink");
         t.assert(regionInk(b, 0, 0, 36, b.w, 40), 0, tag + " intact ground clear");
         t.assert(regionInk(b, 2, 0, 36, b.w, 40), 0, tag + " damaged ground clear");
         t.assert(regionInk(b, 4, 0, 36, b.w, 40) > 0, 1, tag + " broken ground piece ink");
@@ -658,7 +704,7 @@ void testPoleSheets(Test &t) {
     }
 
     // BREAK's side arm extends the frame to 28 px and inks columns 20..27 on
-    // the intact frame (the hammer against the empty background).
+    // the intact frame (the arm against the empty background).
     t.assert(brk.w, 28, "break pole w 28");
     t.assert(regionInk(brk, 0, 20, 0, 28, 40) > 0, 1, "break side arm has ink right of the post");
 }

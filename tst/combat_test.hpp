@@ -213,7 +213,7 @@ void CombatSuite(TestRunner &runner) {
     }
 
     {
-        Test t("pole zone records: crit head, gated appendages, broken overrides");
+        Test t("pole zone records: crit head, all-weapon breakables, broken overrides");
         const CombatZone ph = combatZoneRead(combat_data::ZONE_POLE_HEAD);
         t.assert(ph.box.ox, -128, "plain head ox (x-independent band)");
         t.assert(ph.box.oy, 0, "plain head oy");
@@ -222,10 +222,11 @@ void CombatSuite(TestRunner &runner) {
         t.assert(ph.dmgMul, 140, "plain head dmgMul");
         t.assert(ph.hp, 0, "plain head no pool");
         t.assert(ph.breakTypes, 0, "plain head unbreakable");
+        const uint8_t anyPhys = PHYS_SLASH | PHYS_BLUNT | PHYS_SHOT;
         const CombatZone sh = combatZoneRead(combat_data::ZONE_POLE_SEVER_HEAD);
         t.assert(sh.hp, 60, "sever head pool");
         t.assert(sh.dmgMul, 140, "sever head dmgMul");
-        t.assert(sh.breakTypes, PHYS_SLASH, "sever head slash gate");
+        t.assert(sh.breakTypes, anyPhys, "sever head any weapon breaks");
         t.assert(sh.brokenDmgMul, 100, "sever broken override");
         t.assert(sh.brokenFlags, 0, "sever broken no hurtOff/cue");
         const CombatZone ba = combatZoneRead(combat_data::ZONE_POLE_BREAK_APPENDAGE);
@@ -234,18 +235,18 @@ void CombatSuite(TestRunner &runner) {
         t.assert(ba.box.w, 8, "break arm w");
         t.assert(ba.box.h, 12, "break arm h");
         t.assert(ba.hp, 40, "break arm pool");
-        t.assert(ba.breakTypes, PHYS_BLUNT, "break arm blunt gate");
+        t.assert(ba.breakTypes, anyPhys, "break arm any weapon breaks");
         t.assert(ba.brokenFlags, COMBAT_BROKEN_HURT_OFF, "break arm broken hurtOff");
         const CombatZone ca = combatZoneRead(combat_data::ZONE_POLE_CRACK_APPENDAGE);
         t.assert(ca.box.oy, 18, "crack band oy");
         t.assert(ca.box.h, 10, "crack band h");
         t.assert(ca.hp, 30, "crack band pool");
-        t.assert(ca.breakTypes, PHYS_SHOT, "crack band shot gate");
+        t.assert(ca.breakTypes, anyPhys, "crack band any weapon breaks");
         suite.addTest(t);
     }
 
     {
-        Test t("static prop resolve: east facing, x-independent head band, no gating fallback");
+        Test t("static prop resolve: east facing, x-independent head band, shared pool rule");
         Game g;
         creatureLoad(g, combat_data::CREATURE_POLE);
         t.assert(g.combat.isStatic, 1, "static flag cached");
@@ -253,12 +254,12 @@ void CombatSuite(TestRunner &runner) {
         // Anchor at the prop rect; the head band is hy < rect.y + 16 regardless
         // of hx (the legacy containment), so an hx far outside the 20 px body
         // still selects the head zone (mul 140 -> 14).
-        CombatBodyHit r = combatZoneHitResolveAt(g, 10, PHYS_SLASH, 100, 50, 140, 40, 16, 0, true);
+        CombatBodyHit r = combatZoneHitResolveAt(g, 10, PHYS_SLASH, 100, 50, 140, 40, 16, 0);
         t.assert(r.zone, COMBAT_ZONE_HEAD, "head selected with hx outside the body");
         t.assert(r.mul, 140, "head multiplier 140");
         t.assert(r.dmg, 14, "head damage x1.4");
         // Below the 16 px band -> body.
-        r = combatZoneHitResolveAt(g, 10, PHYS_SLASH, 100, 70, 140, 40, 16, 0, true);
+        r = combatZoneHitResolveAt(g, 10, PHYS_SLASH, 100, 70, 140, 40, 16, 0);
         t.assert(r.zone, COMBAT_NO_ZONE, "below band routes body");
         t.assert(r.dmg, 10, "body damage");
         suite.addTest(t);
