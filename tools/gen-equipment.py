@@ -19,8 +19,8 @@ Two record forms exist:
     prefilled); weapon/offhand placeholders stay blank.
   * `"source": "gen-art"` ref: the record reuses an existing gen-art sprite
     symbol (`sheet`, validated and resolved against fxdata/fxdata.h); no PNG is
-    authored. A 18 B part record (sheet offset, anchor, per-pose frame,
-    optional variants/flat) is packed into the same blob for the render path --
+    authored. A 17 B part record (sheet offset, anchor, per-pose frame,
+    optional variants) is packed into the same blob for the render path --
     see tst/fxdatatest/player_art_test.hpp.
 
 The placeholder art is authored from the same 4-shade primitives as
@@ -34,9 +34,9 @@ the tools/gen-fxtables.cpp serializer pattern:
                    reserved u16
     item    19 B  slot, order, frames, cellW, cellH, anchorX i8, anchorY i8,
                    poseRow[12]
-    part    18 B  gen-art part records in PART_* order: sheet u24 (fx offset),
-                   anchorX i8, anchorY i8, flat u8, frame[12] u8  (only when
-                   the catalog has `source: "gen-art"` records)
+    part    17 B  gen-art part records in PART_* order: sheet u24 (fx offset),
+                   anchorX i8, anchorY i8, frame[12] u8  (only when the
+                   catalog has `source: "gen-art"` records)
     varoff 2*(n+1) B  u16 variant-data index per part, then the variant bytes
 
 The part view is read on device from the mhEquip blob during the render pass
@@ -93,8 +93,8 @@ POSES = ("idle", "attack_startup", "attack_active", "attack_recover", "parry",
          "whirl", "guard", "shove", "dodge", "deflect", "stun", "dead")
 POSE_COUNT = len(POSES)
 
-# Part-view record: sheet u24 + anchorX i8 + anchorY i8 + flat u8 + frame[12].
-PART_SIZE = 6 + POSE_COUNT
+# Part-view record: sheet u24 + anchorX i8 + anchorY i8 + frame[12].
+PART_SIZE = 5 + POSE_COUNT
 
 # docs/equipment-framework.md cart sheet layout.
 EXPECTED_CELL = {
@@ -211,7 +211,7 @@ def load_json(errors, path, rel):
 def normalize_item(errors, rel, name, obj, seen_ids, fx_symbols):
     ctx = rel
     check_keys(errors, ctx, obj, {"id", "slot", "sheet", "cell", "anchor", "order", "frames", "poseMap"},
-               ("flags", "source", "variants", "flat"))
+               ("flags", "source", "variants"))
     if not isinstance(obj, dict):
         return None
 
@@ -342,18 +342,6 @@ def normalize_item(errors, rel, name, obj, seen_ids, fx_symbols):
     # Optional `variants`: a small per-item frame selector for poses that the
     # 12-name pose set cannot express (the sword slash frames 0..4 by attack).
     # The render path indexes VARIANT_<ID> with a compact attack slot.
-    # Optional `flat`: the item's frame index is a raw flat index blitted on
-    # every triplane pass instead of frame * 3 + plane. This reproduces the
-    # pre-existing guard-plate behaviour pinned by player_art_test (the old
-    # `FRAME(guard ? GUARD_WHITE : GUARD_PLATE)` macro expansion evaluated the
-    # ternary before * 3 + plane, so the lit plate was a flat frame).
-    flat = obj.get("flat", False)
-    if not isinstance(flat, bool):
-        errors.add(ctx, "flat: expected a boolean, got %r" % (flat,))
-        flat = False
-    if flat and not gen_art:
-        errors.add(ctx, "flat: only gen-art records may use a flat frame index")
-
     variants = obj.get("variants")
     var_list = []
     if variants is not None:
@@ -370,7 +358,7 @@ def normalize_item(errors, rel, name, obj, seen_ids, fx_symbols):
         return None
     return {"id": item_id, "slot": slot, "sheet": sheet, "cell": (cw, ch), "anchor": (ax, ay),
             "order": order, "frames": frames, "rows": rows, "poseRows": pose_rows,
-            "genArt": gen_art, "flat": flat, "variants": var_list, "flags": list(flags)}
+            "genArt": gen_art, "variants": var_list, "flags": list(flags)}
 
 
 def compile_model(errors, root):
@@ -579,7 +567,7 @@ def pack_blob(errors, items, fx_symbols):
                 return None
             ax, ay = item["anchor"]
             blob += int(value).to_bytes(3, "little")
-            blob += struct.pack("<bbB", ax, ay, 1 if item["flat"] else 0)
+            blob += struct.pack("<bb", ax, ay)
             blob += bytes(item["poseRows"])
         for v_off in layout["variant_offsets"]:
             blob += struct.pack("<H", v_off)
@@ -698,7 +686,7 @@ def emit_part_view(lines, items, fx_symbols):
     app = lines.append
     app("// ---- gen-art player part view (records live in the mhEquip blob) --")
     app("// One PART_SIZE record per part at PARTS_OFF: sheet u24 (fx offset),")
-    app("// anchorX i8, anchorY i8, flat u8, frame[POSE_COUNT] u8; then the u16")
+    app("// anchorX i8, anchorY i8, frame[POSE_COUNT] u8; then the u16")
     app("// variant index table and the variant frame bytes. Little-endian; read")
     app("// on device through core/fxmem.hpp during the render pass.")
     app("constexpr uint8_t PART_COUNT = %d;" % len(parts))
@@ -710,8 +698,7 @@ def emit_part_view(lines, items, fx_symbols):
     app("constexpr uint8_t PART_SHEET_OFF = 0;             // u24")
     app("constexpr uint8_t PART_ANCHOR_X_OFF = 3;          // i8")
     app("constexpr uint8_t PART_ANCHOR_Y_OFF = 4;          // i8")
-    app("constexpr uint8_t PART_FLAT_OFF = 5;              // u8")
-    app("constexpr uint8_t PART_FRAME_OFF = 6;             // u8[POSE_COUNT]")
+    app("constexpr uint8_t PART_FRAME_OFF = 5;             // u8[POSE_COUNT]")
     app("constexpr uint16_t PART_VARIANT_OFFSETS_OFF = %d;" % layout["variants_off"])
     app("constexpr uint16_t PART_VARIANT_DATA_OFF = %d;" % layout["variant_data_off"])
     app("constexpr uint8_t PART_VARIANT_COUNT = %d;" % len(layout["variant_data"]))

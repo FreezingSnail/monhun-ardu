@@ -20,6 +20,12 @@
 //   `make fxtest-headless FXTEST_ONLY=test_player_art`
 //   and copy the `G <case> <p0> <p1> <p2>` lines into GOLDEN below.
 // PRINT_GOLDENS skips the comparisons and just emits the hashes.
+//
+// Regen history: the goldens were captured pre-refactor (bead abr). The
+// FRAME() precedence fix (monhun-ardu-px5) changed exactly one case: 29 = gun
+// idle + ST_GUARD, where the flat guard-white workaround had blitted the white
+// plate's raw frame on every plane; it now gets the per-plane stride. Every
+// other case is byte-identical.
 
 #include "harness/fxtest.hpp"
 #include "src/core/world.hpp"
@@ -105,7 +111,7 @@ static const uint32_t MH_PROGMEM GOLDEN[CASE_COUNT][3] = {
     {0xea752610u, 0x09e1ec10u, 0x09e1ec10u}, {0x7dc1c79cu, 0x7fd5bf9cu, 0x7fd5bf9cu}, {0x0d1c1787u, 0x0b081f87u, 0x0b081f87u}, {0x7dc1c79cu, 0x7fd5bf9cu, 0x7fd5bf9cu},
     {0xc2f7c3b3u, 0xd76180b3u, 0xd76180b3u}, {0x56c39df1u, 0xf42fd3f1u, 0xf42fd3f1u}, {0x56c39df1u, 0xf42fd3f1u, 0xf42fd3f1u}, {0xbeb219f9u, 0xa24911f9u, 0xf7b2b94bu},
     {0x07400feau, 0x095407eau, 0x6ea44bb2u}, {0x4c15ea88u, 0x8428a988u, 0x8428a988u}, {0x07400feau, 0x095407eau, 0x095407eau}, {0xe56a836fu, 0x1d4a306fu, 0xb373bcd7u},
-    {0xd9c2ad2fu, 0xedb3832fu, 0xcacdbe57u}, {0xe56a836fu, 0x1d4a306fu, 0x1d4a306fu}, {0xe56a836fu, 0x1d4a306fu, 0xb373bcd7u}, {0xe56a836fu, 0x1d4a306fu, 0xb373bcd7u},
+    {0xd9c2ad2fu, 0xedb3832fu, 0xcacdbe57u}, {0x30469935u, 0x51a89135u, 0x51a89135u}, {0xe56a836fu, 0x1d4a306fu, 0xb373bcd7u}, {0xe56a836fu, 0x1d4a306fu, 0xb373bcd7u},
     {0x46724db1u, 0x67d445b1u, 0xf8c93455u}, {0xc19b9b2fu, 0x1fb93e2fu, 0xb373bcd7u}, {0xe56a836fu, 0x1d4a306fu, 0x1f116dc5u}, {0x474a642du, 0xc098f32du, 0x606e0819u},
     {0xe56a836fu, 0x1d4a306fu, 0xb373bcd7u},
 };

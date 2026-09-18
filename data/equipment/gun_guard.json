@@ -6,7 +6,7 @@
   "cell": [12, 16],
   "anchor": [6, 8],
   "order": "pose",
-  "frames": 1,
-  "poseMap": { "idle": 0 },
+  "frames": 3,
+  "poseMap": { "guard": 1, "shove": 2, "idle": 0 },
   "flags": []
 }

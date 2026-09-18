@@ -326,7 +326,6 @@ struct PartRec {
     uint8_t sheet[3];   // uint24_t fx offset, little-endian
     int8_t anchorX;
     int8_t anchorY;
-    uint8_t flat;
     uint8_t frame[equip::POSE_COUNT];
 };
 static_assert(sizeof(PartRec) == equip::PART_SIZE, "part record ABI drift");
@@ -352,9 +351,9 @@ static inline void partDraw(uint8_t part, uint8_t pose, int32_t rx, int32_t ry) 
     PartRec rec;
     partRead(part, rec);
     const uint8_t fr = rec.frame[pose];
-    // Flat parts blit a raw frame index on every plane (pre-existing guard-plate
-    // behaviour the pixel oracle pins); everything else is frame * 3 + plane.
-    sprDraw(partSheet(rec), static_cast<int16_t>(rx - rec.anchorX), static_cast<int16_t>(ry - rec.anchorY), rec.flat ? fr : FRAME(fr));
+    // The cart record owns the sheet/frame/anchor; FRAME(fr) selects the
+    // current plane's pass within the logical frame (frame * 3 + plane).
+    sprDraw(partSheet(rec), static_cast<int16_t>(rx - rec.anchorX), static_cast<int16_t>(ry - rec.anchorY), FRAME(fr));
 }
 
 // Variant form for parts whose frame is picked by a compact selector rather
@@ -454,16 +453,16 @@ static void drawPlayer(const mh::Game &g, int16_t camX, int16_t camY) {
         const int32_t shx = cx + ((p.fx * 5) >> 4);
         const int32_t shy = cy + ((p.fy * 5) >> 4);
         // 12x16 plate frame, plate at frame local 1,1: shield centre as ref.
-        // Guard selects the fully lit plate: PART_GUN_GUARD_WHITE is the flat
-        // (every-plane) blit of the plate frame, the plain plate is per-plane.
-        if (p.stance == mh::ST_GUARD)
-            partDraw(equip::PART_GUN_GUARD_WHITE, equip::POSE_GUARD, shx, shy);
-        else
-            partDraw(equip::PART_GUN_GUARD, equip::POSE_IDLE, shx, shy);
+        // Guard selects the fully lit plate via the record's poseMap (frame 1),
+        // the idle plate is frame 0; FRAME() applies the per-plane stride.
+        partDraw(equip::PART_GUN_GUARD, p.stance == mh::ST_GUARD ? equip::POSE_GUARD : equip::POSE_IDLE, shx, shy);
         if (p.state == mh::PS_SHOVE) {
-            const int32_t shx2 = shx + ((p.fx * 4) >> 4);
+            // poseMap shove = frame 2 of the same plate sheet: the shove plate is
+            // drawn 1 px left inside its cell (anchor 5 vs the idle/guard 6), so
+            // +1 on the reference re-centres the shared record anchor.
+            const int32_t shx2 = shx + ((p.fx * 4) >> 4) + 1;
             const int32_t shy2 = shy + ((p.fy * 4) >> 4);
-            partDraw(equip::PART_GUN_SHOVE, equip::POSE_SHOVE, shx2, shy2);
+            partDraw(equip::PART_GUN_GUARD, equip::POSE_SHOVE, shx2, shy2);
         }
         if (p.reload > 0)
             partDraw(equip::PART_GUN_RELOAD, equip::POSE_IDLE, cx, cy);

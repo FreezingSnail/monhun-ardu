@@ -235,23 +235,13 @@
     },
     {
       "path": "data/equipment/gun_guard.json",
-      "sha256": "1086499c095bb9aa03bc540ea206db64438140b82683ccf9a9b97649f6b93f27",
-      "size": 206
-    },
-    {
-      "path": "data/equipment/gun_guard_white.json",
-      "sha256": "582d9b3460d6a309aeab9ee9bd37a99feb4ace3d2f36bb1f659a786462ea3caa",
-      "size": 228
+      "sha256": "0ba51d08ea3e7c2366a3410d8076c39b1f1be63eed0f27b5129dbd1138189956",
+      "size": 230
     },
     {
       "path": "data/equipment/gun_reload.json",
       "sha256": "928bc15b04a40619de5d47c4d714678ac1b60fa47c6fcbc75d80dbc533b70eff",
       "size": 208
-    },
-    {
-      "path": "data/equipment/gun_shove.json",
-      "sha256": "3b44c2d55659e176c9cdcf9887d896df8cd86ae67ed7744490ba476632869a29",
-      "size": 206
     },
     {
       "path": "data/equipment/player_base.json",
@@ -369,8 +359,8 @@
     },
     {
       "path": "fxdata/tables/equip.bin",
-      "sha256": "5ab3508ef9ea8c00bf6074273e203f472be8223991edbde77ef48271360125f2",
-      "size": 716,
+      "sha256": "019d782014e16bee3c86a02d23901274038bd2d0b43ec7d01d449102d8a26025",
+      "size": 624,
       "symbol": "mhEquip"
     },
     {
@@ -401,17 +391,17 @@
   "outputs": [
     {
       "path": "fxdata/fxdata-data.bin",
-      "sha256": "3b83ffcc173b279eae7bf8cc29251dbb3afe9fd1780aae562bb5e04e6b49cc51",
-      "size": 88225
+      "sha256": "ae04baf00219153d424fa670ed7913593bd47ff4f34827cfa37be3243f2c9cb7",
+      "size": 88133
     },
     {
       "path": "fxdata/fxdata.bin",
-      "sha256": "9d23d7dd2f6f0d06394231cf6306ced1b392a291ee5b38070d9ab1c59bf496fc",
+      "sha256": "f63930a4d186d2beed6efde268faa141066aa9dff60d8fab477d407a29b870fd",
       "size": 88320
     },
     {
       "path": "fxdata/fxdata.h",
-      "sha256": "00ca7562abf6e8ca835f380874ac59150fbedfb9e0be1e530b60fbb0128b4aa7",
+      "sha256": "76b568be3ea6bbd369a26dca192631ea3f70e7d6882ec82d346bf2c1f091076f",
       "size": 1567
     },
     {
@@ -421,12 +411,12 @@
     },
     {
       "path": "fxdata/tables/equip.bin",
-      "sha256": "5ab3508ef9ea8c00bf6074273e203f472be8223991edbde77ef48271360125f2",
-      "size": 716
+      "sha256": "019d782014e16bee3c86a02d23901274038bd2d0b43ec7d01d449102d8a26025",
+      "size": 624
     },
     {
       "path": "src/fxdata.h",
-      "sha256": "00ca7562abf6e8ca835f380874ac59150fbedfb9e0be1e530b60fbb0128b4aa7",
+      "sha256": "76b568be3ea6bbd369a26dca192631ea3f70e7d6882ec82d346bf2c1f091076f",
       "size": 1567
     },
     {
@@ -451,8 +441,8 @@
     },
     {
       "path": "src/generated/equip_meta.hpp",
-      "sha256": "e9a899a793c0b18423ba446b8b34b71b191adc811eaf7196b4cf12168ed224bd",
-      "size": 18866
+      "sha256": "03947511b1983e7b703dcd6397e9ab3822070352dffd17ee30e5afb4a19b06f5",
+      "size": 17431
     }
   ],
   "schema_version": 1

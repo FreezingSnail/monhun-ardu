@@ -1,89 +1,82 @@
-# monhun-ardu-9lw — eqf.2.1 move PART tables to cart blob
+# monhun-ardu-px5 — FRAME()/FRAMESHIFT() precedence + retire flat workaround
 
 Worker report. No commit/push/`git add` performed.
 
 ## What changed
 
-- `tools/gen-equipment.py`: the gen-art player part view moved out of flash into
-  the `mhEquip` blob. New part section after the 19 B item records:
-  `PART_COUNT` x 18 B records (sheet u24, anchorX i8, anchorY i8, flat u8,
-  frame[POSE_COUNT] u8), then `PART_COUNT+1` u16 variant-index entries, then the
-  variant frame bytes. `load_fxdata_symbols()` now parses the uint24_t values
-  from `fxdata/fxdata.h` (not just names) and the records bake the sheet offset
-  in. New `part_section()` is the single layout authority shared by the blob
-  packer and the header emitter, so offsets cannot drift.
-- `src/generated/equip_meta.hpp`: no more PROGMEM part arrays / `partSheet()`.
-  Emits only constants: `PART_*` ids, `PARTS_OFF`, `PART_SIZE`, the per-record
-  field offsets, and the variant table offsets/count. Authoring-catalog
-  constants (`ITEM_*`, `POSE_ROW_*`, `FRAME_*`, `SHEET_*`) stay as-is (compile
-  time; not emitted in the device image).
-- `src/render.hpp`: `PartRec` (static_assert == `equip::PART_SIZE`) + `partCart`,
-  `partRead`, `partSheet`. `partDraw`/`partVariantDraw` now fetch one record with
-  a single `mhFxReadBytes` burst (plus one u16 + one u8 read for the variant
-  form). All reads are in `drawPlayer`, in the render pass between plane blits.
-- `tools/tests/test_gen_equipment.py`: part-view/`flat` tests updated to the blob
-  layout (offsets 103/121/125, record bytes, variant table/data); blob length now
-  131 B for the 4 authored + 1 gen-art fixture.
+- `src/common.hpp`: parenthesized both macros —
+  `#define FRAME(x) ((x) * 3 + arduboy.currentPlane())` and
+  `#define FRAMESHIFT(x) ((x) + (2097152 * arduboy.currentPlane()))`.
+  `FRAMESHIFT` has no call sites; existing `FRAME` call sites all pass constant
+  or variable args, so no rendering change from the parenthesization alone.
+- `data/equipment/gun_guard.json`: single record now covers the whole 3-frame
+  `fxguard` sheet — `frames: 3`, `poseMap: { "guard": 1, "shove": 2, "idle": 0 }`
+  (was `frames: 1`, `poseMap: {idle:0}`).
+- `data/equipment/gun_guard_white.json`: **deleted** (retired flat workaround).
+- `data/equipment/gun_shove.json`: **deleted**; shove is now frame 2 of the same
+  `gun_guard` record (`poseMap.shove`), since the requested poseMap is
+  `{guard:1, shove:2, idle:0}` on the single record.
+- `src/render.hpp`:
+  - `PartRec` drops the `flat` byte (ABI now sheet u24 + anchorX i8 + anchorY i8
+    + frame[12] = 17 B); `static_assert(sizeof(PartRec) == equip::PART_SIZE)`
+    still holds (17).
+  - `partDraw` always applies `FRAME(fr)` — no flat branch.
+  - Gun: `partDraw(PART_GUN_GUARD, stance==ST_GUARD ? POSE_GUARD : POSE_IDLE,
+    shx, shy)`. Shove: `partDraw(PART_GUN_GUARD, POSE_SHOVE, shx2, shy2)` with a
+    `+1` on `shx2` — the shove plate is drawn 1 px left inside its 12x16 cell
+    (old anchor [5,8] vs the guard frame's [6,8]), so the reference compensates
+    and the shove pixels are unchanged.
+- `tools/gen-equipment.py`: removed the `flat` key (schema, validation, part
+  dict), the packed `flat` byte, and `PART_FLAT_OFF`; `PART_SIZE` 18 -> 17,
+  `PART_FRAME_OFF` 6 -> 5; docstring updated. Two-pass note + AVR stale-blob
+  static_assert unchanged.
+- `tools/tests/test_gen_equipment.py`: part-view expectations moved to the 17 B
+  layout (offsets 103/120/124, blob 130 B); `test_gen_art_honours_flat_key`
+  replaced by `test_gen_art_flat_key_rejected` (`unknown key 'flat'`).
+- `tst/fxdatatest/player_art_test.hpp`: regenerated via the documented
+  `PRINT_GOLDENS=true` path; regen history comment added.
+
+## Golden diff (regen path: `PRINT_GOLDENS=true` + `FXTEST_ONLY=test_player_art`)
+
+Old vs new GOLDEN array, all 37 cases x 3 planes compared:
+
+```
+changed indices: 29
+```
+
+Index **29 only** = case `{W_GUN, PS_IDLE, ST_GUARD, ...}` (gun idle + guard
+stance). Old `{e56a836f, 1d4a306f, 1d4a306f}` (flat guard-white workaround
+blitted the white plate's raw frame on every plane) -> new
+`{30469935, 51a89135, 51a89135}` (per-plane stride). Every other case
+(including gun shove, case 32) is byte-identical.
 
 ## Verification (exact tails)
 
-1. `make gen` twice -> `make gen-check`
+1. `make gen` x2 -> `make gen-check`
    `fxdata_manifest: PASS (45 generated artifacts unchanged)`
 2. `make test` -> `Total Passed: 3119` / `Total Failed: 0`
-   `make test-tools` -> `Ran 72 tests in 3.988s` / `OK`
-3. `make fxtest-headless` (all 10 suites)
-   - assets 254/0, audio PASS, boot PASS, combat 195/0, data 221/0, hud PASS,
-     menu 59/0, `parity_test PASSED=660 FAILED=0`
-   - `test_player_art PASSED=111 FAILED=0` (goldens byte-identical, not edited)
-   - perf `B pUs=6562 pHz=152 lHz=50 lTk=984 rMx=5492 rAv=4984 ram=411` -> 5/5 P
+   `make test-tools` -> `Ran 73 tests in 4.449s` / `OK`
+3. `make fxtest-headless` (full, all 10 suites):
+   - assets `254/0`, audio `14/0`, boot `4/0`, combat `195/0`, data `221/0`,
+     hud `17/0`, menu `59/0`, `parity_test PASSED=660 FAILED=0`
+   - perf `B pUs=6562 pHz=152 lHz=50 lTk=984 rMx=5472 rAv=4974 ram=411` -> 5/5
+   - `test_player_art PASSED=111 FAILED=0` (37 cases x 3 planes; 1 golden
+     entry regenerated)
 4. `make build` + `make size`
-   `size: .text=26940 .data=58 .bss=1960`
-   `size: flash=26998/29696 (2698 free)  ram=2018/2560`
-   flash delta vs **27282 baseline: -284 B** (26998). Target <=27000 met;
-   the ~26800 stretch target is not (2 B margin).
+   `size: .text=26938 .data=58 .bss=1960`
+   `size: flash=26996/29696 (2700 free)  ram=2018/2560`
+   flash delta vs **26998 baseline: -2 B**. Parity-fixture regen: empty diff.
+   `SHEET_OFF_FXGUARD` + AVR static_assert still present and passing.
 
 ## Deviations / notes
 
-- **Acceptance met at the wire: 26998 vs the 27000 cap (2 B).** The 328 B of
-  removed tables costs ~44 B of new cart-read code/offsets, so the net is 284 B.
-- **Sheet offsets are baked into the blob; this is only safe while every gen-art
-  sheet lives before `mhEquip` in the FX image.** All 10 referenced sheets are
-  `fx*` and precede `mhEquip` (checked in `src/fxdata.h`: max referenced is
-  `fxslash` 0x291E < `mhEquip` 0x77CD), so growing the blob does not shift them.
-  The authored `mh_*` equip sheets (after `mhEquip`) would shift and must not be
-  referenced by a gen-art record without a reorder; no code guard enforces this
-  yet.
-- Blob header/version unchanged (`MAGIC 0x4551`, `VERSION 1`): the part section
-  is appended, existing header + item records are byte-identical.
-- `rMx` 5492 us vs the 5120 us recorded at the abr bead (+372 us, +1 extra cart
-  burst per part draw); floor 7407 us.
-- `fxdata.bin`/`fxdata-data.bin`/`fxdata.h`/`manifest.json` are the regenerated
-  set (blob 388 -> 716 B, FX image 87897 -> 88225 B); staged together with the
-  generated header as usual.
-
-## Follow-up: stale-blob compile-time guard
-
-- `tools/gen-equipment.py` now also emits, per referenced gen-art sheet symbol,
-  the baked absolute offset as `constexpr uint16_t SHEET_OFF_<SYMBOL>`, and on
-  AVR a matching `static_assert(SHEET_OFF_<SYMBOL> == static_cast<uint16_t>(<symbol>),
-  "equip blob stale: re-run make gen")`. `<symbol>` comes from `../fxdata.h`
-  (included only under `__AVR__`; host builds skip it). Zero flash cost
-  (constexpr + static_assert only) -- `make size` still 26998.
-- Generator/docstring explains the two-pass behaviour: addresses come from the
-  previous `fxdata/fxdata.h`, so adding/renaming a gen-art sheet needs a second
-  `make gen` to re-bake; the assert catches a skipped pass.
-- `tools/tests/test_gen_equipment.py`: new `test_gen_art_sheet_offset_rebakes_from_fxdata`
-  (baked constant + assert text, then a shifted `fxdata.h` re-bakes both blob and
-  constant) -> tools suite now `Ran 73 tests`.
-
-Verification:
-
-1. `make gen` twice -> `make gen-check`: `fxdata_manifest: PASS (45 generated artifacts unchanged)`
-2. `make build`: clean (after temporarily breaking `SHEET_OFF_FXCHIP` to 9999 the
-   build fails with `error: static assertion failed: equip blob stale: re-run
-   make gen`; `make gen` restores and it compiles clean). `make size` unchanged
-   `flash=26998/29696 (2698 free)`.
-3. `make test` -> `Total Passed: 3119` / `Total Failed: 0`
-4. `make test-tools` -> `Ran 73 tests in 4.428s` / `OK`
-5. `make fxtest-headless FXTEST_ONLY=test_player_art` -> `PASSED=111 FAILED=0`
-
+- **`gun_shove.json` deleted** (not named in the issue's delete list) so that the
+  requested poseMap `{guard:1, shove:2, idle:0}` is the single record that owns
+  all three `fxguard` frames. Shove is drawn from `gun_guard` with a `+1`
+  reference offset; the shove golden (case 32) is unchanged.
+- Flash is 26996, only 2 B under the 26998 baseline (2700 B free vs the 29696
+  cap). Keeping `gun_shove` as its own record instead would have measured lower,
+  but contradicts the "single `gun_guard` record" scope.
+- `FRAME` parenthesization is correctness/cleanup here: no current call site
+  passed a ternary, so the intentional pixel change comes from the data/poseMap
+  fix, not the macro.

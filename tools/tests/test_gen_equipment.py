@@ -221,27 +221,27 @@ class GenEquipmentTests(unittest.TestCase):
         for needle in (
             "constexpr uint8_t PART_SWORD_SLASH =",
             "constexpr uint16_t PARTS_OFF = 103;",
-            "constexpr uint8_t PART_SIZE = 18;",
+            "constexpr uint8_t PART_SIZE = 17;",
             "constexpr uint8_t PART_SHEET_OFF = 0;",
             "constexpr uint8_t PART_ANCHOR_X_OFF = 3;",
             "constexpr uint8_t PART_ANCHOR_Y_OFF = 4;",
-            "constexpr uint8_t PART_FLAT_OFF = 5;",
-            "constexpr uint8_t PART_FRAME_OFF = 6;",
-            "constexpr uint16_t PART_VARIANT_OFFSETS_OFF = 121;",
-            "constexpr uint16_t PART_VARIANT_DATA_OFF = 125;",
+            "constexpr uint8_t PART_FRAME_OFF = 5;",
+            "constexpr uint16_t PART_VARIANT_OFFSETS_OFF = 120;",
+            "constexpr uint16_t PART_VARIANT_DATA_OFF = 124;",
             "constexpr uint8_t PART_VARIANT_COUNT = 6;",
         ):
             self.assertIn(needle, text)
+        self.assertNotIn("PART_FLAT_OFF", text)
         # The catalog blob carries 4 authored + 1 gen-art item, then the part
         # record, the u16 variant index table and the variant bytes.
         blob = self.read_bytes(BLOB_REL)
-        self.assertEqual(len(blob), 8 + 19 * 5 + 18 + 2 * 2 + 6)
-        sheet, ax, ay, flat = struct.unpack_from("<3sbbB", blob, 103)
+        self.assertEqual(len(blob), 8 + 19 * 5 + 17 + 2 * 2 + 6)
+        sheet, ax, ay = struct.unpack_from("<3sbb", blob, 103)
         self.assertEqual(sheet, b"\x23\x01\x00")   # fxslash = 0x000123
-        self.assertEqual((ax, ay, flat), (16, 16, 0))
-        self.assertEqual(list(blob[109:121]), [0] * 12)
-        self.assertEqual(list(struct.unpack_from("<2H", blob, 121)), [0, 6])
-        self.assertEqual(list(blob[125:131]), [0, 0, 1, 2, 3, 4])
+        self.assertEqual((ax, ay), (16, 16))
+        self.assertEqual(list(blob[108:120]), [0] * 12)
+        self.assertEqual(list(struct.unpack_from("<2H", blob, 120)), [0, 6])
+        self.assertEqual(list(blob[124:130]), [0, 0, 1, 2, 3, 4])
 
     def test_gen_art_unknown_sheet_rejected(self):
         self.add_gen_art(symbol="fxother")
@@ -264,13 +264,12 @@ class GenEquipmentTests(unittest.TestCase):
         self.assertEqual(self.read_bytes(BLOB_REL)[103:106], b"\x56\x04\x00")
         self.assertIn("constexpr uint16_t SHEET_OFF_FXSLASH = 1110;", self.read(META_REL))
 
-    def test_gen_art_honours_flat_key(self):
+    def test_gen_art_flat_key_rejected(self):
+        # The flat workaround is retired (partDraw always applies the per-plane
+        # frame stride), so the schema no longer accepts the key.
         self.add_gen_art()
         self.mutate("data/equipment/sword_slash.json", lambda doc: doc.__setitem__("flat", True))
-        self.assert_succeeds(self.compile())
-        # The record's PART_FLAT_OFF byte carries the flat marker.
-        blob = self.read_bytes(BLOB_REL)
-        self.assertEqual(blob[103 + 5], 1)
+        self.assert_fails(self.compile(), "unknown key 'flat'")
 
     # ------------------------------------------------------- schema errors
 
