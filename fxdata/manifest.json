@@ -171,6 +171,13 @@
     },
     {
       "declaration": "fxdata/blocks/Sprites.txt",
+      "path": "images/blocks/fxtailspin_40x40.png",
+      "sha256": "832d468e2eeddc1b31ad1dba49f2285613ed3d7f0358c22b4ef53c922b0c983b",
+      "size": 2085,
+      "symbol": "fxtailspin"
+    },
+    {
+      "declaration": "fxdata/blocks/Sprites.txt",
       "path": "images/blocks/fxtrail_4x4.png",
       "sha256": "2cb3afe6d52fb80222055b4457c91c664af2d0b9de8178e541f8b02e6e225ab6",
       "size": 86,
@@ -517,12 +524,13 @@
     },
     {
       "path": "fxdata/blocks/Sprites.txt",
-      "sha256": "c2d2bbef19f42f93b853fa8ca8d8b06accacca9d61ed9b2dbc2fc1788bb83481",
-      "size": 427169,
+      "sha256": "e062fec6019d040a7c59f038581dd81c8b546376c2e29d9eeeca065e039a708e",
+      "size": 477612,
       "symbols": [
         "fxtail",
         "fxdeflect",
         "fxtail_spin",
+        "fxtailspin",
         "fxparry",
         "fxmonster",
         "fxchip",
@@ -597,7 +605,7 @@
     },
     {
       "path": "fxdata/tables/equip.bin",
-      "sha256": "f4993a3769af1cc0b3b66627c3aea37e35f8fd8b250cdba32a5b4d57ca0132c1",
+      "sha256": "eb98c0dddf97fe3ef9f873206ebb53c5ba56075c181cddf2d04b78f8e97c2efa",
       "size": 876,
       "symbol": "mhEquip"
     },
@@ -647,18 +655,18 @@
   "outputs": [
     {
       "path": "fxdata/fxdata-data.bin",
-      "sha256": "f71bae6df50c083748c6a097ba879328908be0320c6b6b172dcd4f05e8c486e2",
-      "size": 164753
+      "sha256": "9d3502bbdbdcb0dfa65dddcc5ca2a5fb26f5db3e63a2d06f29501535ea325184",
+      "size": 174355
     },
     {
       "path": "fxdata/fxdata.bin",
-      "sha256": "596215385ebc43b1fa5f941c9f05b6c4f907233efd51877b05b0391068faab51",
-      "size": 164864
+      "sha256": "e91d1828500458b3190587558a40c7b5c969ec022e12ebc3a9ea83a562e431a8",
+      "size": 174592
     },
     {
       "path": "fxdata/fxdata.h",
-      "sha256": "3a52ac3c230bacd69dea21e4e0fd0546e38cfbaa656d3267907a6836a6932cd9",
-      "size": 2393
+      "sha256": "efcbdc443d5d04adc932ac3e71bd1e6d909019136305f80c0f0819fd8b260336",
+      "size": 2435
     },
     {
       "path": "fxdata/tables/combat.bin",
@@ -667,7 +675,7 @@
     },
     {
       "path": "fxdata/tables/equip.bin",
-      "sha256": "f4993a3769af1cc0b3b66627c3aea37e35f8fd8b250cdba32a5b4d57ca0132c1",
+      "sha256": "eb98c0dddf97fe3ef9f873206ebb53c5ba56075c181cddf2d04b78f8e97c2efa",
       "size": 876
     },
     {
@@ -687,13 +695,13 @@
     },
     {
       "path": "src/fxdata.h",
-      "sha256": "3a52ac3c230bacd69dea21e4e0fd0546e38cfbaa656d3267907a6836a6932cd9",
-      "size": 2393
+      "sha256": "efcbdc443d5d04adc932ac3e71bd1e6d909019136305f80c0f0819fd8b260336",
+      "size": 2435
     },
     {
       "path": "src/generated/art_dims.hpp",
-      "sha256": "7f291730f019f390a92cb6dada9bf83c5307d34c9659bc09baf6cfa8bcd2fb17",
-      "size": 5992
+      "sha256": "0185224addd6e1776e301f31d7a089719a8a0b0bf11efa4e1b29622b9cd32539",
+      "size": 6113
     },
     {
       "path": "src/generated/combat_data.hpp",
@@ -712,8 +720,8 @@
     },
     {
       "path": "src/generated/equip_meta.hpp",
-      "sha256": "262172053152652208b5f16855940d6a2889d87c665e3ec1c8756cba755fdc62",
-      "size": 22330
+      "sha256": "2dcf2aee8b5c722ac7158f4a381b0ff8f26ecf0950b2fbe34fd8d662ee91de6c",
+      "size": 22331
     },
     {
       "path": "src/generated/quest_meta.hpp",

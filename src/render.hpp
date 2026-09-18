@@ -9,6 +9,7 @@
 
 #include "common.hpp"
 #include "fxdata.h"
+#include "render_math.hpp"   // spinSheetFrame (host-tested frame selector)
 #include "core/world.hpp"
 #include "core/sin256.hpp"            // 256 B sine LUT -> 65 B quarter wave + sign folding (42n.7)
 #include "generated/art_dims.hpp"     // frame layout + core dims for the FX sheets
@@ -72,10 +73,11 @@ constexpr uint8_t SPIN_SOUTH = 3;
 }   // namespace spr
 
 // Cull fully off-screen sprites before paying the FX seek, then blit on the
-// current plane. Max sheet size is 32x40 (fxmonster 32x24, pole variants
-// 20x40), so these bounds stay conservative.
+// current plane. Max sheet size is 40x40 (fxtailspin 40x40 spin body, pole
+// variants 20x40, fxmonster 32x24), so these bounds stay conservative: a
+// 40 px sprite at x == -39 still has a pixel column on screen.
 static inline void sprDraw(uint24_t img, int16_t x, int16_t y, uint8_t frame) {
-    if (x <= -32 || x >= mh::SCREEN_W || y <= -40 || y >= mh::SCREEN_H)
+    if (x <= -40 || x >= mh::SCREEN_W || y <= -40 || y >= mh::SCREEN_H)
         return;
     SpritesU::drawPlusMaskFX(x, y, img, frame);
 }
@@ -358,6 +360,13 @@ static void drawMonster(const mh::Game &g, int16_t camX, int16_t camY) {
     // Body, feet, head and eyes are baked per state/facing into the sprite;
     // recover dims the body, windup flash and hit flash whiten it.
     const bool flashing = (m.state == mh::MS_WINDUP) && (((m.windupMax - m.t) / 4) % 2 == 0);
+    // Locked (spin) tail attack on the longtail (bead monhun-ardu-nch.3): during
+    // MS_ATTACK the whole beast is drawn from the 8-frame 40x40 fxtailspin sheet,
+    // rotated about the body centre in 45-deg steps synced to the active window;
+    // during MS_WINDUP the small fxtail_spin overlay stays as the tell, and the
+    // resting fxtail_heavy overlay is skipped in both phases.
+    const bool spinning = (m.state == mh::MS_WINDUP || m.state == mh::MS_ATTACK) && m.atkIdx != mh::COMBAT_NO_ATTACK && mh::combatFacingLockV(g.combat.attack.facing);
+    const bool spinAttack = spinning && m.state == mh::MS_ATTACK && g.monsterKind == mh::MON_HEAVY;
     uint8_t f;
     if (g.monsterKind == mh::MON_RAVAGER) {
         // Legacy fxmonster sheet: idle/recover/flash/dead x facing.
@@ -388,7 +397,18 @@ static void drawMonster(const mh::Game &g, int16_t camX, int16_t camY) {
         if (m.fx < 0)
             f = static_cast<uint8_t>(f + art_dims::beast_stride);
     }
-    sprDraw(monsterSheet(g.monsterKind), x, y, FRAME(f));
+    if (spinAttack) {
+        // Whole-beast spin sheet: frame 0 is the east silhouette and the frame
+        // steps 45 deg clockwise from the locked facing each active-window
+        // slice, so the beast completes one visible revolution. The sheet is
+        // 40x40 with the body centre at (20,20), so it is centred on the body
+        // box centre. No per-tick cart read: sheet constant + frame math only.
+        const uint8_t start8 = static_cast<uint8_t>(fp::dirIndexFromDelta(m.fx, m.fy)) & 7;
+        const uint8_t spinF = mh::spinSheetFrame(start8, m.t, static_cast<int16_t>(g.combat.attack.active));
+        sprDraw(fxtailspin, static_cast<int16_t>(x + (w >> 1) - 20), static_cast<int16_t>(y + (h >> 1) - 20), FRAME(spinF));
+    } else {
+        sprDraw(monsterSheet(g.monsterKind), x, y, FRAME(f));
+    }
     if (m.state == mh::MS_DEAD)
         return;
 
@@ -399,9 +419,8 @@ static void drawMonster(const mh::Game &g, int16_t camX, int16_t camY) {
     // contract (east intact / east broken / west intact / west broken). Only the
     // heavy 24x16 sheet is drawn here; the legacy ravager fxtail is 18x10 (not a
     // multiple-of-8 SpritesU page stride) and stays unoverlaid. During a locked
-    // (spin) windup/attack the resting tail is replaced by the whipping
-    // fxtail_spin overlay below, so it is skipped here.
-    const bool spinning = (m.state == mh::MS_WINDUP || m.state == mh::MS_ATTACK) && m.atkIdx != mh::COMBAT_NO_ATTACK && mh::combatFacingLockV(g.combat.attack.facing);
+    // (spin) windup/attack the resting tail is replaced by the whipping art, so
+    // it is skipped here.
     if (g.monsterKind == mh::MON_HEAVY && g.combat.appendZone != mh::COMBAT_NO_ZONE && !spinning) {
         const mh::CombatBox &zb = g.combat.zone[mh::COMBAT_ZONE_APPENDAGE].box;
         int32_t dx, dy;
@@ -416,13 +435,14 @@ static void drawMonster(const mh::Game &g, int16_t camX, int16_t camY) {
         sprDraw(fxwhirl, x + w / 2 + mulQ4(cos256(a), 9), y - 3 + mulQ4(sin256(a), 2), FRAME(spr::WHIRL_DOT));
     }
 
-    // Spin tail overlay (heavy's tail_spin, 4-frame 24x24 sheet): while the
-    // locked attack winds up and strikes, the tail whips toward the hunter. The
+    // Spin tail overlay (heavy's tail_spin, 4-frame 24x24 sheet): during the
+    // locked WINDUP only, the tail whips toward the hunter as the tell. The
     // frame is the world direction of the cached window's face-relative offset
     // (|dx| > |dy| -> E/W else S/N). Windup caches window 0, so the tail points
-    // at the hunter as the tell; the attack step then leads the active hit box.
-    // Frame origin is the body centre.
-    if (spinning) {
+    // at the hunter. During MS_ATTACK this overlay is skipped (nch.3): the
+    // rotating fxtailspin body sheet above carries the read. Frame origin is
+    // the body centre.
+    if (spinning && m.state == mh::MS_WINDUP) {
         int32_t sdx, sdy;
         mh::combatFaceOffset(m.fx, m.fy, g.combat.attack.win.box, sdx, sdy);
         const int32_t adx = (sdx < 0) ? -sdx : sdx;

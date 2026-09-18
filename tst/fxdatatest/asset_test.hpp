@@ -228,6 +228,12 @@ inline void test_assets(FxTest &test) {
     // here; tst/art_dims_test.hpp checks the tip/cap pixels.
     blobHeader(fxtail_spin, 24, 24, test, F("tail spin w/h"));
 
+    // Heavy rotating spin body (bead monhun-ardu-nch.3): the whole longtail in
+    // an 8-frame 40x40 sheet, frame i = east silhouette rotated i*45 deg
+    // clockwise about the body centre. Header identity only here; the host
+    // pixel suite (tst/art_dims_test.hpp) checks the rotation bands and shades.
+    blobHeader(fxtailspin, 40, 40, test, F("tail spin sheet w/h"));
+
     // Demo beast sheets (epic monhun-ardu-nch): one 32x24x8 sheet per roster
     // beast -- LUNGE chicken, SWEEP bull, HEAVY longtail -- and RAVAGER keeps
     // the legacy fxmonster. Header identity only here; the host pixel suite

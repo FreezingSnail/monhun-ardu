@@ -89,18 +89,22 @@ static void setupBeast(Game &g, int8_t kind, int8_t fx, int8_t fy) {
     g.combat.zoneBroken = 0;
 }
 
-// nch.1: park HEAVY in the locked tail_spin active phase with one world window
-// cached, so the spin overlay's frame pick can be read from the framebuffer.
-// The window's box is shrunk to 1x1 after the read: the frame pick only needs
-// the face-relative offset (ox/oy), and a full-size telegraph box would erase
-// the plane-2 tip cap we read (the shade-2 fill clears plane 2 under it).
-static void setupSpin(Game &g, uint8_t window, int8_t fx) {
+// nch.3: park HEAVY in the locked tail_spin ACTIVE phase so drawMonster uses
+// the rotating 8-frame fxtailspin body sheet (frame = dir8(lock facing) +
+// t*8/active). The cached window box is shrunk to 1x1 at the body centre (ox/oy
+// zeroed) so the 4x4 telegraph core sits inside the centre band the quadrant
+// checks exclude; `active` is pinned to 20 so t maps to known frames.
+static void setupSpinAttack(Game &g, int8_t fx, int16_t t) {
     setupBeast(g, MON_HEAVY, fx, 0);
     Monster &m = g.monster;
     m.state = MS_ATTACK;
+    m.t = t;
     m.atkIdx = combat::ATTACK_HEAVY_TAIL_SPIN;
-    g.combat.attack.facing = COMBAT_FACING_LOCK;
-    g.combat.attack.win = combatWindowRead(window);
+    g.combat.attack.facing = COMBAT_FACING_LOCK_AWAY;
+    g.combat.attack.active = 20;
+    g.combat.attack.win = combatWindowRead(combat::WINDOW_HEAVY_TAIL_SPIN_0);
+    g.combat.attack.win.box.ox = 0;
+    g.combat.attack.win.box.oy = 0;
     g.combat.attack.win.box.w = 1;
     g.combat.attack.win.box.h = 1;
 }
@@ -167,35 +171,38 @@ inline void test_monster_art(FxTest &test) {
     test.expectEq(g.combat.appendZone != COMBAT_NO_ZONE ? 1 : 0, 1, F("lunge has a legs appendage zone"));
     test.expectEq(countRegionBit(static_cast<uint8_t>(E_TAIL_X), static_cast<uint8_t>(TAIL_Y), TAIL_W, TAIL_H), 0, F("lunge no overlay band"));
 
-    // ---- tail_spin overlay (nch.1): the 24x24 world-direction frame is picked
-    // from the active window's face-relative offset. The body sprite is
-    // identical across these renders, so the white tip cap (plane 2) moving
-    // side-to-side proves the direction pick. Body centre is (60,42), origin
-    // (48,30): west cap (48,41), east cap (71,41), north (59,30), south (59,52).
-    setupSpin(g, combat::WINDOW_HEAVY_TAIL_SPIN_0, 16);   // ox -20 -> west
+    // ---- nch.3 rotating spin body: during the locked tail_spin ACTIVE phase
+    // drawMonster swaps the 32x24 E/W beast sheet for the 8-frame 40x40
+    // fxtailspin sheet, centred on the body centre (60,42) with cell origin
+    // (40,22). Frame = dir8(lock facing) + t*8/active, so east-facing (start8 0)
+    // with active 20 maps t=2 -> frame0, t=5 -> frame2 (head bottom), t=10 ->
+    // frame4 (head left), t=15 -> frame6 (head top). The WHITE head orbited
+    // through the quadrants is the rotation signature (host suite pins the
+    // sheet; these checks prove the device frame pick + centring).
+    setupSpinAttack(g, 16, 2);   // frame0: head right
     renderMonster(g, 2);
-    test.expectEq(bitAt(48, 41), 1, F("spin west cap plane2"));
-    test.expectEq(bitAt(71, 41), 0, F("spin west east cap clear"));
+    test.expectEq(countRegionBit(64, 22, 16, 40) > 0 ? 1 : 0, 1, F("spin t2 head right"));
+    test.expectEq(countRegionBit(40, 22, 16, 40), 0, F("spin t2 head not left"));
 
-    // The resting tail_heavy overlay is skipped during the spin: its east-frame
-    // white tip cap (zone anchor local (0,8) -> screen (16,36)) stays clear.
+    setupSpinAttack(g, 16, 5);   // frame2: head bottom
     renderMonster(g, 2);
-    test.expectEq(bitAt(E_TAIL_X, TAIL_Y + 8), 0, F("spin skips resting tail cap"));
+    test.expectEq(countRegionBit(40, 46, 40, 16) > 0 ? 1 : 0, 1, F("spin t5 head bottom"));
+    test.expectEq(countRegionBit(40, 22, 40, 16), 0, F("spin t5 head not top"));
 
-    setupSpin(g, combat::WINDOW_HEAVY_TAIL_SPIN_2, 16);   // ox +22 -> east
+    setupSpinAttack(g, 16, 10);   // frame4: head left
     renderMonster(g, 2);
-    test.expectEq(bitAt(71, 41), 1, F("spin east cap plane2"));
-    test.expectEq(bitAt(48, 41), 0, F("spin east west cap clear"));
+    test.expectEq(countRegionBit(40, 22, 16, 40) > 0 ? 1 : 0, 1, F("spin t10 head left"));
+    test.expectEq(countRegionBit(64, 22, 16, 40), 0, F("spin t10 head not right"));
 
-    setupSpin(g, combat::WINDOW_HEAVY_TAIL_SPIN_1, 16);   // oy -22 -> north
+    setupSpinAttack(g, 16, 15);   // frame6: head top
     renderMonster(g, 2);
-    test.expectEq(bitAt(59, 30), 1, F("spin north cap plane2"));
-    test.expectEq(bitAt(59, 52), 0, F("spin north south cap clear"));
+    test.expectEq(countRegionBit(40, 22, 40, 16) > 0 ? 1 : 0, 1, F("spin t15 head top"));
+    test.expectEq(countRegionBit(40, 46, 40, 16), 0, F("spin t15 head not bottom"));
 
-    setupSpin(g, combat::WINDOW_HEAVY_TAIL_SPIN_3, 16);   // oy +22 -> south
-    renderMonster(g, 2);
-    test.expectEq(bitAt(59, 52), 1, F("spin south cap plane2"));
-    test.expectEq(bitAt(59, 30), 0, F("spin south north cap clear"));
+    // The old 4-frame tail overlay is skipped in the attack phase and the
+    // resting tail_heavy cap stays clear too (the rotating sheet carries it).
+    test.expectEq(bitAt(48, 41), 0, F("spin attack old overlay cap clear"));
+    test.expectEq(bitAt(E_TAIL_X, TAIL_Y + 8), 0, F("spin attack skips resting tail cap"));
 
     // ---- nch.2 windup tell: the spin overlay draws during MS_WINDUP too, and
     // the window box fill is gone. Window 1 (oy -22, north frame) is full size:

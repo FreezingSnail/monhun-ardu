@@ -111,6 +111,15 @@ function rotFp(x, y, cosv, sinv) {
   return { x: (x * cosv - y * sinv) >> 4, y: (x * sinv + y * cosv) >> 4 };
 }
 
+// Frame into the 8-frame rotating longtail spin sheet (bead monhun-ardu-nch.3),
+// mirroring the C++ mh::spinSheetFrame (src/render_math.hpp): frame 0 is the
+// east silhouette, each 45-deg clockwise step advances the frame, and the spin
+// completes one revolution over the attack's active window. Integer only.
+function spinSheetFrame(start8, tick, active) {
+  if (!(tick > 0) || !(active > 0)) return start8 & 7;
+  return (start8 + Math.floor((tick * 8) / active)) & 7;
+}
+
 // int stamina in 1/16 units; returns false when empty
 function drainStam(p, amount) {
   p.stamSub += amount;
@@ -1475,6 +1484,19 @@ function drawMonster(ctx, g) {
   if (m.hitFlash > 0) body = 3;
   if (flashing) body = 3;
 
+  // nch.3: heavy's locked tail_spin attack rotates the whole creature about its
+  // centre in 45-deg steps from the locked facing, matching the device's
+  // fxtailspin 8-frame sheet. Only the body rotates; the stun sparkle and the
+  // telegraph core stay world-aligned (drawn after restore).
+  const spinAttack = m.kind === 'heavy' && m.state === 'attack' && m.atk && m.atk.kind === 'tailSpin';
+  const spinFrame = spinAttack ? spinSheetFrame(dirIndexFromDelta(m.face.x, m.face.y), m.t, m.atk.active) : 0;
+  if (spinAttack) {
+    ctx.save();
+    ctx.translate(x + m.w / 2, y + m.h / 2);
+    ctx.rotate(spinFrame * Math.PI / 4);
+    ctx.translate(-(x + m.w / 2), -(y + m.h / 2));
+  }
+
   ctx.fillStyle = SHADES[0];
   ctx.fillRect(x + 2, y + m.h - 1, m.w - 4, 1);
   for (let i = 0; i < 4; i++) ctx.fillRect(x + 3 + i * 8, y + m.h - 3, 3, 3);
@@ -1489,6 +1511,8 @@ function drawMonster(ctx, g) {
   ctx.fillStyle = SHADES[0];
   ctx.fillRect(m.face.x >= 0 ? headX + 7 : headX + 1, y + 13, 2, 2);
   ctx.fillRect(headX + 4, y + 9, 2, 2);
+
+  if (spinAttack) ctx.restore();
 
   if (m.stun > 0) {
     ctx.fillStyle = SHADES[2];
@@ -1961,6 +1985,7 @@ if (typeof module !== 'undefined' && module.exports) {
     newGame, step, render, withWeapon, resetHunt, isqrt, initPoleKind,
     damagePole, poleOnHit, poleStage,
     monsterActiveWindow, monsterTellWindow,
+    spinSheetFrame, dirIndexFromDelta,
     WEAPON_DEFS, MONSTER_ATTACKS, MONSTER_DEFS, POLE_DEFS,
     POLE_PLAIN, POLE_SEVER, POLE_BREAK, POLE_CRACK,
     W, H, ARENA_H, HOLD_TICKS, SHADES, WORLD_W, WORLD_H, FP,

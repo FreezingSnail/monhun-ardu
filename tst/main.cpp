@@ -15,6 +15,7 @@
 #include "smith_test.hpp"
 #include "combat_test.hpp"
 #include "combat_pack_test.hpp"
+#include "render_math_test.hpp"
 
 int main() {
     TestRunner runner;
@@ -33,6 +34,7 @@ int main() {
     SmithSuite(runner);
     CombatSuite(runner);
     CombatPackSuite(runner);
+    rendermathtest::RenderMathSuite(runner);
     runner.printSummary();
     return runner.fail() ? 1 : 0;
 }

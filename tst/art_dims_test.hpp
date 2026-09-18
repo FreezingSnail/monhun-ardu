@@ -700,6 +700,80 @@ void testPoleSheets(Test &t) {
     t.assert(anyInk(crack, 4, 0, 16, 24, 20) > 0, 1, "crack broken displaced chunk");
 }
 
+// ------------------------------------------- heavy rotating spin sheet (nch.3)
+
+// fxtailspin is HEAVY's real spin body: the east longtail silhouette in an
+// 8-frame 40x40 plus-mask sheet, frame i rotated i*45 deg clockwise about the
+// body centre. Frame 0 is the east beast; the white head orbits the centre as
+// the sheet steps, which is the observable rotation signature (body/tail are
+// DARK, the head is the only WHITE ink). Shades stay one of the four authored
+// palette entries (no interpolation), so a WHITE pixel has planes 0+1+2, a
+// LIGHT one 0+1, a DARK one 0 only and the BLACK shadow is an opaque eraser.
+void testTailSpinSheet(Test &t) {
+    std::cout << "---------- heavy rotating spin sheet ----------" << std::endl;
+    Blob spin;
+    if (!parseBlob("fxtailspin", spin, t))
+        return;
+    t.assert(spin.w, art_dims::tailspin_frame_w, "tailspin blob frame w");
+    t.assert(spin.h, art_dims::tailspin_frame_h, "tailspin blob frame h");
+    t.assert(spin.frames, art_dims::tailspin_frames, "tailspin blob frames");
+    t.assert(art_dims::tailspin_frame_w, 40, "tailspin frame w");
+    t.assert(art_dims::tailspin_frame_h, 40, "tailspin frame h");
+    t.assert(art_dims::tailspin_frames, 8, "tailspin frames");
+
+    // Frame 0 is the east beast: dark tail on the left, white head on the
+    // right, black ground shadow on the bottom row.
+    t.assert(planeAtF(spin, 0, 0, 5, 20), 1, "frame0 dark tail plane0");
+    t.assert(planeAtF(spin, 0, 1, 5, 20), 0, "frame0 dark tail dark only");
+    t.assert(planeAtF(spin, 0, 0, 26, 16), 1, "frame0 white head plane0");
+    t.assert(planeAtF(spin, 0, 1, 26, 16), 1, "frame0 white head plane1");
+    t.assert(planeAtF(spin, 0, 2, 26, 16), 1, "frame0 white head plane2");
+    t.assert(maskAtF(spin, 0, 6, 31), 1, "frame0 shadow opaque");
+    t.assert(planeAtF(spin, 0, 0, 6, 31), 0, "frame0 shadow black eraser");
+
+    // 4-shade quantization: LIGHT chest highlight keeps planes 0+1 only.
+    t.assert(planeAtF(spin, 0, 0, 20, 15), 1, "frame0 light chest plane0");
+    t.assert(planeAtF(spin, 0, 1, 20, 15), 1, "frame0 light chest plane1");
+    t.assert(planeAtF(spin, 0, 2, 20, 15), 0, "frame0 light chest not white");
+
+    // The white head orbits the body centre one 45-deg band per frame: right
+    // (0), bottom-right (1), bottom (2), bottom-left (3), left (4), left-up (5),
+    // top (6), top-right (7).
+    auto whiteIn = [&](int frame, int x0, int y0, int x1, int y1) {
+        int n = 0;
+        for (int y = y0; y < y1; y++)
+            for (int x = x0; x < x1; x++)
+                n += planeAtF(spin, frame, 2, x, y);
+        return n;
+    };
+    t.assert(whiteIn(0, 24, 0, 40, 40) > 0, 1, "frame0 head right");
+    t.assert(whiteIn(0, 0, 0, 16, 40), 0, "frame0 no head left");
+    t.assert(whiteIn(1, 24, 24, 40, 40) > 0, 1, "frame1 head bottom-right");
+    t.assert(whiteIn(1, 0, 0, 16, 16), 0, "frame1 no head top-left");
+    t.assert(whiteIn(2, 0, 24, 40, 40) > 0, 1, "frame2 head bottom");
+    t.assert(whiteIn(2, 0, 0, 40, 16), 0, "frame2 no head top");
+    t.assert(whiteIn(3, 0, 24, 16, 40) > 0, 1, "frame3 head bottom-left");
+    t.assert(whiteIn(3, 24, 0, 40, 16), 0, "frame3 no head top-right");
+    t.assert(whiteIn(4, 0, 0, 16, 40) > 0, 1, "frame4 head left");
+    t.assert(whiteIn(4, 24, 0, 40, 40), 0, "frame4 no head right");
+    t.assert(whiteIn(5, 0, 0, 16, 40) > 0, 1, "frame5 head left");
+    t.assert(whiteIn(5, 24, 0, 40, 40), 0, "frame5 no head right");
+    t.assert(whiteIn(6, 0, 0, 40, 16) > 0, 1, "frame6 head top");
+    t.assert(whiteIn(6, 0, 24, 40, 40), 0, "frame6 no head bottom");
+    t.assert(whiteIn(7, 16, 0, 40, 16) > 0, 1, "frame7 head top-right");
+    t.assert(whiteIn(7, 0, 24, 16, 40), 0, "frame7 no head bottom-left");
+
+    // Every frame differs (the rotation is observable), and opposite frames
+    // (0 vs 4, 2 vs 6) differ too, so the sheet is not a mirrored flip.
+    uint32_t hash[8];
+    for (int i = 0; i < 8; i++)
+        hash[i] = blobFrameHash(spin, i);
+    for (int i = 0; i < 8; i++)
+        for (int j = i + 1; j < 8; j++)
+            t.assert(hash[i] != hash[j] ? 1 : 0, 1, "tailspin frames distinct");
+    t.assert(hash[0] != hash[4] ? 1 : 0, 1, "east != west (upside down)");
+}
+
 void ArtDimsSuite(TestRunner &runner) {
     TestSuite suite("art dims");
     {
@@ -730,6 +804,11 @@ void ArtDimsSuite(TestRunner &runner) {
     {
         Test t("heavy tail-spin overlay is a 24x24 world-direction sheet");
         testTailSpin(t);
+        suite.addTest(t);
+    }
+    {
+        Test t("heavy rotating spin sheet is 8 frames of 45-deg steps");
+        testTailSpinSheet(t);
         suite.addTest(t);
     }
     {

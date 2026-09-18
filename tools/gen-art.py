@@ -300,9 +300,18 @@ def icon_defs(dims):
          "frames": tail_heavy_defs()},
         # HEAVY tail-spin overlay (bead monhun-ardu-nch.1): 24x24 frames, tail
         # rooted at the body centre pointing world W/N/E/S, drawn during the
-        # locked tail_spin attack. Frame origin is the body centre.
+        # locked tail_spin WINDUP tell. Frame origin is the body centre.
         {"id": "tail_spin", "w": 24, "h": 24, "anchor": "body centre",
          "frames": tail_spin_defs()},
+        # HEAVY real spin sheet (bead monhun-ardu-nch.3): the whole longtail
+        # silhouette, 8 frames 40x40, rotated 45 deg clockwise per frame about
+        # the body centre. Frame 0 is the east idle beast centred in the cell
+        # (32x24 padded to 40x40); frame i is frame 0 rotated i*45 deg with
+        # nearest-neighbour sampling and the 4-shade palette preserved (no
+        # interpolation). Drawn instead of the normal beast sheet during the
+        # locked tail_spin attack. Frame origin is the body centre.
+        {"id": "tailspin", "w": 40, "h": 40, "anchor": "body centre",
+         "frames": tailspin_frames()},
     ] + hud_defs()
 
 
@@ -649,6 +658,87 @@ def bull_frames():
 
 def longtail_frames():
     return _beast_frames(_longtail_east, _longtail_dead)
+
+
+# ---- HEAVY real spin sheet (bead monhun-ardu-nch.3). The whole longtail
+# silhouette rotates a full revolution during the locked tail_spin attack, so
+# the windup tell (fxtail_spin) is joined by this 8-frame 40x40 body sheet drawn
+# in its place. Frame 0 is the east idle beast (longtail_frames()[0], 32x24)
+# centred in the 40x40 plus-mask cell at (4,8); the body cell centre (16,12)
+# lands on the spin cell centre (20,20). Frame i is frame 0 rotated i*45 deg
+# clockwise about that centre. The whole authored cell rotates, shadow
+# included: the owner wants "the whole creature should rotate", and a rotating
+# ground shadow reads as the creature turning rather than a planted foot. The
+# rotation is exact 1/256 fixed point with nearest-neighbour sampling (no
+# interpolation), so every output pixel is one of the four authored shades.
+#
+# 45-deg CW step (cos, sin) in 1/256 units.
+_ROT45 = (
+    (256, 0), (181, 181), (0, 256), (-181, 181),
+    (-256, 0), (-181, -181), (0, -256), (181, -181),
+)
+
+
+def _rotate_cw(img, step):
+    """Rotate a square RGBA image about its centre by step*45 deg clockwise.
+
+    Inverse-maps each destination pixel through R(-theta) in doubled integer
+    coordinates, rounds to the nearest source pixel and copies the authored
+    RGBA value (so shades never blend). Source pixels outside the image stay
+    transparent.
+    """
+    w, h = img.size
+    if w != h:
+        raise SystemExit("gen-art: _rotate_cw wants a square image, got %dx%d" % (w, h))
+    src = img.load()
+    out = new(w, h)
+    dst = out.load()
+    c, s = _ROT45[step & 7]
+    last = w - 1
+    for y in range(h):
+        vy2 = 2 * y - last
+        for x in range(w):
+            vx2 = 2 * x - last
+            # 512 * rotated source coordinate (centre at (last/2, last/2)).
+            sx2 = c * vx2 + s * vy2
+            sy2 = -s * vx2 + c * vy2
+            ix = (last * 256 + sx2 + 256) >> 9
+            iy = (last * 256 + sy2 + 256) >> 9
+            if 0 <= ix < w and 0 <= iy < h:
+                col = src[ix, iy]
+                if col != CLEAR:
+                    dst[x, y] = col
+    return out
+
+
+def _image_blocks(img):
+    """Run-length encode each image row into (color, x, y, w, h) rect blocks.
+
+    check_sheets/render_icon re-composite the declared blocks, so encoding the
+    rotated frames exactly (one run per color) keeps the pixel check tight
+    without any hand-authored rect list.
+    """
+    blocks = []
+    px = img.load()
+    w, h = img.size
+    for y in range(h):
+        x = 0
+        while x < w:
+            color = px[x, y]
+            if color == CLEAR:
+                x += 1
+                continue
+            x0 = x
+            while x < w and px[x, y] == color:
+                x += 1
+            blocks.append((color, x0, y, x - x0, 1))
+    return blocks
+
+
+def tailspin_frames():
+    base = new(40, 40)
+    base.paste(longtail_frames()[0], (4, 8))
+    return [_image_blocks(_rotate_cw(base, i)) for i in range(8)]
 
 
 def pole_frame(flash):

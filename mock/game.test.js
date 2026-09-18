@@ -623,3 +623,27 @@ test('pole variants: plain pole stays byte-identical (no zone, no break)', () =>
   assert.equal(g.pole.hp, 0, 'plain pool 0');
   assert.equal(g.pole.w, 20, 'plain rect unchanged');
 });
+
+test('spin sheet frame math matches the device selector (nch.3)', () => {
+  // frame 0 is east; progress8 = (tick * 8) / active, truncated, wrapped mod 8.
+  assert.equal(G.spinSheetFrame(0, 0, 20), 0, 'frame 0 at the first tick');
+  assert.equal(G.spinSheetFrame(0, 2, 20), 0, 'still frame 0');
+  assert.equal(G.spinSheetFrame(0, 3, 20), 1, 'second slice');
+  assert.equal(G.spinSheetFrame(0, 5, 20), 2, 'third slice');
+  assert.equal(G.spinSheetFrame(0, 20, 20), 0, 'full revolution wraps at the last tick');
+  assert.equal(G.spinSheetFrame(4, 0, 20), 4, 'starts at the locked facing');
+  assert.equal(G.spinSheetFrame(4, 20, 20), 4, 'and wraps back to it');
+  assert.equal(G.spinSheetFrame(0, 3, 8), 3, 'active 8 advances per tick');
+  assert.equal(G.spinSheetFrame(0, 1, 0), 0, 'stale active collapses to start');
+});
+
+test('DIR8 index from the locked facing vector (nch.3)', () => {
+  assert.equal(G.dirIndexFromDelta(16, 0), 0, 'east');
+  assert.equal(G.dirIndexFromDelta(11, 11), 1, 'southeast');
+  assert.equal(G.dirIndexFromDelta(0, 16), 2, 'south');
+  assert.equal(G.dirIndexFromDelta(-11, 11), 3, 'southwest');
+  assert.equal(G.dirIndexFromDelta(-16, 0), 4, 'west');
+  assert.equal(G.dirIndexFromDelta(-11, -11), 5, 'northwest');
+  assert.equal(G.dirIndexFromDelta(0, -16), 6, 'north');
+  assert.equal(G.dirIndexFromDelta(11, -11), 7, 'northeast');
+});
