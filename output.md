@@ -1,112 +1,104 @@
-# monhun-ardu-cgk — zones: replace N-part machinery with fixed head/body/appendage
+# monhun-ardu-44z — audio: replace ArduboyTones with minimal TIMER3 beeper
 
-Status: **DONE** (all gates green; no commit per worker protocol).
+Status: **DONE** (all gates green; no commit per worker protocol). Spike accepted:
+**552 B** net flash recovered vs 28242 (gate >= 500 B).
 
 ## What changed
 
-- `tools/gen-combat.py`: schema `"parts"` (array of stage/elem records) replaced
-  by `"zones"` (object with optional `head` / `appendage`). New fixed `ZONE`
-  12 B record (`box, hp, dmgMul, bodyShare, breakTypes, staggerOnHit,
-  brokenDmgMul, brokenFlags, unlockMask`); `SKELETON` shrunk to 2 B
-  (`firstAnchor, anchorCount`); creature record's `firstPart/partCount` became
-  `headZone/appendZone`; profile's `partCount` became `zoneFlags`; guard's
-  `firstPartPred/partPredCount` became a `zonesBroken` bitmask. Deleted
-  `STAGES`, `ELEMS`, `REFS`, `PREDICATES` sections; header is 10 counts + 4
-  reserved. New facts `HAS_ZONES`, `HAS_GUARD_ZONES`.
-- `src/core/game.hpp`: `CombatZoneCache` (10 B) + `CombatState` (75 B) with
-  `zone[2]`, `headZone/appendZone`, `zoneBroken`; removed `stages`, `partHp[]`,
-  `partsHurt`, `bodyFirst/bodyCount/overFirst/overCount`, `COMBAT_PART_SLOTS`,
-  `COMBAT_MAX_PARTS`; `PARTS_ENABLED/GUARD_PARTS_ENABLED` -> `ZONES_ENABLED/
-  GUARD_ZONES_ENABLED`.
-- `src/core/combat.hpp`: unrolled 3-zone resolve (`combatZoneHitResolve`: body
-  implicit + wins ties, head tested before appendage on strict `>`; pool drain +
-  single broken bit per zone), `combatZoneHitResolve`/`combatZoneStagger`/
-  `combatAttackDisabled` (broken-zone `unlockMask`); guard `zonesBroken` mask
-  compare. Deleted predicate interpreter, ordinals/`combatPartAt/Count`,
-  `CombatPartNow` stage walk, `combatStage*`, pool indexing, hurt-envelope
-  union, part/stage/elem accessors, `combatResolveHit`. Kept 2-window attacks +
-  window cache, stagger meter/STATE, `combatPartArtFrame` (param is now the
-  broken bit).
-- `src/core/monster.hpp`: target rect is body-only; `monsterOnHit` resolves the
-  zone path and feeds `combatZoneStagger` to `monsterStaggerAdd`; attack-disable
-  gating switched to the zone broken mask. Pattern interpreter unchanged.
-- Data: `data/skeletons.json` drops `parts`; `ravager.json` `"parts"` ->
-  `"zones"` (head + appendage) and `p_enraged` guard -> `zonesBroken:
-  ["appendage"]`.
-- Tests ported (not weakened): `tst/combat_test.hpp`, `tst/combat_pack_test.hpp`,
-  `tst/monster_test.hpp`, `tst/fxdatatest/combat_test.hpp`,
-  `tools/tests/test_gen_combat.py` + fixture, `tools/contact_sheet.py` +
-  its test. Regenerated `combat.bin` + headers + `fxdata`.
-- README status/comments refreshed.
+- `src/audio.hpp` only. Deleted the `ArduboyTones` dependency (include, global
+  `mhTones` instance, `mhAudioEnabled` callback, `audioPlay` switch of
+  `ArduboyTones::tone()` calls) and replaced it with a one-shot TIMER3 square-wave
+  beeper:
+  - `mhCueTable[11][4]` in PROGMEM: `{OCR3A, toggles, OCR3A2, toggles2}` per cue,
+    all constants precomputed with the exact old library math
+    (`OCR = F_CPU/8/freq/2 - 1`, `toggles = (ms*freq)>>9`). No runtime division,
+    no float.
+  - `mhPlay(cue)` disables `OCIE3A`, sets PC6/PC7 output low, loads the two
+    segments, configures CTC /8, then re-enables the ISR.
+  - `ISR(TIMER3_COMPA_vect)` toggles PC6; on segment exhaustion loads the queued
+    second segment or clears `OCIE3A` and parks PC6 low. Max two segments, one
+    shot, non-blocking (audioPlay returns immediately).
+- Driver lives entirely in `src/audio.hpp`; no vendored library touched.
+- `-DMH_AUDIO=0` path unchanged in shape: everything above is inside `#if
+  MH_AUDIO`, so the mute build has no beeper symbols at all. `test_perf` and
+  `test_parity` compile with `-DMH_AUDIO=0` and stay green.
+- Test comments refreshed (`audio_test.hpp`, `perf_test.hpp`) to name the beeper
+  instead of the removed library. Tests themselves unchanged and pass.
 
-## Ravager zones declared
+## Timer / vector (collision answer)
 
-- **head**: box (20,4,12,12), dmgMul 130, hp 40, bodyShare 100, breakTypes
-  SLASH, staggerOnHit 12, broken { dmgMul 130, hurtOn false }.
-- **appendage (tail)**: box (-14,8,18,10), dmgMul 150, hp 60, bodyShare 40,
-  breakTypes SLASH, staggerOnHit 30, broken { dmgMul 200, hurtOff, cue
-  part_break, disableAttacks ["tail_sweep"] }.
+- Beeper: **TIMER3_COMPA = `__vector_32`** (I checked
+  `avr/iom32u4.h`: `TIMER3_COMPA_vect_num 32`).
+- ArduboyG plane timing: **TIMER1_COMPA = `__vector_17`** (`ABG_TIMER1` in
+  `src/common.hpp`). Different timer, different vector — no collision.
+- The bead's "1124 B timer ISR `vector_11`" note was a mis-attribution:
+  `__vector_11` is **USB_COM** (`USB_COM_vect_num 11`), 0x464 = 1124 B, in the
+  baseline ELF. ArduboyTones never used it. The real tone ISR was `__vector_32`,
+  0x8E = 142 B. The beeper keeps TIMER3, so USB is untouched.
 
 ## Verification (exact tails / numbers)
 
 1. `make gen` (x2) -> `make gen-check`:
    ```
-   gen-combat: 4 creatures, 8 attacks, 9 windows, 8 patterns, 8 steps, 3 skeletons, 2 zones, 616 B, sha256 d72d0a10...
    fxdata_manifest: PASS (53 generated artifacts unchanged)
+   gen-check exit: 0
    ```
-2. `make test`: `Total Passed: 3144  Total Failed: 0` (baseline for this task: 3411;
-   the drop is the generic N-part reference suite collapsed into the fixed-zone
-   suite — same behavioral surface, fewer synthetic stage/ordinal vectors).
-   `make test-tools`: `Ran 82 tests ... OK`.
-3. `make fxtest-headless` (full): all suites PASS —
+2. `make test` -> `Total Passed: 3144  Total Failed: 0`.
+   `make test-tools` -> `Ran 82 tests in 4.948s ... OK`.
+3. `make fxtest-headless` (full, run twice on final tree): all suites PASS —
    `test_assets 262/0, test_audio 14/0, test_boot 4/0, test_combat 184/0,
    test_data 221/0, test_hud 17/0, test_menu 59/0, test_parity 660/0,
    test_perf 5/0, test_player_art 111/0`.
-   `test_combat` read budget tail:
-   `C reads spawn=5 attack=5 guard=2 hit=0 tick256=0 simAtk=6 simTk=0 winSw=1`.
    perf tail: `B pUs=6502 pHz=153 lHz=51 lTk=988 rMx=5392 rAv=5028 ram=409`
-   vs reference `pUs=6501 rMx=5388 rAv=5028` (+1 µs plane, +4 µs render max;
-   gates still PASS).
+   vs reference `rMx=5392 rAv=5028 pUs=6502` — **byte-identical, no regression**
+   (bench is `-DMH_AUDIO=0`, so this is unaffected by design; kept as the gate).
 4. `make build` + `make size`:
    ```
-   Sketch uses 28242 bytes (95%) ... Global variables use 2029 bytes ...
-   size: .text=28184 .data=58 .bss=1971
-   size: flash=28242/29696 (1454 free)  ram=2029/2560
+   Sketch uses 27690 bytes (93%) ... Global variables use 2005 bytes ...
+   size: .text=27632 .data=58 .bss=1947
+   size: flash=27690/29696 (2006 free)  ram=2005/2560
    ```
-   **Recovery vs 29560 = 1318 B (> 1 KB spike gate).**
-5. `node tools/gen-parity-fixtures.js` -> `git status tst/fxdatatest/parity_fixtures.hpp` clean (empty diff).
-6. Data facts: `HAS_GUARD_CHANCE:false HAS_GUARD_COOLDOWN:false HAS_GUARD_HP:false
-   HAS_GUARD_PLAYER:false HAS_GUARD_ZONES:true HAS_HIT_STAGGER:false
-   HAS_MULTI_STEP:false HAS_MULTI_WINDOW:true HAS_SIMPLE_GUARDS:false
-   HAS_STAGGER:true HAS_STEP_AFTER:false HAS_STEP_CHANCE:false
-   HAS_WAIT_STEPS:false HAS_ZONES:true`.
+   - Baseline: **28242** (1454 free). New: **27690** (2006 free).
+   - **Net delta vs 28242 = -552 B** (spike gate >= 500 B: PASS).
+   - `-DMH_AUDIO=0` ceiling re-measured today = **27378** (864 B). The beeper
+     costs **312 B** of that ceiling; the other 552 B are recovered library code.
+   - No `ArduboyTones` symbols remain in the ELF (`avr-nm | grep -c` = 0).
+5. `node tools/gen-parity-fixtures.js` -> `git diff --stat` of
+   `tst/fxdatatest/parity_fixtures.hpp` empty (0 diff lines).
+6. Data facts unchanged (no `HAS_*` flip): `HAS_MULTI_WINDOW:true
+   HAS_STAGGER:true HAS_ZONES:true HAS_GUARD_ZONES:true`, rest false.
 
-## Per-symbol delta
+## Per-symbol delta (`avr-nm --print-size`, baseline -> new)
 
-Not reported: LTO makes per-symbol size math meaningless in this repo
-(AGENTS.md "Budget first": measure whole-image deltas). Whole-image delta is
--1318 B. The bytes are in the deleted machinery (predicate interpreter +
-ordinals + `CombatPartNow` stage walk + `combatStage*` + hurt-envelope union +
-pool-index/stage caches, previously ~2.6 KB) minus the ~1.3 KB of new
-zone-resolve/seed code and the retained attack/window/guard interpreter.
+| symbol | baseline | new |
+|---|---|---|
+| `ArduboyTones::nextTone` | 330 | — |
+| `ArduboyTones::getNext` | 40 | — |
+| `ArduboyTones::tone(u16,u16)` | 56 | — |
+| `ArduboyTones::tone(u16,u16,u16,u16)` | 64 | — |
+| `mh::mhAudioEnabled` | 4 | — |
+| `__vector_32` (TIMER3_COMPA ISR) | 142 | 114 |
+| `mh::audioCue(...).constprop` | 280 | 194 |
+| `mh::mhCueTable` (PROGMEM) | — | 88 |
+| `mh::mhPlay` | — | 0 (inlined into audioCue) |
+| RAM `mhToggles/mhOcr2/mhToggles2` | — | 6 B bss |
 
-## Deviations from the old behavior (shipped 3 unchanged; parity fixtures byte-identical)
+RAM: bss 1971 -> 1947 (-24 B), `.data` unchanged; global RAM 2029 -> 2005.
+The remaining whole-image delta also removes the ArduboyTones ctor, 3-tone
+overload and static state (`toneSequence` 14 B + start/index/playing/silent/
+highVol) that size-sort does not attribute cleanly under LTO; whole-image
+measurement is authoritative (AGENTS.md "Budget first").
 
-- Zone `staggerOnHit` is a flat per-zone stat applied on every zone hit; the old
-  tail stagger came from a *crossed stage* (hp <= 30%). Ravager stagger timing
-  therefore differs (tail hits add 30 immediately; head adds 12). The shipped 3
-  have no zones and `staggerMax 0`, so device parity is unaffected.
-- Single broken record: tail break (and tail_sweep disable) now happens only at
-  pool 0; the old first stage fired at 30% hp.
-- `physMul`/`elemMul` are dropped per the design (elem accessors deleted), so
-  tail damage uses only `dmgMul` (150) + bodyShare; the old SLASH 150 / FIRE
-  200 multipliers are gone.
-- Broken zones leave the candidate set; `brokenDmgMul`/`brokenFlags` are
-  data-only (matches the old effective behavior: stage 2 was hurtOff, so the
-  200 override never applied to a landed hit).
-- `-DMH_COMBAT_PARTS=0` macro name kept (only the effective constexpr names
-  changed to `ZONES_ENABLED`/`GUARD_ZONES_ENABLED`) to keep the perf/parity
-  carves and the Makefile untouched.
-- `docs/creature-framework.md` still describes the old part/stage schema; the
-  binding design is `build/zones-design.md`. Left for the docs bead (not in
-  scope / not gated).
+## Fidelity / deviations from ArduboyTones
+
+- Pitch is exact (same `OCR = F_CPU/8/freq/2 - 1`, same /8 CTC prescaler).
+- Duration is exact to within one timer compare: the old ISR advanced to the
+  next segment on the *following* compare after the last toggle; the new ISR
+  advances on the same compare. Max ~1 half-period (< ~3 ms) shorter per segment.
+  Cues use at most two segments (all `tone()` calls in the old switch were 1 or 2
+  tones), so no cue loses a segment.
+- Output mechanism identical: PC6 toggled by writing `PINC`, PC7 held low
+  (normal volume); the old library also played these cues with no
+  `TONE_HIGH_VOLUME` bit, i.e. normal volume, PC7 low.
+- Behavior unchanged: `audioCue`/`audioUpdate` edge detection, rate limit and
+  `firedMask` are untouched. One-shot, non-blocking, does not delay frames.

@@ -6,15 +6,18 @@
 // combat event happens, by diffing the previous tick's state. No core header is
 // modified; cue triggering only *reads* Game.
 //
-// Timer: ArduboyG owns TIMER1 (ABG_TIMER1 in src/common.hpp). ArduboyTones
-// drives TIMER3_COMPA and toggles the speaker pins PC6/PC7, so the two ISRs do
-// not collide. Cues are short, one-shot tone() calls (ArduboyTones is
-// non-blocking: tone() just arms the timer ISR and returns), so the plane loop
-// keeps its FX/OLED bracket and needsUpdate() gating untouched.
+// Timer: ArduboyG owns TIMER1 (ABG_TIMER1 in src/common.hpp); the beeper owns
+// TIMER3_COMPA (the vector at __vector_32, deliberately not USB __vector_11),
+// so the two ISRs do not collide. Cues are short one-shots: audioPlay() just
+// programs the timer/pin and returns, so the plane loop keeps its FX/OLED
+// bracket and needsUpdate() gating untouched. The driver (bead
+// monhun-ardu-44z) is a minimal replacement for ArduboyTones that keeps the
+// same CTC /8 prescaler, speaker pin PC6 (PC7 held low, normal volume) and
+// precomputed pitch/duration constants, so the cues sound the same.
 //
 // Mute for device test builds: compile with -DMH_AUDIO=0. That preprocesses the
-// whole module down to no-ops and drops the ArduboyTones dependency entirely,
-// so an fxtest sketch can include it and still run silent.
+// whole module down to no-ops and drops the beeper entirely, so an fxtest sketch
+// can include it and still run silent.
 //
 // Edge detection is freeze-safe: stepGame() skips updateEffects()/sim while
 // Game::freeze > 0, so an effect can sit at t==1 for several ticks and a
@@ -30,7 +33,9 @@
 #endif
 
 #if MH_AUDIO
-#include <ArduboyTones.h>
+#include <avr/io.h>
+#include <avr/interrupt.h>
+#include <avr/pgmspace.h>
 #endif
 
 namespace mh {
@@ -71,49 +76,62 @@ struct AudioState {
 };
 
 #if MH_AUDIO
-// outEn is called from the tone ISR; the build is compile-time muted, so this
-// only ever runs when cues are actually wanted.
-static inline bool mhAudioEnabled() {
-    return true;
+// Beeper state. ISR-touched values are volatile; the ISR only toggles PC6 and
+// advances/ends the one-shot, so no library object or outEn callback is needed.
+static volatile uint16_t mhToggles;    // pin toggles left in the active segment
+static volatile uint16_t mhOcr2;       // queued segment-2 period (OCR3A)
+static volatile uint16_t mhToggles2;   // queued segment-2 toggles (0 = none)
+
+// Cue table: {OCR3A, toggles, OCR3A2, toggles2}, precomputed for the exact
+// ArduboyTones math (OCR = F_CPU/8/freq/2 - 1, toggles = (ms*freq)>>9).
+// Index 0 is CUE_NONE (all zero); every queue has toggle counts >= 1.
+static const uint16_t mhCueTable[11][4] PROGMEM = {
+    {0, 0, 0, 0},           // CUE_NONE
+    {2023, 21, 0, 0},       // CUE_HIT     494,22
+    {1516, 20, 954, 81},    // CUE_CRIT    659,16 1047,40
+    {1274, 36, 0, 0},       // CUE_TRAIN   784,24
+    {6450, 13, 0, 0},       // CUE_HURT    155,45
+    {1135, 30, 850, 126},   // CUE_PARRY   880,18 1175,55
+    {1431, 24, 1135, 58},   // CUE_DEFLECT 698,18 880,34
+    {5101, 11, 3815, 23},   // CUE_GUARD   196,30 262,45
+    {5713, 6, 4290, 13},    // CUE_WINDUP  175,20 233,30
+    {636, 42, 954, 49},     // CUE_SHOT    1568,14 1047,24
+    {954, 24, 636, 85},     // CUE_RELOAD  1047,12 1568,28
+};
+
+// Arm one cue. Pins are only set to output/low here (the old constructor did it
+// once); PC6 toggles to make the square wave, PC7 stays low for normal volume.
+static void mhPlay(uint8_t cue) {
+    const uint16_t *rec = mhCueTable[cue];
+    TIMSK3 = 0;   // stop the ISR while re-arming
+    DDRC |= _BV(PORTC6) | _BV(PORTC7);
+    PORTC &= (uint8_t)~(_BV(PORTC6) | _BV(PORTC7));
+    mhToggles2 = pgm_read_word(rec + 3);
+    mhOcr2 = pgm_read_word(rec + 2);
+    mhToggles = pgm_read_word(rec + 1);
+    TCCR3A = 0;
+    TCCR3B = _BV(WGM32) | _BV(CS31);   // CTC, /8 (matches ArduboyTones)
+    OCR3A = pgm_read_word(rec + 0);
+    TIMSK3 = _BV(OCIE3A);
 }
-// Global instance performs the speaker-pin setup in its constructor.
-static ArduboyTones mhTones(mhAudioEnabled);
+
+ISR(TIMER3_COMPA_vect) {
+    PINC = _BV(PORTC6);   // toggle speaker pin
+    if (--mhToggles == 0) {
+        const uint16_t t2 = mhToggles2;
+        if (t2) {   // start queued second segment
+            OCR3A = mhOcr2;
+            mhToggles = t2;
+            mhToggles2 = 0;
+        } else {   // one-shot done
+            TIMSK3 = 0;
+            PORTC &= (uint8_t)~_BV(PORTC6);
+        }
+    }
+}
 
 static void audioPlay(uint8_t cue) {
-    switch (cue) {
-    case CUE_HIT:
-        ArduboyTones::tone(494, 22);
-        break;
-    case CUE_CRIT:
-        ArduboyTones::tone(659, 16, 1047, 40);
-        break;
-    case CUE_TRAIN:
-        ArduboyTones::tone(784, 24);
-        break;
-    case CUE_HURT:
-        ArduboyTones::tone(155, 45);
-        break;
-    case CUE_PARRY:
-        ArduboyTones::tone(880, 18, 1175, 55);
-        break;
-    case CUE_DEFLECT:
-        ArduboyTones::tone(698, 18, 880, 34);
-        break;
-    case CUE_GUARD:
-        ArduboyTones::tone(196, 30, 262, 45);
-        break;
-    case CUE_WINDUP:
-        ArduboyTones::tone(175, 20, 233, 30);
-        break;
-    case CUE_SHOT:
-        ArduboyTones::tone(1568, 14, 1047, 24);
-        break;
-    case CUE_RELOAD:
-        ArduboyTones::tone(1047, 12, 1568, 28);
-        break;
-    default:
-        break;
-    }
+    mhPlay(cue);
 }
 #else
 static void audioPlay(uint8_t) {

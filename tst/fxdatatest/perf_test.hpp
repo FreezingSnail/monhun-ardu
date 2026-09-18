@@ -10,7 +10,7 @@
 // Serial already consume ~27.7 KB of the 29.7 KB flash, leaving <2 KB. So the
 // loop is timed inline (no extra measurement framework) and only the final
 // numbers are printed. Timebase is micros() (Timer0 /64), cycle-modelled and
-// independent of ArduboyG's TIMER1 ISR and ArduboyTones' TIMER3, so the real
+// independent of ArduboyG's TIMER1 ISR and the beeper's TIMER3, so the real
 // audio cue path can stay compiled in. Integer math only; 1 us == 16 cycles.
 
 #include "harness/fxtest.hpp"

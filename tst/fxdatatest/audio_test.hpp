@@ -5,8 +5,8 @@
 // per event and asserts the fired-cue mask. Each case uses a fresh valid Game
 // (mh::newGame) so the detector diffs real core fields the same way the device
 // loop does; no sim timing is involved, so it is deterministic. Cues are played
-// for real (MH_AUDIO defaults to 1): if the ArduboyTones TIMER3 ISR collided
-// with ArduboyG's TIMER1 plane ISR the sketch would not reach the final P.
+// for real (MH_AUDIO defaults to 1): if the beeper's TIMER3_COMPA ISR collided
+// with ArduboyG's TIMER1_COMPA plane ISR the sketch would not reach the final P.
 //
 // Pair this with the parity suite (core behaviour) — this test only proves the
 // cue-to-event mapping and that the tone ISR coexists with the plane loop.
