@@ -19,9 +19,10 @@ resolvable local refs, unique local ids and u8/u16 section limits.
 Blob layout (little-endian, explicit u8/u16, no padding, fixed section order):
 
     header     32 B  magic u16, version u8, flags u8, 10x u16 counts + 4x u16 reserved
-    creature   17 B  skeletonIdx, profileIdx, headZone, appendZone,
+    creature   21 B  skeletonIdx, profileIdx, headZone, appendZone,
                      firstAttack, attackCount, firstPattern, patternCount,
-                     w, h, spd, hp u16, spawnX u16, spawnY u16
+                     w, h, spd, collide(ox i8, oy i8, w, h),
+                     hp u16, spawnX u16, spawnY u16
     profile    22 B  engageDist, keepDist, attackDist, circleNum, circleDen,
                      retreatNum, retreatDen, staggerMax, staggerDecay,
                      zoneFlags (bit0 head, bit1 appendage), cdBase u16,
@@ -90,7 +91,7 @@ ZONE_APPENDAGE = 0x02
 COMBAT_NO_ZONE = 0xFF
 
 SIZES = {
-    "CREATURE": 17,
+    "CREATURE": 21,
     "PROFILE": 22,
     "SKELETON": 2,
     "ZONE": 12,
@@ -248,6 +249,20 @@ def normalize_break_types(errors, ctx, value):
         seen.add(item)
         mask |= PHYS[item]
     return mask
+
+
+def normalize_collide(errors, ctx, obj):
+    """Optional per-creature collide box (epic monhun-ardu-nch): the rect
+    syncMonsterTarget/pushApart use for body collision, so a tall wader can
+    expose only its legs while its body region passes over the player. Absent
+    means the body box (stats w/h at the origin), the shipped default."""
+    check_keys(errors, ctx, obj, {"ox", "oy", "w", "h"})
+    return {
+        "ox": read_int(errors, ctx, obj, "ox", -128, 127),
+        "oy": read_int(errors, ctx, obj, "oy", -128, 127),
+        "w": read_int(errors, ctx, obj, "w", 1, 255),
+        "h": read_int(errors, ctx, obj, "h", 1, 255),
+    }
 
 
 def normalize_zone(errors, ctx, obj, attack_ids):
@@ -538,7 +553,7 @@ def compile_model(errors, root):
         obj = load_json(errors, path)
         if obj is None:
             continue
-        check_keys(errors, ctx, obj, {"id", "skeleton", "stats", "profile", "attacks", "patterns"}, {"zones"})
+        check_keys(errors, ctx, obj, {"id", "skeleton", "stats", "profile", "attacks", "patterns"}, {"zones", "collide"})
         cid = read_id(errors, ctx, obj, "id")
         if cid is not None:
             if cid != os.path.splitext(name)[0]:
@@ -553,6 +568,7 @@ def compile_model(errors, root):
             skeleton = skeletons[0]
         stats = obj.get("stats")
         check_keys(errors, ctx + ".stats", stats, {"w", "h", "hp", "spd", "spawnX", "spawnY"})
+        collide = normalize_collide(errors, ctx + ".collide", obj["collide"]) if "collide" in obj else None
         profile = normalize_profile(errors, ctx + ".profile", obj.get("profile"))
         raw_attacks = obj.get("attacks")
         if not isinstance(raw_attacks, list) or not raw_attacks:
@@ -605,6 +621,7 @@ def compile_model(errors, root):
                 "spawnX": read_int(errors, ctx + ".stats", stats, "spawnX", 0, 65535),
                 "spawnY": read_int(errors, ctx + ".stats", stats, "spawnY", 0, 65535),
             },
+            "collide": collide,
             "profile": profile,
             "attacks": attacks,
             "zones": zones,
@@ -760,12 +777,16 @@ def pack_model(errors, model):
         indices["CREATURE_%s" % cid.upper()] = i
         offsets["CREATURE_%s_OFF" % cid.upper()] = mark("creature")
         stats = creature["stats"]
+        # collide box: authored per creature, or the body box default (stats w/h
+        # at the origin) so collision is unchanged for creatures without one.
+        collide = creature["collide"] or {"ox": 0, "oy": 0, "w": stats["w"], "h": stats["h"]}
         record("CREATURE", b"".join([
             u8(model["skeletons"].index(creature["skeleton"])), u8(i),
             u8(entry["head_zone"]), u8(entry["append_zone"]),
             u8(entry["first_attack"]), u8(len(creature["attacks"])),
             u8(entry["first_pattern"]), u8(len(creature["patterns"])),
             u8(stats["w"]), u8(stats["h"]), u8(stats["spd"]),
+            i8(collide["ox"]), i8(collide["oy"]), u8(collide["w"]), u8(collide["h"]),
             u16(stats["hp"]), u16(stats["spawnX"]), u16(stats["spawnY"]),
         ]))
 
@@ -1027,6 +1048,7 @@ def emit_data_header(model, compiled):
     app("    uint8_t firstAttack, attackCount;")
     app("    uint8_t firstPattern, patternCount;")
     app("    uint8_t w, h, spd;")
+    app("    Box collide;   // body-collision rect (legs-only for the chicken)")
     app("    uint16_t hp, spawnX, spawnY;")
     app("};")
     app("")
@@ -1043,11 +1065,14 @@ def emit_data_header(model, compiled):
             for entry in layout["creatures"]:
                 creature = entry["creature"]
                 stats = creature["stats"]
-                app("    {%d, %d, %d, %d, %d, %d, %d, %d, %d, %d, %d, %d, %d, %d}," % (
+                collide = creature["collide"] or {"ox": 0, "oy": 0, "w": stats["w"], "h": stats["h"]}
+                app("    {%d, %d, %d, %d, %d, %d, %d, %d, %d, %d, %d, {%d, %d, %d, %d}, %d, %d, %d}," % (
                     model["skeletons"].index(creature["skeleton"]), compiled["indices"]["CREATURE_%s" % creature["id"].upper()],
                     entry["head_zone"], entry["append_zone"], entry["first_attack"], len(creature["attacks"]),
                     entry["first_pattern"], len(creature["patterns"]),
-                    stats["w"], stats["h"], stats["spd"], stats["hp"], stats["spawnX"], stats["spawnY"]))
+                    stats["w"], stats["h"], stats["spd"],
+                    collide["ox"], collide["oy"], collide["w"], collide["h"],
+                    stats["hp"], stats["spawnX"], stats["spawnY"]))
         elif section == "PROFILES":
             for entry in layout["creatures"]:
                 creature = entry["creature"]
@@ -1268,6 +1293,11 @@ def emit_expect_header(model, compiled):
         app("constexpr uint8_t CREATURE_%s_H = %d;" % (cid, stats["h"]))
         app("constexpr uint8_t CREATURE_%s_ATTACKS = %d;" % (cid, len(creature["attacks"])))
         app("constexpr uint8_t CREATURE_%s_PATTERNS = %d;" % (cid, len(creature["patterns"])))
+        collide = creature["collide"] or {"ox": 0, "oy": 0, "w": stats["w"], "h": stats["h"]}
+        app("constexpr int8_t CREATURE_%s_COLLIDE_OX = %d;" % (cid, collide["ox"]))
+        app("constexpr int8_t CREATURE_%s_COLLIDE_OY = %d;" % (cid, collide["oy"]))
+        app("constexpr uint8_t CREATURE_%s_COLLIDE_W = %d;" % (cid, collide["w"]))
+        app("constexpr uint8_t CREATURE_%s_COLLIDE_H = %d;" % (cid, collide["h"]))
         first_attack = creature["attacks"][0]
         app("constexpr uint16_t ATTACK_%s_%s_WINDUP = %d;" % (cid, first_attack["id"].upper(), first_attack["windup"]))
         app("constexpr uint16_t ATTACK_%s_%s_ACTIVE = %d;" % (cid, first_attack["id"].upper(), first_attack["active"]))
@@ -1303,8 +1333,10 @@ def dump_model(model, compiled):
         stats = creature["stats"]
         zones = " ".join("%s D%d HP%d S%d ST%d" % (
             name, z["dmgMul"], z["hp"], z["bodyShare"], z["staggerOnHit"]) for name, z in sorted(creature["zones"].items()))
-        print("creature %s (skeleton %s, stats w%d h%d hp%d spd%d, spawn %d,%d) zones %s" % (
-            cid, creature["skeleton"]["id"], stats["w"], stats["h"], stats["hp"], stats["spd"], stats["spawnX"], stats["spawnY"], zones or "-"))
+        collide = "body" if creature["collide"] is None else "box(%d,%d,%d,%d)" % (
+            creature["collide"]["ox"], creature["collide"]["oy"], creature["collide"]["w"], creature["collide"]["h"])
+        print("creature %s (skeleton %s, stats w%d h%d hp%d spd%d, spawn %d,%d, collide %s) zones %s" % (
+            cid, creature["skeleton"]["id"], stats["w"], stats["h"], stats["hp"], stats["spd"], stats["spawnX"], stats["spawnY"], collide, zones or "-"))
         for name in ZONE_NAMES:
             if name not in creature["zones"]:
                 continue

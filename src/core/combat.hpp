@@ -101,6 +101,7 @@ struct CombatCreature {
     uint8_t firstAttack, attackCount;
     uint8_t firstPattern, patternCount;
     uint8_t w, h, spd;
+    CombatBox collide;   // body-collision rect (legs-only for the chicken)
     uint16_t hp, spawnX, spawnY;
 };
 
@@ -123,6 +124,7 @@ struct CombatAnchor {
 struct CombatSpawn {
     uint16_t hp, x, y;
     uint8_t spd;
+    CombatBox collide;   // body-collision rect (legs-only for the chicken)
 };
 
 struct CombatAttackValue {
@@ -165,6 +167,8 @@ struct PkCreature {
     uint8_t firstAttack, attackCount;
     uint8_t firstPattern, patternCount;
     uint8_t w, h, spd;
+    int8_t collideOx, collideOy;
+    uint8_t collideW, collideH;
     uint16_t hp, spawnX, spawnY;
 };
 struct PkProfile {
@@ -243,7 +247,7 @@ static_assert(offsetof(CombatPattern, guardIdx) == offsetof(PkPattern, guardIdx)
 static_assert(sizeof(CombatWindow) == 9, "window cache must stay 9 B");
 static_assert(sizeof(CombatAttackCache) == 21, "attack cache must stay 21 B");
 static_assert(sizeof(CombatZoneCache) == 10, "zone cache must stay 10 B");
-static_assert(sizeof(CombatState) == 75, "CombatState must stay 75 B (zones design)");
+static_assert(sizeof(CombatState) == 79, "CombatState must stay 79 B (zones design + collide)");
 
 // Fake cart pointer: the blob lives below 64 KB (generator hard-fails above).
 inline uint16_t combatCartAddr(uint16_t off) {
@@ -285,6 +289,10 @@ inline CombatCreature combatCreatureRead(uint8_t i) {
     v.w = combatReadU8(b + MH_COMBAT_FIELD(detail::PkCreature, w));
     v.h = combatReadU8(b + MH_COMBAT_FIELD(detail::PkCreature, h));
     v.spd = combatReadU8(b + MH_COMBAT_FIELD(detail::PkCreature, spd));
+    v.collide.ox = combatReadI8(b + MH_COMBAT_FIELD(detail::PkCreature, collideOx));
+    v.collide.oy = combatReadI8(b + MH_COMBAT_FIELD(detail::PkCreature, collideOy));
+    v.collide.w = combatReadU8(b + MH_COMBAT_FIELD(detail::PkCreature, collideW));
+    v.collide.h = combatReadU8(b + MH_COMBAT_FIELD(detail::PkCreature, collideH));
     v.hp = combatReadU16(b + MH_COMBAT_FIELD(detail::PkCreature, hp));
     v.spawnX = combatReadU16(b + MH_COMBAT_FIELD(detail::PkCreature, spawnX));
     v.spawnY = combatReadU16(b + MH_COMBAT_FIELD(detail::PkCreature, spawnY));
@@ -333,6 +341,8 @@ inline CombatSpawn combatCreatureSpawnRead(uint8_t i) {
     const uint16_t b = static_cast<uint16_t>(combat::CREATURES_OFF + i * combat::CREATURE_SIZE);
     CombatSpawn v;
     v.spd = combatReadU8(b + MH_COMBAT_FIELD(detail::PkCreature, spd));
+    // collide is 4 contiguous bytes (ox, oy, w, h): one bulk read.
+    detail::combatReadBytes(static_cast<uint16_t>(b + offsetof(detail::PkCreature, collideOx)), &v.collide, sizeof(v.collide));
     v.hp = combatReadU16(b + MH_COMBAT_FIELD(detail::PkCreature, hp));
     v.x = combatReadU16(b + MH_COMBAT_FIELD(detail::PkCreature, spawnX));
     v.y = combatReadU16(b + MH_COMBAT_FIELD(detail::PkCreature, spawnY));
@@ -491,6 +501,10 @@ inline CombatCreature combatCreatureRead(uint8_t i) {
     v.w = c.w;
     v.h = c.h;
     v.spd = c.spd;
+    v.collide.ox = c.collide.ox;
+    v.collide.oy = c.collide.oy;
+    v.collide.w = c.collide.w;
+    v.collide.h = c.collide.h;
     v.hp = c.hp;
     v.spawnX = c.spawnX;
     v.spawnY = c.spawnY;
@@ -539,6 +553,10 @@ inline CombatSpawn combatCreatureSpawnRead(uint8_t i) {
     const combat_data::Creature &c = combat_data::CREATURES[i];
     CombatSpawn v;
     v.spd = c.spd;
+    v.collide.ox = c.collide.ox;
+    v.collide.oy = c.collide.oy;
+    v.collide.w = c.collide.w;
+    v.collide.h = c.collide.h;
     v.hp = c.hp;
     v.x = c.spawnX;
     v.y = c.spawnY;
@@ -752,11 +770,23 @@ inline bool combatCreatureBodyBox(uint8_t creatureId, CombatBox &box) {
     return combatCreatureBodyBox(creatureId, box, headZone, appendZone);
 }
 
+// Collide box: the rectangle syncMonsterTarget/pushApart use for body collision.
+// Authored per creature (epic monhun-ardu-nch: the chicken's two legs) or the
+// body box when absent, so every creature without one keeps its old body rect.
+// One 4-byte bulk read on AVR.
+inline CombatBox combatCreatureCollideBox(uint8_t creatureId) {
+    if (creatureId >= combat::CREATURES_COUNT)
+        creatureId = 0;
+    CombatSpawn spawn = combatCreatureSpawnRead(creatureId);
+    return spawn.collide;
+}
+
 // ======================================================= cache lifecycle
 // creatureCacheReset: identity + runtime caches with no record reads.
 inline void creatureCacheReset(Game &g, uint8_t creatureId) {
     g.combat.creature = creatureId;
     g.combat.body = CombatBox{0, 0, 0, 0};
+    g.combat.collide = CombatBox{0, 0, 0, 0};
     g.combat.headZone = COMBAT_NO_ZONE;
     g.combat.appendZone = COMBAT_NO_ZONE;
     g.combat.zone[0] = CombatZoneCache{};
@@ -787,8 +817,9 @@ inline void combatZoneSeed(Game &g, uint8_t slot, uint8_t zoneIdx) {
 }
 
 // creatureLoad: read the creature profile index + full profile record + body
-// box + zone records into the Game cache (spawn burst; bad ids fall back to
-// creature 0). The attack cache is cleared until attackLoad picks an attack.
+// box + collide box + zone records into the Game cache (spawn burst; bad ids
+// fall back to creature 0). The attack cache is cleared until attackLoad picks
+// an attack.
 inline uint8_t creatureLoad(Game &g, uint8_t creatureId) {
     if (creatureId >= combat::CREATURES_COUNT)
         creatureId = 0;
@@ -796,6 +827,7 @@ inline uint8_t creatureLoad(Game &g, uint8_t creatureId) {
     creatureCacheReset(g, creatureId);
     combatProfileLoad(g, profileIdx);
     combatCreatureBodyBox(creatureId, g.combat.body, g.combat.headZone, g.combat.appendZone);
+    g.combat.collide = combatCreatureCollideBox(creatureId);
     if (ZONES_ENABLED) {
         combatZoneSeed(g, COMBAT_ZONE_HEAD, g.combat.headZone);
         combatZoneSeed(g, COMBAT_ZONE_APPENDAGE, g.combat.appendZone);

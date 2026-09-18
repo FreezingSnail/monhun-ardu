@@ -45,7 +45,9 @@ test('idle hunt runs without crashing, monster engages, player survives', () => 
 test('sword tap attack damages monster', () => {
   const g = G.newGame(0);
   const m = park(g);
-  m.x = g.player.x + 20;
+  // 76y: the chicken's target rect is its legs (9,11,12,13), so sword reach
+  // must meet the legs; the melee centre still lands on the body.
+  m.x = g.player.x + 14;
   m.y = g.player.y;
   const hp0 = m.hp;
   G.step(g, inp({ a: true }));
@@ -60,7 +62,9 @@ test('gunshield hold-B enters guard, stance+A fires a shell', () => {
   ticks(g, G.HOLD_TICKS + 2, { b: true });
   assert.equal(g.player.stance, 'guard');
   G.step(g, inp({ b: true, a: true }));
-  assert.equal(g.player.shells.ball, shells0 - 1);
+  // Demo ammo is unlimited (bead monhun-ardu-zza.0): reload still paces shots
+  // but the magazine is never decremented.
+  assert.equal(g.player.shells.ball, shells0);
   assert.ok(g.projectiles.length >= 1, 'a projectile should exist');
   assert.ok(g.player.reload > 0, 'reload should be running');
 });
@@ -68,7 +72,9 @@ test('gunshield hold-B enters guard, stance+A fires a shell', () => {
 test('flail whirl stance enters and ball throw damages monster', () => {
   const g = G.newGame(1);
   const m = park(g);
-  m.x = g.player.x + 40;
+  // 76y: the thrown ball must meet the legs-only target rect, so the beast
+  // starts inside throw range (the old +40 assumed the full body box).
+  m.x = g.player.x + 28;
   m.y = g.player.y;
   const hp0 = m.hp;
   ticks(g, G.HOLD_TICKS + 2, { b: true });

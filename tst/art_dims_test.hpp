@@ -470,8 +470,8 @@ void testMonsterSheets(Test &t) {
     t.assert(maskAt(chicken, 14, 20), 0, "chicken clear between legs");
     t.assert(maskAt(chicken, 4, 20), 0, "chicken no outer leg");
     t.assert(planeAt(chicken, 2, 22, 0), 1, "chicken comb white");
-    t.assert(planeAt(chicken, 2, 24, 4), 0, "chicken eye not white");
-    t.assert(maskAt(chicken, 24, 4), 1, "chicken eye ink");
+    t.assert(planeAt(chicken, 2, 23, 2), 0, "chicken eye not white");
+    t.assert(maskAt(chicken, 23, 2), 1, "chicken eye ink");
     t.assert(maskAt(chicken, 30, 5), 1, "chicken beak ink");
 
     // Bull: a hanging tail (body plane0 at (1,10)); four separated dark legs

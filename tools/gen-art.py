@@ -453,41 +453,50 @@ def _beast_tone(body):
 
 
 def _chicken_east(put, body, head):
-    # Layered feather plumes on the left, a rounded body with a scalloped wing,
-    # a two-bump comb on a short neck, beak/wattle, and two bird legs with
-    # splayed feet. Legs sit in rows 19..22 so their gap and outer clearance
-    # stay readable at 1x.
+    # Tall wader (epic monhun-ardu-nch, bead 76y): the body is raised into the
+    # upper half of the 32x24 cell on two long legs that reach the ground rows,
+    # so the silhouette reads as a chicken the hunter can walk under. Layered
+    # tail plumes on the left, a rounded raised body with a scalloped wing, a
+    # comb on a short neck, beak/wattle, and two bird legs with a knee bump,
+    # shank and splayed feet. Legs run rows 13..22; the body bulk sits rows 4..13
+    # (vs the old rows 8..20), leaving the leg gap and outer clearance readable
+    # at 1x.
     hi, lo = _beast_tone(body)
 
-    put(0, 6, 6, 3, body)             # tail plume, upper
-    put(0, 9, 8, 4, body)             # tail plume, middle
-    put(1, 13, 6, 4, body)            # tail plume, lower
-    put(0, 6, 3, 1, hi)               # upper plume tip
-    put(0, 9, 3, 1, hi)               # middle plume tip
-    put(1, 13, 3, 1, hi)              # lower plume tip
+    put(0, 3, 6, 3, body)             # tail plume, upper
+    put(0, 6, 8, 4, body)             # tail plume, middle
+    put(1, 10, 6, 3, body)            # tail plume, lower
+    put(0, 3, 3, 1, hi)               # upper plume tip
+    put(0, 6, 3, 1, hi)               # middle plume tip
+    put(1, 10, 3, 1, hi)              # lower plume tip
 
-    put(7, 8, 15, 12, body)           # body
-    put(16, 10, 5, 8, hi)             # chest highlight
-    put(8, 18, 12, 2, lo)             # belly shadow
-    put(8, 10, 10, 7, body)           # wing panel
-    put(8, 10, 9, 1, hi)              # wing top
-    put(9, 13, 9, 1, lo)              # wing feather row 1
-    put(9, 15, 8, 1, lo)              # wing feather row 2
+    put(6, 4, 15, 10, body)           # raised body
+    put(15, 5, 5, 7, hi)              # chest highlight
+    put(7, 12, 12, 2, lo)             # belly shadow
+    put(7, 6, 10, 6, body)            # wing panel
+    put(7, 6, 9, 1, hi)               # wing top
+    put(8, 9, 9, 1, lo)               # wing feather row 1
+    put(8, 11, 8, 1, lo)              # wing feather row 2
 
-    put(18, 4, 5, 5, body)            # neck
-    put(19, 1, 10, 7, head)           # head
-    put(21, 0, 3, 2, head)            # comb front
-    put(25, 0, 2, 2, head)            # comb back
-    put(28, 4, 4, 3, lo)              # beak
-    put(28, 7, 2, 2, lo)              # wattle
-    put(24, 4, 2, 2, BLACK)           # eye
+    put(17, 1, 5, 4, body)            # neck
+    put(18, 0, 11, 6, head)           # head
+    put(20, 0, 3, 1, head)            # comb front
+    put(24, 0, 2, 1, head)            # comb back
+    put(28, 3, 4, 3, lo)              # beak
+    put(28, 6, 2, 2, lo)              # wattle
+    put(23, 2, 2, 2, BLACK)           # eye
 
-    put(11, 19, 2, 4, lo)             # near leg
-    put(16, 19, 2, 4, lo)             # far leg
-    put(9, 22, 5, 1, lo)              # near foot
-    put(15, 22, 5, 1, lo)             # far foot
-    put(9, 21, 1, 1, lo)              # near rear toe
-    put(19, 21, 1, 1, lo)             # far rear toe
+    put(11, 13, 2, 4, lo)             # near thigh
+    put(10, 16, 4, 2, lo)             # near knee
+    put(11, 18, 2, 3, lo)             # near shank
+    put(9, 21, 5, 1, lo)              # near foot
+    put(9, 20, 1, 1, lo)              # near rear toe
+
+    put(16, 13, 2, 4, lo)             # far thigh
+    put(15, 16, 4, 2, lo)             # far knee
+    put(16, 18, 2, 3, lo)             # far shank
+    put(15, 21, 5, 1, lo)             # far foot
+    put(19, 20, 1, 1, lo)             # far rear toe
 
 
 def _bull_east(put, body, head):

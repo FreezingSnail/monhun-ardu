@@ -182,12 +182,33 @@ const MONSTER_ATTACKS = {
 // Demo beast roster (bead monhun-ardu-6zb.1). Index 0 (lunge) is the legacy
 // parity default: its def reproduces the values newGame() used to hardcode.
 // atkDist is the lunge/sweep split distance; negative = never lunge (always
-// sweep).
+// sweep). `collide` is the body-collision box (epic monhun-ardu-nch): the
+// chicken's legs only, so the hunter can overlap the raised body. Absent means
+// the body box (ox/oy 0, w/h = def w/h), matching the C++ creature default.
 const MONSTER_DEFS = [
-  { kind: 'lunge', w: 32, h: 24, hp: 200, spd: 5, atkDist: 32 },
+  { kind: 'lunge', w: 32, h: 24, hp: 200, spd: 5, atkDist: 32, collide: { ox: 9, oy: 11, w: 12, h: 13 } },
   { kind: 'sweep', w: 28, h: 22, hp: 150, spd: 7, atkDist: -1 },
   { kind: 'heavy', w: 40, h: 28, hp: 320, spd: 3, atkDist: 24 },
 ];
+
+// Fixed 3-hitzone model (build/zones-design.md), mirrored from
+// data/creatures/lunge.json: body implicit (mul 100), optional head and
+// appendage (legs) records with face-relative boxes, own pools and bodyShare.
+// Only the chicken ships zones in the mock; the C++ resolver draws the same
+// values from the combat blob. Boxes are face-relative origins (rotated through
+// the facing frame); a drained pool + matching phys type flips the break bit.
+const MONSTER_ZONES = {
+  lunge: {
+    // breakTypes is the C++ phys mask (PHYS_SLASH 0x01); both zones break on
+    // slashing player hits, matching combat_data ZONES.
+    head: { ox: 18, oy: 0, w: 11, h: 7, dmgMul: 130, hp: 40, bodyShare: 100, breakTypes: 1, staggerOnHit: 12 },
+    appendage: { ox: 9, oy: 0, w: 9, h: 24, dmgMul: 150, hp: 60, bodyShare: 40, breakTypes: 1, staggerOnHit: 30 },
+  },
+};
+
+// Player phys bit per weapon (W_SWORD, W_FLAIL, W_GUN), mirroring
+// src/core/monster.hpp playerPhys().
+const PHYS_BIT_BY_WEAPON = [1, 2, 4];
 
 function newGame(weaponIndex, mode, monsterIndex = 0) {
   const g = {
@@ -265,6 +286,17 @@ function initMonster(g, kind = 0) {
   m.stun = 0;
   m.circleDir = 1;
   m.spd = def.spd;
+  m.collide = def.collide || { ox: 0, oy: 0, w: def.w, h: def.h };
+  m.kind = def.kind;
+  // Live zone pools (kind-keyed). Absent kind = no zones (body-only routing).
+  const zones = MONSTER_ZONES[def.kind];
+  m.zones = null;
+  if (zones) {
+    m.zones = {};
+    for (const name of Object.keys(zones)) {
+      m.zones[name] = { hp: zones[name].hp, broken: false };
+    }
+  }
   g.monsterIndex = k;
   return m;
 }
@@ -373,8 +405,8 @@ function updatePlayer(g, inp, aP, bP, bR) {
       p.t++;
       if (p.t >= a.startup && p.t < a.startup + a.active && !p.hitDone) {
         const hit = meleeHitbox(p, a);
-        const tgt = activeTarget(g);
-        if (tgt && rectsOverlap(hit, tgt)) {
+        const tr = targetRect(g);
+        if (tr && rectsOverlap(hit, tr)) {
           p.hitDone = true;
           const mult = (p.state === 'special' && p.riposteT > 0) ? 2 : 1;
           const hx = hit.x + hit.w / 2;
@@ -382,7 +414,7 @@ function updatePlayer(g, inp, aP, bP, bR) {
           if (g.mode === 'train') {
             damagePole(g, a.dmg * mult, hx, hy);
           } else {
-            damageMonster(g, a.dmg * mult, hx, hy);
+            monsterOnHit(g, a.dmg * mult, hx, hy);
             if (g.monster.state !== 'dead') {
               if (a.effect === 'trip') g.monster.stun = Math.max(g.monster.stun, 70);
               if (a.push) knockMonsterAway(g, g.monster, hx, hy, a.push);
@@ -608,16 +640,16 @@ function updateStance(g, def) {
     p.whirlTick++;
     if (!ok) { exitStance(p); p.bLocked = true; return; }
     if (p.whirlTick % 16 === 0) {
-      const tgt = activeTarget(g);
-      if (tgt) {
+      const tr = targetRect(g);
+      if (tr) {
         const cx = p.x + p.w / 2;
         const cy = p.y + p.h / 2;
-        if (circleRectOverlap(cx, cy, 24, tgt)) {
+        if (circleRectOverlap(cx, cy, 24, tr)) {
           if (g.mode === 'train') {
             damagePole(g, 8, cx, cy);
           } else {
-            damageMonster(g, 8, cx, cy);
-            knockMonsterAway(g, tgt, cx, cy, 8);
+            monsterOnHit(g, 8, cx, cy);
+            knockMonsterAway(g, g.monster, cx, cy, 8);
           }
         }
       }
@@ -857,6 +889,60 @@ function lose(g) {
   g.over = 'lose';
 }
 
+// Face-relative box offset, mirroring src/core/game.hpp combatFacePoint():
+// the box centre sits at (ox, oy) in the facing frame, rotated into world
+// space. With oy == 0 this is the legacy scalar reach projection.
+function facePoint(fx, fy, ox, oy) {
+  return {
+    x: ((fx * ox) - (fy * oy)) >> 4,
+    y: ((fy * ox) + (fx * oy)) >> 4,
+  };
+}
+
+// Mirror combatZoneContains(): the zone world rect is the body anchor plus the
+// DIR8-rotated box offset; containment is half-open.
+function zoneContains(g, z, hx, hy) {
+  const m = g.monster;
+  const d = facePoint(m.face.x, m.face.y, z.ox, z.oy);
+  const x = m.x + d.x;
+  const y = m.y + d.y;
+  return hx >= x && hx < x + z.w && hy >= y && hy < y + z.h;
+}
+
+// Mirror combatZoneHitResolve(): body implicit at mul 100; a present,
+// unbroken zone replaces it only on a strictly higher multiplier (head first,
+// then appendage, so the body wins ties). Drains the zone pool and flips the
+// broken bit on a matching phys; routes base * dmgMul% * bodyShare% to HP.
+function zoneHitResolve(g, base, physBit, hx, hy) {
+  const m = g.monster;
+  const defs = m.zones ? MONSTER_ZONES[m.kind] : null;
+  if (base <= 0 || !defs) return { zone: null, mul: 100, dmg: Math.max(0, base) };
+  let best = null;
+  let bestMul = 100;
+  for (const name of ['head', 'appendage']) {
+    const z = defs[name];
+    if (!z) continue;
+    const pool = m.zones[name];
+    if (pool.broken) continue;
+    if (zoneContains(g, z, hx, hy) && z.dmgMul > bestMul) { best = name; bestMul = z.dmgMul; }
+  }
+  if (!best) return { zone: null, mul: 100, dmg: base };
+  const out = (base * bestMul / 100) | 0;
+  const pool = m.zones[best];
+  const pct = Math.min(out, 255);
+  pool.hp = pct < pool.hp ? pool.hp - pct : 0;
+  if (pool.hp === 0 && (physBit & defs[best].breakTypes)) pool.broken = true;
+  const body = (out * defs[best].bodyShare / 100) | 0;
+  return { zone: best, mul: bestMul, dmg: body };
+}
+
+// Target::onHit (player hit landed): resolve the 3-hitzone model, then apply
+// the crit/HP chain. The mock's single entry point for player damage.
+function monsterOnHit(g, base, hx, hy) {
+  const hit = zoneHitResolve(g, base, PHYS_BIT_BY_WEAPON[g.weapon], hx, hy);
+  damageMonster(g, hit.dmg, hx, hy);
+}
+
 function damageMonster(g, dmg, hx, hy) {
   const m = g.monster;
   if (m.state === 'dead') return;
@@ -889,27 +975,41 @@ function knockMonsterAway(g, m, cx, cy, amt) {
 
 function pushApart(g) {
   const p = g.player;
-  const tgt = activeTarget(g);
-  if (!tgt) return;
-  if (!rectsOverlap(p, tgt)) return;
+  const m = g.monster;
+  if (m.state === 'dead') return;
+  const tr = targetRect(g);
+  if (!tr) return;
+  if (!rectsOverlap(p, tr)) return;
 
   // pole never moves; lunging beast shoves you; otherwise the beast gives way
   const shovePlayer = g.mode === 'train' ||
-    (g.mode === 'hunt' && (g.monster.state === 'attack' || g.monster.state === 'windup'));
-  const a = shovePlayer ? p : tgt;
-  const b = shovePlayer ? tgt : p;
+    (g.mode === 'hunt' && (m.state === 'attack' || m.state === 'windup'));
+  const a = shovePlayer ? p : tr;
+  const b = shovePlayer ? tr : p;
   const ox = Math.min(a.x + a.w - b.x, b.x + b.w - a.x);
   const oy = Math.min(a.y + a.h - b.y, b.y + b.h - a.y);
   if (ox < oy) {
-    if (a.x + (a.w >> 1) < b.x + (b.w >> 1)) a.x -= ox; else a.x += ox;
+    const d = (a.x + (a.w >> 1)) < (b.x + (b.w >> 1)) ? -ox : ox;
+    if (shovePlayer) p.x += d; else m.x += d;
   } else {
-    if (a.y + (a.h >> 1) < b.y + (b.h >> 1)) a.y -= oy; else a.y += oy;
+    const d = (a.y + (a.h >> 1)) < (b.y + (b.h >> 1)) ? -oy : oy;
+    if (shovePlayer) p.y += d; else m.y += d;
   }
 }
 
 function activeTarget(g) {
   if (g.mode === 'train') return g.pole;
   return g.monster.state === 'dead' ? null : g.monster;
+}
+
+// Body-collision rect: the creature's collide box (legs-only for the chicken)
+// anchored at m.x/m.y, or the body box when the def has none.
+function targetRect(g) {
+  if (g.mode === 'train') return g.pole;
+  const m = g.monster;
+  if (m.state === 'dead') return null;
+  const c = m.collide || { ox: 0, oy: 0, w: m.w, h: m.h };
+  return { x: m.x + c.ox, y: m.y + c.oy, w: c.w, h: c.h };
 }
 
 function updatePole(g) {
@@ -952,12 +1052,12 @@ function updateProjectiles(g) {
     pr.x += pr.vx;
     pr.y += pr.vy;
     pr.life--;
-    const tgt = activeTarget(g);
-    if (tgt) {
+    const tr = targetRect(g);
+    if (tr) {
       const r = { x: (pr.x >> 4) - (pr.w >> 1), y: (pr.y >> 4) - (pr.h >> 1), w: pr.w, h: pr.h };
-      if (rectsOverlap(r, tgt)) {
+      if (rectsOverlap(r, tr)) {
         if (g.mode === 'train') damagePole(g, pr.dmg, r.x + (r.w >> 1), r.y + (r.h >> 1));
-        else damageMonster(g, pr.dmg, r.x + (r.w >> 1), r.y + (r.h >> 1));
+        else monsterOnHit(g, pr.dmg, r.x + (r.w >> 1), r.y + (r.h >> 1));
         g.projectiles.splice(i, 1);
         continue;
       }

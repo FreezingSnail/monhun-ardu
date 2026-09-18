@@ -82,14 +82,33 @@ static void monsterWindowNext(Game &g) {
 // Keep Game::target (the live hurt box + callbacks) in step with the beast.
 // The body is implicit (build/zones-design.md): m.w/m.h are the creature w/h
 // cached at spawn, m.x/m.y is the body anchor. Zones are tested at the landed
-// hit point, so the target rect stays the body rect.
+// hit point, so the target rect is the body-collision box. When the creature
+// authors a `collide` box (epic monhun-ardu-nch: the chicken's legs) that rect
+// drives body collision instead, so the hunter can overlap the raised body and
+// only the legs push/block; every creature without one uses the body box, so
+// the shipped 3 keep their exact rect.
+static Rect monsterCollideRect(const Game &g) {
+    const Monster &m = g.monster;
+    const CombatBox &c = g.combat.collide;
+    Rect r;
+    if (c.w == 0 || c.h == 0) {
+        r.x = m.x;
+        r.y = m.y;
+        r.w = m.w;
+        r.h = m.h;
+        return r;
+    }
+    r.x = static_cast<int16_t>(m.x + c.ox);
+    r.y = static_cast<int16_t>(m.y + c.oy);
+    r.w = c.w;
+    r.h = c.h;
+    return r;
+}
+
 static void syncMonsterTarget(Game &g) {
     Monster &m = g.monster;
     g.target.alive = (m.state != MS_DEAD);
-    g.target.rect.x = m.x;
-    g.target.rect.y = m.y;
-    g.target.rect.w = m.w;
-    g.target.rect.h = m.h;
+    g.target.rect = monsterCollideRect(g);
 }
 
 static void clampMonster(Game &g) {
@@ -453,36 +472,28 @@ static void pushApart(Game &g) {
     pr.y = p.y;
     pr.w = p.w;
     pr.h = p.h;
-    Rect mr;
-    mr.x = m.x;
-    mr.y = m.y;
-    mr.w = m.w;   // skeleton body box == collide box (migration B)
-    mr.h = m.h;
+    // Body collision uses the creature's collide box (legs-only for the chicken,
+    // the body box otherwise); the monster anchor m.x/m.y shifts rigidly with it.
+    const Rect mr = monsterCollideRect(g);
     if (!pr.overlaps(mr))
         return;
 
     // Pole never moves; an attacking/windup beast shoves the player; otherwise the
     // beast gives way, so idle players are never shoved (mock bug fix).
     const bool shovePlayer = (m.state == MS_ATTACK || m.state == MS_WINDUP);
-    const int16_t ax = shovePlayer ? p.x : m.x;
-    const int16_t ay = shovePlayer ? p.y : m.y;
-    const int16_t aw = shovePlayer ? p.w : m.w;
-    const int16_t ah = shovePlayer ? p.h : m.h;
-    const int16_t bx = shovePlayer ? m.x : p.x;
-    const int16_t by = shovePlayer ? m.y : p.y;
-    const int16_t bw = shovePlayer ? m.w : p.w;
-    const int16_t bh = shovePlayer ? m.h : p.h;
+    const Rect &ar = shovePlayer ? pr : mr;
+    const Rect &br = shovePlayer ? mr : pr;
 
-    const int16_t ox = static_cast<int16_t>((ax + aw - bx) < (bx + bw - ax) ? (ax + aw - bx) : (bx + bw - ax));
-    const int16_t oy = static_cast<int16_t>((ay + ah - by) < (by + bh - ay) ? (ay + ah - by) : (by + bh - ay));
+    const int16_t ox = static_cast<int16_t>((ar.x + ar.w - br.x) < (br.x + br.w - ar.x) ? (ar.x + ar.w - br.x) : (br.x + br.w - ar.x));
+    const int16_t oy = static_cast<int16_t>((ar.y + ar.h - br.y) < (br.y + br.h - ar.y) ? (ar.y + ar.h - br.y) : (br.y + br.h - ar.y));
     if (ox < oy) {
-        const int16_t d = static_cast<int16_t>((ax + (aw >> 1)) < (bx + (bw >> 1)) ? -ox : ox);
+        const int16_t d = static_cast<int16_t>((ar.x + (ar.w >> 1)) < (br.x + (br.w >> 1)) ? -ox : ox);
         if (shovePlayer)
             p.x += d;
         else
             m.x += d;
     } else {
-        const int16_t d = static_cast<int16_t>((ay + (ah >> 1)) < (by + (bh >> 1)) ? -oy : oy);
+        const int16_t d = static_cast<int16_t>((ar.y + (ar.h >> 1)) < (br.y + (br.h >> 1)) ? -oy : oy);
         if (shovePlayer)
             p.y += d;
         else

@@ -101,7 +101,7 @@ class GenCombatTests(unittest.TestCase):
     def test_dump_mode_lists_model_and_writes_nothing(self):
         result = self.compile("--dump")
         self.assert_succeeds(result)
-        self.assertIn("creature beast (skeleton beast_16x12, stats w16 h12 hp80 spd4, spawn 100,32) zones appendage D150 HP30 S40 ST20 head D120 HP10 S100 ST5", result.stdout)
+        self.assertIn("creature beast (skeleton beast_16x12, stats w16 h12 hp80 spd4, spawn 100,32, collide body) zones appendage D150 HP30 S40 ST20 head D120 HP10 S100 ST5", result.stdout)
         self.assertIn("zone head: box(10,2,6,6) dmgMul 120 hp 10 share 100 break 0x02 stagger 5 brokenOverride 120 hurtOff 1 disable -", result.stdout)
         self.assertIn("zone appendage: box(-6,4,8,4) dmgMul 150 hp 30 share 40 break 0x01 stagger 20 brokenOverride 200 hurtOff 1 disable jab", result.stdout)
         self.assertIn("attack jab: windup20 active6 recover30 dmg7 move lunge(20) windows 1", result.stdout)
@@ -308,7 +308,9 @@ class GenCombatTests(unittest.TestCase):
         meta = self.meta_constants()
 
         creature = blob[meta["CREATURE_BEAST_OFF"]:meta["CREATURE_BEAST_OFF"] + meta["CREATURE_SIZE"]]
-        self.assertEqual(creature, bytes([0, 0, 0, 1, 0, 1, 0, 1, 16, 12, 4, 80, 0, 100, 0, 32, 0]))
+        # 21 B creature record: stats then the default collide box (body 16x12
+        # at the origin) then hp/spawnX/spawnY (epic monhun-ardu-nch).
+        self.assertEqual(creature, bytes([0, 0, 0, 1, 0, 1, 0, 1, 16, 12, 4, 0, 0, 16, 12, 80, 0, 100, 0, 32, 0]))
 
         profile = blob[meta["PROFILE_BEAST_OFF"]:meta["PROFILE_BEAST_OFF"] + meta["PROFILE_SIZE"]]
         self.assertEqual(profile, bytes([30, 18, 36, 8, 10, 6, 10, 40, 1, 3, 40, 0, 20, 0,

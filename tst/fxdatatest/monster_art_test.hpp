@@ -130,11 +130,12 @@ inline void test_monster_art(FxTest &test) {
     test.expectEq(bitAt(W_TAIL_X + 23, TAIL_Y + 9), 0, F("west broken tip cleared"));
     test.expectEq(bitAt(W_TAIL_X + 3, TAIL_Y + 8), 1, F("west broken stub plane0"));
 
-    // ---- LUNGE declares no appendage zone: no overlay, east band clear.
+    // ---- LUNGE declares a legs appendage zone (76y) but ships no overlay art
+    // (render only draws HEAVY's tail): east band stays clear.
     setupBeast(g, MON_LUNGE, 16, 0);
     renderMonster(g, 0);
-    test.expectEq(g.combat.appendZone, COMBAT_NO_ZONE, F("lunge has no appendage zone"));
-    test.expectEq(countRegionBit(static_cast<uint8_t>(E_TAIL_X), static_cast<uint8_t>(TAIL_Y), TAIL_W, TAIL_H), 0, F("lunge no tail band"));
+    test.expectEq(g.combat.appendZone != COMBAT_NO_ZONE ? 1 : 0, 1, F("lunge has a legs appendage zone"));
+    test.expectEq(countRegionBit(static_cast<uint8_t>(E_TAIL_X), static_cast<uint8_t>(TAIL_Y), TAIL_W, TAIL_H), 0, F("lunge no overlay band"));
 }
 
 }   // namespace monsterart

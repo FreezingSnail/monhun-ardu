@@ -471,7 +471,10 @@ void MonsterSuite(TestRunner &runner) {
     }
 
     {
-        Test t("push rule: attacking/windup beast shoves the player");
+        // 76y: the chicken's collide rect is the legs only (9,11,12,13), so the
+        // hunter can overlap the raised body and only the legs shove/block.
+        Test t("push rule: legs collide box shoves; body overlap passes under");
+        // (a) body overlap (+8,+4), legs clear: no shove, beast holds.
         Game g;
         newHunt(g);
         Monster &m = g.monster;
@@ -484,9 +487,24 @@ void MonsterSuite(TestRunner &runner) {
         const int py = g.player.y;
         const int mx0 = m.x;
         updateMonster(g);
-        t.assert(g.player.x, px - 8, "player shoved west by overlap");
+        t.assert(g.player.x, px, "hunter walks under the raised body");
         t.assert(g.player.y, py, "player y unchanged");
-        t.assert(m.x, mx0, "beast holds ground while attacking");
+        t.assert(m.x, mx0, "beast holds ground");
+        // (b) legs overlapping (+4,0): the windup beast shoves the hunter west.
+        Game g2;
+        newHunt(g2);
+        Monster &m2 = g2.monster;
+        m2.state = MS_WINDUP;
+        monsterAttackSet(g2, combat::ATTACK_LUNGE_LUNGE);
+        m2.t = 30000;
+        m2.x = g2.player.x + 4;
+        m2.y = g2.player.y;
+        const int px2 = g2.player.x;
+        const int mx20 = m2.x;
+        updateMonster(g2);
+        t.assert(g2.player.x, px2 - 3, "legs shove the hunter west");
+        t.assert(g2.player.y, py, "player y unchanged on legs shove");
+        t.assert(m2.x, mx20, "beast holds ground while attacking");
         suite.addTest(t);
     }
 
@@ -513,7 +531,10 @@ void MonsterSuite(TestRunner &runner) {
         Monster &m = g.monster;
         m.state = MS_RECOVER;   // parked, no movement
         m.t = 30000;
-        m.x = g.player.x + 20;
+        // 76y: the chicken's target rect is the legs (9,11,12,13); the hunter
+        // stands in sword reach of the legs and the melee centre lands on the
+        // body, so the front crit still routes base 9 * 14/10 = 12.
+        m.x = g.player.x + 14;
         m.y = g.player.y;
         hunt(g, 1, Input{0, 0, true, false});
         hunt(g, 1, Input{0, 0, false, false});

@@ -12,8 +12,9 @@
 // the zonesBroken enrage guard, so the zone/stagger paths run against real
 // records; the synthetic value-helper vectors stay as boundary coverage.
 #include "test.hpp"
-#include "../src/core/world.hpp"           // game + player + projectiles + monster (combat) + addEffect
-#include "../src/generated/art_dims.hpp"   // fxtail frame layout (combatPartArtFrame)
+#include "../src/core/world.hpp"                // game + player + projectiles + monster (combat) + addEffect
+#include "../src/generated/art_dims.hpp"        // fxtail frame layout (combatPartArtFrame)
+#include "../src/generated/combat_expect.hpp"   // pinned zone spot values
 
 using namespace mh;
 
@@ -105,8 +106,9 @@ void CombatSuite(TestRunner &runner) {
     {
         Test t("body box + spawn accessors match combat_data.hpp");
         // cgk: the ravager declares head + appendage. 4t4 added the heavy
-        // appendage (long tail), so LUNGE/SWEEP remain body-only.
-        t.assert(combat::ZONES_COUNT, 3, "heavy tail + ravager head/appendage");
+        // appendage (long tail). 76y added the chicken's lunge head + legs
+        // (appendage) zones.
+        t.assert(combat::ZONES_COUNT, 5, "heavy tail + ravager + lunge head/legs zones");
         t.assert(combat::ATTACKS_COUNT, 8, "3x2 shipped + ravager bite/tail_sweep");
         t.assert(combat::WINDOWS_COUNT, 9, "ravager tail_sweep is two windows");
         t.assert(combat::PATTERNS_COUNT, 8, "ravager adds p_enraged");
@@ -129,7 +131,24 @@ void CombatSuite(TestRunner &runner) {
             t.assert(box.h, h.h, "body box h == creature h");
             t.assert(headZone, h.headZone, "body box head zone");
             t.assert(appendZone, h.appendZone, "body box append zone");
+            const CombatBox cb = combatCreatureCollideBox(i);
+            t.assert(cb.ox, h.collide.ox, "collide box ox");
+            t.assert(cb.oy, h.collide.oy, "collide box oy");
+            t.assert(cb.w, h.collide.w, "collide box w");
+            t.assert(cb.h, h.collide.h, "collide box h");
         }
+        // Default collide box is the body box; the chicken authors its legs-
+        // only rect (9,11,12,13) so the hunter can overlap the raised body.
+        CombatBox cbox = combatCreatureCollideBox(combat_data::CREATURE_SWEEP);
+        t.assert(cbox.ox, 0, "sweep collide defaults to body ox");
+        t.assert(cbox.oy, 0, "sweep collide defaults to body oy");
+        t.assert(cbox.w, 28, "sweep collide body w");
+        t.assert(cbox.h, 22, "sweep collide body h");
+        cbox = combatCreatureCollideBox(combat_data::CREATURE_LUNGE);
+        t.assert(cbox.ox, 9, "lunge legs collide ox");
+        t.assert(cbox.oy, 11, "lunge legs collide oy");
+        t.assert(cbox.w, 12, "lunge legs collide w");
+        t.assert(cbox.h, 13, "lunge legs collide h");
         // Pinned shipped sizes (parity contract: LUNGE 32x24, SWEEP 28x22,
         // HEAVY 40x28).
         CombatBox box;
@@ -262,8 +281,18 @@ void CombatSuite(TestRunner &runner) {
         t.assert(g.combat.profile.zoneFlags, hp.zoneFlags, "cache zoneFlags");
         t.assert(g.combat.body.w, 32, "cache body box w");
         t.assert(g.combat.body.h, 24, "cache body box h");
-        t.assert(g.combat.headZone, COMBAT_NO_ZONE, "no head zone");
-        t.assert(g.combat.appendZone, COMBAT_NO_ZONE, "no appendage zone");
+        // 76y: the chicken ships a head and a legs (appendage) zone and a
+        // legs-only collide box; both are cached at spawn.
+        t.assert(g.combat.collide.ox, 9, "cache legs collide ox");
+        t.assert(g.combat.collide.oy, 11, "cache legs collide oy");
+        t.assert(g.combat.collide.w, 12, "cache legs collide w");
+        t.assert(g.combat.collide.h, 13, "cache legs collide h");
+        t.assert(g.combat.headZone, combat_data::ZONE_LUNGE_HEAD, "head zone seeded");
+        t.assert(g.combat.appendZone, combat_data::ZONE_LUNGE_APPENDAGE, "appendage zone seeded");
+        t.assert(g.combat.zone[COMBAT_ZONE_HEAD].hp, combat_expect::ZONE_LUNGE_HEAD_HP, "head pool seeded");
+        t.assert(g.combat.zone[COMBAT_ZONE_APPENDAGE].hp, combat_expect::ZONE_LUNGE_APPENDAGE_HP, "legs pool seeded");
+        t.assert(g.combat.zone[COMBAT_ZONE_APPENDAGE].dmgMul, combat_expect::ZONE_LUNGE_APPENDAGE_DMG_MUL, "legs dmgMul seeded");
+        t.assert(g.combat.zone[COMBAT_ZONE_APPENDAGE].bodyShare, combat_expect::ZONE_LUNGE_APPENDAGE_BODY_SHARE, "legs bodyShare seeded");
         t.assert(g.combat.zoneBroken, 0, "zones intact");
         t.assert(g.combat.patternIdx, COMBAT_NO_PATTERN, "pattern cursor reset");
         t.assert(g.combat.stepIdx, 0, "step cursor reset");

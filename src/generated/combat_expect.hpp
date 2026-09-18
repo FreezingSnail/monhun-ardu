@@ -8,10 +8,10 @@
 
 namespace combat_expect {
 
-constexpr uint16_t BLOB_SIZE = 634;
+constexpr uint16_t BLOB_SIZE = 674;
 constexpr uint8_t ANCHOR_SIZE = 2;
 constexpr uint8_t ATTACK_SIZE = 22;
-constexpr uint8_t CREATURE_SIZE = 17;
+constexpr uint8_t CREATURE_SIZE = 21;
 constexpr uint8_t GUARD_SIZE = 8;
 constexpr uint8_t PATTERN_SIZE = 3;
 constexpr uint8_t PROFILE_SIZE = 22;
@@ -26,6 +26,10 @@ constexpr uint8_t CREATURE_HEAVY_W = 40;
 constexpr uint8_t CREATURE_HEAVY_H = 28;
 constexpr uint8_t CREATURE_HEAVY_ATTACKS = 2;
 constexpr uint8_t CREATURE_HEAVY_PATTERNS = 2;
+constexpr int8_t CREATURE_HEAVY_COLLIDE_OX = 0;
+constexpr int8_t CREATURE_HEAVY_COLLIDE_OY = 0;
+constexpr uint8_t CREATURE_HEAVY_COLLIDE_W = 40;
+constexpr uint8_t CREATURE_HEAVY_COLLIDE_H = 28;
 constexpr uint16_t ATTACK_HEAVY_LUNGE_WINDUP = 40;
 constexpr uint16_t ATTACK_HEAVY_LUNGE_ACTIVE = 10;
 constexpr uint16_t ATTACK_HEAVY_LUNGE_RECOVER = 55;
@@ -42,6 +46,10 @@ constexpr uint8_t CREATURE_LUNGE_W = 32;
 constexpr uint8_t CREATURE_LUNGE_H = 24;
 constexpr uint8_t CREATURE_LUNGE_ATTACKS = 2;
 constexpr uint8_t CREATURE_LUNGE_PATTERNS = 2;
+constexpr int8_t CREATURE_LUNGE_COLLIDE_OX = 9;
+constexpr int8_t CREATURE_LUNGE_COLLIDE_OY = 11;
+constexpr uint8_t CREATURE_LUNGE_COLLIDE_W = 12;
+constexpr uint8_t CREATURE_LUNGE_COLLIDE_H = 13;
 constexpr uint16_t ATTACK_LUNGE_LUNGE_WINDUP = 40;
 constexpr uint16_t ATTACK_LUNGE_LUNGE_ACTIVE = 10;
 constexpr uint16_t ATTACK_LUNGE_LUNGE_RECOVER = 55;
@@ -49,12 +57,22 @@ constexpr uint16_t ATTACK_LUNGE_LUNGE_DMG = 12;
 constexpr uint8_t PATTERN_LUNGE_P_LUNGE_MIN_DIST = 33;
 constexpr uint8_t PATTERN_LUNGE_P_LUNGE_MAX_DIST = 255;
 constexpr uint8_t PATTERN_LUNGE_P_LUNGE_CHANCE = 100;
+constexpr uint8_t ZONE_LUNGE_HEAD_HP = 40;
+constexpr uint8_t ZONE_LUNGE_HEAD_DMG_MUL = 130;
+constexpr uint8_t ZONE_LUNGE_HEAD_BODY_SHARE = 100;
+constexpr uint8_t ZONE_LUNGE_APPENDAGE_HP = 60;
+constexpr uint8_t ZONE_LUNGE_APPENDAGE_DMG_MUL = 150;
+constexpr uint8_t ZONE_LUNGE_APPENDAGE_BODY_SHARE = 40;
 constexpr uint16_t CREATURE_RAVAGER_HP = 260;
 constexpr uint8_t CREATURE_RAVAGER_SPD = 6;
 constexpr uint8_t CREATURE_RAVAGER_W = 32;
 constexpr uint8_t CREATURE_RAVAGER_H = 24;
 constexpr uint8_t CREATURE_RAVAGER_ATTACKS = 2;
 constexpr uint8_t CREATURE_RAVAGER_PATTERNS = 3;
+constexpr int8_t CREATURE_RAVAGER_COLLIDE_OX = 0;
+constexpr int8_t CREATURE_RAVAGER_COLLIDE_OY = 0;
+constexpr uint8_t CREATURE_RAVAGER_COLLIDE_W = 32;
+constexpr uint8_t CREATURE_RAVAGER_COLLIDE_H = 24;
 constexpr uint16_t ATTACK_RAVAGER_BITE_WINDUP = 36;
 constexpr uint16_t ATTACK_RAVAGER_BITE_ACTIVE = 8;
 constexpr uint16_t ATTACK_RAVAGER_BITE_RECOVER = 45;
@@ -74,6 +92,10 @@ constexpr uint8_t CREATURE_SWEEP_W = 28;
 constexpr uint8_t CREATURE_SWEEP_H = 22;
 constexpr uint8_t CREATURE_SWEEP_ATTACKS = 2;
 constexpr uint8_t CREATURE_SWEEP_PATTERNS = 1;
+constexpr int8_t CREATURE_SWEEP_COLLIDE_OX = 0;
+constexpr int8_t CREATURE_SWEEP_COLLIDE_OY = 0;
+constexpr uint8_t CREATURE_SWEEP_COLLIDE_W = 28;
+constexpr uint8_t CREATURE_SWEEP_COLLIDE_H = 22;
 constexpr uint16_t ATTACK_SWEEP_LUNGE_WINDUP = 40;
 constexpr uint16_t ATTACK_SWEEP_LUNGE_ACTIVE = 10;
 constexpr uint16_t ATTACK_SWEEP_LUNGE_RECOVER = 55;
@@ -82,12 +104,12 @@ constexpr uint8_t PATTERN_SWEEP_P_SWEEP_MIN_DIST = 0;
 constexpr uint8_t PATTERN_SWEEP_P_SWEEP_MAX_DIST = 255;
 constexpr uint8_t PATTERN_SWEEP_P_SWEEP_CHANCE = 100;
 
-// sha256 of fxdata/tables/combat.bin: 9ee88b8d3eee1975873e4d02a75e90366a4921f2ebc633643923b10de6828cdd
+// sha256 of fxdata/tables/combat.bin: 2e3e94335168ad71a1cd444ee4531dd127d93d33014febdb3ee7ede0f2cd343e
 constexpr uint8_t BLOB_SHA256[32] = {
-    0x9E, 0xE8, 0x8B, 0x8D, 0x3E, 0xEE, 0x19, 0x75,
-    0x87, 0x3E, 0x4D, 0x02, 0xA7, 0x5E, 0x90, 0x36,
-    0x6A, 0x49, 0x21, 0xF2, 0xEB, 0xC6, 0x33, 0x64,
-    0x39, 0x23, 0xB1, 0x0D, 0xE6, 0x82, 0x8C, 0xDD,
+    0x2E, 0x3E, 0x94, 0x33, 0x51, 0x68, 0xAD, 0x71,
+    0xA1, 0xCD, 0x44, 0x4E, 0xE4, 0x53, 0x1D, 0xD1,
+    0x27, 0xD9, 0x3D, 0x33, 0x01, 0x4F, 0xEB, 0xDB,
+    0x3E, 0xE7, 0xED, 0xE0, 0xF2, 0xCD, 0x34, 0x3E,
 };
 
 }   // namespace combat_expect

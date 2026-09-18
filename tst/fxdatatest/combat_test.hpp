@@ -15,7 +15,8 @@
 //
 // cgk: the blob carries the ravager head + appendage zones and a two-window
 // tail_sweep, so the zone/break/guard paths below read real records. 4t4 added
-// the heavy appendage (long tail) zone, so LUNGE/SWEEP stay body-only while
+// the heavy appendage (long tail) zone; 76y added the chicken's lunge head +
+// legs (appendage) zones and its legs-only collide box, so SWEEP stays
 // HEAVY now resolves its tail.
 #include "harness/fxtest.hpp"
 #include "src/core/combat.hpp"
@@ -95,6 +96,26 @@ inline void test_combat(FxTest &test) {
     test.expectEq(lunge.spd, combat_expect::CREATURE_LUNGE_SPD, F("lunge spd"));
     test.expectEq(lunge.w, combat_expect::CREATURE_LUNGE_W, F("lunge w"));
     test.expectEq(lunge.h, combat_expect::CREATURE_LUNGE_H, F("lunge h"));
+    // 76y: chicken head + legs (appendage) zones and the legs-only collide box.
+    test.expectEq(lunge.headZone, combat::ZONE_LUNGE_HEAD, F("lunge head zone"));
+    test.expectEq(lunge.appendZone, combat::ZONE_LUNGE_APPENDAGE, F("lunge legs zone"));
+    test.expectEq(lunge.collide.ox, 9, F("lunge legs collide ox"));
+    test.expectEq(lunge.collide.oy, 11, F("lunge legs collide oy"));
+    test.expectEq(lunge.collide.w, 12, F("lunge legs collide w"));
+    test.expectEq(lunge.collide.h, 13, F("lunge legs collide h"));
+    const CombatZone lungeHead = combatZoneRead(combat::ZONE_LUNGE_HEAD);
+    test.expectEq(lungeHead.box.ox, 18, F("lunge head box ox"));
+    test.expectEq(lungeHead.box.w, 11, F("lunge head box w"));
+    test.expectEq(lungeHead.box.h, 7, F("lunge head box h"));
+    test.expectEq(lungeHead.hp, combat_expect::ZONE_LUNGE_HEAD_HP, F("lunge head hp"));
+    test.expectEq(lungeHead.dmgMul, combat_expect::ZONE_LUNGE_HEAD_DMG_MUL, F("lunge head dmgMul"));
+    const CombatZone lungeLegs = combatZoneRead(combat::ZONE_LUNGE_APPENDAGE);
+    test.expectEq(lungeLegs.box.ox, 9, F("lunge legs box ox"));
+    test.expectEq(lungeLegs.box.h, 24, F("lunge legs box h"));
+    test.expectEq(lungeLegs.hp, combat_expect::ZONE_LUNGE_APPENDAGE_HP, F("lunge legs hp"));
+    test.expectEq(lungeLegs.dmgMul, combat_expect::ZONE_LUNGE_APPENDAGE_DMG_MUL, F("lunge legs dmgMul"));
+    test.expectEq(lungeLegs.bodyShare, combat_expect::ZONE_LUNGE_APPENDAGE_BODY_SHARE, F("lunge legs bodyShare"));
+    test.expectEq(lungeLegs.breakTypes, PHYS_SLASH, F("lunge legs break slash"));
 
     const CombatCreature sweep = combatCreatureRead(combat::CREATURE_SWEEP);
     test.expectEq(sweep.hp, combat_expect::CREATURE_SWEEP_HP, F("sweep hp"));

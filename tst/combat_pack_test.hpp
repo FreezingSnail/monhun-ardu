@@ -317,9 +317,13 @@ void CombatPackSuite(TestRunner &runner) {
             t.assert(b8(blob, o + 8), h.w, "blob creature w");
             t.assert(b8(blob, o + 9), h.h, "blob creature h");
             t.assert(b8(blob, o + 10), h.spd, "blob creature spd");
-            t.assert(b16(blob, o + 11), h.hp, "blob creature hp");
-            t.assert(b16(blob, o + 13), h.spawnX, "blob creature spawnX");
-            t.assert(b16(blob, o + 15), h.spawnY, "blob creature spawnY");
+            t.assert(bi8(blob, o + 11), h.collide.ox, "blob creature collide.ox");
+            t.assert(bi8(blob, o + 12), h.collide.oy, "blob creature collide.oy");
+            t.assert(b8(blob, o + 13), h.collide.w, "blob creature collide.w");
+            t.assert(b8(blob, o + 14), h.collide.h, "blob creature collide.h");
+            t.assert(b16(blob, o + 15), h.hp, "blob creature hp");
+            t.assert(b16(blob, o + 17), h.spawnX, "blob creature spawnX");
+            t.assert(b16(blob, o + 19), h.spawnY, "blob creature spawnY");
         }
         for (uint8_t i = 0; i < combat::PROFILES_COUNT; i++) {
             const size_t o = static_cast<size_t>(combat::PROFILES_OFF) + i * combat::PROFILE_SIZE;
@@ -434,13 +438,13 @@ void CombatPackSuite(TestRunner &runner) {
 
     {
         Test t("blob spot values match combat_expect.hpp");
-        t.assert(b16(blob, static_cast<size_t>(combat::CREATURE_HEAVY_OFF) + 11), combat_expect::CREATURE_HEAVY_HP, "expect heavy hp");
+        t.assert(b16(blob, static_cast<size_t>(combat::CREATURE_HEAVY_OFF) + 15), combat_expect::CREATURE_HEAVY_HP, "expect heavy hp");
         t.assert(b8(blob, static_cast<size_t>(combat::CREATURE_HEAVY_OFF) + 10), combat_expect::CREATURE_HEAVY_SPD, "expect heavy spd");
         t.assert(b8(blob, static_cast<size_t>(combat::CREATURE_HEAVY_OFF) + 8), combat_expect::CREATURE_HEAVY_W, "expect heavy w");
         t.assert(b8(blob, static_cast<size_t>(combat::CREATURE_HEAVY_OFF) + 9), combat_expect::CREATURE_HEAVY_H, "expect heavy h");
-        t.assert(b16(blob, static_cast<size_t>(combat::CREATURE_LUNGE_OFF) + 11), combat_expect::CREATURE_LUNGE_HP, "expect lunge hp");
+        t.assert(b16(blob, static_cast<size_t>(combat::CREATURE_LUNGE_OFF) + 15), combat_expect::CREATURE_LUNGE_HP, "expect lunge hp");
         t.assert(b8(blob, static_cast<size_t>(combat::CREATURE_LUNGE_OFF) + 10), combat_expect::CREATURE_LUNGE_SPD, "expect lunge spd");
-        t.assert(b16(blob, static_cast<size_t>(combat::CREATURE_SWEEP_OFF) + 11), combat_expect::CREATURE_SWEEP_HP, "expect sweep hp");
+        t.assert(b16(blob, static_cast<size_t>(combat::CREATURE_SWEEP_OFF) + 15), combat_expect::CREATURE_SWEEP_HP, "expect sweep hp");
         t.assert(b8(blob, static_cast<size_t>(combat::CREATURE_SWEEP_OFF) + 10), combat_expect::CREATURE_SWEEP_SPD, "expect sweep spd");
         t.assert(b8(blob, static_cast<size_t>(combat::ZONE_RAVAGER_HEAD_OFF) + 4), combat_expect::ZONE_RAVAGER_HEAD_HP, "expect head hp");
         t.assert(b8(blob, static_cast<size_t>(combat::ZONE_RAVAGER_HEAD_OFF) + 5), combat_expect::ZONE_RAVAGER_HEAD_DMG_MUL, "expect head dmgMul");

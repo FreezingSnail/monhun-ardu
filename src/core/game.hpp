@@ -451,7 +451,8 @@ struct CombatZoneCache {
 };
 
 // Combat runtime state: which creature was loaded, the implicit body box (the
-// creature w/h at (0,0)), the two optional zone slots (slot 0 head, slot 1
+// creature w/h at (0,0)), the body-collision box (authored `collide` box, or
+// the body box when absent), the two optional zone slots (slot 0 head, slot 1
 // appendage; headZone/appendZone hold the global ZONES index or COMBAT_NO_ZONE)
 // and the single broken bit per zone. The pattern step cursor
 // (stepIdx + 256-tick countdown stepT) and stagger meter are unchanged.
@@ -459,6 +460,7 @@ struct CombatState {
     CombatProfile profile;                     // 22 B AVR
     CombatAttackCache attack;                  // 21 B AVR
     CombatBox body;                            // 4 B AVR
+    CombatBox collide;                         // 4 B AVR: body-collision rect
     CombatZoneCache zone[COMBAT_ZONE_SLOTS];   // 20 B AVR
     uint8_t headZone;                          // global ZONE index or COMBAT_NO_ZONE
     uint8_t appendZone;

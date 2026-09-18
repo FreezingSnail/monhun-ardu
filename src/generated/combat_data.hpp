@@ -12,7 +12,7 @@
 namespace combat_data {
 
 constexpr uint8_t VERSION = 1;
-constexpr uint16_t BLOB_SIZE = 634;
+constexpr uint16_t BLOB_SIZE = 674;
 
 struct Box {
     int8_t ox;
@@ -81,6 +81,7 @@ struct Creature {
     uint8_t firstAttack, attackCount;
     uint8_t firstPattern, patternCount;
     uint8_t w, h, spd;
+    Box collide;   // body-collision rect (legs-only for the chicken)
     uint16_t hp, spawnX, spawnY;
 };
 
@@ -136,19 +137,21 @@ constexpr uint8_t WINDOW_RAVAGER_TAIL_SWEEP_1 = 6;
 constexpr uint8_t WINDOW_SWEEP_LUNGE_0 = 7;
 constexpr uint8_t WINDOW_SWEEP_SWEEP_0 = 8;
 constexpr uint8_t ZONE_HEAVY_APPENDAGE = 0;
-constexpr uint8_t ZONE_RAVAGER_APPENDAGE = 2;
-constexpr uint8_t ZONE_RAVAGER_HEAD = 1;
+constexpr uint8_t ZONE_LUNGE_APPENDAGE = 2;
+constexpr uint8_t ZONE_LUNGE_HEAD = 1;
+constexpr uint8_t ZONE_RAVAGER_APPENDAGE = 4;
+constexpr uint8_t ZONE_RAVAGER_HEAD = 3;
 
 inline constexpr std::array<Creature, 4> CREATURES = {{
-    {2, 0, 255, 0, 0, 2, 0, 2, 40, 28, 3, 320, 200, 40},
-    {1, 1, 255, 255, 2, 2, 2, 2, 32, 24, 5, 200, 200, 40},
-    {3, 2, 1, 2, 4, 2, 4, 3, 32, 24, 6, 260, 200, 40},
-    {0, 3, 255, 255, 6, 2, 7, 1, 28, 22, 7, 150, 200, 40},
+    {2, 0, 255, 0, 0, 2, 0, 2, 40, 28, 3, {0, 0, 40, 28}, 320, 200, 40},
+    {1, 1, 1, 2, 2, 2, 2, 2, 32, 24, 5, {9, 11, 12, 13}, 200, 200, 40},
+    {3, 2, 3, 4, 4, 2, 4, 3, 32, 24, 6, {0, 0, 32, 24}, 260, 200, 40},
+    {0, 3, 255, 255, 6, 2, 7, 1, 28, 22, 7, {0, 0, 28, 22}, 150, 200, 40},
 }};
 
 inline constexpr std::array<Profile, 4> PROFILES = {{
     {36, 24, 42, 8, 10, 6, 10, 0, 0, 2, 55, 40, 90, 140, 24, 0},
-    {36, 24, 42, 8, 10, 6, 10, 0, 0, 0, 55, 40, 90, 140, 24, 0},
+    {36, 24, 42, 8, 10, 6, 10, 0, 0, 3, 55, 40, 90, 140, 24, 0},
     {36, 24, 42, 8, 10, 6, 10, 60, 1, 3, 50, 30, 90, 120, 24, 24},
     {36, 24, 42, 8, 10, 6, 10, 0, 0, 0, 55, 40, 90, 140, 24, 0},
 }};
@@ -160,8 +163,10 @@ inline constexpr std::array<Skeleton, 4> SKELETONS = {{
     {6, 2},
 }};
 
-inline constexpr std::array<Zone, 3> ZONES = {{
+inline constexpr std::array<Zone, 5> ZONES = {{
     {{-24, 0, 24, 16}, 60, 150, 40, 1, 30, 200, 3, 2},
+    {{18, 0, 11, 7}, 40, 130, 100, 1, 12, 130, 1, 0},
+    {{9, 0, 9, 24}, 60, 150, 40, 1, 30, 200, 3, 8},
     {{20, 4, 12, 12}, 40, 130, 100, 1, 12, 130, 1, 0},
     {{-14, 8, 18, 10}, 60, 150, 40, 1, 30, 200, 3, 32},
 }};
