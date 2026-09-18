@@ -1,0 +1,11 @@
+{
+  "id": "body_base",
+  "slot": "body",
+  "sheet": "mh_body_base",
+  "cell": [16, 16],
+  "anchor": [8, 8],
+  "order": "facing*pose",
+  "frames": 16,
+  "poseMap": { "idle": 0, "dodge": 1 },
+  "flags": []
+}

@@ -1,0 +1,11 @@
+{
+  "id": "head_helm",
+  "slot": "head",
+  "sheet": "mh_head_helm",
+  "cell": [16, 16],
+  "anchor": [8, 8],
+  "order": "facing",
+  "frames": 8,
+  "poseMap": { "idle": 0 },
+  "flags": []
+}

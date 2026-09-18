@@ -1,0 +1,11 @@
+{
+  "id": "shadow_base",
+  "slot": "shadow",
+  "sheet": "mh_shadow_base",
+  "cell": [16, 16],
+  "anchor": [8, 8],
+  "order": "facing",
+  "frames": 1,
+  "poseMap": { "idle": 0 },
+  "flags": []
+}

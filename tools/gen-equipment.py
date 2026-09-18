@@ -16,12 +16,21 @@ Two record forms exist:
   * authored sheet (default): the tool writes a 4-shade placeholder PNG under
     images/equip/ and the converter packs it. `player_base` matches
     docs/art/player_base_16x16.png pixel-for-pixel (all 8 angle cells
-    prefilled); weapon/offhand placeholders stay blank.
+    prefilled); shadow/body/head sheets are the layered paper-doll art (body in
+    a WHITE idle row + LIGHT dodge row, heads with the per-facing eye slot);
+    weapon/offhand placeholders stay blank.
   * `"source": "gen-art"` ref: the record reuses an existing gen-art sprite
     symbol (`sheet`, validated and resolved against fxdata/fxdata.h); no PNG is
-    authored. A 17 B part record (sheet offset, anchor, per-pose frame,
-    optional variants) is packed into the same blob for the render path --
-    see tst/fxdatatest/player_art_test.hpp.
+    authored. A 19 B part record (sheet offset, anchor, order/frames, per-pose
+    frame, optional variants) is packed into the same blob for the render path
+    -- see tst/fxdatatest/player_art_test.hpp.
+
+Layered slots (`shadow`/`body`/`head`) always emit a part record too, even
+when the sheet is authored: the render slot loop draws them through the same
+cart part view as the gen-art overlays. `data/equipment/sets/default.json`
+picks the default draw set; the generator emits its part ids as constexpr
+constants (DEFAULT_SHADOW/DEFAULT_BODY/DEFAULT_HEAD), so changing the default
+head or body is a JSON edit + `make gen` and never touches render code.
 
 The placeholder art is authored from the same 4-shade primitives as
 tools/gen-art.py / tools/gen-base-sheet.py (palette copied here on purpose:
@@ -34,13 +43,16 @@ the tools/gen-fxtables.cpp serializer pattern:
                    reserved u16
     item    19 B  slot, order, frames, cellW, cellH, anchorX i8, anchorY i8,
                    poseRow[12]
-    part    17 B  gen-art part records in PART_* order: sheet u24 (fx offset),
-                   anchorX i8, anchorY i8, frame[12] u8  (only when the
-                   catalog has `source: "gen-art"` records)
+    part    19 B  player part records in PART_* order: sheet u24 (fx offset),
+                   anchorX i8, anchorY i8, order u8, frames u8, frame[12] u8
+                   (gen-art overlays + authored shadow/body/head layers)
     varoff 2*(n+1) B  u16 variant-data index per part, then the variant bytes
 
 The part view is read on device from the mhEquip blob during the render pass
 (tools emit only the offsets into equip_meta.hpp; see src/render.hpp partDraw).
+`order`/`frames` let the render pick a per-facing frame from the pose row
+(order `facing`: frame = facing; `facing*pose`: row*FACINGS + facing; `pose`:
+the stored frame), so 8-way layers are pure data.
 
 Two-pass note: the baked sheet offsets come from the *previous* run's
 fxdata/fxdata.h, so adding or renaming a gen-art sheet shifts the FX image and
@@ -69,6 +81,8 @@ HERE = os.path.dirname(os.path.abspath(__file__))
 ROOT = os.path.dirname(HERE)
 
 DATA_DIR = "data/equipment"
+SETS_DIR = "data/equipment/sets"
+DEFAULT_SET_REL = "data/equipment/sets/default.json"
 IMAGES_REL = "images/equip"
 BLOB_REL = "fxdata/tables/equip.bin"
 META_REL = "src/generated/equip_meta.hpp"
@@ -88,13 +102,19 @@ FACINGS = 8
 ART_SOURCES = ("gen-art",)
 
 SLOTS = ("player", "shadow", "body", "head", "weapon", "offhand")
+# Equipment layers drawn through the cart part view: authored shadow/body/head
+# sheets and every gen-art overlay (weapon/offhand). `player` is the combined
+# draw-over base template and stays out of the part view.
+LAYERED_SLOTS = ("shadow", "body", "head")
 ORDERS = ("facing", "facing*pose", "pose")
 POSES = ("idle", "attack_startup", "attack_active", "attack_recover", "parry",
          "whirl", "guard", "shove", "dodge", "deflect", "stun", "dead")
 POSE_COUNT = len(POSES)
 
-# Part-view record: sheet u24 + anchorX i8 + anchorY i8 + frame[12].
-PART_SIZE = 5 + POSE_COUNT
+# Part-view record: sheet u24 + anchorX i8 + anchorY i8 + order u8 + frames u8
+# + frame[12]. order/frames select the per-facing frame at draw time (see
+# src/render.hpp partFrame).
+PART_SIZE = 7 + POSE_COUNT
 
 # docs/equipment-framework.md cart sheet layout.
 EXPECTED_CELL = {
@@ -131,6 +151,31 @@ DARK = (85, 85, 85, 255)
 LIGHT = (170, 170, 170, 255)
 WHITE = (255, 255, 255, 255)
 
+# Helmet eye slot per facing (x, y, w, h) inside the head area; None = facing
+# away (helmet back). Must stay identical to tools/gen-base-sheet.py SLIT_RECTS
+# and docs/art/player_base_16x16.png: the slot is the facing read.
+SLIT_RECTS = (
+    (9, 3, 1, 2),    # E:  profile, slit edge-on at the right
+    (9, 4, 2, 1),    # SE: three-quarter
+    (7, 4, 3, 1),    # S:  full front, widest
+    (5, 4, 2, 1),    # SW: three-quarter
+    (6, 3, 1, 2),    # W:  profile, slit edge-on at the left
+    None,            # NW
+    None,            # N
+    None,            # NE
+)
+
+# Placeholder head styles by item id. A new head item is a JSON record + one
+# entry here (the authored-art step): render never names a head sheet.
+HEAD_STYLES = {
+    "head_base": "base",        # plain helmet
+    "head_helm": "helm",        # wider light dome + dark rim
+    "head_bandana": "bandana",  # white head + dark band row
+}
+# Body pose rows: idle in WHITE (matches the old fxplayer normal shade), dodge
+# in LIGHT (the old fxplayer dodge shade).
+BODY_ROW_SHADES = {0: WHITE, 1: LIGHT}
+
 _MISSING = object()
 
 
@@ -146,6 +191,12 @@ class Errors:
 
 def is_int(value):
     return isinstance(value, int) and not isinstance(value, bool)
+
+
+def is_part(item):
+    """True when the item gets a cart part record (gen-art overlay or an
+    authored shadow/body/head layer)."""
+    return item["genArt"] or item["slot"] in LAYERED_SLOTS
 
 
 def check_keys(errors, ctx, obj, required, optional=()):
@@ -361,6 +412,42 @@ def normalize_item(errors, rel, name, obj, seen_ids, fx_symbols):
             "genArt": gen_art, "variants": var_list, "flags": list(flags)}
 
 
+def load_default_set(errors, root, items):
+    """`data/equipment/sets/default.json` -> {slot: item id} (None if absent).
+
+    The set only names layered slots (shadow/body/head) and only items that
+    already exist in the catalog with the matching slot, so a typo'd default is
+    a compile error instead of a silently blank layer.
+    """
+    path = os.path.join(root, DEFAULT_SET_REL)
+    if not os.path.isfile(path):
+        return None
+    obj = load_json(errors, path, DEFAULT_SET_REL)
+    if not isinstance(obj, dict):
+        errors.add(DEFAULT_SET_REL, "expected an object")
+        return None
+    for key in sorted(obj):
+        if key not in LAYERED_SLOTS:
+            errors.add(DEFAULT_SET_REL, "unknown key '%s' (want one of %s)" % (key, ", ".join(LAYERED_SLOTS)))
+    by_id = {item["id"]: item for item in items}
+    out = {}
+    for slot in LAYERED_SLOTS:
+        value = obj.get(slot)
+        if not isinstance(value, str):
+            errors.add(DEFAULT_SET_REL, "%s: expected an item id string, got %r" % (slot, value))
+            continue
+        item = by_id.get(value)
+        if item is None:
+            errors.add(DEFAULT_SET_REL, "%s: unknown item id %r" % (slot, value))
+        elif item["slot"] != slot:
+            errors.add(DEFAULT_SET_REL, "%s: item %r has slot %r" % (slot, value, item["slot"]))
+        elif not is_part(item):
+            errors.add(DEFAULT_SET_REL, "%s: item %r is not a layered part" % (slot, value))
+        else:
+            out[slot] = value
+    return out
+
+
 def compile_model(errors, root):
     data_dir = os.path.join(root, DATA_DIR)
     if not os.path.isdir(data_dir):
@@ -384,7 +471,10 @@ def compile_model(errors, root):
     if errors.items:
         return None
     items.sort(key=lambda item: item["id"])
-    return {"items": items, "fxSymbols": fx_symbols}
+    default_set = load_default_set(errors, root, items)
+    if errors.items:
+        return None
+    return {"items": items, "fxSymbols": fx_symbols, "defaultSet": default_set}
 
 
 # ------------------------------------------------------------------ placeholder art
@@ -415,35 +505,39 @@ def player_cell(facing):
     rect(img, 4, 7, 8, 6, WHITE)    # torso
     rect(img, 5, 13, 2, 2, WHITE)   # legs
     rect(img, 9, 13, 2, 2, WHITE)
-    # Helmet eye slot per facing (x, y, w, h); None = facing away, hidden.
-    slits = (
-        (9, 3, 1, 2),    # E profile
-        (9, 4, 2, 1),    # SE
-        (7, 4, 3, 1),    # S front
-        (5, 4, 2, 1),    # SW
-        (6, 3, 1, 2),    # W profile
-        None,            # NW
-        None,            # N
-        None,            # NE
-    )
-    slit = slits[facing % 8]
+    slit = SLIT_RECTS[facing % 8]
     if slit is not None:
         rect(img, slit[0], slit[1], slit[2], slit[3], BLACK)
     return img
 
 
-def body_cell():
-    """Current fxplayer body minus head and shadow (mock drawPlayer rects)."""
+def body_cell(shade):
+    """Torso + legs only (no head/shadow) in one shade: the mock drawPlayer
+    rects, so body/shadow/head compose at the same (8,8) anchor."""
     img = new(16, 16)
-    rect(img, 4, 7, 8, 6, WHITE)    # torso
-    rect(img, 5, 13, 2, 2, WHITE)   # legs
-    rect(img, 9, 13, 2, 2, WHITE)
+    rect(img, 4, 7, 8, 6, shade)    # torso
+    rect(img, 5, 13, 2, 2, shade)   # legs
+    rect(img, 9, 13, 2, 2, shade)
     return img
 
 
-def head_cell():
+def head_cell(style, facing):
+    """Head layer cell: the per-style helmet/head silhouette plus the black eye
+    slot for this facing (only the 5 toward-viewer facings draw it)."""
     img = new(16, 16)
-    rect(img, 5, 1, 6, 6, WHITE)    # mock head rect
+    if style == "base":
+        rect(img, 5, 1, 6, 6, WHITE)    # plain helmet
+    elif style == "helm":
+        rect(img, 4, 1, 8, 5, LIGHT)    # wider dome
+        rect(img, 4, 6, 8, 1, DARK)     # rim
+    elif style == "bandana":
+        rect(img, 5, 1, 6, 6, WHITE)    # head
+        rect(img, 5, 1, 6, 1, DARK)     # dark band row
+    else:
+        raise SystemExit("gen-equipment: no placeholder art for head style %r" % style)
+    slit = SLIT_RECTS[facing % 8]
+    if slit is not None:
+        rect(img, slit[0], slit[1], slit[2], slit[3], BLACK)
     return img
 
 
@@ -461,9 +555,15 @@ def placeholder_cell(item, index):
     if slot == "shadow":
         return shadow_cell() if index == 0 else None
     if slot == "body":
-        return body_cell() if index == 0 else None
+        # order 'facing*pose': rows are poses (row 0 idle, row 1 dodge); a
+        # single-row 'facing' body keeps the idle shade.
+        row = index // FACINGS if item["order"] == "facing*pose" else 0
+        return body_cell(BODY_ROW_SHADES.get(row, WHITE))
     if slot == "head":
-        return head_cell() if index == 0 else None
+        style = HEAD_STYLES.get(item["id"])
+        if style is None:
+            raise SystemExit("gen-equipment: add %r to HEAD_STYLES for placeholder art" % item["id"])
+        return head_cell(style, index % FACINGS)
     return None  # weapon / offhand placeholders stay blank
 
 
@@ -514,12 +614,13 @@ def frame_table(item):
 
 
 def part_section(items):
-    """Layout of the gen-art part view section (None without gen-art records).
+    """Layout of the cart part view section (None without any part records).
 
-    Returns the part list and every offset the blob packer and the header
-    emitter share, so the two cannot disagree.
+    Parts are the gen-art overlays plus the authored shadow/body/head layers
+    (see is_part). Returns the part list and every offset the blob packer and
+    the header emitter share, so the two cannot disagree.
     """
-    parts = [item for item in items if item["genArt"]]
+    parts = [item for item in items if is_part(item)]
     if not parts:
         return None
     off = HEADER_SIZE + ITEM_SIZE * len(items)
@@ -560,14 +661,20 @@ def pack_blob(errors, items, fx_symbols):
         for item in layout["parts"]:
             value = (fx_symbols or {}).get(item["sheet"])
             if value is None:
-                errors.add(item["id"], "internal: no fx offset for sheet %r" % item["sheet"])
-                return None
+                if item["genArt"]:
+                    errors.add(item["id"], "internal: no fx offset for sheet %r" % item["sheet"])
+                    return None
+                # Authored layer: the sheet symbol only exists after the same
+                # run's convert-sprite, so the first `make gen` bakes 0; the
+                # AVR static_assert forces the second pass (two-pass note).
+                value = 0
             if not 0 <= value <= 0xFFFFFF:
                 errors.add(item["id"], "internal: sheet offset out of range: %d" % value)
                 return None
             ax, ay = item["anchor"]
             blob += int(value).to_bytes(3, "little")
             blob += struct.pack("<bb", ax, ay)
+            blob += bytes([ORDERS.index(item["order"]), item["frames"]])
             blob += bytes(item["poseRows"])
         for v_off in layout["variant_offsets"]:
             blob += struct.pack("<H", v_off)
@@ -590,7 +697,7 @@ def _emit_table(lines, decl, values, per_line):
     lines.append("};")
 
 
-def emit_meta_header(items, blob, fx_symbols):
+def emit_meta_header(items, blob, fx_symbols, default_set):
     lines = []
     app = lines.append
     app("#pragma once")
@@ -665,30 +772,32 @@ def emit_meta_header(items, blob, fx_symbols):
             app("    {" + ", ".join(str(v) for v in row) + "},")
         app("};")
     app("")
-    emit_part_view(lines, items, fx_symbols)
+    emit_part_view(lines, items, fx_symbols, default_set)
     app("}   // namespace equip")
     app("")
     return "\n".join(lines)
 
 
-def emit_part_view(lines, items, fx_symbols):
-    """Player part view offsets for `source: "gen-art"` records.
+def emit_part_view(lines, items, fx_symbols, default_set):
+    """Player part view offsets for the cart part records (gen-art overlays +
+    authored shadow/body/head layers).
 
     The records themselves live in the mhEquip cart blob (pack_blob's part
     section); only the byte offsets are generated here, so the render path
-    (src/render.hpp partDraw) reads sheet + anchor + frame from the cart during
-    the render pass. See docs/equipment-framework.md and
+    (src/render.hpp partDraw) reads sheet + anchor + order/frames + frame from
+    the cart during the render pass. See docs/equipment-framework.md and
     tst/fxdatatest/player_art_test.hpp for the pixel oracle."""
     layout = part_section(items)
     if layout is None:
         return
     parts = layout["parts"]
     app = lines.append
-    app("// ---- gen-art player part view (records live in the mhEquip blob) --")
+    app("// ---- player part view (records live in the mhEquip blob) ----------")
     app("// One PART_SIZE record per part at PARTS_OFF: sheet u24 (fx offset),")
-    app("// anchorX i8, anchorY i8, frame[POSE_COUNT] u8; then the u16")
-    app("// variant index table and the variant frame bytes. Little-endian; read")
-    app("// on device through core/fxmem.hpp during the render pass.")
+    app("// anchorX i8, anchorY i8, order u8, frames u8, frame[POSE_COUNT] u8;")
+    app("// then the u16 variant index table and the variant frame bytes.")
+    app("// Little-endian; read on device through core/fxmem.hpp during the")
+    app("// render pass (src/render.hpp partDraw/partFrame).")
     app("constexpr uint8_t PART_COUNT = %d;" % len(parts))
     for i, item in enumerate(parts):
         app("constexpr uint8_t PART_%s = %d;" % (item["id"].upper(), i))
@@ -698,28 +807,43 @@ def emit_part_view(lines, items, fx_symbols):
     app("constexpr uint8_t PART_SHEET_OFF = 0;             // u24")
     app("constexpr uint8_t PART_ANCHOR_X_OFF = 3;          // i8")
     app("constexpr uint8_t PART_ANCHOR_Y_OFF = 4;          // i8")
-    app("constexpr uint8_t PART_FRAME_OFF = 5;             // u8[POSE_COUNT]")
+    app("constexpr uint8_t PART_ORDER_OFF = 5;             // u8 ORDER_*")
+    app("constexpr uint8_t PART_FRAMES_OFF = 6;            // u8")
+    app("constexpr uint8_t PART_FRAME_OFF = 7;             // u8[POSE_COUNT]")
     app("constexpr uint16_t PART_VARIANT_OFFSETS_OFF = %d;" % layout["variants_off"])
     app("constexpr uint16_t PART_VARIANT_DATA_OFF = %d;" % layout["variant_data_off"])
     app("constexpr uint8_t PART_VARIANT_COUNT = %d;" % len(layout["variant_data"]))
     app("")
 
+    if default_set:
+        # data/equipment/sets/default.json -> the part ids the slot loop draws.
+        # Switching the default head/body is a JSON edit + make gen.
+        app("// Default draw set (data/equipment/sets/default.json): the render")
+        app("// slot loop draws these part ids, so re-skinning the player is a")
+        app("// data edit + make gen, never a render edit.")
+        for slot in LAYERED_SLOTS:
+            app("constexpr uint8_t DEFAULT_%s = PART_%s;" % (slot.upper(), default_set[slot].upper()))
+        app("")
+
     # Pin the baked absolute sheet offsets against the live fxdata.h symbols.
-    # The values came from the previous fxdata.h, so adding/renaming a gen-art
-    # sheet needs a second `make gen` to re-bake; this AVR-only assert fails the
-    # build if that pass was skipped (stale equip.bin). Zero flash cost.
+    # The values came from the previous fxdata.h, so adding/renaming a sheet
+    # needs a second `make gen` to re-bake (authored layers included); this
+    # AVR-only assert fails the build if that pass was skipped (stale equip.bin).
+    # Zero flash cost.
     sheets = []
     for item in parts:
         if item["sheet"] not in sheets:
             sheets.append(item["sheet"])
-    app("// Baked absolute sheet offsets (one per referenced gen-art symbol).")
+    app("// Baked absolute sheet offsets (one per referenced part symbol).")
     app("// The blob stores these; a static_assert pins each against fxdata.h so a")
     app("// stale equip.bin (one gen pass behind) cannot ship on AVR.")
     for sheet in sheets:
-        app("constexpr uint16_t SHEET_OFF_%s = %d;" % (sheet.upper(), fx_symbols[sheet]))
+        # uint32_t (not uint16_t): authored equip sheets live after the tables
+        # and can sit above 64 KB in the FX image (SpritesU seeks with uint24_t).
+        app("constexpr uint32_t SHEET_OFF_%s = %d;" % (sheet.upper(), (fx_symbols or {}).get(sheet, 0)))
     app("#if defined(__AVR__)")
     for sheet in sheets:
-        app("static_assert(SHEET_OFF_%s == static_cast<uint16_t>(%s), \"equip blob stale: re-run make gen\");"
+        app("static_assert(SHEET_OFF_%s == static_cast<uint32_t>(%s), \"equip blob stale: re-run make gen\");"
             % (sheet.upper(), sheet))
     app("#endif")
     app("")
@@ -773,6 +897,8 @@ def run(root, dump):
                   % (item["id"], item["slot"], item["sheet"], cw, ch,
                      item["anchor"][0], item["anchor"][1], item["order"], item["frames"], item["rows"]))
             print("    pose rows: " + ", ".join("%s=%d" % (pose, row) for pose, row in zip(POSES, item["poseRows"])))
+        if model["defaultSet"]:
+            print("default set: " + ", ".join("%s=%s" % (slot, model["defaultSet"][slot]) for slot in LAYERED_SLOTS))
         print("gen-equipment: %d items, %d B blob" % (len(items), len(blob)))
         return 0
 
@@ -795,7 +921,7 @@ def run(root, dump):
 
     if write_if_changed(os.path.join(root, BLOB_REL), blob):
         wrote.add(BLOB_REL)
-    header = emit_meta_header(items, blob, model["fxSymbols"])
+    header = emit_meta_header(items, blob, model["fxSymbols"], model["defaultSet"])
     if write_if_changed(os.path.join(root, META_REL), header):
         wrote.add(META_REL)
 

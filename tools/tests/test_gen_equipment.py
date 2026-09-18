@@ -221,27 +221,32 @@ class GenEquipmentTests(unittest.TestCase):
         for needle in (
             "constexpr uint8_t PART_SWORD_SLASH =",
             "constexpr uint16_t PARTS_OFF = 103;",
-            "constexpr uint8_t PART_SIZE = 17;",
+            "constexpr uint8_t PART_SIZE = 19;",
             "constexpr uint8_t PART_SHEET_OFF = 0;",
             "constexpr uint8_t PART_ANCHOR_X_OFF = 3;",
             "constexpr uint8_t PART_ANCHOR_Y_OFF = 4;",
-            "constexpr uint8_t PART_FRAME_OFF = 5;",
-            "constexpr uint16_t PART_VARIANT_OFFSETS_OFF = 120;",
-            "constexpr uint16_t PART_VARIANT_DATA_OFF = 124;",
+            "constexpr uint8_t PART_ORDER_OFF = 5;",
+            "constexpr uint8_t PART_FRAMES_OFF = 6;",
+            "constexpr uint8_t PART_FRAME_OFF = 7;",
+            "constexpr uint16_t PART_VARIANT_OFFSETS_OFF = 122;",
+            "constexpr uint16_t PART_VARIANT_DATA_OFF = 126;",
             "constexpr uint8_t PART_VARIANT_COUNT = 6;",
         ):
             self.assertIn(needle, text)
         self.assertNotIn("PART_FLAT_OFF", text)
         # The catalog blob carries 4 authored + 1 gen-art item, then the part
-        # record, the u16 variant index table and the variant bytes.
+        # record (sheet/anchor/order/frames/frame), the u16 variant index table
+        # and the variant bytes.
         blob = self.read_bytes(BLOB_REL)
-        self.assertEqual(len(blob), 8 + 19 * 5 + 17 + 2 * 2 + 6)
+        self.assertEqual(len(blob), 8 + 19 * 5 + 19 + 2 * 2 + 6)
         sheet, ax, ay = struct.unpack_from("<3sbb", blob, 103)
         self.assertEqual(sheet, b"\x23\x01\x00")   # fxslash = 0x000123
         self.assertEqual((ax, ay), (16, 16))
-        self.assertEqual(list(blob[108:120]), [0] * 12)
-        self.assertEqual(list(struct.unpack_from("<2H", blob, 120)), [0, 6])
-        self.assertEqual(list(blob[124:130]), [0, 0, 1, 2, 3, 4])
+        order, frames = struct.unpack_from("<BB", blob, 108)
+        self.assertEqual((order, frames), (2, 5))   # ORDER_POSE, fxslash frames
+        self.assertEqual(list(blob[110:122]), [0] * 12)
+        self.assertEqual(list(struct.unpack_from("<2H", blob, 122)), [0, 6])
+        self.assertEqual(list(blob[126:132]), [0, 0, 1, 2, 3, 4])
 
     def test_gen_art_unknown_sheet_rejected(self):
         self.add_gen_art(symbol="fxother")
@@ -252,9 +257,9 @@ class GenEquipmentTests(unittest.TestCase):
         self.assert_succeeds(self.compile())
         text = self.read(META_REL)
         # Baked offset (fxslash 0x000123) and its AVR stale-blob guard.
-        self.assertIn("constexpr uint16_t SHEET_OFF_FXSLASH = 291;", text)
+        self.assertIn("constexpr uint32_t SHEET_OFF_FXSLASH = 291;", text)
         self.assertIn(
-            'static_assert(SHEET_OFF_FXSLASH == static_cast<uint16_t>(fxslash), "equip blob stale: re-run make gen");',
+            'static_assert(SHEET_OFF_FXSLASH == static_cast<uint32_t>(fxslash), "equip blob stale: re-run make gen");',
             text)
         # A shifted fxdata.h is picked up on the next run (the two-pass note):
         # new offset lands in the blob record and the generated constant.
@@ -262,7 +267,7 @@ class GenEquipmentTests(unittest.TestCase):
                         "using uint24_t = __uint24;\nconstexpr uint24_t fxslash = 0x000456;\n")
         self.assert_succeeds(self.compile())
         self.assertEqual(self.read_bytes(BLOB_REL)[103:106], b"\x56\x04\x00")
-        self.assertIn("constexpr uint16_t SHEET_OFF_FXSLASH = 1110;", self.read(META_REL))
+        self.assertIn("constexpr uint32_t SHEET_OFF_FXSLASH = 1110;", self.read(META_REL))
 
     def test_gen_art_flat_key_rejected(self):
         # The flat workaround is retired (partDraw always applies the per-plane
@@ -328,6 +333,168 @@ class GenEquipmentTests(unittest.TestCase):
     def test_missing_equipment_dir_rejected(self):
         shutil.rmtree(self.path("data", "equipment"))
         self.assert_fails(self.compile(), "missing equipment directory")
+
+
+LAYERED_FIXTURE = os.path.join(HERE, "fixtures", "gen_equipment", "layered")
+
+
+class GenEquipmentLayeredTests(unittest.TestCase):
+    """Authored shadow/body/head layers + the default draw set (bead ikp)."""
+
+    maxDiff = None
+
+    def setUp(self):
+        case = os.path.join(SCRATCH, self._testMethodName)
+        shutil.rmtree(case, ignore_errors=True)
+        shutil.copytree(LAYERED_FIXTURE, case)
+        self.case = case
+
+    def path(self, *parts):
+        return os.path.join(self.case, *parts)
+
+    def read(self, *parts):
+        with open(self.path(*parts), encoding="utf-8") as handle:
+            return handle.read()
+
+    def read_bytes(self, *parts):
+        with open(self.path(*parts), "rb") as handle:
+            return handle.read()
+
+    def compile(self, *extra):
+        return run_tool("--root", self.case, *extra)
+
+    def assert_succeeds(self, result):
+        self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+
+    def image(self, name):
+        return Image.open(self.path(IMAGES_REL, name)).convert("RGBA")
+
+    def test_layered_default_set_ids(self):
+        result = self.compile()
+        self.assert_succeeds(result)
+        text = self.read(META_REL)
+        for needle in (
+            "constexpr uint8_t DEFAULT_SHADOW = PART_SHADOW_BASE;",
+            "constexpr uint8_t DEFAULT_BODY = PART_BODY_BASE;",
+            "constexpr uint8_t DEFAULT_HEAD = PART_HEAD_BASE;",
+            "constexpr uint8_t ITEM_SHADOW_BASE =",
+            "constexpr uint8_t ITEM_BODY_BASE =",
+            "constexpr uint8_t ITEM_HEAD_BASE =",
+            "constexpr uint8_t ITEM_HEAD_HELM =",
+            "constexpr uint8_t ITEM_HEAD_BANDANA =",
+        ):
+            self.assertIn(needle, text)
+        # No fxdata.h in the fixture: authored part offsets bake 0 until the
+        # second `make gen` (the AVR static_assert forces the re-bake).
+        for sheet in ("MH_SHADOW_BASE", "MH_BODY_BASE", "MH_HEAD_BASE",
+                      "MH_HEAD_HELM", "MH_HEAD_BANDANA"):
+            self.assertIn("constexpr uint32_t SHEET_OFF_%s = 0;" % sheet, text)
+            self.assertIn('static_assert(SHEET_OFF_%s == static_cast<uint32_t>(%s)'
+                          % (sheet, sheet.lower()), text)
+
+    def test_layered_part_records_layout(self):
+        self.assert_succeeds(self.compile())
+        text = self.read(META_REL)
+        # Parts sorted by id: body_base, head_bandana, head_base, head_helm,
+        # shadow_base (the layered slots always emit a part record).
+        for needle in (
+            "constexpr uint8_t PART_COUNT = 5;",
+            "constexpr uint8_t PART_BODY_BASE = 0;",
+            "constexpr uint8_t PART_HEAD_BANDANA = 1;",
+            "constexpr uint8_t PART_HEAD_BASE = 2;",
+            "constexpr uint8_t PART_HEAD_HELM = 3;",
+            "constexpr uint8_t PART_SHADOW_BASE = 4;",
+            "constexpr uint16_t PARTS_OFF = 103;",   # 8 + 5 items * 19
+            "constexpr uint8_t PART_SIZE = 19;",
+        ):
+            self.assertIn(needle, text)
+        blob = self.read_bytes(BLOB_REL)
+        # header + 5 item records + 5 part records + 6 u16 variant index
+        # entries + the single placeholder variant byte.
+        self.assertEqual(len(blob), 8 + 19 * 5 + 19 * 5 + 2 * 6 + 1)
+        # body_base: ORDER_FACING_POSE(1), 16 frames, idle row 0 / dodge row 1.
+        order, frames = struct.unpack_from("<BB", blob, 103 + 5)
+        self.assertEqual((order, frames), (1, 16))
+        rows = list(blob[103 + 7:103 + 19])
+        self.assertEqual(rows[0], 0)
+        self.assertEqual(rows[8], 1)   # POSE_DODGE
+        # head_base (part 2): ORDER_FACING(0), 8 frames.
+        order, frames = struct.unpack_from("<BB", blob, 103 + 2 * 19 + 5)
+        self.assertEqual((order, frames), (0, 8))
+        # shadow_base (part 4): ORDER_FACING(0), 1 frame.
+        order, frames = struct.unpack_from("<BB", blob, 103 + 4 * 19 + 5)
+        self.assertEqual((order, frames), (0, 1))
+
+    def test_layered_sheet_eye_slot_and_distinctness(self):
+        self.assert_succeeds(self.compile())
+        heads = {}
+        for item in ("head_base", "head_helm", "head_bandana"):
+            img = self.image("mh_%s_16x16.png" % item)
+            self.assertEqual(img.size, (128, 16), item)
+            cells = [img.crop((f * 16, 0, f * 16 + 16, 16)) for f in range(8)]
+            for f in range(5):
+                self.assertIn((0, 0, 0, 255), list(cells[f].getdata()),
+                              "%s cell %d has no eye slot" % (item, f))
+                for g in range(f + 1, 5):
+                    self.assertNotEqual(cells[f].tobytes(), cells[g].tobytes(),
+                                        "%s cells %d/%d identical" % (item, f, g))
+            for f in range(5, 8):
+                self.assertNotIn((0, 0, 0, 255), list(cells[f].getdata()),
+                                 "%s cell %d must face away (no slot)" % (item, f))
+            heads[item] = cells
+
+        body = self.image("mh_body_base_16x16.png")
+        self.assertEqual(body.size, (128, 32))
+        for f in range(8):
+            idle = list(body.crop((f * 16, 0, f * 16 + 16, 16)).getdata())
+            dodge = list(body.crop((f * 16, 16, f * 16 + 16, 32)).getdata())
+            self.assertIn((255, 255, 255, 255), idle, "body idle facing %d" % f)
+            self.assertNotIn((170, 170, 170, 255), idle, "body idle facing %d" % f)
+            self.assertIn((170, 170, 170, 255), dodge, "body dodge facing %d" % f)
+            self.assertNotIn((255, 255, 255, 255), dodge, "body dodge facing %d" % f)
+
+        shadow = self.image("mh_shadow_base_16x16.png")
+        self.assertEqual(shadow.size, (16, 16))
+        for f in range(8):
+            cells = [
+                shadow.crop((0, 0, 16, 16)).tobytes(),
+                body.crop((f * 16, 0, f * 16 + 16, 16)).tobytes(),
+                heads["head_base"][f].tobytes(),
+                heads["head_helm"][f].tobytes(),
+                heads["head_bandana"][f].tobytes(),
+            ]
+            self.assertEqual(len(set(cells)), 5, "facing %d cells not pairwise distinct" % f)
+
+    def test_layered_dump_lists_default_set(self):
+        result = self.compile("--dump")
+        self.assert_succeeds(result)
+        self.assertIn("default set: shadow=shadow_base, body=body_base, head=head_base", result.stdout)
+        self.assertIn("gen-equipment: 5 items,", result.stdout)
+
+    def test_layered_default_set_unknown_item_rejected(self):
+        path = self.path("data", "equipment", "sets", "default.json")
+        with open(path, encoding="utf-8") as handle:
+            doc = json.load(handle)
+        doc["head"] = "head_missing"
+        with open(path, "w", encoding="utf-8", newline="\n") as handle:
+            json.dump(doc, handle, indent=2)
+            handle.write("\n")
+        self.assert_fails(self.compile(), "unknown item id 'head_missing'")
+
+    def test_layered_default_set_wrong_slot_rejected(self):
+        path = self.path("data", "equipment", "sets", "default.json")
+        with open(path, encoding="utf-8") as handle:
+            doc = json.load(handle)
+        doc["head"] = "body_base"
+        with open(path, "w", encoding="utf-8", newline="\n") as handle:
+            json.dump(doc, handle, indent=2)
+            handle.write("\n")
+        self.assert_fails(self.compile(), "item 'body_base' has slot 'body'")
+
+    def assert_fails(self, result, *needles):
+        self.assertEqual(result.returncode, 1, result.stdout + result.stderr)
+        for needle in needles:
+            self.assertIn(needle, result.stderr)
 
 
 if __name__ == "__main__":

@@ -326,6 +326,8 @@ struct PartRec {
     uint8_t sheet[3];   // uint24_t fx offset, little-endian
     int8_t anchorX;
     int8_t anchorY;
+    uint8_t order;    // equip::ORDER_* (facing / facing*pose / pose)
+    uint8_t frames;   // sheet frame count for the facing order
     uint8_t frame[equip::POSE_COUNT];
 };
 static_assert(sizeof(PartRec) == equip::PART_SIZE, "part record ABI drift");
@@ -343,17 +345,30 @@ static inline void partRead(uint8_t part, PartRec &rec) {
     mhFxReadBytes(partCart(static_cast<uint16_t>(equip::PARTS_OFF + static_cast<uint16_t>(part) * equip::PART_SIZE)), reinterpret_cast<uint8_t *>(&rec), equip::PART_SIZE);
 }
 
-// Draw one gen-art part: the generated cart record owns the sheet, the frame
-// for the resolved pose and the frame-local anchor, so drawPlayer selects all
-// three without a per-weapon frame if-chain. `rx/ry` is the caller's reference
-// point (player centre, hit box, shield centre, ...); draw x = rx - anchor x.
-static inline void partDraw(uint8_t part, uint8_t pose, int32_t rx, int32_t ry) {
+// Resolve the sheet frame for a (pose, facing) pair from the cart record's
+// order/frames: 'pose' rows store the absolute frame, 'facing' indexes the row
+// directly (single-frame sheets repeat frame 0), 'facing*pose' uses
+// row * FACINGS + facing. The 8-way layer art therefore needs no render branch.
+static inline uint8_t partFrame(const PartRec &rec, uint8_t pose, uint8_t facing) {
+    const uint8_t row = rec.frame[pose];
+    if (rec.order == equip::ORDER_FACING)
+        return rec.frames == 1 ? 0 : static_cast<uint8_t>(facing % equip::FACINGS);
+    if (rec.order == equip::ORDER_FACING_POSE)
+        return static_cast<uint8_t>(row * equip::FACINGS + (facing % equip::FACINGS));
+    return row;
+}
+
+// Draw one catalog part: the generated cart record owns the sheet, the frame
+// for the resolved (pose, facing) and the frame-local anchor, so drawPlayer
+// selects all three without a per-part frame if-chain. `rx/ry` is the caller's
+// reference point (player centre, hit box, shield centre, ...); draw x =
+// rx - anchor x.
+static inline void partDraw(uint8_t part, uint8_t pose, uint8_t facing, int32_t rx, int32_t ry) {
     PartRec rec;
     partRead(part, rec);
-    const uint8_t fr = rec.frame[pose];
     // The cart record owns the sheet/frame/anchor; FRAME(fr) selects the
     // current plane's pass within the logical frame (frame * 3 + plane).
-    sprDraw(partSheet(rec), static_cast<int16_t>(rx - rec.anchorX), static_cast<int16_t>(ry - rec.anchorY), FRAME(fr));
+    sprDraw(partSheet(rec), static_cast<int16_t>(rx - rec.anchorX), static_cast<int16_t>(ry - rec.anchorY), FRAME(partFrame(rec, pose, facing)));
 }
 
 // Variant form for parts whose frame is picked by a compact selector rather
@@ -366,12 +381,16 @@ static inline void partVariantDraw(uint8_t part, uint8_t variant, int32_t rx, in
     sprDraw(partSheet(rec), static_cast<int16_t>(rx - rec.anchorX), static_cast<int16_t>(ry - rec.anchorY), FRAME(frame));
 }
 
-// Mock drawPlayer(): body, weapon overlay and effects. Every overlay shape,
-// frame and anchor comes from the generated gen-art part tables (bead
-// monhun-ardu-abr; see src/generated/equip_meta.hpp and tst/fxdatatest/
-// player_art_test.hpp) -- sheet/frame/anchor are data, not branches. The
-// position math that must stay mock-exact (rndPx, reach scaling, whirl orbit,
-// tick-driven offsets) is still computed here; the trig bake is eqf.4.
+// Mock drawPlayer(): shadow, body, head, weapon overlay and effects. Every
+// shape, frame and anchor comes from the generated cart part tables (beads
+// monhun-ardu-abr/ikp; see src/generated/equip_meta.hpp and
+// tst/fxdatatest/player_art_test.hpp) -- sheet/frame/anchor/facing are data,
+// not branches. The player body is the layered default draw set
+// (equip::DEFAULT_SHADOW/BODY/HEAD, generated from
+// data/equipment/sets/default.json), so re-skinning the player is art + JSON +
+// `make gen`. The position math that must stay mock-exact (rndPx, reach
+// scaling, whirl orbit, tick-driven offsets) is still computed here; the trig
+// bake is eqf.4.
 static void drawPlayer(const mh::Game &g, int16_t camX, int16_t camY) {
     const mh::Player &p = g.player;
     const int32_t x = rndPx(p.x, p.subX) - camX;
@@ -379,8 +398,15 @@ static void drawPlayer(const mh::Game &g, int16_t camX, int16_t camY) {
     const int32_t cx = x + 8;
     const int32_t cy = y + 8;
 
-    // Shadow + body from the FX sheet; the pose row picks normal vs dodge.
-    partDraw(equip::PART_PLAYER_BODY, p.state == mh::PS_DODGE ? equip::POSE_DODGE : equip::POSE_IDLE, cx, cy);
+    // 8-way facing index from the DIR8 facing vector; partFrame() resolves it
+    // to the sheet frame, so no facing branch lives in the render path.
+    const uint8_t face = static_cast<uint8_t>(fp::dirIndexFromDelta(p.fx, p.fy));
+
+    // Paper-doll slots in draw order: shadow -> body -> head. All three are the
+    // default draw set; the body picks the dodge pose row.
+    partDraw(equip::DEFAULT_SHADOW, equip::POSE_IDLE, face, cx, cy);
+    partDraw(equip::DEFAULT_BODY, p.state == mh::PS_DODGE ? equip::POSE_DODGE : equip::POSE_IDLE, face, cx, cy);
+    partDraw(equip::DEFAULT_HEAD, equip::POSE_IDLE, face, cx, cy);
 
     // Shared attack timing (sword and flail read the same startup/active/reach;
     // the two weapon branches below only scale the reach differently).
@@ -409,24 +435,24 @@ static void drawPlayer(const mh::Game &g, int16_t camX, int16_t camY) {
             partVariantDraw(equip::PART_SWORD_SLASH, slot, hx, hy);
             if (p.state == mh::PS_SPECIAL && p.riposteT > 0) {
                 // Riposte rim: rim at the frame origin, box top-left as ref.
-                partDraw(equip::PART_SWORD_RIPOSTE, equip::POSE_ATTACK_ACTIVE, hx - (hw >> 1), hy - (hh >> 1));
+                partDraw(equip::PART_SWORD_RIPOSTE, equip::POSE_ATTACK_ACTIVE, face, hx - (hw >> 1), hy - (hh >> 1));
             }
         } else if (p.stance == mh::ST_PARRY) {
             // Blade frame anchored on the player centre.
-            partDraw(equip::PART_SWORD_PARRY, equip::POSE_PARRY, cx, cy);
+            partDraw(equip::PART_SWORD_PARRY, equip::POSE_PARRY, face, cx, cy);
         } else {
             // Idle: chip sheet's 3x3 white head on the mock top-left.
-            partDraw(equip::PART_SWORD_CHIP, equip::POSE_IDLE, cx + ((p.fx * 7) >> 4), cy + ((p.fy * 7) >> 4));
+            partDraw(equip::PART_SWORD_CHIP, equip::POSE_IDLE, face, cx + ((p.fx * 7) >> 4), cy + ((p.fy * 7) >> 4));
         }
     } else if (g.weapon == mh::W_FLAIL) {
         if (p.stance == mh::ST_WHIRL) {
             const uint8_t ang = static_cast<uint8_t>(p.whirlTick * ANG_WHIRL_RING);
             for (uint8_t i = 0; i < 6; i++) {
                 const uint8_t ai = static_cast<uint8_t>(ang + mhPgmReadU8(&RING6[i]));
-                partDraw(equip::PART_FLAIL_RING, equip::POSE_WHIRL, cx + mulQ4(cos256(ai), 20), cy + mulQ4(sin256(ai), 14));
+                partDraw(equip::PART_FLAIL_RING, equip::POSE_WHIRL, face, cx + mulQ4(cos256(ai), 20), cy + mulQ4(sin256(ai), 14));
             }
             const uint8_t ba = static_cast<uint8_t>(p.whirlTick * ANG_WHIRL_BALL);
-            partDraw(equip::PART_FLAIL_BALL, equip::POSE_WHIRL, cx + mulQ4(cos256(ba), 20), cy + mulQ4(sin256(ba), 14));
+            partDraw(equip::PART_FLAIL_BALL, equip::POSE_WHIRL, face, cx + mulQ4(cos256(ba), 20), cy + mulQ4(sin256(ba), 14));
         } else if (p.state == mh::PS_ATTACK || p.state == mh::PS_SPECIAL) {
             if (a) {
                 int32_t reach = mh::attackReach(a);
@@ -437,17 +463,17 @@ static void drawPlayer(const mh::Game &g, int16_t camX, int16_t camY) {
                 // the 4x4 white chip, both at the mock's exact positions.
                 for (int32_t i = 1; i <= 3; i++) {
                     const int32_t rr = (reach * i) >> 2;
-                    partDraw(equip::PART_FLAIL_CHAIN, equip::POSE_IDLE, cx + (((int32_t)p.fx * rr) >> 4), cy + (((int32_t)p.fy * rr) >> 4));
+                    partDraw(equip::PART_FLAIL_CHAIN, equip::POSE_IDLE, face, cx + (((int32_t)p.fx * rr) >> 4), cy + (((int32_t)p.fy * rr) >> 4));
                 }
-                partDraw(equip::PART_CHIP_BALL, equip::POSE_IDLE, cx + (((int32_t)p.fx * reach) >> 4), cy + (((int32_t)p.fy * reach) >> 4));
+                partDraw(equip::PART_CHIP_BALL, equip::POSE_IDLE, face, cx + (((int32_t)p.fx * reach) >> 4), cy + (((int32_t)p.fy * reach) >> 4));
             }
         } else {
-            partDraw(equip::PART_FLAIL_CHAIN, equip::POSE_IDLE, cx + ((p.fx * 4) >> 4), cy + ((p.fy * 4) >> 4));
-            partDraw(equip::PART_SWORD_CHIP, equip::POSE_IDLE, cx + ((p.fx * 9) >> 4), cy + ((p.fy * 9) >> 4));
+            partDraw(equip::PART_FLAIL_CHAIN, equip::POSE_IDLE, face, cx + ((p.fx * 4) >> 4), cy + ((p.fy * 4) >> 4));
+            partDraw(equip::PART_SWORD_CHIP, equip::POSE_IDLE, face, cx + ((p.fx * 9) >> 4), cy + ((p.fy * 9) >> 4));
         }
         if (p.state == mh::PS_DEFLECT) {
             // Two light bars; frame centred on the 16 px body.
-            partDraw(equip::PART_DEFLECT, equip::POSE_DEFLECT, cx, cy);
+            partDraw(equip::PART_DEFLECT, equip::POSE_DEFLECT, face, cx, cy);
         }
     } else {   // gunshield
         const int32_t shx = cx + ((p.fx * 5) >> 4);
@@ -455,24 +481,24 @@ static void drawPlayer(const mh::Game &g, int16_t camX, int16_t camY) {
         // 12x16 plate frame, plate at frame local 1,1: shield centre as ref.
         // Guard selects the fully lit plate via the record's poseMap (frame 1),
         // the idle plate is frame 0; FRAME() applies the per-plane stride.
-        partDraw(equip::PART_GUN_GUARD, p.stance == mh::ST_GUARD ? equip::POSE_GUARD : equip::POSE_IDLE, shx, shy);
+        partDraw(equip::PART_GUN_GUARD, p.stance == mh::ST_GUARD ? equip::POSE_GUARD : equip::POSE_IDLE, face, shx, shy);
         if (p.state == mh::PS_SHOVE) {
             // poseMap shove = frame 2 of the same plate sheet: the shove plate is
             // drawn 1 px left inside its cell (anchor 5 vs the idle/guard 6), so
             // +1 on the reference re-centres the shared record anchor.
             const int32_t shx2 = shx + ((p.fx * 4) >> 4) + 1;
             const int32_t shy2 = shy + ((p.fy * 4) >> 4);
-            partDraw(equip::PART_GUN_GUARD, equip::POSE_SHOVE, shx2, shy2);
+            partDraw(equip::PART_GUN_GUARD, equip::POSE_SHOVE, face, shx2, shy2);
         }
         if (p.reload > 0)
-            partDraw(equip::PART_GUN_RELOAD, equip::POSE_IDLE, cx, cy);
+            partDraw(equip::PART_GUN_RELOAD, equip::POSE_IDLE, face, cx, cy);
     }
 
     if (p.iT > 0 && (g.tick % 4) < 2)
-        partDraw(equip::PART_ERASE, equip::POSE_IDLE, cx, cy);
+        partDraw(equip::PART_ERASE, equip::POSE_IDLE, face, cx, cy);
     if (p.state == mh::PS_STUN) {
         const uint8_t ang = static_cast<uint8_t>(static_cast<uint32_t>(g.tick) * ANG_PLAYER_STUN);
-        partDraw(equip::PART_FLAIL_STUN, equip::POSE_STUN, cx + mulQ4(cos256(ang), 7), cy - 10 + mulQ4(sin256(ang), 2));
+        partDraw(equip::PART_FLAIL_STUN, equip::POSE_STUN, face, cx + mulQ4(cos256(ang), 7), cy - 10 + mulQ4(sin256(ang), 2));
     }
 }
 

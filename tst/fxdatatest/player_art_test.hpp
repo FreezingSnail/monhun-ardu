@@ -26,6 +26,14 @@
 // idle + ST_GUARD, where the flat guard-white workaround had blitted the white
 // plate's raw frame on every plane; it now gets the per-plane stride. Every
 // other case is byte-identical.
+//
+// Bead ikp (eqf.3) split the flat fxplayer body into shadow + body + head
+// layers and added the per-facing helmet eye slot. Changed cases: 0, 1, 3, 5,
+// 6, 7, 8, 9, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23, 24, 25, 26,
+// 34 (body shade/facing split + the 5 toward-viewer head slots). Unchanged
+// cases are the ones whose weapon overlay covers the head/body pixels (2, 4,
+// 10 spin/0.6-arc slash, 27..33 gun plate/reload, 35 gun stun, 36 gun
+// i-frames): their overlay shapes are byte-identical to before.
 
 #include "harness/fxtest.hpp"
 #include "src/core/world.hpp"
@@ -104,15 +112,15 @@ static_assert(CASE_COUNT == 37, "golden matrix changed; regenerate GOLDEN");
 // Golden framebuffer hashes [case][plane], captured pre-refactor. See the regen
 // note above; PROGMEM so the 3 x CASE_COUNT words stay in flash.
 static const uint32_t MH_PROGMEM GOLDEN[CASE_COUNT][3] = {
-    {0x84889850u, 0x701edb50u, 0x701edb50u}, {0x36089fd8u, 0xc7b408d8u, 0xc7b408d8u}, {0x9e96c62au, 0xc998692au, 0x17645e42u}, {0xc2b26499u, 0xe4c47799u, 0x64ee0249u},
-    {0x9e96c62au, 0xc998692au, 0x17645e42u}, {0x6f1a5ff1u, 0xfd0a65f1u, 0x46dde0d1u}, {0x7619b2dfu, 0x8a836fdfu, 0x69dda221u}, {0x96fc1615u, 0x12a97015u, 0x6222c301u},
-    {0xeef9f315u, 0x6aa74d15u, 0xba20a001u}, {0x2dae16b3u, 0xca6471b3u, 0x6222c301u}, {0xfc85c4cdu, 0x13a869cdu, 0x356d8145u}, {0x5898152fu, 0x3524c82fu, 0xc7e81d2fu},
-    {0x36089fd8u, 0xc7b408d8u, 0x059d38e0u}, {0xc9c1437eu, 0x01d4027eu, 0x01d4027eu}, {0xdc867550u, 0xc81cb850u, 0xc81cb850u}, {0x07400feau, 0x095407eau, 0x095407eau},
-    {0xea752610u, 0x09e1ec10u, 0x09e1ec10u}, {0x7dc1c79cu, 0x7fd5bf9cu, 0x7fd5bf9cu}, {0x0d1c1787u, 0x0b081f87u, 0x0b081f87u}, {0x7dc1c79cu, 0x7fd5bf9cu, 0x7fd5bf9cu},
-    {0xc2f7c3b3u, 0xd76180b3u, 0xd76180b3u}, {0x56c39df1u, 0xf42fd3f1u, 0xf42fd3f1u}, {0x56c39df1u, 0xf42fd3f1u, 0xf42fd3f1u}, {0xbeb219f9u, 0xa24911f9u, 0xf7b2b94bu},
-    {0x07400feau, 0x095407eau, 0x6ea44bb2u}, {0x4c15ea88u, 0x8428a988u, 0x8428a988u}, {0x07400feau, 0x095407eau, 0x095407eau}, {0xe56a836fu, 0x1d4a306fu, 0xb373bcd7u},
+    {0xe490e488u, 0xccac0388u, 0xccac0388u}, {0xa38365c0u, 0x46b905c0u, 0x46b905c0u}, {0x9e96c62au, 0xc998692au, 0x17645e42u}, {0x90d9bf11u, 0x7d2df311u, 0xd7728e01u},
+    {0x9e96c62au, 0xc998692au, 0x17645e42u}, {0x4fae7d31u, 0xd2f41731u, 0x34651e11u}, {0x3e136117u, 0x55f84217u, 0xf05c2259u}, {0x9861d60du, 0xb2e8700du, 0xf75a8eb9u},
+    {0x8d024a25u, 0x19543b25u, 0xb76fbb91u}, {0xe739e1abu, 0x8f6871abu, 0xf75a8eb9u}, {0xfc85c4cdu, 0x13a869cdu, 0x356d8145u}, {0x6d4eb357u, 0xa7c60857u, 0x3a895d57u},
+    {0xa38365c0u, 0x46b905c0u, 0x37e7b108u}, {0x3ec19436u, 0x3ab58236u, 0x3ab58236u}, {0x82915ce0u, 0x411204e0u, 0x411204e0u}, {0x93745722u, 0x7b8f7622u, 0x7b8f7622u},
+    {0x69a0e3f8u, 0xd2289bf8u, 0xd2289bf8u}, {0x8d8428d4u, 0x759f47d4u, 0x759f47d4u}, {0x5957643fu, 0x4172833fu, 0x4172833fu}, {0x8d8428d4u, 0x759f47d4u, 0x759f47d4u},
+    {0xaf464173u, 0x3aa3ee73u, 0x3aa3ee73u}, {0x909e0569u, 0xe234c969u, 0xe234c969u}, {0x28a41e99u, 0x9e3f6599u, 0x9e3f6599u}, {0x9a8287e1u, 0x1f0c3be1u, 0x1e747583u},
+    {0x93745722u, 0x7b8f7622u, 0x3ce8cb2au}, {0x10a28740u, 0xf618c040u, 0xf618c040u}, {0x93745722u, 0x7b8f7622u, 0x7b8f7622u}, {0xe56a836fu, 0x1d4a306fu, 0xb373bcd7u},
     {0xd9c2ad2fu, 0xedb3832fu, 0xcacdbe57u}, {0x30469935u, 0x51a89135u, 0x51a89135u}, {0xe56a836fu, 0x1d4a306fu, 0xb373bcd7u}, {0xe56a836fu, 0x1d4a306fu, 0xb373bcd7u},
-    {0x46724db1u, 0x67d445b1u, 0xf8c93455u}, {0xc19b9b2fu, 0x1fb93e2fu, 0xb373bcd7u}, {0xe56a836fu, 0x1d4a306fu, 0x1f116dc5u}, {0x474a642du, 0xc098f32du, 0x606e0819u},
+    {0x46724db1u, 0x67d445b1u, 0xf8c93455u}, {0xc19b9b2fu, 0x1fb93e2fu, 0xb373bcd7u}, {0xe56a836fu, 0x1d4a306fu, 0xb845c6bbu}, {0x474a642du, 0xc098f32du, 0x606e0819u},
     {0xe56a836fu, 0x1d4a306fu, 0xb373bcd7u},
 };
 static_assert(sizeof(GOLDEN) / sizeof(GOLDEN[0]) == CASE_COUNT, "goldens must cover every case");
