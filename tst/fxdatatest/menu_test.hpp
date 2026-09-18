@@ -116,7 +116,7 @@ inline void test_menu(FxTest &test) {
     test.expectEq(static_cast<uint32_t>(g.mode), MODE_TRAIN, F("start pole mode"));
     test.expectEq(static_cast<uint32_t>(g.monsterKind), MON_LUNGE, F("start pole kind 0"));
     test.expectEq(static_cast<uint32_t>(g.pole.kind), POLE_PLAIN, F("start plain pole"));
-    test.expectEq(static_cast<uint32_t>(g.pole.hp), 0, F("plain pool 0"));
+    test.expectEq(static_cast<uint32_t>(g.combat.zone[COMBAT_ZONE_HEAD].hp), 0, F("plain pool 0"));
 
     // ---- target 5 SEVER installs the slash-gated pole (pool 60, rect 20)
     MenuState sv;
@@ -125,7 +125,7 @@ inline void test_menu(FxTest &test) {
     menuStart(g, sv);
     test.expectEq(static_cast<uint32_t>(g.mode), MODE_TRAIN, F("start sever mode"));
     test.expectEq(static_cast<uint32_t>(g.pole.kind), POLE_SEVER, F("start sever pole"));
-    test.expectEq(static_cast<uint32_t>(g.pole.hp), 60, F("sever pool 60"));
+    test.expectEq(static_cast<uint32_t>(g.combat.zone[COMBAT_ZONE_HEAD].hp), 60, F("sever pool 60"));
     test.expectEq(static_cast<uint32_t>(g.pole.rect.w), 20, F("sever rect w"));
 
     // ---- target 6 BREAK installs the blunt-gated pole (pool 40, rect 28)
@@ -134,7 +134,7 @@ inline void test_menu(FxTest &test) {
     bk.target = MENU_POLE_TARGET + POLE_BREAK;
     menuStart(g, bk);
     test.expectEq(static_cast<uint32_t>(g.pole.kind), POLE_BREAK, F("start break pole"));
-    test.expectEq(static_cast<uint32_t>(g.pole.hp), 40, F("break pool 40"));
+    test.expectEq(static_cast<uint32_t>(g.combat.zone[COMBAT_ZONE_APPENDAGE].hp), 40, F("break pool 40"));
     test.expectEq(static_cast<uint32_t>(g.pole.rect.w), 28, F("break rect w 28"));
     test.expectEq(static_cast<uint32_t>(g.target.rect.w), 28, F("break target rect"));
 
@@ -144,7 +144,7 @@ inline void test_menu(FxTest &test) {
     ck.target = MENU_POLE_TARGET + POLE_CRACK;
     menuStart(g, ck);
     test.expectEq(static_cast<uint32_t>(g.pole.kind), POLE_CRACK, F("start crack pole"));
-    test.expectEq(static_cast<uint32_t>(g.pole.hp), 30, F("crack pool 30"));
+    test.expectEq(static_cast<uint32_t>(g.combat.zone[COMBAT_ZONE_APPENDAGE].hp), 30, F("crack pool 30"));
 
     // ---- HEAVY -> hunt, cart def drives size/hp (40x28, 320 hp)
     MenuState h;

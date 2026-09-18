@@ -117,6 +117,9 @@ struct CombatCreature {
     uint8_t w, h, spd;
     CombatBox collide;   // body-collision rect (legs-only for the chicken)
     uint16_t hp, spawnX, spawnY;
+    uint8_t flags;              // bit0: static prop (pole); no FSM/attacks
+    uint8_t sheet;              // art sheet id (0 = default monster sheet)
+    uint8_t brokenW, brokenH;   // target rect on break (0 = unchanged)
 };
 
 struct CombatSkeleton {
@@ -184,6 +187,7 @@ struct PkCreature {
     int8_t collideOx, collideOy;
     uint8_t collideW, collideH;
     uint16_t hp, spawnX, spawnY;
+    uint8_t flags, sheet, brokenW, brokenH;
 };
 struct PkProfile {
     uint8_t engageDist, keepDist, attackDist;
@@ -261,7 +265,7 @@ static_assert(offsetof(CombatPattern, guardIdx) == offsetof(PkPattern, guardIdx)
 static_assert(sizeof(CombatWindow) == 9, "window cache must stay 9 B");
 static_assert(sizeof(CombatAttackCache) == 21, "attack cache must stay 21 B");
 static_assert(sizeof(CombatZoneCache) == 10, "zone cache must stay 10 B");
-static_assert(sizeof(CombatState) == 79, "CombatState must stay 79 B (zones design + collide)");
+static_assert(sizeof(CombatState) == 80, "CombatState must stay 80 B (zones design + collide + static flag)");
 
 // Fake cart pointer: the blob lives below 64 KB (generator hard-fails above).
 inline uint16_t combatCartAddr(uint16_t off) {
@@ -310,6 +314,10 @@ inline CombatCreature combatCreatureRead(uint8_t i) {
     v.hp = combatReadU16(b + MH_COMBAT_FIELD(detail::PkCreature, hp));
     v.spawnX = combatReadU16(b + MH_COMBAT_FIELD(detail::PkCreature, spawnX));
     v.spawnY = combatReadU16(b + MH_COMBAT_FIELD(detail::PkCreature, spawnY));
+    v.flags = combatReadU8(b + MH_COMBAT_FIELD(detail::PkCreature, flags));
+    v.sheet = combatReadU8(b + MH_COMBAT_FIELD(detail::PkCreature, sheet));
+    v.brokenW = combatReadU8(b + MH_COMBAT_FIELD(detail::PkCreature, brokenW));
+    v.brokenH = combatReadU8(b + MH_COMBAT_FIELD(detail::PkCreature, brokenH));
     return v;
 }
 
@@ -349,6 +357,26 @@ inline uint16_t combatCreaturePatternHeadRead(uint8_t i) {
 
 inline uint16_t combatCreatureSizeRead(uint8_t i) {
     return combatReadU16(static_cast<uint16_t>(combat::CREATURES_OFF + i * combat::CREATURE_SIZE + MH_COMBAT_FIELD(detail::PkCreature, w)));
+}
+
+inline uint8_t combatCreatureFlags(uint8_t i) {
+    return combatReadU8(static_cast<uint16_t>(combat::CREATURES_OFF + i * combat::CREATURE_SIZE + MH_COMBAT_FIELD(detail::PkCreature, flags)));
+}
+
+inline uint8_t combatCreatureStatic(uint8_t i) {
+    return static_cast<uint8_t>(combatCreatureFlags(i) & 0x01);
+}
+
+inline uint8_t combatCreatureSheet(uint8_t i) {
+    return combatReadU8(static_cast<uint16_t>(combat::CREATURES_OFF + i * combat::CREATURE_SIZE + MH_COMBAT_FIELD(detail::PkCreature, sheet)));
+}
+
+inline uint8_t combatCreatureBrokenW(uint8_t i) {
+    return combatReadU8(static_cast<uint16_t>(combat::CREATURES_OFF + i * combat::CREATURE_SIZE + MH_COMBAT_FIELD(detail::PkCreature, brokenW)));
+}
+
+inline uint8_t combatCreatureBrokenH(uint8_t i) {
+    return combatReadU8(static_cast<uint16_t>(combat::CREATURES_OFF + i * combat::CREATURE_SIZE + MH_COMBAT_FIELD(detail::PkCreature, brokenH)));
 }
 
 inline CombatSpawn combatCreatureSpawnRead(uint8_t i) {
@@ -522,6 +550,10 @@ inline CombatCreature combatCreatureRead(uint8_t i) {
     v.hp = c.hp;
     v.spawnX = c.spawnX;
     v.spawnY = c.spawnY;
+    v.flags = c.flags;
+    v.sheet = c.sheet;
+    v.brokenW = c.brokenW;
+    v.brokenH = c.brokenH;
     return v;
 }
 
@@ -561,6 +593,26 @@ inline uint16_t combatCreaturePatternHeadRead(uint8_t i) {
 inline uint16_t combatCreatureSizeRead(uint8_t i) {
     const combat_data::Creature &c = combat_data::CREATURES[i];
     return static_cast<uint16_t>(static_cast<uint16_t>(c.w) | (static_cast<uint16_t>(c.h) << 8));
+}
+
+inline uint8_t combatCreatureFlags(uint8_t i) {
+    return combat_data::CREATURES[i].flags;
+}
+
+inline uint8_t combatCreatureStatic(uint8_t i) {
+    return static_cast<uint8_t>(combat_data::CREATURES[i].flags & 0x01);
+}
+
+inline uint8_t combatCreatureSheet(uint8_t i) {
+    return combat_data::CREATURES[i].sheet;
+}
+
+inline uint8_t combatCreatureBrokenW(uint8_t i) {
+    return combat_data::CREATURES[i].brokenW;
+}
+
+inline uint8_t combatCreatureBrokenH(uint8_t i) {
+    return combat_data::CREATURES[i].brokenH;
 }
 
 inline CombatSpawn combatCreatureSpawnRead(uint8_t i) {
@@ -806,6 +858,7 @@ inline void creatureCacheReset(Game &g, uint8_t creatureId) {
     g.combat.zone[0] = CombatZoneCache{};
     g.combat.zone[1] = CombatZoneCache{};
     g.combat.zoneBroken = 0;
+    g.combat.isStatic = 0;
     g.combat.patternIdx = COMBAT_NO_PATTERN;
     g.combat.stepIdx = 0;
     g.combat.stepT = 0;
@@ -842,6 +895,7 @@ inline uint8_t creatureLoad(Game &g, uint8_t creatureId) {
     combatProfileLoad(g, profileIdx);
     combatCreatureBodyBox(creatureId, g.combat.body, g.combat.headZone, g.combat.appendZone);
     g.combat.collide = combatCreatureCollideBox(creatureId);
+    g.combat.isStatic = combatCreatureStatic(creatureId);
     if (ZONES_ENABLED) {
         combatZoneSeed(g, COMBAT_ZONE_HEAD, g.combat.headZone);
         combatZoneSeed(g, COMBAT_ZONE_APPENDAGE, g.combat.appendZone);
@@ -1016,15 +1070,23 @@ inline CombatBodyHit combatResolveBodyHit(const Game &g, int32_t base) {
 // A zone box is a face-relative origin: the world rect origin is the body
 // anchor plus the DIR8 rotation of (ox, oy); the box itself stays axis-aligned
 // (same projection the attack windows use). int32 intermediates keep the
-// rotation exact for any int8 box offset.
-inline bool combatZoneContains(const Game &g, const CombatBox &b, int16_t hx, int16_t hy) {
+// rotation exact for any int8 box offset. `bx/by` is the resolver's world
+// anchor (beast body or static prop rect) and `fx/fy` the explicit facing, so
+// a static prop resolves with an east/world vector and never touches
+// g.monster.fx/fy (train mode keeps a frozen beast whose fields are hashed).
+inline bool combatZoneContains(int16_t bx, int16_t by, int16_t fx, int16_t fy, const CombatBox &b, int16_t hx, int16_t hy) {
     int32_t dx, dy;
-    combatFacePoint(g.monster.fx, g.monster.fy, b.ox, b.oy, dx, dy);
-    // Battlefield coords: monster.x/y <= WORLD_W/H (256) and the int8 box
-    // rotation with |fx|,|fy| <= 16 gives |dx|,|dy| <= 254, so x+w <= 511.
-    const int16_t x = static_cast<int16_t>(g.monster.x + static_cast<int16_t>(dx));
-    const int16_t y = static_cast<int16_t>(g.monster.y + static_cast<int16_t>(dy));
+    combatFacePoint(fx, fy, b.ox, b.oy, dx, dy);
+    // Battlefield coords: anchor <= WORLD_W/H (256) and the int8 box rotation
+    // with |fx|,|fy| <= 16 gives |dx|,|dy| <= 254, so x+w <= 511.
+    const int16_t x = static_cast<int16_t>(bx + static_cast<int16_t>(dx));
+    const int16_t y = static_cast<int16_t>(by + static_cast<int16_t>(dy));
     return hx >= x && hx < x + b.w && hy >= y && hy < y + b.h;
+}
+
+// Beast convenience: the anchor and facing are the live monster fields.
+inline bool combatZoneContains(const Game &g, const CombatBox &b, int16_t hx, int16_t hy) {
+    return combatZoneContains(g.monster.x, g.monster.y, g.monster.fx, g.monster.fy, b, hx, hy);
 }
 
 // Landed player hit against the 3-hitzone model. The body is implicit and wins
@@ -1032,7 +1094,10 @@ inline bool combatZoneContains(const Game &g, const CombatBox &b, int16_t hx, in
 // multiplier (tie -> body, then head, then appendage), matching the zone test
 // order. Drained zone pools flip a single broken bit when the hit's phys is in
 // breakTypes. Zero cart reads (all zone scalars were cached at spawn).
-inline CombatBodyHit combatZoneHitResolve(Game &g, int32_t base, uint8_t phys, int16_t hx, int16_t hy) {
+// `gateBreak` makes the pool drain itself require a matching phys (the static
+// prop's legacy "wrong weapon: damage lands, no drain/break" rule); beasts pass
+// false and keep the "breakTypes gates only the broken bit" behaviour.
+inline MH_COMBAT_NI CombatBodyHit combatZoneHitResolveAt(Game &g, int32_t base, uint8_t phys, int16_t hx, int16_t hy, int16_t bx, int16_t by, int16_t fx, int16_t fy, bool gateBreak) {
     CombatBodyHit r;
     r.zone = COMBAT_NO_ZONE;
     r.mul = 100;
@@ -1047,14 +1112,14 @@ inline CombatBodyHit combatZoneHitResolve(Game &g, int32_t base, uint8_t phys, i
     // tie and the body wins any tie at 100.
     if (g.combat.headZone != COMBAT_NO_ZONE && !(g.combat.zoneBroken & COMBAT_ZONE_HEAD_BIT)) {
         const CombatZoneCache &z = g.combat.zone[COMBAT_ZONE_HEAD];
-        if (combatZoneContains(g, z.box, hx, hy) && z.dmgMul > bestMul) {
+        if (combatZoneContains(bx, by, fx, fy, z.box, hx, hy) && z.dmgMul > bestMul) {
             best = COMBAT_ZONE_HEAD;
             bestMul = z.dmgMul;
         }
     }
     if (g.combat.appendZone != COMBAT_NO_ZONE && !(g.combat.zoneBroken & COMBAT_ZONE_APPENDAGE_BIT)) {
         const CombatZoneCache &z = g.combat.zone[COMBAT_ZONE_APPENDAGE];
-        if (combatZoneContains(g, z.box, hx, hy) && z.dmgMul > bestMul) {
+        if (combatZoneContains(bx, by, fx, fy, z.box, hx, hy) && z.dmgMul > bestMul) {
             best = COMBAT_ZONE_APPENDAGE;
             bestMul = z.dmgMul;
         }
@@ -1072,9 +1137,11 @@ inline CombatBodyHit combatZoneHitResolve(Game &g, int32_t base, uint8_t phys, i
 
     CombatZoneCache &z = g.combat.zone[best];
     const uint8_t pct = (out > 255u) ? 255u : static_cast<uint8_t>(out);
-    z.hp = (pct < z.hp) ? static_cast<uint8_t>(z.hp - pct) : 0;
-    if (z.hp == 0 && (phys & z.breakTypes)) {
-        g.combat.zoneBroken |= (best == COMBAT_ZONE_HEAD) ? COMBAT_ZONE_HEAD_BIT : COMBAT_ZONE_APPENDAGE_BIT;
+    if (!gateBreak || (phys & z.breakTypes)) {
+        z.hp = (pct < z.hp) ? static_cast<uint8_t>(z.hp - pct) : 0;
+        if (z.hp == 0 && (phys & z.breakTypes)) {
+            g.combat.zoneBroken |= (best == COMBAT_ZONE_HEAD) ? COMBAT_ZONE_HEAD_BIT : COMBAT_ZONE_APPENDAGE_BIT;
+        }
     }
 
     const uint32_t body = combatMulPercent(out, z.bodyShare);
@@ -1082,6 +1149,11 @@ inline CombatBodyHit combatZoneHitResolve(Game &g, int32_t base, uint8_t phys, i
     r.mul = dmgMul;
     r.dmg = (body > 0xFFFFu) ? 0xFFFFu : static_cast<uint16_t>(body);
     return r;
+}
+
+// Beast resolve: anchor/facing come from the live monster record.
+inline CombatBodyHit combatZoneHitResolve(Game &g, int32_t base, uint8_t phys, int16_t hx, int16_t hy) {
+    return combatZoneHitResolveAt(g, base, phys, hx, hy, g.monster.x, g.monster.y, g.monster.fx, g.monster.fy, false);
 }
 
 // combatZoneStagger: the staggerOnHit of the zone a hit landed on (0 for the

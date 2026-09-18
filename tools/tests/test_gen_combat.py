@@ -120,7 +120,7 @@ class GenCombatTests(unittest.TestCase):
 
     def test_missing_key_rejected(self):
         self.mutate("data/creatures/beast.json", lambda doc: doc.pop("profile"))
-        self.assert_fails(self.compile(), "missing key 'profile'")
+        self.assert_fails(self.compile(), "profile: required for a non-static creature")
 
     def test_float_rejected_for_quantized_field(self):
         self.mutate("data/creatures/beast.json", lambda doc: doc["attacks"][0].__setitem__("windup", 20.0))
@@ -323,9 +323,11 @@ class GenCombatTests(unittest.TestCase):
         meta = self.meta_constants()
 
         creature = blob[meta["CREATURE_BEAST_OFF"]:meta["CREATURE_BEAST_OFF"] + meta["CREATURE_SIZE"]]
-        # 21 B creature record: stats then the default collide box (body 16x12
-        # at the origin) then hp/spawnX/spawnY (epic monhun-ardu-nch).
-        self.assertEqual(creature, bytes([0, 0, 0, 1, 0, 1, 0, 1, 16, 12, 4, 0, 0, 16, 12, 80, 0, 100, 0, 32, 0]))
+        # 25 B creature record: stats then the default collide box (body 16x12
+        # at the origin) then hp/spawnX/spawnY (epic monhun-ardu-nch), then the
+        # static/sheet/brokenBody fields (6zb.6; 0 = dynamic, default sheet, no
+        # broken shrink).
+        self.assertEqual(creature, bytes([0, 0, 0, 1, 0, 1, 0, 1, 16, 12, 4, 0, 0, 16, 12, 80, 0, 100, 0, 32, 0, 0, 0, 0, 0]))
 
         profile = blob[meta["PROFILE_BEAST_OFF"]:meta["PROFILE_BEAST_OFF"] + meta["PROFILE_SIZE"]]
         self.assertEqual(profile, bytes([30, 18, 36, 8, 10, 6, 10, 40, 1, 3, 40, 0, 20, 0,
@@ -359,6 +361,66 @@ class GenCombatTests(unittest.TestCase):
 
         anchor = blob[meta["ANCHOR_BEAST_16X12_ORIGIN_OFF"]:meta["ANCHOR_BEAST_16X12_ORIGIN_OFF"] + meta["ANCHOR_SIZE"]]
         self.assertEqual(anchor, bytes([0, 0]))
+
+    def test_static_creature_record(self):
+        # A static prop: no profile/attacks/patterns keys at all, sheet id,
+        # optional brokenBody, optional zone hp/bodyShare (defaults 0/100).
+        doc = {
+            "id": "pole",
+            "skeleton": "beast_16x12",
+            "static": True,
+            "sheet": 3,
+            "stats": {"w": 20, "h": 36, "hp": 0, "spd": 0, "spawnX": 140, "spawnY": 40,
+                      "brokenBody": {"w": 20, "h": 36}},
+            "zones": {
+                "head": {"box": {"ox": -128, "oy": 0, "w": 255, "h": 16}, "dmgMul": 140},
+                "appendage": {"box": {"ox": 20, "oy": 8, "w": 8, "h": 12}, "dmgMul": 101,
+                              "hp": 40, "breakTypes": ["BLUNT"], "broken": {"hurtOn": False}},
+            },
+        }
+        with open(self.path("data", "creatures", "pole.json"), "w", encoding="utf-8", newline="\n") as handle:
+            json.dump(doc, handle, indent=2)
+            handle.write("\n")
+        self.assert_succeeds(self.compile())
+        meta = self.meta_constants()
+        self.assertEqual(meta["CREATURES_COUNT"], 2)
+        self.assertEqual(meta["ZONES_COUNT"], 4)
+        self.assertEqual(meta["CREATURE_POLE"], 1)
+        self.assertEqual(meta["ZONE_POLE_HEAD"], 2)
+        self.assertEqual(meta["ZONE_POLE_APPENDAGE"], 3)
+
+        blob = self.blob()
+        o = meta["CREATURE_POLE_OFF"]
+        rec = blob[o:o + meta["CREATURE_SIZE"]]
+        # skeleton, profile(=creature idx), head/append zone, no attacks/patterns,
+        # body 20x36, default collide, hp/spawn, static flags, sheet, brokenBody.
+        self.assertEqual(rec, bytes([0, 1, 2, 3, 0, 0, 0, 0, 20, 36, 0,
+                                     0, 0, 20, 36, 0, 0, 140, 0, 40, 0,
+                                     1, 3, 20, 36]))
+
+        # Static profile is inert (all zero, denominators 1, zoneFlags 0x03).
+        p = meta["PROFILE_POLE_OFF"]
+        prof = blob[p:p + meta["PROFILE_SIZE"]]
+        self.assertEqual(prof, bytes([0, 0, 0, 0, 1, 0, 1, 0, 0, 3,
+                                      0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0]))
+
+        head = blob[meta["ZONE_POLE_HEAD_OFF"]:meta["ZONE_POLE_HEAD_OFF"] + meta["ZONE_SIZE"]]
+        # box -128,0,255,16; hp 0 (omitted), dmgMul 140, bodyShare 100 (default),
+        # no breakTypes/broken/stagger.
+        self.assertEqual(head, bytes([0x80, 0, 255, 16, 0, 140, 100, 0, 0, 140, 0, 0]))
+        append = blob[meta["ZONE_POLE_APPENDAGE_OFF"]:meta["ZONE_POLE_APPENDAGE_OFF"] + meta["ZONE_SIZE"]]
+        self.assertEqual(append, bytes([20, 8, 8, 12, 40, 101, 100, 2, 0, 101, 1, 0]))
+
+        expect = self.read(EXPECT_REL)
+        self.assertIn("constexpr uint8_t CREATURE_POLE_STATIC = 1;", expect)
+        self.assertIn("constexpr uint8_t CREATURE_POLE_SHEET = 3;", expect)
+        self.assertIn("constexpr uint8_t CREATURE_POLE_BROKEN_W = 20;", expect)
+        self.assertIn("constexpr uint8_t CREATURE_POLE_BROKEN_H = 36;", expect)
+
+    def test_static_omitted_collections_rejected_for_dynamic(self):
+        # A dynamic creature still needs non-empty attacks/patterns.
+        self.mutate("data/creatures/beast.json", lambda doc: doc.__setitem__("attacks", []))
+        self.assert_fails(self.compile(), "attacks: expected a non-empty array")
 
     def test_expect_header_pins_sizes_spot_values_and_sha(self):
         self.assert_succeeds(self.compile())

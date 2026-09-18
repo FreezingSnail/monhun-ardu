@@ -150,7 +150,7 @@ static void audioSnapshot(AudioState &s, const Game &g) {
     s.monsterStun = g.monster.stun;
     s.projN = g.projN;
     s.riposteT = g.player.riposteT;
-    s.poleBroken = g.pole.broken;
+    s.poleBroken = g.combat.zoneBroken;
     s.monsterState = g.monster.state;
     s.playerStance = g.player.stance;
     s.playerState = g.player.state;
@@ -200,7 +200,7 @@ static void audioUpdate(AudioState &s, const Game &g) {
 
     const bool monsterDrop = m.hp < s.monsterHp;
     const bool trainGain = g.train.total > s.trainTotal;
-    const bool poleBroke = g.pole.broken > s.poleBroken;
+    const bool poleBroke = g.combat.zoneBroken > s.poleBroken;
     const bool playerDrop = p.hp < s.playerHp;
     const bool guarding = playerDrop && (p.stance == ST_GUARD || s.playerStance == ST_GUARD);
 

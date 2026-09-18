@@ -23,6 +23,13 @@
       ]
     },
     {
+      "id": "pole",
+      "anchors": [
+        { "id": "origin", "ox": 0, "oy": 0 },
+        { "id": "head", "ox": 10, "oy": 8 }
+      ]
+    },
+    {
       "id": "quad_32x24",
       "anchors": [
         { "id": "origin", "ox": 0, "oy": 0 },

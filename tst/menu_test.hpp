@@ -200,8 +200,17 @@ void MenuSuite(TestRunner &runner) {
                 t.assert(g.mode, target >= MENU_POLE_TARGET ? MODE_TRAIN : MODE_HUNT, "start mode");
                 t.assert(g.monsterKind, target < MENU_POLE_TARGET ? target : 0, "start kind");
                 if (target >= MENU_POLE_TARGET) {
-                    t.assert(g.pole.kind, target - MENU_POLE_TARGET, "start pole kind");
-                    t.assert(g.pole.hp, poleDefPool(&POLE_DEFS[target - MENU_POLE_TARGET]), "start pole pool");
+                    const int8_t kind = static_cast<int8_t>(target - MENU_POLE_TARGET);
+                    t.assert(g.pole.kind, kind, "start pole kind");
+                    // Pools live in the shared zone cache (loaded by initPoleKind).
+                    if (kind == POLE_SEVER)
+                        t.assert(g.combat.zone[COMBAT_ZONE_HEAD].hp, 60, "start sever pool");
+                    else if (kind == POLE_BREAK)
+                        t.assert(g.combat.zone[COMBAT_ZONE_APPENDAGE].hp, 40, "start break pool");
+                    else if (kind == POLE_CRACK)
+                        t.assert(g.combat.zone[COMBAT_ZONE_APPENDAGE].hp, 30, "start crack pool");
+                    else
+                        t.assert(g.combat.zone[COMBAT_ZONE_HEAD].hp, 0, "start plain pool");
                 } else {
                     t.assert(g.pole.kind, POLE_PLAIN, "hunt pole stays plain");
                 }

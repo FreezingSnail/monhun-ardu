@@ -91,7 +91,7 @@ ZONE_APPENDAGE = 0x02
 COMBAT_NO_ZONE = 0xFF
 
 SIZES = {
-    "CREATURE": 21,
+    "CREATURE": 25,
     "PROFILE": 22,
     "SKELETON": 2,
     "ZONE": 12,
@@ -265,8 +265,22 @@ def normalize_collide(errors, ctx, obj):
     }
 
 
+def normalize_broken_body(errors, ctx, obj):
+    """Optional stats.brokenBody box (static props): the target rect shrinks to
+    this size when the prop's breakable zone breaks. Absent = rect unchanged."""
+    check_keys(errors, ctx, obj, {"w", "h"})
+    return {
+        "w": read_int(errors, ctx, obj, "w", 1, 255),
+        "h": read_int(errors, ctx, obj, "h", 1, 255),
+    }
+
+
 def normalize_zone(errors, ctx, obj, attack_ids):
-    check_keys(errors, ctx, obj, {"box", "dmgMul", "hp", "bodyShare", "breakTypes", "hurtOn"}, {"staggerOnHit", "broken"})
+    # Static props omit the pool (hp 0 = never drains/breaks); bodyShare
+    # defaults to 100 and hurtOn to true. The record itself has no intact
+    # hurtOn field (only the broken override), so those keys are validation
+    # only, kept for authoring clarity.
+    check_keys(errors, ctx, obj, {"box", "dmgMul"}, {"hp", "bodyShare", "breakTypes", "hurtOn", "staggerOnHit", "broken"})
     dmg_mul = read_int(errors, ctx, obj, "dmgMul", 0, 255)
     broken = obj.get("broken")
     broken_dmg = dmg_mul if dmg_mul is not None else 100
@@ -283,10 +297,10 @@ def normalize_zone(errors, ctx, obj, attack_ids):
     return {
         "box": normalize_box(errors, ctx + ".box", obj.get("box")),
         "dmgMul": dmg_mul,
-        "hp": read_int(errors, ctx, obj, "hp", 0, 255),
-        "bodyShare": read_int(errors, ctx, obj, "bodyShare", 0, 255),
-        "breakTypes": normalize_break_types(errors, ctx, obj.get("breakTypes")),
-        "hurtOn": read_bool(errors, ctx, obj, "hurtOn"),
+        "hp": read_int(errors, ctx, obj, "hp", 0, 255, default=0),
+        "bodyShare": read_int(errors, ctx, obj, "bodyShare", 0, 255, default=100),
+        "breakTypes": normalize_break_types(errors, ctx, obj.get("breakTypes", [])),
+        "hurtOn": read_bool(errors, ctx, obj, "hurtOn", default=1),
         "staggerOnHit": read_int(errors, ctx, obj, "staggerOnHit", 0, 255, default=0),
         "brokenDmgMul": broken_dmg if broken_dmg is not None else 100,
         "brokenHurtOff": broken_hurt_off,
@@ -475,6 +489,18 @@ PROFILE_REQUIRED = {"engageDist", "keepDist", "attackDist", "circleNum", "circle
 PROFILE_OPTIONAL = {"staggerMax", "staggerDecay", "staggerRecoverT"}
 
 
+def zero_profile():
+    """Static props carry no behaviour: an inert all-zero profile (denominators
+    stay 1 so a stray divide never faults). The generator still emits a profile
+    record per creature, so the profiles section stays 1:1 with creatures."""
+    return {
+        "engageDist": 0, "keepDist": 0, "attackDist": 0,
+        "circleNum": 0, "circleDen": 1, "retreatNum": 0, "retreatDen": 1,
+        "cdBase": 0, "cdJitter": 0, "spawnT": 0, "spawnCd": 0, "stunRecoverT": 0,
+        "staggerMax": 0, "staggerDecay": 0, "staggerRecoverT": 0,
+    }
+
+
 def normalize_profile(errors, ctx, obj):
     check_keys(errors, ctx, obj, PROFILE_REQUIRED, PROFILE_OPTIONAL)
     return {
@@ -553,7 +579,10 @@ def compile_model(errors, root):
         obj = load_json(errors, path)
         if obj is None:
             continue
-        check_keys(errors, ctx, obj, {"id", "skeleton", "stats", "profile", "attacks", "patterns"}, {"zones", "collide"})
+        check_keys(errors, ctx, obj, {"id", "skeleton", "stats"},
+                   {"profile", "attacks", "patterns", "zones", "collide", "static", "sheet"})
+        is_static = bool(read_bool(errors, ctx, obj, "static", default=0))
+        sheet_id = read_int(errors, ctx, obj, "sheet", 0, 255, default=0)
         cid = read_id(errors, ctx, obj, "id")
         if cid is not None:
             if cid != os.path.splitext(name)[0]:
@@ -567,13 +596,26 @@ def compile_model(errors, root):
             errors.add(ctx, "skeleton: unknown skeleton id %r" % skeleton_id)
             skeleton = skeletons[0]
         stats = obj.get("stats")
-        check_keys(errors, ctx + ".stats", stats, {"w", "h", "hp", "spd", "spawnX", "spawnY"})
+        check_keys(errors, ctx + ".stats", stats, {"w", "h", "hp", "spd", "spawnX", "spawnY"}, {"brokenBody"})
         collide = normalize_collide(errors, ctx + ".collide", obj["collide"]) if "collide" in obj else None
-        profile = normalize_profile(errors, ctx + ".profile", obj.get("profile"))
+        broken_body = normalize_broken_body(errors, ctx + ".stats.brokenBody", stats["brokenBody"]) if "brokenBody" in stats else None
+        if "profile" in obj:
+            profile = normalize_profile(errors, ctx + ".profile", obj.get("profile"))
+        elif is_static:
+            profile = zero_profile()
+        else:
+            errors.add(ctx, "profile: required for a non-static creature")
+            profile = zero_profile()
         raw_attacks = obj.get("attacks")
-        if not isinstance(raw_attacks, list) or not raw_attacks:
-            errors.add(ctx, "attacks: expected a non-empty array")
+        if raw_attacks is None:
+            if not is_static:
+                errors.add(ctx, "attacks: required for a non-static creature")
             raw_attacks = []
+        if not isinstance(raw_attacks, list):
+            errors.add(ctx, "attacks: expected an array")
+            raw_attacks = []
+        elif not raw_attacks and not is_static:
+            errors.add(ctx, "attacks: expected a non-empty array")
         attacks = []
         attack_ids = set()
         for i, attack in enumerate(raw_attacks):
@@ -597,9 +639,15 @@ def compile_model(errors, root):
                     zc = "%s.zones.%s" % (ctx, name_key)
                     zones[name_key] = normalize_zone(errors, zc, raw_zones[name_key], attack_ids)
         raw_patterns = obj.get("patterns")
-        if not isinstance(raw_patterns, list) or not raw_patterns:
-            errors.add(ctx, "patterns: expected a non-empty array")
+        if raw_patterns is None:
+            if not is_static:
+                errors.add(ctx, "patterns: required for a non-static creature")
             raw_patterns = []
+        if not isinstance(raw_patterns, list):
+            errors.add(ctx, "patterns: expected an array")
+            raw_patterns = []
+        elif not raw_patterns and not is_static:
+            errors.add(ctx, "patterns: expected a non-empty array")
         patterns = []
         pattern_ids = set()
         for i, pattern in enumerate(raw_patterns):
@@ -613,6 +661,8 @@ def compile_model(errors, root):
         creatures.append({
             "id": cid,
             "skeleton": skeleton,
+            "static": 1 if is_static else 0,
+            "sheet": sheet_id,
             "stats": {
                 "w": read_int(errors, ctx + ".stats", stats, "w", 1, 255),
                 "h": read_int(errors, ctx + ".stats", stats, "h", 1, 255),
@@ -621,6 +671,7 @@ def compile_model(errors, root):
                 "spawnX": read_int(errors, ctx + ".stats", stats, "spawnX", 0, 65535),
                 "spawnY": read_int(errors, ctx + ".stats", stats, "spawnY", 0, 65535),
             },
+            "brokenBody": broken_body,
             "collide": collide,
             "profile": profile,
             "attacks": attacks,
@@ -684,8 +735,8 @@ def build_layout(model):
             "creature": creature,
             "head_zone": head_idx,
             "append_zone": append_idx,
-            "first_attack": attack_index[(cid, creature["attacks"][0]["id"])],
-            "first_pattern": pattern_index[(cid, creature["patterns"][0]["id"])],
+            "first_attack": attack_index[(cid, creature["attacks"][0]["id"])] if creature["attacks"] else 0,
+            "first_pattern": pattern_index[(cid, creature["patterns"][0]["id"])] if creature["patterns"] else 0,
         })
         for name in ZONE_NAMES:
             if name in creature["zones"]:
@@ -780,6 +831,7 @@ def pack_model(errors, model):
         # collide box: authored per creature, or the body box default (stats w/h
         # at the origin) so collision is unchanged for creatures without one.
         collide = creature["collide"] or {"ox": 0, "oy": 0, "w": stats["w"], "h": stats["h"]}
+        broken_body = creature["brokenBody"] or {"w": 0, "h": 0}
         record("CREATURE", b"".join([
             u8(model["skeletons"].index(creature["skeleton"])), u8(i),
             u8(entry["head_zone"]), u8(entry["append_zone"]),
@@ -788,6 +840,7 @@ def pack_model(errors, model):
             u8(stats["w"]), u8(stats["h"]), u8(stats["spd"]),
             i8(collide["ox"]), i8(collide["oy"]), u8(collide["w"]), u8(collide["h"]),
             u16(stats["hp"]), u16(stats["spawnX"]), u16(stats["spawnY"]),
+            u8(creature["static"]), u8(creature["sheet"]), u8(broken_body["w"]), u8(broken_body["h"]),
         ]))
 
     # profiles
@@ -1050,6 +1103,9 @@ def emit_data_header(model, compiled):
     app("    uint8_t w, h, spd;")
     app("    Box collide;   // body-collision rect (legs-only for the chicken)")
     app("    uint16_t hp, spawnX, spawnY;")
+    app("    uint8_t flags;   // bit0: static prop (pole); no FSM/attacks")
+    app("    uint8_t sheet;   // art sheet id (0 = default monster sheet)")
+    app("    uint8_t brokenW, brokenH;   // target rect on break (0 = unchanged)")
     app("};")
     app("")
     app("// Index constants (creatures sorted by id; attacks, windows, patterns and")
@@ -1066,13 +1122,15 @@ def emit_data_header(model, compiled):
                 creature = entry["creature"]
                 stats = creature["stats"]
                 collide = creature["collide"] or {"ox": 0, "oy": 0, "w": stats["w"], "h": stats["h"]}
-                app("    {%d, %d, %d, %d, %d, %d, %d, %d, %d, %d, %d, {%d, %d, %d, %d}, %d, %d, %d}," % (
+                broken_body = creature["brokenBody"] or {"w": 0, "h": 0}
+                app("    {%d, %d, %d, %d, %d, %d, %d, %d, %d, %d, %d, {%d, %d, %d, %d}, %d, %d, %d, %d, %d, %d, %d}," % (
                     model["skeletons"].index(creature["skeleton"]), compiled["indices"]["CREATURE_%s" % creature["id"].upper()],
                     entry["head_zone"], entry["append_zone"], entry["first_attack"], len(creature["attacks"]),
                     entry["first_pattern"], len(creature["patterns"]),
                     stats["w"], stats["h"], stats["spd"],
                     collide["ox"], collide["oy"], collide["w"], collide["h"],
-                    stats["hp"], stats["spawnX"], stats["spawnY"]))
+                    stats["hp"], stats["spawnX"], stats["spawnY"],
+                    creature["static"], creature["sheet"], broken_body["w"], broken_body["h"]))
         elif section == "PROFILES":
             for entry in layout["creatures"]:
                 creature = entry["creature"]
@@ -1293,21 +1351,28 @@ def emit_expect_header(model, compiled):
         app("constexpr uint8_t CREATURE_%s_H = %d;" % (cid, stats["h"]))
         app("constexpr uint8_t CREATURE_%s_ATTACKS = %d;" % (cid, len(creature["attacks"])))
         app("constexpr uint8_t CREATURE_%s_PATTERNS = %d;" % (cid, len(creature["patterns"])))
+        app("constexpr uint8_t CREATURE_%s_STATIC = %d;" % (cid, creature["static"]))
+        app("constexpr uint8_t CREATURE_%s_SHEET = %d;" % (cid, creature["sheet"]))
+        broken_body = creature["brokenBody"] or {"w": 0, "h": 0}
+        app("constexpr uint8_t CREATURE_%s_BROKEN_W = %d;" % (cid, broken_body["w"]))
+        app("constexpr uint8_t CREATURE_%s_BROKEN_H = %d;" % (cid, broken_body["h"]))
         collide = creature["collide"] or {"ox": 0, "oy": 0, "w": stats["w"], "h": stats["h"]}
         app("constexpr int8_t CREATURE_%s_COLLIDE_OX = %d;" % (cid, collide["ox"]))
         app("constexpr int8_t CREATURE_%s_COLLIDE_OY = %d;" % (cid, collide["oy"]))
         app("constexpr uint8_t CREATURE_%s_COLLIDE_W = %d;" % (cid, collide["w"]))
         app("constexpr uint8_t CREATURE_%s_COLLIDE_H = %d;" % (cid, collide["h"]))
-        first_attack = creature["attacks"][0]
-        app("constexpr uint16_t ATTACK_%s_%s_WINDUP = %d;" % (cid, first_attack["id"].upper(), first_attack["windup"]))
-        app("constexpr uint16_t ATTACK_%s_%s_ACTIVE = %d;" % (cid, first_attack["id"].upper(), first_attack["active"]))
-        app("constexpr uint16_t ATTACK_%s_%s_RECOVER = %d;" % (cid, first_attack["id"].upper(), first_attack["recover"]))
-        app("constexpr uint16_t ATTACK_%s_%s_DMG = %d;" % (cid, first_attack["id"].upper(), first_attack["dmg"]))
-        first_pattern = creature["patterns"][0]
-        guard = first_pattern["guard"]
-        app("constexpr uint8_t PATTERN_%s_%s_MIN_DIST = %d;" % (cid, first_pattern["id"].upper(), guard["minDist"]))
-        app("constexpr uint8_t PATTERN_%s_%s_MAX_DIST = %d;" % (cid, first_pattern["id"].upper(), guard["maxDist"]))
-        app("constexpr uint8_t PATTERN_%s_%s_CHANCE = %d;" % (cid, first_pattern["id"].upper(), guard["chance"]))
+        if creature["attacks"]:
+            first_attack = creature["attacks"][0]
+            app("constexpr uint16_t ATTACK_%s_%s_WINDUP = %d;" % (cid, first_attack["id"].upper(), first_attack["windup"]))
+            app("constexpr uint16_t ATTACK_%s_%s_ACTIVE = %d;" % (cid, first_attack["id"].upper(), first_attack["active"]))
+            app("constexpr uint16_t ATTACK_%s_%s_RECOVER = %d;" % (cid, first_attack["id"].upper(), first_attack["recover"]))
+            app("constexpr uint16_t ATTACK_%s_%s_DMG = %d;" % (cid, first_attack["id"].upper(), first_attack["dmg"]))
+        if creature["patterns"]:
+            first_pattern = creature["patterns"][0]
+            guard = first_pattern["guard"]
+            app("constexpr uint8_t PATTERN_%s_%s_MIN_DIST = %d;" % (cid, first_pattern["id"].upper(), guard["minDist"]))
+            app("constexpr uint8_t PATTERN_%s_%s_MAX_DIST = %d;" % (cid, first_pattern["id"].upper(), guard["maxDist"]))
+            app("constexpr uint8_t PATTERN_%s_%s_CHANCE = %d;" % (cid, first_pattern["id"].upper(), guard["chance"]))
         for name in ZONE_NAMES:
             if name in creature["zones"]:
                 zone = creature["zones"][name]

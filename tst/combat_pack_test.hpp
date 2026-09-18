@@ -233,24 +233,32 @@ void CombatPackSuite(TestRunner &runner) {
             {"CREATURE_LUNGE", combat::CREATURE_LUNGE_OFF, combat::CREATURES_OFF, combat::CREATURE_LUNGE, combat::CREATURE_SIZE, combat::CREATURES_COUNT},
             {"CREATURE_RAVAGER", combat::CREATURE_RAVAGER_OFF, combat::CREATURES_OFF, combat::CREATURE_RAVAGER, combat::CREATURE_SIZE, combat::CREATURES_COUNT},
             {"CREATURE_SWEEP", combat::CREATURE_SWEEP_OFF, combat::CREATURES_OFF, combat::CREATURE_SWEEP, combat::CREATURE_SIZE, combat::CREATURES_COUNT},
-            {"PROFILE_HEAVY", combat::PROFILE_HEAVY_OFF, combat::PROFILES_OFF, 0, combat::PROFILE_SIZE, combat::PROFILES_COUNT},
-            {"PROFILE_LUNGE", combat::PROFILE_LUNGE_OFF, combat::PROFILES_OFF, 1, combat::PROFILE_SIZE, combat::PROFILES_COUNT},
-            {"PROFILE_RAVAGER", combat::PROFILE_RAVAGER_OFF, combat::PROFILES_OFF, 2, combat::PROFILE_SIZE, combat::PROFILES_COUNT},
-            {"PROFILE_SWEEP", combat::PROFILE_SWEEP_OFF, combat::PROFILES_OFF, 3, combat::PROFILE_SIZE, combat::PROFILES_COUNT},
+            {"PROFILE_HEAVY", combat::PROFILE_HEAVY_OFF, combat::PROFILES_OFF, combat::CREATURE_HEAVY, combat::PROFILE_SIZE, combat::PROFILES_COUNT},
+            {"PROFILE_LUNGE", combat::PROFILE_LUNGE_OFF, combat::PROFILES_OFF, combat::CREATURE_LUNGE, combat::PROFILE_SIZE, combat::PROFILES_COUNT},
+            {"PROFILE_RAVAGER", combat::PROFILE_RAVAGER_OFF, combat::PROFILES_OFF, combat::CREATURE_RAVAGER, combat::PROFILE_SIZE, combat::PROFILES_COUNT},
+            {"PROFILE_SWEEP", combat::PROFILE_SWEEP_OFF, combat::PROFILES_OFF, combat::CREATURE_SWEEP, combat::PROFILE_SIZE, combat::PROFILES_COUNT},
+            {"PROFILE_POLE", combat::PROFILE_POLE_OFF, combat::PROFILES_OFF, combat::CREATURE_POLE, combat::PROFILE_SIZE, combat::PROFILES_COUNT},
+            {"PROFILE_POLE_SEVER", combat::PROFILE_POLE_SEVER_OFF, combat::PROFILES_OFF, combat::CREATURE_POLE_SEVER, combat::PROFILE_SIZE, combat::PROFILES_COUNT},
             {"SKELETON_BULL", combat::SKELETON_BULL_OFF, combat::SKELETONS_OFF, combat::SKELETON_BULL, combat::SKELETON_SIZE, combat::SKELETONS_COUNT},
             {"SKELETON_CHICKEN", combat::SKELETON_CHICKEN_OFF, combat::SKELETONS_OFF, combat::SKELETON_CHICKEN, combat::SKELETON_SIZE, combat::SKELETONS_COUNT},
             {"SKELETON_LONGTAIL", combat::SKELETON_LONGTAIL_OFF, combat::SKELETONS_OFF, combat::SKELETON_LONGTAIL, combat::SKELETON_SIZE, combat::SKELETONS_COUNT},
+            {"SKELETON_POLE", combat::SKELETON_POLE_OFF, combat::SKELETONS_OFF, combat::SKELETON_POLE, combat::SKELETON_SIZE, combat::SKELETONS_COUNT},
             {"SKELETON_QUAD_32X24", combat::SKELETON_QUAD_32X24_OFF, combat::SKELETONS_OFF, combat::SKELETON_QUAD_32X24, combat::SKELETON_SIZE, combat::SKELETONS_COUNT},
             {"ZONE_RAVAGER_HEAD", combat::ZONE_RAVAGER_HEAD_OFF, combat::ZONES_OFF, combat::ZONE_RAVAGER_HEAD, combat::ZONE_SIZE, combat::ZONES_COUNT},
             {"ZONE_RAVAGER_APPENDAGE", combat::ZONE_RAVAGER_APPENDAGE_OFF, combat::ZONES_OFF, combat::ZONE_RAVAGER_APPENDAGE, combat::ZONE_SIZE, combat::ZONES_COUNT},
+            {"ZONE_POLE_HEAD", combat::ZONE_POLE_HEAD_OFF, combat::ZONES_OFF, combat::ZONE_POLE_HEAD, combat::ZONE_SIZE, combat::ZONES_COUNT},
+            {"ZONE_POLE_BREAK_APPENDAGE", combat::ZONE_POLE_BREAK_APPENDAGE_OFF, combat::ZONES_OFF, combat::ZONE_POLE_BREAK_APPENDAGE, combat::ZONE_SIZE, combat::ZONES_COUNT},
+            {"ZONE_POLE_CRACK_APPENDAGE", combat::ZONE_POLE_CRACK_APPENDAGE_OFF, combat::ZONES_OFF, combat::ZONE_POLE_CRACK_APPENDAGE, combat::ZONE_SIZE, combat::ZONES_COUNT},
             {"ANCHOR_BULL_ORIGIN", combat::ANCHOR_BULL_ORIGIN_OFF, combat::ANCHORS_OFF, 0, combat::ANCHOR_SIZE, combat::ANCHORS_COUNT},
             {"ANCHOR_BULL_HEAD", combat::ANCHOR_BULL_HEAD_OFF, combat::ANCHORS_OFF, 1, combat::ANCHOR_SIZE, combat::ANCHORS_COUNT},
             {"ANCHOR_CHICKEN_ORIGIN", combat::ANCHOR_CHICKEN_ORIGIN_OFF, combat::ANCHORS_OFF, 2, combat::ANCHOR_SIZE, combat::ANCHORS_COUNT},
             {"ANCHOR_CHICKEN_HEAD", combat::ANCHOR_CHICKEN_HEAD_OFF, combat::ANCHORS_OFF, 3, combat::ANCHOR_SIZE, combat::ANCHORS_COUNT},
             {"ANCHOR_LONGTAIL_ORIGIN", combat::ANCHOR_LONGTAIL_ORIGIN_OFF, combat::ANCHORS_OFF, 4, combat::ANCHOR_SIZE, combat::ANCHORS_COUNT},
             {"ANCHOR_LONGTAIL_HEAD", combat::ANCHOR_LONGTAIL_HEAD_OFF, combat::ANCHORS_OFF, 5, combat::ANCHOR_SIZE, combat::ANCHORS_COUNT},
-            {"ANCHOR_QUAD_32X24_ORIGIN", combat::ANCHOR_QUAD_32X24_ORIGIN_OFF, combat::ANCHORS_OFF, 6, combat::ANCHOR_SIZE, combat::ANCHORS_COUNT},
-            {"ANCHOR_QUAD_32X24_HEAD", combat::ANCHOR_QUAD_32X24_HEAD_OFF, combat::ANCHORS_OFF, 7, combat::ANCHOR_SIZE, combat::ANCHORS_COUNT},
+            {"ANCHOR_POLE_ORIGIN", combat::ANCHOR_POLE_ORIGIN_OFF, combat::ANCHORS_OFF, 6, combat::ANCHOR_SIZE, combat::ANCHORS_COUNT},
+            {"ANCHOR_POLE_HEAD", combat::ANCHOR_POLE_HEAD_OFF, combat::ANCHORS_OFF, 7, combat::ANCHOR_SIZE, combat::ANCHORS_COUNT},
+            {"ANCHOR_QUAD_32X24_ORIGIN", combat::ANCHOR_QUAD_32X24_ORIGIN_OFF, combat::ANCHORS_OFF, 8, combat::ANCHOR_SIZE, combat::ANCHORS_COUNT},
+            {"ANCHOR_QUAD_32X24_HEAD", combat::ANCHOR_QUAD_32X24_HEAD_OFF, combat::ANCHORS_OFF, 9, combat::ANCHOR_SIZE, combat::ANCHORS_COUNT},
             {"ATTACK_HEAVY_BITE", combat::ATTACK_HEAVY_BITE_OFF, combat::ATTACKS_OFF, combat::ATTACK_HEAVY_BITE, combat::ATTACK_SIZE, combat::ATTACKS_COUNT},
             {"ATTACK_HEAVY_TAIL_SPIN", combat::ATTACK_HEAVY_TAIL_SPIN_OFF, combat::ATTACKS_OFF, combat::ATTACK_HEAVY_TAIL_SPIN, combat::ATTACK_SIZE, combat::ATTACKS_COUNT},
             {"ATTACK_LUNGE_LUNGE", combat::ATTACK_LUNGE_LUNGE_OFF, combat::ATTACKS_OFF, combat::ATTACK_LUNGE_LUNGE, combat::ATTACK_SIZE, combat::ATTACKS_COUNT},
@@ -327,6 +335,10 @@ void CombatPackSuite(TestRunner &runner) {
             t.assert(b16(blob, o + 15), h.hp, "blob creature hp");
             t.assert(b16(blob, o + 17), h.spawnX, "blob creature spawnX");
             t.assert(b16(blob, o + 19), h.spawnY, "blob creature spawnY");
+            t.assert(b8(blob, o + 21), h.flags, "blob creature flags");
+            t.assert(b8(blob, o + 22), h.sheet, "blob creature sheet");
+            t.assert(b8(blob, o + 23), h.brokenW, "blob creature brokenW");
+            t.assert(b8(blob, o + 24), h.brokenH, "blob creature brokenH");
         }
         for (uint8_t i = 0; i < combat::PROFILES_COUNT; i++) {
             const size_t o = static_cast<size_t>(combat::PROFILES_OFF) + i * combat::PROFILE_SIZE;

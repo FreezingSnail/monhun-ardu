@@ -150,7 +150,7 @@ void WorldSuite(TestRunner &runner) {
         // Drain the arm (flail blunt) -> the break tick refreshes the target.
         g.weapon = W_FLAIL;
         poleOnHit(g, 40, 164, 58, 0, 0);
-        t.assert(g.pole.broken, 1, "arm broken");
+        t.assert(g.combat.zoneBroken & COMBAT_ZONE_APPENDAGE_BIT, COMBAT_ZONE_APPENDAGE_BIT, "arm broken");
         t.assert(g.target.rect.w, 20, "target rect refresh 28 -> 20");
         // Variant survives withWeapon/resetHunt in train.
         initPoleKind(g, POLE_SEVER);

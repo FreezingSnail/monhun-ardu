@@ -48,7 +48,6 @@ constexpr int16_t MAX_PROJECTILES = 12;
 constexpr int16_t MAX_EFFECTS = 12;
 constexpr int16_t MAX_TRAIN_EVENTS = 24;
 constexpr int16_t PROJ_LIFE = 90;   // ticks, mock fireShell()
-constexpr int16_t POLE_HEAD = 16;   // head zone = top 16 px (x1.4)
 
 enum Mode : int8_t {
     MODE_HUNT = 0,
@@ -329,8 +328,12 @@ struct Effect {
     int16_t text;
 };
 
-// Training-pole variants (bead monhun-ardu-6zb.5). Kind 0 is the legacy plain
-// pole (byte-identical behavior); 1..3 are breakable dummies (see POLE_DEFS).
+// Training-pole variants (bead monhun-ardu-6zb.6). Kind selects the static
+// creature record loaded through the shared combat loader; the record's zones
+// (head crit, breakable appendage) and stats drive behaviour. The Pole itself
+// only owns its world rect, hit flash timer and the selected variant kind:
+// pool/broken live in the shared Game::combat zone caches (zoneBroken, zone[..].hp)
+// exactly like a beast's, so there is no pole-specific drain/break code.
 enum PoleKind : int8_t {
     POLE_PLAIN = 0,
     POLE_SEVER = 1,   // sword-gated top block: breaks -> head crit x1.4 gone
@@ -341,9 +344,7 @@ enum PoleKind : int8_t {
 struct Pole {
     Rect rect;          // hurt box: plain 20x36 at (140,40); BREAK 28x36 intact
     uint8_t hitFlash;   // 4 on hit, decays in updatePole()
-    uint8_t hp;         // remaining zone pool (0 for POLE_PLAIN)
-    uint8_t broken;     // 0 intact, 1 broken (zone pool drained + matching phys)
-    int8_t kind;        // PoleKind
+    int8_t kind;        // PoleKind (selects the prop creature record)
 };
 
 struct TrainEvent {
@@ -478,6 +479,7 @@ struct CombatState {
     uint8_t appendZone;
     uint8_t creature;     // index into CREATURES
     uint8_t zoneBroken;   // bit0 head, bit1 appendage
+    uint8_t isStatic;     // creature record flags bit0: static prop (pole)
     uint8_t patternIdx;
     uint8_t stepIdx;
     uint8_t stepT;     // 8-bit countdown: step `after`/WAIT ticks cap at 255

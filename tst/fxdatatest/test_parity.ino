@@ -1,11 +1,8 @@
-// Perf/parity-bench carve (mirrors test_perf.ino and perf_test.hpp's
-// MH_AUDIO=0): the parity fixtures replay only MON_LUNGE/SWEEP/HEAVY, which
-// never run a zone/multi-window/stagger/zones-guard path, so this
-// image compiles the ravager machinery out (MH_COMBAT_PARTS=0, see
-// src/core/game.hpp) and keeps the flash headroom the full machinery needs.
-// The shipped-3 guards are dist-only and their attacks single-window, so the
-// folded paths are behavior-identical; test_combat keeps the full machinery.
-#define MH_COMBAT_PARTS 0
+// The parity fixtures replay MON_LUNGE/SWEEP/HEAVY plus the plain training
+// pole. The pole scenes now resolve through the shared 3-hitzone code
+// (bead monhun-ardu-6zb.6), so this image keeps the generated combat facts
+// (MH_COMBAT_PARTS default 1). The shipped-3 guards are dist-only and their
+// attacks single-window, so the extra machinery is behavior-identical.
 #include "harness/fx_globals.hpp"
 #include "parity_test.hpp"
 

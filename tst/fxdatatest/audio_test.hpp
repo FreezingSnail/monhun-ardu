@@ -58,7 +58,7 @@ static void evTrainCrit(Game &g) {
 }
 
 static void evPoleBreak(Game &g) {
-    g.pole.broken = 1;
+    g.combat.zoneBroken |= COMBAT_ZONE_APPENDAGE_BIT;
 }
 
 static void evParry(Game &g) {
