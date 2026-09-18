@@ -19,6 +19,18 @@
     "staggerDecay": 0,
     "staggerRecoverT": 0
   },
+  "zones": {
+    "appendage": {
+      "box": { "ox": -24, "oy": 0, "w": 24, "h": 16 },
+      "dmgMul": 150,
+      "hp": 60,
+      "bodyShare": 40,
+      "breakTypes": ["SLASH"],
+      "hurtOn": true,
+      "staggerOnHit": 30,
+      "broken": { "dmgMul": 200, "hurtOn": false, "cue": "part_break", "disableAttacks": ["sweep"] }
+    }
+  },
   "attacks": [
     {
       "id": "lunge",

@@ -1,173 +1,222 @@
-# monhun-ardu-2u8 — menu v2: icon + name options, selection frame, clearer layout
+# monhun-ardu-4t4 — menu name-only + HEAVY long tail
 
-Epic: monhun-ardu-nch. No commit/push/git-add per worker protocol.
+Worker report. Epic monhun-ardu-nch. No commit/push by worker.
 
 ## What changed
 
-- `tools/gen-art.py`
-  - Menu bake rewritten: `mh_menu_bg` (128x64: title, `WEAPON`/`MONSTER`
-    labels, dim option icons + names, `A HUNT` footer), `mh_menu_wsel`
-    (3 x 32x8 weapon tiles), `mh_menu_msel` (5 x 64x8 target tiles). The old
-    `mh_menu_sel` (8 x 28x16 underlined text) is gone.
-  - Each sel tile = white icon + name + bright 1 px open frame + 3x5 cursor
-    arrow (local x0..2), so the selected option composites bright in one blit
-    per plane over its dim bg copy.
-  - Option icons: 8x6 sword/flail/gun rect icons (`WEAPON_ICON_RECTS`) and
-    12x6 monster/pole icons produced by `mini_points()`, a deterministic
-    reduction of the shipped sheet's east idle frame (frame 0). The reduction
-    drops BLACK (shadow row, eyes, hooves) and the final source row, keeping
-    the comb/horns/tail readable.
-  - `check_menu_identity()` extended: every text cell still cross-checked
-    against `fxfontw`/`fxfontg`; every icon re-derived from the shipped
-    beast/pole sheets and checked LIGHT in the bg / WHITE in the sel tiles;
-    frame outline + cursor asserted white. `sheet_filename`/`sheet_kind`
-    updated; menu dumps now print whole (320 px) for review.
-- `src/menu.hpp` — `drawMenu()` draws the three sheets: bg, weapon tile at
-  x=24+34i/y=11, target tile at x=(t&1)*64 / y=29+9*(t>>1). Plain arithmetic
-  (no non-PROGMEM lookup arrays) so RAM stays flat.
-- `tst/fxdatatest/asset_test.hpp` — header checks for the three new sheets
-  (+6 asserts).
-- `tst/fxdatatest/menu_art_test.hpp` + `test_menu_art.ino` — new device pixel
-  oracle (hud_test style): plane 0 pins the frame top row / cursor column on
-  the picked tiles and clear on the others (selection A SWD+CHICKEN,
-  selection B GUN+POLE); plane 2 proves white sel sets while light bg clears
-  (selected names bright, all unselected dim names erased); the 12x6 icon of
-  every target hashes pairwise-distinct. 42 asserts.
-- `README.md`, `docs/equipment-framework.md` — menu v2 sheets/layout; stale
-  `mh_menu_sel` doc reference re-pointed.
+### SCOPE A — menu text-only
+- `tools/gen-art.py`: `menu_defs()` no longer bakes the option mini-icons into
+  `mh_menu_bg` / `mh_menu_wsel` / `mh_menu_msel`; names + bright frame + cursor
+  are unchanged, v2 tile geometry (tile sizes, name lanes x15/x19, cursor at
+  col 0, frame from x=4) is unchanged. Removed the now-dead icon helpers
+  (`WEAPON_ICON_RECTS`, `mask_points`, `mini_points`, `icon_blocks`,
+  `menu_wmasks`, `menu_mmasks`, `menu_source_crop`, `MENU_TARGET_SHEETS`).
+  `check_menu_identity` still cross-checks every name cell against
+  `fxfontw`/`fxfontg` + frame + cursor, and now asserts the old v2 icon slot is
+  clear on every option.
+- `tst/fxdatatest/menu_art_test.hpp`: icon hash/distinct assertions replaced with
+  per-option name-ink checks (plane 0 dim, plane 2 sel bright), per-target
+  sel-name/sel-frame checks, and icon-slot-clear checks on plane 0 + plane 2.
+  Frame/cursor move checks unchanged. Dropped the now-unused `hashRegion`.
+- `tst/fxdatatest/asset_test.hpp`: menu comment updated; header checks kept.
 
-## Option counts / semantics (unchanged)
-
-`MenuState` still 3 weapons x 5 targets, `MENU_POLE_TARGET = 4`, nav/debounce
-and `menuMonsterKind`/`menuMode` untouched. Host `menu_test` (state) is byte-
-for-byte unchanged at 59/0. Only the displayed target labels changed
-(LUNGE/SWEEP/HEAVY -> the beast art names CHICKEN/BULL/LONGTAIL).
-
-## Verification (exact commands + tails)
-
-1. `make gen` x2 then `make gen-check` — PASS
-   - Two-pass equip staleness observed: the menu section shrank 256 B
-     (`fxdata.bin` 150016 -> 149760), shifting the equip sheet offsets, so the
-     first `make gen` re-baked `fxdata/tables/equip.bin` +
-     `src/generated/equip_meta.hpp` from the pre-shift header and the second
-     pass converged. `src/fxdata.h` symbols:
-     `mh_menu_wsel = 0x012A3D`, `mh_menu_msel = 0x012C7F`, `mh_menu_bg = 0x013401`.
-   - `fxdata_manifest: PASS (63 generated artifacts unchanged)`
-2. `make test` — `Total Passed: 3521  Total Failed: 0` (baseline 3521/0)
-   `make test-tools` — `Ran 137 tests in 7.348s  OK`
-3. `make fxtest-headless` — all suites PASS
-   ```
-   test_assets PASSED=276 FAILED=0      test_audio PASSED=14 FAILED=0
-   test_boot PASSED=4 FAILED=0          test_combat PASSED=184 FAILED=0
-   test_data PASSED=221 FAILED=0        test_hub PASSED=57 FAILED=0
-   test_hud PASSED=17 FAILED=0          test_menu_art PASSED=42 FAILED=0
-   test_menu PASSED=59 FAILED=0         test_parity PASSED=660 FAILED=0
-   test_perf PASSED=5 FAILED=0          test_player_art PASSED=111 FAILED=0
-   test_quests PASSED=50 FAILED=0       test_screens PASSED=78 FAILED=0
-   test_smith PASSED=66 FAILED=0
-   ```
-   perf tail: `B pUs=6375 pHz=156 lHz=52 lTk=528 rMx=4968 rAv=4757 ram=602`
-   (baseline `rMx=4968 rAv=4757 pUs=6375` — identical; menu is not in the
-   renderScene bench).
-4. `make build` + `make size`
-   - `Sketch uses 26434 bytes (89%)` / `Global variables use 1863 bytes`
-   - `size: flash=26434/29696 (3262 free)  ram=1863/2560`
-   - vs baseline 26436/3260: flash delta **-2 B** (budget was +200 B), RAM
-     delta 0.
-   - cart: `fxdata/fxdata.bin` 150016 -> 149760 B, **-256 B**.
-5. Parity — `node tools/gen-parity-fixtures.js` -> `scenes=20 ticks=1269
-   snapshots=32 cpFields=20`; `git status --short tst/fxdatatest/
-   parity_fixtures.hpp` empty -> byte-identical.
-
-## ASCII dump (new menu sheets; `make art-dump`)
-
-`menu_wsel` — 3 frames SWD / FLS / GUN (32x8). Cursor = `W` col 0, frame from
-col 4, icon cols 6..13 (`WW`/sword, ball, pistol), name at col 15:
-```
-menu_wsel  frame 32x8  frames 3  size 96x8
-  ....WWWWWWWWWWWWWWWWWWWWWWWWWWWW....WWWWWWWWWWWWWWWWWWWWWWWWWWWW....WWWWWWWWWWWWWWWWWWWWWWWWWWWW
-  ....W....WW....................W....W......WWW.................W....W.......WW.................W
-  W...W....WW.....WW.W.W.WW......WW...W......WWW.WWW.W....WW.....WW...W.WWWWWW....WW.W.W.W.W.....W
-  WW..W....WW....W...W.W.W.W.....WWW..W.....WWWW.W...W...W.......WWW..W.WWWW.....W...W.W.WWW.....W
-  WWW.W..WWWWWW...W..WWW.W.W.....WWWW.W....W.....WW..W....W......WWWW.W.WWWW.....W.W.W.W.W.W.....W
-  WW..W....WW......W.WWW.W.W.....WWW..W..WW......W...W.....W.....WWW..W..WW......W.W.W.W.W.W.....W
-  W...W....WW....WW..W.W.WW......WW...W..WW......W...WWW.WW......WW...W..WW.......WW..WW.W.W.....W
-  ....WWWWWWWWWWWWWWWWWWWWWWWWWWWW....WWWWWWWWWWWWWWWWWWWWWWWWWWWW....WWWWWWWWWWWWWWWWWWWWWWWWWWWW
-```
-`menu_msel` — 5 frames CHICKEN / BULL / LONGTAIL / RAVAGER / POLE (64x8, one
-64 px cell each). The 12x6 icon (cols 6..17) is the reduced beast sheet: chicken
-top-right comb rows 2..3, bull's twin horns rows 2..3, longtail ridge row 2 and
-tail-left bulk, ravager blob, pole verticals:
-```
-menu_msel  frame 64x8  frames 5  size 320x8
-  ....WWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWW....WWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWW....WWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWW....WWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWW....WWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWW
-  ....W........WWWW..............................................W....W..........................................................W....W..........................................................W....W...WWWWWWWW...............................................W....W.WWWWWWWWWWWW.............................................W
-  W...W.WWW....WWWW...WW.W.W.WWW..WW.W.W.WWW.W.W.................WW...W...WWWWW.WWWW.WW..W.W.W...W...............................WW...W.WWWWWWWWWWWW.W....W..W.W..WW.WWW..W..WWW.W...............WW...W..WWWWWWWWWWW.WW...W..W.W..W...WW.WWW.WW..................WW...W.WWWWWWWWWWWW.WW...W..W...WWW.............................W
-  WW..W.WWWWWWWWWWW..W...W.W..W..W...W.W.W...WWW.................WWW..W.WWWWWWWWWWWW.W.W.W.W.W...W...............................WWW..W.WWWWWWWWWWWW.W...W.W.WWW.W....W..W.W..W..W...............WWW..W..WWWWWWWWWWW.W.W.W.W.W.W.W.W.W...W...W.W.................WWW..W.WWWWWWWWWWWW.W.W.W.W.W...W...............................W
-  WWW.W.WWWWWWWWW....W...W.W..W..W...WW..WW..W.W.................WWWW.W.WWWWWWWWWWWW.WW..W.W.W...W...............................WWWW.W.WWWWWWWWWWWW.W...W.W.W.W.W.W..W..WWW..W..W...............WWWW.W..WWWWWWWWWWW.WW..WWW.W.W.WWW.W.W.WW..WW..................WWWW.W..WWWWWWWWWW..WW..W.W.W...WW..............................W
-  WW..W.WWWWWWWWW....W...W.W..W..W...W.W.W...W.W.................WWW..W.WWWWWWWWWWWW.W.W.W.W.W...W...............................WWW..W.WWWWWWWWW....W...W.W.W.W.W.W..W..W.W..W..W...............WWW..W..WWWWWWWWWWW.W.W.W.W.W.W.W.W.W.W.W...W.W.................WWW..W..WWWWWWWWWW..W...W.W.W...W...............................W
-  W...W...W....WW.....WW.W.W.WWW..WW.W.W.WWW.W.W.................WW...W..WW.W..WWW...WW...WW.WWW.WWW.............................WW...W....WWWWWWWW..WWW..W..W.W..WW..W..W.W.WWW.WWW.............WW...W..............W.W.W.W..W..W.W..WW.WWW.W.W.................WW...W..WWWWWWWWWW..W....W..WWW.WWW.............................W
-  ....WWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWW....WWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWW....WWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWW....WWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWW....WWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWW
-```
-`menu_bg` option region (dim light-gray options; `l` = light, `W` = white).
-Weapon row y13 (`l` label + 3 icon/name cells) and the 2-column monster grid
-y29/38/47, footer y56:
-```
-y11 ................................................................................................................................
-y12 .................................ll..................................lll................................ll......................
-y13 l.l.lll..l..ll...l..l.l..........ll.....ll.l.l.ll....................lll.lll.l....ll..............llllll....ll.l.l.l.l..........
-y14 l.l.l...l.l.l.l.l.l.lll..........ll....l...l.l.l.l..................llll.l...l...l................llll.....l...l.l.lll..........
-y15 lll.ll..lll.ll..l.l.l.l........llllll...l..lll.l.l.................l.....ll..l....l...............llll.....l.l.l.l.l.l..........
-y16 lll.l...l.l.l...l.l.l.l..........ll......l.lll.l.l...............ll......l...l.....l...............ll......l.l.l.l.l.l..........
-y17 l.l.lll.l.l.l....l..l.l..........ll....ll..l.l.ll................ll......l...lll.ll................ll.......ll..ll.l.l..........
-y22 l.l..l..l.l..ll.lll.lll.ll......................................................................................................
-y23 lll.l.l.lll.l....l..l...l.l.....................................................................................................
-y24 lll.l.l.l.l..l...l..ll..ll......................................................................................................
-y25 l.l.l.l.l.l...l..l..l...l.l.....................................................................................................
-y26 l.l..l..l.l.ll...l..lll.l.l.....................................................................................................
-y29 .............llll...............................................................................................................
-y30 ......lll....llll...ll.l.l.lll..ll.l.l.lll.l.l..........................lllll.llll.ll..l.l.l...l................................
-y31 ......lllllllllll..l...l.l..l..l...l.l.l...lll........................llllllllllll.l.l.l.l.l...l................................
-y32 ......lllllllll....l...lll..l..l...ll..ll..l.l........................llllllllllll.ll..l.l.l...l................................
-y33 ......lllllllll....l...l.l..l..l...l.l.l...l.l........................llllllllllll.l.l.l.l.l...l................................
-y34 ........l....ll.....ll.l.l.lll..ll.l.l.lll.l.l.........................ll.l..lll...ll...ll.lll.lll..............................
-y38 ........................................................................llllllll................................................
-y39 ......llllllllllll.l....l..l.l..ll.lll..l..lll.l.......................lllllllllll.ll...l..l.l..l...ll.lll.ll...................
-y40 ......llllllllllll.l...l.l.lll.l....l..l.l..l..l.......................lllllllllll.l.l.l.l.l.l.l.l.l...l...l.l..................
-y41 ......llllllllllll.l...l.l.l.l.l.l..l..lll..l..l.......................lllllllllll.ll..lll.l.l.lll.l.l.ll..ll...................
-y42 ......lllllllll....l...l.l.l.l.l.l..l..l.l..l..l.......................lllllllllll.l.l.l.l.l.l.l.l.l.l.l...l.l..................
-y43 .........llllllll..lll..l..l.l..ll..l..l.l.lll.lll.................................l.l.l.l..l..l.l..ll.lll.l.l..................
-y47 ......llllllllllll..............................................................................................................
-y48 ......llllllllllll.ll...l..l...lll..............................................................................................
-y49 ......llllllllllll.l.l.l.l.l...l................................................................................................
-y50 .......llllllllll..ll..l..l.l...ll..............................................................................................
-y51 .......llllllllll..l...l.l.l...l................................................................................................
-y52 .......llllllllll..l....l..lll.lll..............................................................................................
-y56 .....................................................W......W.W.W.W.W.W.WWW.....................................................
-y57 ....................................................W.W.....W.W.W.W.WWW..W......................................................
-y58 ....................................................WWW.....WWW.W.W.W.W..W......................................................
-y59 ....................................................W.W.....W.W.W.W.W.W..W......................................................
-y60 ....................................................W.W.....W.W..WW.W.W..W......................................................
-```
-(rows y18..21, y27..28, y35..37, y44..46, y53..55, y61..63 blank are omitted)
+### SCOPE B — HEAVY long tail
+- `data/creatures/heavy.json`: new `zones.appendage` — box `{ox:-24, oy:0,
+  w:24, h:16}`, `dmgMul 150`, `hp 60`, `bodyShare 40`, `breakTypes ["SLASH"]`,
+  `hurtOn true`, `staggerOnHit 30`, `broken {dmgMul 200, hurtOn false,
+  cue "part_break", disableAttacks ["sweep"]}` (ravager tail scale).
+- `tools/gen-art.py`: new `fxtail_heavy` sheet, 24x16 frames, 4 frames in
+  `combatPartArtFrame` order (east intact / east broken / west intact / west
+  broken), tip/underside/root in 4 shades, west = exact horizontal mirror.
+- `src/render.hpp` `drawMonster()`: HEAVY overlay draw at the appendage-zone
+  world anchor — `combatFaceOffset(m.fx, m.fy, zone.box)` on the RAM zone cache
+  (same transform `combatZoneContains` uses, so art and hitbox cannot drift),
+  frame via `combatPartArtFrame(m.fx < 0, broken)`. Drawn after the body sprite,
+  skipped when dead. No new cart reads beyond the normal `sprDraw`.
+- Tests:
+  - `tst/art_dims_test.hpp`: new “heavy tail overlay is a 24x16 mirror sheet”
+    suite (24 checks): sheet dims/frames, tip/root/underside pixels, broken
+    stubs, exact west mirror (data+mask, all shades/pages).
+  - `tst/combat_test.hpp` (host): new “heavy appendage zone (heavy.json) + tail
+    art linkage” (17 checks): box/hp/mul/share/break/stagger/broken/unlockMask,
+    `art_dims::tail_heavy_frame_{w,h} == zone box`, `creatureLoad` seeds the
+    HEAVY appendage cache. Zone count 2 -> 3.
+  - `tst/fxdatatest/asset_test.hpp`: `blobHeader(fxtail_heavy, 24, 16)`.
+  - `tst/fxdatatest/combat_test.hpp`: HEAVY appendage zone spot checks (record +
+    box + unlockMask), heavy `appendZone` now `ZONE_HEAVY_APPENDAGE`.
+  - NEW `tst/fxdatatest/monster_art_test.hpp` + `test_monster_art.ino` (18
+    checks): renders the real `drawMonster()` per plane and pins the east tail
+    band left of the body (tip x=16 lit, x=15 clear), the plane-2 white cap/root
+    highlight, the west mirror (tip right of body, east band empty), broken
+    stubs, and LUNGE with no appendage -> no overlay.
 
 ## Deviations / notes
+- Tail sheet is **24x16**, not the issue's example 24x10: `SpritesU`'s plus-mask
+  frame stride is `(h >> 3)` pages, so a 10-tall 4-shade sheet mis-draws (only
+  one of two pages). Height 16 is the issue's “height multiple of 8” constraint;
+  the requested symbol name `fxtail_heavy` and the 24 px length are used.
+- Zone `oy` is 0 on purpose: the zone origin rotates through `combatFacePoint`
+  and a non-zero `oy` flips vertically at the 180° west facing. The sprite frame
+  carries the vertical placement instead.
+- The legacy ravager `fxtail` (18x10) is still not drawn: same page-stride issue,
+  and the ravager is outside this bead's scope (RAVAGER keeps the legacy body
+  sheet). Only `MON_HEAVY` overlays a tail.
+- Target/body box untouched: `heavy.json` stats w40 h28 unchanged, so
+  `syncMonsterTarget` rect and parity scenes are untouched. The zone addition
+  intentionally lets tail hits route to the appendage in the HEAVY hunt; no
+  parity scene uses HEAVY.
+- README menu paragraph + heavy-zone mention updated (name-only, tail overlay).
 
-- Layout: replaced the 3+2 underlined text rows (underlines gone) with a
-  WEAPON row at y13 and a 2-column monster grid at y29/38/47 + footer y56, so
-  all five targets show full names (LONGTAIL is the 32 px max at x=19).
-  `menu_state` counts/semantics unchanged, so all state/nav tests are
-  untouched.
-- Target labels LUNGE/SWEEP/HEAVY -> CHICKEN/BULL/LONGTAIL (the menu names the
-  beast art); the picked kind still maps through `menuMonsterKind` (0..3) and
-  RAVAGER/POLE unchanged.
-- Footer changed `A HUB` -> `A HUNT`, matching the 5r1 demo flow (A launches
-  the hunt from the menu).
-- Old `images/menu/mh_menu_sel_28x16.png` deleted; two new generated PNGs
-  (`mh_menu_wsel_32x8.png`, `mh_menu_msel_64x8.png`) are untracked in the
-  working tree (orchestrator stages the generated set together).
-- Host assert count unchanged (3521); device `test_assets` 270 -> 276 (three
-  new blob-header checks), `test_menu` 59 unchanged, new `test_menu_art` 42.
-- Flash -2 B / RAM +0 / cart -256 B. No `PROGMEM` arrays added (arithmetic
-  instead) to keep the RAM line flat.
-- Untracked/none beyond the intended new files; no commit made.
+## Verification (exact)
+
+### 1. gen twice + gen-check
+```
+$ make gen   (first pass: fxdata/tables/equip.bin + src/generated/equip_meta.hpp
+             changed — asset-address shift propagated into the equip part sheet
+             offsets, the expected two-pass equip staleness flow)
+$ make gen   (second pass: unchanged)
+TWO GEN OK
+$ make gen-check
+fxdata_manifest: PASS (64 generated artifacts unchanged)
+```
+Two-pass equip flow returned to a fixed point; `fxdata/fxdata.h == src/fxdata.h`
+asserted by gen-check.
+
+### 2. host + tooling
+```
+$ make test
+Total Passed: 3586
+Total Failed: 0          (baseline 3521; +65 new checks)
+  heavy tail overlay is a 24x16 mirror sheet   Passed: 24  Failed: 0
+  heavy appendage zone (heavy.json) + tail art linkage  Passed: 17  Failed: 0
+$ make test-tools
+Ran 137 tests in 6.908s
+OK
+```
+
+### 3. full device gate
+```
+$ make fxtest-headless
+test_assets       PASSED=278 FAILED=0   PASS
+test_audio        PASSED=14  FAILED=0   PASS
+test_boot         PASSED=4   FAILED=0   PASS
+test_combat       PASSED=193 FAILED=0   PASS
+test_data         PASSED=221 FAILED=0   PASS
+test_hub          PASSED=57  FAILED=0   PASS
+test_hud          PASSED=17  FAILED=0   PASS
+test_menu_art     PASSED=60  FAILED=0   PASS
+test_menu         PASSED=59  FAILED=0   PASS
+test_monster_art  PASSED=18  FAILED=0   PASS
+test_parity       PASSED=660 FAILED=0   PASS
+B pUs=6375 pHz=156 lHz=52 lTk=528 rMx=4968 rAv=4755 ram=601
+test_perf         PASSED=5   FAILED=0   PASS
+test_player_art   PASSED=111 FAILED=0   PASS
+test_quests       PASSED=50  FAILED=0   PASS
+test_screens      PASSED=78  FAILED=0   PASS
+test_smith        PASSED=66  FAILED=0   PASS
+```
+Perf vs baseline `rMx=4968 rAv=4757 pUs=6375`: rMx/pUs identical, rAv 4757 ->
+4755 (-2, the extra appendage branch; within bench noise, no regression).
+
+### 4. build + size
+```
+$ make size
+Sketch uses 26680 bytes (89%) of program storage space.
+Global variables use 1863 bytes (72%) of dynamic memory.
+size: .text=26614 .data=66 .bss=1797
+size: flash=26680/29696 (3016 free)  ram=1863/2560
+size: data facts: HAS_GUARD_CHANCE:false ... HAS_ZONES:true  (no fact flipped)
+```
+- flash 26434 -> 26680, **delta +246 B**; headroom 3262 -> 3016.
+- cart `fxdata/fxdata.bin` 149760 -> **151040 B, delta +1280 B** (new 24x16x4
+  tail sheet + menu shrink + equipment-address shift). No `HAS_*` fact flipped.
+
+### 5. parity fixtures byte-identical
+```
+$ node tools/gen-parity-fixtures.js
+wrote tst/fxdatatest/parity_fixtures.hpp
+scenes=20 ticks=1269 snapshots=32 cpFields=20
+$ git diff --stat tst/fxdatatest/parity_fixtures.hpp
+(empty)
+```
+
+### 6. ASCII evidence (`make art-dump`, gen-art `--dump`)
+
+menu_wsel tile 0 (SWD) — cursor col0, clear icon slot x6..13, white frame, name:
+```
+  ....WWWWWWWWWWWWWWWWWWWWWWWWWWWW
+  ....W..........................W
+  W...W...........WW.W.W.WW......W
+  WW..W..........W...W.W.W.W.....W
+  WWW.W...........W..WWW.W.W.....W
+  WW..W............W.WWW.W.W.....W
+  W...W..........WW..W.W.WW......W
+  ....WWWWWWWWWWWWWWWWWWWWWWWWWWWW
+```
+
+menu_msel tile 0 (CHICKEN) — clear icon slot x6..17, name at x19:
+```
+  ....WWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWW
+  ....W..........................................................W
+  W...W...............WW.W.W.WWW..WW.W.W.WWW.W.W.................W
+  WW..W..............W...W.W..W..W...W.W.W...WWW.................W
+  WWW.W..............W...WWW..W..W...WW..WW..W.W.................W
+  WW..W..............W...W.W..W..W...W.W.W...W.W.................W
+  W...W...............WW.W.W.WWW..WW.W.W.WWW.W.W.................W
+  ....WWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWW
+```
+
+fxtail_heavy 24x16, 4 frames laid left-to-right (columns 0-23 east intact,
+24-47 east broken, 48-71 west intact, 72-95 west broken):
+```
+  ................................................................................................
+  ................................................................................................
+  ................................................................................................
+  ................................................................................................
+  ..............lllllllWWW....................llllWWWlllllll..............llll....................
+  ......lllllllllllllllWWW.................gggllllWWWlllllllllllllll......llllggg.................
+  ......lllllllllllllllWWW.................gggggggWWWlllllllllllllll......ggggggg.................
+  llllllllllllllllllllllll.................gggggggllllllllllllllllllllllllggggggg.................
+  WWWlllllllllllllllllllll.................ggggggglllllllllllllllllllllWWWggggggg.................
+  WWWlllllllllllllllllllll.................ggggggglllllllllllllllllllllWWWggggggg.................
+  WWWlllllllllllllllllllll.................ggggggglllllllllllllllllllllWWWggggggg.................
+  llllllllllllllllllllllll.................gggggggllllllllllllllllllllllllggggggg.................
+  ......lgggggggllllllllll.................gggggggllllllllllgggggggl......ggggggg.................
+  ......lggggggglggggggggg.................gggggggggggggggglgggggggl......ggggggg.................
+  ..............lggggggggg........................gggggggggl......................................
+  ................................................................................................
+```
+(`l` light, `W` white, `g` dark, `.` clear.)
+
+## Files
+```
+ M data/creatures/heavy.json
+ M fxdata/blocks/Sprites.txt
+ M fxdata/fxdata-data.bin
+ M fxdata/fxdata.bin
+ M fxdata/fxdata.h
+ M fxdata/manifest.json
+ M fxdata/menu/Sprites.txt
+ M fxdata/tables/combat.bin
+ M fxdata/tables/equip.bin
+ M images/menu/mh_menu_bg_128x64.png
+ M images/menu/mh_menu_msel_64x8.png
+ M images/menu/mh_menu_wsel_32x8.png
+ M src/fxdata.h
+ M src/generated/art_dims.hpp
+ M src/generated/combat_data.hpp
+ M src/generated/combat_expect.hpp
+ M src/generated/combat_meta.hpp
+ M src/generated/equip_meta.hpp
+ M src/render.hpp
+ M tools/gen-art.py
+ M tst/art_dims_test.hpp
+ M tst/combat_test.hpp
+ M tst/fxdatatest/asset_test.hpp
+ M tst/fxdatatest/combat_test.hpp
+ M tst/fxdatatest/menu_art_test.hpp
+ M README.md
+?? images/blocks/fxtail_heavy_24x16.png
+?? tst/fxdatatest/monster_art_test.hpp
+?? tst/fxdatatest/test_monster_art.ino
+```

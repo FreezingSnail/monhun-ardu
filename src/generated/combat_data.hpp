@@ -12,7 +12,7 @@
 namespace combat_data {
 
 constexpr uint8_t VERSION = 1;
-constexpr uint16_t BLOB_SIZE = 622;
+constexpr uint16_t BLOB_SIZE = 634;
 
 struct Box {
     int8_t ox;
@@ -135,18 +135,19 @@ constexpr uint8_t WINDOW_RAVAGER_TAIL_SWEEP_0 = 5;
 constexpr uint8_t WINDOW_RAVAGER_TAIL_SWEEP_1 = 6;
 constexpr uint8_t WINDOW_SWEEP_LUNGE_0 = 7;
 constexpr uint8_t WINDOW_SWEEP_SWEEP_0 = 8;
-constexpr uint8_t ZONE_RAVAGER_APPENDAGE = 1;
-constexpr uint8_t ZONE_RAVAGER_HEAD = 0;
+constexpr uint8_t ZONE_HEAVY_APPENDAGE = 0;
+constexpr uint8_t ZONE_RAVAGER_APPENDAGE = 2;
+constexpr uint8_t ZONE_RAVAGER_HEAD = 1;
 
 inline constexpr std::array<Creature, 4> CREATURES = {{
-    {2, 0, 255, 255, 0, 2, 0, 2, 40, 28, 3, 320, 200, 40},
+    {2, 0, 255, 0, 0, 2, 0, 2, 40, 28, 3, 320, 200, 40},
     {1, 1, 255, 255, 2, 2, 2, 2, 32, 24, 5, 200, 200, 40},
-    {3, 2, 0, 1, 4, 2, 4, 3, 32, 24, 6, 260, 200, 40},
+    {3, 2, 1, 2, 4, 2, 4, 3, 32, 24, 6, 260, 200, 40},
     {0, 3, 255, 255, 6, 2, 7, 1, 28, 22, 7, 150, 200, 40},
 }};
 
 inline constexpr std::array<Profile, 4> PROFILES = {{
-    {36, 24, 42, 8, 10, 6, 10, 0, 0, 0, 55, 40, 90, 140, 24, 0},
+    {36, 24, 42, 8, 10, 6, 10, 0, 0, 2, 55, 40, 90, 140, 24, 0},
     {36, 24, 42, 8, 10, 6, 10, 0, 0, 0, 55, 40, 90, 140, 24, 0},
     {36, 24, 42, 8, 10, 6, 10, 60, 1, 3, 50, 30, 90, 120, 24, 24},
     {36, 24, 42, 8, 10, 6, 10, 0, 0, 0, 55, 40, 90, 140, 24, 0},
@@ -159,7 +160,8 @@ inline constexpr std::array<Skeleton, 4> SKELETONS = {{
     {6, 2},
 }};
 
-inline constexpr std::array<Zone, 2> ZONES = {{
+inline constexpr std::array<Zone, 3> ZONES = {{
+    {{-24, 0, 24, 16}, 60, 150, 40, 1, 30, 200, 3, 2},
     {{20, 4, 12, 12}, 40, 130, 100, 1, 12, 130, 1, 0},
     {{-14, 8, 18, 10}, 60, 150, 40, 1, 30, 200, 3, 32},
 }};

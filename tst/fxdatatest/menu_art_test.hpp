@@ -10,7 +10,9 @@
 //   plane 2 - white (sel) sets while light gray (bg) clears, so the selected
 //             weapon/target name lights and every unselected copy clears,
 //             proving the bright frame + dim options composite as designed
-//   icons   - the 12x6 target icon of every monster option differs pairwise
+//   names   - every option name lane carries ink (plane 0 dim / plane 2 sel)
+//             while the v2 icon slot is clear on both planes (bead 4t4 made
+//             the menu name-only: no icons)
 //
 // Framebuffer layout (ArduboyG L4_Triplane): 128 B/page, pixel(x,y) =
 // buf[(y >> 3) * 128 + x], bit y & 7.
@@ -89,19 +91,6 @@ static uint16_t countRegionBit(uint8_t xa, uint8_t ya, uint8_t w, uint8_t h) {
     return n;
 }
 
-// FNV-1a over a region's lit bits, so two monster icons match only when every
-// pixel matches (position-independent: the region is cell-relative).
-static uint32_t hashRegion(uint8_t xa, uint8_t ya, uint8_t w, uint8_t h) {
-    uint32_t hash = 2166136261u;
-    for (uint8_t y = ya; y < ya + h; y++) {
-        for (uint8_t x = xa; x < xa + w; x++) {
-            hash ^= bitAt(x, y);
-            hash *= 16777619u;
-        }
-    }
-    return hash;
-}
-
 inline void test_menu_art(FxTest &test) {
     arduboy.startGray();
     gotoPlane(0);
@@ -123,9 +112,16 @@ inline void test_menu_art(FxTest &test) {
     test.expectEq(countRowBit(monY(0), monX(1) + FRAME_X, monX(1) + MTILE_W - 1), 0, F("msel A frame1 clear"));
     test.expectEq(countColBit(monX(0), monY(0) + 2, monY(0) + 6), 5, F("msel A cursor0"));
     test.expectEq(countColBit(monX(1), monY(0) + 2, monY(0) + 6), 0, F("msel A cursor1 clear"));
-    // Unselected tlies stay dim: their name cells carry ink on plane 0 (light
-    // gray is lit there) but are erased on plane 2 (checked below).
-    test.expectEq(countRegionBit(W_X + W_STEP + 15, W_Y + 2, 12, 5) > 0 ? 1 : 0, 1, F("wsel A dim name has ink"));
+    // Unselected tiles stay dim: their name cells carry ink on plane 0 (light
+    // gray is lit there) but are erased on plane 2 (checked below). Every
+    // option is name-only now, so the old v2 icon slot stays clear.
+    for (uint8_t i = 0; i < MENU_WEAPON_COUNT; i++)
+        test.expectEq(countRegionBit(W_X + i * W_STEP + 15, W_Y + 2, 12, 5) > 0 ? 1 : 0, 1, F("wsel dim name has ink"));
+    test.expectEq(countRegionBit(W_X + W_STEP + ICON_X, W_Y + ICON_Y, 8, ICON_H), 0, F("wsel A icon slot clear"));
+    for (uint8_t t = 0; t < MENU_TARGET_COUNT; t++) {
+        test.expectEq(countRegionBit(monX(t) + 19, monY(t) + 2, 32, 5) > 0 ? 1 : 0, 1, F("msel dim name has ink"));
+        test.expectEq(countRegionBit(monX(t) + ICON_X, monY(t) + ICON_Y, M_ICON_W, ICON_H), 0, F("msel icon slot clear"));
+    }
 
     // ---- plane 2: white sel sets, light bg clears. The selected names light
     // and every unselected option's bg copy is erased.
@@ -159,23 +155,22 @@ inline void test_menu_art(FxTest &test) {
     test.expectEq(countRowBit(monY(1), monX(0) + FRAME_X, monX(0) + MTILE_W - 1), 0, F("msel B row1 clear"));
     test.expectEq(countColBit(monX(4), monY(4) + 2, monY(4) + 6), 5, F("msel B pole cursor"));
 
-    // ---- every target option carries a distinct 12x6 icon: select each one
-    // in turn and hash its cell-relative icon region.
-    uint32_t icons[MENU_TARGET_COUNT];
+    // ---- name-only (bead 4t4): select every target in turn, prove its white
+    // name lane is drawn, its bright frame is present and the old v2 icon slot
+    // stays clear on both the selected plane 2 and the dim base plane 0.
     for (uint8_t t = 0; t < MENU_TARGET_COUNT; t++) {
         MenuState m;
         m.target = t;
+        gotoPlane(2);
+        clearFb();
+        drawMenu(m);
+        test.expectEq(countRegionBit(monX(t) + 19, monY(t) + 2, 32, 5) > 0 ? 1 : 0, 1, F("target sel name bright"));
+        test.expectEq(countRowBit(monY(t), monX(t) + FRAME_X, monX(t) + MTILE_W - 1), MTILE_W - FRAME_X, F("target sel frame"));
+        test.expectEq(countRegionBit(monX(t) + ICON_X, monY(t) + ICON_Y, M_ICON_W, ICON_H), 0, F("target icon slot clear"));
         gotoPlane(0);
         clearFb();
         drawMenu(m);
-        const int16_t cx = monX(t) + ICON_X;
-        const int16_t cy = monY(t) + ICON_Y;
-        icons[t] = hashRegion(static_cast<uint8_t>(cx), static_cast<uint8_t>(cy), M_ICON_W, ICON_H);
-        test.expectEq(countRegionBit(static_cast<uint8_t>(cx), static_cast<uint8_t>(cy), M_ICON_W, ICON_H) > 0 ? 1 : 0, 1, F("target icon has ink"));
-    }
-    for (uint8_t i = 0; i < MENU_TARGET_COUNT; i++) {
-        for (uint8_t j = static_cast<uint8_t>(i + 1); j < MENU_TARGET_COUNT; j++)
-            test.expectEq(icons[i] != icons[j] ? 1 : 0, 1, F("target icons distinct"));
+        test.expectEq(countRegionBit(monX(t) + ICON_X, monY(t) + ICON_Y, M_ICON_W, ICON_H), 0, F("target icon slot clear dim"));
     }
 }
 

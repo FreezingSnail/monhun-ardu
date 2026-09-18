@@ -422,6 +422,13 @@ int maskAt(const Blob &b, int x, int y) {
 int planeAt(const Blob &b, int shade, int x, int y) {
     return bitAt(y, pixelData(b, 0, shade, x, y / 8));
 }
+// Same, but for an arbitrary frame (the heavy tail sheet's facing/stage frames).
+int maskAtF(const Blob &b, int frame, int x, int y) {
+    return bitAt(y, pixelMask(b, frame, 0, x, y / 8));
+}
+int planeAtF(const Blob &b, int frame, int shade, int x, int y) {
+    return bitAt(y, pixelData(b, frame, shade, x, y / 8));
+}
 
 // The three demo beasts ship 32x24x8 sheets with distinct silhouettes; RAVAGER
 // keeps the legacy fxmonster. Checks the frame layout, that frame 0 (east idle)
@@ -498,6 +505,63 @@ void testMonsterSheets(Test &t) {
     t.assert(planeAt(longtail, 2, 28, 11), 0, "longtail jaw not white");
 }
 
+// ------------------------------------------- heavy long-tail overlay (4t4)
+
+// fxtail_heavy is the HEAVY appendage overlay: 24x16x4 in combatPartArtFrame
+// order (east intact / east broken / west intact / west broken), frame origin =
+// the heavy.json appendage box top-left. Height 16 is a multiple of 8 so the
+// SpritesU plus-mask page stride is exact at draw time. The west frames must be
+// the exact horizontal mirror of the east frames.
+void testHeavyTail(Test &t) {
+    std::cout << "---------- heavy tail overlay sheet ----------" << std::endl;
+    Blob tail;
+    if (!parseBlob("fxtail_heavy", tail, t))
+        return;
+    t.assert(tail.w, 24, "heavy tail sheet w");
+    t.assert(tail.h, 16, "heavy tail sheet h");
+    t.assert(tail.frames, 4, "heavy tail sheet frames");
+
+    // East intact: light tip at the far left (plane0), white cap on the tip
+    // (plane2), dark underside (plane0 only), light root at the right.
+    t.assert(maskAtF(tail, 0, 0, 7), 1, "heavy tail east tip ink");
+    t.assert(planeAtF(tail, 0, 0, 0, 9), 1, "heavy tail east tip plane0");
+    t.assert(planeAtF(tail, 0, 2, 0, 8), 1, "heavy tail east tip white cap");
+    t.assert(planeAtF(tail, 0, 2, 3, 8), 0, "heavy tail east cap ends at x3");
+    t.assert(planeAtF(tail, 0, 0, 23, 8), 1, "heavy tail east root plane0");
+    t.assert(planeAtF(tail, 0, 2, 22, 5), 1, "heavy tail east root highlight white");
+    t.assert(planeAtF(tail, 0, 0, 10, 12), 1, "heavy tail east underside dark");
+    t.assert(planeAtF(tail, 0, 1, 10, 12), 0, "heavy tail east underside dark only");
+    t.assert(maskAtF(tail, 0, 12, 3), 0, "heavy tail east above root clear");
+    t.assert(maskAtF(tail, 0, 23, 15), 0, "heavy tail east below root clear");
+
+    // East broken: stub at the root only; the tip is gone.
+    t.assert(maskAtF(tail, 1, 0, 8), 0, "heavy tail east broken clears tip");
+    t.assert(planeAtF(tail, 1, 0, 20, 8), 1, "heavy tail east broken stub plane0");
+    t.assert(planeAtF(tail, 1, 1, 21, 4), 1, "heavy tail east broken stump light");
+    t.assert(planeAtF(tail, 1, 0, 23, 13), 1, "heavy tail east broken stub base");
+
+    // West intact/broken are the exact horizontal mirrors.
+    t.assert(planeAtF(tail, 2, 0, 23, 9), 1, "heavy tail west tip plane0");
+    t.assert(planeAtF(tail, 2, 2, 23, 8), 1, "heavy tail west tip white cap");
+    t.assert(planeAtF(tail, 2, 0, 0, 8), 1, "heavy tail west root plane0");
+    t.assert(maskAtF(tail, 3, 23, 8), 0, "heavy tail west broken clears tip");
+    t.assert(planeAtF(tail, 3, 0, 3, 8), 1, "heavy tail west broken stub plane0");
+
+    auto mirrored = [&](int a, int b) {
+        for (int shade = 0; shade < 3; shade++)
+            for (int page = 0; page < 2; page++)
+                for (int x = 0; x < tail.w; x++) {
+                    if (pixelData(tail, a, shade, x, page) != pixelData(tail, b, shade, tail.w - 1 - x, page))
+                        return false;
+                    if (pixelMask(tail, a, shade, x, page) != pixelMask(tail, b, shade, tail.w - 1 - x, page))
+                        return false;
+                }
+        return true;
+    };
+    t.assert(mirrored(0, 2) ? 1 : 0, 1, "heavy tail west mirrors east");
+    t.assert(mirrored(1, 3) ? 1 : 0, 1, "heavy tail west broken mirrors east broken");
+}
+
 void ArtDimsSuite(TestRunner &runner) {
     TestSuite suite("art dims");
     {
@@ -518,6 +582,11 @@ void ArtDimsSuite(TestRunner &runner) {
     {
         Test t("demo beast sheets read as distinct silhouettes");
         testMonsterSheets(t);
+        suite.addTest(t);
+    }
+    {
+        Test t("heavy tail overlay is a 24x16 mirror sheet");
+        testHeavyTail(t);
         suite.addTest(t);
     }
     runner.addTestSuite(suite);

@@ -238,6 +238,12 @@ inline void test_assets(FxTest &test) {
         blobBytes(fxtail, 216 + 0 * 2, clear_col, sizeof(clear_col), test, F("tail f1 clears the tip"));
     }
 
+    // Heavy long-tail overlay (bead monhun-ardu-4t4): 24x16, 4 frames in
+    // combatPartArtFrame() order, matching heavy.json's appendage box. Header
+    // identity only here; the host pixel suite (tst/art_dims_test.hpp) checks
+    // the tip/root ink and the west mirror.
+    blobHeader(fxtail_heavy, 24, 16, test, F("heavy tail w/h"));
+
     // Demo beast sheets (epic monhun-ardu-nch): one 32x24x8 sheet per roster
     // beast -- LUNGE chicken, SWEEP bull, HEAVY longtail -- and RAVAGER keeps
     // the legacy fxmonster. Header identity only here; the host pixel suite
@@ -247,9 +253,10 @@ inline void test_assets(FxTest &test) {
     blobHeader(fxmonster_sweep, 32, 24, test, F("bull monster sheet w/h"));
     blobHeader(fxmonster_heavy, 32, 24, test, F("longtail monster sheet w/h"));
 
-    // Opening menu v2 (bead monhun-ardu-2u8): bg + per-row selection tiles.
-    // Header identity only here; the device pixel oracle (tst/fxdatatest/
-    // menu_art_test.hpp) pins the frame/cursor moves and the per-monster icons.
+    // Opening menu v2 (beads 2u8 / 4t4): bg + per-row selection tiles, now
+    // name-only (no icons). Header identity only here; the device pixel oracle
+    // (tst/fxdatatest/menu_art_test.hpp) pins names/frame/cursor and the clear
+    // icon slots.
     blobHeader(mh_menu_bg, 128, 64, test, F("menu bg w/h"));
     blobHeader(mh_menu_wsel, 32, 8, test, F("menu weapon sel w/h"));
     blobHeader(mh_menu_msel, 64, 8, test, F("menu monster sel w/h"));

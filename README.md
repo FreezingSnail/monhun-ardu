@@ -112,10 +112,13 @@ data/skeletons.json + data/creatures/*.json ──tools/gen-combat.py──►�
   `src/core/combat.hpp` is the production loader (host structs / AVR
   `mhFxRead*`), exercised by `tst/combat_test.hpp`,
   `tst/combat_pack_test.hpp` and the Ardens `test_combat`; the game runs the
-  pattern interpreter from migrations `ljj.3`–`.5`, and `data/creatures/
-  ravager.json` is the first creature with zones (head + appendage, `cgk`,
-  replacing the N-part machinery of `ljj.6`/`ljj.8`): body implicit, one u8
-  pool + one broken record per zone, broken-mask guards. The zones machinery is
+  pattern interpreter from migrations `ljj.3`–`.5`; `data/creatures/
+  ravager.json` was the first creature with zones (head + appendage, `cgk`, and
+  `heavy.json` gained its appendage/long-tail zone in `4t4`), replacing the
+  N-part machinery of `ljj.6`/`ljj.8`: body implicit, one u8 pool + one broken
+  record per zone, broken-mask guards. The shipping heavy tail overlays the
+  `fxtail_heavy` 24x16 sheet at the zone box (`src/render.hpp` drawMonster); the
+  zones machinery is
   folded out of the `test_perf` and `test_parity` images with
   `-DMH_COMBAT_PARTS=0` (see `src/core/game.hpp`), whose scenes never run the
   ravager; shipping and `test_combat` keep it.
@@ -205,13 +208,12 @@ pole, no beast). After a win or loss, A returns to the menu with the picks kept
 until reboot; the next A runs `newGame` again, so projectiles/effects/quest
 counters start clean. While the menu is up the sim and audio are not stepped.
 
-Menu v2 (monhun-ardu-2u8) bakes the options into FX sheets: `mh_menu_bg` (the
-title/labels/footer plus the dim light-gray options), `mh_menu_wsel` (three
-32x8 weapon tiles) and `mh_menu_msel` (five 64x8 target tiles). Every option is
-an icon + name — SWD/FLS/GUN on the weapon row, CHICKEN/BULL/LONGTAIL/RAVAGER/
-POLE in a 2-column beast grid — where the monster icons are deterministic 12x6
-reductions of the shipped beast/pole sheets (comb, horns, tail stay readable)
-and the text is glyph-identical to `fxfontw`/`fxfontg` (gen-art
+Menu v2 (monhun-ardu-2u8, name-only by 4t4) bakes the options into FX sheets:
+`mh_menu_bg` (the title/labels/footer plus the dim light-gray options),
+`mh_menu_wsel` (three 32x8 weapon tiles) and `mh_menu_msel` (five 64x8 target
+tiles). Every option is a name only — SWD/FLS/GUN on the weapon row, CHICKEN/
+BULL/LONGTAIL/RAVAGER/POLE in a 2-column beast grid — with the v2 icon slot left
+clear and the text glyph-identical to `fxfontw`/`fxfontg` (gen-art
 `check_menu_identity`). The picked weapon and target each draw a bright 1 px
 frame plus cursor arrow; unpicked options stay dim. Footer: `A HUNT`.
 

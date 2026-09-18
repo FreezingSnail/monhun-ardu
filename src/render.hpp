@@ -340,6 +340,22 @@ static void drawMonster(const mh::Game &g, int16_t camX, int16_t camY) {
     if (m.state == mh::MS_DEAD)
         return;
 
+    // Breakable appendage overlay (bead monhun-ardu-4t4): HEAVY's long tail.
+    // The appendage zone cache holds the face-relative box the hit test uses
+    // (combatZoneContains), so the overlay lands on the same world rect: body
+    // anchor + DIR8 rotation of (ox, oy). Frames are the combatPartArtFrame
+    // contract (east intact / east broken / west intact / west broken). Only the
+    // heavy 24x16 sheet is drawn here; the legacy ravager fxtail is 18x10 (not a
+    // multiple-of-8 SpritesU page stride) and stays unoverlaid.
+    if (g.monsterKind == mh::MON_HEAVY && g.combat.appendZone != mh::COMBAT_NO_ZONE) {
+        const mh::CombatBox &zb = g.combat.zone[mh::COMBAT_ZONE_APPENDAGE].box;
+        int32_t dx, dy;
+        mh::combatFaceOffset(m.fx, m.fy, zb, dx, dy);
+        const uint8_t broken = (g.combat.zoneBroken & mh::COMBAT_ZONE_APPENDAGE_BIT) ? 1 : 0;
+        const uint8_t tf = mh::combatPartArtFrame(m.fx < 0, broken);
+        sprDraw(fxtail_heavy, static_cast<int16_t>(x + dx), static_cast<int16_t>(y + dy), FRAME(tf));
+    }
+
     if (m.stun > 0) {
         const uint8_t a = static_cast<uint8_t>(static_cast<uint32_t>(g.tick) * ANG_MONSTER_STUN);
         sprDraw(fxwhirl, x + w / 2 + mulQ4(cos256(a), 9), y - 3 + mulQ4(sin256(a), 2), FRAME(spr::WHIRL_DOT));

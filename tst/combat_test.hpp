@@ -104,8 +104,9 @@ void CombatSuite(TestRunner &runner) {
 
     {
         Test t("body box + spawn accessors match combat_data.hpp");
-        // cgk: the ravager declares head + appendage; the shipped 3 have none.
-        t.assert(combat::ZONES_COUNT, 2, "ravager head + appendage");
+        // cgk: the ravager declares head + appendage. 4t4 added the heavy
+        // appendage (long tail), so LUNGE/SWEEP remain body-only.
+        t.assert(combat::ZONES_COUNT, 3, "heavy tail + ravager head/appendage");
         t.assert(combat::ATTACKS_COUNT, 8, "3x2 shipped + ravager bite/tail_sweep");
         t.assert(combat::WINDOWS_COUNT, 9, "ravager tail_sweep is two windows");
         t.assert(combat::PATTERNS_COUNT, 8, "ravager adds p_enraged");
@@ -625,6 +626,34 @@ void CombatSuite(TestRunner &runner) {
         t.assert(combatPartArtFrame(true, 1), 3, "west broken frame");
         for (uint8_t broken = 0; broken < 2; broken++)
             t.assert(combatPartArtFrame(broken != 0, broken) < art_dims::tail_frames, 1, "frame in range");
+        suite.addTest(t);
+    }
+
+    {
+        Test t("heavy appendage zone (heavy.json) + tail art linkage");
+        // 4t4: the longtail gains a real tail zone whose overlay box is the
+        // authored fxtail_heavy frame; the generator keeps the two in step.
+        const CombatZone z = combatZoneRead(combat_data::ZONE_HEAVY_APPENDAGE);
+        t.assert(z.box.ox, -24, "heavy tail ox");
+        t.assert(z.box.oy, 0, "heavy tail oy");
+        t.assert(z.box.w, 24, "heavy tail w");
+        t.assert(z.box.h, 16, "heavy tail h");
+        t.assert(z.hp, 60, "heavy tail hp");
+        t.assert(z.dmgMul, 150, "heavy tail dmgMul");
+        t.assert(z.bodyShare, 40, "heavy tail bodyShare");
+        t.assert(z.breakTypes, PHYS_SLASH, "heavy tail breakTypes");
+        t.assert(z.staggerOnHit, 30, "heavy tail staggerOnHit");
+        t.assert(z.brokenDmgMul, 200, "heavy tail broken dmgMul");
+        t.assert(z.brokenFlags, 0x03, "heavy tail broken hurtOff + cue");
+        t.assert(z.unlockMask, static_cast<uint8_t>(1u << combat_data::ATTACK_HEAVY_SWEEP), "heavy tail disables sweep");
+        t.assert(art_dims::tail_heavy_frame_w, z.box.w, "tail_heavy frame w == zone box w");
+        t.assert(art_dims::tail_heavy_frame_h, z.box.h, "tail_heavy frame h == zone box h");
+        t.assert(art_dims::tail_heavy_frames, 4, "tail_heavy frames");
+        // creatureLoad seeds the heavy appendage cache from the record.
+        Game g;
+        creatureLoad(g, combat_data::CREATURE_HEAVY);
+        t.assert(g.combat.appendZone, combat_data::ZONE_HEAVY_APPENDAGE, "heavy append zone index");
+        t.assert(g.combat.zone[COMBAT_ZONE_APPENDAGE].hp, z.hp, "heavy tail pool seeded");
         suite.addTest(t);
     }
 

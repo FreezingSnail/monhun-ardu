@@ -14,8 +14,9 @@
 // counter is enabled by MH_FX_READ_COUNT in test_combat.ino.
 //
 // cgk: the blob carries the ravager head + appendage zones and a two-window
-// tail_sweep, so the zone/break/guard paths below read real records; the
-// shipped 3 stay on the implicit body path.
+// tail_sweep, so the zone/break/guard paths below read real records. 4t4 added
+// the heavy appendage (long tail) zone, so LUNGE/SWEEP stay body-only while
+// HEAVY now resolves its tail.
 #include "harness/fxtest.hpp"
 #include "src/core/combat.hpp"
 #include "src/core/monster.hpp"       // migration A: sim consumes the attack cache
@@ -75,7 +76,19 @@ inline void test_combat(FxTest &test) {
     test.expectEq(heavy.attackCount, combat_expect::CREATURE_HEAVY_ATTACKS, F("heavy attacks"));
     test.expectEq(heavy.patternCount, combat_expect::CREATURE_HEAVY_PATTERNS, F("heavy patterns"));
     test.expectEq(heavy.headZone, COMBAT_NO_ZONE, F("heavy no head zone"));
-    test.expectEq(heavy.appendZone, COMBAT_NO_ZONE, F("heavy no appendage zone"));
+    test.expectEq(heavy.appendZone, combat::ZONE_HEAVY_APPENDAGE, F("heavy appendage zone"));
+
+    // 4t4: heavy's long tail is a real appendage record with the overlay box.
+    const CombatZone heavyTail = combatZoneRead(combat::ZONE_HEAVY_APPENDAGE);
+    test.expectEq(static_cast<uint32_t>(heavyTail.box.ox), static_cast<uint32_t>(-24), F("heavy tail box ox"));
+    test.expectEq(heavyTail.box.oy, 0, F("heavy tail box oy"));
+    test.expectEq(heavyTail.box.w, 24, F("heavy tail box w"));
+    test.expectEq(heavyTail.box.h, 16, F("heavy tail box h"));
+    test.expectEq(heavyTail.hp, combat_expect::ZONE_HEAVY_APPENDAGE_HP, F("heavy tail hp"));
+    test.expectEq(heavyTail.dmgMul, combat_expect::ZONE_HEAVY_APPENDAGE_DMG_MUL, F("heavy tail dmgMul"));
+    test.expectEq(heavyTail.bodyShare, combat_expect::ZONE_HEAVY_APPENDAGE_BODY_SHARE, F("heavy tail bodyShare"));
+    test.expectEq(heavyTail.breakTypes, PHYS_SLASH, F("heavy tail break slash"));
+    test.expectEq(heavyTail.unlockMask, static_cast<uint8_t>(1u << combat::ATTACK_HEAVY_SWEEP), F("heavy tail unlocks sweep"));
 
     const CombatCreature lunge = combatCreatureRead(combat::CREATURE_LUNGE);
     test.expectEq(lunge.hp, combat_expect::CREATURE_LUNGE_HP, F("lunge hp"));
