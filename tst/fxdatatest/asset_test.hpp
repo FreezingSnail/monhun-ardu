@@ -237,6 +237,14 @@ inline void test_assets(FxTest &test) {
     blobHeader(fxmonster_sweep, 32, 24, test, F("bull monster sheet w/h"));
     blobHeader(fxmonster_heavy, 32, 24, test, F("longtail monster sheet w/h"));
 
+    // Breakable pole variants (bead monhun-ardu-6zb.5): SEVER/CRACK 20x40,
+    // BREAK 28x40; each 4 frames = intact/intact-flash/broken/broken-flash
+    // (PLAIN keeps the legacy 20x40 2-frame fxpole). Header identity only here;
+    // the host dims suite pins the pixels.
+    blobHeader(fxpole_sever, 20, 40, test, F("sever pole w/h"));
+    blobHeader(fxpole_break, 28, 40, test, F("break pole w/h"));
+    blobHeader(fxpole_crack, 20, 40, test, F("crack pole w/h"));
+
     // Opening menu v2 (beads 2u8 / 4t4): bg + per-row selection tiles, now
     // name-only (no icons). Header identity only here; the device pixel oracle
     // (tst/fxdatatest/menu_art_test.hpp) pins names/frame/cursor and the clear

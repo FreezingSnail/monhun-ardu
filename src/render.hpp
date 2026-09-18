@@ -36,9 +36,14 @@ constexpr uint8_t MON_FLASH = 2;
 constexpr uint8_t MON_DEAD = 3;
 constexpr uint8_t MON_WEST = 4;
 
-// 20x40 pole (20x36 art, padded): black-eyed head normal / hit flash.
+// Pole sheets. The PLAIN pole keeps the original 20x40 two-frame sheet
+// (normal/flash) for byte-identical parity; each breakable variant gets its own
+// 20x40 sheet with four frames: intact, intact-flash, broken, broken-flash
+// (bead monhun-ardu-6zb.5). Frame selected by poleSheetFrame().
 constexpr uint8_t POLE_NORMAL = 0;
 constexpr uint8_t POLE_FLASH = 1;
+constexpr uint8_t POLE_BROKEN = 2;
+constexpr uint8_t POLE_BROKEN_FLASH = 3;
 
 // 4x4 spark, light gray / white.
 constexpr uint8_t SPARK_LIGHT = 0;
@@ -64,8 +69,8 @@ constexpr uint8_t SPIN_SOUTH = 3;
 }   // namespace spr
 
 // Cull fully off-screen sprites before paying the FX seek, then blit on the
-// current plane. Max sheet size is 32x40 (fxmonster 32x24, fxpole 20x40), so
-// these bounds stay conservative.
+// current plane. Max sheet size is 32x40 (fxmonster 32x24, pole variants up to
+// 28x40), so these bounds stay conservative.
 static inline void sprDraw(uint24_t img, int16_t x, int16_t y, uint8_t frame) {
     if (x <= -32 || x >= mh::SCREEN_W || y <= -40 || y >= mh::SCREEN_H)
         return;
@@ -268,11 +273,29 @@ static void drawArena(int16_t camX, int16_t camY) {
 
 // Mock drawPole(): base post, ring bands, head, eye hole, ground plate, all
 // baked into the 20x40 (20x36 art) FX sprite; hit flash selects the head plane.
+// Breakable variants select their variant sheet (fxpole_sever/break/crack) and
+// the broken/broken-flash frame once the pool drained. PLAIN keeps fxpole.
+static inline uint24_t poleSheet(int8_t kind) {
+    if (kind == mh::POLE_SEVER)
+        return fxpole_sever;
+    if (kind == mh::POLE_BREAK)
+        return fxpole_break;
+    if (kind == mh::POLE_CRACK)
+        return fxpole_crack;
+    return fxpole;
+}
+
+static inline uint8_t poleSheetFrame(int8_t kind, uint8_t broken, uint8_t flash) {
+    if (kind == mh::POLE_PLAIN)
+        return flash ? spr::POLE_FLASH : spr::POLE_NORMAL;
+    return static_cast<uint8_t>((broken ? spr::POLE_BROKEN : spr::POLE_NORMAL) + (flash ? 1 : 0));
+}
+
 static void drawPole(const mh::Pole &pole, int16_t camX, int16_t camY) {
     const int16_t x = static_cast<int16_t>(pole.rect.x - camX);
     const int16_t y = static_cast<int16_t>(pole.rect.y - camY + mh::HUD_H);
-    const uint8_t f = pole.hitFlash > 0 ? spr::POLE_FLASH : spr::POLE_NORMAL;
-    sprDraw(fxpole, x, y, FRAME(f));
+    const uint8_t f = poleSheetFrame(pole.kind, pole.broken, pole.hitFlash > 0 ? 1 : 0);
+    sprDraw(poleSheet(pole.kind), x, y, FRAME(f));
 }
 
 // Per-creature monster sheet (epic monhun-ardu-nch): the demo roster's beast

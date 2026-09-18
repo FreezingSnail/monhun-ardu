@@ -57,6 +57,10 @@ static void evTrainCrit(Game &g) {
     e = Effect{0, 0, 1, 26, true, 7};   // fresh crit damage number
 }
 
+static void evPoleBreak(Game &g) {
+    g.pole.broken = 1;
+}
+
 static void evParry(Game &g) {
     g.player.riposteT = 90;
 }
@@ -113,6 +117,15 @@ inline void test_audio(FxTest &test) {
         AudioState s{};
         const uint16_t m = cueFor(s, g, evTrainCrit);
         test.expectEq(cueBit(m, CUE_CRIT), 1, F("train pole crit"));
+    }
+    {   // train: a pole variant broke -> CUE_BREAK (wins the same-tick train blip)
+        Game g;
+        newGame(g, W_SWORD, MODE_TRAIN);
+        AudioState s{};
+        const uint16_t m = cueFor(s, g, evPoleBreak);
+        test.expectEq(cueBit(m, CUE_BREAK), 1, F("pole break"));
+        test.expectEq(cueBit(m, CUE_TRAIN), 0, F("break over plain train"));
+        test.expectEq(cueBit(m, CUE_CRIT), 0, F("break not crit"));
     }
     {   // parry riposte armed -> CUE_PARRY
         Game g;

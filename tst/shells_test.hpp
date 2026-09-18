@@ -256,6 +256,143 @@ void ShellSuite(TestRunner &runner) {
     }
 
     {
+        Test t("pole kinds: initPoleKind sets rect/pool; pool 0 for plain");
+        Game g;
+        initGame(g, W_SWORD);
+        initWorld(g, MODE_TRAIN);
+        t.assert(g.pole.kind, POLE_PLAIN, "default plain");
+        t.assert(g.pole.hp, 0, "plain pool 0");
+        t.assert(g.pole.rect.w, 20, "plain rect w");
+        initPoleKind(g, POLE_SEVER);
+        t.assert(g.pole.kind, POLE_SEVER, "sever kind");
+        t.assert(g.pole.hp, 60, "sever pool 60");
+        t.assert(g.pole.rect.w, 20, "sever rect w");
+        initPoleKind(g, POLE_BREAK);
+        t.assert(g.pole.hp, 40, "break pool 40");
+        t.assert(g.pole.rect.w, 28, "break rect w 28");
+        t.assert(g.target.rect.w, 28, "break target rect refreshed");
+        initPoleKind(g, POLE_CRACK);
+        t.assert(g.pole.hp, 30, "crack pool 30");
+        t.assert(g.pole.rect.h, 36, "crack rect h");
+        initPoleKind(g, 99);
+        t.assert(g.pole.kind, POLE_PLAIN, "out-of-range kind clamps to plain");
+        suite.addTest(t);
+    }
+
+    {
+        Test t("SEVER: sword drains the top zone, breaks, loses head crit");
+        Game g;
+        initGame(g, W_SWORD);
+        initWorld(g, MODE_TRAIN);
+        initPoleKind(g, POLE_SEVER);
+        const int16_t zx = 140, zy = 40;       // zone top block @0,0
+        const int16_t hx = 150, hy = zy + 8;   // inside the zone, head zone
+        poleOnHit(g, 10, hx, hy, 0, 0);        // sword: head crit x1.4 -> 14, pool 60 -> 46
+        t.assert(g.pole.hp, 46, "sever pool drains by the crit total");
+        t.assert(g.pole.broken, 0, "not broken yet");
+        t.assert(g.train.last, 14, "head crit x1.4 intact");
+        t.assert(g.pole.hp, 46, "pool 60 - 14");
+        for (int i = 0; i < 5; i++)
+            poleOnHit(g, 10, hx, hy, 0, 0);
+        t.assert(g.pole.hp, 0, "pool drained");
+        t.assert(g.pole.broken, 1, "sever broken");
+        t.assert(g.pole.rect.w, 20, "sever rect unchanged");
+        poleOnHit(g, 10, hx, hy, 0, 0);   // broken: no head crit now
+        t.assert(g.train.last, 10, "head crit gone after break");
+        suite.addTest(t);
+    }
+
+    {
+        Test t("BREAK: flail drains the side arm, rect 28->20, burst + freeze");
+        Game g;
+        initGame(g, W_FLAIL);
+        initWorld(g, MODE_TRAIN);
+        initPoleKind(g, POLE_BREAK);
+        t.assert(g.pole.rect.w, 28, "break rect starts 28");
+        const int16_t zx = 140 + 20, zy = 40 + 8;   // arm box @20,8
+        const int16_t hx = zx + 4, hy = zy + 10;    // body band (below the head 16 px)
+        g.fxN = 0;
+        poleOnHit(g, 20, hx, hy, 0, 0);   // flail body: pool 40 -> 20
+        t.assert(g.pole.hp, 20, "break pool drains on blunt");
+        t.assert(g.pole.broken, 0, "not broken yet");
+        g.fxN = 0;
+        poleOnHit(g, 20, hx, hy, 0, 0);   // pool 20 -> 0 -> break
+        t.assert(g.pole.hp, 0, "pool drained");
+        t.assert(g.pole.broken, 1, "break broken");
+        t.assert(g.pole.rect.w, 20, "break rect shrinks to 20");
+        t.assert(g.target.rect.w, 20, "target rect refreshed");
+        t.assert(g.freeze, 6, "break freeze 6");
+        uint8_t sparks = 0;
+        for (int16_t i = 0; i < g.fxN; i++)
+            if (g.fx[i].text == 0)
+                sparks++;
+        t.assert(sparks, 3, "three burst sparks (+1 damage number)");
+        suite.addTest(t);
+    }
+
+    {
+        Test t("wrong phys: damage lands but the pool never drains/breaks");
+        Game g;
+        initGame(g, W_FLAIL);   // blunt vs SEVER (slash-gated)
+        initWorld(g, MODE_TRAIN);
+        initPoleKind(g, POLE_SEVER);
+        const int16_t hx = 150, hy = 48;
+        for (int i = 0; i < 20; i++)
+            poleOnHit(g, 10, hx, hy, 0, 0);
+        t.assert(g.pole.hp, 60, "wrong phys leaves the pool untouched");
+        t.assert(g.pole.broken, 0, "wrong phys never breaks");
+        t.assert(g.train.total > 0, true, "damage still lands");
+        // Gun vs BREAK (blunt-gated): same story.
+        Game h;
+        initGame(h, W_GUN);
+        initWorld(h, MODE_TRAIN);
+        initPoleKind(h, POLE_BREAK);
+        for (int i = 0; i < 20; i++)
+            poleOnHit(h, 10, 164, 54, 0, 0);
+        t.assert(h.pole.hp, 40, "gun leaves the break pool untouched");
+        t.assert(h.pole.broken, 0, "gun never breaks the arm");
+        suite.addTest(t);
+    }
+
+    {
+        Test t("CRACK: gun shot drains the mid band and breaks it");
+        Game g;
+        initGame(g, W_GUN);
+        initWorld(g, MODE_TRAIN);
+        initPoleKind(g, POLE_CRACK);
+        t.assert(g.pole.hp, 30, "crack pool 30");
+        const int16_t hx = 150, hy = 40 + 23;   // band @0,18 h10, below the head zone
+        g.fxN = 0;
+        poleOnHit(g, 10, hx, hy, 0, 0);   // 30 -> 20
+        poleOnHit(g, 10, hx, hy, 0, 0);   // 20 -> 10
+        g.fxN = 0;
+        poleOnHit(g, 10, hx, hy, 0, 0);   // 10 -> 0 -> break
+        t.assert(g.pole.hp, 0, "crack pool drained");
+        t.assert(g.pole.broken, 1, "crack broken");
+        t.assert(g.pole.rect.w, 20, "crack rect unchanged");
+        uint8_t sparks = 0;
+        for (int16_t i = 0; i < g.fxN; i++)
+            if (g.fx[i].text == 0)
+                sparks++;
+        t.assert(sparks, 3, "break burst spawned");
+        suite.addTest(t);
+    }
+
+    {
+        Test t("plain pole ignores break routing byte-identically");
+        Game g;
+        initGame(g, W_SWORD);
+        initWorld(g, MODE_TRAIN);
+        g.tick = 0;
+        poleOnHit(g, 10, 150, 50, 0, 0);   // top half, head zone
+        t.assert(g.train.last, 14, "plain head x1.4");
+        t.assert(g.pole.broken, 0, "plain never breaks");
+        t.assert(g.pole.hp, 0, "plain pool stays 0");
+        t.assert(g.pole.rect.w, 20, "plain rect unchanged");
+        suite.addTest(t);
+    }
+
+    {
         Test t("train DPS sums the trailing 600-tick window, sum/10 rounded");
         Game g;
         initGame(g, W_SWORD);

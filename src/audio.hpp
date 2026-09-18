@@ -52,6 +52,7 @@ enum AudioCue : uint8_t {
     CUE_WINDUP,    // beast started a windup (telegraph)
     CUE_SHOT,      // gun fired a shell
     CUE_RELOAD,    // gun reload finished
+    CUE_BREAK,     // train: a pole variant's zone drained (part broke)
 };
 
 // Previous-tick snapshot + one-slot retrigger guard.
@@ -64,6 +65,7 @@ struct AudioState {
     uint8_t monsterStun;
     uint8_t projN;
     uint8_t riposteT;
+    uint8_t poleBroken;
     int8_t monsterState;
     int8_t playerStance;
     int8_t playerState;
@@ -85,7 +87,7 @@ static volatile uint16_t mhToggles2;   // queued segment-2 toggles (0 = none)
 // Cue table: {OCR3A, toggles, OCR3A2, toggles2}, precomputed for the exact
 // ArduboyTones math (OCR = F_CPU/8/freq/2 - 1, toggles = (ms*freq)>>9).
 // Index 0 is CUE_NONE (all zero); every queue has toggle counts >= 1.
-static const uint16_t mhCueTable[11][4] PROGMEM = {
+static const uint16_t mhCueTable[12][4] PROGMEM = {
     {0, 0, 0, 0},           // CUE_NONE
     {2023, 21, 0, 0},       // CUE_HIT     494,22
     {1516, 20, 954, 81},    // CUE_CRIT    659,16 1047,40
@@ -97,6 +99,7 @@ static const uint16_t mhCueTable[11][4] PROGMEM = {
     {5713, 6, 4290, 13},    // CUE_WINDUP  175,20 233,30
     {636, 42, 954, 49},     // CUE_SHOT    1568,14 1047,24
     {954, 24, 636, 85},     // CUE_RELOAD  1047,12 1568,28
+    {1431, 20, 750, 100},   // CUE_BREAK   698,28 1060,80
 };
 
 // Arm one cue. Pins are only set to output/low here (the old constructor did it
@@ -147,6 +150,7 @@ static void audioSnapshot(AudioState &s, const Game &g) {
     s.monsterStun = g.monster.stun;
     s.projN = g.projN;
     s.riposteT = g.player.riposteT;
+    s.poleBroken = g.pole.broken;
     s.monsterState = g.monster.state;
     s.playerStance = g.player.stance;
     s.playerState = g.player.state;
@@ -196,6 +200,7 @@ static void audioUpdate(AudioState &s, const Game &g) {
 
     const bool monsterDrop = m.hp < s.monsterHp;
     const bool trainGain = g.train.total > s.trainTotal;
+    const bool poleBroke = g.pole.broken > s.poleBroken;
     const bool playerDrop = p.hp < s.playerHp;
     const bool guarding = playerDrop && (p.stance == ST_GUARD || s.playerStance == ST_GUARD);
 
@@ -207,8 +212,11 @@ static void audioUpdate(AudioState &s, const Game &g) {
     if (m.state == MS_WINDUP && s.monsterState != MS_WINDUP)
         audioCue(s, CUE_WINDUP);
 
-    // Combat reactions (defense > crit > hit > hurt).
-    if (p.riposteT > s.riposteT) {
+    // Combat reactions (break > defense > crit > hit > hurt). Break wins the
+    // same tick as the train damage blip.
+    if (poleBroke) {
+        audioCue(s, CUE_BREAK);
+    } else if (p.riposteT > s.riposteT) {
         audioCue(s, CUE_PARRY);
     } else if (m.stun > s.monsterStun && p.state == PS_DEFLECT) {
         audioCue(s, CUE_DEFLECT);

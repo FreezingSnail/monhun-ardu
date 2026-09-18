@@ -329,9 +329,21 @@ struct Effect {
     int16_t text;
 };
 
+// Training-pole variants (bead monhun-ardu-6zb.5). Kind 0 is the legacy plain
+// pole (byte-identical behavior); 1..3 are breakable dummies (see POLE_DEFS).
+enum PoleKind : int8_t {
+    POLE_PLAIN = 0,
+    POLE_SEVER = 1,   // sword-gated top block: breaks -> head crit x1.4 gone
+    POLE_BREAK = 2,   // flail-gated side arm: breaks -> rect 28x36 -> 20x36
+    POLE_CRACK = 3    // shot-gated band: breaks -> cracked band art
+};
+
 struct Pole {
-    Rect rect;          // hurt box: 20x36 at (140,40)
+    Rect rect;          // hurt box: plain 20x36 at (140,40); BREAK 28x36 intact
     uint8_t hitFlash;   // 4 on hit, decays in updatePole()
+    uint8_t hp;         // remaining zone pool (0 for POLE_PLAIN)
+    uint8_t broken;     // 0 intact, 1 broken (zone pool drained + matching phys)
+    int8_t kind;        // PoleKind
 };
 
 struct TrainEvent {

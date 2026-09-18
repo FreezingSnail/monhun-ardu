@@ -22,7 +22,7 @@ enum MenuAction : int8_t {
 
 struct MenuState {
     int8_t weapon = 0;    // WeaponId 0..2 (SWD/FLS/GUN)
-    int8_t target = 0;    // 0..3 beast kind (lunge/sweep/heavy/ravager), 4 = training pole
+    int8_t target = 0;    // 0..3 beast kind (lunge/sweep/heavy/ravager), 4..7 pole variants
     bool active = true;   // boot into the menu
     bool prevA = false;   // menu-owned edges (see menuReturnStep)
     bool prevB = false;
@@ -33,7 +33,9 @@ struct MenuState {
 };
 
 constexpr int8_t MENU_WEAPON_COUNT = 3;
-constexpr int8_t MENU_TARGET_COUNT = 5;
+// Targets: 0..3 the beast roster, 4..7 the four training poles (plain + the
+// three breakable variants). Pole kind = target - MENU_POLE_TARGET.
+constexpr int8_t MENU_TARGET_COUNT = 8;
 constexpr int8_t MENU_POLE_TARGET = 4;
 
 // D-pad repeat: a fresh direction steps immediately, a held one waits
@@ -102,20 +104,28 @@ inline MenuAction menuStep(MenuState &m, const Input &in) {
     return MENU_NONE;
 }
 
-// Pick -> sim mapping: targets 0..3 select the beast kind in hunt mode, target
-// 4 the training pole in train mode. Single source of truth for the sketch and
-// both suites.
+// Pick -> sim mapping: targets 0..3 select the beast kind in hunt mode, targets
+// 4..7 the training pole (plain/sever/break/crack) in train mode. Single source
+// of truth for the sketch and both suites.
 inline int8_t menuMode(const MenuState &m) {
-    return m.target == MENU_POLE_TARGET ? MODE_TRAIN : MODE_HUNT;
+    return m.target >= MENU_POLE_TARGET ? MODE_TRAIN : MODE_HUNT;
 }
 
 inline int8_t menuMonsterKind(const MenuState &m) {
     return m.target < MENU_POLE_TARGET ? m.target : 0;   // the pole has no beast
 }
 
-// Start the chosen scene from the menu picks.
+// Pole kind for a training target (target - MENU_POLE_TARGET), 0 otherwise.
+inline int8_t menuPoleKind(const MenuState &m) {
+    return m.target >= MENU_POLE_TARGET ? static_cast<int8_t>(m.target - MENU_POLE_TARGET) : 0;
+}
+
+// Start the chosen scene from the menu picks. newGame() keeps its signature and
+// defaults the pole to plain; a training pick installs the variant afterwards.
 inline void menuStart(Game &g, const MenuState &m) {
     newGame(g, m.weapon, menuMode(m), menuMonsterKind(m));
+    if (menuMode(m) == MODE_TRAIN)
+        initPoleKind(g, menuPoleKind(m));
 }
 
 // One input tick while the sim runs: keeps the menu-owned edge flags current and

@@ -253,6 +253,38 @@ const MONSTER_ZONES = {
 // src/core/monster.hpp playerPhys().
 const PHYS_BIT_BY_WEAPON = [1, 2, 4];
 
+// Training-pole variants (bead monhun-ardu-6zb.5), mirroring src/core/game.hpp
+// POLE_DEFS: kind 0 PLAIN is the legacy pole (no zone, no break); 1 SEVER is a
+// slash-gated top block that loses its head crit when broken; 2 BREAK is a
+// flail-gated side arm whose hurt rect shrinks 28x36 -> 20x36; 3 CRACK is a
+// shot-gated mid band. `z` is the zone box relative to the pole rect (w 0 = no
+// zone), pool the drain, breakTypes the required phys mask.
+const POLE_DEFS = [
+  { w: 20, h: 36, z: null, pool: 0, breakTypes: 0, brokenW: 20, brokenH: 36, critLost: false },
+  { w: 20, h: 36, z: { x: 0, y: 0, w: 20, h: 16 }, pool: 60, breakTypes: 1, brokenW: 20, brokenH: 36, critLost: true },
+  { w: 28, h: 36, z: { x: 20, y: 8, w: 8, h: 12 }, pool: 40, breakTypes: 2, brokenW: 20, brokenH: 36, critLost: false },
+  { w: 20, h: 36, z: { x: 0, y: 18, w: 20, h: 10 }, pool: 30, breakTypes: 4, brokenW: 20, brokenH: 36, critLost: false },
+];
+
+const POLE_PLAIN = 0;
+const POLE_SEVER = 1;
+const POLE_BREAK = 2;
+const POLE_CRACK = 3;
+
+// Install a pole variant on the game's pole object. Kind 0 leaves the published
+// 20x36 rect untouched (parity scenes keep setting pole.x/y directly).
+function initPoleKind(g, kind) {
+  let k = kind | 0;
+  if (k < 0 || k >= POLE_DEFS.length) k = 0;
+  const def = POLE_DEFS[k];
+  g.pole.kind = k;
+  g.pole.w = def.w;
+  g.pole.h = def.h;
+  g.pole.hp = def.pool;
+  g.pole.broken = 0;
+  return g;
+}
+
 function newGame(weaponIndex, mode, monsterIndex = 0) {
   const g = {
     tick: 0,
@@ -266,7 +298,7 @@ function newGame(weaponIndex, mode, monsterIndex = 0) {
     monsterIndex: monsterIndex | 0,
     cam: { x: 0, y: 0 },
     train: { total: 0, last: 0, events: [] },
-    pole: { x: 140, y: 40, w: 20, h: 36, hitFlash: 0 },
+    pole: { x: 140, y: 40, w: 20, h: 36, hitFlash: 0, kind: 0, hp: 0, broken: 0 },
     player: {
       x: 96, y: 60, w: 16, h: 16,
       subX: 0, subY: 0, // 1/16 px remainder
@@ -455,7 +487,7 @@ function updatePlayer(g, inp, aP, bP, bR) {
           const hx = hit.x + hit.w / 2;
           const hy = hit.y + hit.h / 2;
           if (g.mode === 'train') {
-            damagePole(g, a.dmg * mult, hx, hy);
+            poleOnHit(g, a.dmg * mult, hx, hy);
           } else {
             monsterOnHit(g, a.dmg * mult, hx, hy);
             if (g.monster.state !== 'dead') {
@@ -689,7 +721,7 @@ function updateStance(g, def) {
         const cy = p.y + p.h / 2;
         if (circleRectOverlap(cx, cy, 24, tr)) {
           if (g.mode === 'train') {
-            damagePole(g, 8, cx, cy);
+            poleOnHit(g, 8, cx, cy);
           } else {
             monsterOnHit(g, 8, cx, cy);
             knockMonsterAway(g, g.monster, cx, cy, 8);
@@ -1098,7 +1130,9 @@ function updatePole(g) {
 
 function damagePole(g, dmg, hx, hy) {
   const pole = g.pole;
-  const crit = hy < pole.y + 16;
+  const def = POLE_DEFS[pole.kind] || POLE_DEFS[0];
+  let crit = hy < pole.y + 16;
+  if (crit && pole.broken && def.critLost) crit = false;   // SEVER: top gone
   const total = Math.max(1, (dmg * (crit ? 14 : 10)) / 10 | 0);
   pole.hitFlash = 4;
   g.freeze = Math.max(g.freeze, crit ? 5 : 4);
@@ -1107,6 +1141,30 @@ function damagePole(g, dmg, hx, hy) {
   g.train.last = total;
   g.train.events.push({ tick: g.tick, dmg: total });
   g.effects.push({ x: hx, y: hy - 6, t: 0, life: 26, crit, text: String(total) });
+  return total;
+}
+
+// Zone resolve for breakable poles: point-in-zone (half-open, facing-free) and
+// pool drain only when the player phys is in breakTypes. Pool 0 -> broken, the
+// hurt rect refreshes (BREAK shrinks) and a small spark burst + freeze fires.
+function poleOnHit(g, dmg, hx, hy) {
+  const total = damagePole(g, dmg, hx, hy);
+  const pole = g.pole;
+  const def = POLE_DEFS[pole.kind] || POLE_DEFS[0];
+  if (pole.kind === 0 || pole.broken || !def.z) return;
+  const zx = pole.x + def.z.x;
+  const zy = pole.y + def.z.y;
+  if (hx < zx || hx >= zx + def.z.w || hy < zy || hy >= zy + def.z.h) return;
+  if (!(PHYS_BIT_BY_WEAPON[g.weapon] & def.breakTypes)) return;
+  if (total < pole.hp) { pole.hp -= total; return; }
+  pole.hp = 0;
+  pole.broken = 1;
+  g.effects.push({ x: zx + (def.z.w >> 1), y: zy + (def.z.h >> 1), t: 0, life: 6, crit: false, text: '' });
+  g.effects.push({ x: zx + (def.z.w >> 1) - 5, y: zy + (def.z.h >> 1) + 3, t: 0, life: 7, crit: false, text: '' });
+  g.effects.push({ x: zx + (def.z.w >> 1) + 5, y: zy + (def.z.h >> 1) - 3, t: 0, life: 7, crit: false, text: '' });
+  g.freeze = Math.max(g.freeze, 6);
+  pole.w = def.brokenW;
+  pole.h = def.brokenH;
 }
 
 function trainDps(g) {
@@ -1136,7 +1194,7 @@ function updateProjectiles(g) {
     if (tr) {
       const r = { x: (pr.x >> 4) - (pr.w >> 1), y: (pr.y >> 4) - (pr.h >> 1), w: pr.w, h: pr.h };
       if (rectsOverlap(r, tr)) {
-        if (g.mode === 'train') damagePole(g, pr.dmg, r.x + (r.w >> 1), r.y + (r.h >> 1));
+        if (g.mode === 'train') poleOnHit(g, pr.dmg, r.x + (r.w >> 1), r.y + (r.h >> 1));
         else monsterOnHit(g, pr.dmg, r.x + (r.w >> 1), r.y + (r.h >> 1));
         g.projectiles.splice(i, 1);
         continue;
@@ -1466,16 +1524,74 @@ function drawPole(ctx, g) {
   const pole = g.pole;
   const x = Math.round(pole.x);
   const y = Math.round(pole.y);
+  const kind = pole.kind | 0;
+  const def = POLE_DEFS[kind] || POLE_DEFS[0];
+  // post + ring bands (shared silhouette), then the per-variant part.
   ctx.fillStyle = SHADES[1];
-  ctx.fillRect(x + 2, y + 12, pole.w - 4, pole.h - 12);
+  ctx.fillRect(x + 2, y + 12, 16, 24);
   ctx.fillStyle = SHADES[0];
-  for (let i = 0; i < 3; i++) ctx.fillRect(x + 2, y + 20 + i * 7, pole.w - 4, 1);
+  for (let i = 0; i < 3; i++) ctx.fillRect(x + 2, y + 20 + i * 7, 16, 1);
   ctx.fillStyle = SHADES[pole.hitFlash > 0 ? 3 : 2];
-  ctx.fillRect(x, y, pole.w, 16);
+  ctx.fillRect(x, y, 20, 16);
   ctx.fillStyle = SHADES[0];
   ctx.fillRect(x + 8, y + 5, 4, 4);
+  if (kind === 1) {
+    if (pole.broken) {
+      // slanted-cut stump
+      ctx.fillStyle = SHADES[0];
+      ctx.fillRect(x + 2, y + 17, 6, 1);
+      ctx.fillRect(x + 8, y + 18, 5, 1);
+      ctx.fillRect(x + 14, y + 19, 4, 1);
+    } else {
+      // diagonal blade notch on the top block
+      ctx.fillRect(x + 3, y + 2, 1, 1);
+      ctx.fillRect(x + 4, y + 3, 1, 1);
+      ctx.fillRect(x + 5, y + 4, 1, 1);
+      ctx.fillRect(x + 6, y + 5, 1, 1);
+      ctx.fillRect(x + 7, y + 6, 1, 1);
+    }
+  } else if (kind === 2) {
+    if (pole.broken) {
+      ctx.fillRect(x + 18, y + 8, 1, 2);   // sheared arm stub
+      ctx.fillRect(x + 2, y + 14, 1, 3);   // stress cracks
+      ctx.fillRect(x + 5, y + 17, 1, 2);
+      ctx.fillRect(x + 11, y + 15, 1, 3);
+    } else {
+      ctx.fillStyle = SHADES[2];
+      ctx.fillRect(x + 20, y + 8, 8, 12);   // side arm
+      ctx.fillStyle = SHADES[3];
+      ctx.fillRect(x + 21, y + 9, 6, 2);    // hammer head
+      ctx.fillRect(x + 21, y + 16, 6, 2);
+      ctx.fillStyle = SHADES[0];
+      ctx.fillRect(x + 22, y + 11, 1, 1);   // rivets
+      ctx.fillRect(x + 22, y + 15, 1, 1);
+      ctx.fillRect(x + 24, y + 11, 1, 1);
+      ctx.fillRect(x + 24, y + 15, 1, 1);
+    }
+  } else if (kind === 3) {
+    if (pole.broken) {
+      ctx.fillRect(x, y + 18, 20, 1);      // split band + jagged crack
+      ctx.fillRect(x + 2, y + 19, 1, 1);
+      ctx.fillRect(x + 5, y + 20, 1, 1);
+      ctx.fillRect(x + 8, y + 19, 1, 1);
+      ctx.fillRect(x + 11, y + 21, 1, 1);
+      ctx.fillRect(x + 14, y + 20, 1, 1);
+      ctx.fillRect(x + 17, y + 19, 1, 1);
+      ctx.fillRect(x, y + 23, 20, 1);
+    } else {
+      ctx.fillRect(x, y + 18, 20, 1);      // bullseye ring band
+      ctx.fillRect(x, y + 27, 20, 1);
+      ctx.fillRect(x + 8, y + 21, 4, 1);
+      ctx.fillRect(x + 7, y + 22, 6, 1);
+      ctx.fillRect(x + 8, y + 23, 4, 1);
+      ctx.fillStyle = SHADES[3];
+      ctx.fillRect(x + 9, y + 22, 2, 1);
+    }
+  } else {
+    ctx.fillStyle = SHADES[0];
+  }
   ctx.fillStyle = SHADES[0];
-  ctx.fillRect(x - 2, y + pole.h - 2, pole.w + 4, 2);
+  ctx.fillRect(x - 2, y + 34, 20 + 4, 2);
 }
 
 function drawProjectiles(ctx, g) {
@@ -1656,13 +1772,20 @@ function wire(ctx, x, y, w, h, color) {
 
 /* ------------------------------------------------------------------ boot */
 
-// weapon swap and reset keep the current area and the chosen beast
+// weapon swap and reset keep the current area, the chosen beast and the pole
+// variant
 function withWeapon(game, weaponIndex) {
-  return newGame(weaponIndex, game.mode, game.monsterIndex);
+  const kind = game.pole.kind | 0;
+  const g = newGame(weaponIndex, game.mode, game.monsterIndex);
+  if (g.mode === 'train') initPoleKind(g, kind);
+  return g;
 }
 
 function resetHunt(game) {
-  return newGame(game.weapon, game.mode, game.monsterIndex);
+  const kind = game.pole.kind | 0;
+  const g = newGame(game.weapon, game.mode, game.monsterIndex);
+  if (g.mode === 'train') initPoleKind(g, kind);
+  return g;
 }
 
 function boot() {
@@ -1736,9 +1859,11 @@ function boot() {
 
 if (typeof module !== 'undefined' && module.exports) {
   module.exports = {
-    newGame, step, render, withWeapon, resetHunt, isqrt,
+    newGame, step, render, withWeapon, resetHunt, isqrt, initPoleKind,
+    damagePole, poleOnHit,
     monsterActiveWindow, monsterTellWindow,
-    WEAPON_DEFS, MONSTER_ATTACKS, MONSTER_DEFS,
+    WEAPON_DEFS, MONSTER_ATTACKS, MONSTER_DEFS, POLE_DEFS,
+    POLE_PLAIN, POLE_SEVER, POLE_BREAK, POLE_CRACK,
     W, H, ARENA_H, HOLD_TICKS, SHADES, WORLD_W, WORLD_H, FP,
   };
 }

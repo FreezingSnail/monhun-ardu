@@ -592,6 +592,59 @@ void testTailSpin(Test &t) {
     t.assert(n != e ? 1 : 0, 1, "north != east");
 }
 
+// -------------------------------------------- training-pole variant sheets
+// Bead monhun-ardu-6zb.5: PLAIN keeps the legacy 2-frame 20x40 sheet; each
+// breakable variant is a 4-frame sheet (intact, intact-flash, broken,
+// broken-flash). The emblems and broken art are pinned by comparing the frames
+// to each other and by requiring ink in the variant part region, so a redraw
+// that collapses a variant to the plain post fails here.
+void testPoleSheets(Test &t) {
+    Blob plain, sever, brk, crack;
+    t.assert(parseBlob("fxpole", plain, t), 1, "plain pole blob");
+    // fxpole is the legacy 20x40 2-frame sheet: byte-identical to before.
+    t.assert(plain.w, 20, "plain pole w");
+    t.assert(plain.h, 40, "plain pole h");
+    t.assert(plain.frames, 2, "plain pole 2 frames");
+
+    const char *const syms[3] = {"fxpole_sever", "fxpole_break", "fxpole_crack"};
+    Blob *const blobs[3] = {&sever, &brk, &crack};
+    for (int vi = 0; vi < 3; vi++) {
+        Blob &b = *blobs[vi];
+        if (!parseBlob(syms[vi], b, t))
+            continue;
+        t.assert(b.frames, 4, std::string(syms[vi]) + " 4 frames");
+        t.assert(b.h, 40, std::string(syms[vi]) + " h 40");
+        // Broken frame (index 2) must differ from the intact frame (index 0):
+        // a variant that never swaps art would fail here.
+        int diff = 0;
+        for (size_t i = 0; i < b.bytes.size() / 4; i++) {
+            if (b.bytes[i] != b.bytes[b.bytes.size() / 2 + i])
+                diff++;
+        }
+        t.assert(diff > 0, 1, std::string(syms[vi]) + " broken differs from intact");
+        // Flash frames (1, 3) differ from their non-flash pair.
+        int flash_diff = 0;
+        const size_t fb = b.bytes.size() / 4;
+        for (size_t i = 0; i < fb; i++) {
+            if (b.bytes[i] != b.bytes[fb + i])
+                flash_diff++;
+        }
+        t.assert(flash_diff > 0, 1, std::string(syms[vi]) + " flash differs from intact");
+    }
+
+    // BREAK's side arm extends the frame to 28 px and inks columns 20..27 on
+    // the intact frame (the hammer against the empty background).
+    t.assert(brk.w, 28, "break pole w 28");
+    int arm = 0;
+    for (int x = 20; x < 28; x++) {
+        for (int page = 0; page < 5; page++) {
+            if (pixelMask(brk, 0, 0, x, page))
+                arm++;
+        }
+    }
+    t.assert(arm > 0, 1, "break side arm has ink right of the post");
+}
+
 void ArtDimsSuite(TestRunner &runner) {
     TestSuite suite("art dims");
     {
@@ -622,6 +675,11 @@ void ArtDimsSuite(TestRunner &runner) {
     {
         Test t("heavy tail-spin overlay is a 24x24 world-direction sheet");
         testTailSpin(t);
+        suite.addTest(t);
+    }
+    {
+        Test t("training-pole variant sheets carry distinct broken/flash art");
+        testPoleSheets(t);
         suite.addTest(t);
     }
     runner.addTestSuite(suite);

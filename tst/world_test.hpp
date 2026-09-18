@@ -141,6 +141,28 @@ void WorldSuite(TestRunner &runner) {
     }
 
     {
+        Test t("pole variants: target rect follows the kind; BREAK refresh on break");
+        Game g;
+        newGame(g, W_SWORD, MODE_TRAIN);
+        initPoleKind(g, POLE_BREAK);
+        t.assert(g.pole.rect.w, 28, "break rect w 28");
+        t.assert(g.target.rect.w, 28, "active target refreshed to 28");
+        // Drain the arm (flail blunt) -> the break tick refreshes the target.
+        g.weapon = W_FLAIL;
+        poleOnHit(g, 40, 164, 58, 0, 0);
+        t.assert(g.pole.broken, 1, "arm broken");
+        t.assert(g.target.rect.w, 20, "target rect refresh 28 -> 20");
+        // Variant survives withWeapon/resetHunt in train.
+        initPoleKind(g, POLE_SEVER);
+        withWeapon(g, W_GUN);
+        t.assert(g.pole.kind, POLE_SEVER, "weapon swap keeps the pole variant");
+        t.assert(g.pole.rect.w, 20, "sever rect kept");
+        resetHunt(g);
+        t.assert(g.pole.kind, POLE_SEVER, "reset keeps the pole variant");
+        suite.addTest(t);
+    }
+
+    {
         Test t("activeTarget indirection: hunt beast, then null once dead");
         Game g;
         newGame(g, W_SWORD, MODE_HUNT);

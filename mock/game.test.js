@@ -453,3 +453,113 @@ test('monster variants: train mode with HEAVY keeps the pole path intact', () =>
   assert.equal(g.monster.y, my);
   assert.equal(g.player.hp, 100, 'nothing can hurt player in train mode');
 });
+
+test('pole variants: defs, initPoleKind and plain parity', () => {
+  assert.equal(G.POLE_DEFS.length, 4);
+  const g = G.newGame(0, 'train');
+  assert.equal(g.pole.kind, 0, 'newGame defaults to PLAIN');
+  assert.equal(g.pole.hp, 0, 'plain pool 0');
+  assert.equal(g.pole.w, 20);
+  G.initPoleKind(g, G.POLE_SEVER);
+  assert.equal(g.pole.hp, 60, 'sever pool 60');
+  G.initPoleKind(g, G.POLE_BREAK);
+  assert.equal(g.pole.w, 28, 'break rect 28 wide');
+  assert.equal(g.pole.hp, 40, 'break pool 40');
+  G.initPoleKind(g, G.POLE_CRACK);
+  assert.equal(g.pole.hp, 30, 'crack pool 30');
+  G.initPoleKind(g, 99);
+  assert.equal(g.pole.kind, 0, 'out-of-range clamps to plain');
+});
+
+test('pole variants: sword severs the top, losing the head crit', () => {
+  const g = G.newGame(0, 'train');
+  G.initPoleKind(g, G.POLE_SEVER);
+  const pole = g.pole;
+  pole.x = 140;
+  pole.y = 40;
+  // zone top block (0,0,20,16); hx/hy are the melee hit centre
+  assert.ok(G.damagePole(g, 10, 150, 48) === 14, 'intact head hit crits x1.4');
+  g.train.total = 0;
+  g.train.last = 0;
+  for (let i = 0; i < 5; i++) G.poleOnHit(g, 10, 150, 48);
+  assert.equal(pole.broken, 1, 'sever breaks');
+  assert.equal(pole.w, 20, 'sever rect unchanged');
+  assert.equal(pole.hp, 0, 'pool drained');
+  G.poleOnHit(g, 10, 150, 48);
+  assert.equal(g.train.last, 10, 'head crit gone after break');
+});
+
+test('pole variants: flail breaks the arm and shrinks the rect 28->20', () => {
+  const g = G.newGame(1, 'train');
+  G.initPoleKind(g, G.POLE_BREAK);
+  const pole = g.pole;
+  pole.x = 140;
+  pole.y = 40;
+  assert.equal(pole.w, 28, 'arm rect starts 28');
+  // arm zone (20,8,8,12), body band below the 16 px head
+  G.poleOnHit(g, 20, 164, 58);
+  assert.equal(pole.hp, 20, 'blunt drains the pool');
+  assert.equal(pole.broken, 0);
+  G.poleOnHit(g, 20, 164, 58);
+  assert.equal(pole.broken, 1, 'arm snaps off');
+  assert.equal(pole.hp, 0);
+  assert.equal(pole.w, 20, 'rect reverts to 20');
+  assert.equal(pole.h, 36);
+  assert.ok(g.freeze >= 6, 'break freeze');
+});
+
+test('pole variants: wrong phys damages but never drains/breaks', () => {
+  const g = G.newGame(1, 'train');   // flail vs slash-gated SEVER
+  G.initPoleKind(g, G.POLE_SEVER);
+  g.pole.x = 140;
+  g.pole.y = 40;
+  for (let i = 0; i < 20; i++) G.poleOnHit(g, 10, 150, 48);
+  assert.equal(g.pole.hp, 60, 'wrong phys leaves the pool');
+  assert.equal(g.pole.broken, 0, 'never breaks');
+  assert.ok(g.train.total > 0, 'damage still lands');
+  // gun vs blunt-gated BREAK
+  const h = G.newGame(2, 'train');
+  G.initPoleKind(h, G.POLE_BREAK);
+  h.pole.x = 140;
+  h.pole.y = 40;
+  for (let i = 0; i < 20; i++) G.poleOnHit(h, 10, 164, 58);
+  assert.equal(h.pole.hp, 40, 'gun leaves the arm pool');
+  assert.equal(h.pole.broken, 0, 'gun never breaks the arm');
+});
+
+test('pole variants: gun cracks the band', () => {
+  const g = G.newGame(2, 'train');
+  G.initPoleKind(g, G.POLE_CRACK);
+  g.pole.x = 140;
+  g.pole.y = 40;
+  assert.equal(g.pole.hp, 30);
+  const sparks = () => g.effects.filter(e => !e.text).length;
+  G.poleOnHit(g, 10, 150, 63);
+  G.poleOnHit(g, 10, 150, 63);
+  assert.equal(g.pole.broken, 0);
+  const before = sparks();
+  G.poleOnHit(g, 10, 150, 63);
+  assert.equal(g.pole.broken, 1, 'band cracked');
+  assert.equal(g.pole.hp, 0);
+  assert.ok(sparks() - before >= 3, 'break burst');
+});
+
+test('pole variants: weapon swap and reset keep the kind', () => {
+  let g = G.newGame(0, 'train');
+  G.initPoleKind(g, G.POLE_CRACK);
+  g = G.withWeapon(g, 1);
+  assert.equal(g.pole.kind, 3, 'swap keeps the pole variant');
+  g = G.resetHunt(g);
+  assert.equal(g.pole.kind, 3, 'reset keeps the pole variant');
+});
+
+test('pole variants: plain pole stays byte-identical (no zone, no break)', () => {
+  const g = G.newGame(0, 'train');
+  g.pole.x = 140;
+  g.pole.y = 40;
+  G.poleOnHit(g, 10, 150, 48);
+  assert.equal(g.train.last, 14, 'plain head x1.4');
+  assert.equal(g.pole.broken, 0, 'plain never breaks');
+  assert.equal(g.pole.hp, 0, 'plain pool 0');
+  assert.equal(g.pole.w, 20, 'plain rect unchanged');
+});

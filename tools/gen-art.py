@@ -662,6 +662,93 @@ def pole_frame(flash):
     return img
 
 
+# ---- Breakable pole variants (bead monhun-ardu-6zb.5). Each variant is a
+# distinct silhouette with a 1x-readable weapon emblem, four frames:
+# intact, intact-flash, broken, broken-flash. PLAIN keeps the original
+# two-frame 20x40 sheet (pole_frame) byte-identical for parity; BREAK is 28x40
+# (side arm) and SEVER/CRACK 20x40. The shared post/bands are drawn at the
+# 20-wide origin; BREAK's post stays 20 wide and only its arm extends right.
+def pole_sever_frame(broken, flash):
+    img = new(20, 40)
+    rect(img, 2, 12, 16, 24, DARK)          # post
+    for band in (20, 27, 34):
+        rect(img, 2, band, 16, 1, BLACK)
+    if broken:
+        # slanted-cut stump: the top block sheared off with a diagonal edge
+        rect(img, 2, 12, 16, 6, DARK)
+        rect(img, 2, 18, 6, 1, BLACK)
+        rect(img, 8, 19, 5, 1, BLACK)
+        rect(img, 14, 20, 4, 1, BLACK)      # slanted cut line
+    else:
+        # top block with a diagonal blade notch (slash emblem)
+        rect(img, 0, 0, 20, 16, WHITE if flash else LIGHT)
+        rect(img, 8, 5, 4, 4, BLACK)
+        rect(img, 3, 2, 1, 1, BLACK)
+        rect(img, 4, 3, 1, 1, BLACK)
+        rect(img, 5, 4, 1, 1, BLACK)
+        rect(img, 6, 5, 1, 1, BLACK)
+        rect(img, 7, 6, 1, 1, BLACK)        # diagonal slash line
+    rect(img, 0, 34, 20, 2, BLACK)
+    return img
+
+
+def pole_break_frame(broken, flash):
+    img = new(28, 40)
+    rect(img, 2, 12, 16, 24, DARK)
+    for band in (20, 27, 34):
+        rect(img, 2, band, 16, 1, BLACK)
+    rect(img, 0, 0, 20, 16, WHITE if flash else LIGHT)
+    rect(img, 8, 5, 4, 4, BLACK)
+    if broken:
+        rect(img, 19, 8, 1, 2, BLACK)       # sheared arm stub
+        rect(img, 3, 14, 1, 3, BLACK)       # stress cracks on the post
+        rect(img, 6, 17, 1, 2, BLACK)
+        rect(img, 12, 15, 1, 3, BLACK)
+    else:
+        rect(img, 20, 8, 8, 12, LIGHT)      # side arm (28 wide with the post)
+        rect(img, 21, 9, 6, 2, WHITE)       # hammer head top
+        rect(img, 21, 16, 6, 2, WHITE)      # hammer head bottom
+        rect(img, 22, 11, 1, 1, BLACK)      # handle rivets
+        rect(img, 22, 15, 1, 1, BLACK)
+        rect(img, 24, 11, 1, 1, BLACK)      # hammer face rivets
+        rect(img, 24, 15, 1, 1, BLACK)
+    rect(img, 0, 34, 20, 2, BLACK)
+    return img
+
+
+def pole_crack_frame(broken, flash):
+    img = new(20, 40)
+    rect(img, 2, 12, 16, 24, DARK)
+    for band in (20, 27, 34):
+        rect(img, 2, band, 16, 1, BLACK)
+    rect(img, 0, 0, 20, 16, WHITE if flash else LIGHT)
+    rect(img, 8, 5, 4, 4, BLACK)
+    if broken:
+        # split band with jagged crack lines across the ring
+        rect(img, 0, 18, 20, 1, BLACK)
+        rect(img, 2, 19, 1, 1, BLACK)
+        rect(img, 5, 20, 1, 1, BLACK)
+        rect(img, 8, 19, 1, 1, BLACK)
+        rect(img, 11, 21, 1, 1, BLACK)
+        rect(img, 14, 20, 1, 1, BLACK)
+        rect(img, 17, 19, 1, 1, BLACK)
+        rect(img, 0, 23, 20, 1, BLACK)
+    else:
+        # bullseye ring band (shot emblem): two concentric rings in the band
+        rect(img, 0, 18, 20, 1, BLACK)
+        rect(img, 0, 27, 20, 1, BLACK)
+        rect(img, 8, 21, 4, 1, BLACK)
+        rect(img, 7, 22, 6, 1, BLACK)
+        rect(img, 8, 23, 4, 1, BLACK)
+        rect(img, 9, 22, 2, 1, WHITE)
+    rect(img, 0, 34, 20, 2, BLACK)
+    return img
+
+
+def pole_variant_frames(draw):
+    return [draw(False, False), draw(False, True), draw(True, False), draw(True, True)]
+
+
 def ball_frame():
     img = new(7, 8)   # 7x6 art, padded
     rect(img, 0, 0, 7, 6, LIGHT)
@@ -762,19 +849,20 @@ def font_sheet(color):
 # little icons. The bg carries the dim (light-gray) option names; the selected
 # option is covered by its white sel tile (name + bright 1 px frame + a 3x5
 # cursor arrow at the left). Weapon options live on menu_wsel (three 32x8 tiles),
-# monster options on menu_msel (five 64x8 tiles) so both rows fit 128 px. Tiles
-# are 8 px tall, which lets the weapon row, five monster slots in a 2-column grid
-# and the footer all fit 64. Geometry (tile sizes, name lanes, frame and cursor)
-# is unchanged from v2; only the icon ink is gone.
+# target options on menu_msel (eight 64x8 tiles) so both rows fit 128 px. Tiles
+# are 8 px tall, which lets the weapon row, eight target slots in a 2-column grid
+# (4 rows) and the footer all fit 64. Geometry (tile sizes, name lanes, frame and
+# cursor) is unchanged from v2; only the icon ink is gone.
 #
 # Layout (screen px):
 #   y=2          MONHUN DEMO           (title, white)
 #   y=13 WEAPON  [SWD] [FLS] [GUN]     (weapon row)
-#   y=22 MONSTER
-#   y=29 [CHICKEN] [BULL]              (2 cols at x=0/64, rows 29/38/47)
-#   y=38 [LONGTAIL] [RAVAGER]
-#   y=47 [POLE]
-#   y=56 A HUNT                        (footer)
+#   y=20 MONSTER
+#   y=26 [CHICKEN] [BULL]              (2 cols at x=0/64, rows 26/34/42/50)
+#   y=34 [LONGTAIL] [RAVAGER]
+#   y=42 [POLE] [SEVER]
+#   y=50 [BREAK] [CRACK]
+#   y=58 A HUNT                        (footer)
 
 def text_blocks(x, y, text, color):
     """blk() rects for `text` on the 4 px glyph lane: 4x8 tile per char, glyph
@@ -793,12 +881,12 @@ def text_blocks(x, y, text, color):
 MENU_ELEMENTS = (
     (42, 2, "MONHUN DEMO", WHITE),   # (128 - 11*4) / 2, title
     (0, 13, "WEAPON", LIGHT),
-    (0, 22, "MONSTER", LIGHT),
-    (52, 56, "A HUNT", WHITE),       # footer: A starts the picked hunt
+    (0, 20, "MONSTER", LIGHT),
+    (52, 58, "A HUNT", WHITE),       # footer: A starts the picked hunt
 )
 
 MENU_WEAPONS = ("SWD", "FLS", "GUN")                              # weapons 0..2
-MENU_TARGETS = ("CHICKEN", "BULL", "LONGTAIL", "RAVAGER", "POLE")  # targets 0..4
+MENU_TARGETS = ("CHICKEN", "BULL", "LONGTAIL", "RAVAGER", "POLE", "SEVER", "BREAK", "CRACK")  # targets 0..7
 
 # Option tile geometry (uniform frame per sheet). local x: cursor 0..2, then
 # the frame from x=4; the 4 px/char name lane at x=15 / x=19 (the v2 icon slot
@@ -824,7 +912,7 @@ MENU_WEAPON_X = 24
 MENU_WEAPON_STEP = 34
 MENU_WEAPON_Y = 11
 MENU_MON_COLS = (0, 64)
-MENU_MON_ROWS = (29, 38, 47)
+MENU_MON_ROWS = (26, 34, 42, 50)
 
 # Cursor arrow: a right-pointing triangle in local cols 0..2, rows 2..6.
 MENU_CURSOR = ((0, 2, 1, 1), (0, 3, 2, 1), (0, 4, 3, 1), (0, 5, 2, 1), (0, 6, 1, 1))
@@ -974,7 +1062,12 @@ def check_menu_identity(sheets):
                         failures.append("%s cursor %d (%d,%d) not white" % (tag, fi, x, y))
 
     for x, y, text, color in MENU_ELEMENTS:
-        check_text(bg, x, y, text, fontw if color == WHITE else fontg, "menu_bg")
+        # Static labels paint only the 5-row glyph cap, and the rows can now sit
+        # 5 apart (WEAPON y=13, MONSTER y=20), so compare exactly the cap: an
+        # 8-row compare would read the next label's ink as a mismatch. The
+        # footer at y=58 is additionally clipped to the bg bottom.
+        rows = min(5, 64 - y)
+        check_text(bg, x, y, text, fontw if color == WHITE else fontg, "menu_bg", rows=rows)
     for i, name in enumerate(MENU_WEAPONS):
         x, y = menu_weapon_cell(i)
         check_text(bg, x + MENU_W_NAME_DX, y + MENU_NAME_DY, name, fontg, "menu_bg weapon name")
@@ -1022,6 +1115,9 @@ def render_all(dims):
     sheets["monster_sweep"] = strip(bull_frames(), 32, 24)
     sheets["monster_heavy"] = strip(longtail_frames(), 32, 24)
     sheets["pole"] = strip([pole_frame(False), pole_frame(True)], 20, 40)
+    sheets["pole_sever"] = strip(pole_variant_frames(pole_sever_frame), 20, 40)
+    sheets["pole_break"] = strip(pole_variant_frames(pole_break_frame), 28, 40)
+    sheets["pole_crack"] = strip(pole_variant_frames(pole_crack_frame), 20, 40)
     menu = menu_defs()
     for d in icons + menu:
         sheets[d["id"]] = render_icon(d)
@@ -1091,6 +1187,9 @@ def sheet_filename(body, img, icons):
         return "fx%s_32x24.png" % body
     if body == "pole":
         return "fxpole_20x40.png"
+    if body in ("pole_sever", "pole_break", "pole_crack"):
+        w = 28 if body == "pole_break" else 20
+        return "fx%s_%dx40.png" % (body, w)
     if body == "ball":
         return "fxball_7x8.png"
     if body == "scatter":

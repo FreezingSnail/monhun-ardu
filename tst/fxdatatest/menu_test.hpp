@@ -44,7 +44,7 @@ inline void test_menu(FxTest &test) {
     menuStep(m, idle);
     test.expectEq(static_cast<uint32_t>(m.weapon), 2, F("nav weapon wrap back"));
 
-    // ---- taps: target down x4 reaches POLE, x5 wraps to LUNGE, up wraps back
+    // ---- taps: target down through all 8, wrap to LUNGE, up wraps back
     menuStep(m, down);
     menuStep(m, idle);
     test.expectEq(static_cast<uint32_t>(m.target), 1, F("nav down 1"));
@@ -59,10 +59,19 @@ inline void test_menu(FxTest &test) {
     test.expectEq(static_cast<uint32_t>(m.target), 4, F("nav down 4 pole"));
     menuStep(m, down);
     menuStep(m, idle);
+    test.expectEq(static_cast<uint32_t>(m.target), 5, F("nav down 5 sever"));
+    menuStep(m, down);
+    menuStep(m, idle);
+    test.expectEq(static_cast<uint32_t>(m.target), 6, F("nav down 6 break"));
+    menuStep(m, down);
+    menuStep(m, idle);
+    test.expectEq(static_cast<uint32_t>(m.target), 7, F("nav down 7 crack"));
+    menuStep(m, down);
+    menuStep(m, idle);
     test.expectEq(static_cast<uint32_t>(m.target), 0, F("nav target wrap fwd"));
     menuStep(m, up);
     menuStep(m, idle);
-    test.expectEq(static_cast<uint32_t>(m.target), 4, F("nav target wrap back"));
+    test.expectEq(static_cast<uint32_t>(m.target), 7, F("nav target wrap back"));
 
     // ---- debounce: press steps once, hold waits DELAY, then repeats REPEAT
     menuStep(m, right);   // weapon 2 -> 0 (immediate)
@@ -93,18 +102,49 @@ inline void test_menu(FxTest &test) {
     menuStep(m, idle);   // release the axis so later picks start fresh
 
     // ---- A edge fires START once per press (picks now FLS + POLE)
+    m.target = MENU_POLE_TARGET;   // nav above wrapped to CRACK; pick plain
     test.expectEq(static_cast<uint32_t>(menuStep(m, a)), MENU_ACCEPT, F("A edge start"));
     for (uint8_t i = 0; i < 4; i++)
         test.expectEq(static_cast<uint32_t>(menuStep(m, a)), MENU_NONE, F("A held no repeat"));
 
-    // ---- start mapping through the real core: POLE -> MODE_TRAIN, no beast
-    // One static Game reused for every mapping check: Game is ~700 B and three
-    // stack copies overflow the AVR stack in setup().
+    // ---- start mapping through the real core: POLE (target 4) -> MODE_TRAIN,
+    // no beast, pole kind 0 (plain). One static Game reused for every mapping
+    // check: Game is ~700 B and three stack copies overflow the AVR stack.
     static Game g;
     menuStart(g, m);
     test.expectEq(static_cast<uint32_t>(g.weapon), W_FLAIL, F("start pole weapon"));
     test.expectEq(static_cast<uint32_t>(g.mode), MODE_TRAIN, F("start pole mode"));
     test.expectEq(static_cast<uint32_t>(g.monsterKind), MON_LUNGE, F("start pole kind 0"));
+    test.expectEq(static_cast<uint32_t>(g.pole.kind), POLE_PLAIN, F("start plain pole"));
+    test.expectEq(static_cast<uint32_t>(g.pole.hp), 0, F("plain pool 0"));
+
+    // ---- target 5 SEVER installs the slash-gated pole (pool 60, rect 20)
+    MenuState sv;
+    sv.weapon = W_SWORD;
+    sv.target = MENU_POLE_TARGET + POLE_SEVER;
+    menuStart(g, sv);
+    test.expectEq(static_cast<uint32_t>(g.mode), MODE_TRAIN, F("start sever mode"));
+    test.expectEq(static_cast<uint32_t>(g.pole.kind), POLE_SEVER, F("start sever pole"));
+    test.expectEq(static_cast<uint32_t>(g.pole.hp), 60, F("sever pool 60"));
+    test.expectEq(static_cast<uint32_t>(g.pole.rect.w), 20, F("sever rect w"));
+
+    // ---- target 6 BREAK installs the blunt-gated pole (pool 40, rect 28)
+    MenuState bk;
+    bk.weapon = W_FLAIL;
+    bk.target = MENU_POLE_TARGET + POLE_BREAK;
+    menuStart(g, bk);
+    test.expectEq(static_cast<uint32_t>(g.pole.kind), POLE_BREAK, F("start break pole"));
+    test.expectEq(static_cast<uint32_t>(g.pole.hp), 40, F("break pool 40"));
+    test.expectEq(static_cast<uint32_t>(g.pole.rect.w), 28, F("break rect w 28"));
+    test.expectEq(static_cast<uint32_t>(g.target.rect.w), 28, F("break target rect"));
+
+    // ---- target 7 CRACK installs the shot-gated pole (pool 30)
+    MenuState ck;
+    ck.weapon = W_GUN;
+    ck.target = MENU_POLE_TARGET + POLE_CRACK;
+    menuStart(g, ck);
+    test.expectEq(static_cast<uint32_t>(g.pole.kind), POLE_CRACK, F("start crack pole"));
+    test.expectEq(static_cast<uint32_t>(g.pole.hp), 30, F("crack pool 30"));
 
     // ---- HEAVY -> hunt, cart def drives size/hp (40x28, 320 hp)
     MenuState h;

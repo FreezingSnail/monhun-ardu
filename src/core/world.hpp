@@ -72,17 +72,23 @@ static void newGame(Game &g, int8_t weapon, int8_t mode, int8_t monsterKind = 0)
 
 // Mock withWeapon(): swap the weapon but stay in the current area and keep the
 // chosen beast. Prototype bug fix: the mock's newGame defaults to hunt, so a
-// naive swap dropped train.
+// naive swap dropped train. A train swap also keeps the picked pole variant.
 static void withWeapon(Game &g, int8_t weapon) {
+    const int8_t poleKind = g.pole.kind;
     newGame(g, weapon, g.mode, g.monsterKind);
+    if (g.mode == MODE_TRAIN)
+        initPoleKind(g, poleKind);
 }
 
 // Mock resetHunt() / the R key: restart the current area with the current
-// weapon, preserving weapon, area and beast. Device bead: bind R to
-// resetHunt(g) — it is NOT the same as newGame() (which would reset the area
-// to hunt).
+// weapon, preserving weapon, area, beast and pole variant. Device bead: bind R
+// to resetHunt(g) — it is NOT the same as newGame() (which would reset the
+// area to hunt).
 static void resetHunt(Game &g) {
+    const int8_t poleKind = g.pole.kind;
     newGame(g, g.weapon, g.mode, g.monsterKind);
+    if (g.mode == MODE_TRAIN)
+        initPoleKind(g, poleKind);
 }
 
 // One full tick in mock step() order: tick++, input edges, camera, then the
