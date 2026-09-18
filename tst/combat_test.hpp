@@ -66,6 +66,7 @@ void CombatSuite(TestRunner &runner) {
             t.assert(p.staggerMax, h.staggerMax, "profile staggerMax");
             t.assert(p.staggerDecay, h.staggerDecay, "profile staggerDecay");
             t.assert(p.zoneFlags, h.zoneFlags, "profile zoneFlags");
+            t.assert(p.faceHold, h.faceHold, "profile faceHold");
             t.assert(p.cdBase, h.cdBase, "profile cdBase");
             t.assert(p.cdJitter, h.cdJitter, "profile cdJitter");
             t.assert(p.spawnT, h.spawnT, "profile spawnT");
@@ -73,6 +74,13 @@ void CombatSuite(TestRunner &runner) {
             t.assert(p.stunRecoverT, h.stunRecoverT, "profile stunRecoverT");
             t.assert(p.staggerRecoverT, h.staggerRecoverT, "profile staggerRecoverT");
         }
+        // nch.4: heavy commits its turn (faceHold 10) and holds ground at 12;
+        // the shipped lunge/sweep keep the every-tick default 0.
+        const CombatProfile heavy = combatProfileRead(combatCreatureProfileIdx(combat_data::CREATURE_HEAVY));
+        t.assert(heavy.faceHold, 10, "heavy faceHold");
+        t.assert(heavy.keepDist, 12, "heavy keepDist 12");
+        const CombatProfile lunge = combatProfileRead(combatCreatureProfileIdx(combat_data::CREATURE_LUNGE));
+        t.assert(lunge.faceHold, 0, "shipped lunge faceHold 0");
         suite.addTest(t);
     }
 
@@ -522,12 +530,12 @@ void CombatSuite(TestRunner &runner) {
         t.assert(combatGuardPasses(g, combat_data::PATTERN_LUNGE_P_SWEEP, in), 1, "sweep dist 0 accepted");
 
         creatureLoad(g, combat_data::CREATURE_HEAVY);
-        in.dist = 24;
-        t.assert(combatGuardPasses(g, combat_data::PATTERN_HEAVY_P_SPIN, in), 1, "heavy spin dist 24 accepted");
-        t.assert(combatGuardPasses(g, combat_data::PATTERN_HEAVY_P_BITE, in), 0, "heavy bite band excludes 24");
-        in.dist = 25;
-        t.assert(combatGuardPasses(g, combat_data::PATTERN_HEAVY_P_SPIN, in), 0, "heavy spin dist 25 rejected");
-        t.assert(combatGuardPasses(g, combat_data::PATTERN_HEAVY_P_BITE, in), 1, "heavy bite dist 25 accepted");
+        in.dist = 30;
+        t.assert(combatGuardPasses(g, combat_data::PATTERN_HEAVY_P_SPIN, in), 1, "heavy spin dist 30 accepted");
+        t.assert(combatGuardPasses(g, combat_data::PATTERN_HEAVY_P_BITE, in), 1, "heavy bite band reaches 30 (spin wins)");
+        in.dist = 31;
+        t.assert(combatGuardPasses(g, combat_data::PATTERN_HEAVY_P_SPIN, in), 0, "heavy spin dist 31 rejected");
+        t.assert(combatGuardPasses(g, combat_data::PATTERN_HEAVY_P_BITE, in), 1, "heavy bite dist 31 accepted");
 
         creatureLoad(g, combat_data::CREATURE_SWEEP);
         in.dist = 0;

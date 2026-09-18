@@ -237,24 +237,33 @@ function monsterTellWindow(m, a) {
 // sweep). `collide` is the body-collision box (epic monhun-ardu-nch): the
 // chicken's legs only, so the hunter can overlap the raised body. Absent means
 // the body box (ox/oy 0, w/h = def w/h), matching the C++ creature default.
+// nch.4: HEAVY holds ground at keepDist 12 and spins inside spinDist 30; its
+// faceHold commits the tracked facing for 10 ticks so the hunter can flank.
+// The shipped kinds leave faceHold/keepDist/spinDist unset (0/24/24), which
+// keeps every parity scene byte-identical.
 const MONSTER_DEFS = [
   { kind: 'lunge', w: 32, h: 24, hp: 200, spd: 5, atkDist: 32, collide: { ox: 9, oy: 11, w: 12, h: 13 } },
   { kind: 'sweep', w: 28, h: 22, hp: 150, spd: 7, atkDist: -1 },
-  { kind: 'heavy', w: 40, h: 28, hp: 320, spd: 3, atkDist: 24 },
+  { kind: 'heavy', w: 40, h: 28, hp: 320, spd: 3, atkDist: 24, keepDist: 12, spinDist: 30, faceHold: 10 },
 ];
 
 // Fixed 3-hitzone model (build/zones-design.md), mirrored from
 // data/creatures/lunge.json: body implicit (mul 100), optional head and
 // appendage (legs) records with face-relative boxes, own pools and bodyShare.
-// Only the chicken ships zones in the mock; the C++ resolver draws the same
-// values from the combat blob. Boxes are face-relative origins (rotated through
-// the facing frame); a drained pool + matching phys type flips the break bit.
+// 4t4/nch.4: HEAVY mirrors its long-tail appendage record (heavy.json) so the
+// from-behind tail hit is testable; the C++ resolver draws the same values from
+// the combat blob. Boxes are face-relative origins (rotated through the facing
+// frame); a drained pool + matching phys type flips the break bit.
 const MONSTER_ZONES = {
   lunge: {
     // breakTypes is the C++ phys mask (PHYS_SLASH 0x01); both zones break on
     // slashing player hits, matching combat_data ZONES.
     head: { ox: 18, oy: 0, w: 11, h: 7, dmgMul: 130, hp: 40, bodyShare: 100, breakTypes: 1, staggerOnHit: 12 },
     appendage: { ox: 9, oy: 0, w: 9, h: 24, dmgMul: 150, hp: 60, bodyShare: 40, breakTypes: 1, staggerOnHit: 30 },
+  },
+  heavy: {
+    // ox -24 sits the tail behind the body so a flanking hit lands here.
+    appendage: { ox: -24, oy: 0, w: 24, h: 16, dmgMul: 150, hp: 60, bodyShare: 40, breakTypes: 1, staggerOnHit: 30 },
   },
 };
 
@@ -338,6 +347,7 @@ function newGame(weaponIndex, mode, monsterIndex = 0) {
       atk: null, lvx: 0, lvy: 0, windupMax: 0,
       hitFlash: 0, stun: 0, circleDir: 1,
       spd: 5, // 1/16 px per tick
+      faceT: 0, // nch.4 turn-commitment countdown
     },
     projectiles: [],
     effects: [],
@@ -373,6 +383,7 @@ function initMonster(g, kind = 0) {
   m.stun = 0;
   m.circleDir = 1;
   m.spd = def.spd;
+  m.faceT = 0; // nch.4: refresh facing on the first update tick
   m.collide = def.collide || { ox: 0, oy: 0, w: def.w, h: def.h };
   m.kind = def.kind;
   // Live zone pools (kind-keyed). Absent kind = no zones (body-only routing).
@@ -829,6 +840,7 @@ function updateCamera(g) {
 function updateMonster(g) {
   const m = g.monster;
   const p = g.player;
+  const def = MONSTER_DEFS[g.monsterIndex];
   if (m.hitFlash > 0) m.hitFlash--;
   if (m.state === 'dead') return;
 
@@ -837,10 +849,24 @@ function updateMonster(g) {
   const dist = isqrt(dx * dx + dy * dy);
   const di = dirIndexFromDelta(dx, dy);
   // Facing: lock attacks freeze the windup-start vector through windup + attack
-  // (nch.1 tail_spin); every legacy lunge/sweep tracks.
+  // (nch.1 tail_spin); every legacy lunge/sweep tracks. nch.4: a def's faceHold
+  // commits the tracked vector for that many ticks (faceT counts down from
+  // faceHold to 0, then the vector refreshes and re-arms); faceHold 0 (the
+  // shipped kinds) recomputes every tick, keeping parity byte-identical.
   const lockFace = m.atk && (m.atk.facing === 'lock-at-windup' || m.atk.facing === 'lock-away') &&
                    (m.state === 'windup' || m.state === 'attack');
-  if (!lockFace) m.face = { x: DIR8[di].x, y: DIR8[di].y };
+  const faceHold = def.faceHold || 0;
+  if (!lockFace) {
+    if (faceHold === 0) {
+      m.face = { x: DIR8[di].x, y: DIR8[di].y };
+    } else {
+      if (m.faceT === 0) {
+        m.face = { x: DIR8[di].x, y: DIR8[di].y };
+        m.faceT = faceHold;
+      }
+      m.faceT--;
+    }
+  }
 
   if (m.stun > 0) {
     m.stun--;
@@ -856,7 +882,8 @@ function updateMonster(g) {
     case 'pursue':
       m.cd--;
       if (dist > 36) addMove(m, m.face.x, m.face.y, m.spd);
-      else if (dist < 24) addMove(m, -m.face.x, -m.face.y, (m.spd * 6) / 10 | 0);
+      else if (dist < (def.keepDist === undefined ? 24 : def.keepDist))
+        addMove(m, -m.face.x, -m.face.y, (m.spd * 6) / 10 | 0);
       else {
         const s = DIR8[(di + 2) & 7];
         addMove(m, s.x * m.circleDir, s.y * m.circleDir, (m.spd * 8) / 10 | 0);
@@ -899,12 +926,12 @@ function updateMonster(g) {
 
 // Lunge/sweep split comes from the roster def: kind 0 (atkDist 32) is the
 // legacy "lunge beyond 32px" rule; negative atkDist (sweep) never lunges. HEAVY
-// (nch.1) runs the new kit: tail_spin inside 24, bite beyond it.
+// (nch.1) runs the new kit: tail_spin inside spinDist (30, nch.4) else bite.
 function chooseAttack(g, dist) {
   const m = g.monster;
   const def = MONSTER_DEFS[g.monsterIndex];
   if (def.kind === 'heavy')
-    m.atk = dist <= 24 ? MONSTER_ATTACKS.tailSpin : MONSTER_ATTACKS.bite;
+    m.atk = dist <= (def.spinDist === undefined ? 24 : def.spinDist) ? MONSTER_ATTACKS.tailSpin : MONSTER_ATTACKS.bite;
   else
     m.atk = def.atkDist >= 0 && dist > def.atkDist ? MONSTER_ATTACKS.lunge : MONSTER_ATTACKS.sweep;
   // nch.2: lock-away turns the back to the hunter once, reusing the tracked
@@ -1986,6 +2013,7 @@ if (typeof module !== 'undefined' && module.exports) {
     damagePole, poleOnHit, poleStage,
     monsterActiveWindow, monsterTellWindow,
     spinSheetFrame, dirIndexFromDelta,
+    zoneHitResolve, zoneContains,
     WEAPON_DEFS, MONSTER_ATTACKS, MONSTER_DEFS, POLE_DEFS,
     POLE_PLAIN, POLE_SEVER, POLE_BREAK, POLE_CRACK,
     W, H, ARENA_H, HOLD_TICKS, SHADES, WORLD_W, WORLD_H, FP,

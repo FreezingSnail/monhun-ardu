@@ -180,7 +180,7 @@ void MonsterSuite(TestRunner &runner) {
     }
 
     {
-        Test t("chooseAttack variants: SWEEP never lunges, HEAVY spins inside 24 else bites");
+        Test t("chooseAttack variants: SWEEP never lunges, HEAVY spins inside 30 else bites");
         Game g;
         newGame(g, W_SWORD, MODE_HUNT, MON_SWEEP);
         Monster &m = g.monster;
@@ -193,10 +193,10 @@ void MonsterSuite(TestRunner &runner) {
         Monster &h = g2.monster;
         chooseAttack(g2, 41);
         t.assert(h.atkIdx, combat::ATTACK_HEAVY_BITE, "heavy bites at 41");
+        chooseAttack(g2, 31);
+        t.assert(h.atkIdx, combat::ATTACK_HEAVY_BITE, "heavy bites at 31");
         chooseAttack(g2, 30);
-        t.assert(h.atkIdx, combat::ATTACK_HEAVY_BITE, "heavy bites at 30");
-        chooseAttack(g2, 25);
-        t.assert(h.atkIdx, combat::ATTACK_HEAVY_BITE, "heavy bites at 25");
+        t.assert(h.atkIdx, combat::ATTACK_HEAVY_TAIL_SPIN, "heavy spins at 30");
         chooseAttack(g2, 24);
         t.assert(h.atkIdx, combat::ATTACK_HEAVY_TAIL_SPIN, "heavy spins at 24");
         Game g3;
@@ -205,6 +205,48 @@ void MonsterSuite(TestRunner &runner) {
         t.assert(g3.monster.atkIdx, combat::ATTACK_LUNGE_LUNGE, "legacy lunges at 33");
         chooseAttack(g3, 32);
         t.assert(g3.monster.atkIdx, combat::ATTACK_LUNGE_SWEEP, "legacy sweeps at 32");
+        suite.addTest(t);
+    }
+
+    {
+        // nch.4: heavy profile.faceHold 10 commits the tracked facing; the hunter
+        // can cross behind and a from-behind hit lands the appendage/tail zone.
+        Test t("heavy faceHold: facing stale for faceHold ticks, flank hit lands the tail");
+        Game g;
+        newGame(g, W_SWORD, MODE_HUNT, MON_HEAVY);
+        Monster &m = g.monster;
+        Player &p = g.player;
+        t.assert(g.combat.profile.faceHold, 10, "heavy faceHold 10");
+        t.assert(g.combat.appendZone != COMBAT_NO_ZONE, true, "heavy appendage zone loaded");
+        // Beast parked in PURSUE (never chooses), hunter due east -> facing E.
+        m.state = MS_PURSUE;
+        m.cd = 30000;
+        m.x = 80;
+        m.y = 40;
+        p.x = 110;
+        p.y = static_cast<int16_t>(m.y + (m.h >> 1) - (p.h >> 1));
+        updateMonster(g);
+        t.assert(m.fx, fp::FP, "facing E after the first refresh");
+        t.assert(m.fy, 0, "level E");
+        t.assert(m.faceT, 9, "faceHold countdown armed (10 set, decremented)");
+        // Hunter crosses behind (west); facing stays E for the rest of the hold.
+        p.x = 40;
+        p.y = static_cast<int16_t>(m.y + (m.h >> 1) - (p.h >> 1));
+        for (int i = 0; i < 9; i++)
+            updateMonster(g);
+        t.assert(m.fx, fp::FP, "facing stale through the full hold");
+        t.assert(m.faceT, 0, "countdown reached zero");
+        // From-behind hit under the stale E facing: the tail box (ox -24)
+        // rotates to the west side and wins the higher multiplier.
+        const int16_t hx = static_cast<int16_t>(m.x - 12);
+        const int16_t hy = static_cast<int16_t>(m.y + (m.h >> 1));
+        const CombatBodyHit behind = combatZoneHitResolveAt(g, 10, PHYS_SLASH, hx, hy, m.x, m.y, m.fx, m.fy);
+        t.assert(behind.zone, COMBAT_ZONE_APPENDAGE, "from-behind hit lands the tail zone");
+        // The next tick refreshes facing W, rotating the tail back in front.
+        updateMonster(g);
+        t.assert(m.fx, -fp::FP, "facing refreshed W after faceHold ticks");
+        const CombatBodyHit front = combatZoneHitResolveAt(g, 10, PHYS_SLASH, hx, hy, m.x, m.y, m.fx, m.fy);
+        t.assert(front.zone, COMBAT_NO_ZONE, "same world point is body once the tail rotates");
         suite.addTest(t);
     }
 

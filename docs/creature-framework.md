@@ -50,7 +50,7 @@ runtime semantics; parity fixtures are generated from the mock.
 | Interpreter target | ≤ 600 B → >3 KB slack for verbs/data |
 | Worst logic tick reads | 14 FX accesses ≈ 126 µs (13% of 988 µs tick) |
 | Spawn burst | ~40 reads ≈ 360 µs, one-time |
-| RAM caches | profile ~25 B + attack/window ~22 B ≈ 47 B of 610 free |
+| RAM caches | profile ~26 B + attack/window ~22 B ≈ 48 B of 610 free |
 
 Reads only happen in `run()` between plane blits, never during paint. The
 interpreter validates end-to-end (`.text` + perf gates), not by symbol math.
@@ -175,17 +175,19 @@ schema below is the retired generic draft.
 
 States: `IDLE → PURSUE → WINDUP → ACTIVE → RECOVER`, plus `STUN`, `DEAD`.
 
-Profile (per creature, RAM-cached, ~25 B):
+Profile (per creature, RAM-cached, ~26 B):
 
 ```
 engageDist, keepDist, attackDist, circleNum/Den, retreatNum/Den,
-cdBase, cdJitter, spawnT, spawnCd, stunRecoverT, lungeSplit
+cdBase, cdJitter, spawnT, spawnCd, stunRecoverT, faceHold
 ```
 
 - Decision tick: in PURSUE with `cd <= 0 && dist < attackDist`, evaluate
   patterns (first match) and run steps.
 - Facing: recomputed every tick from player delta (as today); `facing: lock`
-  freezes at windup start.
+  freezes at windup start. `faceHold > 0` commits the tracked vector for that
+  many ticks (the heavy's 10): the hunter can cross behind and hit the tail
+  before the beast re-aims. `faceHold 0` keeps the every-tick default.
 - Interrupts (native, order is observable and must stay verbatim):
   `hitFlash--` → dead return → face/dist recompute → stun check/return → FSM.
 - `pushApart`, world clamp and deflect/parry stuns stay native — not
@@ -332,8 +334,9 @@ The long-tail's inherited generic `lunge`/`sweep` (initial-creature boxes, the
   through windup + attack, its frame chosen from the cached window's world
   direction. A lock-away hit knocks the hunter radially away from the beast
   (legacy attacks keep the facing-vector push).
-- Selection: `tail_spin` at dist <= 24, `bite` beyond; breaking the tail
-  (`zones.appendage`) disables `tail_spin` and forces `bite`.
+- Selection: `tail_spin` at dist <= 30 (nch.4; `keepDist` 12 holds the band),
+  `bite` beyond; breaking the tail (`zones.appendage`) disables `tail_spin` and
+  forces `bite`. `faceHold` 10 commits the facing so the hunter can flank.
 - Telegraphs are the core marker at the cached window centre (windup 2x2 shade 2,
   attack 4x4 shade 3). The nch.1 full-window block fill read as a debug hurt
   zone on playtest and was removed in nch.2; the fixed 32x24 telegraph sheet is

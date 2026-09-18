@@ -265,12 +265,14 @@ inline void test_combat(FxTest &test) {
     test.expectEq(combatGuardPasses(g, 99, in), 0, F("unknown pattern rejected"));
 
     creatureLoad(g, combat::CREATURE_HEAVY);
-    in.dist = 24;
-    test.expectEq(combatGuardPasses(g, combat::PATTERN_HEAVY_P_SPIN, in), 1, F("heavy spin dist 24 accepted"));
-    test.expectEq(combatGuardPasses(g, combat::PATTERN_HEAVY_P_BITE, in), 0, F("heavy bite dist 24 rejected"));
-    in.dist = 25;
-    test.expectEq(combatGuardPasses(g, combat::PATTERN_HEAVY_P_SPIN, in), 0, F("heavy spin dist 25 rejected"));
-    test.expectEq(combatGuardPasses(g, combat::PATTERN_HEAVY_P_BITE, in), 1, F("heavy bite dist 25 accepted"));
+    test.expectEq(g.combat.profile.keepDist, 12, F("heavy cache keepDist 12"));
+    test.expectEq(g.combat.profile.faceHold, combat_expect::PROFILE_HEAVY_FACE_HOLD, F("heavy cache faceHold"));
+    in.dist = 30;
+    test.expectEq(combatGuardPasses(g, combat::PATTERN_HEAVY_P_SPIN, in), 1, F("heavy spin dist 30 accepted"));
+    test.expectEq(combatGuardPasses(g, combat::PATTERN_HEAVY_P_BITE, in), 1, F("heavy bite band reaches 30"));
+    in.dist = 31;
+    test.expectEq(combatGuardPasses(g, combat::PATTERN_HEAVY_P_SPIN, in), 0, F("heavy spin dist 31 rejected"));
+    test.expectEq(combatGuardPasses(g, combat::PATTERN_HEAVY_P_BITE, in), 1, F("heavy bite dist 31 accepted"));
 
     // Deterministic chance (pinned roll vectors, same function host-tested).
     test.expectEq(combatChanceRoll(0, 1, 2, 0), 9, F("roll tick0"));

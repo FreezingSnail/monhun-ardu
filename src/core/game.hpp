@@ -395,7 +395,7 @@ struct Player : fp::FpBody, fp::FpStam {
 // combat.hpp) because Game stores them by value and combat.hpp includes
 // game.hpp; keeping them next to Player/Monster/Target is the same layering.
 // Sizes are the design contract (docs/creature-framework.md section 9):
-// profile 22 B + attack 21 B + runtime 7 B = 50 B on AVR, no bulk table loads.
+// profile 23 B + attack 21 B + runtime 7 B = 51 B on AVR, no bulk table loads.
 // Compact/packed by construction on AVR (byte fields, uint16 alignment 1).
 
 struct CombatBox {
@@ -407,13 +407,16 @@ struct CombatBox {
 // combat.hpp's COMBAT_ZONE_COUNT/bit constants mirror this order.
 constexpr uint8_t COMBAT_ZONE_SLOTS = 2;
 
-// Full profile record mirror (16 fields, blob ABI order). Read whole at spawn
+// Full profile record mirror (17 fields, blob ABI order). Read whole at spawn
 // and cached; the interpreter consumes the cache at decision time. zoneFlags
-// carries the per-creature zone presence bits (build/zones-design.md).
+// carries the per-creature zone presence bits (build/zones-design.md). faceHold
+// (nch.4) is the turn-commitment cadence: 0 recomputes facing every tick, >0
+// refreshes it only every faceHold ticks.
 struct CombatProfile {
     uint8_t engageDist, keepDist, attackDist;
     uint8_t circleNum, circleDen, retreatNum, retreatDen;
     uint8_t staggerMax, staggerDecay, zoneFlags;
+    uint8_t faceHold;
     uint16_t cdBase, cdJitter, spawnT, spawnCd, stunRecoverT, staggerRecoverT;
 };
 
@@ -473,7 +476,7 @@ struct CombatZoneCache {
 // and the single broken bit per zone. The pattern step cursor
 // (stepIdx + 256-tick countdown stepT) and stagger meter are unchanged.
 struct CombatState {
-    CombatProfile profile;                     // 22 B AVR
+    CombatProfile profile;                     // 23 B AVR
     CombatAttackCache attack;                  // 21 B AVR
     CombatBox body;                            // 4 B AVR
     CombatBox collide;                         // 4 B AVR: body-collision rect
@@ -638,6 +641,10 @@ struct Monster : fp::FpBody {
     uint8_t windupMax, hitFlash, stun;
     int8_t circleDir;
     uint8_t spd;   // generated creature spd <= 7
+    // Turn-commitment countdown (nch.4): profile.faceHold 0 = facing recomputed
+    // every tick; >0 = faceT counts down and facing refreshes at 0. Lock modes
+    // (windup/attack of a lock attack) still freeze facing regardless.
+    uint8_t faceT;
 };
 
 struct Game {

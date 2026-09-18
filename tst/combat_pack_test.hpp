@@ -354,12 +354,13 @@ void CombatPackSuite(TestRunner &runner) {
             t.assert(b8(blob, o + 7), h.staggerMax, "blob profile staggerMax");
             t.assert(b8(blob, o + 8), h.staggerDecay, "blob profile staggerDecay");
             t.assert(b8(blob, o + 9), h.zoneFlags, "blob profile zoneFlags");
-            t.assert(b16(blob, o + 10), h.cdBase, "blob profile cdBase");
-            t.assert(b16(blob, o + 12), h.cdJitter, "blob profile cdJitter");
-            t.assert(b16(blob, o + 14), h.spawnT, "blob profile spawnT");
-            t.assert(b16(blob, o + 16), h.spawnCd, "blob profile spawnCd");
-            t.assert(b16(blob, o + 18), h.stunRecoverT, "blob profile stunRecoverT");
-            t.assert(b16(blob, o + 20), h.staggerRecoverT, "blob profile staggerRecoverT");
+            t.assert(b8(blob, o + 10), h.faceHold, "blob profile faceHold");
+            t.assert(b16(blob, o + 11), h.cdBase, "blob profile cdBase");
+            t.assert(b16(blob, o + 13), h.cdJitter, "blob profile cdJitter");
+            t.assert(b16(blob, o + 15), h.spawnT, "blob profile spawnT");
+            t.assert(b16(blob, o + 17), h.spawnCd, "blob profile spawnCd");
+            t.assert(b16(blob, o + 19), h.stunRecoverT, "blob profile stunRecoverT");
+            t.assert(b16(blob, o + 21), h.staggerRecoverT, "blob profile staggerRecoverT");
         }
         for (uint8_t i = 0; i < combat::SKELETONS_COUNT; i++) {
             const size_t o = static_cast<size_t>(combat::SKELETONS_OFF) + i * combat::SKELETON_SIZE;
@@ -476,8 +477,8 @@ void CombatPackSuite(TestRunner &runner) {
         t.assert(b16(blob, static_cast<size_t>(combat::ATTACK_LUNGE_LUNGE_OFF) + 20), combat_expect::ATTACK_LUNGE_LUNGE_DMG, "expect lunge dmg");
         t.assert(b8(blob, static_cast<size_t>(combat::GUARD_HEAVY_P_SPIN_OFF) + 0), combat_expect::PATTERN_HEAVY_P_SPIN_MIN_DIST, "expect heavy spin minDist");
         t.assert(b8(blob, static_cast<size_t>(combat::GUARD_HEAVY_P_SPIN_OFF) + 1), combat_expect::PATTERN_HEAVY_P_SPIN_MAX_DIST, "expect heavy spin maxDist");
-        // p_bite is the second heavy pattern: minDist 25 .. maxDist 255.
-        t.assert(b8(blob, static_cast<size_t>(combat::GUARD_HEAVY_P_BITE_OFF) + 0), 25, "expect heavy bite minDist");
+        // p_bite is the second heavy pattern: minDist 30 .. maxDist 255 (nch.4).
+        t.assert(b8(blob, static_cast<size_t>(combat::GUARD_HEAVY_P_BITE_OFF) + 0), 30, "expect heavy bite minDist");
         t.assert(b8(blob, static_cast<size_t>(combat::GUARD_HEAVY_P_BITE_OFF) + 1), 255, "expect heavy bite maxDist");
         t.assert(b8(blob, static_cast<size_t>(combat::GUARD_LUNGE_P_LUNGE_OFF) + 0), combat_expect::PATTERN_LUNGE_P_LUNGE_MIN_DIST, "expect lunge minDist");
         t.assert(b8(blob, static_cast<size_t>(combat::GUARD_LUNGE_P_LUNGE_OFF) + 1), combat_expect::PATTERN_LUNGE_P_LUNGE_MAX_DIST, "expect lunge maxDist");

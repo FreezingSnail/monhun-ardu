@@ -23,11 +23,11 @@ Blob layout (little-endian, explicit u8/u16, no padding, fixed section order):
                      firstAttack, attackCount, firstPattern, patternCount,
                      w, h, spd, collide(ox i8, oy i8, w, h),
                      hp u16, spawnX u16, spawnY u16
-    profile    22 B  engageDist, keepDist, attackDist, circleNum, circleDen,
+    profile    23 B  engageDist, keepDist, attackDist, circleNum, circleDen,
                      retreatNum, retreatDen, staggerMax, staggerDecay,
-                     zoneFlags (bit0 head, bit1 appendage), cdBase u16,
-                     cdJitter u16, spawnT u16, spawnCd u16, stunRecoverT u16,
-                     staggerRecoverT u16
+                     zoneFlags (bit0 head, bit1 appendage), faceHold u8 tick
+                     countdown, cdBase u16, cdJitter u16, spawnT u16,
+                     spawnCd u16, stunRecoverT u16, staggerRecoverT u16
     skeleton    2 B  firstAnchor, anchorCount
     zone       12 B  box(ox i8, oy i8, w, h), hp, dmgMul, bodyShare, breakTypes,
                      staggerOnHit, brokenDmgMul, brokenFlags (bit0 hurtOff,
@@ -92,7 +92,7 @@ COMBAT_NO_ZONE = 0xFF
 
 SIZES = {
     "CREATURE": 25,
-    "PROFILE": 22,
+    "PROFILE": 23,
     "SKELETON": 2,
     "ZONE": 12,
     "ANCHOR": 2,
@@ -486,7 +486,7 @@ def load_json(errors, path):
 
 
 PROFILE_REQUIRED = {"engageDist", "keepDist", "attackDist", "circleNum", "circleDen", "retreatNum", "retreatDen", "cdBase", "cdJitter", "spawnT", "spawnCd", "stunRecoverT"}
-PROFILE_OPTIONAL = {"staggerMax", "staggerDecay", "staggerRecoverT"}
+PROFILE_OPTIONAL = {"staggerMax", "staggerDecay", "staggerRecoverT", "faceHold"}
 
 
 def zero_profile():
@@ -497,7 +497,7 @@ def zero_profile():
         "engageDist": 0, "keepDist": 0, "attackDist": 0,
         "circleNum": 0, "circleDen": 1, "retreatNum": 0, "retreatDen": 1,
         "cdBase": 0, "cdJitter": 0, "spawnT": 0, "spawnCd": 0, "stunRecoverT": 0,
-        "staggerMax": 0, "staggerDecay": 0, "staggerRecoverT": 0,
+        "staggerMax": 0, "staggerDecay": 0, "staggerRecoverT": 0, "faceHold": 0,
     }
 
 
@@ -519,6 +519,9 @@ def normalize_profile(errors, ctx, obj):
         "staggerMax": read_int(errors, ctx, obj, "staggerMax", 0, 255, default=0),
         "staggerDecay": read_int(errors, ctx, obj, "staggerDecay", 0, 255, default=0),
         "staggerRecoverT": read_int(errors, ctx, obj, "staggerRecoverT", 0, 255, default=0),
+        # nch.4: optional turn-commitment cadence. 0 = recompute facing every tick
+        # (shipped default); >0 = refresh facing only every `faceHold` ticks.
+        "faceHold": read_int(errors, ctx, obj, "faceHold", 0, 255, default=0),
     }
 
 
@@ -858,7 +861,7 @@ def pack_model(errors, model):
             u8(profile["circleNum"]), u8(profile["circleDen"]),
             u8(profile["retreatNum"]), u8(profile["retreatDen"]),
             u8(profile["staggerMax"]), u8(profile["staggerDecay"]),
-            u8(zone_flags),
+            u8(zone_flags), u8(profile["faceHold"]),
             u16(profile["cdBase"]), u16(profile["cdJitter"]), u16(profile["spawnT"]),
             u16(profile["spawnCd"]), u16(profile["stunRecoverT"]), u16(profile["staggerRecoverT"]),
         ]))
@@ -1054,6 +1057,7 @@ def emit_data_header(model, compiled):
     app("    uint8_t circleNum, circleDen, retreatNum, retreatDen;")
     app("    uint8_t staggerMax, staggerDecay;")
     app("    uint8_t zoneFlags;")
+    app("    uint8_t faceHold;   // 0 = recompute facing every tick")
     app("    uint16_t cdBase, cdJitter, spawnT, spawnCd, stunRecoverT, staggerRecoverT;")
     app("};")
     app("")
@@ -1139,10 +1143,10 @@ def emit_data_header(model, compiled):
                 for name in ZONE_NAMES:
                     if name in creature["zones"]:
                         zone_flags |= zone_flag(name)
-                app("    {%d, %d, %d, %d, %d, %d, %d, %d, %d, %d, %d, %d, %d, %d, %d, %d}," % (
+                app("    {%d, %d, %d, %d, %d, %d, %d, %d, %d, %d, %d, %d, %d, %d, %d, %d, %d}," % (
                     profile["engageDist"], profile["keepDist"], profile["attackDist"],
                     profile["circleNum"], profile["circleDen"], profile["retreatNum"], profile["retreatDen"],
-                    profile["staggerMax"], profile["staggerDecay"], zone_flags,
+                    profile["staggerMax"], profile["staggerDecay"], zone_flags, profile["faceHold"],
                     profile["cdBase"], profile["cdJitter"], profile["spawnT"], profile["spawnCd"],
                     profile["stunRecoverT"], profile["staggerRecoverT"]))
         elif section == "SKELETONS":
@@ -1361,6 +1365,7 @@ def emit_expect_header(model, compiled):
         app("constexpr int8_t CREATURE_%s_COLLIDE_OY = %d;" % (cid, collide["oy"]))
         app("constexpr uint8_t CREATURE_%s_COLLIDE_W = %d;" % (cid, collide["w"]))
         app("constexpr uint8_t CREATURE_%s_COLLIDE_H = %d;" % (cid, collide["h"]))
+        app("constexpr uint8_t PROFILE_%s_FACE_HOLD = %d;" % (cid, creature["profile"]["faceHold"]))
         if creature["attacks"]:
             first_attack = creature["attacks"][0]
             app("constexpr uint16_t ATTACK_%s_%s_WINDUP = %d;" % (cid, first_attack["id"].upper(), first_attack["windup"]))

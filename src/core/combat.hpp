@@ -20,8 +20,8 @@
 // two optional zone rects, picks the highest dmgMul (tie -> body, then head,
 // then appendage), drains the zone pool and flips a single broken bit per zone.
 //
-// Cache budget: CombatProfile 22 B + CombatAttackCache 21 B + body box 4 B +
-// 2x CombatZoneCache 22 B + 4 runtime zone bytes + 4 interpreter bytes = 75 B
+// Cache budget: CombatProfile 23 B + CombatAttackCache 21 B + body box 4 B +
+// 2x CombatZoneCache 22 B + 4 runtime zone bytes + 4 interpreter bytes = 76 B
 // on AVR.
 
 #include <stddef.h>
@@ -192,7 +192,7 @@ struct PkCreature {
 struct PkProfile {
     uint8_t engageDist, keepDist, attackDist;
     uint8_t circleNum, circleDen, retreatNum, retreatDen;
-    uint8_t staggerMax, staggerDecay, zoneFlags;
+    uint8_t staggerMax, staggerDecay, zoneFlags, faceHold;
     uint16_t cdBase, cdJitter, spawnT, spawnCd, stunRecoverT, staggerRecoverT;
 };
 struct PkSkeleton {
@@ -265,7 +265,7 @@ static_assert(offsetof(CombatPattern, guardIdx) == offsetof(PkPattern, guardIdx)
 static_assert(sizeof(CombatWindow) == 9, "window cache must stay 9 B");
 static_assert(sizeof(CombatAttackCache) == 21, "attack cache must stay 21 B");
 static_assert(sizeof(CombatZoneCache) == 11, "zone cache must stay 11 B");
-static_assert(sizeof(CombatState) == 82, "CombatState must stay 82 B (zones design + collide + static flag)");
+static_assert(sizeof(CombatState) == 83, "CombatState must stay 83 B (zones design + collide + static flag + faceHold)");
 
 // Fake cart pointer: the blob lives below 64 KB (generator hard-fails above).
 inline uint16_t combatCartAddr(uint16_t off) {
@@ -391,7 +391,7 @@ inline CombatSpawn combatCreatureSpawnRead(uint8_t i) {
     return v;
 }
 
-// Profile is a byte-identical 22 B mirror: one bulk read at spawn.
+// Profile is a byte-identical 23 B mirror: one bulk read at spawn.
 inline CombatProfile combatProfileRead(uint8_t i) {
     CombatProfile v;
     detail::combatReadBytes(static_cast<uint16_t>(combat::PROFILES_OFF + i * combat::PROFILE_SIZE), &v, sizeof(v));
@@ -642,6 +642,7 @@ inline CombatProfile combatProfileRead(uint8_t i) {
     v.staggerMax = p.staggerMax;
     v.staggerDecay = p.staggerDecay;
     v.zoneFlags = p.zoneFlags;
+    v.faceHold = p.faceHold;
     v.cdBase = p.cdBase;
     v.cdJitter = p.cdJitter;
     v.spawnT = p.spawnT;

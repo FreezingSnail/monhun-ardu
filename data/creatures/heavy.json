@@ -4,8 +4,9 @@
   "stats": { "w": 40, "h": 28, "hp": 320, "spd": 3, "spawnX": 200, "spawnY": 40 },
   "profile": {
     "engageDist": 36,
-    "keepDist": 24,
+    "keepDist": 12,
     "attackDist": 42,
+    "faceHold": 10,
     "circleNum": 8,
     "circleDen": 10,
     "retreatNum": 6,
@@ -73,12 +74,12 @@
   "patterns": [
     {
       "id": "p_spin",
-      "guard": { "maxDist": 24, "chance": 100 },
+      "guard": { "maxDist": 30, "chance": 100 },
       "steps": [ { "atk": "tail_spin", "after": 0 } ]
     },
     {
       "id": "p_bite",
-      "guard": { "minDist": 25, "maxDist": 255, "hpBand": [0, 100], "chance": 100 },
+      "guard": { "minDist": 30, "maxDist": 255, "hpBand": [0, 100], "chance": 100 },
       "steps": [ { "atk": "bite", "after": 0 } ]
     }
   ]

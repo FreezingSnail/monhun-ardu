@@ -288,6 +288,7 @@ static void initMonster(Game &g, int8_t kind = 0) {
     m.stun = 0;
     m.circleDir = 1;
     m.spd = spawn.spd;
+    m.faceT = 0;   // nch.4: refresh facing on the first update tick
     g.over = OVER_NONE;
     g.target.onHit = monsterOnHit;
     g.target.onShove = monsterOnShove;
@@ -536,10 +537,24 @@ static void updateMonster(Game &g) {
     // the vector away at windup entry. Every shipped lunge/sweep is track, so
     // parity stays byte-identical. dist/di still feed PURSUE movement and the
     // circle step while locked.
+    //
+    // Turn commitment (nch.4): profile.faceHold > 0 refreshes the tracked vector
+    // only every faceHold ticks (faceT counts down from faceHold to 0, then the
+    // vector refreshes and faceT re-arms). faceHold 0 recomputes every tick, so
+    // the shipped lunge/sweep stay byte-identical. Lock modes still freeze.
     const bool facingLocked = m.atkIdx != COMBAT_NO_ATTACK && combatFacingLockV(g.combat.attack.facing) && (m.state == MS_WINDUP || m.state == MS_ATTACK);
     if (!facingLocked) {
-        m.fx = fp::dir8X(di);
-        m.fy = fp::dir8Y(di);
+        if (pr.faceHold == 0) {
+            m.fx = fp::dir8X(di);
+            m.fy = fp::dir8Y(di);
+        } else {
+            if (m.faceT == 0) {
+                m.fx = fp::dir8X(di);
+                m.fy = fp::dir8Y(di);
+                m.faceT = pr.faceHold;
+            }
+            m.faceT--;
+        }
     }
 
     // Stagger meter decay (docs section 7). Shipped 3: fact false, folded out.

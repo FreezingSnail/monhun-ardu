@@ -135,6 +135,24 @@ class GenCombatTests(unittest.TestCase):
                     lambda doc: doc["attacks"][0]["windows"][0].__setitem__("dmgMul", 300))
         self.assert_fails(self.compile(), "windows[0]: dmgMul: out of range 0..255: 300")
 
+    def test_face_hold_default_and_emit(self):
+        # nch.4: profile.faceHold is optional (default 0) and packs as the 11th
+        # u8 scalar, right after zoneFlags.
+        self.assert_succeeds(self.compile())
+        meta = self.meta_constants()
+        o = meta["PROFILE_BEAST_OFF"]
+        self.assertEqual(self.blob()[o + 10], 0, "faceHold defaults to 0")
+        self.mutate("data/creatures/beast.json",
+                    lambda doc: doc["profile"].__setitem__("faceHold", 10))
+        self.assert_succeeds(self.compile())
+        self.assertEqual(self.blob()[o + 10], 10, "faceHold emitted")
+        self.assertIn("constexpr uint8_t PROFILE_BEAST_FACE_HOLD = 10;", self.read(EXPECT_REL))
+
+    def test_face_hold_range_rejected(self):
+        self.mutate("data/creatures/beast.json",
+                    lambda doc: doc["profile"].__setitem__("faceHold", 256))
+        self.assert_fails(self.compile(), "profile: faceHold: out of range 0..255: 256")
+
     def test_zone_hp_range_rejected(self):
         self.mutate("data/creatures/beast.json",
                     lambda doc: doc["zones"]["appendage"].__setitem__("hp", 300))
@@ -330,7 +348,9 @@ class GenCombatTests(unittest.TestCase):
         self.assertEqual(creature, bytes([0, 0, 0, 1, 0, 1, 0, 1, 16, 12, 4, 0, 0, 16, 12, 80, 0, 100, 0, 32, 0, 0, 0, 0, 0]))
 
         profile = blob[meta["PROFILE_BEAST_OFF"]:meta["PROFILE_BEAST_OFF"] + meta["PROFILE_SIZE"]]
-        self.assertEqual(profile, bytes([30, 18, 36, 8, 10, 6, 10, 40, 1, 3, 40, 0, 20, 0,
+        # 23 B profile: 11 u8 scalars (zoneFlags then the nch.4 faceHold byte)
+        # then six u16 timers.
+        self.assertEqual(profile, bytes([30, 18, 36, 8, 10, 6, 10, 40, 1, 3, 0, 40, 0, 20, 0,
                                          60, 0, 90, 0, 20, 0, 15, 0]))
 
         skeleton = blob[meta["SKELETON_BEAST_16X12_OFF"]:meta["SKELETON_BEAST_16X12_OFF"] + meta["SKELETON_SIZE"]]
@@ -401,7 +421,7 @@ class GenCombatTests(unittest.TestCase):
         # Static profile is inert (all zero, denominators 1, zoneFlags 0x03).
         p = meta["PROFILE_POLE_OFF"]
         prof = blob[p:p + meta["PROFILE_SIZE"]]
-        self.assertEqual(prof, bytes([0, 0, 0, 0, 1, 0, 1, 0, 0, 3,
+        self.assertEqual(prof, bytes([0, 0, 0, 0, 1, 0, 1, 0, 0, 3, 0,
                                       0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0]))
 
         head = blob[meta["ZONE_POLE_HEAD_OFF"]:meta["ZONE_POLE_HEAD_OFF"] + meta["ZONE_SIZE"]]

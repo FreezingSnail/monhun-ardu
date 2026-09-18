@@ -12,7 +12,7 @@
 namespace combat_data {
 
 constexpr uint8_t VERSION = 1;
-constexpr uint16_t BLOB_SIZE = 962;
+constexpr uint16_t BLOB_SIZE = 970;
 
 struct Box {
     int8_t ox;
@@ -34,6 +34,7 @@ struct Profile {
     uint8_t circleNum, circleDen, retreatNum, retreatDen;
     uint8_t staggerMax, staggerDecay;
     uint8_t zoneFlags;
+    uint8_t faceHold;   // 0 = recompute facing every tick
     uint16_t cdBase, cdJitter, spawnT, spawnCd, stunRecoverT, staggerRecoverT;
 };
 
@@ -169,14 +170,14 @@ inline constexpr std::array<Creature, 8> CREATURES = {{
 }};
 
 inline constexpr std::array<Profile, 8> PROFILES = {{
-    {36, 24, 42, 8, 10, 6, 10, 0, 0, 2, 55, 40, 90, 140, 24, 0},
-    {36, 24, 42, 8, 10, 6, 10, 0, 0, 3, 55, 40, 90, 140, 24, 0},
-    {0, 0, 0, 0, 1, 0, 1, 0, 0, 1, 0, 0, 0, 0, 0, 0},
-    {0, 0, 0, 0, 1, 0, 1, 0, 0, 2, 0, 0, 0, 0, 0, 0},
-    {0, 0, 0, 0, 1, 0, 1, 0, 0, 2, 0, 0, 0, 0, 0, 0},
-    {0, 0, 0, 0, 1, 0, 1, 0, 0, 2, 0, 0, 0, 0, 0, 0},
-    {36, 24, 42, 8, 10, 6, 10, 60, 1, 3, 50, 30, 90, 120, 24, 24},
-    {36, 24, 42, 8, 10, 6, 10, 0, 0, 0, 55, 40, 90, 140, 24, 0},
+    {36, 12, 42, 8, 10, 6, 10, 0, 0, 2, 10, 55, 40, 90, 140, 24, 0},
+    {36, 24, 42, 8, 10, 6, 10, 0, 0, 3, 0, 55, 40, 90, 140, 24, 0},
+    {0, 0, 0, 0, 1, 0, 1, 0, 0, 1, 0, 0, 0, 0, 0, 0, 0},
+    {0, 0, 0, 0, 1, 0, 1, 0, 0, 2, 0, 0, 0, 0, 0, 0, 0},
+    {0, 0, 0, 0, 1, 0, 1, 0, 0, 2, 0, 0, 0, 0, 0, 0, 0},
+    {0, 0, 0, 0, 1, 0, 1, 0, 0, 2, 0, 0, 0, 0, 0, 0, 0},
+    {36, 24, 42, 8, 10, 6, 10, 60, 1, 3, 0, 50, 30, 90, 120, 24, 24},
+    {36, 24, 42, 8, 10, 6, 10, 0, 0, 0, 0, 55, 40, 90, 140, 24, 0},
 }};
 
 inline constexpr std::array<Skeleton, 5> SKELETONS = {{
@@ -250,8 +251,8 @@ inline constexpr std::array<Pattern, 8> PATTERNS = {{
 }};
 
 inline constexpr std::array<Guard, 8> GUARDS = {{
-    {0, 24, 0, 100, 0, 0, 100, 0},
-    {25, 255, 0, 100, 0, 0, 100, 0},
+    {0, 30, 0, 100, 0, 0, 100, 0},
+    {30, 255, 0, 100, 0, 0, 100, 0},
     {33, 255, 0, 100, 0, 0, 100, 0},
     {0, 32, 0, 100, 0, 0, 100, 0},
     {0, 255, 0, 100, 0, 0, 100, 2},

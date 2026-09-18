@@ -330,15 +330,15 @@ test('monster variants: SWEEP never lunges, HEAVY spins inside 24 else bites', (
     assert.equal(m.atk.kind, 'sweep', 'sweep variant at dist ' + d);
   }
 
-  // HEAVY (nch.1) kit: tail_spin at dist <= 24, bite from 25 out to the
+  // HEAVY (nch.4) kit: tail_spin at dist <= 30, bite from 31 out to the
   // pursue engage gate at 42.
-  for (const d of [25, 30, 41]) {
+  for (const d of [31, 41]) {
     const g = G.newGame(0, 'hunt', 2);
     const m = placeAtDistance(g, d);
     G.step(g, inp({}));
     assert.equal(m.atk.kind, 'bite', 'heavy bites at dist ' + d);
   }
-  for (const d of [0, 10, 24]) {
+  for (const d of [0, 10, 24, 30]) {
     const g = G.newGame(0, 'hunt', 2);
     const m = placeAtDistance(g, d);
     G.step(g, inp({}));
@@ -405,6 +405,85 @@ test('monster variants: lock-away tail hit knocks the hunter away from the beast
   G.step(g, inp({}));
   assert.ok(g.player.hp < hp0, 'tail window hit lands');
   assert.ok(g.player.vx > 0, 'radial knock pushes east, away from the beast');
+});
+
+test('monster variants: HEAVY faceHold commits facing; flank hit lands the tail', () => {
+  const g = G.newGame(0, 'hunt', 2);
+  const m = park(g);
+  const def = G.MONSTER_DEFS[2];
+  assert.equal(def.faceHold, 10, 'heavy faceHold 10');
+  assert.equal(def.keepDist, 12, 'heavy holds ground at 12');
+  assert.equal(def.spinDist, 30, 'heavy spins inside 30');
+  m.x = 80;
+  m.y = 40;
+  g.player.x = 120;
+  g.player.y = m.y + (m.h >> 1) - (g.player.h >> 1); // hunter due east
+  m.state = 'pursue';
+  m.cd = 999999; // never choose an attack; cadence only
+  G.step(g, inp({}));
+  assert.equal(m.face.x, 16, 'facing east on first refresh');
+  assert.equal(m.face.y, 0, 'level east');
+  assert.equal(m.faceT, 9, 'faceHold countdown re-armed (10 set, decremented)');
+  // Hunter crosses behind (west); facing stays committed east for the hold.
+  g.player.x = 30;
+  for (let i = 0; i < 9; i++) G.step(g, inp({}));
+  assert.equal(m.face.x, 16, 'facing stale through the full hold');
+  assert.equal(m.faceT, 0, 'countdown reached zero');
+  // Hit from behind under the stale east facing: the tail box (ox -24) rotates
+  // to the west side of the body and wins the higher multiplier.
+  const tail = G.zoneHitResolve(g, 10, 1, m.x - 12, m.y + (m.h >> 1));
+  assert.equal(tail.zone, 'appendage', 'from-behind hit lands the tail zone');
+  // The next tick refreshes facing west, rotating the tail back in front.
+  G.step(g, inp({}));
+  assert.equal(m.face.x, -16, 'facing refreshed west after faceHold ticks');
+  const body = G.zoneHitResolve(g, 10, 1, m.x - 12, m.y + (m.h >> 1));
+  assert.equal(body.zone, null, 'same world point no longer in the tail');
+});
+
+test('monster variants: HEAVY hunter pressing in sees repeated tail_spin', () => {
+  const g = G.newGame(0, 'hunt', 2);
+  g.monster.hp = 100000; // survive the whole probe
+  let spins = 0;
+  let prev = g.monster.state;
+  for (let i = 0; i < 2000; i++) {
+    g.over = null;        // the probe measures attack selection, not the hunt
+    g.player.hp = 100;    // top the hunter up so the sim keeps ticking
+    G.step(g, inp({ mx: 1 })); // hunter pressing in toward the beast
+    const st = g.monster.state;
+    if (st === 'windup' && prev !== 'windup' && g.monster.atk && g.monster.atk.kind === 'tailSpin')
+      spins++;
+    prev = st;
+  }
+  // keepDist 12 holds the spin band instead of retreating to 24 and biting; the
+  // pre-nch.4 mock saw 0 spins / 12 bites in this free-chase probe.
+  assert.ok(spins >= 4, 'tail_spin repeats while the hunter presses in: ' + spins);
+});
+
+test('monster variants: HEAVY tail_spin holds when the hunter is in the 12..30 band', () => {
+  const g = G.newGame(0, 'hunt', 2);
+  g.monster.hp = 100000;
+  let spins = 0;
+  let bites = 0;
+  let prev = g.monster.state;
+  for (let i = 0; i < 2000; i++) {
+    g.over = null;
+    g.player.hp = 100;
+    // Hold the hunter 18px due east and keep pressing in: the pair stays in the
+    // 12..30 spin band, so attack selection is measured there (no retreat).
+    const m = g.monster;
+    const p = g.player;
+    p.x = m.x + (m.w >> 1) - (p.w >> 1) + 18;
+    p.y = m.y + (m.h >> 1) - (p.h >> 1);
+    G.step(g, inp({ mx: 1 }));
+    if (g.monster.state === 'windup' && prev !== 'windup' && g.monster.atk) {
+      if (g.monster.atk.kind === 'tailSpin') spins++;
+      else if (g.monster.atk.kind === 'bite') bites++;
+    }
+    prev = g.monster.state;
+  }
+  // The old keepDist 24 backed out of the band; keepDist 12 spins every cycle.
+  assert.ok(spins >= 8, 'tail_spin repeats in the band: ' + spins);
+  assert.equal(bites, 0, 'no bite while the hunter holds the 12..30 band');
 });
 
 test('monster variants: window telegraph mirrors the C++ window cache', () => {
