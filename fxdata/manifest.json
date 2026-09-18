@@ -94,23 +94,23 @@
     },
     {
       "declaration": "fxdata/blocks/Sprites.txt",
-      "path": "images/blocks/fxpole_break_20x40.png",
-      "sha256": "9e62b5a1c5921d9bb2d596b02e2945ea11cbf0879d647bbe915b7deea2be5c9a",
-      "size": 422,
+      "path": "images/blocks/fxpole_break_24x40.png",
+      "sha256": "6fecf1f650c3e728e1169d25f99270c41332a83d4dad8e0a3143b006133fcf9b",
+      "size": 583,
       "symbol": "fxpole_break"
     },
     {
       "declaration": "fxdata/blocks/Sprites.txt",
-      "path": "images/blocks/fxpole_crack_20x40.png",
-      "sha256": "0b8045b5dc091c16cb6f9c77754cf08e64635feaeed6718baf4487ea627d30df",
-      "size": 406,
+      "path": "images/blocks/fxpole_crack_24x40.png",
+      "sha256": "c27ba5b4e5d0204e8cad0b5c59b432a3796fd664f49ba0024de7a2f2773160ea",
+      "size": 443,
       "symbol": "fxpole_crack"
     },
     {
       "declaration": "fxdata/blocks/Sprites.txt",
-      "path": "images/blocks/fxpole_sever_20x40.png",
-      "sha256": "dfbe9ff1158a36b5b0e3fd29879c2dc9db9b9da83e9d703dfbdb73b79ee2bc69",
-      "size": 406,
+      "path": "images/blocks/fxpole_sever_24x40.png",
+      "sha256": "b720700ec11c6d1b92a1ffbcc45b4780efc12fe8a9abc8a039b2860bae9078a0",
+      "size": 461,
       "symbol": "fxpole_sever"
     },
     {
@@ -307,18 +307,18 @@
     },
     {
       "path": "data/creatures/pole_break.json",
-      "sha256": "001509ef24c51c3ed0e179a1d8df929754c02661078668bd64d758eb4a41945b",
-      "size": 438
+      "sha256": "d1fe0579664a1cbc19208230c10dff01c5e08e045158c15867473eb006b8e090",
+      "size": 436
     },
     {
       "path": "data/creatures/pole_crack.json",
-      "sha256": "005d96f067cedd9dac4eaa058023af87e1bd0bd6b72d0b1e47d9fa7d09da89f4",
+      "sha256": "09aa69d0f549523f10ac4fdcbe69499a7765737a0f3955ccf237ac71f0704544",
       "size": 438
     },
     {
       "path": "data/creatures/pole_sever.json",
-      "sha256": "ab3bdbeeeea31a910533750cddcfaaf9b272efc0108bdaf05b2c6fc6dd651eec",
-      "size": 438
+      "sha256": "19c15e70be94ab89c152e145d6ab1f684c7cef61336e9818aee037038faa60cb",
+      "size": 437
     },
     {
       "path": "data/creatures/ravager.json",
@@ -517,8 +517,8 @@
     },
     {
       "path": "fxdata/blocks/Sprites.txt",
-      "sha256": "a7249785e7e0d1dc3afee665c215f7a90393a30af1559e31aca5ab569067a8aa",
-      "size": 415829,
+      "sha256": "c2d2bbef19f42f93b853fa8ca8d8b06accacca9d61ed9b2dbc2fc1788bb83481",
+      "size": 427169,
       "symbols": [
         "fxtail",
         "fxdeflect",
@@ -539,14 +539,14 @@
         "fxplayer",
         "fxripspecial",
         "fxtail_heavy",
-        "fxpole_sever",
+        "fxpole_crack",
+        "fxpole_break",
         "fxreload",
         "fxscatter",
+        "fxpole_sever",
         "fxerase",
-        "fxpole_break",
         "fxhud",
-        "fxslash",
-        "fxpole_crack"
+        "fxslash"
       ]
     },
     {
@@ -591,13 +591,13 @@
     },
     {
       "path": "fxdata/tables/combat.bin",
-      "sha256": "f3c5423abdbc6f508f6c377fc3dc6784a99d31b21b3c040378ca583ddf42fb5c",
+      "sha256": "057705340d1057989813440384a7049b6420e4e9820ea83fe42609dca9ee202d",
       "size": 962,
       "symbol": "mhCombat"
     },
     {
       "path": "fxdata/tables/equip.bin",
-      "sha256": "5712562434e49eb78910d389510b0478883a7d29c2e07a572155867efb1398f2",
+      "sha256": "f4993a3769af1cc0b3b66627c3aea37e35f8fd8b250cdba32a5b4d57ca0132c1",
       "size": 876,
       "symbol": "mhEquip"
     },
@@ -647,27 +647,27 @@
   "outputs": [
     {
       "path": "fxdata/fxdata-data.bin",
-      "sha256": "d3d8117e4c3b94b76cdd44e10d71217e4d8e9537d3b5a6a8d290d3da594cd383",
-      "size": 162593
+      "sha256": "f71bae6df50c083748c6a097ba879328908be0320c6b6b172dcd4f05e8c486e2",
+      "size": 164753
     },
     {
       "path": "fxdata/fxdata.bin",
-      "sha256": "1abf758dac1a80aeb91c9bab6b16da7b9c80306dcaea524ddcddd0f4ce78870f",
-      "size": 162816
+      "sha256": "596215385ebc43b1fa5f941c9f05b6c4f907233efd51877b05b0391068faab51",
+      "size": 164864
     },
     {
       "path": "fxdata/fxdata.h",
-      "sha256": "1de1c123d9eefa37c7575989b04991b2c867046411a33c72bd60405aadd2ab82",
+      "sha256": "3a52ac3c230bacd69dea21e4e0fd0546e38cfbaa656d3267907a6836a6932cd9",
       "size": 2393
     },
     {
       "path": "fxdata/tables/combat.bin",
-      "sha256": "f3c5423abdbc6f508f6c377fc3dc6784a99d31b21b3c040378ca583ddf42fb5c",
+      "sha256": "057705340d1057989813440384a7049b6420e4e9820ea83fe42609dca9ee202d",
       "size": 962
     },
     {
       "path": "fxdata/tables/equip.bin",
-      "sha256": "5712562434e49eb78910d389510b0478883a7d29c2e07a572155867efb1398f2",
+      "sha256": "f4993a3769af1cc0b3b66627c3aea37e35f8fd8b250cdba32a5b4d57ca0132c1",
       "size": 876
     },
     {
@@ -687,7 +687,7 @@
     },
     {
       "path": "src/fxdata.h",
-      "sha256": "1de1c123d9eefa37c7575989b04991b2c867046411a33c72bd60405aadd2ab82",
+      "sha256": "3a52ac3c230bacd69dea21e4e0fd0546e38cfbaa656d3267907a6836a6932cd9",
       "size": 2393
     },
     {
@@ -697,12 +697,12 @@
     },
     {
       "path": "src/generated/combat_data.hpp",
-      "sha256": "b8b4ea54ecdaf2394760e026a1e8b601678b2ea9d84dd683c4577cd75cb1a731",
-      "size": 9157
+      "sha256": "363c9222d49326b9e8e5c720369e3e55a2cddf29eeb634ff6d7a19b09177376e",
+      "size": 9154
     },
     {
       "path": "src/generated/combat_expect.hpp",
-      "sha256": "56dfe419e535fd9af95a8101342a677738a29df9d3c32d2b0a29c914c0ad5e04",
+      "sha256": "4b50d2c48f3289cf39021c02d299189f695a7ff716e3c214b5e9d51cb6147e0b",
       "size": 9266
     },
     {
@@ -712,8 +712,8 @@
     },
     {
       "path": "src/generated/equip_meta.hpp",
-      "sha256": "7530ac53c9f810a17c3378bb7bc84f40f096d39c12115c4076d9a507d02e7686",
-      "size": 22329
+      "sha256": "262172053152652208b5f16855940d6a2889d87c665e3ec1c8756cba755fdc62",
+      "size": 22330
     },
     {
       "path": "src/generated/quest_meta.hpp",

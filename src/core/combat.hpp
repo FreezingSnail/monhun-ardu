@@ -1093,10 +1093,10 @@ inline bool combatZoneContains(const Game &g, const CombatBox &b, int16_t hx, in
 // Landed player hit against the 3-hitzone model. The body is implicit and wins
 // ties: a zone candidate replaces it only on a strictly higher final
 // multiplier (tie -> body, then head, then appendage), matching the zone test
-// order. Any landed hit drains the zone pool; a drained pool flips a single
-// broken bit when the hit's phys is in breakTypes (the shared monster rule,
-// now also used by static props). Zero cart reads (all zone scalars were cached
-// at spawn).
+// order. Any landed hit on a zone drains its pool; a drained pool flips a
+// single broken bit when the hit's phys is in breakTypes (the shared monster
+// rule, now also used by static props). Zero cart reads (all zone scalars were
+// cached at spawn).
 inline MH_COMBAT_NI CombatBodyHit combatZoneHitResolveAt(Game &g, int32_t base, uint8_t phys, int16_t hx, int16_t hy, int16_t bx, int16_t by, int16_t fx, int16_t fy) {
     CombatBodyHit r;
     r.zone = COMBAT_NO_ZONE;

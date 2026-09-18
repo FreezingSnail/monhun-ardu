@@ -141,16 +141,16 @@ void WorldSuite(TestRunner &runner) {
     }
 
     {
-        Test t("pole variants: target rect follows the kind; whole-pole break at 20");
+        Test t("pole variants: target rect follows the kind; part-locked break at 20");
         Game g;
         newGame(g, W_SWORD, MODE_TRAIN);
         initPoleKind(g, POLE_BREAK);
         t.assert(g.pole.rect.w, 20, "break rect w 20");
         t.assert(g.target.rect.w, 20, "active target refreshed to 20");
-        // Drain the whole-pole zone (flail blunt) at the mid-post play point.
+        // Drain the part-locked horn zone (flail blunt) at the horn centre.
         g.weapon = W_FLAIL;
-        poleOnHit(g, 40, static_cast<int16_t>(g.pole.rect.x + 10), static_cast<int16_t>(g.pole.rect.y + 22), 0, 0);
-        t.assert(g.combat.zoneBroken & COMBAT_ZONE_APPENDAGE_BIT, COMBAT_ZONE_APPENDAGE_BIT, "whole pole broken");
+        poleOnHit(g, 40, static_cast<int16_t>(g.pole.rect.x + 13), static_cast<int16_t>(g.pole.rect.y + 10), 0, 0);
+        t.assert(g.combat.zoneBroken & COMBAT_ZONE_APPENDAGE_BIT, COMBAT_ZONE_APPENDAGE_BIT, "horn broken");
         t.assert(g.target.rect.w, 20, "target rect stays 20");
         // Variant survives withWeapon/resetHunt in train.
         initPoleKind(g, POLE_SEVER);

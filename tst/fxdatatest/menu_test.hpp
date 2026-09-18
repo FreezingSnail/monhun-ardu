@@ -118,7 +118,7 @@ inline void test_menu(FxTest &test) {
     test.expectEq(static_cast<uint32_t>(g.pole.kind), POLE_PLAIN, F("start plain pole"));
     test.expectEq(static_cast<uint32_t>(g.combat.zone[COMBAT_ZONE_HEAD].hp), 0, F("plain pool 0"));
 
-    // ---- target 5 SEVER installs the whole-pole breakable variant (pool 60)
+    // ---- target 5 SEVER installs the cap-locked breakable variant (pool 60)
     MenuState sv;
     sv.weapon = W_SWORD;
     sv.target = MENU_POLE_TARGET + POLE_SEVER;
@@ -127,8 +127,9 @@ inline void test_menu(FxTest &test) {
     test.expectEq(static_cast<uint32_t>(g.pole.kind), POLE_SEVER, F("start sever pole"));
     test.expectEq(static_cast<uint32_t>(g.combat.zone[COMBAT_ZONE_APPENDAGE].hp), 60, F("sever pool 60"));
     test.expectEq(static_cast<uint32_t>(g.pole.rect.w), 20, F("sever rect w"));
+    test.expectEq(static_cast<uint32_t>(g.pole.rect.h), 36, F("sever rect h"));
 
-    // ---- target 6 BREAK installs the horn variant (pool 40, rect 20)
+    // ---- target 6 BREAK installs the horn variant (pool 40, rect 20x36)
     MenuState bk;
     bk.weapon = W_FLAIL;
     bk.target = MENU_POLE_TARGET + POLE_BREAK;
@@ -136,15 +137,18 @@ inline void test_menu(FxTest &test) {
     test.expectEq(static_cast<uint32_t>(g.pole.kind), POLE_BREAK, F("start break pole"));
     test.expectEq(static_cast<uint32_t>(g.combat.zone[COMBAT_ZONE_APPENDAGE].hp), 40, F("break pool 40"));
     test.expectEq(static_cast<uint32_t>(g.pole.rect.w), 20, F("break rect w 20"));
+    test.expectEq(static_cast<uint32_t>(g.pole.rect.h), 36, F("break rect h"));
     test.expectEq(static_cast<uint32_t>(g.target.rect.w), 20, F("break target rect"));
 
-    // ---- target 7 CRACK installs the whole-pole crack variant (pool 30)
+    // ---- target 7 CRACK installs the collar variant (pool 30)
     MenuState ck;
     ck.weapon = W_GUN;
     ck.target = MENU_POLE_TARGET + POLE_CRACK;
     menuStart(g, ck);
     test.expectEq(static_cast<uint32_t>(g.pole.kind), POLE_CRACK, F("start crack pole"));
     test.expectEq(static_cast<uint32_t>(g.combat.zone[COMBAT_ZONE_APPENDAGE].hp), 30, F("crack pool 30"));
+    test.expectEq(static_cast<uint32_t>(g.pole.rect.w), 20, F("crack rect w"));
+    test.expectEq(static_cast<uint32_t>(g.pole.rect.h), 36, F("crack rect h"));
 
     // ---- HEAVY -> hunt, cart def drives size/hp (40x28, 320 hp)
     MenuState h;

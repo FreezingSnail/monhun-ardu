@@ -297,10 +297,12 @@ static inline uint24_t poleSheetById(uint8_t sheet) {
     }
 }
 
-// Mock drawPole(): base post, ring bands, head, emblem, ground plate, all baked
-// into the sheet; hit flash selects the flash frame. The plain pole sheet has 2
-// frames (normal/flash); each breakable variant has 6 (stage*2 + flash) driven
-// by its breakable zone pool + broken bit + hitFlash.
+// Mock drawPole(): base post, ring bands, additive LIGHT part (cap/horn/collar),
+// ground plate, all baked into the sheet; hit flash selects the flash frame. The
+// plain pole sheet is 2 frames (normal/flash) 20 px wide; each breakable variant
+// is a 24 px wide six-frame sheet (stage*2 + flash) driven by its breakable zone
+// pool + broken bit + hitFlash. The variant sheets bake a 2 px transparent
+// margin on each side so their 24 px part stays centered on the 20 px pole rect.
 static inline uint8_t poleSheetFrame(uint8_t sheet, uint8_t broken, uint8_t hp, uint8_t hpMax, uint8_t flash) {
     if (sheet == SHEET_POLE)
         return flash ? spr::POLE_FLASH : spr::POLE_NORMAL;
@@ -309,14 +311,14 @@ static inline uint8_t poleSheetFrame(uint8_t sheet, uint8_t broken, uint8_t hp, 
 
 static void drawPole(const mh::Game &g, int16_t camX, int16_t camY) {
     const mh::Pole &pole = g.pole;
-    const int16_t x = static_cast<int16_t>(pole.rect.x - camX);
-    const int16_t y = static_cast<int16_t>(pole.rect.y - camY + mh::HUD_H);
     const uint8_t sheet = mh::combatCreatureSheet(g.combat.creature);
-    // The breakable zone drives the stage: every variant ships one whole-pole
-    // appendage zone, so its pool + broken bit select the horn/stump/band stage;
-    // the head fallback is kept for a hypothetical head-pool prop. hpMax == 0
-    // means no breakable zone, so PLAIN stays on its 2-frame sheet above.
-    // Everything here is cache state -- no per-tick cart reads.
+    const int16_t x = static_cast<int16_t>(pole.rect.x - camX + ((sheet == SHEET_POLE) ? 0 : -2));
+    const int16_t y = static_cast<int16_t>(pole.rect.y - camY + mh::HUD_H);
+    // The breakable zone drives the stage: every variant ships one part-locked
+    // appendage zone (cap/horn/collar), so its pool + broken bit select the
+    // cap/horn/collar stage; the head fallback is kept for a hypothetical
+    // head-pool prop. hpMax == 0 means no breakable zone, so PLAIN stays on its
+    // 2-frame sheet above. Everything here is cache state -- no cart reads.
     const mh::CombatZoneCache &za = g.combat.zone[mh::COMBAT_ZONE_APPENDAGE];
     const mh::CombatZoneCache &zh = g.combat.zone[mh::COMBAT_ZONE_HEAD];
     const bool append = za.hpMax != 0;

@@ -593,14 +593,15 @@ void testTailSpin(Test &t) {
 }
 
 // -------------------------------------------- training-pole variant sheets
-// Beads monhun-ardu-6zb.5 / 6zb.7 / 6zb.8: PLAIN keeps the legacy 2-frame
-// 20x40 sheet; each breakable variant is a 6-frame sheet in stage*2 + flash
-// order (intact, intact-flash, damaged, damaged-flash, broken, broken-flash).
-// The marker is a neutral 7-px jagged fracture on the actual breakable part --
-// SEVER on the LIGHT head (BLACK), BREAK on the DARK horn (WHITE), CRACK on the
-// DARK band (WHITE) -- so the tests pin position, contrast (the part behind is
-// the opposite shade) and the damaged (5-px chipped) / broken (detached on the
-// ground) stages. All three variant sheets are 20x40 (bead 6zb.9).
+// Beads monhun-ardu-6zb.5 / 6zb.7 / 6zb.10: PLAIN keeps the legacy 2-frame
+// 20x40 sheet; each breakable variant is a 24x40 6-frame sheet in stage*2 +
+// flash order (intact, intact-flash, damaged, damaged-flash, broken,
+// broken-flash). The pole is a 16-px DARK post centered at x4..20 and the
+// breakable part is a LIGHT additive shape spanning the full 24 px (so it
+// protrudes 4 px past the post on each side) with a WHITE highlight, a BLACK
+// seam and the neutral 7-px jagged fracture marker (BLACK on LIGHT). Tests pin
+// the part protrusion (cap/collar margins, horn tip), the marker stages
+// (7/5/0 px), the damaged/broken stage differences and the broken ground piece.
 void testPoleSheets(Test &t) {
     Blob plain, sever, brk, crack;
     t.assert(parseBlob("fxpole", plain, t), 1, "plain pole blob");
@@ -609,53 +610,45 @@ void testPoleSheets(Test &t) {
     t.assert(plain.h, 40, "plain pole h");
     t.assert(plain.frames, 2, "plain pole 2 frames");
 
-    // Mask ink count inside a half-open rect of one frame.
-    auto regionInk = [](const Blob &b, int frame, int x0, int y0, int x1, int y1) {
+    // Opaque pixels of a target shade in a half-open rect: 0 BLACK, 1 DARK,
+    // 2 LIGHT, 3 WHITE (L4 triplane decode), transparent skipped.
+    auto shadeInk = [](const Blob &b, int frame, int shade, int x0, int y0, int x1, int y1) {
+        int n = 0;
+        for (int y = y0; y < y1; y++) {
+            for (int x = x0; x < x1; x++) {
+                if (!bitAt(y, pixelMask(b, frame, 0, x, y / 8)))
+                    continue;
+                const int p0 = bitAt(y, pixelData(b, frame, 0, x, y / 8));
+                const int p1 = bitAt(y, pixelData(b, frame, 1, x, y / 8));
+                const int p2 = bitAt(y, pixelData(b, frame, 2, x, y / 8));
+                const int s = p2 ? 3 : (p1 ? 2 : (p0 ? 1 : 0));
+                if (s == shade)
+                    n++;
+            }
+        }
+        return n;
+    };
+    auto anyInk = [](const Blob &b, int frame, int x0, int y0, int x1, int y1) {
         int n = 0;
         for (int y = y0; y < y1; y++)
             for (int x = x0; x < x1; x++)
                 n += bitAt(y, pixelMask(b, frame, 0, x, y / 8));
         return n;
     };
-    // Opaque pixels of a target shade in a rect: shade 0 = BLACK (all data
-    // planes 0), shade 2 = WHITE (data plane 2 set).
-    auto markerInk = [](const Blob &b, int frame, int shade, int x0, int y0, int x1, int y1) {
-        int n = 0;
-        for (int y = y0; y < y1; y++) {
-            for (int x = x0; x < x1; x++) {
-                if (!bitAt(y, pixelMask(b, frame, 0, x, y / 8)))
-                    continue;
-                if (shade == 0)
-                    n += bitAt(y, pixelData(b, frame, 0, x, y / 8)) ? 0 : 1;
-                else
-                    n += bitAt(y, pixelData(b, frame, 2, x, y / 8));
-            }
-        }
-        return n;
-    };
-
-    // DARK (shade 1) opaque pixels in a rect: mask set, plane0 set, plane1
-    // clear. The BREAK horn is DARK on the LIGHT head, so this counts its ink.
-    auto darkInk = [](const Blob &b, int frame, int x0, int y0, int x1, int y1) {
-        int n = 0;
-        for (int y = y0; y < y1; y++)
-            for (int x = x0; x < x1; x++)
-                if (bitAt(y, pixelMask(b, frame, 0, x, y / 8)) && bitAt(y, pixelData(b, frame, 0, x, y / 8)) && !bitAt(y, pixelData(b, frame, 1, x, y / 8)))
-                    n++;
-        return n;
-    };
 
     const char *const syms[3] = {"fxpole_sever", "fxpole_break", "fxpole_crack"};
     Blob *const blobs[3] = {&sever, &brk, &crack};
-    // Fracture marker rect on the breakable part and the shade it must use.
-    const int mbox[3][4] = {{8, 3, 12, 8}, {7, 5, 11, 10}, {8, 19, 12, 24}};
-    const int mshade[3] = {0, 3, 3};   // BLACK on the head, WHITE on horn/band
+    // Marker rect (mx+1..mx+3, my..my+4) holding the 7-px stamp, and a
+    // guaranteed-LIGHT sample beside it.
+    const int mbox[3][4] = {{10, 3, 13, 8}, {17, 5, 20, 10}, {11, 21, 14, 26}};
+    const int lite[3][2] = {{7, 6}, {16, 10}, {8, 23}};
     for (int vi = 0; vi < 3; vi++) {
         Blob &b = *blobs[vi];
         const std::string tag = syms[vi];
         if (!parseBlob(syms[vi], b, t))
             continue;
         t.assert(b.frames, 6, tag + " 6 frames");
+        t.assert(b.w, 24, tag + " w 24");
         t.assert(b.h, 40, tag + " h 40");
         const size_t fb = b.bytes.size() / 6;
 
@@ -674,60 +667,37 @@ void testPoleSheets(Test &t) {
         t.assert(bytesDiffer(0, 2) > 0, 1, tag + " damaged differs from intact");
         t.assert(bytesDiffer(2, 4) > 0, 1, tag + " broken differs from damaged");
 
-        // Neutral fracture marker on the breakable part: 7 px intact, chipped
-        // to 5 px when damaged, gone once the part detaches.
+        // Neutral fracture marker on the LIGHT part: 7 px intact, chipped to
+        // 5 px when damaged, gone once the part detaches.
         const int *m = mbox[vi];
-        const int ms = mshade[vi];
-        t.assert(markerInk(b, 0, ms, m[0], m[1], m[2], m[3]), 7, tag + " intact 7-px marker");
-        t.assert(markerInk(b, 2, ms, m[0], m[1], m[2], m[3]), 5, tag + " damaged 5-px marker");
-        t.assert(markerInk(b, 4, ms, m[0], m[1], m[2], m[3]), 0, tag + " broken marker gone");
+        t.assert(shadeInk(b, 0, 0, m[0], m[1], m[2], m[3]), 7, tag + " intact 7-px marker");
+        t.assert(shadeInk(b, 2, 0, m[0], m[1], m[2], m[3]), 5, tag + " damaged 5-px marker");
+        t.assert(shadeInk(b, 4, 0, m[0], m[1], m[2], m[3]), 0, tag + " broken marker gone");
+        // The part behind the marker is LIGHT (contrast), and it flashes WHITE.
+        t.assert(shadeInk(b, 0, 2, lite[vi][0], lite[vi][1], lite[vi][0] + 1, lite[vi][1] + 1), 1, tag + " LIGHT part behind marker");
+        t.assert(shadeInk(b, 1, 3, lite[vi][0], lite[vi][1], lite[vi][0] + 1, lite[vi][1] + 1), 1, tag + " part flashes WHITE");
 
-        // Contrast-aware: BLACK ink sits on the LIGHT SEVER head, WHITE on the
-        // DARK BREAK horn and the DARK CRACK band. Sample the part by the marker.
-        if (vi == 0) {
-            const int bx = 2, by = 2;
-            const int page = by / 8;
-            t.assert(bitAt(by, pixelMask(b, 0, 0, bx, page)), 1, tag + " marker part opaque");
-            t.assert(bitAt(by, pixelData(b, 0, 0, bx, page)), 1, tag + " part non-BLACK");
-            t.assert(bitAt(by, pixelData(b, 0, 2, bx, page)), 0, tag + " part LIGHT behind BLACK marker");
-        } else if (vi == 1) {
-            const int bx = 7, by = 11;
-            const int page = by / 8;
-            t.assert(bitAt(by, pixelMask(b, 0, 0, bx, page)), 1, tag + " horn opaque");
-            t.assert(bitAt(by, pixelData(b, 0, 0, bx, page)), 1, tag + " horn non-BLACK");
-            t.assert(bitAt(by, pixelData(b, 0, 1, bx, page)), 0, tag + " DARK horn behind WHITE marker");
-            t.assert(bitAt(by, pixelData(b, 0, 2, bx, page)), 0, tag + " horn not WHITE");
-        } else {
-            const int by = 24;
-            const int page = by / 8;
-            t.assert(bitAt(by, pixelMask(b, 0, 0, 4, page)), 1, tag + " band opaque");
-            t.assert(bitAt(by, pixelData(b, 0, 0, 4, page)), 1, tag + " band non-BLACK");
-            t.assert(bitAt(by, pixelData(b, 0, 1, 4, page)), 0, tag + " DARK band behind WHITE marker");
-        }
-
-        // Every variant keeps a LIGHT head block intact/damaged and moves a
-        // detached piece to the ground band when broken.
-        t.assert(regionInk(b, 0, 0, 0, b.w, 16) > 8, 1, tag + " intact head block ink");
-        t.assert(regionInk(b, 2, 0, 0, b.w, 16) > 8, 1, tag + " damaged head block ink");
-        t.assert(regionInk(b, 0, 0, 36, b.w, 40), 0, tag + " intact ground clear");
-        t.assert(regionInk(b, 2, 0, 36, b.w, 40), 0, tag + " damaged ground clear");
-        t.assert(regionInk(b, 4, 0, 36, b.w, 40) > 0, 1, tag + " broken ground piece ink");
-        t.assert(regionInk(b, 5, 0, 36, b.w, 40) > 0, 1, tag + " broken-flash ground piece ink");
-        // SEVER loses the head block when broken; BREAK/CRACK keep it.
-        if (vi == 0)
-            t.assert(regionInk(b, 4, 0, 0, b.w, 12), 0, tag + " broken head block gone");
-        else
-            t.assert(regionInk(b, 4, 0, 0, b.w, 16) > 8, 1, tag + " broken head block kept");
+        // Every variant has a broken ground piece; intact/damaged stay clear.
+        t.assert(anyInk(b, 0, 0, 36, b.w, 40), 0, tag + " intact ground clear");
+        t.assert(anyInk(b, 2, 0, 36, b.w, 40), 0, tag + " damaged ground clear");
+        t.assert(anyInk(b, 4, 0, 36, b.w, 40) > 0, 1, tag + " broken ground piece ink");
+        t.assert(anyInk(b, 5, 0, 36, b.w, 40) > 0, 1, tag + " broken-flash ground piece ink");
     }
 
-    // BREAK is a horn (bead 6zb.9): a DARK curved horn on the LIGHT head block
-    // inside the 20 px width, a jagged base stub + the horn on the ground when
-    // broken. No side arm extends the frame any more.
-    t.assert(brk.w, 20, "break pole w 20");
-    t.assert(darkInk(brk, 0, 4, 0, 16, 14) > 20, 1, "break intact horn ink on the block");
-    t.assert(darkInk(brk, 2, 4, 0, 16, 14) > 20, 1, "break damaged horn ink on the block");
-    t.assert(darkInk(brk, 4, 4, 8, 12, 14) > 3, 1, "break broken base stub on the block");
-    t.assert(darkInk(brk, 4, 0, 36, 20, 40) > 5, 1, "break broken horn on the ground");
+    // The additive parts protrude 4 px past the 16 px DARK post on both sides
+    // (SEVER cap rows 0..14, CRACK collar rows 18..30); BREAK's horn reaches
+    // the right margin near the top.
+    t.assert(shadeInk(sever, 0, 2, 0, 0, 4, 14) > 0, 1, "sever cap left margin");
+    t.assert(shadeInk(sever, 0, 2, 20, 0, 24, 14) > 0, 1, "sever cap right margin");
+    t.assert(shadeInk(crack, 0, 2, 0, 18, 4, 30) > 0, 1, "crack collar left margin");
+    t.assert(shadeInk(crack, 0, 2, 20, 18, 24, 30) > 0, 1, "crack collar right margin");
+    t.assert(shadeInk(brk, 0, 2, 20, 0, 24, 16) > 0, 1, "break horn protrudes right");
+    t.assert(shadeInk(brk, 0, 1, 4, 12, 20, 36) > 0, 1, "break post sits under the horn");
+    // SEVER loses the cap when broken (no ink above the stump at y12); BREAK
+    // leaves a horn-base stub and CRACK a displaced collar chunk.
+    t.assert(anyInk(sever, 4, 0, 0, 24, 12), 0, "sever broken cap gone");
+    t.assert(anyInk(brk, 4, 10, 11, 18, 15) > 0, 1, "break broken base stub");
+    t.assert(anyInk(crack, 4, 0, 16, 24, 20) > 0, 1, "crack broken displaced chunk");
 }
 
 void ArtDimsSuite(TestRunner &runner) {

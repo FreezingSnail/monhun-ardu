@@ -253,20 +253,20 @@ const MONSTER_ZONES = {
 // src/core/monster.hpp playerPhys().
 const PHYS_BIT_BY_WEAPON = [1, 2, 4];
 
-// Training-pole variants (bead monhun-ardu-6zb.5; whole-pole zone 6zb.9),
-// mirroring src/core/game.hpp POLE_DEFS: kind 0 PLAIN is the legacy pole (no
+// Training-pole variants (bead monhun-ardu-6zb.5; part-locked zones 6zb.10),
+// mirroring data/creatures/pole*.json: kind 0 PLAIN is the legacy pole (no
 // zone, no break, keeps its head crit); 1 SEVER, 2 BREAK and 3 CRACK each
-// carry ONE whole-pole breakable zone (4 px margin) so any landed hit on the
-// post drains, no matter where the attack box centre falls. All three share
-// the monster rule (any weapon drains; breakTypes is the full phys mask).
-// `z` is the zone box relative to the pole rect (w 0 = no zone), pool the
-// drain, breakTypes the required phys mask. Broken art is a stage, not a rect
-// resize, so brokenW/brokenH stay the body size.
+// carry ONE part-locked breakable zone (cap x-2..22, horn x+4..22, collar
+// x-2..22 mid-height) so only a hit on the part drains, never a lower-post
+// body hit. All three share the monster rule (any weapon drains; breakTypes is
+// the full phys mask). `z` is the zone box relative to the pole rect (w 0 = no
+// zone), pool the drain, breakTypes the required phys mask. Broken art is a
+// stage, not a rect resize, so brokenW/brokenH stay the body size.
 const POLE_DEFS = [
   { w: 20, h: 36, z: null, pool: 0, breakTypes: 0, brokenW: 20, brokenH: 36 },
-  { w: 20, h: 36, z: { x: -4, y: -4, w: 28, h: 44 }, pool: 60, breakTypes: 7, brokenW: 20, brokenH: 36 },
-  { w: 20, h: 36, z: { x: -4, y: -4, w: 28, h: 44 }, pool: 40, breakTypes: 7, brokenW: 20, brokenH: 36 },
-  { w: 20, h: 36, z: { x: -4, y: -4, w: 28, h: 44 }, pool: 30, breakTypes: 7, brokenW: 20, brokenH: 36 },
+  { w: 20, h: 36, z: { x: -2, y: 0, w: 24, h: 20 }, pool: 60, breakTypes: 7, brokenW: 20, brokenH: 36 },
+  { w: 20, h: 36, z: { x: 4, y: 0, w: 18, h: 20 }, pool: 40, breakTypes: 7, brokenW: 20, brokenH: 36 },
+  { w: 20, h: 36, z: { x: -2, y: 12, w: 24, h: 16 }, pool: 30, breakTypes: 7, brokenW: 20, brokenH: 36 },
 ];
 
 const POLE_PLAIN = 0;
@@ -1534,15 +1534,17 @@ function poleStage(pole, def) {
 
 // Neutral fracture marker (tools/gen-art.py _fracture mirror): a 7-px jagged
 // crack burst in `shade`; chipped drops the two far-end pixels (5 px) for the
-// damaged stage. Contrast-aware placement: BLACK (0) on the LIGHT head/arm,
-// WHITE (3) on the DARK post band.
+// damaged stage. All three 6zb.10 parts are LIGHT, so the marker is BLACK (0)
+// on every part face.
 const POLE_FRACTURE = [[2, 0], [1, 1], [1, 2], [2, 2], [2, 3], [3, 3], [3, 4]];
-// BREAK's curved horn (tools/gen-art.py _BREAK_HORN mirror): [x, y, w] DARK
-// runs on the head block, all inside the 20 px width.
+// BREAK's curved horn (tools/gen-art.py _BREAK_HORN mirror): [x, y, w] LIGHT
+// runs rising out of the upper post to the right, in the 24 px variant frame.
 const POLE_HORN = [
-  [12, 1, 3], [11, 2, 4], [11, 3, 3], [10, 4, 3], [9, 5, 3], [8, 6, 3],
-  [7, 7, 4], [7, 8, 4], [6, 9, 4], [6, 10, 3], [5, 11, 4], [5, 12, 4],
+  [18, 1, 4], [18, 2, 5], [17, 3, 5], [17, 4, 6], [16, 5, 6], [16, 6, 6],
+  [15, 7, 6], [15, 8, 6], [14, 9, 6], [13, 10, 6], [12, 11, 6], [11, 12, 6],
+  [10, 13, 6],
 ];
+
 function poleFracture(ctx, x, y, chipped, shade) {
   ctx.fillStyle = SHADES[shade];
   for (let i = 0; i < POLE_FRACTURE.length; i++) {
@@ -1551,16 +1553,39 @@ function poleFracture(ctx, x, y, chipped, shade) {
   }
 }
 
+// 16-px DARK post + ring bands, centered in the 24 px variant frame.
+function polePost(ctx, x, y) {
+  ctx.fillStyle = SHADES[1];
+  ctx.fillRect(x + 4, y + 12, 16, 24);
+  ctx.fillStyle = SHADES[0];
+  for (let i = 0; i < 3; i++) ctx.fillRect(x + 4, y + 20 + i * 7, 16, 1);
+}
+
+function poleGround(ctx, x, y) {
+  ctx.fillStyle = SHADES[0];
+  ctx.fillRect(x, y + 34, 24, 2);
+}
+
+// A detached part lying on the ground: LIGHT body + BLACK cut edge + fracture.
+function polePiece(ctx, x, y, px, py, w, h, head) {
+  ctx.fillStyle = SHADES[head];
+  ctx.fillRect(x + px, y + py, w, h);
+  ctx.fillStyle = SHADES[0];
+  ctx.fillRect(x + px, y + py, w, 1);
+  ctx.fillRect(x + px + 4, y + py + h - 1, 2, 1);
+  ctx.fillRect(x + px + w - 2, y + py + 1, 1, 1);
+}
+
 function drawPole(ctx, g) {
   const pole = g.pole;
-  const x = Math.round(pole.x);
-  const y = Math.round(pole.y);
   const kind = pole.kind | 0;
   const def = POLE_DEFS[kind] || POLE_DEFS[0];
   const head = pole.hitFlash > 0 ? 3 : 2;
 
-  // PLAIN keeps the legacy draw exactly (no zone, no stage).
+  // PLAIN keeps the legacy 20x40 draw exactly (no zone, no stage).
   if (kind === 0) {
+    const x = Math.round(pole.x);
+    const y = Math.round(pole.y);
     ctx.fillStyle = SHADES[1];
     ctx.fillRect(x + 2, y + 12, 16, 24);
     ctx.fillStyle = SHADES[0];
@@ -1573,106 +1598,99 @@ function drawPole(ctx, g) {
     return;
   }
 
+  // Variant sheets are 24 px wide with a baked 2 px margin so the 24 px part
+  // stays centered on the 20 px rect: draw the sheet 2 px left of the anchor.
+  const x = Math.round(pole.x) - 2;
+  const y = Math.round(pole.y);
   const stage = poleStage(pole, def);
 
-  // SEVER's broken stage replaces the post with a stepped slanted stump.
-  if (!(kind === 1 && stage === 2)) {
-    ctx.fillStyle = SHADES[1];
-    ctx.fillRect(x + 2, y + 12, 16, 24);
-  } else {
-    for (let k = 0; k < 4; k++) {
-      const sx = 2 + k * 4, top = 13 + k * 2;
-      ctx.fillStyle = SHADES[1];
-      ctx.fillRect(x + sx, y + top, 4, 36 - top);
+  if (kind === 1) {
+    // SEVER: 24 px cap on the post; broken = jagged stump + cap on the ground.
+    if (stage === 2) {
+      for (let k = 0; k < 4; k++) {
+        const sx = 4 + k * 4, top = 13 + k * 2;
+        ctx.fillStyle = SHADES[1];
+        ctx.fillRect(x + sx, y + top, 4, 36 - top);
+        ctx.fillStyle = SHADES[0];
+        ctx.fillRect(x + sx, y + top, 4, 1);
+      }
+      polePiece(ctx, x, y, 3, 36, 14, 4, head);
+    } else {
+      polePost(ctx, x, y);
+      ctx.fillStyle = SHADES[head];
+      ctx.fillRect(x, y, 24, 14);
+      ctx.fillStyle = SHADES[3];
+      ctx.fillRect(x + 2, y + 11, 20, 2);
       ctx.fillStyle = SHADES[0];
-      ctx.fillRect(x + sx, y + top, 4, 1);
-    }
-  }
-  ctx.fillStyle = SHADES[0];
-  for (let i = 0; i < 3; i++) ctx.fillRect(x + 2, y + 20 + i * 7, 16, 1);
-
-  // Head block + neutral fracture marker (SEVER broken has no head to stand on).
-  if (!(kind === 1 && stage === 2)) {
-    ctx.fillStyle = SHADES[head];
-    ctx.fillRect(x, y, 20, 16);
-    if (kind === 1) {
-      poleFracture(ctx, x + 8, y + 3, stage === 1, 0);
+      ctx.fillRect(x, y + 14, 24, 1);      // seam where the cap meets the post
+      poleFracture(ctx, x + 9, y + 3, stage === 1, 0);
       if (stage === 1) {
         ctx.fillStyle = SHADES[0];
-        ctx.fillRect(x + 14, y + 2, 1, 4);   // extra cracks on the head
-        ctx.fillRect(x + 15, y + 3, 1, 2);
-        ctx.fillRect(x + 4, y + 9, 1, 3);
+        ctx.fillRect(x + 16, y + 2, 1, 4);
+        ctx.fillRect(x + 17, y + 3, 1, 2);
+        ctx.fillRect(x + 5, y + 8, 1, 3);
       }
     }
-  }
-
-  if (kind === 1) {
-    if (stage === 2) {
-      // severed top block on the ground below the post
-      ctx.fillStyle = SHADES[head];
-      ctx.fillRect(x + 1, y + 36, 12, 4);
-      ctx.fillStyle = SHADES[0];
-      ctx.fillRect(x + 1, y + 36, 12, 1);
-      ctx.fillRect(x + 4, y + 38, 2, 1);
-      ctx.fillRect(x + 10, y + 37, 1, 1);
-    }
   } else if (kind === 2) {
-    // BREAK is a horn you knock off (bead monhun-ardu-6zb.9): a curved DARK
-    // horn on the LIGHT head block, a WHITE fracture marker on the shaft, then
-    // a jagged base stub + the horn on the ground once broken.
+    // BREAK: thick curved horn out of the upper post; broken = base stub + horn
+    // on the ground.
+    polePost(ctx, x, y);
     if (stage === 2) {
-      ctx.fillStyle = SHADES[1];            // jagged base stub on the block
-      ctx.fillRect(x + 5, y + 11, 4, 2);
-      ctx.fillRect(x + 6, y + 9, 1, 2);
-      ctx.fillRect(x + 8, y + 10, 1, 1);
+      ctx.fillStyle = SHADES[head];
+      ctx.fillRect(x + 10, y + 11, 6, 3);
+      ctx.fillRect(x + 12, y + 14, 2, 1);
       ctx.fillStyle = SHADES[0];
-      ctx.fillRect(x + 5, y + 11, 4, 1);
-      ctx.fillStyle = SHADES[1];            // horn lying on the ground
-      ctx.fillRect(x + 3, y + 36, 9, 3);
-      ctx.fillRect(x + 12, y + 37, 3, 2);
+      ctx.fillRect(x + 10, y + 11, 6, 1);
+      polePiece(ctx, x, y, 2, 36, 13, 4, head);
+      ctx.fillStyle = SHADES[head];
+      ctx.fillRect(x + 15, y + 37, 6, 2);
       ctx.fillStyle = SHADES[0];
-      ctx.fillRect(x + 3, y + 36, 9, 1);
-      ctx.fillRect(x + 12, y + 37, 3, 1);
+      ctx.fillRect(x + 15, y + 37, 6, 1);
     } else {
-      ctx.fillStyle = SHADES[1];            // DARK curved horn on the block
+      ctx.fillStyle = SHADES[head];
       for (const [hx0, hy0, hw] of POLE_HORN) ctx.fillRect(x + hx0, y + hy0, hw, 1);
-      poleFracture(ctx, x + 7, y + 5, stage === 1, 3);
+      ctx.fillStyle = SHADES[3];
+      for (const [hx0, hy0] of POLE_HORN) ctx.fillRect(x + hx0, y + hy0, 1, 1);
+      ctx.fillStyle = SHADES[0];
+      ctx.fillRect(x + 10, y + 13, 8, 1);  // seam where the horn meets the post
+      poleFracture(ctx, x + 16, y + 5, stage === 1, 0);
       if (stage === 1) {
-        ctx.fillStyle = SHADES[3];
-        ctx.fillRect(x + 6, y + 9, 1, 2);   // extra cracks down the horn
-        ctx.fillRect(x + 11, y + 4, 1, 2);
+        ctx.fillStyle = SHADES[0];
+        ctx.fillRect(x + 20, y + 3, 1, 3);
+        ctx.fillRect(x + 13, y + 10, 1, 3);
       }
     }
   } else if (kind === 3) {
+    // CRACK: 24 px collar ringing the post; broken = split collar with a
+    // displaced chunk on the post + one on the ground.
+    polePost(ctx, x, y);
     if (stage === 2) {
+      ctx.fillStyle = SHADES[head];
+      ctx.fillRect(x, y + 16, 24, 4);
+      ctx.fillRect(x + 3, y + 26, 21, 4);
       ctx.fillStyle = SHADES[0];
-      ctx.fillRect(x, y + 17, 20, 1);       // upper band chunk
-      ctx.fillRect(x, y + 18, 20, 2);
-      ctx.fillRect(x, y + 26, 20, 1);       // lower band chunk
-      ctx.fillRect(x, y + 27, 20, 2);
-      const teeth = [[2, 20], [5, 21], [8, 20], [11, 22], [14, 21], [17, 20]];
+      ctx.fillRect(x, y + 16, 24, 1);
+      ctx.fillRect(x + 3, y + 26, 21, 1);
+      const teeth = [[2, 21], [6, 22], [10, 23], [14, 22], [18, 21], [21, 23]];
       for (const [tx, ty] of teeth) ctx.fillRect(x + tx, y + ty, 1, 1);
-      ctx.fillStyle = SHADES[head];         // band chunk on the ground
-      ctx.fillRect(x + 1, y + 36, 12, 4);
-      ctx.fillStyle = SHADES[0];
-      ctx.fillRect(x + 1, y + 36, 12, 1);
-      ctx.fillRect(x + 4, y + 38, 2, 1);
-      ctx.fillRect(x + 10, y + 37, 1, 1);
+      polePiece(ctx, x, y, 3, 36, 14, 4, head);
     } else {
+      ctx.fillStyle = SHADES[head];
+      ctx.fillRect(x, y + 18, 24, 12);
+      ctx.fillStyle = SHADES[3];
+      ctx.fillRect(x + 1, y + 19, 22, 2);
       ctx.fillStyle = SHADES[0];
-      ctx.fillRect(x, y + 18, 20, 1);       // band ring edges
-      ctx.fillRect(x, y + 27, 20, 1);
-      poleFracture(ctx, x + 8, y + 19, stage === 1, 3);
+      ctx.fillRect(x, y + 18, 24, 1);
+      ctx.fillRect(x, y + 29, 24, 1);
+      poleFracture(ctx, x + 10, y + 21, stage === 1, 0);
       if (stage === 1) {
-        ctx.fillStyle = SHADES[3];
-        ctx.fillRect(x + 2, y + 20, 1, 4);  // extra cracks along the band
-        ctx.fillRect(x + 16, y + 23, 1, 3);
+        ctx.fillStyle = SHADES[0];
+        ctx.fillRect(x + 3, y + 21, 1, 4);
+        ctx.fillRect(x + 19, y + 23, 1, 3);
       }
     }
   }
-  ctx.fillStyle = SHADES[0];
-  ctx.fillRect(x + 2, y + 34, 16, 1);
-  ctx.fillRect(x, y + 34, 20, 2);
+  poleGround(ctx, x, y);
 }
 
 function drawProjectiles(ctx, g) {

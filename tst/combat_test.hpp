@@ -217,7 +217,7 @@ void CombatSuite(TestRunner &runner) {
     }
 
     {
-        Test t("pole zone records: crit head, one whole-pole breakable per variant");
+        Test t("pole zone records: crit head, one part-locked breakable per variant");
         const CombatZone ph = combatZoneRead(combat_data::ZONE_POLE_HEAD);
         t.assert(ph.box.ox, -128, "plain head ox (x-independent band)");
         t.assert(ph.box.oy, 0, "plain head oy");
@@ -227,34 +227,34 @@ void CombatSuite(TestRunner &runner) {
         t.assert(ph.hp, 0, "plain head no pool");
         t.assert(ph.breakTypes, 0, "plain head unbreakable");
         const uint8_t anyPhys = PHYS_SLASH | PHYS_BLUNT | PHYS_SHOT;
-        // Each variant ships exactly one appendage zone: the whole pole with a
-        // 4 px margin, body-mul 100 so the shared resolver drains it on a tie.
+        // Each variant ships exactly one appendage zone locked to its additive
+        // part (cap/horn/collar), dmgMul 101 so a part hit beats the body tie.
         const CombatZone sa = combatZoneRead(combat_data::ZONE_POLE_SEVER_APPENDAGE);
-        t.assert(sa.box.ox, -4, "sever whole-pole ox");
-        t.assert(sa.box.oy, -4, "sever whole-pole oy");
-        t.assert(sa.box.w, 28, "sever whole-pole w");
-        t.assert(sa.box.h, 44, "sever whole-pole h");
-        t.assert(sa.hp, 60, "sever whole-pole pool");
-        t.assert(sa.dmgMul, 101, "sever whole-pole dmgMul (beats body tie, damage stays base)");
-        t.assert(sa.bodyShare, 100, "sever whole-pole body share");
+        t.assert(sa.box.ox, -2, "sever cap ox");
+        t.assert(sa.box.oy, 0, "sever cap oy");
+        t.assert(sa.box.w, 24, "sever cap w");
+        t.assert(sa.box.h, 20, "sever cap h");
+        t.assert(sa.hp, 60, "sever cap pool");
+        t.assert(sa.dmgMul, 101, "sever cap dmgMul (beats body tie, damage stays base)");
+        t.assert(sa.bodyShare, 100, "sever cap body share");
         t.assert(sa.breakTypes, anyPhys, "sever any weapon breaks");
         t.assert(sa.brokenFlags, COMBAT_BROKEN_HURT_OFF, "sever broken hurtOff");
         const CombatZone ba = combatZoneRead(combat_data::ZONE_POLE_BREAK_APPENDAGE);
-        t.assert(ba.box.ox, -4, "break whole-pole ox");
-        t.assert(ba.box.oy, -4, "break whole-pole oy");
-        t.assert(ba.box.w, 28, "break whole-pole w");
-        t.assert(ba.box.h, 44, "break whole-pole h");
-        t.assert(ba.hp, 40, "break whole-pole pool");
-        t.assert(ba.dmgMul, 101, "break whole-pole dmgMul (beats body tie, damage stays base)");
+        t.assert(ba.box.ox, 4, "break horn ox");
+        t.assert(ba.box.oy, 0, "break horn oy");
+        t.assert(ba.box.w, 18, "break horn w");
+        t.assert(ba.box.h, 20, "break horn h");
+        t.assert(ba.hp, 40, "break horn pool");
+        t.assert(ba.dmgMul, 101, "break horn dmgMul (beats body tie, damage stays base)");
         t.assert(ba.breakTypes, anyPhys, "break any weapon breaks");
         t.assert(ba.brokenFlags, COMBAT_BROKEN_HURT_OFF, "break broken hurtOff");
         const CombatZone ca = combatZoneRead(combat_data::ZONE_POLE_CRACK_APPENDAGE);
-        t.assert(ca.box.ox, -4, "crack whole-pole ox");
-        t.assert(ca.box.oy, -4, "crack whole-pole oy");
-        t.assert(ca.box.w, 28, "crack whole-pole w");
-        t.assert(ca.box.h, 44, "crack whole-pole h");
-        t.assert(ca.hp, 30, "crack whole-pole pool");
-        t.assert(ca.dmgMul, 101, "crack whole-pole dmgMul (beats body tie, damage stays base)");
+        t.assert(ca.box.ox, -2, "crack collar ox");
+        t.assert(ca.box.oy, 12, "crack collar oy");
+        t.assert(ca.box.w, 24, "crack collar w");
+        t.assert(ca.box.h, 16, "crack collar h");
+        t.assert(ca.hp, 30, "crack collar pool");
+        t.assert(ca.dmgMul, 101, "crack collar dmgMul (beats body tie, damage stays base)");
         t.assert(ca.breakTypes, anyPhys, "crack any weapon breaks");
         suite.addTest(t);
     }

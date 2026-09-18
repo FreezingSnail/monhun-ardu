@@ -203,7 +203,7 @@ void MenuSuite(TestRunner &runner) {
                     const int8_t kind = static_cast<int8_t>(target - MENU_POLE_TARGET);
                     t.assert(g.pole.kind, kind, "start pole kind");
                     // Pools live in the shared zone cache (loaded by initPoleKind);
-                    // every variant carries its whole-pole pool on the appendage.
+                    // every variant carries its part-locked pool on the appendage.
                     if (kind == POLE_SEVER)
                         t.assert(g.combat.zone[COMBAT_ZONE_APPENDAGE].hp, 60, "start sever pool");
                     else if (kind == POLE_BREAK)

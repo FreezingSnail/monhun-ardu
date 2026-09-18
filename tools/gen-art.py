@@ -663,17 +663,18 @@ def pole_frame(flash):
 
 
 # ---- Breakable pole variants (bead monhun-ardu-6zb.5; staged 6zb.7; markers
-# 6zb.8; whole-pole zones + BREAK horn 6zb.9). Each variant is a distinct
-# silhouette with a neutral 7-px jagged fracture marker on its ACTUAL breakable
-# part -- SEVER on the LIGHT top block (BLACK), BREAK on the DARK horn (WHITE),
-# CRACK on the DARK post band (WHITE) -- so the contrast reads at 1x and the art
-# no longer names a weapon. Frame layout is stage*2 + flash: intact,
-# intact-flash, damaged, damaged-flash, broken, broken-flash. The damaged marker
-# sheds its two far ends + adds extra crack lines; the broken frame keeps the
-# detached piece on the ground (the key 1x read). PLAIN keeps the original
-# two-frame 20x40 sheet (pole_frame) byte-identical for parity; all three
-# variants are 20x40. Sub-8 tall ground pieces live in the 4 padding rows below
-# the 36-tall art (plus-mask preserves them).
+# 6zb.8; whole-pole zones 6zb.9; part-locked zones + additive parts 6zb.10).
+# Each variant is a 24x40 six-frame sheet: the pole itself is a 16-px DARK shaft
+# centered at x4..20 and the breakable PART is a LIGHT additive shape spanning
+# the full 24 px, so it sticks 4 px out of the post on each side and reads at
+# 1x. Every part carries a WHITE highlight, a BLACK seam where it meets the
+# post, and the neutral 7-px jagged fracture marker (BLACK on LIGHT) on its
+# face. Frame layout is stage*2 + flash: intact, intact-flash, damaged,
+# damaged-flash, broken, broken-flash. Damaged chips the marker + adds crack
+# lines; broken leaves a stub on the post and puts the detached part on the
+# ground (the key 1x read). PLAIN keeps the original two-frame 20x40 sheet
+# (pole_frame) byte-identical for parity. Sub-8 tall ground pieces live in the
+# 4 padding rows below the 36-tall art (plus-mask preserves them).
 def pole_variant_frames(draw):
     return [draw(stage, flash) for stage in range(3) for flash in (False, True)]
 
@@ -690,105 +691,114 @@ def _fracture(img, x, y, color, chipped=False):
         rect(img, x + dx, y + dy, 1, 1, color)
 
 
+def _pole_post(img):
+    # 16-px DARK shaft centered in the 24-px frame (aligned with the 20-px pole
+    # rect once the sheet is drawn 2 px left of the anchor).
+    rect(img, 4, 12, 16, 24, DARK)
+    for band in (20, 27, 34):
+        rect(img, 4, band, 16, 1, BLACK)
+
+
+def _pole_ground(img):
+    rect(img, 0, 34, 24, 2, BLACK)          # ground plate
+
+
+def _pole_piece(img, x, y, w, h, head):
+    rect(img, x, y, w, h, head)
+    rect(img, x, y, w, 1, BLACK)            # cut edge
+    rect(img, x + 4, y + h - 1, 2, 1, BLACK)  # fracture remnant
+    rect(img, x + w - 2, y + 1, 1, 1, BLACK)
+
+
+# SEVER's part is a wide cap/head block that shears off; broken leaves a jagged
+# stump and puts the cap on the ground.
 def pole_sever_frame(stage, flash):
-    img = new(20, 40)
+    img = new(24, 40)
     head = WHITE if flash else LIGHT
     if stage == 2:
         # slanted-cut stump: four stepped DARK columns, each with a BLACK edge
         for k in range(4):
-            x, top = 2 + k * 4, 13 + k * 2
+            x, top = 4 + k * 4, 13 + k * 2
             rect(img, x, top, 4, 36 - top, DARK)
             rect(img, x, top, 4, 1, BLACK)
-        # severed top block lying on the ground below the post
-        rect(img, 1, 36, 12, 4, head)
-        rect(img, 1, 36, 12, 1, BLACK)      # cut edge
-        rect(img, 4, 38, 2, 1, BLACK)       # fracture remnant
-        rect(img, 10, 37, 1, 1, BLACK)
+        _pole_piece(img, 3, 36, 14, 4, head)
     else:
-        rect(img, 2, 12, 16, 24, DARK)      # post
-        rect(img, 0, 0, 20, 16, head)       # head block
-        _fracture(img, 8, 3, BLACK, chipped=(stage == 1))
+        _pole_post(img)
+        rect(img, 0, 0, 24, 14, head)       # 24-px cap on the post
+        rect(img, 2, 11, 20, 2, WHITE)      # bright underside highlight
+        rect(img, 0, 14, 24, 1, BLACK)      # seam where the cap meets the post
+        _fracture(img, 9, 3, BLACK, chipped=(stage == 1))
         if stage == 1:
-            rect(img, 14, 2, 1, 4, BLACK)   # extra cracks on the head
-            rect(img, 15, 3, 1, 2, BLACK)
-            rect(img, 4, 9, 1, 3, BLACK)
-    for band in (20, 27, 34):
-        rect(img, 2, band, 16, 1, BLACK)
-    rect(img, 0, 34, 20, 2, BLACK)          # ground plate
+            rect(img, 16, 2, 1, 4, BLACK)   # extra cracks on the cap
+            rect(img, 17, 3, 1, 2, BLACK)
+            rect(img, 5, 8, 1, 3, BLACK)
+    _pole_ground(img)
     return img
 
 
-# BREAK is a horn you knock off (bead monhun-ardu-6zb.9): a curved DARK horn
-# grows from the LIGHT head block, stays inside the 20 px width (no side arm)
-# and reads against the head. A WHITE fracture marker sits on the shaft,
-# chipped when the pool is at half. Broken: a jagged base stub left on the
-# block plus the horn lying on the ground below the post.
+# BREAK's part is a thick curved horn growing out of the upper post to the
+# right; broken leaves a base stub and puts the horn on the ground. Runs are
+# (x, y, w) LIGHT rows mirrored by mock/game.js POLE_HORN.
 _BREAK_HORN = (
-    (12, 1, 3), (11, 2, 4), (11, 3, 3), (10, 4, 3), (9, 5, 3), (8, 6, 3),
-    (7, 7, 4), (7, 8, 4), (6, 9, 4), (6, 10, 3), (5, 11, 4), (5, 12, 4),
+    (18, 1, 4), (18, 2, 5), (17, 3, 5), (17, 4, 6), (16, 5, 6), (16, 6, 6),
+    (15, 7, 6), (15, 8, 6), (14, 9, 6), (13, 10, 6), (12, 11, 6), (11, 12, 6),
+    (10, 13, 6),
 )
 
 
-def _break_horn(img):
+def _break_horn(img, head):
     for x, y, w in _BREAK_HORN:
-        rect(img, x, y, w, 1, DARK)
+        rect(img, x, y, w, 1, head)
+    for x, y, w in _BREAK_HORN:
+        rect(img, x, y, 1, 1, WHITE)        # highlight spine up the inner edge
 
 
 def pole_break_frame(stage, flash):
-    img = new(20, 40)
+    img = new(24, 40)
     head = WHITE if flash else LIGHT
-    rect(img, 2, 12, 16, 24, DARK)          # post
-    rect(img, 0, 0, 20, 16, head)           # head block (survives the break)
+    _pole_post(img)
     if stage == 2:
-        # jagged base stub left on the block where the horn sheared off
-        rect(img, 5, 11, 4, 2, DARK)
-        rect(img, 6, 9, 1, 2, DARK)
-        rect(img, 8, 10, 1, 1, DARK)
-        rect(img, 5, 11, 4, 1, BLACK)
-        # the horn lies on the ground beside the post
-        rect(img, 3, 36, 9, 3, DARK)
-        rect(img, 12, 37, 3, 2, DARK)
-        rect(img, 3, 36, 9, 1, BLACK)
-        rect(img, 12, 37, 3, 1, BLACK)
+        rect(img, 10, 11, 6, 3, head)       # horn-base stub left on the post
+        rect(img, 10, 11, 6, 1, BLACK)
+        rect(img, 12, 14, 2, 1, head)
+        _pole_piece(img, 2, 36, 13, 4, head)   # horn on the ground
+        rect(img, 15, 37, 6, 2, head)
+        rect(img, 15, 37, 6, 1, BLACK)
     else:
-        _break_horn(img)
-        _fracture(img, 7, 5, WHITE, chipped=(stage == 1))
+        _break_horn(img, head)
+        rect(img, 10, 13, 8, 1, BLACK)      # seam where the horn meets the post
+        _fracture(img, 16, 5, BLACK, chipped=(stage == 1))
         if stage == 1:
-            rect(img, 6, 9, 1, 2, WHITE)    # extra cracks down the horn
-            rect(img, 11, 4, 1, 2, WHITE)
-    for band in (20, 27, 34):
-        rect(img, 2, band, 16, 1, BLACK)
-    rect(img, 0, 34, 20, 2, BLACK)
+            rect(img, 20, 3, 1, 3, BLACK)   # extra cracks down the horn
+            rect(img, 13, 10, 1, 3, BLACK)
+    _pole_ground(img)
     return img
 
 
+# CRACK's part is a 24-px collar ringing the post; broken splits it, leaving a
+# displaced chunk on the post and one on the ground.
 def pole_crack_frame(stage, flash):
-    img = new(20, 40)
+    img = new(24, 40)
     head = WHITE if flash else LIGHT
-    rect(img, 2, 12, 16, 24, DARK)          # post
-    rect(img, 0, 0, 20, 16, head)           # head block (survives the break)
+    _pole_post(img)
     if stage == 2:
-        # band split: two BLACK chunks with a DARK jagged gap between
-        rect(img, 0, 17, 20, 1, BLACK)      # upper band edge
-        rect(img, 0, 18, 20, 2, BLACK)      # upper band chunk
-        rect(img, 0, 26, 20, 1, BLACK)      # lower band edge
-        rect(img, 0, 27, 20, 2, BLACK)      # lower band chunk
-        for x, y in ((2, 20), (5, 21), (8, 20), (11, 22), (14, 21), (17, 20)):
+        rect(img, 0, 16, 24, 4, head)       # upper collar chunk
+        rect(img, 0, 16, 24, 1, BLACK)
+        rect(img, 3, 26, 21, 4, head)       # displaced lower chunk
+        rect(img, 3, 26, 21, 1, BLACK)
+        for x, y in ((2, 21), (6, 22), (10, 23), (14, 22), (18, 21), (21, 23)):
             rect(img, x, y, 1, 1, BLACK)    # jagged crack teeth
-        # band chunk on the ground
-        rect(img, 1, 36, 12, 4, head)
-        rect(img, 1, 36, 12, 1, BLACK)
-        rect(img, 4, 38, 2, 1, BLACK)       # fracture remnant
-        rect(img, 10, 37, 1, 1, BLACK)
+        _pole_piece(img, 3, 36, 14, 4, head)
     else:
-        rect(img, 0, 18, 20, 1, BLACK)      # band ring edges (breakable part)
-        rect(img, 0, 27, 20, 1, BLACK)
-        _fracture(img, 8, 19, WHITE, chipped=(stage == 1))
+        rect(img, 0, 18, 24, 12, head)      # 24-px collar wrapping the post
+        rect(img, 1, 19, 22, 2, WHITE)      # bright inner band
+        rect(img, 0, 18, 24, 1, BLACK)      # collar rim seams
+        rect(img, 0, 29, 24, 1, BLACK)
+        _fracture(img, 10, 21, BLACK, chipped=(stage == 1))
         if stage == 1:
-            rect(img, 2, 20, 1, 4, WHITE)   # extra cracks along the band
-            rect(img, 16, 23, 1, 3, WHITE)
-    rect(img, 2, 34, 16, 1, BLACK)
-    rect(img, 0, 34, 20, 2, BLACK)
+            rect(img, 3, 21, 1, 4, BLACK)   # extra cracks along the collar
+            rect(img, 19, 23, 1, 3, BLACK)
+    _pole_ground(img)
     return img
 
 
@@ -1158,9 +1168,9 @@ def render_all(dims):
     sheets["monster_sweep"] = strip(bull_frames(), 32, 24)
     sheets["monster_heavy"] = strip(longtail_frames(), 32, 24)
     sheets["pole"] = strip([pole_frame(False), pole_frame(True)], 20, 40)
-    sheets["pole_sever"] = strip(pole_variant_frames(pole_sever_frame), 20, 40)
-    sheets["pole_break"] = strip(pole_variant_frames(pole_break_frame), 20, 40)
-    sheets["pole_crack"] = strip(pole_variant_frames(pole_crack_frame), 20, 40)
+    sheets["pole_sever"] = strip(pole_variant_frames(pole_sever_frame), 24, 40)
+    sheets["pole_break"] = strip(pole_variant_frames(pole_break_frame), 24, 40)
+    sheets["pole_crack"] = strip(pole_variant_frames(pole_crack_frame), 24, 40)
     menu = menu_defs()
     for d in icons + menu:
         sheets[d["id"]] = render_icon(d)
@@ -1231,7 +1241,7 @@ def sheet_filename(body, img, icons):
     if body == "pole":
         return "fxpole_20x40.png"
     if body in ("pole_sever", "pole_break", "pole_crack"):
-        return "fx%s_20x40.png" % body
+        return "fx%s_24x40.png" % body
     if body == "ball":
         return "fxball_7x8.png"
     if body == "scatter":
