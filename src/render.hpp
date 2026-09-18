@@ -10,8 +10,9 @@
 #include "common.hpp"
 #include "fxdata.h"
 #include "core/world.hpp"
-#include "core/sin256.hpp"          // 256 B sine LUT -> 65 B quarter wave + sign folding (42n.7)
-#include "generated/art_dims.hpp"   // frame layout + core dims for the FX sheets
+#include "core/sin256.hpp"            // 256 B sine LUT -> 65 B quarter wave + sign folding (42n.7)
+#include "generated/art_dims.hpp"     // frame layout + core dims for the FX sheets
+#include "generated/equip_meta.hpp"   // gen-art part tables (sheet/frame/anchor) for drawPlayer
 
 #ifndef DEBUG_HURTBOXES
 #define DEBUG_HURTBOXES 0
@@ -25,10 +26,6 @@ namespace mh {
 // are left-to-right strips and FRAME(i) == i*3 + currentPlane() selects the
 // current plane's data, so one draw call per plane composites the 4 shades.
 namespace spr {
-// 16x16 player body.
-constexpr uint8_t PLAYER_NORMAL = 0;
-constexpr uint8_t PLAYER_DODGE = 1;
-
 // 32x24 monster: four states facing east, then the same four facing west.
 constexpr uint8_t MON_IDLE = 0;
 constexpr uint8_t MON_RECOVER = 1;
@@ -44,37 +41,13 @@ constexpr uint8_t POLE_FLASH = 1;
 constexpr uint8_t SPARK_LIGHT = 0;
 constexpr uint8_t SPARK_BRIGHT = 1;
 
-// Overlay/effect sheets (bead monhun-ardu-42n.2); anchors are documented at
-// each draw site in drawPlayer/drawMonster/drawProjectiles.
-// fxslash 32x32: one frame per distinct sword hit box, box centred in the
-// frame with the 4x4 white core at the centre (slash_core_x/y). Frame order:
-// 12x10 combo (frames 0 is also combo 2), 18x14 combo 3, 20x16 special,
-// 14x12 step-slash branch, 28x26 spin-cut branch.
-constexpr uint8_t SLASH_SMALL = 0;
-constexpr uint8_t SLASH_MID = 1;
-constexpr uint8_t SLASH_SPECIAL = 2;
-constexpr uint8_t SLASH_STEPSLASH = 3;
-constexpr uint8_t SLASH_SPINCUT = 4;
-// fxripspecial 24x24: special hit box grown 2 px per side, rim at frame 0,0.
-constexpr uint8_t RIPOSTE_RIM = 0;
-// fxparry 24x16: white blade + light cap, player centre at frame local 12,12.
-constexpr uint8_t PARRY_BLADE = 0;
+// Overlay/effect sheets (bead monhun-ardu-42n.2); the player overlays moved to
+// the generated gen-art part tables (bead monhun-ardu-abr, see drawPlayer), so
+// only the monster/effect sheets keep named frames here. Anchors are documented
+// at each draw site in drawMonster/drawProjectiles.
 // fxwhirl 8x4: 2x2 light orbit dot, 4x4 white ball, 1x1 light chain dot,
 // 2x2 white stun sparkle.
 constexpr uint8_t WHIRL_DOT = art_dims::whirl_dot_frame;
-constexpr uint8_t WHIRL_BALL = art_dims::whirl_ball_frame;
-constexpr uint8_t WHIRL_CHAIN = art_dims::whirl_chain_frame;
-constexpr uint8_t WHIRL_STUN = art_dims::whirl_stun_frame;
-// fxdeflect 24x16: two 1x12 light bars, frame centred on the 16 px body.
-constexpr uint8_t DEFLECT_BARS = 0;
-// fxguard 12x16: light plate + black notch, white guard plate, white shove.
-constexpr uint8_t GUARD_PLATE = 0;
-constexpr uint8_t GUARD_WHITE = 1;
-constexpr uint8_t GUARD_SHOVE = 2;
-// fxreload 10x8: light 10x2 bar on frame row 3 (bar centre at frame centre).
-constexpr uint8_t RELOAD_BAR = 0;
-// fxerase 4x16: frame row 0 is a mask-only shade-0 eraser, rest transparent.
-constexpr uint8_t ERASE_HOLE = 0;
 // fxtrail 4x4: 2x2 light puff (frame 0) / dark puff (frame 1).
 constexpr uint8_t TRAIL_LIGHT = 0;
 constexpr uint8_t TRAIL_DARK = 1;
@@ -86,9 +59,6 @@ constexpr uint8_t TELE_LUNGE_WINDUP = 0;
 constexpr uint8_t TELE_LUNGE_HIT = 1;
 constexpr uint8_t TELE_SWEEP_WINDUP = 2;
 constexpr uint8_t TELE_SWEEP_HIT = 3;
-// fxchip 8x8: 3x3 white idle/aim chip (frame 0) / 4x4 white ball (frame 1).
-constexpr uint8_t CHIP_IDLE = art_dims::chip_idle_frame;
-constexpr uint8_t CHIP_BALL = art_dims::chip_ball_frame;
 }   // namespace spr
 
 // Cull fully off-screen sprites before paying the FX seek, then blit on the
@@ -349,10 +319,31 @@ static void drawMonster(const mh::Game &g, int16_t camX, int16_t camY) {
     }
 }
 
-// Mock drawPlayer(): shadow, body, weapon-specific overlay frames, i-frame
-// flicker and stun sparkle. Sword arc / parry, flail chain + whirl ring, gun
-// plate. All overlay shapes come from the FX sheets (bead monhun-ardu-42n.2);
-// the position math (rndPx, reach, mulQ4 trig) is the mock's, unchanged.
+// Draw one gen-art part: the generated tables own the sheet, the frame for the
+// resolved pose and the frame-local anchor, so drawPlayer selects all three
+// without a per-weapon frame if-chain. `rx/ry` is the caller's reference point
+// (player centre, hit box, shield centre, ...); draw x = rx - anchor x.
+static inline void partDraw(uint8_t part, uint8_t pose, int32_t rx, int32_t ry) {
+    const uint8_t fr = mhPgmReadU8(&equip::PART_FRAME[part][pose]);
+    // Flat parts blit a raw frame index on every plane (pre-existing guard-plate
+    // behaviour the pixel oracle pins); everything else is frame * 3 + plane.
+    sprDraw(equip::partSheet(part), static_cast<int16_t>(rx - mhPgmReadI8(&equip::PART_ANCHOR_X[part])), static_cast<int16_t>(ry - mhPgmReadI8(&equip::PART_ANCHOR_Y[part])),
+            mhPgmReadU8(&equip::PART_FLAT[part]) ? fr : FRAME(fr));
+}
+
+// Variant form for parts whose frame is picked by a compact selector rather
+// than a pose (the sword slash attack slot -> frames 0..4).
+static inline void partVariantDraw(uint8_t part, uint8_t variant, int32_t rx, int32_t ry) {
+    const uint8_t frame = mhPgmReadU8(&equip::PART_VARIANT[mhPgmReadU16(&equip::PART_VARIANT_OFF[part]) + variant]);
+    sprDraw(equip::partSheet(part), static_cast<int16_t>(rx - mhPgmReadI8(&equip::PART_ANCHOR_X[part])), static_cast<int16_t>(ry - mhPgmReadI8(&equip::PART_ANCHOR_Y[part])), FRAME(frame));
+}
+
+// Mock drawPlayer(): body, weapon overlay and effects. Every overlay shape,
+// frame and anchor comes from the generated gen-art part tables (bead
+// monhun-ardu-abr; see src/generated/equip_meta.hpp and tst/fxdatatest/
+// player_art_test.hpp) -- sheet/frame/anchor are data, not branches. The
+// position math that must stay mock-exact (rndPx, reach scaling, whirl orbit,
+// tick-driven offsets) is still computed here; the trig bake is eqf.4.
 static void drawPlayer(const mh::Game &g, int16_t camX, int16_t camY) {
     const mh::Player &p = g.player;
     const int32_t x = rndPx(p.x, p.subX) - camX;
@@ -360,9 +351,8 @@ static void drawPlayer(const mh::Game &g, int16_t camX, int16_t camY) {
     const int32_t cx = x + 8;
     const int32_t cy = y + 8;
 
-    // Shadow + body from the FX sheet; dodge dims the body one shade.
-    const uint8_t bodyFrame = (p.state == mh::PS_DODGE) ? spr::PLAYER_DODGE : spr::PLAYER_NORMAL;
-    sprDraw(fxplayer, x, y, FRAME(bodyFrame));
+    // Shadow + body from the FX sheet; the pose row picks normal vs dodge.
+    partDraw(equip::PART_PLAYER_BODY, p.state == mh::PS_DODGE ? equip::POSE_DODGE : equip::POSE_IDLE, cx, cy);
 
     // Shared attack timing (sword and flail read the same startup/active/reach;
     // the two weapon branches below only scale the reach differently).
@@ -376,50 +366,39 @@ static void drawPlayer(const mh::Game &g, int16_t camX, int16_t camY) {
 
     if (g.weapon == mh::W_SWORD) {
         if (a) {
-            {
-                int32_t reach = mh::attackReach(a);
-                if (phase != 1)
-                    reach = reach * 6 / 10;   // mock 0.6 arc
-                const int32_t hx = cx + (((int32_t)p.fx * reach) >> 4);
-                const int32_t hy = cy + (((int32_t)p.fy * reach) >> 4);
-                const int32_t hw = mh::attackHw(a);
-                const int32_t hh = mh::attackHh(a);
-                // 32x32 composite frame, hit box centred (frame local 16,16 ==
-                // hx,hy) with the 4x4 white core baked at the box centre.
-                // Exact frame for the live hw/hh: combo 12x10 (frames 0, also
-                // combo 2), combo 3 18x14, special 20x16, step-slash branch
-                // 14x12, spin-cut branch 28x26.
-                uint8_t f = spr::SLASH_SMALL;
-                if (hw == art_dims::sword_atk2_hw && hh == art_dims::sword_atk2_hh)
-                    f = spr::SLASH_MID;
-                else if (hw == art_dims::sword_special_hw && hh == art_dims::sword_special_hh)
-                    f = spr::SLASH_SPECIAL;
-                else if (hw == art_dims::sword_branch0_hw && hh == art_dims::sword_branch0_hh)
-                    f = spr::SLASH_STEPSLASH;
-                else if (hw == art_dims::sword_branch1_hw && hh == art_dims::sword_branch1_hh)
-                    f = spr::SLASH_SPINCUT;
-                sprDraw(fxslash, hx - 16, hy - 16, FRAME(f));
-                if (p.state == mh::PS_SPECIAL && p.riposteT > 0) {
-                    // Riposte rim: special box + 2 px per side, rim at frame 0,0.
-                    sprDraw(fxripspecial, hx - (hw >> 1) - 2, hy - (hh >> 1) - 2, FRAME(spr::RIPOSTE_RIM));
-                }
+            int32_t reach = mh::attackReach(a);
+            if (phase != 1)
+                reach = reach * 6 / 10;   // mock 0.6 arc
+            const int32_t hx = cx + (((int32_t)p.fx * reach) >> 4);
+            const int32_t hy = cy + (((int32_t)p.fy * reach) >> 4);
+            const int32_t hw = mh::attackHw(a);
+            const int32_t hh = mh::attackHh(a);
+            // Attack slot -> slash frame (VARIANT_SWORD_SLASH): combo chain
+            // 0/1/2, plain special, step-slash, spin-cut. The 32x32 frames are
+            // hit-box-centred with the 4x4 white core at the centre.
+            const int8_t atkId = mh::attackId(a);
+            const uint8_t slot = atkId == mh::ATK_NONE ? static_cast<uint8_t>(p.state == mh::PS_SPECIAL ? 3 : p.chain) : static_cast<uint8_t>(3 + atkId);
+            partVariantDraw(equip::PART_SWORD_SLASH, slot, hx, hy);
+            if (p.state == mh::PS_SPECIAL && p.riposteT > 0) {
+                // Riposte rim: rim at the frame origin, box top-left as ref.
+                partDraw(equip::PART_SWORD_RIPOSTE, equip::POSE_ATTACK_ACTIVE, hx - (hw >> 1), hy - (hh >> 1));
             }
         } else if (p.stance == mh::ST_PARRY) {
-            // Blade frame anchored on the player centre (frame local 12,12).
-            sprDraw(fxparry, cx - 12, cy - 12, FRAME(spr::PARRY_BLADE));
+            // Blade frame anchored on the player centre.
+            partDraw(equip::PART_SWORD_PARRY, equip::POSE_PARRY, cx, cy);
         } else {
             // Idle: chip sheet's 3x3 white head on the mock top-left.
-            sprDraw(fxchip, cx + ((p.fx * 7) >> 4) - 1, cy + ((p.fy * 7) >> 4) - 1, FRAME(spr::CHIP_IDLE));
+            partDraw(equip::PART_SWORD_CHIP, equip::POSE_IDLE, cx + ((p.fx * 7) >> 4), cy + ((p.fy * 7) >> 4));
         }
     } else if (g.weapon == mh::W_FLAIL) {
         if (p.stance == mh::ST_WHIRL) {
             const uint8_t ang = static_cast<uint8_t>(p.whirlTick * ANG_WHIRL_RING);
             for (uint8_t i = 0; i < 6; i++) {
                 const uint8_t ai = static_cast<uint8_t>(ang + mhPgmReadU8(&RING6[i]));
-                sprDraw(fxwhirl, cx + mulQ4(cos256(ai), 20), cy + mulQ4(sin256(ai), 14), FRAME(spr::WHIRL_DOT));
+                partDraw(equip::PART_FLAIL_RING, equip::POSE_WHIRL, cx + mulQ4(cos256(ai), 20), cy + mulQ4(sin256(ai), 14));
             }
             const uint8_t ba = static_cast<uint8_t>(p.whirlTick * ANG_WHIRL_BALL);
-            sprDraw(fxwhirl, cx + mulQ4(cos256(ba), 20) - 2, cy + mulQ4(sin256(ba), 14) - 2, FRAME(spr::WHIRL_BALL));
+            partDraw(equip::PART_FLAIL_BALL, equip::POSE_WHIRL, cx + mulQ4(cos256(ba), 20), cy + mulQ4(sin256(ba), 14));
         } else if (p.state == mh::PS_ATTACK || p.state == mh::PS_SPECIAL) {
             if (a) {
                 int32_t reach = mh::attackReach(a);
@@ -430,39 +409,42 @@ static void drawPlayer(const mh::Game &g, int16_t camX, int16_t camY) {
                 // the 4x4 white chip, both at the mock's exact positions.
                 for (int32_t i = 1; i <= 3; i++) {
                     const int32_t rr = (reach * i) >> 2;
-                    sprDraw(fxwhirl, cx + (((int32_t)p.fx * rr) >> 4), cy + (((int32_t)p.fy * rr) >> 4), FRAME(spr::WHIRL_CHAIN));
+                    partDraw(equip::PART_FLAIL_CHAIN, equip::POSE_IDLE, cx + (((int32_t)p.fx * rr) >> 4), cy + (((int32_t)p.fy * rr) >> 4));
                 }
-                sprDraw(fxchip, cx + (((int32_t)p.fx * reach) >> 4) - 2, cy + (((int32_t)p.fy * reach) >> 4) - 2, FRAME(spr::CHIP_BALL));
+                partDraw(equip::PART_CHIP_BALL, equip::POSE_IDLE, cx + (((int32_t)p.fx * reach) >> 4), cy + (((int32_t)p.fy * reach) >> 4));
             }
         } else {
-            sprDraw(fxwhirl, cx + ((p.fx * 4) >> 4), cy + ((p.fy * 4) >> 4), FRAME(spr::WHIRL_CHAIN));
-            sprDraw(fxchip, cx + ((p.fx * 9) >> 4) - 1, cy + ((p.fy * 9) >> 4) - 1, FRAME(spr::CHIP_IDLE));
+            partDraw(equip::PART_FLAIL_CHAIN, equip::POSE_IDLE, cx + ((p.fx * 4) >> 4), cy + ((p.fy * 4) >> 4));
+            partDraw(equip::PART_SWORD_CHIP, equip::POSE_IDLE, cx + ((p.fx * 9) >> 4), cy + ((p.fy * 9) >> 4));
         }
         if (p.state == mh::PS_DEFLECT) {
-            // Two light bars; frame centred on the 16 px body (player top-left -4).
-            sprDraw(fxdeflect, x - 4, y, FRAME(spr::DEFLECT_BARS));
+            // Two light bars; frame centred on the 16 px body.
+            partDraw(equip::PART_DEFLECT, equip::POSE_DEFLECT, cx, cy);
         }
     } else {   // gunshield
-        const bool guard = (p.stance == mh::ST_GUARD);
         const int32_t shx = cx + ((p.fx * 5) >> 4);
         const int32_t shy = cy + ((p.fy * 5) >> 4);
-        // 12x16 plate frame, 10x14 plate at frame local 1,1: origin is the
-        // plate centre minus (6,8). Guard swaps in the white plate.
-        sprDraw(fxguard, shx - 6, shy - 8, FRAME(guard ? spr::GUARD_WHITE : spr::GUARD_PLATE));
+        // 12x16 plate frame, plate at frame local 1,1: shield centre as ref.
+        // Guard selects the fully lit plate: PART_GUN_GUARD_WHITE is the flat
+        // (every-plane) blit of the plate frame, the plain plate is per-plane.
+        if (p.stance == mh::ST_GUARD)
+            partDraw(equip::PART_GUN_GUARD_WHITE, equip::POSE_GUARD, shx, shy);
+        else
+            partDraw(equip::PART_GUN_GUARD, equip::POSE_IDLE, shx, shy);
         if (p.state == mh::PS_SHOVE) {
             const int32_t shx2 = shx + ((p.fx * 4) >> 4);
             const int32_t shy2 = shy + ((p.fy * 4) >> 4);
-            sprDraw(fxguard, shx2 - 5, shy2 - 8, FRAME(spr::GUARD_SHOVE));
+            partDraw(equip::PART_GUN_SHOVE, equip::POSE_SHOVE, shx2, shy2);
         }
         if (p.reload > 0)
-            sprDraw(fxreload, x + 3, y - 6, FRAME(spr::RELOAD_BAR));
+            partDraw(equip::PART_GUN_RELOAD, equip::POSE_IDLE, cx, cy);
     }
 
     if (p.iT > 0 && (g.tick % 4) < 2)
-        sprDraw(fxerase, x + 6, y + 3, FRAME(spr::ERASE_HOLE));
+        partDraw(equip::PART_ERASE, equip::POSE_IDLE, cx, cy);
     if (p.state == mh::PS_STUN) {
-        const uint8_t a = static_cast<uint8_t>(static_cast<uint32_t>(g.tick) * ANG_PLAYER_STUN);
-        sprDraw(fxwhirl, cx + mulQ4(cos256(a), 7), y - 2 + mulQ4(sin256(a), 2), FRAME(spr::WHIRL_STUN));
+        const uint8_t ang = static_cast<uint8_t>(static_cast<uint32_t>(g.tick) * ANG_PLAYER_STUN);
+        partDraw(equip::PART_FLAIL_STUN, equip::POSE_STUN, cx + mulQ4(cos256(ang), 7), cy - 10 + mulQ4(sin256(ang), 2));
     }
 }
 

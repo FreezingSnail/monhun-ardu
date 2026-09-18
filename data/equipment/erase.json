@@ -1,0 +1,12 @@
+{
+  "id": "erase",
+  "slot": "offhand",
+  "source": "gen-art",
+  "sheet": "fxerase",
+  "cell": [4, 16],
+  "anchor": [2, 5],
+  "order": "pose",
+  "frames": 1,
+  "poseMap": { "idle": 0 },
+  "flags": []
+}

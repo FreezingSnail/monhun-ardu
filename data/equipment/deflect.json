@@ -1,0 +1,12 @@
+{
+  "id": "deflect",
+  "slot": "offhand",
+  "source": "gen-art",
+  "sheet": "fxdeflect",
+  "cell": [24, 16],
+  "anchor": [12, 8],
+  "order": "pose",
+  "frames": 1,
+  "poseMap": { "idle": 0 },
+  "flags": []
+}

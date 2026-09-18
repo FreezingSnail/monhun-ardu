@@ -1,0 +1,12 @@
+{
+  "id": "sword_riposte",
+  "slot": "weapon",
+  "source": "gen-art",
+  "sheet": "fxripspecial",
+  "cell": [24, 24],
+  "anchor": [2, 2],
+  "order": "pose",
+  "frames": 1,
+  "poseMap": { "idle": 0 },
+  "flags": []
+}

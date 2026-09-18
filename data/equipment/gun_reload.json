@@ -1,0 +1,12 @@
+{
+  "id": "gun_reload",
+  "slot": "weapon",
+  "source": "gen-art",
+  "sheet": "fxreload",
+  "cell": [10, 8],
+  "anchor": [5, 14],
+  "order": "pose",
+  "frames": 1,
+  "poseMap": { "idle": 0 },
+  "flags": []
+}

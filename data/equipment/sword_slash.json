@@ -1,0 +1,13 @@
+{
+  "id": "sword_slash",
+  "slot": "weapon",
+  "source": "gen-art",
+  "sheet": "fxslash",
+  "cell": [32, 32],
+  "anchor": [16, 16],
+  "order": "pose",
+  "frames": 5,
+  "poseMap": { "idle": 0 },
+  "variants": [0, 0, 1, 2, 3, 4],
+  "flags": []
+}

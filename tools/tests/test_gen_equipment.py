@@ -181,6 +181,68 @@ class GenEquipmentTests(unittest.TestCase):
         self.assertFalse(os.path.exists(self.path(META_REL)))
         self.assertFalse(os.path.exists(self.path(IMAGES_REL)))
 
+    # -------------------------------------------------------- gen-art refs
+
+    def write_text(self, rel_path, text):
+        path = self.path(rel_path)
+        os.makedirs(os.path.dirname(path), exist_ok=True)
+        with open(path, "w", encoding="utf-8", newline="\n") as handle:
+            handle.write(text)
+
+    GEN_ART_JSON = {
+        "id": "sword_slash",
+        "slot": "weapon",
+        "source": "gen-art",
+        "sheet": "fxslash",
+        "cell": [32, 32],
+        "anchor": [16, 16],
+        "order": "pose",
+        "frames": 5,
+        "poseMap": {"idle": 0},
+        "variants": [0, 0, 1, 2, 3, 4],
+        "flags": [],
+    }
+
+    def add_gen_art(self, symbol="fxslash"):
+        self.write_text("fxdata/fxdata.h",
+                        "using uint24_t = __uint24;\n"
+                        "constexpr uint24_t %s = 0x000123;\n" % symbol)
+        self.write_text("data/equipment/sword_slash.json",
+                        json.dumps(self.GEN_ART_JSON, indent=2) + "\n")
+
+    def test_gen_art_record_needs_no_png_and_emits_part_view(self):
+        self.add_gen_art()
+        result = self.compile()
+        self.assert_succeeds(result)
+        self.assertIn("fxslash (gen-art sword_slash, no PNG)", result.stdout)
+        # The referenced sprite is not authored into images/equip.
+        self.assertFalse(os.path.exists(self.path(IMAGES_REL, "fxslash_32x32.png")))
+        text = self.read(META_REL)
+        for needle in (
+            "constexpr uint8_t PART_SWORD_SLASH =",
+            "static const uint24_t MH_PROGMEM PART_SHEET[PART_COUNT] = {",
+            "static const uint8_t MH_PROGMEM PART_FLAT[PART_COUNT] = {",
+            "static const uint8_t MH_PROGMEM PART_VARIANT[6] = {",
+            "0, 0, 1, 2, 3, 4,",
+            "inline uint24_t partSheet(uint8_t part) {",
+        ):
+            self.assertIn(needle, text)
+        # The catalog blob still carries the record (4 authored + 1 gen-art).
+        self.assertEqual(len(self.read_bytes(BLOB_REL)), 8 + 19 * 5)
+
+    def test_gen_art_unknown_sheet_rejected(self):
+        self.add_gen_art(symbol="fxother")
+        self.assert_fails(self.compile(), "sheet: 'fxslash' is not declared in fxdata/fxdata.h")
+
+    def test_gen_art_honours_flat_key(self):
+        self.add_gen_art()
+        self.mutate("data/equipment/sword_slash.json", lambda doc: doc.__setitem__("flat", True))
+        self.assert_succeeds(self.compile())
+        # flat before the frame table: the one part carries the flat marker.
+        text = self.read(META_REL)
+        flat = text.split("PART_FLAT[PART_COUNT] = {", 1)[1].split("};", 1)[0]
+        self.assertIn("1,", flat)
+
     # ------------------------------------------------------- schema errors
 
     def test_unknown_key_rejected(self):

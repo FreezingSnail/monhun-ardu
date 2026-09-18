@@ -199,9 +199,89 @@
       "size": 1547
     },
     {
+      "path": "data/equipment/chip_ball.json",
+      "sha256": "3addc0f43398c27ed1308bf5dde6e546ba53d30cc773eac52493af137e2f7828",
+      "size": 203
+    },
+    {
+      "path": "data/equipment/deflect.json",
+      "sha256": "30b0018478b2f8ce7c526aca65832c39f6a8505277edbadc000bd9c8516a28a4",
+      "size": 208
+    },
+    {
+      "path": "data/equipment/erase.json",
+      "sha256": "167c3ee8505dc28567ab2d6e2f16c8ddbc42be05638652d04a4c840bde9aeaab",
+      "size": 202
+    },
+    {
+      "path": "data/equipment/flail_ball.json",
+      "sha256": "f7966e560a0eff6b028785770269ced7fb10e56b876fa9cd8c48481903047818",
+      "size": 205
+    },
+    {
+      "path": "data/equipment/flail_chain.json",
+      "sha256": "af7b2139342a85dd24eeb358d697be584c315067c373690e3b9b237af7a664e9",
+      "size": 206
+    },
+    {
+      "path": "data/equipment/flail_ring.json",
+      "sha256": "080bbe21fdbcd9a30ef69fee63095b3f3904edfbb851fd6d0b49ee74991646c8",
+      "size": 205
+    },
+    {
+      "path": "data/equipment/flail_stun.json",
+      "sha256": "15ad90af5f52735e39efd6dc81bb9b5c052f274c9e03fdbcac1134929426d78e",
+      "size": 206
+    },
+    {
+      "path": "data/equipment/gun_guard.json",
+      "sha256": "1086499c095bb9aa03bc540ea206db64438140b82683ccf9a9b97649f6b93f27",
+      "size": 206
+    },
+    {
+      "path": "data/equipment/gun_guard_white.json",
+      "sha256": "582d9b3460d6a309aeab9ee9bd37a99feb4ace3d2f36bb1f659a786462ea3caa",
+      "size": 228
+    },
+    {
+      "path": "data/equipment/gun_reload.json",
+      "sha256": "928bc15b04a40619de5d47c4d714678ac1b60fa47c6fcbc75d80dbc533b70eff",
+      "size": 208
+    },
+    {
+      "path": "data/equipment/gun_shove.json",
+      "sha256": "3b44c2d55659e176c9cdcf9887d896df8cd86ae67ed7744490ba476632869a29",
+      "size": 206
+    },
+    {
       "path": "data/equipment/player_base.json",
       "sha256": "d335c10d731bdbab354bb97fb9b835c475c898a2acbbac37faa92784c49507b0",
       "size": 194
+    },
+    {
+      "path": "data/equipment/player_body.json",
+      "sha256": "31b4dcd53cc2b703b66f2f9395664ffd4abe30a3f792527ad7234e3ea47bee8f",
+      "size": 219
+    },
+    {
+      "path": "data/equipment/sword_chip.json",
+      "sha256": "33b0eed72dfe159c2c09627a9d0af43e403efab2f8c125ff0ac8ecd247d55f45",
+      "size": 204
+    },
+    {
+      "path": "data/equipment/sword_parry.json",
+      "sha256": "cf1386158f52a56f395f6880370e4a8a098addf263cd5d5c4543d384d14fd166",
+      "size": 210
+    },
+    {
+      "path": "data/equipment/sword_riposte.json",
+      "sha256": "08317332fc1c675b0a2b9f9a6d281f51288bdbd25f9b61dd4ad7a2f9dd754efc",
+      "size": 215
+    },
+    {
+      "path": "data/equipment/sword_slash.json",
+      "sha256": "6f28bbc07bb38f0bc9634899e2d135ff3816928f1133cb25e3401404b980fa98",
+      "size": 244
     },
     {
       "path": "data/equipment/weapon_flail.json",
@@ -289,8 +369,8 @@
     },
     {
       "path": "fxdata/tables/equip.bin",
-      "sha256": "1a0d2ed9196d1afd6499a0cfc2ca935e0d9837b4ecbc6bb04f24d2652bee9b78",
-      "size": 84,
+      "sha256": "20e6b5740c596a20788526d51b59001bbe6ab3da87906e4663a117669604414a",
+      "size": 388,
       "symbol": "mhEquip"
     },
     {
@@ -321,17 +401,17 @@
   "outputs": [
     {
       "path": "fxdata/fxdata-data.bin",
-      "sha256": "5d1b4aeaa1775359a6fecb0ac8dbc3f3a0b44f4a1f5a9a9e5531966626b6e0f6",
-      "size": 87593
+      "sha256": "6902d6e0e45613939513464b06d66179d63aceabd52393bae44f20a70914ea00",
+      "size": 87897
     },
     {
       "path": "fxdata/fxdata.bin",
-      "sha256": "599085f6983257c2f29f1bf95ecdf7e4f1af5d453fea67f39f7e9db6a770aef3",
-      "size": 87808
+      "sha256": "47a40481c13eea415e383710d53dfd357fceaad089c71427597bc9ded0a7b09d",
+      "size": 88064
     },
     {
       "path": "fxdata/fxdata.h",
-      "sha256": "e7e79b58f8ad516d5789f93c92451f3b7e1bb22a2c7b94755cf07495cb637cf4",
+      "sha256": "1cef08ae8365c7a41af1056119ac1fae20c83f45d72c7ddb500541603bb1390e",
       "size": 1567
     },
     {
@@ -341,12 +421,12 @@
     },
     {
       "path": "fxdata/tables/equip.bin",
-      "sha256": "1a0d2ed9196d1afd6499a0cfc2ca935e0d9837b4ecbc6bb04f24d2652bee9b78",
-      "size": 84
+      "sha256": "20e6b5740c596a20788526d51b59001bbe6ab3da87906e4663a117669604414a",
+      "size": 388
     },
     {
       "path": "src/fxdata.h",
-      "sha256": "e7e79b58f8ad516d5789f93c92451f3b7e1bb22a2c7b94755cf07495cb637cf4",
+      "sha256": "1cef08ae8365c7a41af1056119ac1fae20c83f45d72c7ddb500541603bb1390e",
       "size": 1567
     },
     {
@@ -371,8 +451,8 @@
     },
     {
       "path": "src/generated/equip_meta.hpp",
-      "sha256": "6093e82c168eba58a467306397cf30584d8e6ab2c1387ea91f3a492b4ae3e34e",
-      "size": 5160
+      "sha256": "8fe8d961644aae69b1eefc8436e9f810ead16b26cc9e66ba6e8559f3c3367ac3",
+      "size": 18852
     }
   ],
   "schema_version": 1

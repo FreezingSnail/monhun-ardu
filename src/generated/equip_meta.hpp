@@ -7,19 +7,21 @@
 // sheets are the uint24_t offsets fxdata.h exposes for fxdata/equip/Sprites.txt.
 
 #include <stdint.h>
+#include "../core/progmem.hpp"   // MH_PROGMEM + pgm_read_byte for the part view
+#include "../fxdata.h"           // gen-art sheet offsets (uint24_t symbols)
 
 namespace equip {
 
 constexpr uint16_t MAGIC = 0x4551;
 constexpr uint8_t VERSION = 1;
 constexpr uint8_t FLAGS = 0x00;
-constexpr uint16_t SIZE = 84;
+constexpr uint16_t SIZE = 388;
 constexpr uint8_t HEADER_SIZE = 8;
 constexpr uint8_t ITEM_SIZE = 19;
 constexpr uint8_t FACINGS = 8;
 constexpr uint8_t SLOT_COUNT = 6;
 constexpr uint8_t POSE_COUNT = 12;
-constexpr uint8_t ITEM_COUNT = 4;
+constexpr uint8_t ITEM_COUNT = 20;
 
 // Slots, in draw order (docs/equipment-framework.md).
 constexpr uint8_t SLOT_PLAYER = 0;
@@ -44,47 +46,142 @@ constexpr uint8_t POSE_STUN = 10;
 constexpr uint8_t POSE_DEAD = 11;
 
 // Sheet frame order ('facing' = one row of facings, 'facing*pose' =
-// FACINGS columns x rows).
+// FACINGS columns x rows, 'pose' = one row per pose, no facing).
 constexpr uint8_t ORDER_FACING = 0;
 constexpr uint8_t ORDER_FACING_POSE = 1;
+constexpr uint8_t ORDER_POSE = 2;
 
 // Item indices, sorted by id.
-constexpr uint8_t ITEM_PLAYER_BASE = 0;
-constexpr uint8_t ITEM_WEAPON_FLAIL = 1;
-constexpr uint8_t ITEM_WEAPON_GUN = 2;
-constexpr uint8_t ITEM_WEAPON_SWORD = 3;
+constexpr uint8_t ITEM_CHIP_BALL = 0;
+constexpr uint8_t ITEM_DEFLECT = 1;
+constexpr uint8_t ITEM_ERASE = 2;
+constexpr uint8_t ITEM_FLAIL_BALL = 3;
+constexpr uint8_t ITEM_FLAIL_CHAIN = 4;
+constexpr uint8_t ITEM_FLAIL_RING = 5;
+constexpr uint8_t ITEM_FLAIL_STUN = 6;
+constexpr uint8_t ITEM_GUN_GUARD = 7;
+constexpr uint8_t ITEM_GUN_GUARD_WHITE = 8;
+constexpr uint8_t ITEM_GUN_RELOAD = 9;
+constexpr uint8_t ITEM_GUN_SHOVE = 10;
+constexpr uint8_t ITEM_PLAYER_BASE = 11;
+constexpr uint8_t ITEM_PLAYER_BODY = 12;
+constexpr uint8_t ITEM_SWORD_CHIP = 13;
+constexpr uint8_t ITEM_SWORD_PARRY = 14;
+constexpr uint8_t ITEM_SWORD_RIPOSTE = 15;
+constexpr uint8_t ITEM_SWORD_SLASH = 16;
+constexpr uint8_t ITEM_WEAPON_FLAIL = 17;
+constexpr uint8_t ITEM_WEAPON_GUN = 18;
+constexpr uint8_t ITEM_WEAPON_SWORD = 19;
 
 // Sheet symbol names (fxdata/equip/Sprites.txt -> fxdata.h uint24_t offsets).
+constexpr const char *SHEET_CHIP_BALL = "fxchip";
+constexpr const char *SHEET_DEFLECT = "fxdeflect";
+constexpr const char *SHEET_ERASE = "fxerase";
+constexpr const char *SHEET_FLAIL_BALL = "fxwhirl";
+constexpr const char *SHEET_FLAIL_CHAIN = "fxwhirl";
+constexpr const char *SHEET_FLAIL_RING = "fxwhirl";
+constexpr const char *SHEET_FLAIL_STUN = "fxwhirl";
+constexpr const char *SHEET_GUN_GUARD = "fxguard";
+constexpr const char *SHEET_GUN_GUARD_WHITE = "fxguard";
+constexpr const char *SHEET_GUN_RELOAD = "fxreload";
+constexpr const char *SHEET_GUN_SHOVE = "fxguard";
 constexpr const char *SHEET_PLAYER_BASE = "mh_player_base";
+constexpr const char *SHEET_PLAYER_BODY = "fxplayer";
+constexpr const char *SHEET_SWORD_CHIP = "fxchip";
+constexpr const char *SHEET_SWORD_PARRY = "fxparry";
+constexpr const char *SHEET_SWORD_RIPOSTE = "fxripspecial";
+constexpr const char *SHEET_SWORD_SLASH = "fxslash";
 constexpr const char *SHEET_WEAPON_FLAIL = "mh_weapon_flail";
 constexpr const char *SHEET_WEAPON_GUN = "mh_weapon_gun";
 constexpr const char *SHEET_WEAPON_SWORD = "mh_weapon_sword";
 
 // Per-item catalog, indexed by the ITEM_* constants above.
 constexpr uint8_t ITEM_SLOT[ITEM_COUNT] = {
-    0, 4, 4, 4,
+    4, 5, 5, 4, 4, 4, 5, 4,
+    4, 4, 4, 0, 2, 4, 4, 4,
+    4, 4, 4, 4,
 };
 constexpr uint8_t ITEM_ORDER[ITEM_COUNT] = {
-    0, 1, 1, 1,
+    2, 2, 2, 2, 2, 2, 2, 2,
+    2, 2, 2, 0, 2, 2, 2, 2,
+    2, 1, 1, 1,
 };
 constexpr uint8_t ITEM_FRAMES[ITEM_COUNT] = {
-    8, 24, 24, 24,
+    2, 1, 1, 4, 4, 4, 4, 1,
+    2, 1, 3, 8, 2, 1, 1, 1,
+    5, 24, 24, 24,
 };
 constexpr uint8_t ITEM_CELL_W[ITEM_COUNT] = {
-    16, 32, 32, 32,
+    8, 24, 4, 8, 8, 8, 8, 12,
+    12, 10, 12, 16, 16, 8, 24, 24,
+    32, 32, 32, 32,
 };
 constexpr uint8_t ITEM_CELL_H[ITEM_COUNT] = {
-    16, 32, 32, 32,
+    8, 16, 16, 4, 4, 4, 4, 16,
+    16, 8, 16, 16, 16, 8, 16, 24,
+    32, 32, 32, 32,
 };
 constexpr int8_t ITEM_ANCHOR_X[ITEM_COUNT] = {
-    8, 16, 16, 16,
+    2, 12, 2, 2, 0, 0, 0, 6,
+    6, 5, 5, 8, 8, 1, 12, 2,
+    16, 16, 16, 16,
 };
 constexpr int8_t ITEM_ANCHOR_Y[ITEM_COUNT] = {
-    8, 16, 16, 16,
+    2, 8, 5, 2, 0, 0, 0, 8,
+    8, 14, 8, 8, 8, 1, 12, 2,
+    16, 16, 16, 16,
 };
 
 // Pose -> phase row, resolved. All rows are 0 for single-row sheets.
+constexpr uint8_t POSE_ROW_CHIP_BALL[POSE_COUNT] = {
+    1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1,
+};
+constexpr uint8_t POSE_ROW_DEFLECT[POSE_COUNT] = {
+    0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+};
+constexpr uint8_t POSE_ROW_ERASE[POSE_COUNT] = {
+    0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+};
+constexpr uint8_t POSE_ROW_FLAIL_BALL[POSE_COUNT] = {
+    1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1,
+};
+constexpr uint8_t POSE_ROW_FLAIL_CHAIN[POSE_COUNT] = {
+    2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2,
+};
+constexpr uint8_t POSE_ROW_FLAIL_RING[POSE_COUNT] = {
+    0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+};
+constexpr uint8_t POSE_ROW_FLAIL_STUN[POSE_COUNT] = {
+    3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3,
+};
+constexpr uint8_t POSE_ROW_GUN_GUARD[POSE_COUNT] = {
+    0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+};
+constexpr uint8_t POSE_ROW_GUN_GUARD_WHITE[POSE_COUNT] = {
+    1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1,
+};
+constexpr uint8_t POSE_ROW_GUN_RELOAD[POSE_COUNT] = {
+    0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+};
+constexpr uint8_t POSE_ROW_GUN_SHOVE[POSE_COUNT] = {
+    2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2,
+};
 constexpr uint8_t POSE_ROW_PLAYER_BASE[POSE_COUNT] = {
+    0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+};
+constexpr uint8_t POSE_ROW_PLAYER_BODY[POSE_COUNT] = {
+    0, 0, 0, 0, 0, 0, 0, 0, 1, 0, 0, 0,
+};
+constexpr uint8_t POSE_ROW_SWORD_CHIP[POSE_COUNT] = {
+    0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+};
+constexpr uint8_t POSE_ROW_SWORD_PARRY[POSE_COUNT] = {
+    0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+};
+constexpr uint8_t POSE_ROW_SWORD_RIPOSTE[POSE_COUNT] = {
+    0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+};
+constexpr uint8_t POSE_ROW_SWORD_SLASH[POSE_COUNT] = {
     0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
 };
 constexpr uint8_t POSE_ROW_WEAPON_FLAIL[POSE_COUNT] = {
@@ -100,6 +197,160 @@ constexpr uint8_t POSE_ROW_WEAPON_SWORD[POSE_COUNT] = {
 // Frame index tables: FRAME_<ID>[pose][facing]. 'facing' sheets index the
 // facing directly (single-frame sheets repeat frame 0); 'facing*pose' sheets
 // use row * FACINGS + facing.
+constexpr uint8_t FRAME_CHIP_BALL[POSE_COUNT][FACINGS] = {
+    {1, 1, 1, 1, 1, 1, 1, 1},
+    {1, 1, 1, 1, 1, 1, 1, 1},
+    {1, 1, 1, 1, 1, 1, 1, 1},
+    {1, 1, 1, 1, 1, 1, 1, 1},
+    {1, 1, 1, 1, 1, 1, 1, 1},
+    {1, 1, 1, 1, 1, 1, 1, 1},
+    {1, 1, 1, 1, 1, 1, 1, 1},
+    {1, 1, 1, 1, 1, 1, 1, 1},
+    {1, 1, 1, 1, 1, 1, 1, 1},
+    {1, 1, 1, 1, 1, 1, 1, 1},
+    {1, 1, 1, 1, 1, 1, 1, 1},
+    {1, 1, 1, 1, 1, 1, 1, 1},
+};
+constexpr uint8_t FRAME_DEFLECT[POSE_COUNT][FACINGS] = {
+    {0, 0, 0, 0, 0, 0, 0, 0},
+    {0, 0, 0, 0, 0, 0, 0, 0},
+    {0, 0, 0, 0, 0, 0, 0, 0},
+    {0, 0, 0, 0, 0, 0, 0, 0},
+    {0, 0, 0, 0, 0, 0, 0, 0},
+    {0, 0, 0, 0, 0, 0, 0, 0},
+    {0, 0, 0, 0, 0, 0, 0, 0},
+    {0, 0, 0, 0, 0, 0, 0, 0},
+    {0, 0, 0, 0, 0, 0, 0, 0},
+    {0, 0, 0, 0, 0, 0, 0, 0},
+    {0, 0, 0, 0, 0, 0, 0, 0},
+    {0, 0, 0, 0, 0, 0, 0, 0},
+};
+constexpr uint8_t FRAME_ERASE[POSE_COUNT][FACINGS] = {
+    {0, 0, 0, 0, 0, 0, 0, 0},
+    {0, 0, 0, 0, 0, 0, 0, 0},
+    {0, 0, 0, 0, 0, 0, 0, 0},
+    {0, 0, 0, 0, 0, 0, 0, 0},
+    {0, 0, 0, 0, 0, 0, 0, 0},
+    {0, 0, 0, 0, 0, 0, 0, 0},
+    {0, 0, 0, 0, 0, 0, 0, 0},
+    {0, 0, 0, 0, 0, 0, 0, 0},
+    {0, 0, 0, 0, 0, 0, 0, 0},
+    {0, 0, 0, 0, 0, 0, 0, 0},
+    {0, 0, 0, 0, 0, 0, 0, 0},
+    {0, 0, 0, 0, 0, 0, 0, 0},
+};
+constexpr uint8_t FRAME_FLAIL_BALL[POSE_COUNT][FACINGS] = {
+    {1, 1, 1, 1, 1, 1, 1, 1},
+    {1, 1, 1, 1, 1, 1, 1, 1},
+    {1, 1, 1, 1, 1, 1, 1, 1},
+    {1, 1, 1, 1, 1, 1, 1, 1},
+    {1, 1, 1, 1, 1, 1, 1, 1},
+    {1, 1, 1, 1, 1, 1, 1, 1},
+    {1, 1, 1, 1, 1, 1, 1, 1},
+    {1, 1, 1, 1, 1, 1, 1, 1},
+    {1, 1, 1, 1, 1, 1, 1, 1},
+    {1, 1, 1, 1, 1, 1, 1, 1},
+    {1, 1, 1, 1, 1, 1, 1, 1},
+    {1, 1, 1, 1, 1, 1, 1, 1},
+};
+constexpr uint8_t FRAME_FLAIL_CHAIN[POSE_COUNT][FACINGS] = {
+    {2, 2, 2, 2, 2, 2, 2, 2},
+    {2, 2, 2, 2, 2, 2, 2, 2},
+    {2, 2, 2, 2, 2, 2, 2, 2},
+    {2, 2, 2, 2, 2, 2, 2, 2},
+    {2, 2, 2, 2, 2, 2, 2, 2},
+    {2, 2, 2, 2, 2, 2, 2, 2},
+    {2, 2, 2, 2, 2, 2, 2, 2},
+    {2, 2, 2, 2, 2, 2, 2, 2},
+    {2, 2, 2, 2, 2, 2, 2, 2},
+    {2, 2, 2, 2, 2, 2, 2, 2},
+    {2, 2, 2, 2, 2, 2, 2, 2},
+    {2, 2, 2, 2, 2, 2, 2, 2},
+};
+constexpr uint8_t FRAME_FLAIL_RING[POSE_COUNT][FACINGS] = {
+    {0, 0, 0, 0, 0, 0, 0, 0},
+    {0, 0, 0, 0, 0, 0, 0, 0},
+    {0, 0, 0, 0, 0, 0, 0, 0},
+    {0, 0, 0, 0, 0, 0, 0, 0},
+    {0, 0, 0, 0, 0, 0, 0, 0},
+    {0, 0, 0, 0, 0, 0, 0, 0},
+    {0, 0, 0, 0, 0, 0, 0, 0},
+    {0, 0, 0, 0, 0, 0, 0, 0},
+    {0, 0, 0, 0, 0, 0, 0, 0},
+    {0, 0, 0, 0, 0, 0, 0, 0},
+    {0, 0, 0, 0, 0, 0, 0, 0},
+    {0, 0, 0, 0, 0, 0, 0, 0},
+};
+constexpr uint8_t FRAME_FLAIL_STUN[POSE_COUNT][FACINGS] = {
+    {3, 3, 3, 3, 3, 3, 3, 3},
+    {3, 3, 3, 3, 3, 3, 3, 3},
+    {3, 3, 3, 3, 3, 3, 3, 3},
+    {3, 3, 3, 3, 3, 3, 3, 3},
+    {3, 3, 3, 3, 3, 3, 3, 3},
+    {3, 3, 3, 3, 3, 3, 3, 3},
+    {3, 3, 3, 3, 3, 3, 3, 3},
+    {3, 3, 3, 3, 3, 3, 3, 3},
+    {3, 3, 3, 3, 3, 3, 3, 3},
+    {3, 3, 3, 3, 3, 3, 3, 3},
+    {3, 3, 3, 3, 3, 3, 3, 3},
+    {3, 3, 3, 3, 3, 3, 3, 3},
+};
+constexpr uint8_t FRAME_GUN_GUARD[POSE_COUNT][FACINGS] = {
+    {0, 0, 0, 0, 0, 0, 0, 0},
+    {0, 0, 0, 0, 0, 0, 0, 0},
+    {0, 0, 0, 0, 0, 0, 0, 0},
+    {0, 0, 0, 0, 0, 0, 0, 0},
+    {0, 0, 0, 0, 0, 0, 0, 0},
+    {0, 0, 0, 0, 0, 0, 0, 0},
+    {0, 0, 0, 0, 0, 0, 0, 0},
+    {0, 0, 0, 0, 0, 0, 0, 0},
+    {0, 0, 0, 0, 0, 0, 0, 0},
+    {0, 0, 0, 0, 0, 0, 0, 0},
+    {0, 0, 0, 0, 0, 0, 0, 0},
+    {0, 0, 0, 0, 0, 0, 0, 0},
+};
+constexpr uint8_t FRAME_GUN_GUARD_WHITE[POSE_COUNT][FACINGS] = {
+    {1, 1, 1, 1, 1, 1, 1, 1},
+    {1, 1, 1, 1, 1, 1, 1, 1},
+    {1, 1, 1, 1, 1, 1, 1, 1},
+    {1, 1, 1, 1, 1, 1, 1, 1},
+    {1, 1, 1, 1, 1, 1, 1, 1},
+    {1, 1, 1, 1, 1, 1, 1, 1},
+    {1, 1, 1, 1, 1, 1, 1, 1},
+    {1, 1, 1, 1, 1, 1, 1, 1},
+    {1, 1, 1, 1, 1, 1, 1, 1},
+    {1, 1, 1, 1, 1, 1, 1, 1},
+    {1, 1, 1, 1, 1, 1, 1, 1},
+    {1, 1, 1, 1, 1, 1, 1, 1},
+};
+constexpr uint8_t FRAME_GUN_RELOAD[POSE_COUNT][FACINGS] = {
+    {0, 0, 0, 0, 0, 0, 0, 0},
+    {0, 0, 0, 0, 0, 0, 0, 0},
+    {0, 0, 0, 0, 0, 0, 0, 0},
+    {0, 0, 0, 0, 0, 0, 0, 0},
+    {0, 0, 0, 0, 0, 0, 0, 0},
+    {0, 0, 0, 0, 0, 0, 0, 0},
+    {0, 0, 0, 0, 0, 0, 0, 0},
+    {0, 0, 0, 0, 0, 0, 0, 0},
+    {0, 0, 0, 0, 0, 0, 0, 0},
+    {0, 0, 0, 0, 0, 0, 0, 0},
+    {0, 0, 0, 0, 0, 0, 0, 0},
+    {0, 0, 0, 0, 0, 0, 0, 0},
+};
+constexpr uint8_t FRAME_GUN_SHOVE[POSE_COUNT][FACINGS] = {
+    {2, 2, 2, 2, 2, 2, 2, 2},
+    {2, 2, 2, 2, 2, 2, 2, 2},
+    {2, 2, 2, 2, 2, 2, 2, 2},
+    {2, 2, 2, 2, 2, 2, 2, 2},
+    {2, 2, 2, 2, 2, 2, 2, 2},
+    {2, 2, 2, 2, 2, 2, 2, 2},
+    {2, 2, 2, 2, 2, 2, 2, 2},
+    {2, 2, 2, 2, 2, 2, 2, 2},
+    {2, 2, 2, 2, 2, 2, 2, 2},
+    {2, 2, 2, 2, 2, 2, 2, 2},
+    {2, 2, 2, 2, 2, 2, 2, 2},
+    {2, 2, 2, 2, 2, 2, 2, 2},
+};
 constexpr uint8_t FRAME_PLAYER_BASE[POSE_COUNT][FACINGS] = {
     {0, 1, 2, 3, 4, 5, 6, 7},
     {0, 1, 2, 3, 4, 5, 6, 7},
@@ -113,6 +364,76 @@ constexpr uint8_t FRAME_PLAYER_BASE[POSE_COUNT][FACINGS] = {
     {0, 1, 2, 3, 4, 5, 6, 7},
     {0, 1, 2, 3, 4, 5, 6, 7},
     {0, 1, 2, 3, 4, 5, 6, 7},
+};
+constexpr uint8_t FRAME_PLAYER_BODY[POSE_COUNT][FACINGS] = {
+    {0, 0, 0, 0, 0, 0, 0, 0},
+    {0, 0, 0, 0, 0, 0, 0, 0},
+    {0, 0, 0, 0, 0, 0, 0, 0},
+    {0, 0, 0, 0, 0, 0, 0, 0},
+    {0, 0, 0, 0, 0, 0, 0, 0},
+    {0, 0, 0, 0, 0, 0, 0, 0},
+    {0, 0, 0, 0, 0, 0, 0, 0},
+    {0, 0, 0, 0, 0, 0, 0, 0},
+    {1, 1, 1, 1, 1, 1, 1, 1},
+    {0, 0, 0, 0, 0, 0, 0, 0},
+    {0, 0, 0, 0, 0, 0, 0, 0},
+    {0, 0, 0, 0, 0, 0, 0, 0},
+};
+constexpr uint8_t FRAME_SWORD_CHIP[POSE_COUNT][FACINGS] = {
+    {0, 0, 0, 0, 0, 0, 0, 0},
+    {0, 0, 0, 0, 0, 0, 0, 0},
+    {0, 0, 0, 0, 0, 0, 0, 0},
+    {0, 0, 0, 0, 0, 0, 0, 0},
+    {0, 0, 0, 0, 0, 0, 0, 0},
+    {0, 0, 0, 0, 0, 0, 0, 0},
+    {0, 0, 0, 0, 0, 0, 0, 0},
+    {0, 0, 0, 0, 0, 0, 0, 0},
+    {0, 0, 0, 0, 0, 0, 0, 0},
+    {0, 0, 0, 0, 0, 0, 0, 0},
+    {0, 0, 0, 0, 0, 0, 0, 0},
+    {0, 0, 0, 0, 0, 0, 0, 0},
+};
+constexpr uint8_t FRAME_SWORD_PARRY[POSE_COUNT][FACINGS] = {
+    {0, 0, 0, 0, 0, 0, 0, 0},
+    {0, 0, 0, 0, 0, 0, 0, 0},
+    {0, 0, 0, 0, 0, 0, 0, 0},
+    {0, 0, 0, 0, 0, 0, 0, 0},
+    {0, 0, 0, 0, 0, 0, 0, 0},
+    {0, 0, 0, 0, 0, 0, 0, 0},
+    {0, 0, 0, 0, 0, 0, 0, 0},
+    {0, 0, 0, 0, 0, 0, 0, 0},
+    {0, 0, 0, 0, 0, 0, 0, 0},
+    {0, 0, 0, 0, 0, 0, 0, 0},
+    {0, 0, 0, 0, 0, 0, 0, 0},
+    {0, 0, 0, 0, 0, 0, 0, 0},
+};
+constexpr uint8_t FRAME_SWORD_RIPOSTE[POSE_COUNT][FACINGS] = {
+    {0, 0, 0, 0, 0, 0, 0, 0},
+    {0, 0, 0, 0, 0, 0, 0, 0},
+    {0, 0, 0, 0, 0, 0, 0, 0},
+    {0, 0, 0, 0, 0, 0, 0, 0},
+    {0, 0, 0, 0, 0, 0, 0, 0},
+    {0, 0, 0, 0, 0, 0, 0, 0},
+    {0, 0, 0, 0, 0, 0, 0, 0},
+    {0, 0, 0, 0, 0, 0, 0, 0},
+    {0, 0, 0, 0, 0, 0, 0, 0},
+    {0, 0, 0, 0, 0, 0, 0, 0},
+    {0, 0, 0, 0, 0, 0, 0, 0},
+    {0, 0, 0, 0, 0, 0, 0, 0},
+};
+constexpr uint8_t FRAME_SWORD_SLASH[POSE_COUNT][FACINGS] = {
+    {0, 0, 0, 0, 0, 0, 0, 0},
+    {0, 0, 0, 0, 0, 0, 0, 0},
+    {0, 0, 0, 0, 0, 0, 0, 0},
+    {0, 0, 0, 0, 0, 0, 0, 0},
+    {0, 0, 0, 0, 0, 0, 0, 0},
+    {0, 0, 0, 0, 0, 0, 0, 0},
+    {0, 0, 0, 0, 0, 0, 0, 0},
+    {0, 0, 0, 0, 0, 0, 0, 0},
+    {0, 0, 0, 0, 0, 0, 0, 0},
+    {0, 0, 0, 0, 0, 0, 0, 0},
+    {0, 0, 0, 0, 0, 0, 0, 0},
+    {0, 0, 0, 0, 0, 0, 0, 0},
 };
 constexpr uint8_t FRAME_WEAPON_FLAIL[POSE_COUNT][FACINGS] = {
     {0, 1, 2, 3, 4, 5, 6, 7},
@@ -156,5 +477,85 @@ constexpr uint8_t FRAME_WEAPON_SWORD[POSE_COUNT][FACINGS] = {
     {0, 1, 2, 3, 4, 5, 6, 7},
     {0, 1, 2, 3, 4, 5, 6, 7},
 };
+
+// ---- gen-art player part view --
+// (source "gen-art" records; see docs/equipment-framework.md and
+// tst/fxdatatest/player_art_test.hpp for the pixel oracle.)
+constexpr uint8_t PART_COUNT = 16;
+constexpr uint8_t PART_CHIP_BALL = 0;
+constexpr uint8_t PART_DEFLECT = 1;
+constexpr uint8_t PART_ERASE = 2;
+constexpr uint8_t PART_FLAIL_BALL = 3;
+constexpr uint8_t PART_FLAIL_CHAIN = 4;
+constexpr uint8_t PART_FLAIL_RING = 5;
+constexpr uint8_t PART_FLAIL_STUN = 6;
+constexpr uint8_t PART_GUN_GUARD = 7;
+constexpr uint8_t PART_GUN_GUARD_WHITE = 8;
+constexpr uint8_t PART_GUN_RELOAD = 9;
+constexpr uint8_t PART_GUN_SHOVE = 10;
+constexpr uint8_t PART_PLAYER_BODY = 11;
+constexpr uint8_t PART_SWORD_CHIP = 12;
+constexpr uint8_t PART_SWORD_PARRY = 13;
+constexpr uint8_t PART_SWORD_RIPOSTE = 14;
+constexpr uint8_t PART_SWORD_SLASH = 15;
+
+// fx sheet offsets (uint24_t), in PART_* order.
+static const uint24_t MH_PROGMEM PART_SHEET[PART_COUNT] = {
+    fxchip, fxdeflect, fxerase, fxwhirl, fxwhirl, fxwhirl, fxwhirl, fxguard, fxguard, fxreload, fxguard, fxplayer, fxchip, fxparry, fxripspecial, fxslash,
+};
+// Frame-local pivot the caller's reference point maps to:
+// draw x = ref - PART_ANCHOR_X, y = ref - PART_ANCHOR_Y.
+static const int8_t MH_PROGMEM PART_ANCHOR_X[PART_COUNT] = {
+    2, 12, 2, 2, 0, 0, 0, 6, 6, 5, 5, 8,
+    1, 12, 2, 16,
+};
+static const int8_t MH_PROGMEM PART_ANCHOR_Y[PART_COUNT] = {
+    2, 8, 5, 2, 0, 0, 0, 8, 8, 14, 8, 8,
+    1, 12, 2, 16,
+};
+// PART_FLAT[part]: frame index is a raw flat index (blit on every plane)
+// rather than frame * 3 + plane; documented in the record's `flat` key.
+static const uint8_t MH_PROGMEM PART_FLAT[PART_COUNT] = {
+    0, 0, 0, 0, 0, 0, 0, 0, 1, 0, 0, 0,
+    0, 0, 0, 0,
+};
+// PART_FRAME[part][pose]: sheet frame for the resolved poseMap.
+static const uint8_t MH_PROGMEM PART_FRAME[PART_COUNT][POSE_COUNT] = {
+    {1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1},
+    {0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0},
+    {0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0},
+    {1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1},
+    {2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2},
+    {0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0},
+    {3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3},
+    {0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0},
+    {1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1},
+    {0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0},
+    {2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2},
+    {0, 0, 0, 0, 0, 0, 0, 0, 1, 0, 0, 0},
+    {0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0},
+    {0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0},
+    {0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0},
+    {0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0},
+};
+// Optional variant selectors: PART_VARIANT[PART_VARIANT_OFF[part] + v].
+static const uint16_t MH_PROGMEM PART_VARIANT_OFF[PART_COUNT + 1] = {
+    0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 6,
+};
+static const uint8_t MH_PROGMEM PART_VARIANT[6] = {
+    0, 0, 1, 2, 3, 4,
+};
+
+// 24-bit fx offset read (three LPM bytes on AVR, plain load on host).
+inline uint24_t partSheet(uint8_t part) {
+#if defined(__AVR__)
+    const uint8_t *p = reinterpret_cast<const uint8_t *>(&PART_SHEET[part]);
+    return static_cast<uint24_t>(pgm_read_byte(p)) |
+           static_cast<uint24_t>(pgm_read_byte(p + 1)) << 8 |
+           static_cast<uint24_t>(pgm_read_byte(p + 2)) << 16;
+#else
+    return PART_SHEET[part];
+#endif
+}
 
 }   // namespace equip

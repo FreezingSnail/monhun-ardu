@@ -1,0 +1,12 @@
+{
+  "id": "gun_shove",
+  "slot": "weapon",
+  "source": "gen-art",
+  "sheet": "fxguard",
+  "cell": [12, 16],
+  "anchor": [5, 8],
+  "order": "pose",
+  "frames": 3,
+  "poseMap": { "idle": 2 },
+  "flags": []
+}

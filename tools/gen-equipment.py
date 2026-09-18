@@ -11,11 +11,21 @@ unknown/missing keys, id == file name, `sheet` == "mh_<id>", per-slot cell size,
 cell height multiple of 8, poseMap keys from the pose set with `idle` present,
 in-range pose rows, and integer-only fields.
 
+Two record forms exist:
+
+  * authored sheet (default): the tool writes a 4-shade placeholder PNG under
+    images/equip/ and the converter packs it. `player_base` matches
+    docs/art/player_base_16x16.png pixel-for-pixel (all 8 angle cells
+    prefilled); weapon/offhand placeholders stay blank.
+  * `"source": "gen-art"` ref: the record reuses an existing gen-art sprite
+    symbol (`sheet`, validated against fxdata/fxdata.h); no PNG is authored.
+    These records also emit the player part view (`PART_*` flash tables:
+    sheet offset, anchor, per-pose frame, optional variants/flat) that the
+    render path selects from -- see tst/fxdatatest/player_art_test.hpp.
+
 The placeholder art is authored from the same 4-shade primitives as
 tools/gen-art.py / tools/gen-base-sheet.py (palette copied here on purpose:
-1:1 with the L4 triplane levels). player_base matches
-docs/art/player_base_16x16.png pixel-for-pixel (all 8 angle cells prefilled);
-weapon/offhand placeholders stay blank for now.
+1:1 with the L4 triplane levels).
 
 Blob layout (little-endian, explicit u8/i8, no padding, fixed order), following
 the tools/gen-fxtables.cpp serializer pattern:
@@ -48,6 +58,7 @@ DATA_DIR = "data/equipment"
 IMAGES_REL = "images/equip"
 BLOB_REL = "fxdata/tables/equip.bin"
 META_REL = "src/generated/equip_meta.hpp"
+FX_HEADER_REL = "fxdata/fxdata.h"
 
 MAGIC = 0x4551
 VERSION = 1
@@ -56,8 +67,14 @@ HEADER_SIZE = 8
 ITEM_SIZE = 19
 FACINGS = 8
 
+# `source: "gen-art"` records reference an existing fx sprite symbol (declared in
+# fxdata/fxdata.h) instead of authoring a placeholder sheet: no images/equip PNG,
+# the sheet is drawn with its current pixels. See the player part view emitted in
+# equip_meta.hpp.
+ART_SOURCES = ("gen-art",)
+
 SLOTS = ("player", "shadow", "body", "head", "weapon", "offhand")
-ORDERS = ("facing", "facing*pose")
+ORDERS = ("facing", "facing*pose", "pose")
 POSES = ("idle", "attack_startup", "attack_active", "attack_recover", "parry",
          "whirl", "guard", "shove", "dodge", "deflect", "stun", "dead")
 POSE_COUNT = len(POSES)
@@ -84,6 +101,8 @@ EXPECTED_ANCHOR = {
 
 ID_RE = re.compile(r"^[a-z][a-z0-9_]*$")
 SYMBOL_RE = re.compile(r"^[A-Za-z_][A-Za-z0-9_]*$")
+# fxdata.h declares every sheet offset as `constexpr uint24_t <symbol> = ...;`.
+FX_SYMBOL_RE = re.compile(r"constexpr\s+uint24_t\s+([A-Za-z_][A-Za-z0-9_]*)\s*=")
 MAX_ID = 31
 
 # 4-shade RGBA palette, 1:1 with L4_Triplane (copied from tools/gen-base-sheet.py).
@@ -148,6 +167,16 @@ def read_pair(errors, ctx, obj, key, lo, hi):
     return value
 
 
+def load_fxdata_symbols(root):
+    """Sheet symbols declared by fxdata/fxdata.h (None if the header is absent)."""
+    path = os.path.join(root, FX_HEADER_REL)
+    try:
+        with open(path, encoding="utf-8") as handle:
+            return set(FX_SYMBOL_RE.findall(handle.read()))
+    except OSError:
+        return None
+
+
 def load_json(errors, path, rel):
     try:
         with open(path, encoding="utf-8") as handle:
@@ -159,10 +188,10 @@ def load_json(errors, path, rel):
     return None
 
 
-def normalize_item(errors, rel, name, obj, seen_ids):
+def normalize_item(errors, rel, name, obj, seen_ids, fx_symbols):
     ctx = rel
     check_keys(errors, ctx, obj, {"id", "slot", "sheet", "cell", "anchor", "order", "frames", "poseMap"},
-               ("flags",))
+               ("flags", "source", "variants", "flat"))
     if not isinstance(obj, dict):
         return None
 
@@ -182,10 +211,23 @@ def normalize_item(errors, rel, name, obj, seen_ids):
         errors.add(ctx, "slot: unknown value %r (want one of %s)" % (slot, ", ".join(SLOTS)))
         slot = None
 
+    # `source: "gen-art"` records reuse an existing fx sprite: the sheet is the
+    # symbol itself (no mh_ prefix, no placeholder PNG), and it must already be
+    # declared in fxdata/fxdata.h. Everything else keeps the authored-sheet rules.
+    source = obj.get("source")
+    gen_art = source == "gen-art"
+    if source is not None and source not in ART_SOURCES:
+        errors.add(ctx, "source: unknown value %r (want one of %s)" % (source, ", ".join(ART_SOURCES)))
+
     sheet = obj.get("sheet")
     if not isinstance(sheet, str) or not SYMBOL_RE.match(sheet):
         errors.add(ctx, "sheet: expected a C symbol, got %r" % (sheet,))
         sheet = None
+    elif gen_art:
+        if fx_symbols is None:
+            errors.add(ctx, "source 'gen-art': %s not found (cannot validate sheet %r)" % (FX_HEADER_REL, sheet))
+        elif sheet not in fx_symbols:
+            errors.add(ctx, "sheet: %r is not declared in %s" % (sheet, FX_HEADER_REL))
     elif item_id is not None and sheet != "mh_" + item_id:
         errors.add(ctx, "sheet: expected 'mh_%s', got %r" % (item_id, sheet))
 
@@ -194,16 +236,23 @@ def normalize_item(errors, rel, name, obj, seen_ids):
     cw = ch = ax = ay = None
     if cell is not None:
         cw, ch = cell
-        if ch % 8 != 0:
+        if not gen_art and ch % 8 != 0:
+            # Converter/packer rule for authored sheets; gen-art reuse may have
+            # any existing frame height (fxwhirl frames are 8x4).
             errors.add(ctx, "cell: height %d must be a multiple of 8" % ch)
-        if slot is not None:
+        if not gen_art and slot is not None:
             want = EXPECTED_CELL[slot]
             if (cw, ch) != want:
                 errors.add(ctx, "cell: %s cells are %dx%d, got %dx%d" % (slot, want[0], want[1], cw, ch))
-        anchor = read_pair(errors, ctx, obj, "anchor", 0, 255)
+        # The anchor is the frame-local pivot the reference point maps to, so a
+        # pivot may sit outside the cell (reload/erase) and gen-art anchors are
+        # signed; authored sheets keep the [0, cell] window and slot convention.
+        anchor = read_pair(errors, ctx, obj, "anchor", -128 if gen_art else 0, 127 if gen_art else 255)
         if anchor is not None:
             ax, ay = anchor
-            if not (0 <= ax <= cw and 0 <= ay <= ch):
+            if gen_art:
+                pass
+            elif not (0 <= ax <= cw and 0 <= ay <= ch):
                 errors.add(ctx, "anchor: (%d,%d) outside the %dx%d cell" % (ax, ay, cw, ch))
                 anchor = None
             elif slot is not None and (ax, ay) != EXPECTED_ANCHOR[slot]:
@@ -224,6 +273,10 @@ def normalize_item(errors, rel, name, obj, seen_ids):
                 errors.add(ctx, "order 'facing': frames must be 1 or %d, got %d" % (FACINGS, frames))
             else:
                 rows = 1
+        elif order == "pose":
+            # One frame per pose row, no facing dimension: poseMap values are
+            # sheet frame indices (gen-art strips are not facing-indexed).
+            rows = frames
         else:
             if frames % FACINGS != 0:
                 errors.add(ctx, "order 'facing*pose': frames must be a multiple of %d, got %d" % (FACINGS, frames))
@@ -266,10 +319,38 @@ def normalize_item(errors, rel, name, obj, seen_ids):
         errors.add(ctx, "flags: expected an array of [a-z][a-z0-9_]* strings")
         flags = []
 
+    # Optional `variants`: a small per-item frame selector for poses that the
+    # 12-name pose set cannot express (the sword slash frames 0..4 by attack).
+    # The render path indexes VARIANT_<ID> with a compact attack slot.
+    # Optional `flat`: the item's frame index is a raw flat index blitted on
+    # every triplane pass instead of frame * 3 + plane. This reproduces the
+    # pre-existing guard-plate behaviour pinned by player_art_test (the old
+    # `FRAME(guard ? GUARD_WHITE : GUARD_PLATE)` macro expansion evaluated the
+    # ternary before * 3 + plane, so the lit plate was a flat frame).
+    flat = obj.get("flat", False)
+    if not isinstance(flat, bool):
+        errors.add(ctx, "flat: expected a boolean, got %r" % (flat,))
+        flat = False
+    if flat and not gen_art:
+        errors.add(ctx, "flat: only gen-art records may use a flat frame index")
+
+    variants = obj.get("variants")
+    var_list = []
+    if variants is not None:
+        if not isinstance(variants, list) or not variants:
+            errors.add(ctx, "variants: expected a non-empty array of frame indices")
+        elif frames is not None:
+            for value in variants:
+                if not is_int(value) or not 0 <= value < frames:
+                    errors.add(ctx, "variants: %r out of range 0..%d" % (value, frames - 1))
+                else:
+                    var_list.append(value)
+
     if None in (item_id, slot, sheet, cell, anchor, order, frames) or pose_rows is None:
         return None
     return {"id": item_id, "slot": slot, "sheet": sheet, "cell": (cw, ch), "anchor": (ax, ay),
-            "order": order, "frames": frames, "rows": rows, "poseRows": pose_rows, "flags": list(flags)}
+            "order": order, "frames": frames, "rows": rows, "poseRows": pose_rows,
+            "genArt": gen_art, "flat": flat, "variants": var_list, "flags": list(flags)}
 
 
 def compile_model(errors, root):
@@ -281,6 +362,7 @@ def compile_model(errors, root):
     if not names:
         errors.add(DATA_DIR, "no equipment JSON files found")
         return None
+    fx_symbols = load_fxdata_symbols(root)
     items = []
     seen_ids = set()
     for name in names:
@@ -288,7 +370,7 @@ def compile_model(errors, root):
         obj = load_json(errors, os.path.join(data_dir, name), rel)
         if obj is None:
             continue
-        item = normalize_item(errors, rel, name, obj, seen_ids)
+        item = normalize_item(errors, rel, name, obj, seen_ids, fx_symbols)
         if item is not None:
             items.append(item)
     if errors.items:
@@ -410,11 +492,14 @@ def png_bytes(img):
 
 
 def frame_table(item):
-    """FRAME[pose][facing]; order 'facing' repeats frame 0 when frames == 1."""
+    """FRAME[pose][facing]; order 'facing' repeats frame 0 when frames == 1;
+    order 'pose' has no facing dimension and repeats the resolved frame."""
     table = []
     for row in item["poseRows"]:
         if item["order"] == "facing":
             table.append([0] * FACINGS if item["frames"] == 1 else list(range(FACINGS)))
+        elif item["order"] == "pose":
+            table.append([row] * FACINGS)
         else:
             table.append([row * FACINGS + facing for facing in range(FACINGS)])
     return table
@@ -463,6 +548,8 @@ def emit_meta_header(items, blob):
     app("// sheets are the uint24_t offsets fxdata.h exposes for fxdata/equip/Sprites.txt.")
     app("")
     app("#include <stdint.h>")
+    app("#include \"../core/progmem.hpp\"   // MH_PROGMEM + pgm_read_byte for the part view")
+    app("#include \"../fxdata.h\"           // gen-art sheet offsets (uint24_t symbols)")
     app("")
     app("namespace equip {")
     app("")
@@ -486,7 +573,7 @@ def emit_meta_header(items, blob):
         app("constexpr uint8_t POSE_%s = %d;" % (pose.upper(), i))
     app("")
     app("// Sheet frame order ('facing' = one row of facings, 'facing*pose' =")
-    app("// FACINGS columns x rows).")
+    app("// FACINGS columns x rows, 'pose' = one row per pose, no facing).")
     for i, order in enumerate(ORDERS):
         app("constexpr uint8_t ORDER_%s = %d;" % (_const_name(order), i))
     app("")
@@ -521,9 +608,84 @@ def emit_meta_header(items, blob):
             app("    {" + ", ".join(str(v) for v in row) + "},")
         app("};")
     app("")
+    emit_part_view(lines, items)
     app("}   // namespace equip")
     app("")
     return "\n".join(lines)
+
+
+def emit_part_view(lines, items):
+    """Player part view for `source: "gen-art"` records.
+
+    The render path selects sheet + frame + anchor from these flash tables
+    instead of per-weapon if-chains. PART_FRAME[part][pose] is the resolved
+    sheet frame row for the item's poseMap; PART_VARIANT holds optional
+    per-part frame selectors (the sword slash attack frames). partSheet()
+    reads the 24-bit fx offset out of flash."""
+    parts = [item for item in items if item["genArt"]]
+    if not parts:
+        return
+    app = lines.append
+    app("// ---- gen-art player part view --")
+    app("// (source \"gen-art\" records; see docs/equipment-framework.md and")
+    app("// tst/fxdatatest/player_art_test.hpp for the pixel oracle.)")
+    app("constexpr uint8_t PART_COUNT = %d;" % len(parts))
+    for i, item in enumerate(parts):
+        app("constexpr uint8_t PART_%s = %d;" % (item["id"].upper(), i))
+    app("")
+    app("// fx sheet offsets (uint24_t), in PART_* order.")
+    app("static const uint24_t MH_PROGMEM PART_SHEET[PART_COUNT] = {")
+    app("    " + ", ".join(item["sheet"] for item in parts) + ",")
+    app("};")
+    app("// Frame-local pivot the caller's reference point maps to:")
+    app("// draw x = ref - PART_ANCHOR_X, y = ref - PART_ANCHOR_Y.")
+    _emit_progmem_table(lines, "static const int8_t MH_PROGMEM PART_ANCHOR_X[PART_COUNT]",
+                        [item["anchor"][0] for item in parts])
+    _emit_progmem_table(lines, "static const int8_t MH_PROGMEM PART_ANCHOR_Y[PART_COUNT]",
+                        [item["anchor"][1] for item in parts])
+    app("// PART_FLAT[part]: frame index is a raw flat index (blit on every plane)")
+    app("// rather than frame * 3 + plane; documented in the record's `flat` key.")
+    _emit_progmem_table(lines, "static const uint8_t MH_PROGMEM PART_FLAT[PART_COUNT]",
+                        [1 if item["flat"] else 0 for item in parts])
+    app("// PART_FRAME[part][pose]: sheet frame for the resolved poseMap.")
+    app("static const uint8_t MH_PROGMEM PART_FRAME[PART_COUNT][POSE_COUNT] = {")
+    for item in parts:
+        app("    {" + ", ".join(str(v) for v in item["poseRows"]) + "},")
+    app("};")
+    variant_data = []
+    variant_off = []
+    for item in parts:
+        variant_off.append(len(variant_data))
+        variant_data.extend(item["variants"])
+    variant_off.append(len(variant_data))
+    app("// Optional variant selectors: PART_VARIANT[PART_VARIANT_OFF[part] + v].")
+    app("static const uint16_t MH_PROGMEM PART_VARIANT_OFF[PART_COUNT + 1] = {")
+    app("    " + ", ".join(str(v) for v in variant_off) + ",")
+    app("};")
+    if not variant_data:
+        variant_data = [0]   # keep the array well-formed when no part uses one
+    _emit_progmem_table(lines, "static const uint8_t MH_PROGMEM PART_VARIANT[%d]" % len(variant_data),
+                        variant_data)
+    app("")
+    app("// 24-bit fx offset read (three LPM bytes on AVR, plain load on host).")
+    app("inline uint24_t partSheet(uint8_t part) {")
+    app("#if defined(__AVR__)")
+    app("    const uint8_t *p = reinterpret_cast<const uint8_t *>(&PART_SHEET[part]);")
+    app("    return static_cast<uint24_t>(pgm_read_byte(p)) |")
+    app("           static_cast<uint24_t>(pgm_read_byte(p + 1)) << 8 |")
+    app("           static_cast<uint24_t>(pgm_read_byte(p + 2)) << 16;")
+    app("#else")
+    app("    return PART_SHEET[part];")
+    app("#endif")
+    app("}")
+    app("")
+
+
+def _emit_progmem_table(lines, decl, values):
+    lines.append(decl + " = {")
+    for i in range(0, len(values), 12):
+        lines.append("    " + ", ".join(str(v) for v in values[i:i + 12]) + ",")
+    lines.append("};")
 
 
 # --------------------------------------------------------------------------- main
@@ -583,6 +745,8 @@ def run(root, dump):
     expected = set()
     sizes = {}
     for item in items:
+        if item["genArt"]:
+            continue   # reuses an existing fx sprite; nothing to author
         name = image_name(item)
         expected.add(name)
         sheet = author_sheet(item)
@@ -601,6 +765,9 @@ def run(root, dump):
     print("gen-equipment: %d items, %d B blob (magic 0x%04X version %d)"
           % (len(items), len(blob), MAGIC, VERSION))
     for item in items:
+        if item["genArt"]:
+            print("gen-equipment: %s (gen-art %s, no PNG)" % (item["sheet"], item["id"]))
+            continue
         rel = "%s/%s" % (IMAGES_REL, image_name(item))
         width, height = sizes[item["id"]]
         print("gen-equipment: %s (%dx%d, %s)" % (rel, width, height,

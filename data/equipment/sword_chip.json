@@ -1,0 +1,12 @@
+{
+  "id": "sword_chip",
+  "slot": "weapon",
+  "source": "gen-art",
+  "sheet": "fxchip",
+  "cell": [8, 8],
+  "anchor": [1, 1],
+  "order": "pose",
+  "frames": 1,
+  "poseMap": { "idle": 0 },
+  "flags": []
+}

@@ -1,0 +1,12 @@
+{
+  "id": "player_body",
+  "slot": "body",
+  "source": "gen-art",
+  "sheet": "fxplayer",
+  "cell": [16, 16],
+  "anchor": [8, 8],
+  "order": "pose",
+  "frames": 2,
+  "poseMap": { "idle": 0, "dodge": 1 },
+  "flags": []
+}
