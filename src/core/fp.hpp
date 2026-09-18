@@ -46,7 +46,7 @@ inline int16_t tdiv(int16_t a, int16_t b) {
 }
 
 // input (mx,my) is -1/0/1 per axis; returns DIR8 index or -1 when idle
-inline int8_t dirIndexFromInput(int16_t mx, int16_t my) {
+inline int8_t dirIndexFromInput(int8_t mx, int8_t my) {
     if (mx > 0)
         return my < 0 ? 7 : my > 0 ? 1 : 0;
     if (mx < 0)
@@ -96,10 +96,10 @@ inline int16_t isqrt(int32_t n) {
 // fixed velocity move (1/16 px per tick)
 struct FpBody {
     int16_t x, y;
-    int16_t subX, subY;   // 1/16 px remainder
+    int8_t subX, subY;   // 1/16 px remainder, always in -15..15
 };
 
-inline void addVel(FpBody &o, int16_t vx, int16_t vy) {
+inline void addVel(FpBody &o, int8_t vx, int8_t vy) {
     o.subX += vx;
     o.subY += vy;
     o.x += tdiv(o.subX, FP);
@@ -110,7 +110,7 @@ inline void addVel(FpBody &o, int16_t vx, int16_t vy) {
 
 // accumulate fixed sub-pixel movement, keep x/y int pixels.
 // signed % 16 (NOT & 15): mask bug caused up/left stutter in the prototype.
-inline void addMove(FpBody &o, int16_t dx, int16_t dy, int16_t spd) {
+inline void addMove(FpBody &o, int8_t dx, int8_t dy, uint8_t spd) {
     o.subX += tdiv(dx * spd, FP);
     o.subY += tdiv(dy * spd, FP);
     o.x += tdiv(o.subX, FP);
@@ -128,17 +128,20 @@ inline Dir8 rotFp(int16_t x, int16_t y, int16_t cosv, int16_t sinv) {
     return d;
 }
 
-// stamina is int with a 1/16 accumulator; returns false when empty
+// stamina is int with a 1/16 accumulator; returns false when empty.
+// Domain 0..stamMax (100), so a byte suffices; drain clamps at 0 (the FSM
+// exits the draining stance on the same tick it empties).
 struct FpStam {
-    int16_t stam;
-    int16_t stamSub;
+    uint8_t stam;
+    uint8_t stamSub;
 };
 
-inline bool drainStam(FpStam &p, int16_t amount) {
+inline bool drainStam(FpStam &p, uint8_t amount) {
     p.stamSub += amount;
     while (p.stamSub >= FP) {
         p.stamSub -= FP;
-        p.stam--;
+        if (p.stam > 0)
+            p.stam--;
     }
     return p.stam > 0;
 }

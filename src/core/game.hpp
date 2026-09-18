@@ -300,9 +300,9 @@ struct Game;
 struct Target {
     Rect rect;   // hurt box (monster body or training pole)
     bool alive;
-    void (*onHit)(Game &, int dmg, int hx, int hy, int push, int effect);
-    void (*onShove)(Game &, int dirX, int dirY, int amount, int freeze);
-    void (*onStun)(Game &, int ticks);   // deflect / parry response
+    void (*onHit)(Game &, uint8_t dmg, int16_t hx, int16_t hy, uint8_t push, uint8_t effect);
+    void (*onShove)(Game &, int8_t dirX, int8_t dirY, uint8_t amount, uint8_t freeze);
+    void (*onStun)(Game &, uint8_t ticks);   // deflect / parry response
 };
 
 // hrd: shot / spark / damage-number state, mirroring mock/game.js
@@ -314,24 +314,24 @@ struct Target {
 // port keeps the published numbers (spawn centre + facing*13, speedF, life
 // 90) with the intended fixed-point motion.
 struct Projectile : fp::FpBody {
-    int16_t vx, vy;   // 1/16 px per tick
-    int16_t w, h;     // collision size (px)
-    int16_t dmg;
-    int16_t life;
-    bool heavy;   // ball (render: big core) vs scatter pellet
+    int8_t vx, vy;   // 1/16 px per tick: |dir| <= 16, speedF <= 42 -> |v| <= 42
+    uint8_t w, h;    // collision size (px): generated shell w/h <= 7
+    uint8_t dmg;     // generated shell dmg <= 28
+    uint8_t life;    // PROJ_LIFE 90, culled at 0
+    bool heavy;      // ball (render: big core) vs scatter pellet
 };
 
 // text == 0: spark / muzzle effect. text != 0: rising damage number.
 struct Effect {
     int16_t x, y;
-    int16_t t, life;
+    uint8_t t, life;   // life <= 26 (spark/damage-number), t ages to life
     bool crit;
     int16_t text;
 };
 
 struct Pole {
     Rect rect;          // hurt box: 20x36 at (140,40)
-    int16_t hitFlash;   // 4 on hit, decays in updatePole()
+    uint8_t hitFlash;   // 4 on hit, decays in updatePole()
 };
 
 struct TrainEvent {
@@ -345,32 +345,32 @@ struct TrainStats {
     int32_t total;
     int16_t last;
     TrainEvent ev[MAX_TRAIN_EVENTS];
-    int16_t head;   // next write slot
-    int16_t count;
+    uint8_t head;    // next write slot, 0..MAX_TRAIN_EVENTS-1
+    uint8_t count;   // 0..MAX_TRAIN_EVENTS
 };
 
 // Player inherits the fp bodies so addMove/addVel/drainStam work directly on
 // it (p.x/p.subX and p.stam/p.stamSub are the fp-owned fields).
 struct Player : fp::FpBody, fp::FpStam {
-    int16_t w, h;     // hurt box size (px)
-    int16_t vx, vy;   // 1/16 px per tick (dodge/deflect/lunge/knockback)
-    int16_t fx, fy;   // 1/16 unit facing vector
-    int16_t hp, hpMax;
-    int16_t stamMax;
+    uint8_t w, h;        // hurt box size (px): 16x16
+    int8_t vx, vy;       // 1/16 px per tick, |v| <= 54
+    int8_t fx, fy;       // 1/16 unit facing vector, -16..16
+    uint8_t hp, hpMax;   // 0..100, clamped at 0 on the landing tick
+    uint8_t stamMax;
     PState state;
-    int16_t t;
+    uint8_t t;   // state timer, <= ~200
     const Attack *atk;
     bool hitDone;
-    int16_t chain, chainWin, aBuffer;
+    uint8_t chain, chainWin, aBuffer;   // chain 0..2, windows <= CHAIN_WIN/A_BUFFER
     Stance stance;
-    int16_t stanceT, stanceAuto, whirlTick;
-    int16_t throwCd, riposteT;
+    uint8_t stanceT, stanceAuto, whirlTick;
+    uint8_t throwCd, riposteT;
     int16_t bHeld;
     bool bReady, bLocked;
-    int16_t iT;
+    uint8_t iT;
     int8_t shell;   // 0 ball, 1 scatter
-    int16_t reload;
-    int16_t shells[2];
+    uint8_t reload;
+    uint8_t shells[2];
 
     void init(int8_t weapon);
 };
@@ -604,38 +604,41 @@ enum Over : int8_t {
 // FSM fields mirror the mock monster object; face is a fixed 1/16 unit vector
 // (never a normalized float).
 struct Monster : fp::FpBody {
-    int16_t w, h;   // hurt box size (px)
-    int16_t hp, hpMax;
+    uint8_t w, h;        // hurt box size (px): generated creature w/h <= 40
+    int16_t hp, hpMax;   // generated creature hp <= 320
     MState state;
-    int16_t t, cd;
-    int16_t fx, fy;   // 1/16 unit facing vector
+    int16_t t, cd;   // 30000 sentinel set by the parity fixture setup; kept int16
+    int8_t fx, fy;   // 1/16 unit facing vector, -16..16
     // Attack identity + cache link (migration A): the global attack index the
     // combat loader cached in Game::combat.attack, COMBAT_NO_ATTACK when none.
     // Replaces the old MONSTER_ATTACKS pointer; render/debug read this plus the
     // cached window scalars, never a table pointer.
     uint8_t atkIdx;
     uint8_t winRemain;   // windows remaining after the cached one (multi-window)
-    int16_t lvx, lvy;    // lunge velocity (1/16 px per tick)
-    int16_t windupMax, hitFlash, stun, circleDir, spd;
+    int8_t lvx, lvy;     // lunge velocity (1/16 px per tick), |v| <= 34
+    uint8_t windupMax, hitFlash, stun;
+    int8_t circleDir;
+    uint8_t spd;   // generated creature spd <= 7
 };
 
 struct Game {
-    int16_t tick, freeze;
+    int16_t tick;
+    uint8_t freeze;   // hitstop ticks, 0..12
     int8_t weapon;
     int8_t over;          // Over: 0 none, 1 win, 2 lose
     int8_t mode;          // Mode: hunt or train (hrd)
     int8_t monsterKind;   // MonsterKind: chosen demo beast variant (6zb)
-    int16_t camX, camY;   // camera top-left in world px (mock g.cam), updated in world.hpp
+    uint8_t camX, camY;   // camera top-left in world px: 0..CAM_MAX_X/Y
     bool prevA, prevB;
     Player player;
     Monster monster;
     Target target;
-    int8_t lastShot;                  // 1 ball, 2 scatter; cleared by spawnShot (hrd)
-    int16_t lastShotX, lastShotY;     // player centre at fire time
-    int16_t lastShotFx, lastShotFy;   // facing at fire time
-    int16_t projN;
+    int8_t lastShot;                 // 1 ball, 2 scatter; cleared by spawnShot (hrd)
+    uint8_t lastShotX, lastShotY;    // player centre at fire time: 8..248
+    int8_t lastShotFx, lastShotFy;   // facing at fire time, -16..16
+    uint8_t projN;                   // 0..MAX_PROJECTILES
     Projectile proj[MAX_PROJECTILES];
-    int16_t fxN;
+    uint8_t fxN;   // 0..MAX_EFFECTS
     Effect fx[MAX_EFFECTS];
     Pole pole;
     TrainStats train;

@@ -104,7 +104,7 @@ static void clampMonster(Game &g) {
         m.y = WORLD_H - m.h;
 }
 
-static void knockMonsterAway(Game &g, Monster &m, int16_t cx, int16_t cy, int16_t amt) {
+static void knockMonsterAway(Game &g, Monster &m, int16_t cx, int16_t cy, uint8_t amt) {
     const int16_t dx = static_cast<int16_t>((m.x + (m.w >> 1)) - cx);
     const int16_t dy = static_cast<int16_t>((m.y + (m.h >> 1)) - cy);
     const int8_t di = fp::dirIndexFromDelta(dx, dy);
@@ -174,7 +174,7 @@ static uint8_t playerPhys(const Game &g) {
 // Target::onHit — player hit landed: resolve the hurt part (multi-part
 // creatures route through the cached part list + pools; the shipped 3 stay on
 // the single-body path), then damage, stagger, trip stun, knockback.
-static void monsterOnHit(Game &g, int dmg, int hx, int hy, int push, int effect) {
+static void monsterOnHit(Game &g, uint8_t dmg, int16_t hx, int16_t hy, uint8_t push, uint8_t effect) {
     Monster &m = g.monster;
     if (m.state == MS_DEAD)
         return;
@@ -205,15 +205,15 @@ static void monsterOnHit(Game &g, int dmg, int hx, int hy, int push, int effect)
 }
 
 // Target::onShove — gunshield shove: beast always gives way.
-static void monsterOnShove(Game &g, int dirX, int dirY, int amount, int freeze) {
-    fp::addMove(g.monster, static_cast<int16_t>(dirX), static_cast<int16_t>(dirY), static_cast<int16_t>(amount));
+static void monsterOnShove(Game &g, int8_t dirX, int8_t dirY, uint8_t amount, uint8_t freeze) {
+    fp::addMove(g.monster, dirX, dirY, amount);
     if (g.freeze < freeze)
-        g.freeze = static_cast<int16_t>(freeze);
+        g.freeze = freeze;
 }
 
 // Target::onStun — deflect (28) / parry (60) freeze the beast.
-static void monsterOnStun(Game &g, int ticks) {
-    g.monster.stun = static_cast<int16_t>(ticks);
+static void monsterOnStun(Game &g, uint8_t ticks) {
+    g.monster.stun = ticks;
 }
 
 // Spawn the hunt beast and wire it into Game::target. Call after initGame().
@@ -287,7 +287,7 @@ static bool patternGuardFull(Game &g, uint8_t patternIdx, uint8_t dist) {
     return combatGuardPasses(g, patternIdx, in);
 }
 
-static bool patternGuardOk(Game &g, uint8_t patternIdx, int32_t dist) {
+static bool patternGuardOk(Game &g, uint8_t patternIdx, int16_t dist) {
     const uint8_t d = static_cast<uint8_t>(dist < 0 ? 0 : (dist > 255 ? 255 : dist));
     if (SIMPLE_GUARDS) {
         // chooseAttack only probes indices below the creature's pattern count,
@@ -378,7 +378,7 @@ static void patternSteps(Game &g) {
 // creature's patterns in source order and run the first whose guard passes.
 // No guard matching leaves the beast pursuing (cd stays <= 0, retried next
 // tick); shipped guards cover every dist so this never fires today.
-static void chooseAttack(Game &g, int32_t dist) {
+static void chooseAttack(Game &g, int16_t dist) {
     const uint16_t head = combatCreaturePatternHeadRead(g.combat.creature);
     const uint8_t first = static_cast<uint8_t>(head & 0xFF);
     const uint8_t count = static_cast<uint8_t>(head >> 8);
@@ -468,8 +468,8 @@ static void pushApart(Game &g) {
     const int16_t bw = shovePlayer ? m.w : p.w;
     const int16_t bh = shovePlayer ? m.h : p.h;
 
-    const int32_t ox = (ax + aw - bx) < (bx + bw - ax) ? (ax + aw - bx) : (bx + bw - ax);
-    const int32_t oy = (ay + ah - by) < (by + bh - ay) ? (ay + ah - by) : (by + bh - ay);
+    const int16_t ox = static_cast<int16_t>((ax + aw - bx) < (bx + bw - ax) ? (ax + aw - bx) : (bx + bw - ax));
+    const int16_t oy = static_cast<int16_t>((ay + ah - by) < (by + bh - ay) ? (ay + ah - by) : (by + bh - ay));
     if (ox < oy) {
         const int16_t d = static_cast<int16_t>((ax + (aw >> 1)) < (bx + (bw >> 1)) ? -ox : ox);
         if (shovePlayer)
@@ -498,7 +498,7 @@ static void updateMonster(Game &g) {
 
     const int32_t dx = (p.x + (p.w >> 1)) - (m.x + (m.w >> 1));
     const int32_t dy = (p.y + (p.h >> 1)) - (m.y + (m.h >> 1));
-    const int32_t dist = fp::isqrt(dx * dx + dy * dy);
+    const int16_t dist = fp::isqrt(dx * dx + dy * dy);
     const int8_t di = fp::dirIndexFromDelta(dx, dy);
     m.fx = fp::dir8X(di);
     m.fy = fp::dir8Y(di);
@@ -558,8 +558,7 @@ static void updateMonster(Game &g) {
         const uint16_t t16 = static_cast<uint16_t>(m.t);
         if (t16 >= g.combat.attack.win.t0 && t16 <= g.combat.attack.win.t1 && monsterHitsPlayer(g)) {
             playerHurt(g, g.combat.attack.dmg, m.fx, m.fy);
-            if (p.hp <= 0) {
-                p.hp = 0;
+            if (p.hp == 0) {
                 if (g.over == OVER_NONE)
                     g.over = OVER_LOSE;
             }

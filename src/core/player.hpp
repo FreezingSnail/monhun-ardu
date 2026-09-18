@@ -14,7 +14,7 @@ namespace mh {
 
 // Defined in projectiles.hpp (included after this header). The mock's damage
 // handlers spawn a hit spark, so player/monster hit paths forward here.
-static void addEffect(Game &g, int16_t x, int16_t y, int16_t life, bool crit, int16_t text);
+static void addEffect(Game &g, int16_t x, int16_t y, uint8_t life, bool crit, int16_t text);
 
 void Player::init(int8_t weapon) {
     (void)weapon;
@@ -94,19 +94,19 @@ static void clampPlayer(Player &p) {
         p.y = WORLD_H - p.h;
 }
 
-static void movePlayer(Player &p, int16_t mx, int16_t my, int16_t spd) {
+static void movePlayer(Player &p, int8_t mx, int8_t my, uint8_t spd) {
     const int8_t i = fp::dirIndexFromInput(mx, my);
     if (i < 0)
         return;
-    const int16_t dx = fp::dir8X(i);
-    const int16_t dy = fp::dir8Y(i);
+    const int8_t dx = static_cast<int8_t>(fp::dir8X(i));
+    const int8_t dy = static_cast<int8_t>(fp::dir8Y(i));
     p.fx = dx;
     p.fy = dy;
     fp::addMove(p, dx, dy, spd);
 }
 
 // fixed-velocity decay; 13/16 per tick default, 14/16 for dodge/deflect
-static void applyDrift(Player &p, int16_t mult = 13) {
+static void applyDrift(Player &p, uint8_t mult = 13) {
     p.subX += p.vx;
     p.subY += p.vy;
     p.x += fp::tdiv(p.subX, fp::FP);
@@ -131,7 +131,7 @@ static void startAttack(Game &g, const WeaponDef *def) {
     if (p.stam < 1)
         return;
     const int16_t stam = attackStam(a);
-    p.stam = p.stam - stam < 0 ? 0 : p.stam - stam;
+    p.stam = (stam >= p.stam) ? 0 : static_cast<uint8_t>(p.stam - stam);
     p.state = PS_ATTACK;
     p.atk = a;
     p.t = 0;
@@ -416,10 +416,9 @@ static void playerHurt(Game &g, int16_t dmg, int16_t faceX, int16_t faceY) {
     }
     if (p.stance == ST_GUARD) {
         const int16_t chip = static_cast<int16_t>((dmg * 25) / 100);
-        p.stam -= 22;
-        if (p.stam < 0)
-            p.stam = 0;
-        p.hp -= chip < 1 ? 1 : chip;
+        p.stam = (p.stam > 22) ? static_cast<uint8_t>(p.stam - 22) : 0;
+        const int16_t chipDmg = chip < 1 ? 1 : chip;
+        p.hp = (chipDmg >= p.hp) ? 0 : static_cast<uint8_t>(p.hp - chipDmg);
         p.vx = (faceX * 19) >> 4;
         p.vy = (faceY * 19) >> 4;
         g.freeze = g.freeze > 3 ? g.freeze : 3;
@@ -432,7 +431,7 @@ static void playerHurt(Game &g, int16_t dmg, int16_t faceX, int16_t faceY) {
         return;
     }
 
-    p.hp -= dmg;
+    p.hp = (dmg >= p.hp) ? 0 : static_cast<uint8_t>(p.hp - dmg);
     p.iT = 34;
     p.vx = (faceX * 35) >> 4;
     p.vy = (faceY * 35) >> 4;
@@ -512,13 +511,13 @@ static void updatePlayer(Game &g, const Input &inp, bool aP, bool bP, bool bR) {
 
     switch (p.state) {
     case PS_IDLE: {
-        int16_t mx = inp.mx;
-        int16_t my = inp.my;
+        int8_t mx = inp.mx;
+        int8_t my = inp.my;
         if (p.stance == ST_PARRY) {
             mx = 0;
             my = 0;
         }
-        int16_t sp = weaponSpd(def);
+        uint8_t sp = static_cast<uint8_t>(weaponSpd(def));
         if (p.stance == ST_WHIRL)
             sp = (sp * 6) / 10;
         if (p.stance == ST_GUARD)

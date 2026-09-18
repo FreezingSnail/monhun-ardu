@@ -58,12 +58,12 @@ enum AudioCue : uint8_t {
 struct AudioState {
     int16_t tick;
     int16_t monsterHp;
-    int16_t playerHp;
+    uint8_t playerHp;
     int32_t trainTotal;
-    int16_t reload;
-    int16_t monsterStun;
-    int16_t projN;
-    int16_t riposteT;
+    uint8_t reload;
+    uint8_t monsterStun;
+    uint8_t projN;
+    uint8_t riposteT;
     int8_t monsterState;
     int8_t playerStance;
     int8_t playerState;

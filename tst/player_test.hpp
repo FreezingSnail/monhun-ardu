@@ -24,17 +24,17 @@ struct Rec {
 };
 Rec rec;
 
-void onHit(Game &, int dmg, int, int, int push, int effect) {
+void onHit(Game &, uint8_t dmg, int16_t, int16_t, uint8_t push, uint8_t effect) {
     rec.hits++;
     rec.lastDmg = dmg;
     rec.lastPush = push;
     rec.lastEffect = effect;
 }
-void onShove(Game &, int, int, int, int freeze) {
+void onShove(Game &, int8_t, int8_t, uint8_t, uint8_t freeze) {
     rec.shoves++;
     rec.lastFreeze = freeze;
 }
-void onStun(Game &, int) {
+void onStun(Game &, uint8_t) {
     rec.stuns++;
 }
 

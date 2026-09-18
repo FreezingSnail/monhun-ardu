@@ -95,9 +95,10 @@ static __attribute__((noinline)) int16_t rndPx(int16_t v, int16_t sub) {
 }
 
 // round((a*b)/16) for Q4 vectors: matches Math.round() of the mock's float
-// product for every sign (arithmetic shift floors (a*b+8)/16).
-static inline int32_t mulQ4(int32_t a, int32_t b) {
-    return (a * b + 8) >> 4;
+// product for every sign (arithmetic shift floors (a*b+8)/16). Inputs are
+// table values |a| <= 16 and small radii |b| <= 20, so the product fits int16.
+static inline int16_t mulQ4(int16_t a, int16_t b) {
+    return static_cast<int16_t>((a * b + 8) >> 4);
 }
 
 // 256-step sine, Q4 fixed point (-16..16). See core/sin256.hpp for the
@@ -202,10 +203,10 @@ static inline void hudBlk(int16_t x, int16_t y, int16_t w, int16_t h, uint8_t sh
 // byte lives on the light-gray (fxfontg) or white (fxfontw) plane, so FRAME(c)
 // makes glyph c render on its own plane. Advance 4 px == mock drawText scale 1
 // (3 px glyph + 1 px gap). No glyph bitmap lives in MCU flash or RAM.
-static inline int16_t textPut(uint24_t sheet, int32_t x, int32_t y, char c) {
+static inline int16_t textPut(uint24_t sheet, int16_t x, int16_t y, char c) {
     const uint8_t code = static_cast<uint8_t>(c);
     if (code < 128 && x > -4 && x < mh::SCREEN_W)
-        SpritesU::drawPlusMaskFX(static_cast<int16_t>(x), static_cast<int16_t>(y), sheet, FRAME(code));
+        SpritesU::drawPlusMaskFX(x, y, sheet, FRAME(code));
     return static_cast<int16_t>(x + 4);
 }
 
@@ -255,8 +256,8 @@ static void drawArena(int16_t camX, int16_t camY) {
         if (wy >= mh::WORLD_H)
             wy -= mh::WORLD_H;
     }
-    const int32_t lx = -camX;
-    const int32_t ly = static_cast<int32_t>(mh::HUD_H) - camY;
+    const int16_t lx = static_cast<int16_t>(-camX);
+    const int16_t ly = static_cast<int16_t>(mh::HUD_H - camY);
     blk(lx, ly, mh::WORLD_W, 1, 2);
     blk(lx, ly + mh::WORLD_H - 1, mh::WORLD_W, 1, 2);
     blk(lx, ly, 1, mh::WORLD_H, 2);
@@ -266,8 +267,8 @@ static void drawArena(int16_t camX, int16_t camY) {
 // Mock drawPole(): base post, ring bands, head, eye hole, ground plate, all
 // baked into the 20x40 (20x36 art) FX sprite; hit flash selects the head plane.
 static void drawPole(const mh::Pole &pole, int16_t camX, int16_t camY) {
-    const int32_t x = static_cast<int32_t>(pole.rect.x) - camX;
-    const int32_t y = static_cast<int32_t>(pole.rect.y) - camY + mh::HUD_H;
+    const int16_t x = static_cast<int16_t>(pole.rect.x - camX);
+    const int16_t y = static_cast<int16_t>(pole.rect.y - camY + mh::HUD_H);
     const uint8_t f = pole.hitFlash > 0 ? spr::POLE_FLASH : spr::POLE_NORMAL;
     sprDraw(fxpole, x, y, FRAME(f));
 }
@@ -276,10 +277,10 @@ static void drawPole(const mh::Pole &pole, int16_t camX, int16_t camY) {
 // windup/attack telegraph box.
 static void drawMonster(const mh::Game &g, int16_t camX, int16_t camY) {
     const mh::Monster &m = g.monster;
-    const int32_t x = rndPx(m.x, m.subX) - camX;
-    const int32_t y = rndPx(m.y, m.subY) - camY + mh::HUD_H;
-    const int32_t w = m.w;
-    const int32_t h = m.h;
+    const int16_t x = static_cast<int16_t>(rndPx(m.x, m.subX) - camX);
+    const int16_t y = static_cast<int16_t>(rndPx(m.y, m.subY) - camY + mh::HUD_H);
+    const int16_t w = m.w;
+    const int16_t h = m.h;
 
     // Zone overlay art is not drawn yet: the tail sheet exists (combatPartArtFrame)
     // but the body/feet/head/eyes are baked per state/facing into the sprite, so
@@ -313,8 +314,8 @@ static void drawMonster(const mh::Game &g, int16_t camX, int16_t camY) {
             // the attack box shade 2 with a 4x4 white core, for both attacks.
             int32_t dx, dy;
             mh::combatFaceOffset(m.fx, m.fy, g.combat.attack.win.box, dx, dy);
-            const int32_t ax = x + w / 2 + dx;
-            const int32_t ay = y + h / 2 + dy;
+            const int16_t ax = static_cast<int16_t>(x + w / 2 + dx);
+            const int16_t ay = static_cast<int16_t>(y + h / 2 + dy);
             const bool lunge = g.combat.attack.moveType == mh::MOVE_LUNGE;
             const uint8_t f = static_cast<uint8_t>((lunge ? spr::TELE_LUNGE_WINDUP : spr::TELE_SWEEP_WINDUP) + (m.state == mh::MS_WINDUP ? 0 : 1));
             sprDraw(fxtelegraph, ax - 16, ay - 12, FRAME(f));
@@ -366,7 +367,7 @@ static inline uint8_t partFrame(const PartRec &rec, uint8_t pose, uint8_t facing
 // selects all three without a per-part frame if-chain. `rx/ry` is the caller's
 // reference point (player centre, hit box, shield centre, ...); draw x =
 // rx - anchor x.
-static inline void partDraw(uint8_t part, uint8_t pose, uint8_t facing, int32_t rx, int32_t ry) {
+static inline void partDraw(uint8_t part, uint8_t pose, uint8_t facing, int16_t rx, int16_t ry) {
     PartRec rec;
     partRead(part, rec);
     // The cart record owns the sheet/frame/anchor; FRAME(fr) selects the
@@ -376,7 +377,7 @@ static inline void partDraw(uint8_t part, uint8_t pose, uint8_t facing, int32_t 
 
 // Variant form for parts whose frame is picked by a compact selector rather
 // than a pose (the sword slash attack slot -> frames 0..4).
-static inline void partVariantDraw(uint8_t part, uint8_t variant, int32_t rx, int32_t ry) {
+static inline void partVariantDraw(uint8_t part, uint8_t variant, int16_t rx, int16_t ry) {
     PartRec rec;
     partRead(part, rec);
     const uint16_t v_off = mhFxReadU16(reinterpret_cast<const uint16_t *>(partCart(static_cast<uint16_t>(equip::PART_VARIANT_OFFSETS_OFF + static_cast<uint16_t>(part) * 2))));
@@ -397,10 +398,10 @@ static inline void partVariantDraw(uint8_t part, uint8_t variant, int32_t rx, in
 // bake is eqf.4.
 static void drawPlayer(const mh::Game &g, int16_t camX, int16_t camY) {
     const mh::Player &p = g.player;
-    const int32_t x = rndPx(p.x, p.subX) - camX;
-    const int32_t y = rndPx(p.y, p.subY) - camY + mh::HUD_H;
-    const int32_t cx = x + 8;
-    const int32_t cy = y + 8;
+    const int16_t x = static_cast<int16_t>(rndPx(p.x, p.subX) - camX);
+    const int16_t y = static_cast<int16_t>(rndPx(p.y, p.subY) - camY + mh::HUD_H);
+    const int16_t cx = static_cast<int16_t>(x + 8);
+    const int16_t cy = static_cast<int16_t>(y + 8);
 
     // 8-way facing index from the DIR8 facing vector; partFrame() resolves it
     // to the sheet frame, so no facing branch lives in the render path.
@@ -423,13 +424,13 @@ static void drawPlayer(const mh::Game &g, int16_t camX, int16_t camY) {
 
     if (g.weapon == mh::W_SWORD) {
         if (a) {
-            int32_t reach = mh::attackReach(a);
+            int16_t reach = mh::attackReach(a);
             if (phase != 1)
-                reach = reach * 6 / 10;   // mock 0.6 arc
-            const int32_t hx = cx + (((int32_t)p.fx * reach) >> 4);
-            const int32_t hy = cy + (((int32_t)p.fy * reach) >> 4);
-            const int32_t hw = mh::attackHw(a);
-            const int32_t hh = mh::attackHh(a);
+                reach = static_cast<int16_t>(reach * 6 / 10);   // mock 0.6 arc
+            const int16_t hx = static_cast<int16_t>(cx + (((int32_t)p.fx * reach) >> 4));
+            const int16_t hy = static_cast<int16_t>(cy + (((int32_t)p.fy * reach) >> 4));
+            const int16_t hw = mh::attackHw(a);
+            const int16_t hh = mh::attackHh(a);
             // Attack slot -> slash frame (VARIANT_SWORD_SLASH): combo chain
             // 0/1/2, plain special, step-slash, spin-cut. The 32x32 frames are
             // hit-box-centred with the 4x4 white core at the centre.
@@ -469,29 +470,29 @@ static void drawPlayer(const mh::Game &g, int16_t camX, int16_t camY) {
             partDraw(equip::PART_FLAIL_BALL, equip::POSE_WHIRL, face, cx + mulQ4(cos256(ba), 20), cy + mulQ4(sin256(ba), 14));
         } else if (p.state == mh::PS_ATTACK || p.state == mh::PS_SPECIAL) {
             if (a) {
-                int32_t reach = mh::attackReach(a);
+                int16_t reach = mh::attackReach(a);
                 if (phase != 1)
-                    reach = reach / 2;   // mock 0.5 chain
+                    reach = static_cast<int16_t>(reach / 2);   // mock 0.5 chain
                 // 1x1 light dots from the reach/aim math (8-way facing, halved
                 // startup/recovery reach, trip branch reach 12); the ball is
                 // the 4x4 white chip, both at the mock's exact positions.
-                for (int32_t i = 1; i <= 3; i++) {
-                    const int32_t rr = (reach * i) >> 2;
-                    partDraw(equip::PART_FLAIL_CHAIN, equip::POSE_IDLE, face, cx + (((int32_t)p.fx * rr) >> 4), cy + (((int32_t)p.fy * rr) >> 4));
+                for (int8_t i = 1; i <= 3; i++) {
+                    const int16_t rr = static_cast<int16_t>((reach * i) >> 2);
+                    partDraw(equip::PART_FLAIL_CHAIN, equip::POSE_IDLE, face, static_cast<int16_t>(cx + (((int32_t)p.fx * rr) >> 4)), static_cast<int16_t>(cy + (((int32_t)p.fy * rr) >> 4)));
                 }
-                partDraw(equip::PART_CHIP_BALL, equip::POSE_IDLE, face, cx + (((int32_t)p.fx * reach) >> 4), cy + (((int32_t)p.fy * reach) >> 4));
+                partDraw(equip::PART_CHIP_BALL, equip::POSE_IDLE, face, static_cast<int16_t>(cx + (((int32_t)p.fx * reach) >> 4)), static_cast<int16_t>(cy + (((int32_t)p.fy * reach) >> 4)));
             }
         } else {
-            partDraw(equip::PART_FLAIL_CHAIN, equip::POSE_IDLE, face, cx + ((p.fx * 4) >> 4), cy + ((p.fy * 4) >> 4));
-            partDraw(equip::PART_SWORD_CHIP, equip::POSE_IDLE, face, cx + ((p.fx * 9) >> 4), cy + ((p.fy * 9) >> 4));
+            partDraw(equip::PART_FLAIL_CHAIN, equip::POSE_IDLE, face, static_cast<int16_t>(cx + ((p.fx * 4) >> 4)), static_cast<int16_t>(cy + ((p.fy * 4) >> 4)));
+            partDraw(equip::PART_SWORD_CHIP, equip::POSE_IDLE, face, static_cast<int16_t>(cx + ((p.fx * 9) >> 4)), static_cast<int16_t>(cy + ((p.fy * 9) >> 4)));
         }
         if (p.state == mh::PS_DEFLECT) {
             // Two light bars; frame centred on the 16 px body.
             partDraw(equip::PART_DEFLECT, equip::POSE_DEFLECT, face, cx, cy);
         }
     } else {   // gunshield
-        const int32_t shx = cx + ((p.fx * 5) >> 4);
-        const int32_t shy = cy + ((p.fy * 5) >> 4);
+        const int16_t shx = static_cast<int16_t>(cx + ((p.fx * 5) >> 4));
+        const int16_t shy = static_cast<int16_t>(cy + ((p.fy * 5) >> 4));
         // 12x16 plate frame, plate at frame local 1,1: shield centre as ref.
         // Guard selects the fully lit plate via the record's poseMap (frame 1),
         // the idle plate is frame 0; FRAME() applies the per-plane stride.
@@ -500,8 +501,8 @@ static void drawPlayer(const mh::Game &g, int16_t camX, int16_t camY) {
             // poseMap shove = frame 2 of the same plate sheet: the shove plate is
             // drawn 1 px left inside its cell (anchor 5 vs the idle/guard 6), so
             // +1 on the reference re-centres the shared record anchor.
-            const int32_t shx2 = shx + ((p.fx * 4) >> 4) + 1;
-            const int32_t shy2 = shy + ((p.fy * 4) >> 4);
+            const int16_t shx2 = static_cast<int16_t>(shx + ((p.fx * 4) >> 4) + 1);
+            const int16_t shy2 = static_cast<int16_t>(shy + ((p.fy * 4) >> 4));
             partDraw(equip::PART_GUN_GUARD, equip::POSE_SHOVE, face, shx2, shy2);
         }
         if (p.reload > 0)
@@ -520,18 +521,18 @@ static void drawPlayer(const mh::Game &g, int16_t camX, int16_t camY) {
 static void drawProjectiles(const mh::Game &g, int16_t camX, int16_t camY) {
     for (int16_t i = 0; i < g.projN; i++) {
         const mh::Projectile &pr = g.proj[i];
-        const int32_t x = pr.x - camX;
-        const int32_t y = pr.y - camY + mh::HUD_H;
-        const int32_t bx = (pr.vx * 2) >> 4;
-        const int32_t by = (pr.vy * 2) >> 4;
+        const int16_t x = static_cast<int16_t>(pr.x - camX);
+        const int16_t y = static_cast<int16_t>(pr.y - camY + mh::HUD_H);
+        const int16_t bx = static_cast<int16_t>((pr.vx * 2) >> 4);
+        const int16_t by = static_cast<int16_t>((pr.vy * 2) >> 4);
 
         // 2x2 trail puffs at the mock offsets, drawn far dark -> near light.
-        sprDraw(fxtrail, x - bx * 2 - 1, y - by * 2 - 1, FRAME(spr::TRAIL_DARK));
-        sprDraw(fxtrail, x - bx * 3 - 1, y - by * 3 - 1, FRAME(spr::TRAIL_DARK));
-        sprDraw(fxtrail, x - bx - 1, y - by - 1, FRAME(spr::TRAIL_LIGHT));
+        sprDraw(fxtrail, static_cast<int16_t>(x - bx * 2 - 1), static_cast<int16_t>(y - by * 2 - 1), FRAME(spr::TRAIL_DARK));
+        sprDraw(fxtrail, static_cast<int16_t>(x - bx * 3 - 1), static_cast<int16_t>(y - by * 3 - 1), FRAME(spr::TRAIL_DARK));
+        sprDraw(fxtrail, static_cast<int16_t>(x - bx - 1), static_cast<int16_t>(y - by - 1), FRAME(spr::TRAIL_LIGHT));
 
-        const int32_t hw = pr.w >> 1;
-        const int32_t hh = pr.h >> 1;
+        const int16_t hw = static_cast<int16_t>(pr.w >> 1);
+        const int16_t hh = static_cast<int16_t>(pr.h >> 1);
         // Ball (7x8) / scatter (4x8) sheets; art occupies the top 7x6 / 4x4.
         if (pr.heavy)
             sprDraw(fxball, x - hw, y - hh, FRAME(0));
@@ -554,17 +555,17 @@ static void drawEffects(const mh::Game &g, int16_t camX, int16_t camY) {
         const mh::Effect &e = g.fx[i];
         const int16_t r = e.life - e.t;
         if (e.text) {
-            const int32_t x = e.x - camX;
-            const int32_t y = static_cast<int32_t>(e.y) - (r + 1) / 3 - camY + mh::HUD_H;
-            drawNumber(x - 2, y, e.text, e.crit ? 3 : 2);
+            const int16_t x = static_cast<int16_t>(e.x - camX);
+            const int16_t y = static_cast<int16_t>(e.y - (r + 1) / 3 - camY + mh::HUD_H);
+            drawNumber(static_cast<int16_t>(x - 2), y, e.text, e.crit ? 3 : 2);
         } else {
             // 4x4 spark sprite centred on the effect; crit selects the white
             // plane. TODO: the mock expands the 4 dots with radius r — the FX
             // sprite is fixed size, so the spread animation is dropped.
             const uint8_t f = e.crit ? spr::SPARK_BRIGHT : spr::SPARK_LIGHT;
-            const int32_t x = e.x - camX;
-            const int32_t y = e.y - camY + mh::HUD_H;
-            sprDraw(fxspark, x - 2, y - 2, FRAME(f));
+            const int16_t x = static_cast<int16_t>(e.x - camX);
+            const int16_t y = static_cast<int16_t>(e.y - camY + mh::HUD_H);
+            sprDraw(fxspark, static_cast<int16_t>(x - 2), static_cast<int16_t>(y - 2), FRAME(f));
         }
     }
 }
@@ -686,23 +687,23 @@ static inline int16_t hudPut(int16_t x, char c) {
     return textPut(fxfontw, x, 1, c);
 }
 
-static uint8_t hudDigits(int32_t v) {
+static uint8_t hudDigits(int16_t v) {
     uint8_t n = 1;
     while (v >= 10) {
-        v /= 10;
+        v = static_cast<int16_t>(v / 10);
         n++;
     }
     return n;
 }
 
 // Print a non-negative value as exactly `digits` digits (leading zeros).
-static int16_t hudNum(int16_t x, int32_t v, uint8_t digits) {
+static int16_t hudNum(int16_t x, int16_t v, uint8_t digits) {
     if (digits > 5)
         digits = 5;
     char b[5];
     for (int8_t i = static_cast<int8_t>(digits - 1); i >= 0; i--) {
         b[i] = static_cast<char>('0' + v % 10);
-        v /= 10;
+        v = static_cast<int16_t>(v / 10);
     }
     for (uint8_t i = 0; i < digits; i++)
         x = hudPut(x, b[i]);
@@ -776,10 +777,8 @@ static void drawHud(const mh::Game &g) {
     }
 
     if (g.mode == mh::MODE_TRAIN) {   // train total + DPS
-        int32_t total = g.train.total;
-        if (total > 9999)
-            total = 9999;
-        int32_t dps = mh::trainDps(g);
+        const int16_t total = g.train.total > 9999 ? 9999 : static_cast<int16_t>(g.train.total);
+        int16_t dps = mh::trainDps(g);
         if (dps > 999)
             dps = 999;
         const uint8_t nt = hudDigits(total);

@@ -49,7 +49,7 @@ static void initWorld(Game &g, int8_t mode) {
 
 // ---------------------------------------------------------------- effects
 
-static void addEffect(Game &g, int16_t x, int16_t y, int16_t life, bool crit, int16_t text) {
+static void addEffect(Game &g, int16_t x, int16_t y, uint8_t life, bool crit, int16_t text) {
     if (g.fxN >= MAX_EFFECTS) {   // device cap: drop oldest, keep newest
         for (int16_t i = 1; i < MAX_EFFECTS; i++)
             g.fx[i - 1] = g.fx[i];
@@ -109,31 +109,31 @@ static int16_t trainDps(const Game &g) {
 
 // Mock damagePole(): head zone is the top 16 px (crit x1.4 as integer 14/10),
 // hitFlash 4, freeze crit 5 / body 4, rising damage number (life 26).
-static void damagePole(Game &g, int dmg, int hx, int hy) {
+static void damagePole(Game &g, uint8_t dmg, int16_t hx, int16_t hy) {
     Pole &pole = g.pole;
     const bool crit = hy < pole.rect.y + POLE_HEAD;
     int32_t total = (dmg * (crit ? 14 : 10)) / 10;
     if (total < 1)
         total = 1;
     pole.hitFlash = 4;
-    const int16_t fr = crit ? 5 : 4;
+    const uint8_t fr = crit ? 5 : 4;
     if (g.freeze < fr)
         g.freeze = fr;
     g.train.total += total;
     g.train.last = static_cast<int16_t>(total);
     trainAdd(g.train, g.tick, static_cast<int16_t>(total));
-    addEffect(g, static_cast<int16_t>(hx), static_cast<int16_t>(hy - 6), 26, crit, static_cast<int16_t>(total));
+    addEffect(g, hx, static_cast<int16_t>(hy - 6), 26, crit, static_cast<int16_t>(total));
 }
 
 // Target::onHit — pole is static and takes no knockback/trip.
-static void poleOnHit(Game &g, int dmg, int hx, int hy, int push, int effect) {
+static void poleOnHit(Game &g, uint8_t dmg, int16_t hx, int16_t hy, uint8_t push, uint8_t effect) {
     (void)push;
     (void)effect;
     damagePole(g, dmg, hx, hy);
 }
-static void poleOnShove(Game &, int, int, int, int) {
+static void poleOnShove(Game &, int8_t, int8_t, uint8_t, uint8_t) {
 }   // pole never moves
-static void poleOnStun(Game &, int) {
+static void poleOnStun(Game &, uint8_t) {
 }
 
 static void armPoleTarget(Game &g) {
@@ -155,12 +155,12 @@ static void spawnShot(Game &g) {
     const ShellDef *sh = weaponShell(&WEAPON_DEFS[g.weapon], shot - 1);
     const int16_t cx = g.lastShotX;
     const int16_t cy = g.lastShotY;
-    const int16_t fx = g.lastShotFx;
-    const int16_t fy = g.lastShotFy;
+    const int8_t fx = g.lastShotFx;
+    const int8_t fy = g.lastShotFy;
 
     addEffect(g, static_cast<int16_t>(cx + ((fx * 10) >> 4)), static_cast<int16_t>(cy + ((fy * 10) >> 4)), 5, true, 0);
 
-    int16_t dirX[3], dirY[3];
+    int8_t dirX[3], dirY[3];
     int8_t n = 1;
     if (shellPellets(sh) == 1) {
         dirX[0] = fx;
@@ -168,12 +168,12 @@ static void spawnShot(Game &g) {
     } else {
         const fp::Dir8 left = fp::rotFp(fx, fy, 15, 6);     // ~22 deg left
         const fp::Dir8 right = fp::rotFp(fx, fy, 15, -6);   // ~22 deg right
-        dirX[0] = left.x;
-        dirY[0] = left.y;
+        dirX[0] = static_cast<int8_t>(left.x);
+        dirY[0] = static_cast<int8_t>(left.y);
         dirX[1] = fx;
         dirY[1] = fy;
-        dirX[2] = right.x;
-        dirY[2] = right.y;
+        dirX[2] = static_cast<int8_t>(right.x);
+        dirY[2] = static_cast<int8_t>(right.y);
         n = 3;
     }
 
