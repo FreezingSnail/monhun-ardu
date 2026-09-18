@@ -1,6 +1,7 @@
 #pragma once
-// Boot-flow routing between the opening menu, the data-driven screens (hub /
-// quests / smith) and a hunt (bead monhun-ardu-mgn, docs/quests-shops.md qs.4).
+// App-level routing between the opening menu, the data-driven screens (hub /
+// quests / smith) and a hunt (bead monhun-ardu-mgn, docs/quests-shops.md qs.4;
+// demo flow rework monhun-ardu-5r1).
 //
 // Host- and device-testable: no cart reads, no Arduino.h. The caller resolves
 // the cursor row off the cart (screenCursorRow in src/screens.hpp) and passes
@@ -8,9 +9,14 @@
 // menu/screen state changes, so the sketch and the device E2E suite run the
 // exact same routing code.
 //
-// Flow (qs.4):
-//   menu --A--> hub --HUNT--> hunt --end+A--> hub --B--> menu
-//                   hub --QUESTS/SMITH--> screen --B/LEAVE--> hub
+// Demo flow (monhun-ardu-5r1, what the shipping sketch wires):
+//   menu --A--> hunt --end+A--> menu          (a fresh hunt re-runs newGame)
+//
+// Shelf graph (kept compiled + unit-tested, NOT reachable from the sketch; the
+// hub/quests/smith work stays in the tree for later re-enable):
+//   hub --HUNT--> hunt
+//   hub --QUESTS/SMITH--> screen --B/LEAVE--> hub
+//   hub --B/LEAVE--> menu
 //
 // appNavApply() takes the transition Input so the new owner's A/B edge flags
 // start from the button state that caused the change: a held button cannot
@@ -31,9 +37,10 @@ enum AppNav : int8_t {
     APP_NAV_HUNT   // start the picked loadout in the sim
 };
 
-// Opening-menu A: open the hub (replaces the old direct hunt start).
+// Opening-menu A: launch the picked loadout straight into the hunt (demo flow,
+// monhun-ardu-5r1). The hub graph below stays for the screen suites only.
 inline AppNav appMenuAccept() {
-    return APP_NAV_HUB;
+    return APP_NAV_HUNT;
 }
 
 // B: quests/smith -> hub; hub -> menu.
@@ -64,14 +71,16 @@ inline AppNav appScreenAccept(uint8_t screen, const ScreenRow &row) {
     return APP_NAV_NONE;
 }
 
-// Hunt end: A after the over screen returns to the hub.
+// Hunt end: A after the over screen returns to the opening menu (demo flow).
+// The menu's next A re-runs menuStart -> newGame, so the fresh hunt starts from
+// a fully reset world (projectiles/effects/quest counters).
 inline AppNav appHuntReturn() {
-    return APP_NAV_HUB;
+    return APP_NAV_MENU;
 }
 
 // Apply a nav destination to the live states. Returns true when a hunt just
 // started (the caller then arms the quest/upgrade state and clears its
-// hunt-end latch). `menu` keeps the weapon/target picks for the HUNT row.
+// hunt-end latch). `menu` keeps the weapon/target picks across the hunt.
 // Screen row counts come from the generated screen_meta.hpp constants, so this
 // stays cart-free and host-testable; the device build's screenEnter() reads the
 // same counts off the cart.
@@ -106,6 +115,7 @@ inline bool appNavApply(AppNav nav, MenuState &menu, ScreenState &screen, const 
     case APP_NAV_HUNT:
         menuStart(game, menu);
         screen.active = false;
+        menu.active = false;   // demo flow: the menu itself launched the hunt
         menu.prevA = in.a;
         menu.prevB = in.b;
         return true;

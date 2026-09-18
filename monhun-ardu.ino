@@ -32,9 +32,9 @@ decltype(arduboy) arduboy;
 mh::Game g;
 
 // Opening menu (bead monhun-ardu-6zb.2): boot lands here. While active it owns
-// every input edge; the sim and audio are not stepped. A opens the hub (qs.4)
-// carrying the picked weapon/target; the hub's HUNT row starts the hunt. The
-// picks stay live across the whole boot -> hub -> hunt -> hub round trip.
+// every input edge; the sim and audio are not stepped. A launches the picked
+// weapon/target straight into the hunt (demo flow, monhun-ardu-5r1); a win/loss
+// + A returns here. The picks stay live across the menu -> hunt -> menu loop.
 mh::MenuState s_menu;
 
 // Audio cue edge detector. Driven from run() after stepGame(); reads Game only
@@ -44,8 +44,10 @@ mh::AudioState s_audio;
 // Persistent save + the data-driven screen state (bead monhun-ardu-cgz). The
 // save loads once in setup(); it is committed only from a screen action or the
 // hunt-end progress commit (never mid-hunt) so EEPROM write cycles stay low.
-// The hub is entered from the opening menu's A edge (qs.4) and routes to the
-// quests/smith screens or into a hunt; B steps back one level.
+// The hub/quests/smith screens are off the demo path (monhun-ardu-5r1): the
+// routing code stays compiled and tested, but the sketch never enters the hub.
+// If a save already carries an active quest/tier it still applies at hunt start
+// and the hunt-end commit runs once per hunt, exactly as before.
 mh::SaveBlock s_save;
 mh::ScreenState s_screen;
 static const mh::SaveBackend SAVE_BACKEND = {mh::saveEepromRead, mh::saveEepromWrite};
@@ -106,8 +108,9 @@ static mh::Input sampleInput() {
 
 // One logic tick. Called only from needsUpdate() (never mid-plane), so the
 // whole core advances atomically between planes. pollButtons() already ran.
-// Boot flow (qs.4): menu --A--> hub --HUNT--> hunt --end+A--> hub --B--> menu;
-// hub --QUESTS/SMITH--> screen --B/LEAVE--> hub.
+// Demo flow (monhun-ardu-5r1): menu --A--> hunt --end+A--> menu. The screen
+// branch below still handles the hub graph if a screen ever becomes active
+// (shelf code kept in tree), but nothing on the demo path sets it.
 void run() {
     const mh::Input in = sampleInput();
 #if DEBUG_HURTBOXES
@@ -115,9 +118,17 @@ void run() {
 #endif
     if (s_menu.active) {
         // Menu tick: no stepGame, no audio (the new game re-latches the audio
-        // snapshot on its tick 0). A opens the hub with the picked loadout.
-        if (mh::menuStep(s_menu, in) == mh::MENU_ACCEPT)
-            mh::appNavApply(mh::appMenuAccept(), s_menu, s_screen, s_save, g, in);
+        // snapshot on its tick 0). A launches the picked loadout directly
+        // (APP_NAV_HUNT -> menuStart -> newGame, so projectiles/effects/quest
+        // counters reset for the fresh hunt); then re-arm the quest/tier from
+        // the save and clear the hunt-end latch, exactly like the screen path.
+        if (mh::menuStep(s_menu, in) == mh::MENU_ACCEPT) {
+            if (mh::appNavApply(mh::appMenuAccept(), s_menu, s_screen, s_save, g, in)) {
+                mh::questApplyToGame(g, s_save);
+                mh::upgradeApplyToGame(g, s_save);
+                s_huntOver = false;
+            }
+        }
         return;
     }
     if (s_screen.active) {
@@ -155,7 +166,8 @@ void run() {
     // hygiene); appHuntCommit() owns the latch.
     if (mh::appHuntCommit(g.over != mh::OVER_NONE, s_huntOver, s_save, g.questProgress))
         mh::saveStore(s_save, SAVE_BACKEND);
-    // Win/lose over screen: a fresh A returns to the hub (picks preserved).
+    // Win/lose over screen: a fresh A returns to the opening menu (picks
+    // preserved); the menu's next A starts a fully reset hunt.
     if (mh::menuReturnStep(s_menu, g.over != mh::OVER_NONE, in))
         mh::appNavApply(mh::appHuntReturn(), s_menu, s_screen, s_save, g, in);
 }

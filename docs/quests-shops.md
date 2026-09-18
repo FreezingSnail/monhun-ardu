@@ -63,6 +63,9 @@ UpgradeDef: weaponIdx u8, tier u8, cost u16, dmgMul u8, spdMul u8, unlockFlag
 2. `qs.2` quest content: board screen data, kill accounting, payout, guards.
 3. `qs.3` smith content: tier table, stat application, purchase flow.
 4. `qs.4` integration: hub entry from the opening menu, return paths, art.
+   (Superseded on the demo path by `monhun-ardu-5r1`: the opening menu A now
+   launches the hunt directly and win/loss + A returns to the menu. The hub
+   graph stays compiled and tested but is not reachable from the sketch.)
 
 ## Acceptance
 

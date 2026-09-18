@@ -62,14 +62,16 @@ directly in 1/16-px units and integrated by straight addition.
 - `monhun-ardu.ino` — plane loop, input sampling, `stepGame()` + `audioUpdate()`
   in `run()`, `renderScene()` in `render()`. Boots into the opening menu; while
   it is active the sim/audio are skipped and `drawMenu()` replaces the scene.
-  FX reads happen inside `FX::enableOLED()` / `waitForNextPlane()` /
-  `FX::disableOLED()`.
+  Menu A launches the picked hunt directly; win/loss + A returns to the menu
+  (demo loop `5r1`). FX reads happen inside `FX::enableOLED()` /
+  `waitForNextPlane()` / `FX::disableOLED()`.
 - `src/menu_state.hpp` — host-testable menu FSM (`MenuState`/`menuStep`, pick →
   mode/kind mapping, post-over return edge); no Arduino.h.
 - `src/menu.hpp` — menu render (FX glyph rows + selection underline), per plane.
-- `src/app_state.hpp` — host-testable boot-flow routing (qs.4): menu ↔ hub ↔
-  quests/smith ↔ hunt transitions, the held-button guards and the once-per-hunt
-  progress commit.
+- `src/app_state.hpp` — host-testable app routing (qs.4, demo flow `5r1`):
+  menu → hunt → menu on the shipped path (a fresh hunt re-runs `newGame`), plus
+  the shelf hub ↔ quests/smith graph kept compiled/tested but off the demo path,
+  the held-button guards and the once-per-hunt progress commit.
 - `src/app_setup.hpp` — device cart glue for a hunt start: arm the quest kill
   counter from the active `QuestDef` and resolve the smith tier multipliers.
 - `src/render.hpp` — whole render path (also compiled into the perf bench so
@@ -190,19 +192,24 @@ data/skeletons.json + data/creatures/*.json ──tools/gen-combat.py──►�
 |---|---|
 | LEFT / RIGHT | cycle weapon: SWD (sword) / FLS (flail) / GUN (gunshield) |
 | UP / DOWN | cycle target: LUNGE / SWEEP / HEAVY / RAVAGER beast, or POLE |
-| A | open the HUB with the picked loadout |
+| A | launch the picked loadout directly into the hunt |
 
 D-pad nav is debounced: a tap moves exactly one pick (immediate on the direction
 change), while holding waits ~300 ms (16 logic ticks) and then repeats every
 ~115 ms (6 ticks). Reversing steps at once; releasing resets the hold timer; a
 re-entry after win/loss resets it too, so a held d-pad cannot skip picks. A stays
-edge-based: one open per press. Picks wrap in both directions. A opens the hub
-(qs.4); the hub's HUNT row starts the selected scene, so targets LUNGE/SWEEP/
-HEAVY start the matching beast variant in hunt mode and POLE starts train mode
-(the static pole, no beast). After a win or loss, A returns to the hub with the
-picks kept until reboot. While the menu is up the sim and audio are not stepped.
+edge-based: one launch per press. Picks wrap in both directions. A starts the
+selected scene (demo flow, monhun-ardu-5r1), so targets LUNGE/SWEEP/HEAVY start
+the matching beast variant in hunt mode and POLE starts train mode (the static
+pole, no beast). After a win or loss, A returns to the menu with the picks kept
+until reboot; the next A runs `newGame` again, so projectiles/effects/quest
+counters start clean. While the menu is up the sim and audio are not stepped.
 
-### Hub / quests / smith (data-driven screens, qs.1–qs.4)
+### Hub / quests / smith (shelf code, qs.1–qs.4 — not on the demo path)
+
+The data-driven hub/quests/smith screens and their EEPROM save stay in the tree
+and unit/device-tested, but the shipped demo loop is menu → hunt → menu
+(monhun-ardu-5r1) and never enters the hub. The shelf graph is:
 
 | Input | Action |
 |---|---|
@@ -214,8 +221,11 @@ The hub shows HUNT / QUESTS / SMITH plus a ZENNY row that renders the live
 `save.zenny` balance (dynamic value token). The quests board takes a kill quest
 and turns it in for its reward; the smith sells weapon upgrade tiers. Every
 state-changing action commits the 15-byte EEPROM save block once (write-on-
-change + verify read), and the hunt-end quest-progress commit runs exactly once
-per hunt.
+change + verify read). If a save already carries an active quest/tier it still
+applies at hunt start and the hunt-end quest-progress commit still runs exactly
+once per hunt; the demo path never takes/turns in a quest, so nothing can
+double-count. There is no quit input in the demo — win/loss + A is the only
+hunt exit.
 
 ### Target roster (`MONSTER_DEFS`, FX cart blob)
 
