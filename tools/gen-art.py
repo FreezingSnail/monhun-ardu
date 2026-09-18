@@ -27,9 +27,11 @@ the declared rects must stay transparent. `--dump` prints the ASCII evidence.
 The opening-menu sheets (images/menu/, bead monhun-ardu-zza) are authored from
 the same GLYPHS table as the font sheets, so the baked pixels are provably the
 font glyphs the old textPut(fxfontw/fxfontg) layout drew. check_menu_identity()
-cross-compares every menu glyph cell against the authored font sheet; the font
-sheets stay on the MCU-independent side because the HUD still textPuts from
-them.
+cross-compares every menu glyph cell against the authored font sheet. The HUD
+marker strips (images/blocks/fxhud, bead monhun-ardu-e4a) are baked the same way
+and cross-checked against fxfontw by check_hud_identity(); the font sheets stay
+on the MCU-independent side because the HUD still textPuts the gun reload/shell
+and train readouts from them.
 
 The same run writes src/generated/art_dims.hpp: per-frame core dimensions and
 frame layout for the render bead + the host dims-drift test (tst/art_dims_test.hpp).
@@ -296,7 +298,7 @@ def icon_defs(dims):
         # the 6 dots are placed with the device's SIN65/mulQ4 math.
         {"id": "whirlring", "w": 48, "h": 32, "anchor": "player centre",
          "frames": whirl_ring_frames(dims)},
-    ]
+    ] + hud_defs()
 
 
 # Existing block sheets (kept byte-stable).
@@ -508,6 +510,53 @@ def menu_defs():
         {"id": "menu_bg", "w": 128, "h": 64, "anchor": "screen top-left", "frames": [bg]},
         {"id": "menu_sel", "w": 28, "h": 16, "anchor": "option top-left", "frames": frames},
     ]
+
+
+# ------------------------------------------------------ HUD marker strips
+# Bead monhun-ardu-e4a: drawHud() used to textPut() 4 glyphs/frame for the
+# weapon marker (SWD/FLA/GUN) + mode char (H/T) at x=46, each a fixed cart seek.
+# The 4 txfa glyphs (3 weapon + 1 mode) are baked into one 16x8 strip, drawn
+# with a single blit per plane. Pixels come from the same GLYPHS table the font
+# sheets are authored from; check_hud_identity() cross-checks every cell against
+# fxfontw, the sheet hudPut() blitted from.
+HUD_WEAPONS = ("SWD", "FLA", "GUN")   # W_SWORD, W_FLAIL, W_GUN
+HUD_MODES = ("H", "T")                # MODE_HUNT, MODE_TRAIN
+
+
+def hud_defs():
+    """Six 16x8 marker strips, frame = weapon*2 + mode: the drawHud x=46 lane
+    (4 glyph cells at 4 px advance, 8 px tall) for each weapon x mode."""
+    frames = []
+    for wpn in HUD_WEAPONS:
+        for mode in HUD_MODES:
+            frames.append(text_blocks(0, 0, wpn + mode, WHITE))
+    return [{"id": "hud", "w": 16, "h": 8, "anchor": "marker top-left", "frames": frames}]
+
+
+def check_hud_identity(sheets):
+    """Cross-check the HUD bake against the authored white font sheet: each of
+    the six 16x8 frames is 4 fxfontw glyph tiles (weapon marker + mode char) and
+    must be pixel-identical to the sheet tile for the same character. Same
+    pixel-oracle link as check_menu_identity()."""
+    fontw = sheets["fontw"].load()
+    hud = sheets["hud"].load()
+    failures = []
+    fi = 0
+    for wpn in HUD_WEAPONS:
+        for mode in HUD_MODES:
+            for i, ch in enumerate(wpn + mode):
+                ox = fi * 16 + i * 4
+                for row in range(8):
+                    for col in range(4):
+                        got = hud[ox + col, row]
+                        want = fontw[ord(ch) * 4 + col, row]
+                        if got != want:
+                            failures.append("hud frame %d (%d,%d) %r: got %s want %s" % (fi, ox + col, row, ch, got, want))
+            fi += 1
+    if failures:
+        for f in failures[:20]:
+            print("gen-art: HUD IDENTITY FAIL: %s" % f, file=sys.stderr)
+        raise SystemExit("gen-art: %d hud identity failures" % len(failures))
 
 
 def check_menu_identity(sheets):
@@ -824,6 +873,7 @@ def main():
     defs = icons + menu
     check_sheets(defs, sheets)
     check_menu_identity(sheets)
+    check_hud_identity(sheets)
 
     names = {kind: set() for kind in dirs}
     for body, img in sheets.items():

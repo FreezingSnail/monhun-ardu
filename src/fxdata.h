@@ -6,8 +6,8 @@ using uint24_t = __uint24;
 
 // Initialize FX hardware using  FX::begin(FX_DATA_PAGE); in the setup() function.
 
-constexpr uint16_t FX_DATA_PAGE  = 0xfe1b;
-constexpr uint24_t FX_DATA_BYTES = 123917;
+constexpr uint16_t FX_DATA_PAGE  = 0xfe19;
+constexpr uint24_t FX_DATA_BYTES = 124495;
 
 constexpr uint24_t mhWeaponDefs = 0x000000;
 constexpr uint24_t mhMonsterAttacks = 0x00021C;
@@ -32,17 +32,18 @@ constexpr uint24_t fxtelegraph = 0x009425;
 constexpr uint24_t fxreload = 0x009D27;
 constexpr uint24_t fxscatter = 0x009D65;
 constexpr uint24_t fxerase = 0x009D7F;
-constexpr uint24_t fxslash = 0x009DB1;
-constexpr uint24_t fxfontg = 0x00ACB3;
-constexpr uint24_t fxfontw = 0x00B8B5;
-constexpr uint24_t mh_menu_sel = 0x00C4B7;
-constexpr uint24_t mh_menu_bg = 0x00CF39;
-constexpr uint24_t mh_head_bandana = 0x00E73B;
-constexpr uint24_t mh_weapon_sword = 0x00ED3D;
-constexpr uint24_t mh_head_helm = 0x01353F;
-constexpr uint24_t mh_player_base = 0x013B41;
-constexpr uint24_t mh_body_base = 0x014143;
-constexpr uint24_t mh_shadow_base = 0x014D45;
-constexpr uint24_t mh_weapon_gun = 0x014E07;
-constexpr uint24_t mh_head_base = 0x019609;
-constexpr uint24_t mh_weapon_flail = 0x019C0B;
+constexpr uint24_t fxhud = 0x009DB1;
+constexpr uint24_t fxslash = 0x009FF3;
+constexpr uint24_t fxfontg = 0x00AEF5;
+constexpr uint24_t fxfontw = 0x00BAF7;
+constexpr uint24_t mh_menu_sel = 0x00C6F9;
+constexpr uint24_t mh_menu_bg = 0x00D17B;
+constexpr uint24_t mh_head_bandana = 0x00E97D;
+constexpr uint24_t mh_weapon_sword = 0x00EF7F;
+constexpr uint24_t mh_head_helm = 0x013781;
+constexpr uint24_t mh_player_base = 0x013D83;
+constexpr uint24_t mh_body_base = 0x014385;
+constexpr uint24_t mh_shadow_base = 0x014F87;
+constexpr uint24_t mh_weapon_gun = 0x015049;
+constexpr uint24_t mh_head_base = 0x01984B;
+constexpr uint24_t mh_weapon_flail = 0x019E4D;

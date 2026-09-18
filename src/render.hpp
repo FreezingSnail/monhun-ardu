@@ -738,25 +738,19 @@ static void drawHud(const mh::Game &g) {
     hudBar(29, 2, 16, 4, p.stam, p.stamMax, 2);   // stamina (light gray)
 
     // Weapon marker (mock's full name shortened to fit the 128 px strip), then
-    // the mode marker (device-only, the mock implied it via pole vs beast).
-    int16_t x = 46;
-    if (g.weapon == mh::W_SWORD) {
-        x = hudPut(x, 'S');
-        x = hudPut(x, 'W');
-        x = hudPut(x, 'D');
-    } else if (g.weapon == mh::W_FLAIL) {
-        x = hudPut(x, 'F');
-        x = hudPut(x, 'L');
-        x = hudPut(x, 'A');
-    } else {
-        x = hudPut(x, 'G');
-        x = hudPut(x, 'U');
-        x = hudPut(x, 'N');
-    }
-    x = hudPut(x, g.mode == mh::MODE_TRAIN ? 'T' : 'H');
+    // the mode marker (device-only, the mock implied it via pole vs beast): the
+    // 4 glyphs (3-char weapon + 1-char mode) on the 4 px lane at x=46 are baked
+    // into one 16x8 FX strip (bead monhun-ardu-e4a), drawn with a single blit
+    // per plane instead of 4 textPut() cart seeks. Frame order is
+    // weapon*2 + mode (SWD/FLA/GUN x hunt/train); the pixels come from the same
+    // GLYPHS table as fxfontw (gen-art check_hud_identity). The else branch
+    // keeps the old "anything but sword/flail reads GUN" mapping.
+    const uint8_t wf = static_cast<uint8_t>(g.weapon == mh::W_SWORD ? 0 : (g.weapon == mh::W_FLAIL ? 1 : 2));
+    const uint8_t mf = static_cast<uint8_t>(g.mode == mh::MODE_TRAIN ? 1 : 0);
+    sprDraw(fxhud, 46, 1, FRAME(static_cast<uint8_t>(wf * 2 + mf)));
 
     if (g.weapon == mh::W_GUN) {   // shell count + reload
-        x = 67;
+        int16_t x = 67;
         if (p.reload > 0) {
             hudPut(x, 'R');
             hudPut(x, 'L');
@@ -788,7 +782,7 @@ static void drawHud(const mh::Game &g) {
             dps = 999;
         const uint8_t nt = hudDigits(total);
         const uint8_t nd = hudDigits(dps);
-        x = static_cast<int16_t>(127 - 4 * (nt + nd + 2));
+        int16_t x = static_cast<int16_t>(127 - 4 * (nt + nd + 2));
         x = hudPut(x, 'T');
         x = hudNum(x, total, nt);
         x = hudPut(x, 'D');
