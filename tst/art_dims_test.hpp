@@ -439,8 +439,15 @@ void testMonsterSheets(Test &t) {
     // above the head; a black eye inside the white head; a black beak.
     t.assert(planeAt(chicken, 0, 2, 6), 1, "chicken upper tail plume");
     t.assert(planeAt(chicken, 0, 2, 10), 1, "chicken tail plume body");
+    // The legs render in DARK, not the shade-0 `lo` eraser, so the plane-0 bit
+    // must be lit at the leg pixels -- on the old BLACK art planeAt was 0 and
+    // these fail. The gap and outer-clear masks still pin the silhouette.
     t.assert(maskAt(chicken, 11, 20), 1, "chicken near leg");
+    t.assert(planeAt(chicken, 0, 11, 20), 1, "chicken near leg plane0 ink");
     t.assert(maskAt(chicken, 16, 20), 1, "chicken far leg");
+    t.assert(planeAt(chicken, 0, 16, 20), 1, "chicken far leg plane0 ink");
+    t.assert(planeAt(chicken, 0, 12, 20), 1, "chicken near shank plane0 ink");
+    t.assert(planeAt(chicken, 0, 17, 20), 1, "chicken far shank plane0 ink");
     t.assert(maskAt(chicken, 14, 20), 0, "chicken clear between legs");
     t.assert(maskAt(chicken, 4, 20), 0, "chicken no outer leg");
     t.assert(planeAt(chicken, 2, 22, 0), 1, "chicken comb white");

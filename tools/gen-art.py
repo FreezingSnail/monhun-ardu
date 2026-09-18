@@ -520,17 +520,26 @@ def _chicken_east(put, body, head):
     put(28, 6, 2, 2, lo)              # wattle
     put(23, 2, 2, 2, BLACK)           # eye
 
-    put(11, 13, 2, 4, lo)             # near thigh
-    put(10, 16, 4, 2, lo)             # near knee
-    put(11, 18, 2, 3, lo)             # near shank
-    put(9, 21, 5, 1, lo)              # near foot
-    put(9, 20, 1, 1, lo)              # near rear toe
+    # Legs in DARK, not the tone `lo`: for the idle/flash bodies lo is BLACK,
+    # the shade-0 eraser, so the legs vanished on the black arena floor. DARK
+    # renders on the floor and the 1 px LIGHT shank/foot highlights keep the
+    # thin limbs readable at 1x. BLACK stays for the eye/beak/wattle (against
+    # the white head) and the ground shadow row.
+    put(11, 13, 2, 4, DARK)           # near thigh
+    put(10, 16, 4, 2, DARK)           # near knee
+    put(11, 18, 2, 3, DARK)           # near shank
+    put(11, 18, 1, 3, LIGHT)          # near shank highlight
+    put(9, 21, 5, 1, DARK)            # near foot
+    put(9, 20, 1, 1, DARK)            # near rear toe
+    put(10, 21, 2, 1, LIGHT)          # near foot front highlight
 
-    put(16, 13, 2, 4, lo)             # far thigh
-    put(15, 16, 4, 2, lo)             # far knee
-    put(16, 18, 2, 3, lo)             # far shank
-    put(15, 21, 5, 1, lo)             # far foot
-    put(19, 20, 1, 1, lo)             # far rear toe
+    put(16, 13, 2, 4, DARK)           # far thigh
+    put(15, 16, 4, 2, DARK)           # far knee
+    put(16, 18, 2, 3, DARK)           # far shank
+    put(16, 18, 1, 3, LIGHT)          # far shank highlight
+    put(15, 21, 5, 1, DARK)           # far foot
+    put(19, 20, 1, 1, DARK)           # far rear toe
+    put(18, 21, 2, 1, LIGHT)          # far foot front highlight
 
 
 def _bull_east(put, body, head):

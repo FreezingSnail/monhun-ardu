@@ -60,8 +60,8 @@
     {
       "declaration": "fxdata/blocks/Sprites.txt",
       "path": "images/blocks/fxmonster_lunge_32x24.png",
-      "sha256": "9f61a876206903c29753b9186d4d39fa8db5fd47ea0024e0bcbec207124cea85",
-      "size": 1229,
+      "sha256": "a6ad0e7c1c9d169466ce1c7d9701cf64fd0a3708013bfb410a9f8f5ddaf38cec",
+      "size": 1259,
       "symbol": "fxmonster_lunge"
     },
     {
@@ -524,7 +524,7 @@
     },
     {
       "path": "fxdata/blocks/Sprites.txt",
-      "sha256": "e062fec6019d040a7c59f038581dd81c8b546376c2e29d9eeeca065e039a708e",
+      "sha256": "08157d8df5d77d0a18d385f167350a252279277363ae485b554d08239944ff75",
       "size": 477612,
       "symbols": [
         "fxtail",
@@ -655,12 +655,12 @@
   "outputs": [
     {
       "path": "fxdata/fxdata-data.bin",
-      "sha256": "115a28385039035ec049e9c7c754802d23397f0c4e6e0c195bf65a58d9567f69",
+      "sha256": "89c7e522b485213a7ef7b55427c7afe57b3d3e4dea01f4aadfb39d56f039a331",
       "size": 174363
     },
     {
       "path": "fxdata/fxdata.bin",
-      "sha256": "aafe66050b74659354696e87c358b32b24635ef9cd1179aa7804f58033facf54",
+      "sha256": "f73787495e4ed46a05fa80f7016157bcaf13e72a2273e5d9ed3359c0d483250c",
       "size": 174592
     },
     {

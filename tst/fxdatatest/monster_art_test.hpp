@@ -171,6 +171,19 @@ inline void test_monster_art(FxTest &test) {
     test.expectEq(g.combat.appendZone != COMBAT_NO_ZONE ? 1 : 0, 1, F("lunge has a legs appendage zone"));
     test.expectEq(countRegionBit(static_cast<uint8_t>(E_TAIL_X), static_cast<uint8_t>(TAIL_Y), TAIL_W, TAIL_H), 0, F("lunge no overlay band"));
 
+    // ---- nch.6 chicken legs: the LUNGE idle sheet's legs (thigh/knee/shank/
+    // foot/toe) are DARK, so they light plane 0 on the device plane stack. The
+    // leg band is cell x9..19, rows 18..22 (screen BX+9..BX+19, BY+18..BY+22);
+    // the near shank cell x11 and far shank x16 must each carry plane-0 ink and
+    // the cell x14 gap stays clear. The old shade-0 eraser legs left plane 0
+    // empty, so the count would be 0 and the shank bits 0.
+    setupBeast(g, MON_LUNGE, 16, 0);
+    renderMonster(g, 0);
+    test.expectEq(countRegionBit(BX + 9, BY + 18, 11, 5) > 0 ? 1 : 0, 1, F("lunge leg band plane0 ink"));
+    test.expectEq(bitAt(BX + 11, BY + 20), 1, F("lunge near shank plane0"));
+    test.expectEq(bitAt(BX + 16, BY + 20), 1, F("lunge far shank plane0"));
+    test.expectEq(bitAt(BX + 14, BY + 20), 0, F("lunge leg gap clear"));
+
     // ---- nch.3 rotating spin body: during the locked tail_spin ACTIVE phase
     // drawMonster swaps the 32x24 E/W beast sheet for the 8-frame 40x40
     // fxtailspin sheet, centred on the body centre (60,42) with cell origin
