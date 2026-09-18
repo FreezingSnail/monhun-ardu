@@ -114,9 +114,6 @@ constexpr uint8_t erase_frames = 1;
 constexpr uint8_t trail_frame_w = 4;
 constexpr uint8_t trail_frame_h = 4;
 constexpr uint8_t trail_frames = 2;
-constexpr uint8_t telegraph_frame_w = 32;
-constexpr uint8_t telegraph_frame_h = 24;
-constexpr uint8_t telegraph_frames = 4;
 constexpr uint8_t chip_frame_w = 8;
 constexpr uint8_t chip_frame_h = 8;
 constexpr uint8_t chip_frames = 2;
@@ -129,6 +126,9 @@ constexpr uint8_t tail_frames = 4;
 constexpr uint8_t tail_heavy_frame_w = 24;
 constexpr uint8_t tail_heavy_frame_h = 16;
 constexpr uint8_t tail_heavy_frames = 4;
+constexpr uint8_t tail_spin_frame_w = 24;
+constexpr uint8_t tail_spin_frame_h = 24;
+constexpr uint8_t tail_spin_frames = 4;
 constexpr uint8_t hud_frame_w = 16;
 constexpr uint8_t hud_frame_h = 8;
 constexpr uint8_t hud_frames = 6;
@@ -140,13 +140,6 @@ constexpr uint8_t slash_core_x = 14;
 constexpr uint8_t slash_core_y = 14;
 constexpr uint8_t slash_core_size = 4;
 constexpr uint8_t slash_riposte_pad = 2;
-
-// Telegraph: hit box centred in the frame, core at centre. Frames: lunge
-// windup, lunge attack, sweep windup, sweep attack.
-constexpr uint8_t telegraph_lunge_x = 4;
-constexpr uint8_t telegraph_lunge_y = 1;
-constexpr uint8_t telegraph_sweep_x = 0;
-constexpr uint8_t telegraph_sweep_y = 0;
 
 // Whirl frames in fxwhirl: 2x2 light orbit dot, 4x4 white ball, 1x1
 // light chain dot, 2x2 white stun sparkle.

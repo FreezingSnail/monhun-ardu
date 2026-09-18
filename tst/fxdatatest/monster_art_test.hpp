@@ -89,6 +89,22 @@ static void setupBeast(Game &g, int8_t kind, int8_t fx, int8_t fy) {
     g.combat.zoneBroken = 0;
 }
 
+// nch.1: park HEAVY in the locked tail_spin active phase with one world window
+// cached, so the spin overlay's frame pick can be read from the framebuffer.
+// The window's box is shrunk to 1x1 after the read: the frame pick only needs
+// the face-relative offset (ox/oy), and a full-size telegraph box would erase
+// the plane-2 tip cap we read (the shade-2 fill clears plane 2 under it).
+static void setupSpin(Game &g, uint8_t window, int8_t fx) {
+    setupBeast(g, MON_HEAVY, fx, 0);
+    Monster &m = g.monster;
+    m.state = MS_ATTACK;
+    m.atkIdx = combat::ATTACK_HEAVY_TAIL_SPIN;
+    g.combat.attack.facing = COMBAT_FACING_LOCK;
+    g.combat.attack.win = combatWindowRead(window);
+    g.combat.attack.win.box.w = 1;
+    g.combat.attack.win.box.h = 1;
+}
+
 inline void test_monster_art(FxTest &test) {
     arduboy.startGray();
 
@@ -136,6 +152,36 @@ inline void test_monster_art(FxTest &test) {
     renderMonster(g, 0);
     test.expectEq(g.combat.appendZone != COMBAT_NO_ZONE ? 1 : 0, 1, F("lunge has a legs appendage zone"));
     test.expectEq(countRegionBit(static_cast<uint8_t>(E_TAIL_X), static_cast<uint8_t>(TAIL_Y), TAIL_W, TAIL_H), 0, F("lunge no overlay band"));
+
+    // ---- tail_spin overlay (nch.1): the 24x24 world-direction frame is picked
+    // from the active window's face-relative offset. The body sprite is
+    // identical across these renders, so the white tip cap (plane 2) moving
+    // side-to-side proves the direction pick. Body centre is (60,42), origin
+    // (48,30): west cap (48,41), east cap (71,41), north (59,30), south (59,52).
+    setupSpin(g, combat::WINDOW_HEAVY_TAIL_SPIN_0, 16);   // ox -20 -> west
+    renderMonster(g, 2);
+    test.expectEq(bitAt(48, 41), 1, F("spin west cap plane2"));
+    test.expectEq(bitAt(71, 41), 0, F("spin west east cap clear"));
+
+    // The resting tail_heavy overlay is skipped during the spin: its east-frame
+    // white tip cap (zone anchor local (0,8) -> screen (16,36)) stays clear.
+    renderMonster(g, 2);
+    test.expectEq(bitAt(E_TAIL_X, TAIL_Y + 8), 0, F("spin skips resting tail cap"));
+
+    setupSpin(g, combat::WINDOW_HEAVY_TAIL_SPIN_2, 16);   // ox +22 -> east
+    renderMonster(g, 2);
+    test.expectEq(bitAt(71, 41), 1, F("spin east cap plane2"));
+    test.expectEq(bitAt(48, 41), 0, F("spin east west cap clear"));
+
+    setupSpin(g, combat::WINDOW_HEAVY_TAIL_SPIN_1, 16);   // oy -22 -> north
+    renderMonster(g, 2);
+    test.expectEq(bitAt(59, 30), 1, F("spin north cap plane2"));
+    test.expectEq(bitAt(59, 52), 0, F("spin north south cap clear"));
+
+    setupSpin(g, combat::WINDOW_HEAVY_TAIL_SPIN_3, 16);   // oy +22 -> south
+    renderMonster(g, 2);
+    test.expectEq(bitAt(59, 52), 1, F("spin south cap plane2"));
+    test.expectEq(bitAt(59, 30), 0, F("spin south north cap clear"));
 }
 
 }   // namespace monsterart

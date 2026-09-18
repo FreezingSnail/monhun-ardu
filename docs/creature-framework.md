@@ -315,3 +315,24 @@ Implementation notes:
 - Parity: bull and long-tail collide changes move their scenes; mirror in
   mock/game.js and regenerate fixtures in the same change, and keep the
   changed-scene list explicit in the bead report.
+
+## Long-tail attack kit (owner ask, 2026-09-18 — bead nch.1)
+
+The long-tail's inherited generic `lunge`/`sweep` (initial-creature boxes, the
+32x24 sweep telegraph) are replaced by a two-attack kit:
+
+- `bite` — short forward lunge (windup 30 / active 8 / recover 40, dmg 10,
+  window 18x14 @ ox 14), track facing.
+- `tail_spin` — stationary 360 tail whip (windup 42 / active 20 / recover 55,
+  dmg 8), **`facing: lock-at-windup`** (the engine now consumes the facing
+  field; track attacks keep the per-tick recompute), four contiguous windows
+  (24x16 behind -> 16x24 side -> 24x16 front -> 16x24 side). The active window
+  drives the hit test and the telegraph; a 4-frame `fxtail_spin` overlay shows
+  the tail leading it.
+- Selection: `tail_spin` at dist <= 24, `bite` beyond; breaking the tail
+  (`zones.appendage`) disables `tail_spin` and forces `bite`.
+- Telegraphs are now the cached window box itself (block fill + core), so every
+  attack tells its real hit area; the fixed 32x24 telegraph sheet is gone.
+- Mock parity: bite/tailSpin use a new `windows[]`/lock path in `MONSTER_ATTACKS`
+  (`monsterActiveWindow`/`monsterTellWindow`); the legacy lunge/sweep path is
+  value-identical, so all 20 parity scenes stay byte-identical.

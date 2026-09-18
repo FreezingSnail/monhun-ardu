@@ -54,19 +54,18 @@ constexpr uint8_t WHIRL_DOT = art_dims::whirl_dot_frame;
 // fxtrail 4x4: 2x2 light puff (frame 0) / dark puff (frame 1).
 constexpr uint8_t TRAIL_LIGHT = 0;
 constexpr uint8_t TRAIL_DARK = 1;
-// fxtelegraph 32x24, box centred with the core at the box centre. Frames:
-// lunge windup / lunge attack / sweep windup / sweep attack (the mock's
-// windup box is shade 1 with a 2x2 light core, the attack box shade 2 with a
-// 4x4 white core, for both attacks).
-constexpr uint8_t TELE_LUNGE_WINDUP = 0;
-constexpr uint8_t TELE_LUNGE_HIT = 1;
-constexpr uint8_t TELE_SWEEP_WINDUP = 2;
-constexpr uint8_t TELE_SWEEP_HIT = 3;
+// fxtail_spin 24x24 (heavy's tail_spin overlay): the tail rooted at the body
+// centre, pointing world W / N / E / S. The frame is picked from the world
+// direction of the active window's face-relative offset (drawMonster).
+constexpr uint8_t SPIN_WEST = 0;
+constexpr uint8_t SPIN_NORTH = 1;
+constexpr uint8_t SPIN_EAST = 2;
+constexpr uint8_t SPIN_SOUTH = 3;
 }   // namespace spr
 
 // Cull fully off-screen sprites before paying the FX seek, then blit on the
-// current plane. Max sheet size is still 32x40 (fxtelegraph 32x24, fxpole
-// 20x40), so these bounds stay conservative.
+// current plane. Max sheet size is 32x40 (fxmonster 32x24, fxpole 20x40), so
+// these bounds stay conservative.
 static inline void sprDraw(uint24_t img, int16_t x, int16_t y, uint8_t frame) {
     if (x <= -32 || x >= mh::SCREEN_W || y <= -40 || y >= mh::SCREEN_H)
         return;
@@ -346,8 +345,11 @@ static void drawMonster(const mh::Game &g, int16_t camX, int16_t camY) {
     // anchor + DIR8 rotation of (ox, oy). Frames are the combatPartArtFrame
     // contract (east intact / east broken / west intact / west broken). Only the
     // heavy 24x16 sheet is drawn here; the legacy ravager fxtail is 18x10 (not a
-    // multiple-of-8 SpritesU page stride) and stays unoverlaid.
-    if (g.monsterKind == mh::MON_HEAVY && g.combat.appendZone != mh::COMBAT_NO_ZONE) {
+    // multiple-of-8 SpritesU page stride) and stays unoverlaid. During a locked
+    // (spin) attack the resting tail is replaced by the whipping fxtail_spin
+    // overlay below, so it is skipped here.
+    const bool spinning = m.state == mh::MS_ATTACK && m.atkIdx != mh::COMBAT_NO_ATTACK && g.combat.attack.facing == mh::COMBAT_FACING_LOCK;
+    if (g.monsterKind == mh::MON_HEAVY && g.combat.appendZone != mh::COMBAT_NO_ZONE && !spinning) {
         const mh::CombatBox &zb = g.combat.zone[mh::COMBAT_ZONE_APPENDAGE].box;
         int32_t dx, dy;
         mh::combatFaceOffset(m.fx, m.fy, zb, dx, dy);
@@ -361,20 +363,44 @@ static void drawMonster(const mh::Game &g, int16_t camX, int16_t camY) {
         sprDraw(fxwhirl, x + w / 2 + mulQ4(cos256(a), 9), y - 3 + mulQ4(sin256(a), 2), FRAME(spr::WHIRL_DOT));
     }
 
+    // Spin tail overlay (heavy's tail_spin, 4-frame 24x24 sheet): while the
+    // locked attack is active, the tail whips 360. The frame is the world
+    // direction of the active window's face-relative offset (|dx| > |dy| -> E/W
+    // else S/N), so the whip leads the hit box. Frame origin is the body centre.
+    if (spinning) {
+        int32_t sdx, sdy;
+        mh::combatFaceOffset(m.fx, m.fy, g.combat.attack.win.box, sdx, sdy);
+        const int32_t adx = (sdx < 0) ? -sdx : sdx;
+        const int32_t ady = (sdy < 0) ? -sdy : sdy;
+        uint8_t sf;
+        if (adx > ady)
+            sf = (sdx < 0) ? spr::SPIN_WEST : spr::SPIN_EAST;
+        else
+            sf = (sdy < 0) ? spr::SPIN_NORTH : spr::SPIN_SOUTH;
+        sprDraw(fxtail_spin, static_cast<int16_t>(x + (w >> 1) - 12), static_cast<int16_t>(y + (h >> 1) - 12), FRAME(sf));
+    }
+
+    // Telegraph: the cached window box itself (migration A), so the tell is the
+    // real hit window for every attack (bite's small box, tail_spin's four
+    // rotated boxes) instead of one fixed sprite. Same face-relative centre and
+    // size the hit test uses, so no cart read happens during paint. The mock's
+    // windup box is shade 1 with a 2x2 shade-2 core; the attack box shade 2
+    // with a 4x4 shade-3 core.
     if (m.state == mh::MS_WINDUP || m.state == mh::MS_ATTACK) {
         if (m.atkIdx != mh::COMBAT_NO_ATTACK) {
-            // Telegraph consumes the RAM window cache (migration A): same
-            // face-relative centre and size the hit test uses, so no cart read
-            // happens during paint. Frame by state (MS_WINDUP vs MS_ATTACK) and
-            // move type: the mock's windup box is shade 1 with a 2x2 light core,
-            // the attack box shade 2 with a 4x4 white core, for both attacks.
             int32_t dx, dy;
             mh::combatFaceOffset(m.fx, m.fy, g.combat.attack.win.box, dx, dy);
             const int16_t ax = static_cast<int16_t>(x + w / 2 + dx);
             const int16_t ay = static_cast<int16_t>(y + h / 2 + dy);
-            const bool lunge = g.combat.attack.moveType == mh::MOVE_LUNGE;
-            const uint8_t f = static_cast<uint8_t>((lunge ? spr::TELE_LUNGE_WINDUP : spr::TELE_SWEEP_WINDUP) + (m.state == mh::MS_WINDUP ? 0 : 1));
-            sprDraw(fxtelegraph, ax - 16, ay - 12, FRAME(f));
+            const int16_t bw = g.combat.attack.win.box.w;
+            const int16_t bh = g.combat.attack.win.box.h;
+            if (m.state == mh::MS_WINDUP) {
+                blk(static_cast<int16_t>(ax - (bw >> 1)), static_cast<int16_t>(ay - (bh >> 1)), bw, bh, 1);
+                blk(static_cast<int16_t>(ax - 1), static_cast<int16_t>(ay - 1), 2, 2, 2);
+            } else {
+                blk(static_cast<int16_t>(ax - (bw >> 1)), static_cast<int16_t>(ay - (bh >> 1)), bw, bh, 2);
+                blk(static_cast<int16_t>(ax - 2), static_cast<int16_t>(ay - 2), 4, 4, 3);
+            }
         }
     }
 }

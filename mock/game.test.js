@@ -322,7 +322,7 @@ test('monster variants: roster + spawn stats per def, default is legacy LUNGE', 
   assert.equal(d.monster.hp, 200);
 });
 
-test('monster variants: SWEEP never lunges, HEAVY lunges past 24', () => {
+test('monster variants: SWEEP never lunges, HEAVY spins inside 24 else bites', () => {
   const sweep = G.newGame(0, 'hunt', 1);
   for (const d of [10, 33, 41]) {
     const m = placeAtDistance(sweep, d);
@@ -330,20 +330,26 @@ test('monster variants: SWEEP never lunges, HEAVY lunges past 24', () => {
     assert.equal(m.atk.kind, 'sweep', 'sweep variant at dist ' + d);
   }
 
-  // HEAVY atkDist 24 with the pursue engage gate at dist < 42: lunge band
-  // 25..41, sweep at 24 and below. A lower atkDist widens the lunge band.
-  for (let d = 25; d <= 41; d++) {
+  // HEAVY (nch.1) kit: tail_spin at dist <= 24, bite from 25 out to the
+  // pursue engage gate at 42.
+  for (const d of [25, 30, 41]) {
     const g = G.newGame(0, 'hunt', 2);
     const m = placeAtDistance(g, d);
     G.step(g, inp({}));
-    assert.equal(m.atk.kind, 'lunge', 'heavy lunges at dist ' + d);
+    assert.equal(m.atk.kind, 'bite', 'heavy bites at dist ' + d);
   }
   for (const d of [0, 10, 24]) {
     const g = G.newGame(0, 'hunt', 2);
     const m = placeAtDistance(g, d);
     G.step(g, inp({}));
-    assert.equal(m.atk.kind, 'sweep', 'heavy sweeps at dist ' + d);
+    assert.equal(m.atk.kind, 'tailSpin', 'heavy spins at dist ' + d);
   }
+  // The spin is a four-window, contiguous, face-locking attack.
+  const spin = G.MONSTER_ATTACKS.tailSpin;
+  assert.equal(spin.facing, 'lock-at-windup');
+  assert.equal(spin.windows.length, 4);
+  assert.deepEqual(spin.windows.map(w => [w.t0, w.t1]), [[0, 5], [6, 10], [11, 15], [16, 20]]);
+  assert.ok(spin.windows[0].ox < 0 && spin.windows[2].ox > 0, 'whips back then front');
 
   const lunge = G.newGame(0);
   placeAtDistance(lunge, 33);
@@ -353,6 +359,50 @@ test('monster variants: SWEEP never lunges, HEAVY lunges past 24', () => {
   placeAtDistance(inside, 32);
   G.step(inside, inp({}));
   assert.equal(inside.monster.atk.kind, 'sweep', 'legacy sweep at 32');
+});
+
+test('monster variants: heavy tail_spin locks facing and hits through its window', () => {
+  const g = G.newGame(0, 'hunt', 2);
+  const m = park(g);
+  m.x = 100;
+  m.y = 40;
+  m.atk = G.MONSTER_ATTACKS.tailSpin;
+  m.state = 'attack';
+  m.t = 0;
+  m.face = { x: 16, y: 0 };   // face east
+  // w0 sweeps behind: face-relative ox -20 from the body centre (120,54).
+  g.player.x = 92;
+  g.player.y = 48;
+  const hp0 = g.player.hp;
+  G.step(g, inp({}));
+  assert.ok(g.player.hp < hp0, 'spin window hit the player behind the beast');
+
+  // Facing stays east through the active phase even with the player to the
+  // west, and it is NOT recomputed while the player is behind.
+  g.player.x = 20;
+  g.player.y = 40;
+  ticks(g, 5);
+  assert.ok(m.face.x > 0, 'facing stays locked east during the spin');
+});
+
+test('monster variants: window telegraph mirrors the C++ window cache', () => {
+  const bite = G.MONSTER_ATTACKS.bite;
+  const spin = G.MONSTER_ATTACKS.tailSpin;
+  // Windup: the tell is always window 0 (attackLoad caches it; no refresh runs
+  // until MS_ATTACK), even when the countdown t overlaps window ticks.
+  assert.equal(G.monsterTellWindow({ state: 'windup', t: 30 }, bite), bite.windows[0]);
+  assert.equal(G.monsterTellWindow({ state: 'windup', t: 7 }, spin), spin.windows[0]);
+  // Active: the window covering t.
+  assert.equal(G.monsterTellWindow({ state: 'attack', t: 7 }, spin), spin.windows[1]);
+  assert.equal(G.monsterTellWindow({ state: 'attack', t: 16 }, spin), spin.windows[3]);
+  // Attack tail past the last window: the cache holds the last window.
+  assert.equal(G.monsterTellWindow({ state: 'attack', t: 30 }, spin), spin.windows[3]);
+  // Legacy reach attacks keep the scalar-path tell (no windows array).
+  assert.equal(G.monsterTellWindow({ state: 'attack', t: 3 }, G.MONSTER_ATTACKS.sweep), null);
+  // Hit test only fires inside a window (outside returns null, never NaN).
+  assert.equal(G.monsterActiveWindow(spin, 25), null);
+  assert.equal(G.monsterActiveWindow(spin, 16), spin.windows[3]);
+  assert.equal(G.monsterActiveWindow(G.MONSTER_ATTACKS.sweep, 3), null);
 });
 
 test('monster variants: weapon swap and reset keep the chosen beast', () => {

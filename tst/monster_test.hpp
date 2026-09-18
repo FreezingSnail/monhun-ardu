@@ -180,7 +180,7 @@ void MonsterSuite(TestRunner &runner) {
     }
 
     {
-        Test t("chooseAttack variants: SWEEP never lunges, HEAVY split at 24");
+        Test t("chooseAttack variants: SWEEP never lunges, HEAVY spins inside 24 else bites");
         Game g;
         newGame(g, W_SWORD, MODE_HUNT, MON_SWEEP);
         Monster &m = g.monster;
@@ -192,13 +192,13 @@ void MonsterSuite(TestRunner &runner) {
         newGame(g2, W_SWORD, MODE_HUNT, MON_HEAVY);
         Monster &h = g2.monster;
         chooseAttack(g2, 41);
-        t.assert(h.atkIdx, combat::ATTACK_HEAVY_LUNGE, "heavy lunges at 41 (gate < 42)");
+        t.assert(h.atkIdx, combat::ATTACK_HEAVY_BITE, "heavy bites at 41");
         chooseAttack(g2, 30);
-        t.assert(h.atkIdx, combat::ATTACK_HEAVY_LUNGE, "heavy lunges at 30");
+        t.assert(h.atkIdx, combat::ATTACK_HEAVY_BITE, "heavy bites at 30");
         chooseAttack(g2, 25);
-        t.assert(h.atkIdx, combat::ATTACK_HEAVY_LUNGE, "heavy lunges at 25");
+        t.assert(h.atkIdx, combat::ATTACK_HEAVY_BITE, "heavy bites at 25");
         chooseAttack(g2, 24);
-        t.assert(h.atkIdx, combat::ATTACK_HEAVY_SWEEP, "heavy sweeps at 24");
+        t.assert(h.atkIdx, combat::ATTACK_HEAVY_TAIL_SPIN, "heavy spins at 24");
         Game g3;
         newGame(g3, W_SWORD, MODE_HUNT, MON_LUNGE);
         chooseAttack(g3, 33);

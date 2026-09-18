@@ -8,7 +8,7 @@
 
 namespace combat_expect {
 
-constexpr uint16_t BLOB_SIZE = 674;
+constexpr uint16_t BLOB_SIZE = 704;
 constexpr uint8_t ANCHOR_SIZE = 2;
 constexpr uint8_t ATTACK_SIZE = 22;
 constexpr uint8_t CREATURE_SIZE = 21;
@@ -30,13 +30,13 @@ constexpr int8_t CREATURE_HEAVY_COLLIDE_OX = 0;
 constexpr int8_t CREATURE_HEAVY_COLLIDE_OY = 0;
 constexpr uint8_t CREATURE_HEAVY_COLLIDE_W = 40;
 constexpr uint8_t CREATURE_HEAVY_COLLIDE_H = 28;
-constexpr uint16_t ATTACK_HEAVY_LUNGE_WINDUP = 40;
-constexpr uint16_t ATTACK_HEAVY_LUNGE_ACTIVE = 10;
-constexpr uint16_t ATTACK_HEAVY_LUNGE_RECOVER = 55;
-constexpr uint16_t ATTACK_HEAVY_LUNGE_DMG = 12;
-constexpr uint8_t PATTERN_HEAVY_P_LUNGE_MIN_DIST = 25;
-constexpr uint8_t PATTERN_HEAVY_P_LUNGE_MAX_DIST = 255;
-constexpr uint8_t PATTERN_HEAVY_P_LUNGE_CHANCE = 100;
+constexpr uint16_t ATTACK_HEAVY_BITE_WINDUP = 30;
+constexpr uint16_t ATTACK_HEAVY_BITE_ACTIVE = 8;
+constexpr uint16_t ATTACK_HEAVY_BITE_RECOVER = 40;
+constexpr uint16_t ATTACK_HEAVY_BITE_DMG = 10;
+constexpr uint8_t PATTERN_HEAVY_P_SPIN_MIN_DIST = 0;
+constexpr uint8_t PATTERN_HEAVY_P_SPIN_MAX_DIST = 24;
+constexpr uint8_t PATTERN_HEAVY_P_SPIN_CHANCE = 100;
 constexpr uint8_t ZONE_HEAVY_APPENDAGE_HP = 60;
 constexpr uint8_t ZONE_HEAVY_APPENDAGE_DMG_MUL = 150;
 constexpr uint8_t ZONE_HEAVY_APPENDAGE_BODY_SHARE = 40;
@@ -104,12 +104,12 @@ constexpr uint8_t PATTERN_SWEEP_P_SWEEP_MIN_DIST = 0;
 constexpr uint8_t PATTERN_SWEEP_P_SWEEP_MAX_DIST = 255;
 constexpr uint8_t PATTERN_SWEEP_P_SWEEP_CHANCE = 100;
 
-// sha256 of fxdata/tables/combat.bin: 2e3e94335168ad71a1cd444ee4531dd127d93d33014febdb3ee7ede0f2cd343e
+// sha256 of fxdata/tables/combat.bin: b37eb4b0941c315392b7bb29ecc407648afabb53b5dd40b3df1dff7c46a4867b
 constexpr uint8_t BLOB_SHA256[32] = {
-    0x2E, 0x3E, 0x94, 0x33, 0x51, 0x68, 0xAD, 0x71,
-    0xA1, 0xCD, 0x44, 0x4E, 0xE4, 0x53, 0x1D, 0xD1,
-    0x27, 0xD9, 0x3D, 0x33, 0x01, 0x4F, 0xEB, 0xDB,
-    0x3E, 0xE7, 0xED, 0xE0, 0xF2, 0xCD, 0x34, 0x3E,
+    0xB3, 0x7E, 0xB4, 0xB0, 0x94, 0x1C, 0x31, 0x53,
+    0x92, 0xB7, 0xBB, 0x29, 0xEC, 0xC4, 0x07, 0x64,
+    0x8A, 0xFA, 0xBB, 0x53, 0xB5, 0xDD, 0x40, 0xB3,
+    0xDF, 0x1D, 0xFF, 0x7C, 0x46, 0xA4, 0x86, 0x7B,
 };
 
 }   // namespace combat_expect

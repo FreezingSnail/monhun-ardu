@@ -236,10 +236,10 @@ void testSlashLayout(Test &t) {
 // --------------------------------------------- per-sheet pixel presence
 
 void testSheetPixels(Test &t) {
-    Blob slash, ripspecial, parry, whirl, deflect, guard, reload, erase, trail, telegraph, chip, tail;
+    Blob slash, ripspecial, parry, whirl, deflect, guard, reload, erase, trail, chip, tail;
     if (!parseBlob("fxslash", slash, t) || !parseBlob("fxripspecial", ripspecial, t) || !parseBlob("fxparry", parry, t) || !parseBlob("fxwhirl", whirl, t) || !parseBlob("fxdeflect", deflect, t) ||
-        !parseBlob("fxguard", guard, t) || !parseBlob("fxreload", reload, t) || !parseBlob("fxerase", erase, t) || !parseBlob("fxtrail", trail, t) || !parseBlob("fxtelegraph", telegraph, t) ||
-        !parseBlob("fxchip", chip, t) || !parseBlob("fxtail", tail, t))
+        !parseBlob("fxguard", guard, t) || !parseBlob("fxreload", reload, t) || !parseBlob("fxerase", erase, t) || !parseBlob("fxtrail", trail, t) || !parseBlob("fxchip", chip, t) ||
+        !parseBlob("fxtail", tail, t))
         return;
 
     // Sheet headers agree with the generated frame layout.
@@ -250,9 +250,6 @@ void testSheetPixels(Test &t) {
     t.assert(parry.h, art_dims::parry_frame_h, "parry blob frame h");
     t.assert(guard.w, art_dims::guard_frame_w, "guard blob frame w");
     t.assert(guard.frames, art_dims::guard_frames, "guard blob frames");
-    t.assert(telegraph.w, art_dims::telegraph_frame_w, "telegraph blob frame w");
-    t.assert(telegraph.h, art_dims::telegraph_frame_h, "telegraph blob frame h");
-    t.assert(telegraph.frames, art_dims::telegraph_frames, "telegraph blob frames");
     t.assert(whirl.frames, art_dims::whirl_frames, "whirl blob frames");
     t.assert(chip.frames, art_dims::chip_frames, "chip blob frames");
     t.assert(tail.w, art_dims::tail_frame_w, "tail blob frame w");
@@ -337,28 +334,6 @@ void testSheetPixels(Test &t) {
     t.assert(bitAt(0, pixelData(trail, 1, 0, 0, 0)), 1, "trail puff dark plane0");
     t.assert(bitAt(0, pixelData(trail, 1, 1, 0, 0)), 0, "trail puff dark plane1 off");
 
-    // Telegraph frames 0..3: lunge windup (dark box + 2x2 light core), lunge
-    // attack (light box + 4x4 white core), sweep windup and sweep attack. Box
-    // and core are centred in the 32x24 frame for both attacks.
-    const int lx = art_dims::telegraph_lunge_x;
-    const int ly = art_dims::telegraph_lunge_y;
-    const int lcx = lx + monHw(&MONSTER_ATTACKS[0]) / 2 - 1;
-    const int lcy = ly + monHh(&MONSTER_ATTACKS[0]) / 2 - 1;
-    t.assert(bitAt(ly % 8, pixelData(telegraph, 0, 0, lx, ly / 8)), 1, "lunge windup dark");
-    t.assert(bitAt(ly % 8, pixelData(telegraph, 0, 1, lx, ly / 8)), 0, "lunge windup not light");
-    t.assert(bitAt(lcy % 8, pixelData(telegraph, 0, 1, lcx, lcy / 8)), 1, "lunge windup core light");
-    t.assert(bitAt(ly % 8, pixelData(telegraph, 1, 1, lx, ly / 8)), 1, "lunge attack light");
-    t.assert(bitAt((lcy - 1) % 8, pixelData(telegraph, 1, 2, lcx - 1, (lcy - 1) / 8)), 1, "lunge attack core white");
-    const int sx = art_dims::telegraph_sweep_x;
-    const int sy = art_dims::telegraph_sweep_y;
-    const int scx = sx + monHw(&MONSTER_ATTACKS[1]) / 2 - 1;
-    const int scy = sy + monHh(&MONSTER_ATTACKS[1]) / 2 - 1;
-    t.assert(bitAt(sy % 8, pixelData(telegraph, 2, 0, sx, sy / 8)), 1, "sweep windup dark");
-    t.assert(bitAt(sy % 8, pixelData(telegraph, 2, 1, sx, sy / 8)), 0, "sweep windup not light");
-    t.assert(bitAt(scy % 8, pixelData(telegraph, 2, 1, scx, scy / 8)), 1, "sweep windup core light");
-    t.assert(bitAt(sy % 8, pixelData(telegraph, 3, 1, sx, sy / 8)), 1, "sweep attack light");
-    t.assert(bitAt((scy - 1) % 8, pixelData(telegraph, 3, 2, scx - 1, (scy - 1) / 8)), 1, "sweep attack core white");
-
     // Chip: 3x3 white idle/aim chip (frame 0) and 4x4 white ball (frame 1).
     t.assert(bitAt(0, pixelData(chip, art_dims::chip_idle_frame, 2, 0, 0)), 1, "chip idle white");
     t.assert(bitAt(0, pixelData(chip, art_dims::chip_idle_frame, 2, 1, 0)), 1, "chip idle row0 col1");
@@ -397,7 +372,6 @@ void testSheetPixels(Test &t) {
     t.assert(reload.frames, art_dims::reload_frames, "reload frames parsed");
     t.assert(erase.frames, art_dims::erase_frames, "erase frames parsed");
     t.assert(trail.frames, art_dims::trail_frames, "trail frames parsed");
-    t.assert(telegraph.frames, art_dims::telegraph_frames, "telegraph frames parsed");
     t.assert(chip.frames, art_dims::chip_frames, "chip frames parsed");
     t.assert(tail.frames, art_dims::tail_frames, "tail frames parsed");
 }
@@ -562,6 +536,62 @@ void testHeavyTail(Test &t) {
     t.assert(mirrored(1, 3) ? 1 : 0, 1, "heavy tail west broken mirrors east broken");
 }
 
+// ------------------------------------------- heavy tail-spin overlay (nch.1)
+
+// fxtail_spin is HEAVY's tail_spin overlay: 24x24 x4 frames in world direction
+// order W / N / E / S, the tail rooted at the frame centre (12,12), so the
+// render draws it at body centre - (12,12). Each frame is the east tail rotated
+// a quarter turn CW about the centre; the white tip cap (plane 2) lands on the
+// frame edge facing that world direction, which is the pixel the device test
+// reads to prove the direction pick.
+void testTailSpin(Test &t) {
+    std::cout << "---------- heavy tail-spin overlay ----------" << std::endl;
+    Blob spin;
+    if (!parseBlob("fxtail_spin", spin, t))
+        return;
+    t.assert(spin.w, art_dims::tail_spin_frame_w, "tail_spin blob frame w");
+    t.assert(spin.h, art_dims::tail_spin_frame_h, "tail_spin blob frame h");
+    t.assert(spin.frames, art_dims::tail_spin_frames, "tail_spin blob frames");
+    t.assert(art_dims::tail_spin_frame_w, 24, "tail_spin frame w");
+    t.assert(art_dims::tail_spin_frame_h, 24, "tail_spin frame h");
+    t.assert(art_dims::tail_spin_frames, 4, "tail_spin frames");
+
+    // Root segment sits on/near the body centre in every frame (the tail is
+    // rooted there), so the frame anchor is exact.
+    t.assert(maskAtF(spin, 0, 10, 12), 1, "west root near centre");
+    t.assert(maskAtF(spin, 1, 12, 10), 1, "north root near centre");
+    t.assert(maskAtF(spin, 2, 12, 12), 1, "east root at centre");
+    t.assert(maskAtF(spin, 3, 12, 12), 1, "south root at centre");
+
+    // White tip cap faces its world direction: W frame at x0..1, E at x22..23,
+    // N at y0..1, S at y22..23 (plane 2 only).
+    t.assert(planeAtF(spin, 0, 2, 0, 11), 1, "west cap plane2");
+    t.assert(planeAtF(spin, 0, 2, 1, 12), 1, "west cap plane2 row12");
+    t.assert(planeAtF(spin, 2, 2, 22, 11), 1, "east cap plane2");
+    t.assert(planeAtF(spin, 2, 2, 23, 12), 1, "east cap plane2 row12");
+    t.assert(planeAtF(spin, 1, 2, 11, 0), 1, "north cap plane2");
+    t.assert(planeAtF(spin, 1, 2, 12, 1), 1, "north cap plane2 col12");
+    t.assert(planeAtF(spin, 3, 2, 11, 22), 1, "south cap plane2");
+    t.assert(planeAtF(spin, 3, 2, 12, 23), 1, "south cap plane2 col12");
+    // The cap is on the facing edge, not the opposite one.
+    t.assert(planeAtF(spin, 2, 2, 0, 11), 0, "east frame west edge clear");
+    t.assert(planeAtF(spin, 0, 2, 22, 11), 0, "west frame east edge clear");
+    t.assert(planeAtF(spin, 3, 2, 11, 0), 0, "south frame north edge clear");
+    t.assert(planeAtF(spin, 1, 2, 11, 22), 0, "north frame south edge clear");
+
+    // The dark underside stays dark (plane0 only).
+    t.assert(planeAtF(spin, 2, 0, 13, 14), 1, "east underside plane0");
+    t.assert(planeAtF(spin, 2, 1, 13, 14), 0, "east underside dark only");
+
+    // Every world frame differs (the direction pick is observable).
+    const uint32_t w = blobFrameHash(spin, 0), n = blobFrameHash(spin, 1);
+    const uint32_t e = blobFrameHash(spin, 2), s = blobFrameHash(spin, 3);
+    t.assert(w != n ? 1 : 0, 1, "west != north");
+    t.assert(w != e ? 1 : 0, 1, "west != east");
+    t.assert(w != s ? 1 : 0, 1, "west != south");
+    t.assert(n != e ? 1 : 0, 1, "north != east");
+}
+
 void ArtDimsSuite(TestRunner &runner) {
     TestSuite suite("art dims");
     {
@@ -587,6 +617,11 @@ void ArtDimsSuite(TestRunner &runner) {
     {
         Test t("heavy tail overlay is a 24x16 mirror sheet");
         testHeavyTail(t);
+        suite.addTest(t);
+    }
+    {
+        Test t("heavy tail-spin overlay is a 24x24 world-direction sheet");
+        testTailSpin(t);
         suite.addTest(t);
     }
     runner.addTestSuite(suite);

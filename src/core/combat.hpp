@@ -73,6 +73,11 @@ enum MoveType : uint8_t {
 enum GuardPlayer : uint8_t {
     GUARD_PLAYER_ATTACKING = 0x01
 };
+// Attack facing mode (tools/gen-combat.py FACINGS): track recomputes the
+// facing vector from the player delta every tick; lock-at-windup freezes the
+// windup-start facing through WINDUP + ATTACK (heavy's tail_spin).
+constexpr uint8_t COMBAT_FACING_TRACK = 0;
+constexpr uint8_t COMBAT_FACING_LOCK = 1;
 
 // Fixed zone model (build/zones-design.md): zone slot 0 is the head, slot 1 the
 // appendage; the broken bitmask uses the same bit order and matches the

@@ -194,27 +194,6 @@ inline void test_assets(FxTest &test) {
         blobBytes(fxtrail, 24, puff1, sizeof(puff1), test, F("trail dark puff"));
     }
 
-    // Telegraph: 32x24 (page_count 3), 4 frames = lunge windup / lunge attack
-    // / sweep windup / sweep attack, box and core centred. Frame bytes 576.
-    // f0: dark lunge box (4,1,24,22) at body 8 (col 4, rows 1..7 = 254) with
-    // the light 2x2 core at (15,11) (body 286, rows 11..12 = 24).
-    // f1: light lunge box with the white 4x4 core at (14,10) (body 1052).
-    // f2: dark sweep box (full frame) body 1152; f3: light sweep (body 1920).
-    if (blobHeader(fxtelegraph, 32, 24, test, F("telegraph w/h"))) {
-        static const uint8_t lunge_windup[4] = {254, 254, 254, 254};
-        blobBytes(fxtelegraph, 8, lunge_windup, sizeof(lunge_windup), test, F("lunge windup box"));
-        static const uint8_t windup_core[4] = {24, 255, 24, 255};
-        blobBytes(fxtelegraph, 286, windup_core, sizeof(windup_core), test, F("lunge windup core"));
-        static const uint8_t lunge_attack[4] = {254, 254, 254, 254};
-        blobBytes(fxtelegraph, 776, lunge_attack, sizeof(lunge_attack), test, F("lunge attack box"));
-        static const uint8_t attack_core[8] = {60, 255, 60, 255, 60, 255, 60, 255};
-        blobBytes(fxtelegraph, 1052, attack_core, sizeof(attack_core), test, F("lunge attack core"));
-        static const uint8_t sweep_windup[4] = {255, 255, 255, 255};
-        blobBytes(fxtelegraph, 1152, sweep_windup, sizeof(sweep_windup), test, F("sweep windup dark"));
-        static const uint8_t sweep_attack[4] = {255, 255, 255, 255};
-        blobBytes(fxtelegraph, 1920, sweep_attack, sizeof(sweep_attack), test, F("sweep attack light"));
-    }
-
     // Chip: 8x8 (page_count 1); frame 0 the 3x3 white idle/aim chip, frame 1
     // the 4x4 white ball. Body 0 / 80 = frame 0/1 pass 2 col 0.
     if (blobHeader(fxchip, 8, 8, test, F("chip w/h"))) {
@@ -243,6 +222,11 @@ inline void test_assets(FxTest &test) {
     // identity only here; the host pixel suite (tst/art_dims_test.hpp) checks
     // the tip/root ink and the west mirror.
     blobHeader(fxtail_heavy, 24, 16, test, F("heavy tail w/h"));
+
+    // Heavy tail-spin overlay (bead monhun-ardu-nch.1): 24x24, 4 frames =
+    // world W / N / E / S, frame origin the body centre. Header identity only
+    // here; tst/art_dims_test.hpp checks the tip/cap pixels.
+    blobHeader(fxtail_spin, 24, 24, test, F("tail spin w/h"));
 
     // Demo beast sheets (epic monhun-ardu-nch): one 32x24x8 sheet per roster
     // beast -- LUNGE chicken, SWEEP bull, HEAVY longtail -- and RAVAGER keeps

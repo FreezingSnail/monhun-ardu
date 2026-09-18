@@ -47,7 +47,7 @@ void CombatSuite(TestRunner &runner) {
         // Migration A scaffold: slot 0 of every shipped creature is its lunge.
         t.assert(combatCreatureFirstAttack(combat_data::CREATURE_LUNGE), combat_data::ATTACK_LUNGE_LUNGE, "lunge creature first attack");
         t.assert(combatCreatureFirstAttack(combat_data::CREATURE_SWEEP), combat_data::ATTACK_SWEEP_LUNGE, "sweep creature first attack");
-        t.assert(combatCreatureFirstAttack(combat_data::CREATURE_HEAVY), combat_data::ATTACK_HEAVY_LUNGE, "heavy creature first attack");
+        t.assert(combatCreatureFirstAttack(combat_data::CREATURE_HEAVY), combat_data::ATTACK_HEAVY_BITE, "heavy creature first attack");
         suite.addTest(t);
     }
 
@@ -110,8 +110,8 @@ void CombatSuite(TestRunner &runner) {
         // (appendage) zones.
         t.assert(combat::ZONES_COUNT, 5, "heavy tail + ravager + lunge head/legs zones");
         t.assert(combat::ATTACKS_COUNT, 8, "3x2 shipped + ravager bite/tail_sweep");
-        t.assert(combat::WINDOWS_COUNT, 9, "ravager tail_sweep is two windows");
-        t.assert(combat::PATTERNS_COUNT, 8, "ravager adds p_enraged");
+        t.assert(combat::WINDOWS_COUNT, 12, "3 single-window + ravager 2 + heavy bite 1 + tail_spin 4");
+        t.assert(combat::PATTERNS_COUNT, 8, "ravager adds p_enraged; heavy swaps lunge/sweep for spin/bite");
         t.assert(combat::GUARDS_COUNT, 8, "one guard per pattern");
         for (uint8_t i = 0; i < combat::CREATURES_COUNT; i++) {
             const combat_data::Creature &h = combat_data::CREATURES[i];
@@ -365,7 +365,7 @@ void CombatSuite(TestRunner &runner) {
 
         const uint8_t bad = attackLoad(g, 200);
         t.assert(bad, 0, "bad attack id falls back to 0");
-        t.assert(g.combat.attack.winIdx, combat_data::WINDOW_HEAVY_LUNGE_0, "fallback window idx");
+        t.assert(g.combat.attack.winIdx, combat_data::WINDOW_HEAVY_BITE_0, "fallback window idx");
         suite.addTest(t);
     }
 
@@ -373,8 +373,8 @@ void CombatSuite(TestRunner &runner) {
         Test t("pattern cursor + combatTick countdown (no reads)");
         Game g;
         creatureLoad(g, combat_data::CREATURE_HEAVY);
-        patternStateSet(g, combat_data::PATTERN_HEAVY_P_LUNGE, 1, 3);
-        t.assert(g.combat.patternIdx, combat_data::PATTERN_HEAVY_P_LUNGE, "pattern idx set");
+        patternStateSet(g, combat_data::PATTERN_HEAVY_P_SPIN, 1, 3);
+        t.assert(g.combat.patternIdx, combat_data::PATTERN_HEAVY_P_SPIN, "pattern idx set");
         t.assert(g.combat.stepIdx, 1, "step idx set");
         t.assert(g.combat.stepT, 3, "step timer set");
         combatTick(g);
@@ -385,7 +385,7 @@ void CombatSuite(TestRunner &runner) {
         for (int i = 0; i < 10; i++)
             combatTick(g);
         t.assert(g.combat.stepT, 0, "tick floors at 0");
-        t.assert(g.combat.patternIdx, combat_data::PATTERN_HEAVY_P_LUNGE, "cursor untouched");
+        t.assert(g.combat.patternIdx, combat_data::PATTERN_HEAVY_P_SPIN, "cursor untouched");
         suite.addTest(t);
     }
 
@@ -409,9 +409,11 @@ void CombatSuite(TestRunner &runner) {
 
         creatureLoad(g, combat_data::CREATURE_HEAVY);
         in.dist = 24;
-        t.assert(combatGuardPasses(g, combat_data::PATTERN_HEAVY_P_LUNGE, in), 0, "heavy swap dist 24 rejected");
+        t.assert(combatGuardPasses(g, combat_data::PATTERN_HEAVY_P_SPIN, in), 1, "heavy spin dist 24 accepted");
+        t.assert(combatGuardPasses(g, combat_data::PATTERN_HEAVY_P_BITE, in), 0, "heavy bite band excludes 24");
         in.dist = 25;
-        t.assert(combatGuardPasses(g, combat_data::PATTERN_HEAVY_P_LUNGE, in), 1, "heavy swap dist 25 accepted");
+        t.assert(combatGuardPasses(g, combat_data::PATTERN_HEAVY_P_SPIN, in), 0, "heavy spin dist 25 rejected");
+        t.assert(combatGuardPasses(g, combat_data::PATTERN_HEAVY_P_BITE, in), 1, "heavy bite dist 25 accepted");
 
         creatureLoad(g, combat_data::CREATURE_SWEEP);
         in.dist = 0;
@@ -645,6 +647,47 @@ void CombatSuite(TestRunner &runner) {
     }
 
     {
+        Test t("heavy bite + 4-window tail_spin decode + facing lock");
+        // nch.1: the longtail swaps lunge/sweep for bite + a 360 tail_spin
+        // whose four contiguous windows whip behind -> side -> front -> side.
+        t.assert(combatAttackWindowCount(combat_data::ATTACK_HEAVY_BITE), 1, "bite single window");
+        t.assert(combatAttackWindowCount(combat_data::ATTACK_HEAVY_TAIL_SPIN), 4, "tail_spin four windows");
+        t.assert(combatAttackFacing(combat_data::ATTACK_HEAVY_BITE), COMBAT_FACING_TRACK, "bite tracks");
+        t.assert(combatAttackFacing(combat_data::ATTACK_HEAVY_TAIL_SPIN), COMBAT_FACING_LOCK, "tail_spin locks");
+        const CombatWindow bite = combatWindowRead(combat_data::WINDOW_HEAVY_BITE_0);
+        t.assert(bite.t0, 0, "bite t0");
+        t.assert(bite.t1, 8, "bite t1");
+        t.assert(bite.box.ox, 14, "bite ox");
+        t.assert(bite.box.oy, 0, "bite oy");
+        t.assert(bite.box.w, 18, "bite w");
+        t.assert(bite.box.h, 14, "bite h");
+        const CombatWindow spin0 = combatWindowRead(combat_data::WINDOW_HEAVY_TAIL_SPIN_0);
+        const CombatWindow spin1 = combatWindowRead(combat_data::WINDOW_HEAVY_TAIL_SPIN_1);
+        const CombatWindow spin2 = combatWindowRead(combat_data::WINDOW_HEAVY_TAIL_SPIN_2);
+        const CombatWindow spin3 = combatWindowRead(combat_data::WINDOW_HEAVY_TAIL_SPIN_3);
+        t.assert(spin0.t0, 0, "spin0 t0");
+        t.assert(spin0.t1, 5, "spin0 t1");
+        t.assert(spin0.box.ox, -20, "spin0 whips behind");
+        t.assert(spin0.box.oy, 0, "spin0 level");
+        t.assert(spin1.t0, 6, "spin1 t0");
+        t.assert(spin1.t1, 10, "spin1 t1");
+        t.assert(spin1.box.ox, 0, "spin1 centred x");
+        t.assert(spin1.box.oy, -22, "spin1 whips north");
+        t.assert(spin2.t0, 11, "spin2 t0");
+        t.assert(spin2.t1, 15, "spin2 t1");
+        t.assert(spin2.box.ox, 22, "spin2 whips front");
+        t.assert(spin3.t0, 16, "spin3 t0");
+        t.assert(spin3.t1, 20, "spin3 t1");
+        t.assert(spin3.box.oy, 22, "spin3 whips south");
+        t.assert(combatAttackFirstWindow(combat_data::ATTACK_HEAVY_TAIL_SPIN), combat_data::WINDOW_HEAVY_TAIL_SPIN_0, "spin first window");
+        // Source order is semantic: p_spin (<=24) is listed before p_bite (>=25).
+        t.assertLessThan(combat_data::PATTERN_HEAVY_P_SPIN, combat_data::PATTERN_HEAVY_P_BITE, "spin pattern listed first");
+        t.assert(combatStepRef(combat_data::STEP_HEAVY_P_SPIN_0), combat_data::ATTACK_HEAVY_TAIL_SPIN, "spin step attack");
+        t.assert(combatStepRef(combat_data::STEP_HEAVY_P_BITE_0), combat_data::ATTACK_HEAVY_BITE, "bite step attack");
+        suite.addTest(t);
+    }
+
+    {
         Test t("part art frame linkage (fxtail sheet)");
         t.assert(art_dims::tail_frames, 4, "tail sheet frames");
         t.assert(art_dims::tail_frame_w, 18, "tail frame w == zone box w");
@@ -674,15 +717,25 @@ void CombatSuite(TestRunner &runner) {
         t.assert(z.staggerOnHit, 30, "heavy tail staggerOnHit");
         t.assert(z.brokenDmgMul, 200, "heavy tail broken dmgMul");
         t.assert(z.brokenFlags, 0x03, "heavy tail broken hurtOff + cue");
-        t.assert(z.unlockMask, static_cast<uint8_t>(1u << combat_data::ATTACK_HEAVY_SWEEP), "heavy tail disables sweep");
+        t.assert(z.unlockMask, static_cast<uint8_t>(1u << combat_data::ATTACK_HEAVY_TAIL_SPIN), "heavy tail disables tail_spin");
         t.assert(art_dims::tail_heavy_frame_w, z.box.w, "tail_heavy frame w == zone box w");
         t.assert(art_dims::tail_heavy_frame_h, z.box.h, "tail_heavy frame h == zone box h");
         t.assert(art_dims::tail_heavy_frames, 4, "tail_heavy frames");
+        // nch.1: the spin overlay sheet is 4 x 24x24, body-centre anchored.
+        t.assert(art_dims::tail_spin_frame_w, 24, "tail_spin frame w");
+        t.assert(art_dims::tail_spin_frame_h, 24, "tail_spin frame h");
+        t.assert(art_dims::tail_spin_frames, 4, "tail_spin frames (W/N/E/S)");
         // creatureLoad seeds the heavy appendage cache from the record.
         Game g;
         creatureLoad(g, combat_data::CREATURE_HEAVY);
         t.assert(g.combat.appendZone, combat_data::ZONE_HEAVY_APPENDAGE, "heavy append zone index");
         t.assert(g.combat.zone[COMBAT_ZONE_APPENDAGE].hp, z.hp, "heavy tail pool seeded");
+        // Broken tail disables tail_spin but leaves bite available.
+        t.assert(combatAttackDisabled(g, combat_data::ATTACK_HEAVY_TAIL_SPIN), 0, "spin enabled intact");
+        t.assert(combatAttackDisabled(g, combat_data::ATTACK_HEAVY_BITE), 0, "bite enabled intact");
+        g.combat.zoneBroken = COMBAT_ZONE_APPENDAGE_BIT;
+        t.assert(combatAttackDisabled(g, combat_data::ATTACK_HEAVY_TAIL_SPIN), 1, "broken tail disables tail_spin");
+        t.assert(combatAttackDisabled(g, combat_data::ATTACK_HEAVY_BITE), 0, "broken tail keeps bite");
         suite.addTest(t);
     }
 

@@ -175,9 +175,50 @@ const WEAPON_DEFS = [
 ];
 
 const MONSTER_ATTACKS = {
+  // Legacy kit (defs 0/1): single window via reach/hw/hh, byte-identical to the
+  // published lunge/sweep so parity fixtures do not move.
   lunge: { kind: 'lunge', windup: 40, active: 10, recover: 55, speedF: 34, dmg: 12, reach: 12, hw: 24, hh: 22 },
   sweep: { kind: 'sweep', windup: 48, active: 12, recover: 60, dmg: 9, reach: 17, hw: 32, hh: 24 },
+  // HEAVY kit (nch.1): bite lunges and tracks; tail_spin locks its facing at
+  // windup and whips four contiguous windows (behind -> north -> front ->
+  // south). `windows` entries are face-relative box centres (ox/oy, w/h),
+  // matching the C++ CombatWindow decode.
+  bite: {
+    kind: 'bite', windup: 30, active: 8, recover: 40, dmg: 10, speedF: 26,
+    phys: 'BLUNT', facing: 'track',
+    windows: [{ t0: 0, t1: 8, ox: 14, oy: 0, w: 18, h: 14, dmgMul: 100 }],
+  },
+  tailSpin: {
+    kind: 'tailSpin', windup: 42, active: 20, recover: 55, dmg: 8,
+    phys: 'BLUNT', facing: 'lock-at-windup',
+    windows: [
+      { t0: 0, t1: 5, ox: -20, oy: 0, w: 24, h: 16, dmgMul: 100 },
+      { t0: 6, t1: 10, ox: 0, oy: -22, w: 16, h: 24, dmgMul: 100 },
+      { t0: 11, t1: 15, ox: 22, oy: 0, w: 24, h: 16, dmgMul: 100 },
+      { t0: 16, t1: 20, ox: 0, oy: 22, w: 16, h: 24, dmgMul: 100 },
+    ],
+  },
 };
+
+// Active window for a windows-path attack at inclusive 1-based tick t, or null
+// (legacy reach attacks have no windows array). Null also means "no hit": the
+// C++ hit test only fires inside the cached window's [t0, t1].
+function monsterActiveWindow(a, t) {
+  if (!a || !a.windows) return null;
+  for (const w of a.windows) if (t >= w.t0 && t <= w.t1) return w;
+  return null;
+}
+
+// Telegraph window for a windows-path attack, mirroring the C++ RAM cache
+// (attackLoad caches window 0 at windup; monsterWindowNext leaves the last
+// window cached through the attack tail): active window if any, else the first
+// during windup and the last after the windows end. Null for legacy attacks.
+function monsterTellWindow(m, a) {
+  if (!a || !a.windows) return null;
+  if (m.state === 'windup') return a.windows[0];
+  const win = monsterActiveWindow(a, m.t);
+  return win || a.windows[a.windows.length - 1];
+}
 
 // Demo beast roster (bead monhun-ardu-6zb.1). Index 0 (lunge) is the legacy
 // parity default: its def reproduces the values newGame() used to hardcode.
@@ -749,7 +790,11 @@ function updateMonster(g) {
   const dy = (p.y + (p.h >> 1)) - (m.y + (m.h >> 1));
   const dist = isqrt(dx * dx + dy * dy);
   const di = dirIndexFromDelta(dx, dy);
-  m.face = { x: DIR8[di].x, y: DIR8[di].y };
+  // Facing: lock-at-windup attacks freeze the windup-start vector through
+  // windup + attack (nch.1 tail_spin); every legacy lunge/sweep tracks.
+  const lockFace = m.atk && m.atk.facing === 'lock-at-windup' &&
+                   (m.state === 'windup' || m.state === 'attack');
+  if (!lockFace) m.face = { x: DIR8[di].x, y: DIR8[di].y };
 
   if (m.stun > 0) {
     m.stun--;
@@ -779,7 +824,7 @@ function updateMonster(g) {
     case 'attack': {
       const a = m.atk;
       m.t++;
-      if (a.kind === 'lunge' && m.t <= a.active) addVel(m, m.lvx, m.lvy);
+      if (a.speedF && m.t <= a.active) addVel(m, m.lvx, m.lvy);
       if (m.t <= a.active && monsterHitsPlayer(g, a)) playerHit(g, a.dmg, m);
       if (m.t > a.active + a.recover) {
         m.state = 'pursue';
@@ -801,11 +846,15 @@ function updateMonster(g) {
 }
 
 // Lunge/sweep split comes from the roster def: kind 0 (atkDist 32) is the
-// legacy "lunge beyond 32px" rule; negative atkDist (sweep) never lunges.
+// legacy "lunge beyond 32px" rule; negative atkDist (sweep) never lunges. HEAVY
+// (nch.1) runs the new kit: tail_spin inside 24, bite beyond it.
 function chooseAttack(g, dist) {
   const m = g.monster;
   const def = MONSTER_DEFS[g.monsterIndex];
-  m.atk = def.atkDist >= 0 && dist > def.atkDist ? MONSTER_ATTACKS.lunge : MONSTER_ATTACKS.sweep;
+  if (def.kind === 'heavy')
+    m.atk = dist <= 24 ? MONSTER_ATTACKS.tailSpin : MONSTER_ATTACKS.bite;
+  else
+    m.atk = def.atkDist >= 0 && dist > def.atkDist ? MONSTER_ATTACKS.lunge : MONSTER_ATTACKS.sweep;
   m.state = 'windup';
   m.t = m.atk.windup;
   m.windupMax = m.atk.windup;
@@ -815,7 +864,7 @@ function startMonsterAttack(m) {
   const a = m.atk;
   m.state = 'attack';
   m.t = 0;
-  if (a.kind === 'lunge') {
+  if (a.speedF) {
     m.lvx = (m.face.x * a.speedF) >> 4;
     m.lvy = (m.face.y * a.speedF) >> 4;
   } else {
@@ -824,11 +873,27 @@ function startMonsterAttack(m) {
   }
 }
 
+// Window-path hit test (bite / tail_spin): the active window's face-relative
+// box centre + size. Legacy reach attacks keep the scalar projection so their
+// behaviour is byte-identical.
 function monsterHitsPlayer(g, a) {
   const m = g.monster;
-  const cx = m.x + (m.w >> 1) + ((m.face.x * a.reach) >> 4);
-  const cy = m.y + (m.h >> 1) + ((m.face.y * a.reach) >> 4);
-  const r = { x: cx - (a.hw >> 1), y: cy - (a.hh >> 1), w: a.hw, h: a.hh };
+  const win = monsterActiveWindow(a, m.t);
+  if (a.windows && !win) return false;   // outside every window: no hit
+  let cx, cy, hw, hh;
+  if (win) {
+    const d = facePoint(m.face.x, m.face.y, win.ox, win.oy);
+    cx = m.x + (m.w >> 1) + d.x;
+    cy = m.y + (m.h >> 1) + d.y;
+    hw = win.w;
+    hh = win.h;
+  } else {
+    cx = m.x + (m.w >> 1) + ((m.face.x * a.reach) >> 4);
+    cy = m.y + (m.h >> 1) + ((m.face.y * a.reach) >> 4);
+    hw = a.hw;
+    hh = a.hh;
+  }
+  const r = { x: cx - (hw >> 1), y: cy - (hh >> 1), w: hw, h: hh };
   return rectsOverlap(r, g.player);
 }
 
@@ -1358,16 +1423,30 @@ function drawMonster(ctx, g) {
 
   if (m.state === 'windup' || m.state === 'attack') {
     const a = m.atk;
-    const ax = x + m.w / 2 + m.face.x * a.reach;
-    const ay = y + m.h / 2 + m.face.y * a.reach;
+    // Window-path attacks telegraph the real hit box (face-relative centre +
+    // size); legacy reach attacks keep the published scalar projection.
+    let ax, ay, hw, hh;
+    const win = monsterTellWindow(m, a);
+    if (win) {
+      const d = facePoint(m.face.x, m.face.y, win.ox, win.oy);
+      ax = x + m.w / 2 + d.x;
+      ay = y + m.h / 2 + d.y;
+      hw = win.w;
+      hh = win.h;
+    } else {
+      ax = x + m.w / 2 + m.face.x * a.reach;
+      ay = y + m.h / 2 + m.face.y * a.reach;
+      hw = a.hw;
+      hh = a.hh;
+    }
     if (m.state === 'windup') {
       ctx.fillStyle = SHADES[1];
-      ctx.fillRect(Math.round(ax - a.hw / 2), Math.round(ay - a.hh / 2), a.hw, a.hh);
+      ctx.fillRect(Math.round(ax - hw / 2), Math.round(ay - hh / 2), hw, hh);
       ctx.fillStyle = SHADES[2];
       ctx.fillRect(Math.round(ax) - 1, Math.round(ay) - 1, 2, 2);
     } else {
       ctx.fillStyle = SHADES[2];
-      ctx.fillRect(Math.round(ax - a.hw / 2), Math.round(ay - a.hh / 2), a.hw, a.hh);
+      ctx.fillRect(Math.round(ax - hw / 2), Math.round(ay - hh / 2), hw, hh);
       ctx.fillStyle = SHADES[3];
       ctx.fillRect(Math.round(ax) - 2, Math.round(ay) - 2, 4, 4);
     }
@@ -1649,6 +1728,7 @@ function boot() {
 if (typeof module !== 'undefined' && module.exports) {
   module.exports = {
     newGame, step, render, withWeapon, resetHunt, isqrt,
+    monsterActiveWindow, monsterTellWindow,
     WEAPON_DEFS, MONSTER_ATTACKS, MONSTER_DEFS,
     W, H, ARENA_H, HOLD_TICKS, SHADES, WORLD_W, WORLD_H, FP,
   };

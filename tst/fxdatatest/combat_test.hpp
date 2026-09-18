@@ -89,7 +89,36 @@ inline void test_combat(FxTest &test) {
     test.expectEq(heavyTail.dmgMul, combat_expect::ZONE_HEAVY_APPENDAGE_DMG_MUL, F("heavy tail dmgMul"));
     test.expectEq(heavyTail.bodyShare, combat_expect::ZONE_HEAVY_APPENDAGE_BODY_SHARE, F("heavy tail bodyShare"));
     test.expectEq(heavyTail.breakTypes, PHYS_SLASH, F("heavy tail break slash"));
-    test.expectEq(heavyTail.unlockMask, static_cast<uint8_t>(1u << combat::ATTACK_HEAVY_SWEEP), F("heavy tail unlocks sweep"));
+    test.expectEq(heavyTail.unlockMask, static_cast<uint8_t>(1u << combat::ATTACK_HEAVY_TAIL_SPIN), F("heavy tail unlocks tail_spin"));
+
+    // nch.1: heavy's bite + 4-window tail_spin, decoded from the real blob.
+    const CombatAttackValue heavyBite = combatAttackRead(combat::ATTACK_HEAVY_BITE);
+    test.expectEq(heavyBite.windup, combat_expect::ATTACK_HEAVY_BITE_WINDUP, F("heavy bite windup"));
+    test.expectEq(heavyBite.active, combat_expect::ATTACK_HEAVY_BITE_ACTIVE, F("heavy bite active"));
+    test.expectEq(heavyBite.dmg, combat_expect::ATTACK_HEAVY_BITE_DMG, F("heavy bite dmg"));
+    test.expectEq(heavyBite.facing, COMBAT_FACING_TRACK, F("heavy bite tracks"));
+    const CombatWindow biteWin = combatWindowRead(heavyBite.firstWindow);
+    test.expectEq(biteWin.t0, 0, F("heavy bite t0"));
+    test.expectEq(biteWin.t1, 8, F("heavy bite t1"));
+    test.expectEq(biteWin.box.ox, 14, F("heavy bite ox"));
+    test.expectEq(biteWin.box.w, 18, F("heavy bite w"));
+    const CombatAttackValue heavySpin = combatAttackRead(combat::ATTACK_HEAVY_TAIL_SPIN);
+    test.expectEq(heavySpin.windowCount, 4, F("heavy spin four windows"));
+    test.expectEq(heavySpin.facing, COMBAT_FACING_LOCK, F("heavy spin locks facing"));
+    const CombatWindow spin0 = combatWindowRead(combat::WINDOW_HEAVY_TAIL_SPIN_0);
+    const CombatWindow spin1 = combatWindowRead(combat::WINDOW_HEAVY_TAIL_SPIN_1);
+    const CombatWindow spin2 = combatWindowRead(combat::WINDOW_HEAVY_TAIL_SPIN_2);
+    const CombatWindow spin3 = combatWindowRead(combat::WINDOW_HEAVY_TAIL_SPIN_3);
+    test.expectEq(spin0.t0, 0, F("spin0 t0"));
+    test.expectEq(spin0.t1, 5, F("spin0 t1"));
+    test.expectEq(static_cast<uint32_t>(spin0.box.ox), static_cast<uint32_t>(-20), F("spin0 behind"));
+    test.expectEq(spin1.t0, 6, F("spin1 t0"));
+    test.expectEq(static_cast<uint32_t>(spin1.box.oy), static_cast<uint32_t>(-22), F("spin1 north"));
+    test.expectEq(spin2.t0, 11, F("spin2 t0"));
+    test.expectEq(spin2.box.ox, 22, F("spin2 front"));
+    test.expectEq(spin3.t0, 16, F("spin3 t0"));
+    test.expectEq(spin3.box.oy, 22, F("spin3 south"));
+    test.expectEq(heavy.firstAttack, combat::ATTACK_HEAVY_BITE, F("heavy first attack bite"));
 
     const CombatCreature lunge = combatCreatureRead(combat::CREATURE_LUNGE);
     test.expectEq(lunge.hp, combat_expect::CREATURE_LUNGE_HP, F("lunge hp"));
@@ -236,9 +265,11 @@ inline void test_combat(FxTest &test) {
 
     creatureLoad(g, combat::CREATURE_HEAVY);
     in.dist = 24;
-    test.expectEq(combatGuardPasses(g, combat::PATTERN_HEAVY_P_LUNGE, in), 0, F("heavy guard dist 24 rejected"));
+    test.expectEq(combatGuardPasses(g, combat::PATTERN_HEAVY_P_SPIN, in), 1, F("heavy spin dist 24 accepted"));
+    test.expectEq(combatGuardPasses(g, combat::PATTERN_HEAVY_P_BITE, in), 0, F("heavy bite dist 24 rejected"));
     in.dist = 25;
-    test.expectEq(combatGuardPasses(g, combat::PATTERN_HEAVY_P_LUNGE, in), 1, F("heavy guard dist 25 accepted"));
+    test.expectEq(combatGuardPasses(g, combat::PATTERN_HEAVY_P_SPIN, in), 0, F("heavy spin dist 25 rejected"));
+    test.expectEq(combatGuardPasses(g, combat::PATTERN_HEAVY_P_BITE, in), 1, F("heavy bite dist 25 accepted"));
 
     // Deterministic chance (pinned roll vectors, same function host-tested).
     test.expectEq(combatChanceRoll(0, 1, 2, 0), 9, F("roll tick0"));
@@ -365,7 +396,7 @@ inline void test_combat(FxTest &test) {
     test.expectEq(g.combat.zoneBroken, 0, F("fallback resets zones"));
     const uint8_t badAtk = attackLoad(g, 200);
     test.expectEq(badAtk, 0, F("bad attack id -> attack 0"));
-    test.expectEq(g.combat.attack.winIdx, combat::WINDOW_HEAVY_LUNGE_0, F("fallback window"));
+    test.expectEq(g.combat.attack.winIdx, combat::WINDOW_HEAVY_BITE_0, F("fallback window"));
 
     // --------------------------------- sim attack path consumes the cache
     // (migration A / ljj.3): attack start loads the identity + first window

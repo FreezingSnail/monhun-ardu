@@ -12,7 +12,7 @@
 namespace combat_data {
 
 constexpr uint8_t VERSION = 1;
-constexpr uint16_t BLOB_SIZE = 674;
+constexpr uint16_t BLOB_SIZE = 704;
 
 struct Box {
     int8_t ox;
@@ -87,8 +87,8 @@ struct Creature {
 
 // Index constants (creatures sorted by id; attacks, windows, patterns and
 // steps keep source order inside each creature).
-constexpr uint8_t ATTACK_HEAVY_LUNGE = 0;
-constexpr uint8_t ATTACK_HEAVY_SWEEP = 1;
+constexpr uint8_t ATTACK_HEAVY_BITE = 0;
+constexpr uint8_t ATTACK_HEAVY_TAIL_SPIN = 1;
 constexpr uint8_t ATTACK_LUNGE_LUNGE = 2;
 constexpr uint8_t ATTACK_LUNGE_SWEEP = 3;
 constexpr uint8_t ATTACK_RAVAGER_BITE = 4;
@@ -99,16 +99,16 @@ constexpr uint8_t CREATURE_HEAVY = 0;
 constexpr uint8_t CREATURE_LUNGE = 1;
 constexpr uint8_t CREATURE_RAVAGER = 2;
 constexpr uint8_t CREATURE_SWEEP = 3;
-constexpr uint8_t GUARD_HEAVY_P_LUNGE = 0;
-constexpr uint8_t GUARD_HEAVY_P_SWEEP = 1;
+constexpr uint8_t GUARD_HEAVY_P_BITE = 1;
+constexpr uint8_t GUARD_HEAVY_P_SPIN = 0;
 constexpr uint8_t GUARD_LUNGE_P_LUNGE = 2;
 constexpr uint8_t GUARD_LUNGE_P_SWEEP = 3;
 constexpr uint8_t GUARD_RAVAGER_P_BITE = 6;
 constexpr uint8_t GUARD_RAVAGER_P_ENRAGED = 4;
 constexpr uint8_t GUARD_RAVAGER_P_SWEEP = 5;
 constexpr uint8_t GUARD_SWEEP_P_SWEEP = 7;
-constexpr uint8_t PATTERN_HEAVY_P_LUNGE = 0;
-constexpr uint8_t PATTERN_HEAVY_P_SWEEP = 1;
+constexpr uint8_t PATTERN_HEAVY_P_BITE = 1;
+constexpr uint8_t PATTERN_HEAVY_P_SPIN = 0;
 constexpr uint8_t PATTERN_LUNGE_P_LUNGE = 2;
 constexpr uint8_t PATTERN_LUNGE_P_SWEEP = 3;
 constexpr uint8_t PATTERN_RAVAGER_P_BITE = 6;
@@ -119,23 +119,26 @@ constexpr uint8_t SKELETON_BULL = 0;
 constexpr uint8_t SKELETON_CHICKEN = 1;
 constexpr uint8_t SKELETON_LONGTAIL = 2;
 constexpr uint8_t SKELETON_QUAD_32X24 = 3;
-constexpr uint8_t STEP_HEAVY_P_LUNGE_0 = 0;
-constexpr uint8_t STEP_HEAVY_P_SWEEP_0 = 1;
+constexpr uint8_t STEP_HEAVY_P_BITE_0 = 1;
+constexpr uint8_t STEP_HEAVY_P_SPIN_0 = 0;
 constexpr uint8_t STEP_LUNGE_P_LUNGE_0 = 2;
 constexpr uint8_t STEP_LUNGE_P_SWEEP_0 = 3;
 constexpr uint8_t STEP_RAVAGER_P_BITE_0 = 6;
 constexpr uint8_t STEP_RAVAGER_P_ENRAGED_0 = 4;
 constexpr uint8_t STEP_RAVAGER_P_SWEEP_0 = 5;
 constexpr uint8_t STEP_SWEEP_P_SWEEP_0 = 7;
-constexpr uint8_t WINDOW_HEAVY_LUNGE_0 = 0;
-constexpr uint8_t WINDOW_HEAVY_SWEEP_0 = 1;
-constexpr uint8_t WINDOW_LUNGE_LUNGE_0 = 2;
-constexpr uint8_t WINDOW_LUNGE_SWEEP_0 = 3;
-constexpr uint8_t WINDOW_RAVAGER_BITE_0 = 4;
-constexpr uint8_t WINDOW_RAVAGER_TAIL_SWEEP_0 = 5;
-constexpr uint8_t WINDOW_RAVAGER_TAIL_SWEEP_1 = 6;
-constexpr uint8_t WINDOW_SWEEP_LUNGE_0 = 7;
-constexpr uint8_t WINDOW_SWEEP_SWEEP_0 = 8;
+constexpr uint8_t WINDOW_HEAVY_BITE_0 = 0;
+constexpr uint8_t WINDOW_HEAVY_TAIL_SPIN_0 = 1;
+constexpr uint8_t WINDOW_HEAVY_TAIL_SPIN_1 = 2;
+constexpr uint8_t WINDOW_HEAVY_TAIL_SPIN_2 = 3;
+constexpr uint8_t WINDOW_HEAVY_TAIL_SPIN_3 = 4;
+constexpr uint8_t WINDOW_LUNGE_LUNGE_0 = 5;
+constexpr uint8_t WINDOW_LUNGE_SWEEP_0 = 6;
+constexpr uint8_t WINDOW_RAVAGER_BITE_0 = 7;
+constexpr uint8_t WINDOW_RAVAGER_TAIL_SWEEP_0 = 8;
+constexpr uint8_t WINDOW_RAVAGER_TAIL_SWEEP_1 = 9;
+constexpr uint8_t WINDOW_SWEEP_LUNGE_0 = 10;
+constexpr uint8_t WINDOW_SWEEP_SWEEP_0 = 11;
 constexpr uint8_t ZONE_HEAVY_APPENDAGE = 0;
 constexpr uint8_t ZONE_LUNGE_APPENDAGE = 2;
 constexpr uint8_t ZONE_LUNGE_HEAD = 1;
@@ -183,19 +186,22 @@ inline constexpr std::array<Anchor, 8> ANCHORS = {{
 }};
 
 inline constexpr std::array<Attack, 8> ATTACKS = {{
-    {1, 34, 0, 0, 0, 2, 0, 0, 0, 0, 0, 1, 0, 1, 40, 10, 55, 12},
-    {0, 0, 0, 0, 0, 2, 0, 0, 0, 0, 0, 1, 1, 1, 48, 12, 60, 9},
-    {1, 34, 0, 0, 0, 2, 0, 0, 0, 0, 0, 1, 2, 1, 40, 10, 55, 12},
-    {0, 0, 0, 0, 0, 2, 0, 0, 0, 0, 0, 1, 3, 1, 48, 12, 60, 9},
-    {1, 30, 0, 0, 0, 2, 0, 0, 0, 0, 0, 1, 4, 1, 36, 8, 45, 10},
-    {0, 0, 0, 0, 0, 2, 0, 0, 0, 0, 0, 1, 5, 2, 48, 12, 60, 9},
-    {1, 34, 0, 0, 0, 2, 0, 0, 0, 0, 0, 1, 7, 1, 40, 10, 55, 12},
-    {0, 0, 0, 0, 0, 2, 0, 0, 0, 0, 0, 1, 8, 1, 48, 12, 60, 9},
+    {1, 26, 0, 0, 0, 2, 0, 0, 0, 0, 0, 1, 0, 1, 30, 8, 40, 10},
+    {0, 0, 0, 0, 1, 2, 0, 0, 0, 0, 0, 1, 1, 4, 42, 20, 55, 8},
+    {1, 34, 0, 0, 0, 2, 0, 0, 0, 0, 0, 1, 5, 1, 40, 10, 55, 12},
+    {0, 0, 0, 0, 0, 2, 0, 0, 0, 0, 0, 1, 6, 1, 48, 12, 60, 9},
+    {1, 30, 0, 0, 0, 2, 0, 0, 0, 0, 0, 1, 7, 1, 36, 8, 45, 10},
+    {0, 0, 0, 0, 0, 2, 0, 0, 0, 0, 0, 1, 8, 2, 48, 12, 60, 9},
+    {1, 34, 0, 0, 0, 2, 0, 0, 0, 0, 0, 1, 10, 1, 40, 10, 55, 12},
+    {0, 0, 0, 0, 0, 2, 0, 0, 0, 0, 0, 1, 11, 1, 48, 12, 60, 9},
 }};
 
-inline constexpr std::array<Window, 9> WINDOWS = {{
-    {0, 10, {12, 0, 24, 22}, 100, 0},
-    {0, 12, {17, 0, 32, 24}, 100, 0},
+inline constexpr std::array<Window, 12> WINDOWS = {{
+    {0, 8, {14, 0, 18, 14}, 100, 0},
+    {0, 5, {-20, 0, 24, 16}, 100, 0},
+    {6, 10, {0, -22, 16, 24}, 100, 0},
+    {11, 15, {22, 0, 24, 16}, 100, 0},
+    {16, 20, {0, 22, 16, 24}, 100, 0},
     {0, 10, {12, 0, 24, 22}, 100, 0},
     {0, 12, {17, 0, 32, 24}, 100, 0},
     {0, 8, {13, 0, 22, 18}, 100, 0},
@@ -217,8 +223,8 @@ inline constexpr std::array<Pattern, 8> PATTERNS = {{
 }};
 
 inline constexpr std::array<Guard, 8> GUARDS = {{
-    {25, 255, 0, 100, 0, 0, 100, 0},
     {0, 24, 0, 100, 0, 0, 100, 0},
+    {25, 255, 0, 100, 0, 0, 100, 0},
     {33, 255, 0, 100, 0, 0, 100, 0},
     {0, 32, 0, 100, 0, 0, 100, 0},
     {0, 255, 0, 100, 0, 0, 100, 2},
@@ -228,8 +234,8 @@ inline constexpr std::array<Guard, 8> GUARDS = {{
 }};
 
 inline constexpr std::array<Step, 8> STEPS = {{
-    {0, 0, 0, 100},
     {0, 1, 0, 100},
+    {0, 0, 0, 100},
     {0, 2, 0, 100},
     {0, 3, 0, 100},
     {0, 4, 0, 100},

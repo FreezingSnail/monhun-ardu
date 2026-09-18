@@ -193,10 +193,6 @@ def attack_boxes(dims):
     return {
         "slash": list(dict.fromkeys(slash)),
         "ripspecial": (sword.special.hw, sword.special.hh),
-        "monster": {
-            "lunge": (dims.monsterAttacks.lunge.hw, dims.monsterAttacks.lunge.hh),
-            "sweep": (dims.monsterAttacks.sweep.hw, dims.monsterAttacks.sweep.hh),
-        },
         "gun_boxes": [(gun.attacks[i].hw, gun.attacks[i].hh) for i in range(3)],
     }
 
@@ -248,7 +244,6 @@ def whirl_ring_frames(dims):
 
 def icon_defs(dims):
     d = attack_boxes(dims)
-    lunge, sweep = d["monster"]["lunge"], d["monster"]["sweep"]
 
     def slash_frame(hw, hh):
         px = (32 - hw) // 2
@@ -279,14 +274,6 @@ def icon_defs(dims):
          "frames": [[(BLACK, 0, 0, 4, 1)]]},
         {"id": "trail", "w": 4, "h": 4, "anchor": "puff top-left",
          "frames": [[(LIGHT, 0, 0, 2, 2)], [(DARK, 0, 0, 2, 2)]]},
-        # Frames in order: lunge windup, lunge attack, sweep windup, sweep
-        # attack. The mock's windup box is shade 1 with a 2x2 shade-2 core and
-        # the attack box shade 2 with a 4x4 shade-3 core, for both attacks.
-        {"id": "telegraph", "w": 32, "h": 24, "anchor": "box centre",
-         "frames": [[(DARK, (32 - lunge[0]) // 2, (24 - lunge[1]) // 2, lunge[0], lunge[1]), (LIGHT, 15, 11, 2, 2)],
-                    [(LIGHT, (32 - lunge[0]) // 2, (24 - lunge[1]) // 2, lunge[0], lunge[1]), (WHITE, 14, 10, 4, 4)],
-                    [(DARK, (32 - sweep[0]) // 2, (24 - sweep[1]) // 2, sweep[0], sweep[1]), (LIGHT, 15, 11, 2, 2)],
-                    [(LIGHT, (32 - sweep[0]) // 2, (24 - sweep[1]) // 2, sweep[0], sweep[1]), (WHITE, 14, 10, 4, 4)]]},
         {"id": "chip", "w": 8, "h": 8, "anchor": "chip top-left",
          "frames": [[(WHITE, 0, 0, 3, 3)], [(WHITE, 0, 0, 4, 4)]]},
         # Flail whirl ring (bead monhun-ardu-836): the 6 orbit dots of
@@ -311,6 +298,11 @@ def icon_defs(dims):
         # a multiple of 8 so SpritesU's plus-mask page stride is exact.
         {"id": "tail_heavy", "w": 24, "h": 16, "anchor": "part box top-left",
          "frames": tail_heavy_defs()},
+        # HEAVY tail-spin overlay (bead monhun-ardu-nch.1): 24x24 frames, tail
+        # rooted at the body centre pointing world W/N/E/S, drawn during the
+        # locked tail_spin attack. Frame origin is the body centre.
+        {"id": "tail_spin", "w": 24, "h": 24, "anchor": "body centre",
+         "frames": tail_spin_defs()},
     ] + hud_defs()
 
 
@@ -373,6 +365,39 @@ def tail_defs():
 # horizontal mirror (x -> 24 - x - w) of the east art.
 def _mirror_rect(rects, w):
     return [(c, w - x - bw, y, bw, bh) for c, x, y, bw, bh in rects]
+
+
+# ---- HEAVY tail-spin overlay (bead monhun-ardu-nch.1). The spin attack whips
+# the tail 360 around the body; this 24x24 sheet holds one frame per world
+# direction (W / N / E / S) with the tail rooted at the frame centre (12,12),
+# so render.hpp draws it at body centre - (12,12). Frames are the east tail
+# rotated 90 deg about the centre; W turns=2, N turns=1, E turns=0, S turns=3
+# (clockwise quarter turns), matching spr::SPIN_WEST/NORTH/EAST/SOUTH.
+SPIN_CANON = [
+    (LIGHT, 12, 9, 6, 7),    # root segment off the body centre
+    (DARK, 13, 14, 5, 2),    # root underside
+    (LIGHT, 18, 10, 4, 5),   # mid segment
+    (DARK, 18, 13, 4, 2),    # mid underside
+    (LIGHT, 22, 11, 2, 3),   # tip stub reaching the frame edge
+    (WHITE, 22, 11, 2, 2),   # bright tip cap
+]
+
+
+def _cw_rect(block, size=24):
+    """Rotate one rect 90 deg clockwise about the frame centre (size/2)."""
+    c, x, y, w, h = block
+    return (c, y, size - x - w, h, w)
+
+
+def _spin_frame(turns):
+    blocks = list(SPIN_CANON)
+    for _ in range(turns):
+        blocks = [_cw_rect(b) for b in blocks]
+    return blocks
+
+
+def tail_spin_defs():
+    return [_spin_frame(2), _spin_frame(1), _spin_frame(0), _spin_frame(3)]
 
 
 def tail_heavy_defs():
@@ -1199,16 +1224,6 @@ def emit_dims_header(dims, icons, path):
     L.append("constexpr uint8_t slash_core_y = %d;" % ((by_id["slash"]["h"] - 4) // 2))
     L.append("constexpr uint8_t slash_core_size = 4;")
     L.append("constexpr uint8_t slash_riposte_pad = 2;")
-    L.append("")
-
-    # Telegraph boxes: hit box centred in the frame (same size as the monster
-    # hurt box) with the flash core at its centre. Frame order: lunge windup,
-    # lunge attack, sweep windup, sweep attack.
-    L.append("// Telegraph: hit box centred in the frame, core at centre. Frames: lunge")
-    L.append("// windup, lunge attack, sweep windup, sweep attack.")
-    for name, atk in (("lunge", lunge), ("sweep", sweep)):
-        L.append("constexpr uint8_t telegraph_%s_x = %d;" % (name, (32 - atk.hw) // 2))
-        L.append("constexpr uint8_t telegraph_%s_y = %d;" % (name, (24 - atk.hh) // 2))
     L.append("")
 
     L.append("// Whirl frames in fxwhirl: 2x2 light orbit dot, 4x4 white ball, 1x1")

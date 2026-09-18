@@ -516,8 +516,16 @@ static void updateMonster(Game &g) {
     const int32_t dy = (p.y + (p.h >> 1)) - (m.y + (m.h >> 1));
     const int16_t dist = fp::isqrt(dx * dx + dy * dy);
     const int8_t di = fp::dirIndexFromDelta(dx, dy);
-    m.fx = fp::dir8X(di);
-    m.fy = fp::dir8Y(di);
+    // Facing (docs section 7): track attacks recompute the unit vector from the
+    // player delta every tick. A lock-at-windup attack (heavy's tail_spin)
+    // freezes the windup-start facing through WINDUP + ATTACK; every shipped
+    // lunge/sweep is track, so parity stays byte-identical. dist/di still feed
+    // PURSUE movement and the circle step while locked.
+    const bool facingLocked = m.atkIdx != COMBAT_NO_ATTACK && g.combat.attack.facing == COMBAT_FACING_LOCK && (m.state == MS_WINDUP || m.state == MS_ATTACK);
+    if (!facingLocked) {
+        m.fx = fp::dir8X(di);
+        m.fy = fp::dir8Y(di);
+    }
 
     // Stagger meter decay (docs section 7). Shipped 3: fact false, folded out.
     if (STAGGER_ENABLED && g.combat.stagger > 0) {
