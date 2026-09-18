@@ -121,6 +121,34 @@
       "symbol": "fxwhirl"
     },
     {
+      "declaration": "fxdata/equip/Sprites.txt",
+      "path": "images/equip/mh_player_base_16x16.png",
+      "sha256": "2c41c38a99b999d68129c4cc4a48583b2fc122d2fdcfd6027abffc9b2c6dc533",
+      "size": 168,
+      "symbol": "mh_player_base"
+    },
+    {
+      "declaration": "fxdata/equip/Sprites.txt",
+      "path": "images/equip/mh_weapon_flail_32x32.png",
+      "sha256": "9082495bd66c5963e977b61a5c7a4781f53df0e2c44c45a8ea28cd8a3af05d10",
+      "size": 175,
+      "symbol": "mh_weapon_flail"
+    },
+    {
+      "declaration": "fxdata/equip/Sprites.txt",
+      "path": "images/equip/mh_weapon_gun_32x32.png",
+      "sha256": "9082495bd66c5963e977b61a5c7a4781f53df0e2c44c45a8ea28cd8a3af05d10",
+      "size": 175,
+      "symbol": "mh_weapon_gun"
+    },
+    {
+      "declaration": "fxdata/equip/Sprites.txt",
+      "path": "images/equip/mh_weapon_sword_32x32.png",
+      "sha256": "9082495bd66c5963e977b61a5c7a4781f53df0e2c44c45a8ea28cd8a3af05d10",
+      "size": 175,
+      "symbol": "mh_weapon_sword"
+    },
+    {
       "declaration": "fxdata/fonts/Sprites.txt",
       "path": "images/fonts/fxfontg_4x8.png",
       "sha256": "baaf9980ddbd8b30d8e96fab278313d34308892eaf86b629aba06eb390a5b530",
@@ -171,6 +199,26 @@
       "size": 1547
     },
     {
+      "path": "data/equipment/player_base.json",
+      "sha256": "d335c10d731bdbab354bb97fb9b835c475c898a2acbbac37faa92784c49507b0",
+      "size": 194
+    },
+    {
+      "path": "data/equipment/weapon_flail.json",
+      "sha256": "854139491cfb7b0c60671090a9178aae3024b6ca72df3158d9da3c1254a507d7",
+      "size": 284
+    },
+    {
+      "path": "data/equipment/weapon_gun.json",
+      "sha256": "1263d094fdda0107b6814b63dd4fcd6ee540c2cf515f2d3263cf5ab5c5f438d3",
+      "size": 280
+    },
+    {
+      "path": "data/equipment/weapon_sword.json",
+      "sha256": "956cffb9db3717734a0146672fad43b7cb91716af37fee885e80318f210dea7e",
+      "size": 284
+    },
+    {
       "path": "data/skeletons.json",
       "sha256": "fce9cf4595c25cb562d68f29c9e1a8435c99ce7fa0562f4b603f0683f1743c89",
       "size": 1336
@@ -200,6 +248,17 @@
       ]
     },
     {
+      "path": "fxdata/equip/Sprites.txt",
+      "sha256": "4dc085746c383f5a457896c1c9ff7ba7f60826cd8093adf79b809c77b6f43ca1",
+      "size": 298557,
+      "symbols": [
+        "mh_weapon_sword",
+        "mh_player_base",
+        "mh_weapon_gun",
+        "mh_weapon_flail"
+      ]
+    },
+    {
       "path": "fxdata/fonts/Sprites.txt",
       "sha256": "f4f9ad00d560715137f29ceed3e0c31335e12a8b314f2711649218126ba57c7f",
       "size": 32336,
@@ -210,8 +269,8 @@
     },
     {
       "path": "fxdata/fxdata.txt",
-      "sha256": "c938bf338b333a2e96efd7140064b64f9d8e61922c0f647a23844dbefc818b44",
-      "size": 1098
+      "sha256": "182fc9b2d95d24ea062399fd135103e758cad55b08ff6d1d87528429f0df5174",
+      "size": 1874
     },
     {
       "path": "fxdata/menu/Sprites.txt",
@@ -227,6 +286,12 @@
       "sha256": "9fd2797434356b13ef13c8e085aebcc835e05e9673b4a3594271c44fb41707eb",
       "size": 634,
       "symbol": "mhCombat"
+    },
+    {
+      "path": "fxdata/tables/equip.bin",
+      "sha256": "1a0d2ed9196d1afd6499a0cfc2ca935e0d9837b4ecbc6bb04f24d2652bee9b78",
+      "size": 84,
+      "symbol": "mhEquip"
     },
     {
       "path": "fxdata/tables/monsterattacks.bin",
@@ -256,18 +321,18 @@
   "outputs": [
     {
       "path": "fxdata/fxdata-data.bin",
-      "sha256": "83943aec1808243940c96635c081d2a1563725e8b5376e67e08b53fd3a414f9c",
-      "size": 30669
+      "sha256": "2f69a76d390b46f18a89c22009c0c8ced576151c9e13f3d78f3c868cbe3cc1f2",
+      "size": 87593
     },
     {
       "path": "fxdata/fxdata.bin",
-      "sha256": "ea513886b0c5c91914d06fd969be174bf75d4f9dd8e28998a2a738b59600145e",
-      "size": 30720
+      "sha256": "ef3970b6ca93d95a375c972ed41f164bf1ce7f4269e664f0149ffb4edac3dd1f",
+      "size": 87808
     },
     {
       "path": "fxdata/fxdata.h",
-      "sha256": "afd3f77a11a4aec53263e4eb8ed0ef5d8e998f6d67600b948ec80f634b7a3068",
-      "size": 1343
+      "sha256": "e7e79b58f8ad516d5789f93c92451f3b7e1bb22a2c7b94755cf07495cb637cf4",
+      "size": 1567
     },
     {
       "path": "fxdata/tables/combat.bin",
@@ -275,9 +340,14 @@
       "size": 634
     },
     {
+      "path": "fxdata/tables/equip.bin",
+      "sha256": "1a0d2ed9196d1afd6499a0cfc2ca935e0d9837b4ecbc6bb04f24d2652bee9b78",
+      "size": 84
+    },
+    {
       "path": "src/fxdata.h",
-      "sha256": "afd3f77a11a4aec53263e4eb8ed0ef5d8e998f6d67600b948ec80f634b7a3068",
-      "size": 1343
+      "sha256": "e7e79b58f8ad516d5789f93c92451f3b7e1bb22a2c7b94755cf07495cb637cf4",
+      "size": 1567
     },
     {
       "path": "src/generated/art_dims.hpp",
@@ -298,6 +368,11 @@
       "path": "src/generated/combat_meta.hpp",
       "sha256": "77b3e29c578e2f1cb3966f1fd7ef35d71e91673f733d81399bbaedea1bcfc60c",
       "size": 8004
+    },
+    {
+      "path": "src/generated/equip_meta.hpp",
+      "sha256": "6093e82c168eba58a467306397cf30584d8e6ab2c1387ea91f3a492b4ae3e34e",
+      "size": 5160
     }
   ],
   "schema_version": 1

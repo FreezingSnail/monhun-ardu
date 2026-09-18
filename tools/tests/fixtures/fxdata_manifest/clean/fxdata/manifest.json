@@ -75,6 +75,11 @@
       "size": 8
     },
     {
+      "path": "fxdata/tables/equip.bin",
+      "sha256": "94bf565c8f82439cda406bd5b53323e336fd894e7942760f50a9e627fb9ee84e",
+      "size": 8
+    },
+    {
       "path": "src/fxdata.h",
       "sha256": "b042ae69b54dce02c2a1c941372b2f17c17bbdfe68820d7e160369bea5b58591",
       "size": 140

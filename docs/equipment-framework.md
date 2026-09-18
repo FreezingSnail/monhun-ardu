@@ -43,11 +43,17 @@ until their own bead; they are state overlays, not equipment.
 Generated from `data/equipment/*.json`; PNGs live under `images/equip/` and are
 declared through `fxdata/equip/Sprites.txt` (same flow as blocks/fonts/menu).
 
+The base unit is a **player sheet**: one row, 8 facing cells (DIR8 order:
+0=E, 1=SE, 2=S, 3=SW, 4=W, 5=NW, 6=N, 7=NE), cell = anchor center. Equipment
+sets are drawn over that same layout. Layered per-slot sheets (below) are the
+deferred option for mixed gear; when they land they use the same row layout.
+
 | slot | cell | frames | layout |
 |---|---|---|---|
-| shadow | 16x16 | 1 | — |
-| body | 16x16 | 8 | one row, facing 0..7 |
-| head | 16x16 | 8 | one row, facing 0..7 |
+| player | 16x16 | 8 | one row, facing 0..7 (base / equipment-set sheet) |
+| shadow | 16x16 | 1 | — (deferred layer) |
+| body | 16x16 | 8 | one row, facing 0..7 (deferred layer) |
+| head | 16x16 | 8 | one row, facing 0..7 (deferred layer) |
 | weapon | 32x32 | 24 | 8 facing columns x 3 phase rows (frame index = phase*8 + facing) |
 | offhand | 16x16 | 8 x N poses | columns = facing, rows = pose |
 
@@ -68,15 +74,14 @@ declared through `fxdata/equip/Sprites.txt` (same flow as blocks/fonts/menu).
 
 | file | content |
 |---|---|
-| `base_shadow_16x16.png` | current shadow bar, 1 frame |
-| `base_body_16x16.png` | torso+legs only, facing 0 filled (current art), 1..7 blank |
-| `base_head_16x16.png` | head only, facing 0 filled, 1..7 blank |
-| `base_weapon_32x32.png` | 8 facing columns x 3 phase rows of empty 32x32 cells |
-| `guide_player_base_4x.png` | 4x guide: per-cell grid, frame labels, anchor crosses, palette swatches |
+| `player_base_16x16.png` | **the base template**: one sheet, 128x16, all 8 player angles; facing 0 filled with the current silhouette, 1..7 blank |
+| `guide_player_base_4x.png` | 4x guide: direction labels (E..NE), cell grid, anchor crosses (8,8), palette swatches |
 
-Workflow for a new item: open the matching base sheet, draw inside the existing
-cells (do not resize the file), keep the palette, save as
-`images/equip/<slot>_<item>_<W>x<H>.png`, add a JSON record, run `make gen`.
+Workflow for a new player/equipment set: copy `player_base_16x16.png`, draw the
+8 angles (one per cell, same cell size), keep the palette, save as
+`images/equip/<set>_16x16.png`, add a one-record JSON (`slot: "player"`), run
+`make gen`. Layered items (head/body/weapon) follow the same row layout when
+the split bead lands.
 
 ## Item record (JSON)
 

@@ -34,9 +34,11 @@ GENERATED_GLOBS = (
     "images/blocks/*.png",
     "images/fonts/*.png",
     "images/menu/*.png",
+    "images/equip/*.png",
     "fxdata/blocks/Sprites.txt",
     "fxdata/fonts/Sprites.txt",
     "fxdata/menu/Sprites.txt",
+    "fxdata/equip/Sprites.txt",
     "fxdata/tables/*.bin",
     "fxdata/fxdata.bin",
     "fxdata/fxdata-data.bin",
@@ -52,13 +54,16 @@ OUTPUT_PATHS = (
     "fxdata/fxdata.h",
     "src/fxdata.h",
     "fxdata/tables/combat.bin",
+    "fxdata/tables/equip.bin",
 )
+
 OUTPUT_GLOBS = ("src/generated/**/*",)
 
 # JSON sources compiled into generated artifacts (tools/gen-combat.py reads
-# data/skeletons.json + data/creatures/*.json and emits fxdata/tables/combat.bin
-# and the three src/generated/combat_*.hpp headers). Tracked as manifest inputs
-# so a content edit without a regen fails make gen-check.
+# data/skeletons.json + data/creatures/*.json; tools/gen-equipment.py reads
+# data/equipment/*.json). The recursive data/**/*.json glob covers both trees,
+# tracked as manifest inputs so a content edit without a regen fails
+# make gen-check.
 DATA_GLOBS = ("data/**/*.json",)
 
 IMAGE_RE = re.compile(r"^([A-Za-z_][A-Za-z0-9_]*)_(\d+)x(\d+)\.png$")

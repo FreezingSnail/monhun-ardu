@@ -29,15 +29,22 @@ g++ -std=c++17 -O2 -w tools/gen-fxtables.cpp -o build/gen-fxtables
 # flashed separately.
 python3 tools/gen-combat.py
 
+# Equipment catalog (bead monhun-ardu-3o9): author the placeholder 4-shade
+# sheets into images/equip/, emit src/generated/equip_meta.hpp and the packed
+# fxdata/tables/equip.bin catalog. Schema-validated, deterministic; ships
+# unused (no render change yet).
+python3 tools/gen-equipment.py
+
 # Convert each sprite directory into a Sprites.txt of uint8_t plus-mask blobs.
 # convert-sprite.py appends to Sprites.txt (it does not truncate), so a sheet
 # renamed in gen-art.py would leave a stale symbol behind: remove the generated
 # files first. convert-sprite.py resolves paths relative to tools/, hence ../.
-mkdir -p fxdata/blocks fxdata/fonts fxdata/menu
-rm -f fxdata/blocks/Sprites.txt fxdata/fonts/Sprites.txt fxdata/menu/Sprites.txt
+mkdir -p fxdata/blocks fxdata/fonts fxdata/menu fxdata/equip
+rm -f fxdata/blocks/Sprites.txt fxdata/fonts/Sprites.txt fxdata/menu/Sprites.txt fxdata/equip/Sprites.txt
 python3 tools/convert-sprite.py ../images/blocks -s 4 -o ../fxdata/blocks/
 python3 tools/convert-sprite.py ../images/fonts -s 4 -o ../fxdata/fonts/
 python3 tools/convert-sprite.py ../images/menu -s 4 -o ../fxdata/menu/
+python3 tools/convert-sprite.py ../images/equip -s 4 -o ../fxdata/equip/
 
 # Pack the FX image and emit the generated header.
 python3 Arduboy-Python-Utilities/fxdata-build.py fxdata/fxdata.txt

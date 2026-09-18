@@ -67,7 +67,7 @@ class FxdataManifestTests(unittest.TestCase):
         before = self.read("fxdata", "manifest.json")
         result = self.check()
         self.assertEqual(result.returncode, 0, result.stderr)
-        self.assertIn("PASS (3 images, 4 inputs, 6 outputs", result.stdout)
+        self.assertIn("PASS (3 images, 4 inputs, 7 outputs", result.stdout)
         self.assertEqual(before, self.read("fxdata", "manifest.json"))
         manifest = json.loads(before)
         images = {entry["symbol"]: entry for entry in manifest["images"]}
@@ -171,7 +171,7 @@ class FxdataManifestTests(unittest.TestCase):
         self.assertEqual(result.returncode, 0, result.stderr)
         result = run_tool("--root", self.case, "--verify-snapshot", snap)
         self.assertEqual(result.returncode, 0, result.stderr)
-        self.assertIn("PASS (13 generated artifacts unchanged)", result.stdout)
+        self.assertIn("PASS (14 generated artifacts unchanged)", result.stdout)
         self.write("src/fxdata.h", "// edited\n")
         result = run_tool("--root", self.case, "--verify-snapshot", snap)
         self.assert_fails(result, "stale generated artifact: src/fxdata.h")

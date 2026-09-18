@@ -21,6 +21,17 @@ raw_t mhSin65 = "tables/sin65.bin"
 // yet read at runtime (migration beads 3-5).
 raw_t mhCombat = "tables/combat.bin"
 
+// Equipment catalog (bead monhun-ardu-3o9): data/equipment/*.json compiled by
+// tools/gen-equipment.py into the layout from docs/equipment-framework.md
+// (header + fixed-size item records, little-endian, no padding). Offsets land
+// in equip_meta.hpp; packed but not yet read at runtime (the eqf.2 render
+// refactor consumes it).
+//
+// The catalog and every raw_t runtime table above stay below 64 KB: fxmem.hpp
+// casts their uint24_t offsets to the 16-bit fake cart pointers the core uses.
+raw_t mhEquip = "tables/equip.bin"
 
-
-
+// Equipment sheets go last. They are addressed through 24-bit FX::seekData
+// (SpritesU), so they may live anywhere; keeping them after the tables leaves
+// the runtime-read blobs inside the 64 KB fake-pointer window.
+include "equip/Sprites.txt"

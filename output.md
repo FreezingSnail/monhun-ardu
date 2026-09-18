@@ -107,3 +107,34 @@ the underlines are the exact old `blk(x, y+9, len*4-1, 1, shade 3)` rects baked
 at local row 9. Both checks run inside `make gen`/`gen-check`. The shipping
 `drawMenu` itself has no on-device pixel test (pre-existing gap, hud_test-style
 oracle not added by this bead).
+
+---
+
+# monhun-ardu-3o9 — equipment catalog pipeline + single 8-angle base sheet
+
+Worker (dispatched, cancelled mid-run) landed the pipeline; orchestrator finished
+it inline after the base-template correction (user: base = ONE sheet, all 8
+player angles).
+
+## Changed
+- `tools/gen-equipment.py`: strict schema -> `src/generated/equip_meta.hpp` +
+  `fxdata/tables/equip.bin` + placeholder sheets in `images/equip/`. Slots now
+  `player, shadow, body, head, weapon, offhand`; `player` is the base set
+  (16x16, 8 facings, anchor 8,8).
+- `tools/gen-base-sheet.py`: now emits ONE base template,
+  `docs/art/player_base_16x16.png` (128x16, 8 angles, facing 0 filled) +
+  `docs/art/guide_player_base_4x.png` (direction labels, anchors, palette).
+- `data/equipment/`: `player_base.json` + three weapon records (was split
+  shadow/body/head records).
+- `tools/gen.sh` + `tools/fxdata_manifest.py` + `fxdata/fxdata.txt`: equip step,
+  globs, `raw_t mhEquip`.
+- `tools/tests/test_gen_equipment.py` + fixture tree: updated to the 4-item
+  catalog (69 tool tests OK).
+
+## Gates
+- `make gen` deterministic; `make gen-check` PASS (45 artifacts)
+- `make test` 3119/0; `make test-tools` 69 OK
+- `make fxtest-headless` all PASS (asset 254, audio 14, boot 4, combat 195,
+  data 221, hud 17, menu 59, parity 660, perf 5)
+- `make build`/`make size`: flash 26668 (unchanged; blob is cart bytes),
+  cart image 87593 B

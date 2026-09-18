@@ -1,0 +1,11 @@
+{
+  "id": "player_base",
+  "slot": "player",
+  "sheet": "mh_player_base",
+  "cell": [16, 16],
+  "anchor": [8, 8],
+  "order": "facing",
+  "frames": 8,
+  "poseMap": { "idle": 0 },
+  "flags": []
+}
