@@ -726,3 +726,23 @@ test('DIR8 index from the locked facing vector (nch.3)', () => {
   assert.equal(G.dirIndexFromDelta(0, -16), 6, 'north');
   assert.equal(G.dirIndexFromDelta(11, -11), 7, 'northeast');
 });
+
+test('heavy tail_spin windup holds the locked away body frame (nch.5)', () => {
+  // Away facing south (start8 2): the windup body frame is 2, so the beast's
+  // head points away and the tail at the hunter. The old E/W beast sheet
+  // ignored fy and would have drawn the east side profile (head right) here.
+  const m = { kind: 'heavy', state: 'windup', t: 10, atk: G.MONSTER_ATTACKS.tailSpin, face: { x: 0, y: 16 } };
+  assert.equal(G.monsterSpinFrame(m), 2, 'windup away south -> frame 2');
+  m.face = { x: -16, y: 0 };
+  assert.equal(G.monsterSpinFrame(m), 4, 'windup away west -> frame 4');
+  m.face = { x: 0, y: -16 };
+  assert.equal(G.monsterSpinFrame(m), 6, 'windup away north -> frame 6');
+  // The attack still spins from the locked facing over the active window.
+  m.state = 'attack';
+  m.t = 5;
+  m.face = { x: 16, y: 0 };
+  assert.equal(G.monsterSpinFrame(m), 2, 'attack spins from start8 (east t5)');
+  // Not a heavy locked spin -> no rotation.
+  m.atk = G.MONSTER_ATTACKS.bite;
+  assert.equal(G.monsterSpinFrame(m), -1, 'bite does not rotate the body');
+});

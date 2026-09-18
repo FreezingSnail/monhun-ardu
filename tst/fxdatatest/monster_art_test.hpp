@@ -112,8 +112,8 @@ static void setupSpinAttack(Game &g, int8_t fx, int16_t t) {
 // nch.2: park HEAVY in the locked tail_spin WINDUP with the FULL cached window
 // (no shrink). The spin tell now draws in windup too, and the window box fill is
 // gone, so a full-size box must not erase the plane-2 tip cap or paint any fill.
-static void setupSpinWindup(Game &g, uint8_t window, int8_t fx) {
-    setupBeast(g, MON_HEAVY, fx, 0);
+static void setupSpinWindup(Game &g, uint8_t window, int8_t fx, int8_t fy = 0) {
+    setupBeast(g, MON_HEAVY, fx, fy);
     Monster &m = g.monster;
     m.state = MS_WINDUP;
     m.atkIdx = combat::ATTACK_HEAVY_TAIL_SPIN;
@@ -221,6 +221,19 @@ inline void test_monster_art(FxTest &test) {
     test.expectEq(bitAt(59, 52), 0, F("windup north south cap clear"));
     // The resting tail_heavy overlay is skipped during the windup spin too.
     test.expectEq(bitAt(E_TAIL_X, TAIL_Y + 8), 0, F("windup spin skips resting tail cap"));
+
+    // ---- nch.5 windup away-facing: during the windup the body is drawn from
+    // the 8-frame fxtailspin sheet held at start8 = dir8(locked away facing), so
+    // the head points away from the hunter and the tail at them for all 8
+    // directions. Away facing south (start8 2) is frame 2 (east silhouette
+    // rotated 90 deg clockwise): white head ink in the BOTTOM band of the 40x40
+    // cell (y46..61), top band clear. The window-1 overlay's white cap sits at
+    // (70,41), outside both bands. Pre-nch.5 the E/W beast sheet ignored fy and
+    // put the head right, so the top band would not be clear.
+    setupSpinWindup(g, combat::WINDOW_HEAVY_TAIL_SPIN_1, 0, 16);   // away south
+    renderMonster(g, 2);
+    test.expectEq(countRegionBit(40, 46, 40, 16) > 0 ? 1 : 0, 1, F("windup away south head bottom"));
+    test.expectEq(countRegionBit(40, 22, 40, 16), 0, F("windup away south top band clear"));
 }
 
 }   // namespace monsterart

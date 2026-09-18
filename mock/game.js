@@ -120,6 +120,18 @@ function spinSheetFrame(start8, tick, active) {
   return (start8 + Math.floor((tick * 8) / active)) & 7;
 }
 
+// Body-sheet rotation frame for the heavy's locked tail_spin (beads nch.3/5),
+// mirroring src/render.hpp drawMonster: MS_ATTACK spins the 8-frame sheet from
+// the locked facing each active-window slice; MS_WINDUP holds the locked away
+// frame (start8) so the beast looks away with its tail at the hunter for all 8
+// directions. Returns -1 when the draw is not a heavy locked spin (no rotation).
+function monsterSpinFrame(m) {
+  if (!m || m.kind !== 'heavy' || !m.atk || m.atk.kind !== 'tailSpin') return -1;
+  if (m.state === 'windup') return dirIndexFromDelta(m.face.x, m.face.y);
+  if (m.state === 'attack') return spinSheetFrame(dirIndexFromDelta(m.face.x, m.face.y), m.t, m.atk.active);
+  return -1;
+}
+
 // int stamina in 1/16 units; returns false when empty
 function drainStam(p, amount) {
   p.stamSub += amount;
@@ -1511,13 +1523,14 @@ function drawMonster(ctx, g) {
   if (m.hitFlash > 0) body = 3;
   if (flashing) body = 3;
 
-  // nch.3: heavy's locked tail_spin attack rotates the whole creature about its
-  // centre in 45-deg steps from the locked facing, matching the device's
-  // fxtailspin 8-frame sheet. Only the body rotates; the stun sparkle and the
-  // telegraph core stay world-aligned (drawn after restore).
-  const spinAttack = m.kind === 'heavy' && m.state === 'attack' && m.atk && m.atk.kind === 'tailSpin';
-  const spinFrame = spinAttack ? spinSheetFrame(dirIndexFromDelta(m.face.x, m.face.y), m.t, m.atk.active) : 0;
-  if (spinAttack) {
+  // nch.3/nch.5: heavy's locked tail_spin rotates the whole creature about its
+  // centre in 45-deg steps from the locked facing (nch.3), and holds the locked
+  // away frame through the windup (nch.5) so the beast looks away with the tail
+  // at the hunter. Only the body rotates; the stun sparkle and the telegraph
+  // core stay world-aligned (drawn after restore).
+  const spinFrame = monsterSpinFrame(m);
+  const spinDraw = spinFrame >= 0;
+  if (spinDraw) {
     ctx.save();
     ctx.translate(x + m.w / 2, y + m.h / 2);
     ctx.rotate(spinFrame * Math.PI / 4);
@@ -1539,7 +1552,7 @@ function drawMonster(ctx, g) {
   ctx.fillRect(m.face.x >= 0 ? headX + 7 : headX + 1, y + 13, 2, 2);
   ctx.fillRect(headX + 4, y + 9, 2, 2);
 
-  if (spinAttack) ctx.restore();
+  if (spinDraw) ctx.restore();
 
   if (m.stun > 0) {
     ctx.fillStyle = SHADES[2];
@@ -2012,7 +2025,7 @@ if (typeof module !== 'undefined' && module.exports) {
     newGame, step, render, withWeapon, resetHunt, isqrt, initPoleKind,
     damagePole, poleOnHit, poleStage,
     monsterActiveWindow, monsterTellWindow,
-    spinSheetFrame, dirIndexFromDelta,
+    spinSheetFrame, dirIndexFromDelta, monsterSpinFrame,
     zoneHitResolve, zoneContains,
     WEAPON_DEFS, MONSTER_ATTACKS, MONSTER_DEFS, POLE_DEFS,
     POLE_PLAIN, POLE_SEVER, POLE_BREAK, POLE_CRACK,

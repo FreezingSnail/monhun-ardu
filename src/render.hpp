@@ -360,13 +360,17 @@ static void drawMonster(const mh::Game &g, int16_t camX, int16_t camY) {
     // Body, feet, head and eyes are baked per state/facing into the sprite;
     // recover dims the body, windup flash and hit flash whiten it.
     const bool flashing = (m.state == mh::MS_WINDUP) && (((m.windupMax - m.t) / 4) % 2 == 0);
-    // Locked (spin) tail attack on the longtail (bead monhun-ardu-nch.3): during
-    // MS_ATTACK the whole beast is drawn from the 8-frame 40x40 fxtailspin sheet,
+    // Locked (spin) tail attack on the longtail (beads monhun-ardu-nch.3/5):
+    // MS_ATTACK draws the whole beast from the 8-frame 40x40 fxtailspin sheet,
     // rotated about the body centre in 45-deg steps synced to the active window;
-    // during MS_WINDUP the small fxtail_spin overlay stays as the tell, and the
-    // resting fxtail_heavy overlay is skipped in both phases.
+    // MS_WINDUP draws the same sheet held at the locked away frame (start8), so
+    // the beast visibly looks away with its tail at the hunter for all 8
+    // directions -- the 2-facing E/W beast sheet cannot show N/S. The small
+    // fxtail_spin overlay stays as the windup tell, and the resting fxtail_heavy
+    // overlay is skipped in both phases. Trade: the spin sheet has no windup
+    // flash frame (the tell + telegraph core carry the timing).
     const bool spinning = (m.state == mh::MS_WINDUP || m.state == mh::MS_ATTACK) && m.atkIdx != mh::COMBAT_NO_ATTACK && mh::combatFacingLockV(g.combat.attack.facing);
-    const bool spinAttack = spinning && m.state == mh::MS_ATTACK && g.monsterKind == mh::MON_HEAVY;
+    const bool spinSheet = spinning && g.monsterKind == mh::MON_HEAVY;
     uint8_t f;
     if (g.monsterKind == mh::MON_RAVAGER) {
         // Legacy fxmonster sheet: idle/recover/flash/dead x facing.
@@ -397,14 +401,15 @@ static void drawMonster(const mh::Game &g, int16_t camX, int16_t camY) {
         if (m.fx < 0)
             f = static_cast<uint8_t>(f + art_dims::beast_stride);
     }
-    if (spinAttack) {
-        // Whole-beast spin sheet: frame 0 is the east silhouette and the frame
-        // steps 45 deg clockwise from the locked facing each active-window
-        // slice, so the beast completes one visible revolution. The sheet is
-        // 40x40 with the body centre at (20,20), so it is centred on the body
-        // box centre. No per-tick cart read: sheet constant + frame math only.
+    if (spinSheet) {
+        // Whole-beast spin sheet: frame 0 is the east silhouette. Windup holds
+        // the locked away frame; the attack steps 45 deg clockwise from it each
+        // active-window slice, so the beast completes one visible revolution.
+        // The sheet is 40x40 with the body centre at (20,20), so it is centred
+        // on the body box centre. No per-tick cart read: sheet constant + frame
+        // math only.
         const uint8_t start8 = static_cast<uint8_t>(fp::dirIndexFromDelta(m.fx, m.fy)) & 7;
-        const uint8_t spinF = mh::spinSheetFrame(start8, m.t, static_cast<int16_t>(g.combat.attack.active));
+        const uint8_t spinF = (m.state == mh::MS_WINDUP) ? start8 : mh::spinSheetFrame(start8, m.t, static_cast<int16_t>(g.combat.attack.active));
         sprDraw(fxtailspin, static_cast<int16_t>(x + (w >> 1) - 20), static_cast<int16_t>(y + (h >> 1) - 20), FRAME(spinF));
     } else {
         sprDraw(monsterSheet(g.monsterKind), x, y, FRAME(f));
