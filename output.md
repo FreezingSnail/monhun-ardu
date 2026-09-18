@@ -1,118 +1,68 @@
-# monhun-ardu-z6v — bake projectile trail + flail chain/idle: BLOCKED (measured)
+# monhun-ardu-603 — pack raw_t tables before sprite sections: DONE
 
-Worker report. **No commit/push/`git add` performed. Working tree reverted to
-HEAD (a750cf0) — no source/art/generated changes remain.**
+Worker report. **No commit/push/`git add` performed.**
 
-The bead's premise ("each sprDraw pays a fixed cart seek ~156 us, so a bake
-pays for itself") does not hold on this blitter for cells bigger than ~16 px.
-Both candidate bakes were implemented, built, and measured on the real target
-(Ardens cycle-accurate ATmega32u4, `test_perf`). **(a) the projectile-trail bake
-regresses `rMx` at every cell size tried; (b) the flail chain+idle bake is
-exactly perf-neutral.** Neither improves `rMx` vs the 5496 baseline, so per the
-bead's own instruction I am reporting measured numbers + analysis instead of
-claiming a win, and I did not keep the changes.
+## Change
 
-## What was implemented and measured (then reverted)
+`fxdata/fxdata.txt` section order is the packer's only ordering mechanism:
+`Arduboy-Python-Utilities/fxdata-build.py` (v1.15) has **no ordering directive**
+— `include "..."` expands in place and `raw_t`/`image_t` blobs append as parsed
+(see its read loop, lines 216-343). No vendored-tool patch needed.
 
-Full implementations were built and run, not estimated:
+Moved every `raw_t` runtime table (`mhWeaponDefs`, `mhMonsterAttacks`,
+`mhMonsterDefs`, `mhSin65`, `mhCombat`, `mhEquip`) ahead of
+`include "blocks|fonts|menu|equip/Sprites.txt"`, and documented the load-bearing
+order in the file header (fxmem.hpp casts these uint24_t offsets to 16-bit fake
+cart pointers → must stay < 64 KiB; SpritesU sheets use 24-bit seeks → free).
+Updated the now-stale ordering comment in `tools/gen-art.py` (WHIRL_RING_FRAMES
+stays 24; constraint removed, not rebaked).
 
-- `tools/gen-art.py` — `DIR8` parsed out of `src/core/fp.hpp`, `trail_frames()`
-  (one frame per firing facing, ball-centre anchor) and `flail_idle_frames()`
-  (chain dot + chip, player-centre anchor); two new block sheets + equipment
-  records (`trailbake`, `flail_idle`) via the same gen-art/part-record path the
-  whirl-ring bake (monhun-ardu-836) uses.
-- `src/render.hpp` — `drawProjectiles` drew one `fxtrailbake` blit + ball;
-  the flail idle `else` branch drew one `PART_FLAIL_IDLE` blit.
-- `fxdata/fxdata.txt` — **reordered so the `raw_t` runtime tables pack before
-  the sprite sections** (see "Option 2" below). Verified: `mhEquip` at 0x000525,
-  i.e. all six 16-bit fake-pointer tables stay in the first 1.4 KiB of the
-  137 KB image, structurally immune to any future sprite growth.
+Files: `fxdata/fxdata.txt`, `tools/gen-art.py`, regenerated set
+(`fxdata/fxdata.{h,bin,data-data.bin,manifest.json}`, `fxdata/tables/equip.bin`,
+`src/fxdata.h`, `src/generated/equip_meta.hpp`).
 
-## Measured results (`test_perf`, hunt+train scenes)
+## Addresses (new; FX_DATA_BYTES unchanged 123917)
 
-Baseline (HEAD, unchanged): `B pUs=6614 pHz=151 lHz=50 lTk=984 rMx=5496 rAv=5136 ram=424`
-— reproduced exactly before and after the revert, so the numbers below are
-directly comparable.
+| symbol | new | old |
+|---|---|---|
+| mhWeaponDefs | 0x000000 | 0x00DEAA |
+| mhMonsterAttacks | 0x00021C | 0x00E0C6 |
+| mhMonsterDefs | 0x00023E | 0x00E0E8 |
+| mhSin65 | 0x00026A | 0x00E114 |
+| mhCombat | 0x0002AB | 0x00E155 |
+| mhEquip | 0x000525 | 0x00E3CF |
+| first sprite (`fxdeflect`) | 0x000891 | 0x000000 |
+| last sprite (`mh_weapon_flail`) | 0x019C0B | 0x019C0B |
 
-| config | bake cell | `rMx` | delta vs 5496 | gate |
-|---|---|---|---|---|
-| (a) trail bake only | 40x40 | **6476** | **+980** | **F 12** (`pUs=7751 pHz=129 lHz=43`) |
-| (a) trail bake only | 30x30 (tight union) | **5712** | **+216** | 5/5 |
-| (a) trail bake only | 24x24 | **5712** | **+216** | 5/5 |
-| (b) flail idle bake only, bench forced onto the flail-idle path | 24x24 | 5240 | 0 (old = 5240) | 5/5 |
-| (b) flail idle bake only, same forced bench | 22x22 (tight union) | 5240 | 0 (old = 5240) | 5/5 |
-| (b) flail idle bake, unmodified bench (path not exercised) | 24x24 | 5496 | 0 | 5/5 |
+Table block = 0x000000-0x000891 (2193 B). **Headroom to the 64 KiB window =
+0x10000 - 0x891 = 0xF76F = 63,343 B**, and sprite growth no longer moves the
+tables at all (tables are pinned at the image base), so the ceiling is
+structurally gone. `mhEquip` (the render-pass raw_t read) is at 0x000525.
 
-`test_perf` repeats are bit-stable on this model, so the 216/980 us deltas are
-real signal, not noise. The (b) A/B used a *temporary* `primeHunt` stance change
-(`ST_WHIRL` -> `ST_NONE`) purely to force the bench onto the idle branch, then
-was reverted; with the stock bench the flail-idle branch is never executed
-(hunt = `ST_WHIRL`, train = `W_GUN`), which is why (b) shows 5496 -> 5496.
+## Verification
 
-## Why the bakes do not pay off
+1. `make gen` x2 -> `make gen-check` **PASS**:
+   `fxdata_manifest: PASS (51 generated artifacts unchanged)`;
+   manifest `31 images, 40 inputs, 11 outputs`. `fxdata/fxdata.h == src/fxdata.h`.
+   (First gen re-baked equip part-view offsets from the pre-reorder header; second
+   pass converged; gen-check's own gen confirmed determinism.)
+2. `make test`: **Total Passed: 3119 / Total Failed: 0**
+   `make test-tools`: **Ran 81 tests ... OK**
+3. `make fxtest-headless` full — all 10 suites PASS:
+   test_assets 254/0, test_audio 14/0, test_boot 4/0, test_combat 195/0,
+   test_data 221/0, test_hud 17/0, test_menu 59/0, test_parity 660/0,
+   test_perf 5/0, test_player_art 111/0.
+   Perf line: `B pUs=6614 pHz=151 lHz=50 lTk=984 rMx=5496 rAv=5136 ram=420`
+   (pUs/rMx/rAv identical to the documented baseline `pUs=6614 rMx=5496 rAv=5136`;
+   `ram` was 424 there, unrelated to this change).
+   AVR `equip_meta.hpp` static_assert stale-blob guard passes (all SHEET_OFF_*
+   re-baked; e.g. FXCHIP 7383, FXDEFLECT 2193, MH_BODY_BASE 82243).
+4. `make build` + `make size`: **flash=27000/29696 (2696 free)**, RAM 2018/2560.
+   Delta vs 27020 baseline = **-20 B** (no regression). `.text=26942 .data=58 .bss=1960`.
+   data facts unchanged (`HAS_SIMPLE_GUARDS:true`, rest false).
 
-`SpritesU::drawPlusMaskFX` = one `FX::seekData()` (~156 us, the number the bead
-quotes) **plus** a streamed blit whose cost is `pages x cols x 3` shade passes
-(`drawBasic` in `src/external/SpritesU.hpp`). The seek is worth only ~150 us;
-enlarging a sprite cell to cover a scattered ink union costs far more than the
-seeks it removes:
+## Deviations
 
-- **Trail (a):** the three puffs' union spans 28x28 px (`bx` up to +/-5 from
-  `vx = DIR8[i]*speedF>>4`, offsets `-bx*3-1 .. -bx-1`), i.e. 4 pages x 28 cols
-  x 3 = 336 passes minimum. Three 4x4 puffs cost 3 seeks + 36 passes. Break-even
-  would need the new cell under ~16 px, which the geometry makes impossible.
-  Measured +216 us at the tightest cell that actually holds the ink (30x30).
-- **Idle (b):** the chip (`(fx*9)>>4 - 1`, 3x3) plus the chain dot union to 21x21
-  px -> 3 pages. That exactly cancels the one seek saved: 1 seek + 198 passes
-  == 2 seeks + 48 passes, so rMx is identical at 22x22 and 24x24. Geometrically
-  incapable of a win.
-- **Cross-check:** the monhun-ardu-836 ring bake did win (-316 us) only because
-  it collapsed **six** partDraw calls (each = record read + blit) into one, i.e.
-  it had a 6-seek budget; a single 6-dot ring's ink also needs only 4 pages.
-  The trail/idle bakes each have a 1-2 seek budget, which is not enough.
-
-## Option 2 (independently useful, kept out of this bead)
-
-The `fxdata/fxdata.txt` reorder (runtime tables first, sprite `include`s last)
-removes the 64 KiB fake-pointer risk the bead flags: `mhEquip` currently sits at
-**0x00E3CF = 58,319**, only ~7 KB below the 64 KiB window, and the bead's own
-trail/idle sheets would have pushed it past it. With the reorder, all six
-`mhWeaponDefs/mhMonsterAttacks/mhMonsterDefs/mhSin65/mhCombat/mhEquip` offsets
-land at 0x000000..0x000525. It is a zero-cost structural fix and was verified
-here (gen x3 deterministic, device build clean, `test_perf` 5/5, parity
-unaffected), but it is not a `z6v` deliverable — worth its own bead.
-
-## Options for the orchestrator
-
-1. **Close z6v as won't-fix / re-scope.** The blitter's seek is cheap relative
-   to a wide cell; art bakes only win when they collapse >=4-6 blits into a
-   small cell. The trail and flail-idle cases cannot meet that bar.
-2. **File the `fxdata.txt` reorder as its own bead** (Option 2 above) — it is
-   the one real, safe improvement found while investigating the 64 KiB window.
-3. **If a real win is wanted, the change is code, not art:** add a bulk path
-   that seeks `fxtrail` once and emits the three puffs from explicit `(w,h,frame)`
-   offsets without re-seeking (`drawBasic` already supports the header-less
-   form; it needs a safe shared-seek wrapper). This is the actual ~2-seek/frame
-   saving and would not touch the goldens.
-
-## Verification performed (on the reverted tree, baseline intact)
-
-```
-make gen-check   -> fxdata_manifest: PASS (51 generated artifacts unchanged)
-make test        -> Total Passed: 3119   Total Failed: 0
-make build       -> Sketch uses 26642 bytes (89%) of program storage
-test_perf        -> B pUs=6614 pHz=151 lHz=50 lTk=984 rMx=5496 rAv=5136 ram=424
-                    perf_test PASSED=5 FAILED=0
-```
-
-(Baseline `make test` 3119/0 and `test_perf` 5/5 confirmed both before any edit
-and after the revert, so the revert is byte-clean at HEAD.)
-
-## Deviations / notes
-
-- The reported flash/cart deltas and golden changes from the bead description
-  (projectile cases, flail idle/attack cases) were **not** produced: the art
-  was reverted, so `player_art_test.hpp` goldens are unchanged and flash/cart
-  are at the 26642 B / 123917 B baseline.
-- `bd close` was **not** run: the bead's acceptance (rMx improved vs 5496) is
-  not met, and the changes that would have met it regress or are neutral.
+- `tools/gen-art.py`: comment-only edit explaining the order change; no generated
+  art changed (WHIRL_RING_FRAMES stays 24).
+- Host build `output.md` itself remains the only tracked report artifact; not staged.

@@ -67,12 +67,14 @@ SHADE_NAMES = ("black", "dark", "light", "white")
 # used; the frame count is the render phase selector
 # (art_dims::whirlring_frames).
 #
-# 24 phases, not 32: the sheet lands in the blocks section, which is packed
-# *before* the raw_t runtime tables in fxdata.txt. At 48x32 a frame is 1152 B,
-# so 32 phases (36,864 B) pushes mhEquip past the 64 KiB 16-bit fake-pointer
-# window fxmem.hpp requires; 24 phases (27,648 B) keeps every runtime table
-# below it (mhEquip ~0x77CD -> ~0xE3CD). 256/24 = 10.67 units of ring angle
-# per frame vs the 14-unit tick step, so the motion stays smooth.
+# 24 phases, not 32: chosen when the blocks section was packed *before* the
+# raw_t runtime tables in fxdata.txt (a 48x32 frame is 1152 B, so 32 phases =
+# 36,864 B pushed mhEquip past the 64 KiB 16-bit fake-pointer window fxmem.hpp
+# requires). Bead monhun-ardu-603 moved the raw_t tables first, so the window no
+# longer constrains sprite growth; the count stays 24 (256/24 = 10.67 units of
+# ring angle per frame vs the 14-unit tick step keeps the motion smooth) rather
+# than rebaking a larger sheet. RING6 frames remain pixel-identical to the old
+# six blits.
 RING6 = (0, 43, 85, 128, 171, 213)
 WHIRL_RING_FRAMES = 24
 

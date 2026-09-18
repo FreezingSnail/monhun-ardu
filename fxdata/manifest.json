@@ -417,8 +417,8 @@
     },
     {
       "path": "fxdata/fxdata.txt",
-      "sha256": "182fc9b2d95d24ea062399fd135103e758cad55b08ff6d1d87528429f0df5174",
-      "size": 1874
+      "sha256": "2419c17f62ee26b91bf0811fa4e3a12b1f38b0301c580c0a6da19d52e0e089f2",
+      "size": 2428
     },
     {
       "path": "fxdata/menu/Sprites.txt",
@@ -437,7 +437,7 @@
     },
     {
       "path": "fxdata/tables/equip.bin",
-      "sha256": "de9b508280d8a4197199d9918ac77b711cec824ce0987a07bbdb8a02851ad114",
+      "sha256": "e9d5d457e502ae10e3680c22baf81553114595de7eb67d4f91d950be534e6ef9",
       "size": 876,
       "symbol": "mhEquip"
     },
@@ -469,17 +469,17 @@
   "outputs": [
     {
       "path": "fxdata/fxdata-data.bin",
-      "sha256": "851575da191932f14595793aae8e5fae204675901449b86b6ef206996641e4ae",
+      "sha256": "3dd0eda9dfa0f04e68034f7ec1175f1b4c384f0152a66584a0d9c0b18511f93a",
       "size": 123917
     },
     {
       "path": "fxdata/fxdata.bin",
-      "sha256": "b15a2db551de5845ef3e6c40bbea7f56c528b5414487994273b120d2d78af464",
+      "sha256": "2c84c82ef771894098eda5f6544e72d065176c927823e8d040158ab7bea6b648",
       "size": 124160
     },
     {
       "path": "fxdata/fxdata.h",
-      "sha256": "65a2a11ec643c88a2b7ae8c3b98d645a913a5cd49ebb3a34d60b744227d1e37d",
+      "sha256": "57d9595474ac45c1e675129b2f322302ae4f39bfcba09b6a7c7edabd5383f2e8",
       "size": 1836
     },
     {
@@ -489,12 +489,12 @@
     },
     {
       "path": "fxdata/tables/equip.bin",
-      "sha256": "de9b508280d8a4197199d9918ac77b711cec824ce0987a07bbdb8a02851ad114",
+      "sha256": "e9d5d457e502ae10e3680c22baf81553114595de7eb67d4f91d950be534e6ef9",
       "size": 876
     },
     {
       "path": "src/fxdata.h",
-      "sha256": "65a2a11ec643c88a2b7ae8c3b98d645a913a5cd49ebb3a34d60b744227d1e37d",
+      "sha256": "57d9595474ac45c1e675129b2f322302ae4f39bfcba09b6a7c7edabd5383f2e8",
       "size": 1836
     },
     {
@@ -519,8 +519,8 @@
     },
     {
       "path": "src/generated/equip_meta.hpp",
-      "sha256": "0129789ab8360d629e733ecdf3f56aa5c1d621686ebc1fd9f2ad61bd828a2849",
-      "size": 22319
+      "sha256": "c2b36cb139f9b4ad5938397dea68ce33f9b0dddac5575f4df1cd007270b9a24e",
+      "size": 22323
     }
   ],
   "schema_version": 1
