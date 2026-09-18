@@ -55,7 +55,7 @@ SCREEN_MAX = 255
 TIER_COUNT = 3   # N_WEAPONS (W_SWORD/W_FLAIL/W_GUN); must match core/save.hpp
 
 ACTION_NAMES = ("leave", "buy_upgrade", "take_quest", "turn_in_quest")
-COND_NAMES = ("always", "zenny", "flag", "tier")
+COND_NAMES = ("always", "zenny", "flag", "tier", "quest")
 ROW_FLAGS = {"hide_locked": 0x01}
 
 _MISSING = object()
@@ -159,6 +159,16 @@ def normalize_row(errors, ctx, obj):
         errors.add(ctx, "param: save flag bit must be 0..31, got %d" % param)
     if cond == COND_NAMES.index("tier") and param is not None and param >= TIER_COUNT:
         errors.add(ctx, "param: tier index must be 0..%d, got %d" % (TIER_COUNT - 1, param))
+    if cond == COND_NAMES.index("quest") and param is not None:
+        # param packs (need << 4) | quest id (see screen_state.hpp COND_QUEST):
+        # take rows leave the need nibble 0, turn-in rows carry their need there.
+        need = (param >> 4) & 15
+        if action == ACTION_NAMES.index("take_quest") and need != 0:
+            errors.add(ctx, "param: take_quest need nibble must be 0, got %d" % need)
+        if action == ACTION_NAMES.index("turn_in_quest") and need == 0:
+            errors.add(ctx, "param: turn_in_quest need nibble must be 1..15, got %d" % need)
+        if action not in (ACTION_NAMES.index("take_quest"), ACTION_NAMES.index("turn_in_quest")):
+            errors.add(ctx, "condition 'quest' needs a take_quest/turn_in_quest action")
     if None in (label, cost, action, cond, param, mask):
         return None
     return {"label": label, "cost": cost, "action": action, "flags": mask, "cond": cond, "param": param}

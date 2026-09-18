@@ -67,6 +67,11 @@ void initGame(Game &g, int8_t weapon) {
     g.lastShot = 0;
     g.lastShotX = 0;
     g.lastShotY = 0;
+    // Quest accounting defaults off; the sketch arms it from the active quest
+    // def after newGame() (bead monhun-ardu-me6).
+    g.questTarget = -1;
+    g.questNeed = 0;
+    g.questProgress = 0;
 }
 
 static Rect meleeHitbox(const Player &p, const Attack *a) {

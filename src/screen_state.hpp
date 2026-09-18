@@ -4,17 +4,24 @@
 // Host-testable state machine shared by the device suite and src/screens.hpp:
 //   * ScreenState: current screen index, cursor, page scroll
 //   * debounced up/down nav (same tap/hold feel as menu_state.hpp)
-//   * row condition evaluation (zenny >= cost / save flag / tier < max)
+//   * row condition evaluation (zenny >= cost / save flag / tier < max / quest)
 //   * the fixed action switch (BUY_UPGRADE / TAKE_QUEST / TURN_IN_QUEST / LEAVE)
 //
 // Conditions gate the action (A on a locked row does nothing), so the state
 // machine needs no per-row visibility mask. The cart side (reading ScreenDef/
 // ScreenRow records) lives in src/screens.hpp so this header compiles on the
 // host with plain ScreenRow structs.
+//
+// Quest rows (bead monhun-ardu-me6): COND_QUEST picks the check from the row's
+// action -- a TAKE_QUEST row is takeable when no quest is active and this one
+// is neither taken nor done; a TURN_IN_QUEST row is ready when it is the active
+// quest and progress >= need. `param` packs (need << 4) | quest id; the turn-in
+// payout is the row `cost` (the quest's reward, from data/quests/*.json).
 
 #include <stdint.h>
 #include "core/input.hpp"
 #include "core/save.hpp"
+#include "quest_state.hpp"
 #include "generated/screen_meta.hpp"
 
 namespace mh {
@@ -56,7 +63,8 @@ enum ScreenEvent : int8_t {
     SCREEN_BACK      // B rising edge: return to the caller
 };
 
-// Row condition: 0 = always, zenny >= cost, save flag set, or tier < max.
+// Row condition: 0 = always, zenny >= cost, save flag set, tier < max, or the
+// quest state query (action-dependent; see the header note).
 inline bool screenCondOk(const SaveBlock &save, const ScreenRow &row) {
     switch (row.cond) {
     case screens::COND_ZENNY:
@@ -65,6 +73,12 @@ inline bool screenCondOk(const SaveBlock &save, const ScreenRow &row) {
         return saveQuestGet(save, static_cast<uint8_t>(row.param & 15), static_cast<uint8_t>((row.param >> 4) & 1));
     case screens::COND_TIER:
         return save.tier[row.param < SAVE_TIER_COUNT ? row.param : 0] < SCREEN_MAX_TIER;
+    case screens::COND_QUEST: {
+        const uint8_t quest = static_cast<uint8_t>(row.param & 15);
+        if (row.action == screens::ACTION_TURN_IN_QUEST)
+            return questReady(save, quest, static_cast<uint8_t>((row.param >> 4) & 15));
+        return questTakeable(save, quest);
+    }
     default:
         return true;
     }
@@ -119,7 +133,8 @@ inline ScreenEvent screenStep(ScreenState &s, const Input &in) {
 
 // Apply the fixed action switch. Returns true when the save changed and must be
 // committed (the caller then calls saveStore once). Buying a tier is gated by
-// the tier cap and the zenny cost; quest bits are taken/done.
+// the tier cap and the zenny cost; quest rows take/turn in through
+// src/quest_state.hpp (turn-in pays the row cost, u16-clamped).
 inline bool screenApplyAction(SaveBlock &save, const ScreenRow &row) {
     switch (row.action) {
     case screens::ACTION_BUY_UPGRADE: {
@@ -130,21 +145,10 @@ inline bool screenApplyAction(SaveBlock &save, const ScreenRow &row) {
         save.tier[weapon]++;
         return true;
     }
-    case screens::ACTION_TAKE_QUEST: {
-        const uint8_t quest = static_cast<uint8_t>(row.param & 15);
-        if (saveQuestGet(save, quest, 0) || saveQuestGet(save, quest, 1))
-            return false;
-        saveQuestSet(save, quest, 0);
-        return true;
-    }
-    case screens::ACTION_TURN_IN_QUEST: {
-        const uint8_t quest = static_cast<uint8_t>(row.param & 15);
-        if (!saveQuestGet(save, quest, 0) || saveQuestGet(save, quest, 1))
-            return false;
-        saveQuestClear(save, quest, 0);
-        saveQuestSet(save, quest, 1);
-        return true;
-    }
+    case screens::ACTION_TAKE_QUEST:
+        return questTake(save, static_cast<uint8_t>(row.param & 15));
+    case screens::ACTION_TURN_IN_QUEST:
+        return questTurnIn(save, static_cast<uint8_t>(row.param & 15), static_cast<uint8_t>((row.param >> 4) & 15), row.cost);
     default:   // ACTION_LEAVE
         return false;
     }

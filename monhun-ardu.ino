@@ -20,6 +20,7 @@
 #include "src/render.hpp"
 #include "src/menu.hpp"      // draws through render.hpp (textPut/blk) + MenuState
 #include "src/screens.hpp"   // hub/list screens + EEPROM save (qs.1)
+#include "src/quest.hpp"     // quest defs on cart + TAKE/TURN_IN state (qs.2)
 
 decltype(arduboy) arduboy;
 
@@ -43,6 +44,28 @@ mh::AudioState s_audio;
 mh::SaveBlock s_save;
 mh::ScreenState s_screen;
 static const mh::SaveBackend SAVE_BACKEND = {mh::saveEepromRead, mh::saveEepromWrite};
+
+// Quest kill accounting edge (qs.2): the hunt-end commit writes the progress
+// once per hunt (never mid-hunt), and the flag also keeps the re-open menu edge
+// from re-committing.
+static bool s_huntOver = false;
+
+// Arm the core's kill counter from the active quest def (cart) and restore the
+// persisted progress. Called after every newGame/menuStart, so a fresh hunt
+// continues a partially-complete quest.
+static void questApplyToGame() {
+    g.questTarget = -1;
+    g.questNeed = 0;
+    g.questProgress = 0;
+    const uint8_t quest = s_save.activeQuest;
+    if (quest == mh::SAVE_QUEST_NONE || quest >= quests::QUEST_COUNT)
+        return;
+    mh::QuestDef def;
+    mh::questReadDef(quest, def);
+    g.questTarget = static_cast<int8_t>(def.targetKind);
+    g.questNeed = def.need;
+    g.questProgress = s_save.progress;
+}
 
 #if DEBUG_HURTBOXES
 // Runtime toggle inside the debug build: hold A+B for 30 ticks to flip. The
@@ -76,6 +99,7 @@ void setup() {
 
     mh::newGame(g, mh::W_SWORD, mh::MODE_HUNT);
     mh::saveLoad(s_save, SAVE_BACKEND);   // first boot / bad block -> defaults
+    questApplyToGame();
 }
 
 // One input sample per logic tick, shared by the menu and the sim. The menu
@@ -105,6 +129,8 @@ void run() {
         const mh::MenuAction act = mh::menuStep(s_menu, in);
         if (act == mh::MENU_START) {
             mh::menuStart(g, s_menu);
+            questApplyToGame();
+            s_huntOver = false;
             s_menu.active = false;
         } else if (act == mh::MENU_SCREEN) {
             mh::screenEnter(s_screen, screens::SCREEN_HUB, s_save);
@@ -137,6 +163,17 @@ void run() {
     }
     mh::stepGame(g, in);
     mh::audioUpdate(s_audio, g);
+    // Hunt-end quest commit (qs.2): persist the kill progress once per hunt.
+    // The save is otherwise untouched during a hunt (write-cycle hygiene).
+    if (g.over != mh::OVER_NONE) {
+        if (!s_huntOver && s_save.activeQuest != mh::SAVE_QUEST_NONE) {
+            s_save.progress = g.questProgress;
+            mh::saveStore(s_save, SAVE_BACKEND);
+        }
+        s_huntOver = true;
+    } else {
+        s_huntOver = false;
+    }
     if (mh::menuReturnStep(s_menu, g.over != mh::OVER_NONE, in))
         s_menu.active = true;   // picks preserved until reboot
 }

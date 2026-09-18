@@ -643,6 +643,14 @@ struct Game {
     Pole pole;
     TrainStats train;
     CombatState combat;   // combat loader caches (ljj.2, 50 B AVR)
+    // Quest kill accounting (bead monhun-ardu-me6): the sketch sets questTarget
+    // from the active quest's def at hunt start (-1 = none), restores progress
+    // from the save, and every monster death of that kind bumps questProgress.
+    // The hunt-end commit writes questProgress back to the save. Not part of the
+    // deterministic sim hash: a default Game (questTarget -1) never counts.
+    int8_t questTarget;   // MonsterKind to count, -1 = no active quest
+    uint8_t questNeed;
+    uint8_t questProgress;
 };
 
 }   // namespace mh

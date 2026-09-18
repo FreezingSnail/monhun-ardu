@@ -40,6 +40,12 @@ python3 tools/gen-equipment.py
 # indices/offsets + action/condition enums). Schema-validated, deterministic.
 python3 tools/gen-screens.py
 
+# Quest defs (bead monhun-ardu-me6): compile data/quests/*.json into the packed
+# fxdata/tables/quests.bin blob + src/generated/quest_meta.hpp (quest
+# indices/offsets + target-kind enums). Schema-validated, deterministic; runs
+# before fxdata-build.py so the raw_t mhQuests payload exists.
+python3 tools/gen-quests.py
+
 # Convert each sprite directory into a Sprites.txt of uint8_t plus-mask blobs.
 # convert-sprite.py appends to Sprites.txt (it does not truncate), so a sheet
 # renamed in gen-art.py would leave a stale symbol behind: remove the generated

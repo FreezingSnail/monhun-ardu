@@ -77,7 +77,7 @@ void ScreenSuite(TestRunner &runner) {
         t.assert(bytes[3], 0x39, "zenny low");
         t.assert(bytes[4], 0x30, "zenny high");
         t.assert(bytes[5 + 0], 0x40, "quest3 taken bit");
-        t.assert(bytes[9 + 1], 2, "tier[1]");
+        t.assert(bytes[SAVE_TIER_OFF + 1], 2, "tier[1]");
         uint8_t sum = 0;
         for (uint8_t i = 0; i < SAVE_CHECKSUM_OFF; i++)
             sum = static_cast<uint8_t>(sum + bytes[i]);

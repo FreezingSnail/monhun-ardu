@@ -132,6 +132,7 @@ class GenScreensTests(unittest.TestCase):
             "constexpr uint8_t COND_ZENNY = 1;",
             "constexpr uint8_t COND_FLAG = 2;",
             "constexpr uint8_t COND_TIER = 3;",
+            "constexpr uint8_t COND_QUEST = 4;",
             "constexpr uint8_t ROW_F_HIDE_LOCKED = 0x01;",
             "constexpr uint8_t SCREEN_HUB = 0;",
             "constexpr uint16_t SCREEN_HUB_OFF = 12;",
@@ -239,6 +240,23 @@ class GenScreensTests(unittest.TestCase):
         self.mutate("data/screens/hub.json",
                     lambda doc: doc["rows"][0].update({"condition": "flag", "param": 32}))
         self.assert_fails(self.compile(), "save flag bit must be 0..31")
+
+    def test_quest_condition_requires_quest_action(self):
+        self.mutate("data/screens/hub.json",
+                    lambda doc: doc["rows"][0].update({"condition": "quest", "param": 0}))
+        self.assert_fails(self.compile(), "condition 'quest' needs a take_quest/turn_in_quest action")
+
+    def test_take_quest_need_nibble_must_be_zero(self):
+        self.mutate("data/screens/hub.json",
+                    lambda doc: doc["rows"][0].update({"action": "take_quest", "condition": "quest",
+                                                       "param": 16}))
+        self.assert_fails(self.compile(), "take_quest need nibble must be 0")
+
+    def test_turn_in_quest_need_nibble_required(self):
+        self.mutate("data/screens/hub.json",
+                    lambda doc: doc["rows"][0].update({"action": "turn_in_quest", "condition": "quest",
+                                                       "param": 0}))
+        self.assert_fails(self.compile(), "turn_in_quest need nibble must be 1..15")
 
     def test_empty_rows_rejected(self):
         self.mutate("data/screens/hub.json", lambda doc: doc.__setitem__("rows", []))

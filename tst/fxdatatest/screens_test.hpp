@@ -51,8 +51,9 @@ static uint16_t countBits(uint8_t xa, uint8_t xb, uint8_t ya, uint8_t yb) {
 
 inline void test_screens(FxTest &test) {
     // ------------------------------------------------- generated cart rows
-    test.expectEq(screens::SCREEN_COUNT, 1, F("screen count"));
+    test.expectEq(screens::SCREEN_COUNT, 2, F("screen count"));
     test.expectEq(screens::SCREEN_HUB, 0, F("hub index"));
+    test.expectEq(screens::SCREEN_QUESTS, 1, F("quests index"));
     test.expectEq(screenRowCount(screens::SCREEN_HUB), 3, F("hub row count"));
 
     // Title bytes come from the cart def (id u8, titleLen u8, title chars).
@@ -192,6 +193,27 @@ inline void test_screens(FxTest &test) {
     test.expectEq(countBits(10, 50, 20, 27) > 0 ? 1 : 0, 1, F("row1 label ink"));
     // The cursor sits on row 0, so row 1's cursor cell stays empty.
     test.expectEq(countBits(2, 5, 22, 25), 0, F("row1 no cursor"));
+
+    // -------------------------------------------------- quests board screen
+    test.expectEq(screenRowCount(screens::SCREEN_QUESTS), 6, F("quests row count"));
+    ScreenRow q0, q1;
+    screenReadRow(screenRowOffsetAt(screens::SCREEN_QUESTS, 0), q0);
+    screenReadRow(screenRowOffsetAt(screens::SCREEN_QUESTS, 1), q1);
+    test.expectEq(q0.action, screens::ACTION_TAKE_QUEST, F("quest row0 action"));
+    test.expectEq(q0.cond, screens::COND_QUEST, F("quest row0 cond"));
+    test.expectEq(q0.param, 0, F("quest row0 param (quest 0)"));
+    test.expectEq(q1.action, screens::ACTION_TURN_IN_QUEST, F("quest row1 action"));
+    test.expectEq(q1.cost, 150, F("quest row1 reward cost"));
+    test.expectEq(q1.param, 48, F("quest row1 param (need 3, quest 0)"));
+
+    // Pixel: the quests page draws through the same generic renderer.
+    clearFb();
+    ScreenState qs;
+    screenEnter(qs, screens::SCREEN_QUESTS, ps);
+    drawScreen(qs, ps);
+    test.expectEq(countBits(2, 5, 13, 16), 16, F("quests cursor chip 4x4"));
+    test.expectEq(countBits(2, 20, 0, 7) > 0 ? 1 : 0, 1, F("quests title ink"));
+    test.expectEq(countBits(10, 60, 11, 18) > 0 ? 1 : 0, 1, F("quests row0 label ink"));
 }
 
 }   // namespace screenfx

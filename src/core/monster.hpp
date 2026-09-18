@@ -137,6 +137,11 @@ static void damageMonster(Game &g, int16_t dmg, int16_t hx, int16_t hy) {
         m.state = MS_DEAD;
         g.over = OVER_WIN;
         g.freeze = 12;
+        // Quest kill accounting (bead monhun-ardu-me6): count this hunt's kill
+        // when the beast matches the active quest's target kind. progress is
+        // committed to the save at hunt end by the sketch, never mid-hunt.
+        if (g.questTarget >= 0 && g.monsterKind == g.questTarget && g.questProgress < 255)
+            g.questProgress++;
     }
 }
 

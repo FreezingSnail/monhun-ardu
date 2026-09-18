@@ -10,6 +10,7 @@
 #include "sin_test.hpp"
 #include "menu_test.hpp"
 #include "screens_test.hpp"
+#include "quests_test.hpp"
 #include "combat_test.hpp"
 #include "combat_pack_test.hpp"
 
@@ -25,6 +26,7 @@ int main() {
     SinSuite(runner);
     MenuSuite(runner);
     ScreenSuite(runner);
+    QuestSuite(runner);
     CombatSuite(runner);
     CombatPackSuite(runner);
     runner.printSummary();

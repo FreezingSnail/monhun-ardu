@@ -43,6 +43,13 @@ raw_t mhEquip = "tables/equip.bin"
 // during the screen scan/render pass (src/screens.hpp).
 raw_t mhScreens = "tables/screens.bin"
 
+// Quest defs (bead monhun-ardu-me6): data/quests/*.json compiled by
+// tools/gen-quests.py into a fixed 6 B QuestDef record per quest (header +
+// records, little-endian, no padding). Offsets land in quest_meta.hpp; read on
+// device through fxmem.hpp during the screen scan/render pass (src/quest.hpp)
+// for the board rows and the per-hunt kill target.
+raw_t mhQuests = "tables/quests.bin"
+
 // Sprite sections: blocks/fonts/menu/equip sheets, addressed with 24-bit
 // SpritesU seeks so they may grow past the tables' 64 KiB window. Equipment
 // sheets stay last (mh_head_bandana...mh_weapon_flail).
