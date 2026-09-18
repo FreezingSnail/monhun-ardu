@@ -13,7 +13,27 @@
 #include "fxmem.hpp"                      // FX cart offsets + mhFxRead* field readers (identity on host)
 #include "../generated/combat_meta.hpp"   // data facts (HAS_PARTS) size the part caches
 
+// Per-image parts carve (mirrors MH_AUDIO in src/audio.hpp): the on-device
+// perf bench and parity scenes run only MON_LUNGE/SWEEP/HEAVY, which never run a
+// breakable-part, multi-window, stagger or parts-guard path, so those images
+// compile the ravager machinery out with -DMH_COMBAT_PARTS=0 and keep their
+// flash headroom. Shipping and test_combat keep the generated facts (default
+// 1). The generated data facts stay authoritative; these effective flags only
+// fold optional machinery for a build whose scene does not exercise it, and for
+// the shipped 3 they are behavior-identical (single-window attacks, dist-only
+// guards, staggerMax 0).
+#ifndef MH_COMBAT_PARTS
+#define MH_COMBAT_PARTS 1
+#endif
+
 namespace mh {
+
+constexpr bool PARTS_ENABLED = combat::HAS_PARTS && MH_COMBAT_PARTS;
+constexpr bool MULTI_WINDOW_ENABLED = combat::HAS_MULTI_WINDOW && MH_COMBAT_PARTS;
+constexpr bool STAGGER_ENABLED = combat::HAS_STAGGER && MH_COMBAT_PARTS;
+constexpr bool GUARD_PARTS_ENABLED = combat::HAS_GUARD_PARTS && MH_COMBAT_PARTS;
+// A carved image only has dist-only guards, so the fast path is correct there.
+constexpr bool SIMPLE_GUARDS = combat::HAS_SIMPLE_GUARDS || !MH_COMBAT_PARTS;
 
 constexpr int16_t HOLD_TICKS = 11;   // B held this long -> stance (~180ms)
 constexpr int16_t CHAIN_WIN = 14;    // chain follow-up window after a combo hit
@@ -372,7 +392,7 @@ struct CombatBox {
 // section 4). The live part caches (pools + boxes) are sized by the data fact,
 // so a build with no part pools pays one placeholder slot instead of eight.
 constexpr uint8_t COMBAT_MAX_PARTS = 8;
-constexpr uint8_t COMBAT_PART_SLOTS = combat::HAS_PARTS ? COMBAT_MAX_PARTS : 1;
+constexpr uint8_t COMBAT_PART_SLOTS = PARTS_ENABLED ? COMBAT_MAX_PARTS : 1;
 
 // Full profile record mirror (16 fields, blob ABI order). Read whole at spawn
 // and cached; the interpreter consumes the cache at decision time.
@@ -431,7 +451,7 @@ struct CombatAttackCache {
 // the 8 facings, anchor-relative to m.x/m.y), so the per-tick target sync is
 // four stores and hit resolution/render rotate one box for the current facing.
 // The arrays exist only when the shipped blob declares pools/stages
-// (combat::HAS_PARTS); otherwise they fold to 1 slot.
+// (PARTS_ENABLED); otherwise they fold to 1 slot.
 struct CombatState {
     CombatProfile profile;      // 22 B AVR
     CombatAttackCache attack;   // 21 B AVR

@@ -55,12 +55,12 @@ static uint8_t monsterCreatureId(int8_t kind) {
 
 // Load an attack's scalars + first window into the cache and record the stable
 // identity on the monster. ~16 cart reads; the only attack-start read burst.
-// Multi-window attacks (combat::HAS_MULTI_WINDOW) track the pending windows;
+// Multi-window attacks (MULTI_WINDOW_ENABLED) track the pending windows;
 // single-window data folds the bookkeeping away (winRemain stays 0).
 static uint8_t monsterAttackSet(Game &g, uint8_t attackIdx) {
     const uint8_t loaded = attackLoad(g, attackIdx);
     g.monster.atkIdx = loaded;
-    if (combat::HAS_MULTI_WINDOW) {
+    if (MULTI_WINDOW_ENABLED) {
         const uint8_t windows = combatAttackWindowCount(loaded);
         g.monster.winRemain = (windows > 0) ? static_cast<uint8_t>(windows - 1) : 0;
     }
@@ -89,7 +89,7 @@ static void monsterWindowNext(Game &g) {
 static void syncMonsterTarget(Game &g) {
     Monster &m = g.monster;
     g.target.alive = (m.state != MS_DEAD);
-    if (combat::HAS_PARTS && (g.combat.bodyCount + g.combat.overCount) > 1) {
+    if (PARTS_ENABLED && (g.combat.bodyCount + g.combat.overCount) > 1) {
         const CombatBox &h = g.combat.partsHurt;
         g.target.rect.x = static_cast<int16_t>(m.x + h.ox);
         g.target.rect.y = static_cast<int16_t>(m.y + h.oy);
@@ -189,7 +189,7 @@ static void monsterOnHit(Game &g, int dmg, int hx, int hy, int push, int effect)
     if (m.state == MS_DEAD)
         return;
     CombatBodyHit hit;
-    if (combat::HAS_PARTS && (g.combat.bodyCount + g.combat.overCount) > 1) {
+    if (PARTS_ENABLED && (g.combat.bodyCount + g.combat.overCount) > 1) {
         hit = combatPartHitResolve(g, dmg, playerPhys(g), static_cast<int16_t>(hx), static_cast<int16_t>(hy));
     } else {
         hit = combatResolveBodyHit(g, dmg);
@@ -200,10 +200,11 @@ static void monsterOnHit(Game &g, int dmg, int hx, int hy, int push, int effect)
     if (m.state == MS_DEAD)
         return;
     // Stagger meter (docs section 7). profile.staggerMax == 0 on the shipped 3
-    // (combat::HAS_STAGGER false), so the guard folds the whole meter out; part
-    // stage stagger (combat::STAGES_COUNT) is the part-break interrupt channel
-    // once stages exist, like every other stage-gated path.
-    if (combat::HAS_HIT_STAGGER && combat::STAGES_COUNT > 0 && g.combat.profile.staggerMax > 0)
+    // (STAGGER_ENABLED false), so the guard folds the whole meter out; the
+    // part stage stagger is the part-break interrupt channel (combat::STAGES_COUNT
+    // > 0 only once a breakable part ships). PARTS_ENABLED folds this with the
+    // rest of the parts machinery in images that compile it out.
+    if (PARTS_ENABLED && STAGGER_ENABLED && combat::STAGES_COUNT > 0 && g.combat.profile.staggerMax > 0)
         monsterStaggerAdd(g, combatPartStaggerNow(g, hit.partIdx));
     if (effect == 1 && m.stun < 70)
         m.stun = 70;   // trip
@@ -273,7 +274,7 @@ static void initMonster(Game &g, int8_t kind = 0) {
 // Source order is semantic: the first matching guard wins. profile.staggerMax
 // == 0 (shipped 3) keeps the stagger meter inert.
 
-// Guard probe for one pattern. Dist-only guards (combat::HAS_SIMPLE_GUARDS,
+// Guard probe for one pattern. Dist-only guards (SIMPLE_GUARDS,
 // the shipped 3) are one u16 cart read + a min/max compare; complex guards
 // (hp band, player flags, cooldown, part predicates, chance) fall back to the
 // loader's full evaluator (~10 cart accesses, tick-derived chance). Generic
@@ -296,7 +297,7 @@ static bool patternGuardFull(Game &g, uint8_t patternIdx, uint8_t dist) {
 
 static bool patternGuardOk(Game &g, uint8_t patternIdx, int32_t dist) {
     const uint8_t d = static_cast<uint8_t>(dist < 0 ? 0 : (dist > 255 ? 255 : dist));
-    if (combat::HAS_SIMPLE_GUARDS) {
+    if (SIMPLE_GUARDS) {
         // chooseAttack only probes indices below the creature's pattern count,
         // so the guard record is always in range (generator-validated).
         const uint16_t range = combatPatternGuardRangeRead(patternIdx);
@@ -343,7 +344,7 @@ static void patternStepsGeneric(Game &g) {
             continue;   // skip immediately; `after` still delays the next step
         // Part-stage attack gating (ljj.6): a crossed stage can disable an
         // attack (docs section 4); data with no parts/stages folds this out.
-        if (combat::HAS_PARTS && combatAttackDisabled(g, s.ref))
+        if (PARTS_ENABLED && combatAttackDisabled(g, s.ref))
             continue;
         monsterAttackSet(g, s.ref);
         m.state = MS_WINDUP;
@@ -365,7 +366,7 @@ static void patternStepsSingle(Game &g) {
     const uint8_t ref = combatStepRef(combatPatternFirstStep(c.patternIdx));
     c.patternIdx = COMBAT_NO_PATTERN;
     c.stepT = 0;
-    if (combat::HAS_PARTS && combatAttackDisabled(g, ref))
+    if (PARTS_ENABLED && combatAttackDisabled(g, ref))
         return;   // stage-disabled step: cursor cleared, decision retries
     monsterAttackSet(g, ref);
     Monster &m = g.monster;
@@ -511,7 +512,7 @@ static void updateMonster(Game &g) {
     m.fy = fp::dir8Y(di);
 
     // Stagger meter decay (docs section 7). Shipped 3: fact false, folded out.
-    if (combat::HAS_STAGGER && g.combat.stagger > 0) {
+    if (STAGGER_ENABLED && g.combat.stagger > 0) {
         const uint8_t decay = pr.staggerDecay;
         g.combat.stagger = (g.combat.stagger > decay) ? static_cast<uint8_t>(g.combat.stagger - decay) : 0;
     }
@@ -560,7 +561,7 @@ static void updateMonster(Game &g) {
         m.t++;
         if (g.combat.attack.moveType == MOVE_LUNGE && m.t <= active)
             fp::addVel(m, m.lvx, m.lvy);
-        if (combat::HAS_MULTI_WINDOW)
+        if (MULTI_WINDOW_ENABLED)
             monsterWindowNext(g);
         const uint16_t t16 = static_cast<uint16_t>(m.t);
         if (t16 >= g.combat.attack.win.t0 && t16 <= g.combat.attack.win.t1 && monsterHitsPlayer(g)) {
@@ -587,9 +588,9 @@ static void updateMonster(Game &g) {
         }
         break;
     case MS_STAGGER:
-        // Inert on the shipped 3 (profile.staggerMax 0, combat::HAS_STAGGER
+        // Inert on the shipped 3 (profile.staggerMax 0, STAGGER_ENABLED
         // false); same release as stun. Generic path returns with stagger data.
-        if (!combat::HAS_STAGGER)
+        if (!STAGGER_ENABLED)
             break;
         m.t--;
         if (m.t <= 0) {

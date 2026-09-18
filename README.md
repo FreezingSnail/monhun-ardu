@@ -106,8 +106,11 @@ data/skeletons.json + data/creatures/*.json ──tools/gen-combat.py──►�
   `mhFxRead*`), exercised by `tst/combat_test.hpp`,
   `tst/combat_pack_test.hpp` and the Ardens `test_combat`; the game runs the
   pattern interpreter from migrations `ljj.3`–`.5`, and `data/creatures/
-  ravager.json` is the first creature with a breakable part (pool + stages +
-  pattern-swap guard, `ljj.6`).
+  ravager.json` is the first creature with a breakable part (tail pool + stages +
+  pattern-swap guard, `ljj.8`). The parts machinery is folded out of the
+  `test_perf` and `test_parity` images with `-DMH_COMBAT_PARTS=0` (see
+  `src/core/game.hpp`), whose scenes never run the ravager; shipping and
+  `test_combat` keep it.
 - Current blobs: `fxmonster`, `fxplayer`, `fxpole`, `fxball`, `fxscatter`,
   `fxspark`, `fxfontw`, `fxfontg`, the overlay/effect sheets and the raw
   content tables (`mhWeaponDefs`, `mhMonsterAttacks`, `mhMonsterDefs`,

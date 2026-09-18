@@ -236,10 +236,10 @@ void testSlashLayout(Test &t) {
 // --------------------------------------------- per-sheet pixel presence
 
 void testSheetPixels(Test &t) {
-    Blob slash, ripspecial, parry, whirl, deflect, guard, reload, erase, trail, telegraph, chip;
+    Blob slash, ripspecial, parry, whirl, deflect, guard, reload, erase, trail, telegraph, chip, tail;
     if (!parseBlob("fxslash", slash, t) || !parseBlob("fxripspecial", ripspecial, t) || !parseBlob("fxparry", parry, t) || !parseBlob("fxwhirl", whirl, t) || !parseBlob("fxdeflect", deflect, t) ||
         !parseBlob("fxguard", guard, t) || !parseBlob("fxreload", reload, t) || !parseBlob("fxerase", erase, t) || !parseBlob("fxtrail", trail, t) || !parseBlob("fxtelegraph", telegraph, t) ||
-        !parseBlob("fxchip", chip, t))
+        !parseBlob("fxchip", chip, t) || !parseBlob("fxtail", tail, t))
         return;
 
     // Sheet headers agree with the generated frame layout.
@@ -255,6 +255,9 @@ void testSheetPixels(Test &t) {
     t.assert(telegraph.frames, art_dims::telegraph_frames, "telegraph blob frames");
     t.assert(whirl.frames, art_dims::whirl_frames, "whirl blob frames");
     t.assert(chip.frames, art_dims::chip_frames, "chip blob frames");
+    t.assert(tail.w, art_dims::tail_frame_w, "tail blob frame w");
+    t.assert(tail.h, art_dims::tail_frame_h, "tail blob frame h");
+    t.assert(tail.frames, art_dims::tail_frames, "tail blob frames");
 
     // Sword slash frames 0..4: light box (hw x hh) centred in the 32x32 frame
     // with the white 4x4 core on the box centre. Frame order: combo 12x10,
@@ -363,6 +366,26 @@ void testSheetPixels(Test &t) {
     t.assert(bitAt(0, pixelData(chip, art_dims::chip_ball_frame, 2, 1, 0)), 1, "chip ball white");
     t.assert(chip.w, art_dims::chip_frame_w, "chip blob frame w");
 
+    // Breakable-part tail: frames in combatPartArtFrame() order (east intact,
+    // east broken, west intact, west broken). Intact frames are a light body
+    // (planes 0+1) with a white tip (plane 2); broken frames are a dark stub
+    // (plane 0 only) at the body end; the far side stays transparent.
+    t.assert(bitAt(2 % 8, pixelMask(tail, 0, 0, 0, 2 / 8)), 1, "tail east intact mask");
+    t.assert(bitAt(2 % 8, pixelData(tail, 0, 0, 0, 2 / 8)), 1, "tail east intact plane0");
+    t.assert(bitAt(2 % 8, pixelData(tail, 0, 1, 0, 2 / 8)), 1, "tail east intact plane1");
+    t.assert(bitAt(2 % 8, pixelData(tail, 0, 2, 0, 2 / 8)), 0, "tail east intact tip is light");
+    t.assert(bitAt(3 % 8, pixelData(tail, 0, 2, 0, 3 / 8)), 1, "tail east white tip plane2");
+    t.assert(bitAt(2 % 8, pixelMask(tail, 0, 0, 12, 2 / 8)), 0, "tail east far side clear");
+    t.assert(bitAt(3 % 8, pixelData(tail, 1, 0, 9, 3 / 8)), 1, "tail east broken stub plane0");
+    t.assert(bitAt(3 % 8, pixelData(tail, 1, 1, 9, 3 / 8)), 0, "tail east broken stub dark only");
+    t.assert(bitAt(2 % 8, pixelMask(tail, 1, 0, 0, 2 / 8)), 0, "tail east broken clears the tip");
+    t.assert(bitAt(2 % 8, pixelData(tail, 2, 0, 6, 2 / 8)), 1, "tail west intact plane0");
+    t.assert(bitAt(3 % 8, pixelData(tail, 2, 2, 15, 3 / 8)), 1, "tail west white tip plane2");
+    t.assert(bitAt(2 % 8, pixelMask(tail, 2, 0, 0, 2 / 8)), 0, "tail west near side clear");
+    t.assert(bitAt(3 % 8, pixelData(tail, 3, 0, 0, 3 / 8)), 1, "tail west broken stub plane0");
+    t.assert(bitAt(3 % 8, pixelData(tail, 3, 1, 0, 3 / 8)), 0, "tail west broken stub dark only");
+    t.assert(bitAt(3 % 8, pixelMask(tail, 3, 0, 9, 3 / 8)), 0, "tail west broken clears the tip");
+
     // Frame coverage: every declared frame of every new sheet is parsed, so a
     // truncated Sprites.txt (stale append) cannot silently skip an icon.
     t.assert(slash.frames, art_dims::slash_frames, "slash frames parsed");
@@ -376,6 +399,7 @@ void testSheetPixels(Test &t) {
     t.assert(trail.frames, art_dims::trail_frames, "trail frames parsed");
     t.assert(telegraph.frames, art_dims::telegraph_frames, "telegraph frames parsed");
     t.assert(chip.frames, art_dims::chip_frames, "chip frames parsed");
+    t.assert(tail.frames, art_dims::tail_frames, "tail frames parsed");
 }
 
 void ArtDimsSuite(TestRunner &runner) {

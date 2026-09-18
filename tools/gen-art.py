@@ -298,6 +298,14 @@ def icon_defs(dims):
         # the 6 dots are placed with the device's SIN65/mulQ4 math.
         {"id": "whirlring", "w": 48, "h": 32, "anchor": "player centre",
          "frames": whirl_ring_frames(dims)},
+        # Breakable-part overlay (beads monhun-ardu-ljj.6/ljj.8): the ravager
+        # tail, one 18x10 frame per (facing, stage) pair, matching the part box
+        # in data/creatures/ravager.json ({ox:-14, oy:8, w:18, h:10}). Frame
+        # order is the combatPartArtFrame contract (src/core/combat.hpp):
+        # east intact, east broken, west intact, west broken. Frame origin is
+        # the face-relative part box top-left (rotated at draw time).
+        {"id": "tail", "w": 18, "h": 10, "anchor": "part box top-left",
+         "frames": tail_defs()},
     ] + hud_defs()
 
 
@@ -334,8 +342,18 @@ def monster_frame(body, head, east, dead=False):
     return img
 
 
-# ---- breakable-part overlay (ljj.6 / parts budget bead): the tail sheet was
-# deferred with the parts pass. Re-add with the framework when parts ship.
+# ---- breakable-part overlay (ljj.6 / ljj.8 parts pass). The tail is an 18x10
+# frame matching the ravager part box; the broken variants keep only a stub at
+# the body end. Frame order is the combatPartArtFrame() contract
+# (src/core/combat.hpp): east intact, east broken, west intact, west broken, so
+# one index selects the draw. Frame origin is the part box top-left.
+def tail_defs():
+    return [
+        [(LIGHT, 0, 2, 12, 6), (WHITE, 0, 3, 3, 4)],   # east intact
+        [(DARK, 9, 3, 9, 4)],                          # east broken stub
+        [(LIGHT, 6, 2, 12, 6), (WHITE, 15, 3, 3, 4)],  # west intact
+        [(DARK, 0, 3, 9, 4)],                          # west broken stub
+    ]
 
 
 def monster_frames():

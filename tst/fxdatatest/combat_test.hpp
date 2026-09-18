@@ -12,9 +12,10 @@
 // <= 12, and 0 cart reads per tick in the steady state (combatTick). The
 // counter is enabled by MH_FX_READ_COUNT in test_combat.ino.
 //
-// Shipped blob limits, called out honestly: STAGES/ELEMS/PREDICATES counts are
-// 0, so stage transitions and predicate ops are exercised on the packed
-// bitfield + value helpers, while every other path reads real records.
+// ljj.8: the blob now carries the ravager's breakable tail (override part,
+// 2 stage records, 1 element, 1 parts-predicate guard) and a two-window
+// tail_sweep, so the stage/predicate/break paths below read real records;
+// the shipped 3 stay on the single-body path.
 #include "harness/fxtest.hpp"
 #include "src/core/combat.hpp"
 #include "src/core/monster.hpp"       // migration A: sim consumes the attack cache
@@ -317,6 +318,47 @@ inline void test_combat(FxTest &test) {
     test.expectEq(g.combat.stages, static_cast<uint16_t>(3u | (3u << 6)), F("packed stage bits"));
     test.expectEq(combatPartDmgMulNow(g, combat::PART_QUAD_32X24_BODY), 100, F("effective dmgMul stays neutral"));
     test.expectEq(combatAttackDisabled(g, combat::ATTACK_LUNGE_LUNGE), 0, F("no stage disables lunge"));
+
+    // ------------------------------- ravager breakable tail (ljj.8)
+    // Device-side proof the real cart records drive the parts path: record spot
+    // values, spawn pool seeding, stage effects, break -> pattern swap. The
+    // exhaustive multiplier/art vectors live in the host combat suite.
+    {
+        const CombatPart tail = combatPartRead(combat::PART_RAVAGER_TAIL);
+        test.expectEq(tail.hp, 60, F("tail hp"));
+        test.expectEq(tail.breakTypes, PHYS_SLASH, F("tail break slash"));
+        test.expectEq(tail.stageCount, 2, F("tail stages"));
+
+        before = mhFxReadCount;
+        creatureLoad(g, combat::CREATURE_RAVAGER);
+        const uint16_t ravReads = static_cast<uint16_t>(mhFxReadCount - before);
+        test.expectEq(g.combat.overFirst, combat::PART_RAVAGER_TAIL, F("tail override head"));
+        test.expectEq(g.combat.partHp[g.combat.bodyCount], 60, F("tail pool seeded"));
+        test.expectEq(ravReads <= 40, 1, F("ravager spawn <= 40 reads"));
+        test.expectEq(combatPartStageForHp(combat::PART_RAVAGER_TAIL, 18, 60), 1, F("tail stage 1"));
+        combatPartStageSet(g, combat::PART_RAVAGER_TAIL, 1);
+        test.expectEq(combatPartStaggerNow(g, combat::PART_RAVAGER_TAIL), 30, F("stage 1 stagger"));
+        test.expectEq(combatAttackDisabled(g, combat::ATTACK_RAVAGER_TAIL_SWEEP), 1, F("stage 1 disables sweep"));
+        CombatGuardInput en = {0, 100, 0, 0, 0xFFFF, 0};
+        test.expectEq(combatGuardPasses(g, combat::PATTERN_RAVAGER_P_ENRAGED, en), 1, F("stage 1 enrage guard"));
+        combatPartStageSet(g, combat::PART_RAVAGER_TAIL, 2);
+        test.expectEq(combatPartHurtOff(g, combat::PART_RAVAGER_TAIL), 1, F("stage 2 hurt off"));
+    }
+
+    // ------------------------------- multi-window refresh (ljj.8)
+    {
+        initMonster(g, MON_RAVAGER);
+        before = mhFxReadCount;
+        monsterAttackSet(g, combat::ATTACK_RAVAGER_TAIL_SWEEP);
+        const uint16_t mwReads = static_cast<uint16_t>(mhFxReadCount - before);
+        test.expectEq(g.monster.winRemain, 1, F("two windows pending"));
+        test.expectEq(g.combat.attack.win.t1, 5, F("window 0 t1"));
+        test.expectEq(mwReads <= 24, 1, F("multi-window load <= 24 reads"));
+        g.monster.t = 6;   // past the first window's t1
+        monsterWindowNext(g);
+        test.expectEq(g.combat.attack.winIdx, combat::WINDOW_RAVAGER_TAIL_SWEEP_1, F("window 1 loaded"));
+        test.expectEq(g.monster.winRemain, 0, F("windows exhausted"));
+    }
 
     // --------------------------------------------------- bad-id fallback
     const uint8_t fallback = creatureLoad(g, 99);

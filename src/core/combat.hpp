@@ -289,7 +289,7 @@ static_assert(offsetof(CombatStep, chance) == offsetof(PkStep, chance), "step mi
 static_assert(offsetof(CombatPattern, guardIdx) == offsetof(PkPattern, guardIdx), "pattern mirror drift");
 static_assert(sizeof(CombatWindow) == 9, "window cache must stay 9 B");
 static_assert(sizeof(CombatAttackCache) == 21, "attack cache must stay 21 B");
-static_assert(sizeof(CombatState) == (combat::HAS_PARTS ? 78 : 64), "CombatState must stay 78 B with parts, 64 B without (ljj.6 part caches fold to 1 slot when the blob declares none)");
+static_assert(sizeof(CombatState) == (PARTS_ENABLED ? 78 : 64), "CombatState must stay 78 B with parts, 64 B without (ljj.6 part caches fold to 1 slot when the blob declares none)");
 
 // Fake cart pointer: the blob lives below 64 KB (generator hard-fails above).
 inline uint16_t combatCartAddr(uint16_t off) {
@@ -616,7 +616,7 @@ inline uint8_t combatPatternStepCount(uint8_t i) {
     return combatReadU8(static_cast<uint16_t>(combat::PATTERNS_OFF + i * combat::PATTERN_SIZE + MH_COMBAT_FIELD(detail::PkPattern, stepCount)));
 }
 
-// Dist-only guard probe (combat::HAS_SIMPLE_GUARDS): minDist/maxDist are the
+// Dist-only guard probe (SIMPLE_GUARDS): minDist/maxDist are the
 // guard record's leading byte pair, so the range is one u16 cart read. Complex
 // guards go through combatGuardPasses instead.
 inline uint16_t combatPatternGuardRangeRead(uint8_t i) {
@@ -1094,45 +1094,58 @@ inline void combatPartHitRect(const Game &g, const CombatBox &b, CombatBox &out)
 // part caches: live pools + the facing-independent hurt envelope (union of
 // every part rect over the 8 facings) + list heads. One spawn burst; the hit,
 // target and render paths then need at most one box read per part. Only
-// compiled when the shipped blob declares pools/stages (combat::HAS_PARTS);
+// compiled when the shipped blob declares pools/stages (PARTS_ENABLED);
 // creatures over the ordinal cap keep their extra parts untracked (generator
 // still packs them).
 inline void combatCreaturePartsLoad(Game &g, uint8_t creatureId) {
-    if (!combat::HAS_PARTS)
+    if (!PARTS_ENABLED)
         return;
-    uint8_t n = 0;
-    const uint8_t bodyFirst = g.combat.bodyFirst;
+    // Lazy pool fill: only override parts carry a pool in v1 (skeleton parts
+    // are hp 0, so their slot is never read -- combatPartDamage returns early on
+    // hpMax == 0). Override part ordinals still start at bodyCount.
     const uint8_t bodyCount = g.combat.bodyCount;
-    for (uint8_t i = 0; i < bodyCount && n < COMBAT_PART_SLOTS; i++)
-        g.combat.partHp[n++] = combatPartHp(static_cast<uint8_t>(bodyFirst + i));
     uint8_t overCount = combatCreaturePartCount(creatureId);
-    if (overCount > static_cast<uint8_t>(COMBAT_PART_SLOTS - n))
-        overCount = static_cast<uint8_t>(COMBAT_PART_SLOTS - n);
+    if (bodyCount >= COMBAT_PART_SLOTS)
+        overCount = 0;
+    else if (overCount > static_cast<uint8_t>(COMBAT_PART_SLOTS - bodyCount))
+        overCount = static_cast<uint8_t>(COMBAT_PART_SLOTS - bodyCount);
     g.combat.overFirst = combatCreatureFirstPart(creatureId);
     g.combat.overCount = overCount;
     for (uint8_t i = 0; i < overCount; i++)
-        g.combat.partHp[n++] = combatPartHp(static_cast<uint8_t>(g.combat.overFirst + i));
+        g.combat.partHp[static_cast<uint8_t>(bodyCount + i)] = combatPartHp(static_cast<uint8_t>(g.combat.overFirst + i));
 
-    // Hurt envelope: union of every part rect over the 8 DIR8 facings. Starts
-    // from the body rect (the body part is {0,0,w,h}, so its rect is fixed).
-    int32_t minX = g.combat.body.ox, minY = g.combat.body.oy;
-    int32_t maxX = g.combat.body.ox + g.combat.body.w, maxY = g.combat.body.oy + g.combat.body.h;
+    // Hurt envelope: a conservative bounding box of every part rect over the
+    // 8 DIR8 facings. A part box is a face-relative origin (ox,oy); DIR8 has
+    // (16,0)/(0,16) axis steps and (11,11) diagonals, so the rotated origin
+    // stays within +/-m of (ox,oy) with m = max(|ox|, |oy|, 11*(|ox|+|oy|)/16).
+    // The envelope is the body rect extended by each part's [ox-m, ox+m+w].
+    // (Exact per-facet rects are still tested at hit time, so an over-wide
+    // target rect can only cost an early-out, never a wrong hit.)
+    int16_t minX = g.combat.body.ox, minY = g.combat.body.oy;
+    int16_t maxX = static_cast<int16_t>(g.combat.body.ox + g.combat.body.w);
+    int16_t maxY = static_cast<int16_t>(g.combat.body.oy + g.combat.body.h);
     const uint8_t count = combatPartCount(g);
     for (uint8_t ord = 0; ord < count; ord++) {
         const uint8_t partIdx = combatPartAt(g, ord);
         const CombatBox b = combatPartBoxRead(partIdx);
-        for (int8_t dir = 0; dir < 8; dir++) {
-            CombatBox r;
-            combatPartRectRot(fp::dir8X(dir), fp::dir8Y(dir), g.combat.body, b, r);
-            if (r.ox < minX)
-                minX = r.ox;
-            if (r.oy < minY)
-                minY = r.oy;
-            if (static_cast<int32_t>(r.ox) + r.w > maxX)
-                maxX = static_cast<int32_t>(r.ox) + r.w;
-            if (static_cast<int32_t>(r.oy) + r.h > maxY)
-                maxY = static_cast<int32_t>(r.oy) + r.h;
-        }
+        const int16_t ax = (b.ox < 0) ? static_cast<int16_t>(-b.ox) : b.ox;
+        const int16_t ay = (b.oy < 0) ? static_cast<int16_t>(-b.oy) : b.oy;
+        int16_t m = (ax > ay) ? ax : ay;
+        const int16_t diag = static_cast<int16_t>((11 * static_cast<int16_t>(ax + ay)) >> 4);
+        if (diag > m)
+            m = diag;
+        const int16_t x0 = static_cast<int16_t>(g.combat.body.ox + b.ox - m);
+        const int16_t y0 = static_cast<int16_t>(g.combat.body.oy + b.oy - m);
+        const int16_t x1 = static_cast<int16_t>(g.combat.body.ox + b.ox + m + b.w);
+        const int16_t y1 = static_cast<int16_t>(g.combat.body.oy + b.oy + m + b.h);
+        if (x0 < minX)
+            minX = x0;
+        if (y0 < minY)
+            minY = y0;
+        if (x1 > maxX)
+            maxX = x1;
+        if (y1 > maxY)
+            maxY = y1;
     }
     g.combat.partsHurt.ox = static_cast<int8_t>((minX < -128) ? -128 : (minX > 127 ? 127 : minX));
     g.combat.partsHurt.oy = static_cast<int8_t>((minY < -128) ? -128 : (minY > 127 ? 127 : minY));
@@ -1375,31 +1388,31 @@ inline uint8_t combatPartCueNow(const Game &g, uint8_t partIdx) {
 // stage disable/enable refs in order; the last match wins. Stage-less data
 // short-circuits after stageCount (no ref reads).
 inline bool combatAttackDisabled(const Game &g, uint8_t attackIdx) {
-    const CombatCreature c = combatCreatureRead(g.combat.creature);
-    const CombatSkeleton sk = combatSkeletonRead(c.skeletonIdx);
+    // Only per-creature override parts can carry attack disable/enable refs
+    // (the generator rejects skeleton-part stage attack refs), so the effective
+    // override list cached at spawn is the whole search space; no creature or
+    // skeleton record reads.
     bool disabled = false;
-    for (uint8_t list = 0; list < 2; list++) {
-        const uint8_t first = (list == 0) ? sk.firstPart : c.firstPart;
-        const uint8_t count = (list == 0) ? sk.partCount : c.partCount;
-        for (uint8_t p = 0; p < count; p++) {
-            const uint8_t partIdx = static_cast<uint8_t>(first + p);
-            const uint8_t stage = combatPartStageGet(g, partIdx);
-            if (stage == 0)
-                continue;
-            const uint8_t stageCount = combatPartStageCount(partIdx);
-            if (stageCount == 0)
-                continue;
-            const uint8_t firstStage = combatPartFirstStage(partIdx);
-            for (uint8_t s = 0; s < stageCount && s < stage; s++) {
-                const CombatStage st = combatStageRead(firstStage + s);
-                for (uint8_t d = 0; d < st.disableCount; d++) {
-                    if (combatRefRead(static_cast<uint8_t>(st.firstDisable + d)) == attackIdx)
-                        disabled = true;
-                }
-                for (uint8_t e = 0; e < st.enableCount; e++) {
-                    if (combatRefRead(static_cast<uint8_t>(st.firstEnable + e)) == attackIdx)
-                        disabled = false;
-                }
+    const uint8_t first = g.combat.overFirst;
+    const uint8_t count = g.combat.overCount;
+    for (uint8_t p = 0; p < count; p++) {
+        const uint8_t partIdx = static_cast<uint8_t>(first + p);
+        const uint8_t stage = combatPartStageGet(g, partIdx);
+        if (stage == 0)
+            continue;
+        const uint8_t stageCount = combatPartStageCount(partIdx);
+        if (stageCount == 0)
+            continue;
+        const uint8_t firstStage = combatPartFirstStage(partIdx);
+        for (uint8_t s = 0; s < stageCount && s < stage; s++) {
+            const CombatStage st = combatStageRead(firstStage + s);
+            for (uint8_t d = 0; d < st.disableCount; d++) {
+                if (combatRefRead(static_cast<uint8_t>(st.firstDisable + d)) == attackIdx)
+                    disabled = true;
+            }
+            for (uint8_t e = 0; e < st.enableCount; e++) {
+                if (combatRefRead(static_cast<uint8_t>(st.firstEnable + e)) == attackIdx)
+                    disabled = false;
             }
         }
     }
@@ -1480,7 +1493,7 @@ inline bool combatGuardPasses(const Game &g, uint8_t patternIdx, const CombatGua
         return false;
     if (combat::HAS_GUARD_COOLDOWN && !combatGuardCooldownOk(gu.cooldown, in.sinceUse))
         return false;
-    if (combat::HAS_GUARD_PARTS) {
+    if (GUARD_PARTS_ENABLED) {
         for (uint8_t i = 0; i < gu.partPredCount; i++) {
             if (!combatPredicatePasses(combatPredicateRead(static_cast<uint8_t>(gu.firstPartPred + i)), g.combat.stages))
                 return false;
@@ -1719,29 +1732,47 @@ inline CombatBodyHit combatPartHitResolve(Game &g, int32_t base, uint8_t phys, i
     const uint8_t count = combatPartCount(g);
     uint8_t best = COMBAT_NO_PART;
     uint32_t bestMul = 0;
-    uint8_t bestDmgMul = 0, bestPhysMul = 100, bestBodyShare = 100, bestBreak = 0;
+    uint8_t bestDmgMul = 100, bestPhysMul = 100, bestBodyShare = 100, bestBreak = 0;
     uint16_t bestHpMax = 0;
     for (uint8_t ord = 0; ord < count; ord++) {
         const uint8_t partIdx = combatPartAt(g, ord);
-        const CombatPartNow n = combatPartNow(g, partIdx);
-        if (n.hurtOff)
+        // One bulk part read; stage overrides applied in place only when the
+        // part has crossed at least one threshold (skeleton parts never do).
+        CombatPart p;
+        combatPartLoad(partIdx, p);
+        uint8_t dmgMul = p.dmgMul;
+        bool hurtOff = (p.hurtOn == 0);
+        const uint8_t stage = combatPartStageGet(g, partIdx);
+        if (p.stageCount != 0 && stage != 0) {
+            for (uint8_t i = 0; i < p.stageCount && i < stage; i++) {
+                CombatStage s;
+                combatStageLoad(static_cast<uint8_t>(p.firstStage + i), s);
+                dmgMul = combatStageDmgMul(s, dmgMul);
+                if (combatStageHurtOff(s))
+                    hurtOff = true;
+            }
+        }
+        if (hurtOff)
             continue;
-        CombatBox rect;
-        combatPartHitRect(g, n.box, rect);
-        const int32_t x = g.monster.x + rect.ox;
-        const int32_t y = g.monster.y + rect.oy;
-        if (hx < x || hx >= x + rect.w || hy < y || hy >= y + rect.h)
+        const uint8_t physMul = (phys & PHYS_SLASH) ? p.physSlash : ((phys & PHYS_BLUNT) ? p.physBlunt : ((phys & PHYS_SHOT) ? p.physShot : 100));
+        // Part boxes are face-relative origins: world rect origin is the body
+        // anchor plus the DIR8 rotation of (ox, oy); int16 suffices (products
+        // are <= 16 * 127). Same projection the attack windows use.
+        const int16_t dx = static_cast<int16_t>((static_cast<int16_t>(g.monster.fx) * p.box.ox - static_cast<int16_t>(g.monster.fy) * p.box.oy) >> 4);
+        const int16_t dy = static_cast<int16_t>((static_cast<int16_t>(g.monster.fy) * p.box.ox + static_cast<int16_t>(g.monster.fx) * p.box.oy) >> 4);
+        const int16_t x = static_cast<int16_t>(g.monster.x + dx);
+        const int16_t y = static_cast<int16_t>(g.monster.y + dy);
+        if (hx < x || hx >= x + p.box.w || hy < y || hy >= y + p.box.h)
             continue;
-        const uint8_t physMul = combatPartNowPhysMul(n, phys);
-        const uint32_t mul = combatPartMul(n.dmgMul, physMul, 100);
+        const uint32_t mul = combatPartMul(dmgMul, physMul, 100);
         if (best == COMBAT_NO_PART || combatMulBeats(mul, partIdx, bestMul, best)) {
             best = partIdx;
             bestMul = mul;
-            bestDmgMul = n.dmgMul;
+            bestDmgMul = dmgMul;
             bestPhysMul = physMul;
-            bestBodyShare = n.bodyShare;
-            bestBreak = n.breakTypes;
-            bestHpMax = n.hpMax;
+            bestBodyShare = p.bodyShare;
+            bestBreak = p.breakTypes;
+            bestHpMax = p.hp;
         }
     }
     if (best == COMBAT_NO_PART)

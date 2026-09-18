@@ -1,102 +1,107 @@
-# monhun-ardu-h71 — eqf.4 bake per-facing weapon arcs, drop player trig
+# monhun-ardu-ljj.8 — Parts: breakable-part budget + lean implementation
 
-Status: DONE — **spike outcome: NOT WORTH IT. No art baked, tree clean at HEAD.**
-No commit/push (orchestrator commits). Deliverable for this bead is the
-measurement report (bead allows the "not worth it" outcome).
+Status: **DONE.** Breakable parts landed end to end. Shipping + every Ardens
+suite green; parity fixtures byte-identical. No commit/push (orchestrator
+commits). One deviation from the dispatch, flagged below: the ravager-machinery
+carve had to cover `test_parity` as well as `test_perf` (the shipped-3 parity
+scene cannot fit the full machinery either), and the carve folds the
+ravager-only multi-window/stagger/parts-guard facts too — behavior-identical
+for the shipped 3.
 
-HEAD during the spike: `665db9d perf: bake HUD marker strip, flash 26928 (monhun-ardu-e4a)`.
+## Shipped
 
-## Question
+Data (`data/creatures/ravager.json`):
+- `parts`: `tail` `{ox:-14, oy:8, w:18, h:10}`, dmgMul 150, physMul SLASH 150 /
+  BLUNT 75, elemMul FIRE 200, hp 60, bodyShare 40, breakTypes SLASH, hurtOn
+  true; stages `at 30` (stagger 30, disableAttacks tail_sweep, speedMul 100,
+  cue part_break) and `at 0` (dmgMulOverride 200, hurtOn false).
+- `tail_sweep` split into 2 windows (`0..5` behind ox -22, `6..11` front ox 20).
+- `p_enraged` parts-guard pattern (`parts.tail >= 1` -> bite), listed first.
+- profile `staggerMax 60 / staggerDecay 1 / staggerRecoverT 24`.
 
-Remaining `mulQ4(cos256/sin256)` consumers in the render path were thin: whirl
-BALL, player STUN sparkle, monster stun dot, camera SHAKE. Bead context: bake
-the ball/stun as 24-phase sheets (like the 836 ring) if the measured saving
-justifies it; otherwise report and stop.
+Data facts (generated): `HAS_PARTS=true HAS_STAGGER=true HAS_MULTI_WINDOW=true
+HAS_GUARD_PARTS=true HAS_SIMPLE_GUARDS=false` (HAS_HIT_STAGGER stays false: no
+attack carries stagger; the meter is driven by the tail break-stage stagger).
 
-## Spike method
+Lean `combat.hpp` (kept, measured on shipping):
+1. int16 per-part envelope extremes + override-only `combatAttackDisabled`
+   (the generator rejects skeleton-part attack refs, so only the cached
+   override list can disable): -46 B.
+2. `combatPartHitResolve` rewritten (direct field reads, int16 rect, no
+   `CombatPartNow` / `combatPartHitRect` / `combatPartRectRot` on the hot path):
+   -420 B.
+3. lazy override-only pool fill (skeleton parts are hp 0, never read): -52 B.
+4. conservative hurt envelope `m=max(|ox|,|oy|,11(|ox|+|oy|)/16)` instead of the
+   exact 8-facing union (exact per-part rects are still tested at hit time): -172 B.
+5. `monsterOnHit` now gates the part-stage stagger channel on
+   `PARTS_ENABLED && STAGGER_ENABLED && STAGES_COUNT > 0` (was
+   `HAS_HIT_STAGGER`, which no attack sets, so the meter could never charge):
+   the feature is now functional, +212 B.
 
-Scratch-edit `src/render.hpp` only, one variant per build, `make fxtest-headless
-FXTEST_ONLY=test_perf`, read `rMx`. The perf bench scene (`primeHunt`) has the
-player simultaneously in `PS_STUN` + `ST_WHIRL` plus a monster stun dot and
-hit-flash shake, so all remaining consumers are live on the max frame. Each
-build measured in full; `render.hpp` reverted between variants; all numbers
-deterministic with the documented baseline `rMx=5388 rAv=5028 pUs=6501`.
+## Per-image carve (flags in `src/core/game.hpp`)
 
-## Measured rMx deltas (us, triplane frame)
+`-DMH_COMBAT_PARTS=0` defines effective flags (`PARTS_ENABLED`,
+`MULTI_WINDOW_ENABLED`, `STAGGER_ENABLED`, `GUARD_PARTS_ENABLED`,
+`SIMPLE_GUARDS`) that fold the ravager machinery. The generated data facts stay
+authoritative; `tools/tests/test_gen_combat.py::test_data_facts_match_fixture`
+is unchanged and passes. Applied in `tst/fxdatatest/test_perf.ino` (as
+dispatched) **and `tst/fxdatatest/test_parity.ino`** (deviation): parity with
+the full machinery is 32212/29696; parts-only fold is 29770 (74 over, because
+the ravager's multi-window/parts-guard/stagger facts are separate gate sites);
+the broad carve returns parity to HEAD's exact 29452 and is behavior-identical
+(parity 660/0). Shipping and `test_combat` compile the full machinery.
 
-| variant (only change) | rMx | Δ |
+## Verification (all re-run at this tree)
+
+```
+make gen (x2)            deterministic
+make gen-check           PASS (53 generated artifacts unchanged)
+make test                3411 passed / 0 failed
+make test-tools          Ran 81 tests, OK
+make fxtest-headless     all PASS:
+  assets 262/0  audio 14/0  boot 4/0  combat 211/0  data 221/0  hud 17/0
+  menu 59/0  parity 660/0  perf 5/0  player_art 111/0
+  combat reads: spawn=10 attack=5 guard=2 hit=9 tick256=0 simAtk=6 simTk=0 winSw=1
+  perf: B pUs=6501 pHz=153 lHz=51 lTk=984 rMx=5388 rAv=5028 ram=418
+        (vs rMx=5388 rAv=5028 pUs=6501 — unchanged; carve adds 10 B free RAM)
+node tools/gen-parity-fixtures.js -> empty tst/fxdatatest/parity_fixtures.hpp diff
+make build / make size   flash=29560/29696 (136 free)  ram=2032/2560
+```
+
+Shipping delta vs 26928 baseline: **+2632 B** (2768 -> 136 free).
+`make size` data facts: `HAS_GUARD_PARTS:true HAS_MULTI_WINDOW:true
+HAS_PARTS:true HAS_SIMPLE_GUARDS:false HAS_STAGGER:true` (rest false).
+
+Per-image flash (fxtest = device, stock flags; shipping = size flags):
+
+| image | flash | free |
 |---|---|---|
-| baseline HEAD | 5388 | — |
-| whirl BALL trig -> constant (blit kept) | 5348 | **-40** |
-| player STUN trig -> constant (blit kept) | 5348 | **-40** |
-| BALL+STUN trig -> constant (blits kept) | 5308 | **-80** |
-| monster stun dot trig -> constant | 5348 | -40 |
-| camera SHAKE trig -> constant | 5360 | -28 |
-| all four trig consumers -> constant | 5248 | -140 |
-| BALL full draw removed (partRead+8x4 blit+trig) | 5244 | -144 |
-| STUN full draw removed (partRead+8x4 blit+trig) | 5276 | -112 |
-| BALL+STUN full draw removed | 5124 | -264 |
-| whirl RING blit removed (48x32 triplane, already baked) | 5036 | **-352** |
+| shipping (full machinery) | 29560 | 136 |
+| test_combat (full) | 29508 | 188 |
+| test_parity (carved) | 29452 | 244 |
+| test_perf (carved) | 28202 | 1494 |
+| test_data | 16486 | 13210 |
+| test_boot | 15288 | 14408 |
+| test_audio | 14986 | 14710 |
+| test_assets | 8696 | 21000 |
+| test_hud | 20132 | 9564 |
+| test_menu | 15444 | 14252 |
+| test_player_art | 16148 | 13548 |
 
-Player path trig alone = 80 us/frame; ball = 40, stun = 40 (≈13 us/plane for
-the cos+sin pair, i.e. ~6.7 us per `sin256` cart byte fetch, paid on all 3
-planes).
+## Un-gated / added tests
 
-## Why the bake loses (the decisive number)
+- `tst/combat_test.hpp`: tail record, pool seeding, stage thresholds + effect
+  projections, `combatPartHitResolve` containment/multiplier/pool-drain/break,
+  multi-window windows, enrage parts-guard flip, `combatPartArtFrame` <->
+  `art_dims::tail_*` linkage, and the stagger meter tripping `MS_STAGGER`.
+- `tst/combat_pack_test.hpp`: STAGE/ELEM/REF/PREDICATE decode loops plus
+  MetaRecord coverage for every new ravager record.
+- `tst/fxdatatest/combat_test.hpp`: real-cart tail record, spawn pool, stage
+  stagger, break -> tail_sweep disable, enrage guard, mid-active window refresh.
+- `tst/art_dims_test.hpp` + `tst/fxdatatest/asset_test.hpp`: `fxtail` blob
+  header/pixels/bytes (new authored sheet).
+- Art: `tools/gen-art.py` authors `images/blocks/fxtail_18x10.png` (4 frames:
+  east-intact, east-broken, west-intact, west-broken, matching
+  `combatPartArtFrame`); FX image now 33 sheets.
 
-`partDraw` runs once per plane. A baked phase sheet must be at least the orbit
-bounding box, because the blit origin is the fixed player centre reference:
-
-- Ball orbit = `cx ± 20`, `cy ± 14`, cell 8x4 -> baked cell **48x32**.
-- One 48x32 triplane sprite blit costs **~352 us/frame for the whole ring draw**
-  (measured above: removing the already-baked ring blit saves 352 us). A 48x32
-  `drawPlusMaskFX` streams ~1728 cart bytes (6 pages x 48 x mask+data x 3
-  planes); area/bytes dominate, not the seek.
-- Baking the ball replaces [8x4 blit + 2 trig = ~48 us/plane] with a
-  [48x32 blit = ~117 us/plane] -> net **regression ~+200 us/frame**.
-
-Precedent: the 836 ring bake was a win only because it collapsed **6 separate
-`partDraw` seeks + 12 `sin256` reads into 1 blit** (7 blits -> 2). The ball and
-stun are already single blits — there is no blit to collapse, so the bake only
-swaps cheap trig for a much larger streaming blit.
-
-Stun orbit = `cx ± 7`, `cy ± 2` -> baked cell 24x8 (1 page, 3 columns): the
-per-part `partRead` seek remains, only the ~13 us/plane of trig is removed, so
-the best case is well under the bead's ~50 us bar and would cost 24 art frames
-plus quantization error. No measurable case clears the bar; the ball case is
-negative.
-
-## Remaining trig consumers in the player/render path (and why)
-
-| consumer | calls/frame | why it stays |
-|---|---|---|
-| whirl BALL orbit | 2 (cos+sin) | single 8x4 blit; a phase sheet needs a 48x32 cell (~+200 us) |
-| player STUN sparkle | 2 | single 8x4 blit; 24x8 bake nets <50 us, not worth the art |
-| monster stun dot | 2 | same single-blit shape as the player sparkle |
-| camera SHAKE | 2 (sin+cos) | **must stay per-frame**: the mock is `sin(tick*1.7)*shake`, `cos(tick*2.3)*0.7*shake` — a continuous, tick-dependent oscillation over the whole scene; it cannot be baked into a finite sheet without a per-tick table, and it is render-wide (this is stated explicitly per the bead acceptance) |
-| whirl RING | 0 | already baked (836) |
-
-`mulQ4` therefore stays in `render.hpp` for the ball/stun/shake/dot consumers.
-
-## Verification (tree-clean branch of acceptance)
-
-Tree clean at HEAD `665db9d` (`git status --short` empty; `git diff` empty).
-
-- `make gen-check`: `fxdata_manifest: PASS (52 generated artifacts unchanged)`.
-- `make test`: `Total Passed: 3119  Total Failed: 0`.
-- `make test-tools`: `Ran 81 tests ... OK`.
-- `make fxtest-headless` (full): all suites PASS —
-  `test_assets 254/0`, `test_audio 14/0`, `test_boot 4/0`, `test_combat 195/0`,
-  `test_data 221/0`, `test_hud 17/0`, `test_menu 59/0`, `test_parity 660/0`,
-  `test_player_art 111/0`, `test_perf 5/0`.
-  Perf line vs current baseline: `B pUs=6501 pHz=153 lHz=51 lTk=984 rMx=5388
-  rAv=5028 ram=418` (matches `rMx=5388 rAv=5028 pUs=6501`).
-- `make size`: `flash=26928/29696 (2768 free)  ram=2018/2560` — unchanged vs
-  the 26928 HEAD baseline (no art, no code delta).
-
-## Deviations / notes
-
-- No source, art, data, generated file, or test changed. No goldens touched.
-- Spike edits were reverted; every build in the table used the same toolchain
-  and the baseline was re-confirmed after revert.
-- Did not commit, stage, or push.
+No commit/push/add performed.

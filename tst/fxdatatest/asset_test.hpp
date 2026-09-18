@@ -223,4 +223,18 @@ inline void test_assets(FxTest &test) {
         static const uint8_t ball[8] = {15, 15, 15, 15, 15, 15, 15, 15};
         blobBytes(fxchip, 80, ball, sizeof(ball), test, F("chip ball frame"));
     }
+
+    // Breakable-part tail (ljj.8): 18x10 (page_count 2), 4 frames in
+    // combatPartArtFrame() order. Frame bytes = 3 passes * 2 pages * 18 * 2 =
+    // 216. Body 0 = frame 0 (east intact) pass 0 page 0 col 0: the light 6-row
+    // bar is rows 2..7 -> data/mask 0b11111100 = 252. Frame 1 (east broken)
+    // pass 0 col 9 = dark stub rows 3..6 -> 0b01111000 = 120.
+    if (blobHeader(fxtail, 18, 10, test, F("tail w/h"))) {
+        static const uint8_t light_col[2] = {252, 252};
+        blobBytes(fxtail, 0, light_col, sizeof(light_col), test, F("tail f0 col0 light"));
+        static const uint8_t stub_col[2] = {120, 120};
+        blobBytes(fxtail, 216 + 9 * 2, stub_col, sizeof(stub_col), test, F("tail f1 broken stub"));
+        static const uint8_t clear_col[2] = {0, 0};
+        blobBytes(fxtail, 216 + 0 * 2, clear_col, sizeof(clear_col), test, F("tail f1 clears the tip"));
+    }
 }
