@@ -1,4 +1,4 @@
-.PHONY :  full build mini gen gen-check size debug hooks format test test-tools testvm testvm-debug fxtest fxtest-headless fxtest-headless-preflight fxtest-build fxtest-run
+.PHONY :  full build mini gen gen-check size debug hooks format test test-tools testvm testvm-debug fxtest fxtest-headless fxtest-headless-preflight fxtest-build fxtest-run base-sheet
 
 # Common compiler flags
 CXX_FLAGS = -std=c++17 -I/src -w -O0 -g3
@@ -85,6 +85,9 @@ test:
 	$(call run_test,,$(TEST_FLAGS),$(TEST_SOURCES))
 
 # Python tooling tests (unittest suite co-located under tools/tests/).
+base-sheet:
+	python3 tools/gen-base-sheet.py
+
 test-tools:
 	python3 -m unittest discover -s tools/tests -p 'test_*.py' -v
 
