@@ -123,8 +123,8 @@
     {
       "declaration": "fxdata/equip/Sprites.txt",
       "path": "images/equip/mh_body_base_16x16.png",
-      "sha256": "4fd018def90bf97051234726e3329ce9f69fe1b3fe8af72b33b6279465525efa",
-      "size": 191,
+      "sha256": "00cf6b5286d504a305184ca9a92257996875caa79f468858a2f874ed5e85ea21",
+      "size": 223,
       "symbol": "mh_body_base"
     },
     {
@@ -310,8 +310,8 @@
     },
     {
       "path": "data/equipment/sets/default.json",
-      "sha256": "e24df4a47804c098100ffe5de8374a561cfe0720a9ad45eaef5c31eaf4c260e1",
-      "size": 76
+      "sha256": "e6e2ee1b0545a449cf37a3e4da74b441ec18a41310bf66e72d85c1b90f7b95fc",
+      "size": 49
     },
     {
       "path": "data/equipment/shadow_base.json",
@@ -384,7 +384,7 @@
     },
     {
       "path": "fxdata/equip/Sprites.txt",
-      "sha256": "168878b1a77e4ce1fd0257479103c5f557dec880cdecf86b23310b47039a1480",
+      "sha256": "d4e27475cdfa3575bdf6ba2f5eef8b6d67699d62d681b2e190c3c307e0bec9a9",
       "size": 340115,
       "symbols": [
         "mh_head_bandana",
@@ -461,12 +461,12 @@
   "outputs": [
     {
       "path": "fxdata/fxdata-data.bin",
-      "sha256": "1e85ec53b93e5a95234bd24b02465475f4bc1716728480ebc25fd4eab3e04e98",
+      "sha256": "ba1874e22662b21399f8fe60f0eea397ea4c0a19db076f65ffc7d467816980b5",
       "size": 96243
     },
     {
       "path": "fxdata/fxdata.bin",
-      "sha256": "acebfa0000e9af1dc67edb6c21b25646359897ade8f8ec328f9d63cc19ef9030",
+      "sha256": "384831043be63227eeee745e02781fe16dd706a504090c9615c2f5db8ff044c4",
       "size": 96256
     },
     {
@@ -511,8 +511,8 @@
     },
     {
       "path": "src/generated/equip_meta.hpp",
-      "sha256": "216ce2e935e0e6f064e16618034e59d1d9176f8284058152f1f9137ab52d8fe0",
-      "size": 22196
+      "sha256": "6f2220fefd952fa0adb6479b9924da744816a6bee1d13bf4ca71abb508aa9b49",
+      "size": 22143
     }
   ],
   "schema_version": 1

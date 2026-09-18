@@ -465,6 +465,49 @@ class GenEquipmentLayeredTests(unittest.TestCase):
             ]
             self.assertEqual(len(set(cells)), 5, "facing %d cells not pairwise distinct" % f)
 
+    def test_layered_body_bakes_shadow_row(self):
+        # Bead monhun-ardu-3fh: the ground-shadow bar (2,15,12,1 DARK, the same
+        # rect the shadow_base sheet uses) is painted into every body frame of
+        # both pose rows and all 8 facings, so the body sheet alone reproduces
+        # the old body+shadow composite at the same cell coordinates.
+        self.assert_succeeds(self.compile())
+        body = self.image("mh_body_base_16x16.png")
+        self.assertEqual(body.size, (128, 32))
+        dark = (85, 85, 85, 255)
+        clear = (0, 0, 0, 0)
+        for row in range(2):
+            for f in range(8):
+                cell = body.crop((f * 16, row * 16, f * 16 + 16, row * 16 + 16))
+                px = cell.load()
+                for x in range(2, 14):
+                    self.assertEqual(px[x, 15], dark,
+                                     "body row %d facing %d: shadow missing at x=%d" % (row, f, x))
+                self.assertEqual(px[0, 15], clear, "body row %d facing %d: x=0" % (row, f))
+                self.assertEqual(px[14, 15], clear, "body row %d facing %d: x=14" % (row, f))
+
+    def test_layered_default_set_shadow_optional(self):
+        # The default set may omit a layered slot: the layer is simply not drawn
+        # (bead monhun-ardu-3fh drops `shadow`). The shadow item record/sheet
+        # stays in the catalog as an unused default.
+        path = self.path("data", "equipment", "sets", "default.json")
+        with open(path, encoding="utf-8") as handle:
+            doc = json.load(handle)
+        doc.pop("shadow")
+        with open(path, "w", encoding="utf-8", newline="\n") as handle:
+            json.dump(doc, handle, indent=2)
+            handle.write("\n")
+        result = self.compile()
+        self.assert_succeeds(result)
+        text = self.read(META_REL)
+        self.assertNotIn("DEFAULT_SHADOW", text)
+        self.assertIn("constexpr uint8_t DEFAULT_BODY = PART_BODY_BASE;", text)
+        self.assertIn("constexpr uint8_t DEFAULT_HEAD = PART_HEAD_BASE;", text)
+        self.assertIn("constexpr uint8_t ITEM_SHADOW_BASE =", text)
+        self.assertIn("constexpr uint8_t PART_SHADOW_BASE =", text)
+        dump = self.compile("--dump")
+        self.assert_succeeds(dump)
+        self.assertIn("default set: body=body_base, head=head_base", dump.stdout)
+
     def test_layered_dump_lists_default_set(self):
         result = self.compile("--dump")
         self.assert_succeeds(result)

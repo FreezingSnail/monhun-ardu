@@ -381,14 +381,15 @@ static inline void partVariantDraw(uint8_t part, uint8_t variant, int32_t rx, in
     sprDraw(partSheet(rec), static_cast<int16_t>(rx - rec.anchorX), static_cast<int16_t>(ry - rec.anchorY), FRAME(frame));
 }
 
-// Mock drawPlayer(): shadow, body, head, weapon overlay and effects. Every
-// shape, frame and anchor comes from the generated cart part tables (beads
+// Mock drawPlayer(): body, head, weapon overlay and effects. Every shape,
+// frame and anchor comes from the generated cart part tables (beads
 // monhun-ardu-abr/ikp; see src/generated/equip_meta.hpp and
 // tst/fxdatatest/player_art_test.hpp) -- sheet/frame/anchor/facing are data,
 // not branches. The player body is the layered default draw set
-// (equip::DEFAULT_SHADOW/BODY/HEAD, generated from
-// data/equipment/sets/default.json), so re-skinning the player is art + JSON +
-// `make gen`. The position math that must stay mock-exact (rndPx, reach
+// (equip::DEFAULT_BODY/HEAD, generated from data/equipment/sets/default.json),
+// so re-skinning the player is art + JSON + `make gen`. The ground shadow is
+// baked into every body frame (bead monhun-ardu-3fh), so there is no separate
+// shadow blit. The position math that must stay mock-exact (rndPx, reach
 // scaling, whirl orbit, tick-driven offsets) is still computed here; the trig
 // bake is eqf.4.
 static void drawPlayer(const mh::Game &g, int16_t camX, int16_t camY) {
@@ -402,9 +403,8 @@ static void drawPlayer(const mh::Game &g, int16_t camX, int16_t camY) {
     // to the sheet frame, so no facing branch lives in the render path.
     const uint8_t face = static_cast<uint8_t>(fp::dirIndexFromDelta(p.fx, p.fy));
 
-    // Paper-doll slots in draw order: shadow -> body -> head. All three are the
-    // default draw set; the body picks the dodge pose row.
-    partDraw(equip::DEFAULT_SHADOW, equip::POSE_IDLE, face, cx, cy);
+    // Paper-doll slots in draw order: body (with the baked shadow) -> head.
+    // Both are the default draw set; the body picks the dodge pose row.
     partDraw(equip::DEFAULT_BODY, p.state == mh::PS_DODGE ? equip::POSE_DODGE : equip::POSE_IDLE, face, cx, cy);
     partDraw(equip::DEFAULT_HEAD, equip::POSE_IDLE, face, cx, cy);
 

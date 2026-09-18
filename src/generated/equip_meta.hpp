@@ -579,7 +579,6 @@ constexpr uint8_t PART_VARIANT_COUNT = 6;
 // Default draw set (data/equipment/sets/default.json): the render
 // slot loop draws these part ids, so re-skinning the player is a
 // data edit + make gen, never a render edit.
-constexpr uint8_t DEFAULT_SHADOW = PART_SHADOW_BASE;
 constexpr uint8_t DEFAULT_BODY = PART_BODY_BASE;
 constexpr uint8_t DEFAULT_HEAD = PART_HEAD_BASE;
 

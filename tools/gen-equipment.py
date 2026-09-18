@@ -17,8 +17,9 @@ Two record forms exist:
     images/equip/ and the converter packs it. `player_base` matches
     docs/art/player_base_16x16.png pixel-for-pixel (all 8 angle cells
     prefilled); shadow/body/head sheets are the layered paper-doll art (body in
-    a WHITE idle row + LIGHT dodge row, heads with the per-facing eye slot);
-    weapon/offhand placeholders stay blank.
+    a WHITE idle row + LIGHT dodge row with the ground-shadow bar baked into
+    every frame, heads with the per-facing eye slot); weapon/offhand
+    placeholders stay blank.
   * `"source": "gen-art"` ref: the record reuses an existing gen-art sprite
     symbol (`sheet`, validated and resolved against fxdata/fxdata.h); no PNG is
     authored. A 19 B part record (sheet offset, anchor, order/frames, per-pose
@@ -29,8 +30,10 @@ Layered slots (`shadow`/`body`/`head`) always emit a part record too, even
 when the sheet is authored: the render slot loop draws them through the same
 cart part view as the gen-art overlays. `data/equipment/sets/default.json`
 picks the default draw set; the generator emits its part ids as constexpr
-constants (DEFAULT_SHADOW/DEFAULT_BODY/DEFAULT_HEAD), so changing the default
-head or body is a JSON edit + `make gen` and never touches render code.
+constants (DEFAULT_BODY/DEFAULT_HEAD, ...), so changing the default head or body
+is a JSON edit + `make gen` and never touches render code. A slot omitted from
+the set is simply not drawn (the default omits `shadow`: its row is baked into
+the body sheet).
 
 The placeholder art is authored from the same 4-shade primitives as
 tools/gen-art.py / tools/gen-base-sheet.py (palette copied here on purpose:
@@ -417,7 +420,10 @@ def load_default_set(errors, root, items):
 
     The set only names layered slots (shadow/body/head) and only items that
     already exist in the catalog with the matching slot, so a typo'd default is
-    a compile error instead of a silently blank layer.
+    a compile error instead of a silently blank layer. A missing slot is allowed
+    and means that layer is not drawn (bead monhun-ardu-3fh: the default omits
+    `shadow`, whose row is baked into the body sheet, while the shadow catalog
+    record stays available).
     """
     path = os.path.join(root, DEFAULT_SET_REL)
     if not os.path.isfile(path):
@@ -433,6 +439,8 @@ def load_default_set(errors, root, items):
     out = {}
     for slot in LAYERED_SLOTS:
         value = obj.get(slot)
+        if value is None:
+            continue   # slot omitted: that layer is simply not drawn
         if not isinstance(value, str):
             errors.add(DEFAULT_SET_REL, "%s: expected an item id string, got %r" % (slot, value))
             continue
@@ -512,9 +520,14 @@ def player_cell(facing):
 
 
 def body_cell(shade):
-    """Torso + legs only (no head/shadow) in one shade: the mock drawPlayer
-    rects, so body/shadow/head compose at the same (8,8) anchor."""
+    """Torso + legs + the baked ground shadow in one shade: the mock drawPlayer
+    rects, so body/head compose at the same (8,8) anchor. The shadow row (rect
+    2,15,12,1 in DARK, identical to the shadow_base sheet) is painted into every
+    body frame so the render drops its separate shadow blit (bead
+    monhun-ardu-3fh); the bar never overlaps the torso/legs, so the composite is
+    pixel-identical."""
     img = new(16, 16)
+    rect(img, 2, 15, 12, 1, DARK)   # baked ground shadow
     rect(img, 4, 7, 8, 6, shade)    # torso
     rect(img, 5, 13, 2, 2, shade)   # legs
     rect(img, 9, 13, 2, 2, shade)
@@ -817,12 +830,14 @@ def emit_part_view(lines, items, fx_symbols, default_set):
 
     if default_set:
         # data/equipment/sets/default.json -> the part ids the slot loop draws.
-        # Switching the default head/body is a JSON edit + make gen.
+        # Switching the default head/body is a JSON edit + make gen. Omitted
+        # slots emit no constant (the layer is not drawn).
         app("// Default draw set (data/equipment/sets/default.json): the render")
         app("// slot loop draws these part ids, so re-skinning the player is a")
         app("// data edit + make gen, never a render edit.")
         for slot in LAYERED_SLOTS:
-            app("constexpr uint8_t DEFAULT_%s = PART_%s;" % (slot.upper(), default_set[slot].upper()))
+            if slot in default_set:
+                app("constexpr uint8_t DEFAULT_%s = PART_%s;" % (slot.upper(), default_set[slot].upper()))
         app("")
 
     # Pin the baked absolute sheet offsets against the live fxdata.h symbols.
@@ -898,7 +913,8 @@ def run(root, dump):
                      item["anchor"][0], item["anchor"][1], item["order"], item["frames"], item["rows"]))
             print("    pose rows: " + ", ".join("%s=%d" % (pose, row) for pose, row in zip(POSES, item["poseRows"])))
         if model["defaultSet"]:
-            print("default set: " + ", ".join("%s=%s" % (slot, model["defaultSet"][slot]) for slot in LAYERED_SLOTS))
+            print("default set: " + ", ".join("%s=%s" % (slot, model["defaultSet"][slot])
+                                               for slot in LAYERED_SLOTS if slot in model["defaultSet"]))
         print("gen-equipment: %d items, %d B blob" % (len(items), len(blob)))
         return 0
 
