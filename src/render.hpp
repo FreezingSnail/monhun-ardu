@@ -306,14 +306,36 @@ static void drawMonster(const mh::Game &g, int16_t camX, int16_t camY) {
     // Body, feet, head and eyes are baked per state/facing into the sprite;
     // recover dims the body, windup flash and hit flash whiten it.
     const bool flashing = (m.state == mh::MS_WINDUP) && (((m.windupMax - m.t) / 4) % 2 == 0);
-    uint8_t state = spr::MON_IDLE;
-    if (m.state == mh::MS_RECOVER)
-        state = spr::MON_RECOVER;
-    if (m.hitFlash > 0 || flashing)
-        state = spr::MON_FLASH;
-    if (m.state == mh::MS_DEAD)
-        state = spr::MON_DEAD;
-    const uint8_t f = static_cast<uint8_t>(state + (m.fx >= 0 ? 0 : spr::MON_WEST));
+    uint8_t f;
+    if (g.monsterKind == mh::MON_RAVAGER) {
+        // Legacy fxmonster sheet: idle/recover/flash/dead x facing.
+        uint8_t state = spr::MON_IDLE;
+        if (m.state == mh::MS_RECOVER)
+            state = spr::MON_RECOVER;
+        if (m.hitFlash > 0 || flashing)
+            state = spr::MON_FLASH;
+        if (m.state == mh::MS_DEAD)
+            state = spr::MON_DEAD;
+        f = static_cast<uint8_t>(state + (m.fx >= 0 ? 0 : spr::MON_WEST));
+    } else {
+        // Animated demo sheets (BEAST_POSES order; west = +beast_stride). The
+        // idle bob steps every 8 ticks; windup/attack carry the coil->lunge
+        // pose pair. Purely cosmetic: the telegraph window math does not move.
+        if (m.state == mh::MS_DEAD)
+            f = art_dims::beast_dead_frame;
+        else if (m.hitFlash > 0 || flashing)
+            f = art_dims::beast_flash_frame;
+        else if (m.state == mh::MS_WINDUP)
+            f = art_dims::beast_windup_frame;
+        else if (m.state == mh::MS_ATTACK)
+            f = art_dims::beast_attack_frame;
+        else if (m.state == mh::MS_RECOVER)
+            f = art_dims::beast_recover_frame;
+        else
+            f = static_cast<uint8_t>(art_dims::beast_idle0_frame + ((g.tick / 8) % art_dims::beast_idle_count));
+        if (m.fx < 0)
+            f = static_cast<uint8_t>(f + art_dims::beast_stride);
+    }
     sprDraw(monsterSheet(g.monsterKind), x, y, FRAME(f));
     if (m.state == mh::MS_DEAD)
         return;

@@ -379,14 +379,23 @@ def monster_frames():
 # authored facing east and mirrored for west, so both facings come from one
 # source. The ground shadow row and the body/head/eye layers all stay inside the
 # 32x24 cell.
-def _beast_frame(draw, dead_draw, body, head, east, dead=False):
+def _beast_frame(draw, dead_draw, body, head, east, dead=False, dx=0, dy=0):
     img = new(32, 24)
     if dead:
         dead_draw(img)
         return img
 
     def put(x, y, w, h, color):
-        rect(img, (32 - x - w) if not east else x, y, w, h, color)
+        # dx/dy are the animation pose offsets (bob/coil/lunge); the ground
+        # shadow stays planted, west mirrors the horizontal shift. Poses that
+        # push ink past the cell edge are clipped (placeholder poses only).
+        xs = (32 - x - w) if not east else x
+        xs += dx if east else -dx
+        ys = y + dy
+        px = img.load()
+        for yy in range(max(0, ys), min(24, ys + h)):
+            for xx in range(max(0, xs), min(32, xs + w)):
+                px[xx, yy] = color
 
     rect(img, 2, 23, 28, 1, BLACK)   # ground shadow
     draw(put, body, head)
@@ -527,19 +536,31 @@ def _longtail_dead(img):
     rect(img, 1, 19, 8, 5, DARK)     # collapsed tail
 
 
+# Animated demo-beast layout (epic monhun-ardu-nch): per facing, seven frames
+# in this order. The pose offsets are the placeholder animation: idle bob,
+# windup coil, attack lunge. art_dims emits the matching base indices and the
+# render frame map consumes them (BEAST_* below).
+BEAST_POSES = (
+    ("idle0", DARK, WHITE, 0, 0),      # rest
+    ("idle1", DARK, WHITE, 0, 1),      # bob down 1
+    ("windup", DARK, WHITE, -1, 1),    # coil back + down
+    ("attack", DARK, WHITE, 1, -1),    # lunge forward + up
+    ("recover", LIGHT, LIGHT, 0, 0),
+    ("flash", WHITE, WHITE, 0, 0),
+    ("dead", DARK, WHITE, 0, 0),       # dead heap (pose ignored)
+)
+BEAST_FRAMES = len(BEAST_POSES)
+BEAST_STRIDE = BEAST_FRAMES   # west frames start at +stride
+
+
 def _beast_frames(draw, dead_draw):
-    # 0..3 facing east (head right), 4..7 facing west (head left), each facing
-    # idle / recover / flash / dead -- the same order as monster_frames().
-    states = [
-        (DARK, WHITE),   # idle / attack
-        (LIGHT, LIGHT),  # recover
-        (WHITE, WHITE),  # windup flash / hit flash
-    ]
+    # East frames 0..BEAST_FRAMES-1 (head right), then the same west (head
+    # left); the order follows BEAST_POSES so art_dims bases stay in sync.
     frames = []
     for east in (True, False):
-        for body, head in states:
-            frames.append(_beast_frame(draw, dead_draw, body, head, east))
-        frames.append(_beast_frame(draw, dead_draw, DARK, WHITE, east, dead=True))
+        for name, body, head, dx, dy in BEAST_POSES:
+            frames.append(_beast_frame(draw, dead_draw, body, head, east,
+                                       dead=(name == "dead"), dx=dx, dy=dy))
     return frames
 
 
@@ -983,6 +1004,13 @@ def emit_dims_header(dims, icons, path):
     L.append("constexpr int16_t monster_sweep_reach = %d;" % sweep.reach)
     L.append("constexpr int16_t monster_w = %d;" % dims.monster.w)
     L.append("constexpr int16_t monster_h = %d;" % dims.monster.h)
+    # Demo beast animation layout (BEAST_POSES order, east base; west = +stride).
+    L.append("")
+    L.append("// Demo beast sheet layout (tools/gen-art.py BEAST_POSES).")
+    L.append("constexpr uint8_t beast_stride = %d;" % BEAST_STRIDE)
+    L.append("constexpr uint8_t beast_idle_count = 2;")
+    for i, pose in enumerate(BEAST_POSES):
+        L.append("constexpr uint8_t beast_%s_frame = %d;" % (pose[0], i))
     L.append("")
     L.append("constexpr int16_t whirl_orbit_rx = %d;" % dims.whirl.rx)
     L.append("constexpr int16_t whirl_orbit_ry = %d;" % dims.whirl.ry)

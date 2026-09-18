@@ -432,17 +432,26 @@ void testMonsterSheets(Test &t) {
     Blob chicken, bull, longtail, ravager;
     if (!parseBlob("fxmonster_lunge", chicken, t) || !parseBlob("fxmonster_sweep", bull, t) || !parseBlob("fxmonster_heavy", longtail, t) || !parseBlob("fxmonster", ravager, t))
         return;
-    for (const Blob *b : {&chicken, &bull, &longtail, &ravager}) {
+    for (const Blob *b : {&chicken, &bull, &longtail}) {
         t.assert(b->w, 32, "beast sheet w");
         t.assert(b->h, 24, "beast sheet h");
-        t.assert(b->frames, 8, "beast sheet frames");
+        t.assert(b->frames, 14, "beast sheet frames (2 facings x 7 poses)");
     }
-    // Frame 0 (east idle) is unique per beast and mirrored for west (frame 4).
+    t.assert(ravager.w, 32, "ravager sheet w");
+    t.assert(ravager.h, 24, "ravager sheet h");
+    t.assert(ravager.frames, 8, "ravager legacy sheet frames");
+    // Frame 0 (east idle) is unique per beast and mirrored for west (stride 7).
     const uint32_t hc = blobFrameHash(chicken, 0), hb = blobFrameHash(bull, 0), hl = blobFrameHash(longtail, 0);
     t.assert(hc != hb ? 1 : 0, 1, "chicken != bull frame 0");
     t.assert(hc != hl ? 1 : 0, 1, "chicken != longtail frame 0");
     t.assert(hb != hl ? 1 : 0, 1, "bull != longtail frame 0");
-    t.assert(blobFrameHash(chicken, 0) != blobFrameHash(chicken, 4) ? 1 : 0, 1, "chicken east != west");
+    t.assert(blobFrameHash(chicken, 0) != blobFrameHash(chicken, 7) ? 1 : 0, 1, "chicken east != west");
+    // Animation: the two idle frames bob, the windup/attack poses differ.
+    for (const Blob *b : {&chicken, &bull, &longtail}) {
+        t.assert(blobFrameHash(*b, 0) != blobFrameHash(*b, 1) ? 1 : 0, 1, "idle bob differs");
+        t.assert(blobFrameHash(*b, 2) != blobFrameHash(*b, 3) ? 1 : 0, 1, "windup != attack");
+        t.assert(blobFrameHash(*b, 3) != blobFrameHash(*b, 0) ? 1 : 0, 1, "attack != idle");
+    }
 
     // Chicken: layered tail plumes fill the left of the cell (body plane0 at
     // (2,6) and (2,10)); two separated dark legs with a clear gap; a white comb

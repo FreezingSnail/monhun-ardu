@@ -71,6 +71,17 @@ constexpr int16_t monster_sweep_reach = 17;
 constexpr int16_t monster_w = 32;
 constexpr int16_t monster_h = 24;
 
+// Demo beast sheet layout (tools/gen-art.py BEAST_POSES).
+constexpr uint8_t beast_stride = 7;
+constexpr uint8_t beast_idle_count = 2;
+constexpr uint8_t beast_idle0_frame = 0;
+constexpr uint8_t beast_idle1_frame = 1;
+constexpr uint8_t beast_windup_frame = 2;
+constexpr uint8_t beast_attack_frame = 3;
+constexpr uint8_t beast_recover_frame = 4;
+constexpr uint8_t beast_flash_frame = 5;
+constexpr uint8_t beast_dead_frame = 6;
+
 constexpr int16_t whirl_orbit_rx = 20;
 constexpr int16_t whirl_orbit_ry = 14;
 constexpr int16_t whirl_radius = 24;
