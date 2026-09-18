@@ -293,3 +293,25 @@ Phases (each gated by `make test` + `fxtest-headless` parity 660/0):
 - VM revisit trigger (define the first fight that declarative guards cannot
   express).
 - Docs/authoring ownership: agents draft JSON, owner tunes numbers.
+
+## Demo monster collide + hurt boxes (owner note, 2026-09-18)
+
+Each of the three demo monsters should carry its **own collide box and hurt
+boxes**, authored per creature (not inherited as one generic body box):
+
+| creature | collide box | hurt zones |
+|---|---|---|
+| chicken (lunge) | legs only — player walks under the raised body | head + legs (appendage) — **done** (monhun-ardu-76y) |
+| bull (sweep) | legs/hooves region, wide low stance | head/horns + body; hooves as appendage if breakable |
+| long-tail (heavy) | body + tail base (tail is hittable behind the body) | head + long tail (appendage) — tail zone/art **done**, collide still body-only |
+
+Implementation notes:
+- Data: creature `stats.collide` box (optional; default body box) + `zones`
+  head/appendage records. Both are already in the schema.
+- The zone machinery is reused, so per-creature boxes are data-only changes;
+  collision support (legs-only overlap) is the part that costs flash (~220 B
+  for the current chicken implementation, mostly the collide cart read +
+  target-rect selection).
+- Parity: bull and long-tail collide changes move their scenes; mirror in
+  mock/game.js and regenerate fixtures in the same change, and keep the
+  changed-scene list explicit in the bead report.
