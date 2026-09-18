@@ -402,6 +402,80 @@ void testSheetPixels(Test &t) {
     t.assert(tail.frames, art_dims::tail_frames, "tail frames parsed");
 }
 
+// ------------------------------------------- demo beast sheets (epic nch)
+
+// FNV-1a over one frame's plus-mask bytes; the plane passes are included, so
+// two frames match only when every pixel/shade matches.
+uint32_t blobFrameHash(const Blob &b, int frame) {
+    const int frame_bytes = ((b.h + 7) / 8) * b.w * 3 * 2;
+    uint32_t h = 2166136261u;
+    for (int i = 0; i < frame_bytes; i++) {
+        h ^= static_cast<uint32_t>(b.bytes[frame * frame_bytes + i]);
+        h *= 16777619u;
+    }
+    return h;
+}
+
+int maskAt(const Blob &b, int x, int y) {
+    return bitAt(y, pixelMask(b, 0, 0, x, y / 8));
+}
+int planeAt(const Blob &b, int shade, int x, int y) {
+    return bitAt(y, pixelData(b, 0, shade, x, y / 8));
+}
+
+// The three demo beasts ship 32x24x8 sheets with distinct silhouettes; RAVAGER
+// keeps the legacy fxmonster. Checks the frame layout, that frame 0 (east idle)
+// differs across beasts and from its own west frame, and the signature
+// features (crest / two legs, four legs + horns, thick tail).
+void testMonsterSheets(Test &t) {
+    std::cout << "---------- demo beast sheets distinct ----------" << std::endl;
+    Blob chicken, bull, longtail, ravager;
+    if (!parseBlob("fxmonster_lunge", chicken, t) || !parseBlob("fxmonster_sweep", bull, t) || !parseBlob("fxmonster_heavy", longtail, t) || !parseBlob("fxmonster", ravager, t))
+        return;
+    for (const Blob *b : {&chicken, &bull, &longtail, &ravager}) {
+        t.assert(b->w, 32, "beast sheet w");
+        t.assert(b->h, 24, "beast sheet h");
+        t.assert(b->frames, 8, "beast sheet frames");
+    }
+    // Frame 0 (east idle) is unique per beast and mirrored for west (frame 4).
+    const uint32_t hc = blobFrameHash(chicken, 0), hb = blobFrameHash(bull, 0), hl = blobFrameHash(longtail, 0);
+    t.assert(hc != hb ? 1 : 0, 1, "chicken != bull frame 0");
+    t.assert(hc != hl ? 1 : 0, 1, "chicken != longtail frame 0");
+    t.assert(hb != hl ? 1 : 0, 1, "bull != longtail frame 0");
+    t.assert(blobFrameHash(chicken, 0) != blobFrameHash(chicken, 4) ? 1 : 0, 1, "chicken east != west");
+
+    // Chicken: two separate legs (mask ink) at x 12/17, empty at x 5 and x 24;
+    // a crest above the head (white) and no ink at x 2, y 6.
+    t.assert(maskAt(chicken, 12, 20), 1, "chicken near leg");
+    t.assert(maskAt(chicken, 17, 20), 1, "chicken far leg");
+    t.assert(maskAt(chicken, 5, 20), 0, "chicken no outer leg");
+    t.assert(maskAt(chicken, 24, 20), 0, "chicken no far outer leg");
+    t.assert(planeAt(chicken, 2, 22, 0), 1, "chicken crest");
+    t.assert(planeAt(chicken, 0, 2, 6), 0, "chicken no tail at (2,6)");
+
+    // Bull: four legs at x 5/10/19/24, clear between; horns are head-shade ink
+    // above the low head; broad body plane0 at (10,10).
+    t.assert(maskAt(bull, 5, 20), 1, "bull leg 1");
+    t.assert(maskAt(bull, 10, 20), 1, "bull leg 2");
+    t.assert(maskAt(bull, 19, 20), 1, "bull leg 3");
+    t.assert(maskAt(bull, 24, 20), 1, "bull leg 4");
+    t.assert(maskAt(bull, 15, 20), 0, "bull clear between legs");
+    t.assert(planeAt(bull, 2, 24, 6), 1, "bull horn");
+    t.assert(planeAt(bull, 0, 10, 10), 1, "bull broad body");
+    t.assert(planeAt(bull, 0, 2, 6), 0, "bull no tail at (2,6)");
+
+    // Longtail: a thick tail fills the left of the cell (plane0 at (2,6) and
+    // (2,10)); four legs; head pushed forward.
+    t.assert(planeAt(longtail, 0, 2, 6), 1, "longtail upper tail");
+    t.assert(planeAt(longtail, 0, 2, 10), 1, "longtail tail body");
+    t.assert(maskAt(longtail, 10, 20), 1, "longtail leg 1");
+    t.assert(maskAt(longtail, 15, 20), 1, "longtail leg 2");
+    t.assert(maskAt(longtail, 20, 20), 1, "longtail leg 3");
+    t.assert(maskAt(longtail, 25, 20), 1, "longtail leg 4");
+    t.assert(maskAt(longtail, 13, 20), 0, "longtail clear between legs");
+    t.assert(planeAt(longtail, 2, 22, 6), 1, "longtail forward head");
+}
+
 void ArtDimsSuite(TestRunner &runner) {
     TestSuite suite("art dims");
     {
@@ -417,6 +491,11 @@ void ArtDimsSuite(TestRunner &runner) {
     {
         Test t("overlay/effect sheets carry core-sized ink");
         testSheetPixels(t);
+        suite.addTest(t);
+    }
+    {
+        Test t("demo beast sheets read as distinct silhouettes");
+        testMonsterSheets(t);
         suite.addTest(t);
     }
     runner.addTestSuite(suite);

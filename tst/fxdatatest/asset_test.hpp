@@ -237,4 +237,13 @@ inline void test_assets(FxTest &test) {
         static const uint8_t clear_col[2] = {0, 0};
         blobBytes(fxtail, 216 + 0 * 2, clear_col, sizeof(clear_col), test, F("tail f1 clears the tip"));
     }
+
+    // Demo beast sheets (epic monhun-ardu-nch): one 32x24x8 sheet per roster
+    // beast -- LUNGE chicken, SWEEP bull, HEAVY longtail -- and RAVAGER keeps
+    // the legacy fxmonster. Header identity only here; the host pixel suite
+    // (tst/art_dims_test.hpp) checks the silhouettes.
+    blobHeader(fxmonster, 32, 24, test, F("ravager monster sheet w/h"));
+    blobHeader(fxmonster_lunge, 32, 24, test, F("chicken monster sheet w/h"));
+    blobHeader(fxmonster_sweep, 32, 24, test, F("bull monster sheet w/h"));
+    blobHeader(fxmonster_heavy, 32, 24, test, F("longtail monster sheet w/h"));
 }

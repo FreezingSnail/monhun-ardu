@@ -26,7 +26,10 @@ namespace mh {
 // are left-to-right strips and FRAME(i) == i*3 + currentPlane() selects the
 // current plane's data, so one draw call per plane composites the 4 shades.
 namespace spr {
-// 32x24 monster: four states facing east, then the same four facing west.
+// 32x24 monster sheets (epic monhun-ardu-nch): one sheet per demo beast, all
+// sharing this frame layout -- four states facing east, then the same four
+// facing west. Which sheet is drawn is picked by the roster kind
+// (monsterSheet() below), so the state/frame math stays single-sourced.
 constexpr uint8_t MON_IDLE = 0;
 constexpr uint8_t MON_RECOVER = 1;
 constexpr uint8_t MON_FLASH = 2;
@@ -273,6 +276,21 @@ static void drawPole(const mh::Pole &pole, int16_t camX, int16_t camY) {
     sprDraw(fxpole, x, y, FRAME(f));
 }
 
+// Per-creature monster sheet (epic monhun-ardu-nch): the demo roster's beast
+// kind selects the fxdata sheet authored by tools/gen-art.py; RAVAGER keeps the
+// legacy flat sheet its tail part overlays. Frame layout is identical across
+// sheets, so only the sprite base changes -- the state/facing mapping below is
+// untouched (no per-state code).
+static inline uint24_t monsterSheet(int8_t kind) {
+    if (kind == mh::MON_SWEEP)
+        return fxmonster_sweep;
+    if (kind == mh::MON_HEAVY)
+        return fxmonster_heavy;
+    if (kind == mh::MON_RAVAGER)
+        return fxmonster;
+    return fxmonster_lunge;
+}
+
 // Mock drawMonster(): dead heap, feet, body, head + eyes, stun sparkle, and the
 // windup/attack telegraph box.
 static void drawMonster(const mh::Game &g, int16_t camX, int16_t camY) {
@@ -296,7 +314,7 @@ static void drawMonster(const mh::Game &g, int16_t camX, int16_t camY) {
     if (m.state == mh::MS_DEAD)
         state = spr::MON_DEAD;
     const uint8_t f = static_cast<uint8_t>(state + (m.fx >= 0 ? 0 : spr::MON_WEST));
-    sprDraw(fxmonster, x, y, FRAME(f));
+    sprDraw(monsterSheet(g.monsterKind), x, y, FRAME(f));
     if (m.state == mh::MS_DEAD)
         return;
 

@@ -1,9 +1,10 @@
 #pragma once
 // On-device end-to-end suite for the qs.4 boot flow (bead monhun-ardu-mgn):
-// boot menu -> hub -> quests (take) -> hub -> smith (buy) -> hub -> HUNT ->
-// fight -> win -> hub with the committed progress + updated zenny, plus hub
-// pixel checks. Drives the same src/app_state.hpp routing and
-// src/app_setup.hpp hunt arming as the shipping sketch.
+// boot menu -> hub -> quests (take; entered directly -- the hub row is hidden,
+// epic monhun-ardu-nch) -> hub -> smith (buy) -> hub -> HUNT -> fight -> win ->
+// hub with the committed progress + updated zenny, plus hub pixel checks.
+// Drives the same src/app_state.hpp routing and src/app_setup.hpp hunt arming
+// as the shipping sketch.
 
 #include "harness/fxtest.hpp"
 #include "src/screens.hpp"
@@ -103,21 +104,21 @@ inline void test_hub(FxTest &test) {
     test.expectEq(static_cast<uint32_t>(screen.screen), screens::SCREEN_HUB, F("hub screen"));
     test.expectEq(static_cast<uint32_t>(screen.rowCount), screens::SCREEN_HUB_ROWS, F("hub row count"));
 
-    // ------------------------------------------------ hub -> quests: take 0
-    tap(screen, H_DOWN);
-    test.expectEq(static_cast<uint32_t>(screen.cursor), 1, F("cursor on QUESTS"));
-    appNavApply(pressA(screen, save), menu, screen, save, g, H_A);
+    // ------------------------------ quests flow (hub row hidden, epic nch)
+    // The QUESTS row is hidden from the shipped hub, but the quest screen and
+    // its save actions stay: enter it directly, take quest 0, then B back.
+    appNavApply(APP_NAV_QUESTS, menu, screen, save, g, H_A);
     test.expectEq(static_cast<uint32_t>(screen.screen), screens::SCREEN_QUESTS, F("quests screen"));
     appNavApply(pressA(screen, save), menu, screen, save, g, H_A);   // take row 0
     test.expectEq(static_cast<uint32_t>(save.activeQuest), 0, F("quest 0 active"));
     test.expectEq(static_cast<uint32_t>(saveQuestGet(save, 0, 0)), 1, F("quest 0 taken bit"));
 
     // ----------------------------------------------- back -> smith: buy T1
+    // SMITH is now hub row 1 (QUESTS hidden).
     appNavApply(pressB(screen, save), menu, screen, save, g, H_B);
     test.expectEq(static_cast<uint32_t>(screen.screen), screens::SCREEN_HUB, F("back on hub"));
     tap(screen, H_DOWN);
-    tap(screen, H_DOWN);
-    test.expectEq(static_cast<uint32_t>(screen.cursor), 2, F("cursor on SMITH"));
+    test.expectEq(static_cast<uint32_t>(screen.cursor), 1, F("cursor on SMITH"));
     appNavApply(pressA(screen, save), menu, screen, save, g, H_A);
     test.expectEq(static_cast<uint32_t>(screen.screen), screens::SCREEN_SMITH, F("smith screen"));
     appNavApply(pressA(screen, save), menu, screen, save, g, H_A);   // buy SWORD T1
@@ -174,14 +175,14 @@ inline void test_hub(FxTest &test) {
     clearFb();
     drawScreen(screen, save);
 
-    // HUNT is row 0 with the white chip cursor; QUESTS row 1; the ZENNY row
-    // (row 3, y = 11 + 3*9 = 38) shows the live 400 balance in the cost column.
+    // HUNT is row 0 with the white chip cursor; SMITH row 1; the ZENNY row
+    // (row 2, y = 11 + 2*9 = 29) shows the live 400 balance in the cost column.
     test.expectEq(countBits(2, 5, 13, 16), 16, F("hub cursor chip 4x4"));
     test.expectEq(countBits(2, 13, 0, 7) > 0 ? 1 : 0, 1, F("hub title ink"));
     test.expectEq(countBits(10, 30, 11, 18) > 0 ? 1 : 0, 1, F("HUNT label ink"));
-    test.expectEq(countBits(10, 40, 20, 27) > 0 ? 1 : 0, 1, F("QUESTS label ink"));
-    test.expectEq(countBits(10, 32, 38, 45) > 0 ? 1 : 0, 1, F("ZENNY label ink"));
-    test.expectEq(countBits(112, 123, 38, 45) > 0 ? 1 : 0, 1, F("live zenny 400 drawn"));
+    test.expectEq(countBits(10, 40, 20, 27) > 0 ? 1 : 0, 1, F("SMITH label ink"));
+    test.expectEq(countBits(10, 32, 29, 36) > 0 ? 1 : 0, 1, F("ZENNY label ink"));
+    test.expectEq(countBits(112, 123, 29, 36) > 0 ? 1 : 0, 1, F("live zenny 400 drawn"));
 }
 
 }   // namespace hubfx

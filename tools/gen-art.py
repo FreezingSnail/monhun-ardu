@@ -371,6 +371,129 @@ def monster_frames():
     return frames
 
 
+# ---- demo beast silhouettes (epic monhun-ardu-nch). One 32x24 sheet per demo
+# creature so LUNGE/SWEEP/HEAVY read as distinct at 1x; RAVAGER keeps the legacy
+# fxmonster sheet (its tail part overlays it). The state shade rules are the
+# legacy ones (idle dark body + white head, recover light, windup/hit flash
+# white) and the dead heap stays on the same dark/light palette. Shapes are
+# authored facing east and mirrored for west, so both facings come from one
+# source. The ground shadow row and the body/head/eye layers all stay inside the
+# 32x24 cell.
+def _beast_frame(draw, dead_draw, body, head, east, dead=False):
+    img = new(32, 24)
+    if dead:
+        dead_draw(img)
+        return img
+
+    def put(x, y, w, h, color):
+        rect(img, (32 - x - w) if not east else x, y, w, h, color)
+
+    rect(img, 2, 23, 28, 1, BLACK)   # ground shadow
+    draw(put, body, head)
+    return img
+
+
+def _chicken_east(put, body, head):
+    # Small compact bipedal body, two-bump crest, tail-feather fan, two legs.
+    put(3, 6, 5, 4, body)             # tail-feather upper fan
+    put(2, 9, 5, 4, body)             # tail-feather lower fan
+    put(9, 8, 14, 11, body)           # body
+    put(18, 5, 5, 5, body)            # neck
+    put(20, 2, 8, 7, head)            # head
+    put(21, 0, 2, 3, head)            # crest bump
+    put(24, 0, 3, 2, head)            # crest bump
+    put(24, 4, 2, 2, BLACK)           # eye
+    put(28, 6, 3, 2, DARK)            # beak
+    put(12, 19, 2, 3, BLACK)          # near leg
+    put(17, 19, 2, 3, BLACK)          # far leg
+    put(11, 21, 4, 1, BLACK)          # near foot
+    put(16, 21, 4, 1, BLACK)          # far foot
+
+
+def _bull_east(put, body, head):
+    # Broad low body on four legs, short tail, horns, head hung low.
+    put(2, 11, 3, 3, body)            # tail
+    put(4, 9, 22, 10, body)           # broad body
+    put(6, 8, 12, 3, body)            # shoulder hump
+    put(23, 10, 8, 7, head)           # low head
+    put(23, 6, 3, 3, head)            # near horn
+    put(28, 6, 3, 3, head)            # far horn
+    put(27, 12, 2, 2, BLACK)          # eye
+    put(29, 14, 3, 2, DARK)           # muzzle
+    put(5, 19, 3, 4, BLACK)           # legs x4
+    put(10, 19, 3, 4, BLACK)
+    put(19, 19, 3, 4, BLACK)
+    put(24, 19, 3, 4, BLACK)
+
+
+def _longtail_east(put, body, head):
+    # Bulkier body, a pronounced thick tail filling the left of the cell, head
+    # pushed forward.
+    put(0, 8, 8, 7, body)             # thick tail
+    put(0, 6, 5, 3, body)             # tail upper ridge
+    put(0, 13, 5, 3, body)            # tail lower ridge
+    put(8, 7, 16, 12, body)           # bulky body
+    put(21, 5, 10, 9, head)           # head forward
+    put(27, 8, 2, 2, BLACK)           # eye
+    put(28, 13, 4, 2, DARK)           # jaw
+    put(10, 19, 3, 4, BLACK)          # legs x4
+    put(15, 19, 3, 4, BLACK)
+    put(20, 19, 3, 4, BLACK)
+    put(25, 19, 3, 4, BLACK)
+
+
+def _dead_heap(img):
+    rect(img, 0, 16, 32, 8, DARK)
+    rect(img, 12, 14, 8, 4, LIGHT)
+
+
+def _chicken_dead(img):
+    rect(img, 8, 17, 16, 7, DARK)
+    rect(img, 12, 15, 7, 3, LIGHT)
+    rect(img, 21, 14, 3, 2, LIGHT)   # crest stub
+
+
+def _bull_dead(img):
+    rect(img, 3, 17, 26, 7, DARK)
+    rect(img, 10, 15, 12, 3, LIGHT)
+    rect(img, 4, 15, 3, 2, LIGHT)    # horn
+    rect(img, 25, 15, 3, 2, LIGHT)   # horn
+
+
+def _longtail_dead(img):
+    rect(img, 9, 17, 18, 7, DARK)
+    rect(img, 13, 15, 9, 3, LIGHT)
+    rect(img, 1, 19, 8, 5, DARK)     # collapsed tail
+
+
+def _beast_frames(draw, dead_draw):
+    # 0..3 facing east (head right), 4..7 facing west (head left), each facing
+    # idle / recover / flash / dead -- the same order as monster_frames().
+    states = [
+        (DARK, WHITE),   # idle / attack
+        (LIGHT, LIGHT),  # recover
+        (WHITE, WHITE),  # windup flash / hit flash
+    ]
+    frames = []
+    for east in (True, False):
+        for body, head in states:
+            frames.append(_beast_frame(draw, dead_draw, body, head, east))
+        frames.append(_beast_frame(draw, dead_draw, DARK, WHITE, east, dead=True))
+    return frames
+
+
+def chicken_frames():
+    return _beast_frames(_chicken_east, _chicken_dead)
+
+
+def bull_frames():
+    return _beast_frames(_bull_east, _bull_dead)
+
+
+def longtail_frames():
+    return _beast_frames(_longtail_east, _longtail_dead)
+
+
 def pole_frame(flash):
     img = new(20, 40)   # 20x36 art, padded to a multiple of 8
     rect(img, 2, 12, 16, 24, DARK)
@@ -634,6 +757,9 @@ def render_all(dims):
         sheets[d["id"]] = render_icon(d)
     sheets["player"] = strip(player_frames(), 16, 16)
     sheets["monster"] = strip(monster_frames(), 32, 24)
+    sheets["monster_lunge"] = strip(chicken_frames(), 32, 24)
+    sheets["monster_sweep"] = strip(bull_frames(), 32, 24)
+    sheets["monster_heavy"] = strip(longtail_frames(), 32, 24)
     sheets["pole"] = strip([pole_frame(False), pole_frame(True)], 20, 40)
     sheets["ball"] = strip([ball_frame()], 7, 8)
     sheets["scatter"] = strip([scatter_frame()], 4, 8)
@@ -695,8 +821,8 @@ def sheet_filename(body, img, icons):
         return "fx%s_%dx%d.png" % (body, d["w"], d["h"])
     if body == "player":
         return "fxplayer_16x16.png"
-    if body == "monster":
-        return "fxmonster_32x24.png"
+    if body == "monster" or body.startswith("monster_"):
+        return "fx%s_32x24.png" % body
     if body == "pole":
         return "fxpole_20x40.png"
     if body == "ball":

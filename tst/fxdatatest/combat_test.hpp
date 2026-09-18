@@ -91,7 +91,7 @@ inline void test_combat(FxTest &test) {
 
     // --------------------------------------------- cross-reference walk
     const CombatSkeleton sk = combatSkeletonRead(lunge.skeletonIdx);
-    test.expectEq(lunge.skeletonIdx, combat::SKELETON_QUAD_32X24, F("lunge skeleton idx"));
+    test.expectEq(lunge.skeletonIdx, combat::SKELETON_CHICKEN, F("lunge skeleton idx"));
     test.expectEq(sk.anchorCount, 2, F("lunge skeleton anchors"));
 
     const CombatAttackValue lungeAtk = combatAttackRead(lunge.firstAttack);

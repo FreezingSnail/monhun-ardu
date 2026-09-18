@@ -13,12 +13,12 @@ namespace screens {
 constexpr uint16_t MAGIC = 0x5343;
 constexpr uint8_t VERSION = 1;
 constexpr uint8_t FLAGS = 0x00;
-constexpr uint16_t SIZE = 297;
+constexpr uint16_t SIZE = 284;
 constexpr uint8_t HEADER_SIZE = 8;
 constexpr uint8_t DEF_OFF_OFF = 8;
 constexpr uint16_t ROWS_OFF = 43;
 constexpr uint8_t SCREEN_COUNT = 3;
-constexpr uint16_t ROW_COUNT = 17;
+constexpr uint16_t ROW_COUNT = 16;
 constexpr uint8_t TIER_COUNT = 3;   // must match core/save.hpp SAVE_TIER_COUNT
 
 // Row action ids; src/screen_state.hpp switches on these.
@@ -46,18 +46,18 @@ constexpr uint8_t ROW_F_ZENNY = 0x02;
 // Screen indices, sorted by id, with the cart offsets the runtime uses.
 constexpr uint8_t SCREEN_HUB = 0;
 constexpr uint16_t SCREEN_HUB_OFF = 14;
-constexpr uint8_t SCREEN_HUB_ROWS = 4;
+constexpr uint8_t SCREEN_HUB_ROWS = 3;
 constexpr uint8_t SCREEN_HUB_TITLE_LEN = 3;
 constexpr uint16_t SCREEN_HUB_FIRST_ROW = 43;
 constexpr uint8_t SCREEN_QUESTS = 1;
 constexpr uint16_t SCREEN_QUESTS_OFF = 22;
 constexpr uint8_t SCREEN_QUESTS_ROWS = 6;
 constexpr uint8_t SCREEN_QUESTS_TITLE_LEN = 6;
-constexpr uint16_t SCREEN_QUESTS_FIRST_ROW = 91;
+constexpr uint16_t SCREEN_QUESTS_FIRST_ROW = 78;
 constexpr uint8_t SCREEN_SMITH = 2;
 constexpr uint16_t SCREEN_SMITH_OFF = 33;
 constexpr uint8_t SCREEN_SMITH_ROWS = 7;
 constexpr uint8_t SCREEN_SMITH_TITLE_LEN = 5;
-constexpr uint16_t SCREEN_SMITH_FIRST_ROW = 199;
+constexpr uint16_t SCREEN_SMITH_FIRST_ROW = 186;
 
 }   // namespace screens

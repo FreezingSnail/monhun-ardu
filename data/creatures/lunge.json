@@ -1,6 +1,6 @@
 {
   "id": "lunge",
-  "skeleton": "quad_32x24",
+  "skeleton": "chicken",
   "stats": { "w": 32, "h": 24, "hp": 200, "spd": 5, "spawnX": 200, "spawnY": 40 },
   "profile": {
     "engageDist": 36,

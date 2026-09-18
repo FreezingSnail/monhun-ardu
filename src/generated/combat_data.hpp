@@ -12,7 +12,7 @@
 namespace combat_data {
 
 constexpr uint8_t VERSION = 1;
-constexpr uint16_t BLOB_SIZE = 616;
+constexpr uint16_t BLOB_SIZE = 622;
 
 struct Box {
     int8_t ox;
@@ -114,9 +114,10 @@ constexpr uint8_t PATTERN_RAVAGER_P_BITE = 6;
 constexpr uint8_t PATTERN_RAVAGER_P_ENRAGED = 4;
 constexpr uint8_t PATTERN_RAVAGER_P_SWEEP = 5;
 constexpr uint8_t PATTERN_SWEEP_P_SWEEP = 7;
-constexpr uint8_t SKELETON_QUAD_28X22 = 0;
-constexpr uint8_t SKELETON_QUAD_32X24 = 1;
-constexpr uint8_t SKELETON_QUAD_40X28 = 2;
+constexpr uint8_t SKELETON_BULL = 0;
+constexpr uint8_t SKELETON_CHICKEN = 1;
+constexpr uint8_t SKELETON_LONGTAIL = 2;
+constexpr uint8_t SKELETON_QUAD_32X24 = 3;
 constexpr uint8_t STEP_HEAVY_P_LUNGE_0 = 0;
 constexpr uint8_t STEP_HEAVY_P_SWEEP_0 = 1;
 constexpr uint8_t STEP_LUNGE_P_LUNGE_0 = 2;
@@ -140,7 +141,7 @@ constexpr uint8_t ZONE_RAVAGER_HEAD = 0;
 inline constexpr std::array<Creature, 4> CREATURES = {{
     {2, 0, 255, 255, 0, 2, 0, 2, 40, 28, 3, 320, 200, 40},
     {1, 1, 255, 255, 2, 2, 2, 2, 32, 24, 5, 200, 200, 40},
-    {1, 2, 0, 1, 4, 2, 4, 3, 32, 24, 6, 260, 200, 40},
+    {3, 2, 0, 1, 4, 2, 4, 3, 32, 24, 6, 260, 200, 40},
     {0, 3, 255, 255, 6, 2, 7, 1, 28, 22, 7, 150, 200, 40},
 }};
 
@@ -151,10 +152,11 @@ inline constexpr std::array<Profile, 4> PROFILES = {{
     {36, 24, 42, 8, 10, 6, 10, 0, 0, 0, 55, 40, 90, 140, 24, 0},
 }};
 
-inline constexpr std::array<Skeleton, 3> SKELETONS = {{
+inline constexpr std::array<Skeleton, 4> SKELETONS = {{
     {0, 2},
     {2, 2},
     {4, 2},
+    {6, 2},
 }};
 
 inline constexpr std::array<Zone, 2> ZONES = {{
@@ -162,13 +164,15 @@ inline constexpr std::array<Zone, 2> ZONES = {{
     {{-14, 8, 18, 10}, 60, 150, 40, 1, 30, 200, 3, 32},
 }};
 
-inline constexpr std::array<Anchor, 6> ANCHORS = {{
+inline constexpr std::array<Anchor, 8> ANCHORS = {{
     {0, 0},
     {19, 5},
     {0, 0},
     {22, 6},
     {0, 0},
     {28, 7},
+    {0, 0},
+    {22, 6},
 }};
 
 inline constexpr std::array<Attack, 8> ATTACKS = {{

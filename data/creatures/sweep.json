@@ -1,6 +1,6 @@
 {
   "id": "sweep",
-  "skeleton": "quad_28x22",
+  "skeleton": "bull",
   "stats": { "w": 28, "h": 22, "hp": 150, "spd": 7, "spawnX": 200, "spawnY": 40 },
   "profile": {
     "engageDist": 36,

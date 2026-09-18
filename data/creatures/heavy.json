@@ -1,6 +1,6 @@
 {
   "id": "heavy",
-  "skeleton": "quad_40x28",
+  "skeleton": "longtail",
   "stats": { "w": 40, "h": 28, "hp": 320, "spd": 3, "spawnX": 200, "spawnY": 40 },
   "profile": {
     "engageDist": 36,
