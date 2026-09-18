@@ -41,7 +41,7 @@ inline int16_t dir8Y(int8_t i) {
 // truncating fixed divide, rounds toward zero (hardware friendly).
 // C++ integer division already truncates toward zero; kept as a named
 // function to mirror the prototype and forbid >> on negative values.
-inline int16_t tdiv(int32_t a, int32_t b) {
+inline int16_t tdiv(int16_t a, int16_t b) {
     return static_cast<int16_t>(a / b);
 }
 
@@ -59,9 +59,9 @@ inline int8_t dirIndexFromInput(int16_t mx, int16_t my) {
 }
 
 // map a movement delta to the nearest DIR8 index (for facing / knockback)
-inline int8_t dirIndexFromDelta(int32_t dx, int32_t dy) {
-    const int32_t adx = dx < 0 ? -dx : dx;
-    const int32_t ady = dy < 0 ? -dy : dy;
+inline int8_t dirIndexFromDelta(int16_t dx, int16_t dy) {
+    const int16_t adx = dx < 0 ? static_cast<int16_t>(-dx) : dx;
+    const int16_t ady = dy < 0 ? static_cast<int16_t>(-dy) : dy;
     if (adx > ady * 2)
         return dx < 0 ? 4 : 0;
     if (ady > adx * 2)

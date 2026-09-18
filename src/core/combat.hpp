@@ -974,8 +974,10 @@ inline CombatBodyHit combatResolveBodyHit(const Game &g, int32_t base) {
 inline bool combatZoneContains(const Game &g, const CombatBox &b, int16_t hx, int16_t hy) {
     int32_t dx, dy;
     combatFacePoint(g.monster.fx, g.monster.fy, b.ox, b.oy, dx, dy);
-    const int32_t x = static_cast<int32_t>(g.monster.x) + dx;
-    const int32_t y = static_cast<int32_t>(g.monster.y) + dy;
+    // Battlefield coords: monster.x/y <= WORLD_W/H (256) and the int8 box
+    // rotation with |fx|,|fy| <= 16 gives |dx|,|dy| <= 254, so x+w <= 511.
+    const int16_t x = static_cast<int16_t>(g.monster.x + static_cast<int16_t>(dx));
+    const int16_t y = static_cast<int16_t>(g.monster.y + static_cast<int16_t>(dy));
     return hx >= x && hx < x + b.w && hy >= y && hy < y + b.h;
 }
 

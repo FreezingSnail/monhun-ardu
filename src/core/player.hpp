@@ -73,8 +73,8 @@ static Rect meleeHitbox(const Player &p, const Attack *a) {
     const int16_t reach = attackReach(a);
     const int16_t hw = attackHw(a);
     const int16_t hh = attackHh(a);
-    const int32_t cx = p.x + (p.w >> 1) + ((p.fx * reach) >> 4);
-    const int32_t cy = p.y + (p.h >> 1) + ((p.fy * reach) >> 4);
+    const int16_t cx = static_cast<int16_t>(p.x + (p.w >> 1) + ((p.fx * reach) >> 4));
+    const int16_t cy = static_cast<int16_t>(p.y + (p.h >> 1) + ((p.fy * reach) >> 4));
     Rect r;
     r.x = static_cast<int16_t>(cx - (hw >> 1));
     r.y = static_cast<int16_t>(cy - (hh >> 1));
@@ -113,8 +113,8 @@ static void applyDrift(Player &p, int16_t mult = 13) {
     p.y += fp::tdiv(p.subY, fp::FP);
     p.subX %= fp::FP;
     p.subY %= fp::FP;
-    const int32_t avx = p.vx < 0 ? -p.vx : p.vx;
-    const int32_t avy = p.vy < 0 ? -p.vy : p.vy;
+    const int16_t avx = p.vx < 0 ? static_cast<int16_t>(-p.vx) : p.vx;
+    const int16_t avy = p.vy < 0 ? static_cast<int16_t>(-p.vy) : p.vy;
     const int16_t ax = static_cast<int16_t>((avx * mult) / 16);
     const int16_t ay = static_cast<int16_t>((avy * mult) / 16);
     p.vx = p.vx < 0 ? -ax : ax;
@@ -192,9 +192,9 @@ static void updateStance(Game &g, const WeaponDef *def) {
         }
         if (p.whirlTick % 16 == 0) {
             if (g.target.alive) {
-                const int32_t cx = p.x + (p.w >> 1);
-                const int32_t cy = p.y + (p.h >> 1);
-                if (circleRectOverlap(static_cast<int16_t>(cx), static_cast<int16_t>(cy), 24, g.target.rect)) {
+                const int16_t cx = static_cast<int16_t>(p.x + (p.w >> 1));
+                const int16_t cy = static_cast<int16_t>(p.y + (p.h >> 1));
+                if (circleRectOverlap(cx, cy, 24, g.target.rect)) {
                     if (g.target.onHit)
                         g.target.onHit(g, 8, cx, cy, 8, 0);
                 }
@@ -415,11 +415,11 @@ static void playerHurt(Game &g, int16_t dmg, int16_t faceX, int16_t faceY) {
         return;
     }
     if (p.stance == ST_GUARD) {
-        const int32_t chip = (dmg * 25) / 100;
+        const int16_t chip = static_cast<int16_t>((dmg * 25) / 100);
         p.stam -= 22;
         if (p.stam < 0)
             p.stam = 0;
-        p.hp -= chip < 1 ? 1 : static_cast<int16_t>(chip);
+        p.hp -= chip < 1 ? 1 : chip;
         p.vx = (faceX * 19) >> 4;
         p.vy = (faceY * 19) >> 4;
         g.freeze = g.freeze > 3 ? g.freeze : 3;
@@ -532,15 +532,15 @@ static void updatePlayer(Game &g, const Input &inp, bool aP, bool bP, bool bR) {
         const Attack *a = p.atk;
         const int16_t startup = attackStartup(a);
         const int16_t active = attackActive(a);
-        const int32_t total = startup + active + attackRecover(a);
+        const int16_t total = static_cast<int16_t>(startup + active + attackRecover(a));
         p.t++;
         if (p.t >= startup && p.t < startup + active && !p.hitDone) {
             const Rect hit = meleeHitbox(p, a);
             if (g.target.alive && hit.overlaps(g.target.rect)) {
                 p.hitDone = true;
-                const int32_t mult = (p.state == PS_SPECIAL && p.riposteT > 0) ? 2 : 1;
-                const int32_t hx = hit.x + hit.w / 2;
-                const int32_t hy = hit.y + hit.h / 2;
+                const int16_t mult = (p.state == PS_SPECIAL && p.riposteT > 0) ? 2 : 1;
+                const int16_t hx = static_cast<int16_t>(hit.x + hit.w / 2);
+                const int16_t hy = static_cast<int16_t>(hit.y + hit.h / 2);
                 if (g.target.onHit) {
                     g.target.onHit(g, attackDmg(a) * mult, hx, hy, attackPush(a), attackEffect(a));
                 }

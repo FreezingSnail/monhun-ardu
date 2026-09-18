@@ -139,10 +139,12 @@ static const uint8_t MH_PROGMEM MH_MASK_BOT[8] = {0x01, 0x03, 0x07, 0x0F, 0x1F, 
 // 128 bytes/page, pixel(x,y) = buf[page*128 + x], bit y&7. Clamping above is the
 // only bounds work needed; writes stay inside [0,1024). Render runs between
 // waitForNextPlane() calls, never during the plane blit.
-__attribute__((noinline)) static void blkClamp(int32_t x, int32_t y, int32_t w, int32_t h, uint8_t shade, int32_t minY) {
+__attribute__((noinline)) static void blkClamp(int16_t x, int16_t y, int16_t w, int16_t h, uint8_t shade, int16_t minY) {
     if (w <= 0 || h <= 0)
         return;
-    int32_t x0 = x, y0 = y, x1 = x + w, y1 = y + h;
+    // Screen extents stay well inside int16: x/y come from world coords <= 256
+    // plus a <= 128 px size, so x+w <= ~384 (minY is 0 or HUD_H).
+    int16_t x0 = x, y0 = y, x1 = static_cast<int16_t>(x + w), y1 = static_cast<int16_t>(y + h);
     if (x0 < 0)
         x0 = 0;
     if (y0 < minY)

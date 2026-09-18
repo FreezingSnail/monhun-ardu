@@ -104,9 +104,9 @@ static void clampMonster(Game &g) {
         m.y = WORLD_H - m.h;
 }
 
-static void knockMonsterAway(Game &g, Monster &m, int32_t cx, int32_t cy, int16_t amt) {
-    const int32_t dx = (m.x + (m.w >> 1)) - cx;
-    const int32_t dy = (m.y + (m.h >> 1)) - cy;
+static void knockMonsterAway(Game &g, Monster &m, int16_t cx, int16_t cy, int16_t amt) {
+    const int16_t dx = static_cast<int16_t>((m.x + (m.w >> 1)) - cx);
+    const int16_t dy = static_cast<int16_t>((m.y + (m.h >> 1)) - cy);
     const int8_t di = fp::dirIndexFromDelta(dx, dy);
     fp::addMove(m, fp::dir8X(di), fp::dir8Y(di), amt);
     clampMonster(g);
@@ -116,11 +116,12 @@ static void damageMonster(Game &g, int16_t dmg, int16_t hx, int16_t hy) {
     Monster &m = g.monster;
     if (m.state == MS_DEAD)
         return;
-    const int32_t cx = m.x + (m.w >> 1);
-    const int32_t cy = m.y + (m.h >> 1);
+    const int16_t cx = static_cast<int16_t>(m.x + (m.w >> 1));
+    const int16_t cy = static_cast<int16_t>(m.y + (m.h >> 1));
     // projection of the hit point onto the facing axis; >3 px on the head side
-    // is a crit (x1.4, integer 14/10).
-    const int32_t proj = ((hx - cx) * m.fx + (hy - cy) * m.fy) >> 4;
+    // is a crit (x1.4, integer 14/10). Coords <= 256 and |fx|,|fy| <= 16 keep
+    // the products inside int16 (max |proj| = 512*16*2 >> 4 = 1024).
+    const int16_t proj = static_cast<int16_t>(((hx - cx) * m.fx + (hy - cy) * m.fy) >> 4);
     const bool crit = proj > 3;
     int32_t total = (dmg * (crit ? 14 : 10)) / 10;
     if (total < 1)
