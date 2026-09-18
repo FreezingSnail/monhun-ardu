@@ -325,14 +325,20 @@ def player_cell(facing):
     rect(img, 4, 7, 8, 6, WHITE)    # torso
     rect(img, 5, 13, 2, 2, WHITE)   # legs
     rect(img, 9, 13, 2, 2, WHITE)
-    signs = ((1, 0), (1, 1), (0, 1), (-1, 1), (-1, 0), (-1, -1), (0, -1), (1, -1))
-    dx, dy = signs[facing % 8]
-    hx = 8 + dx * 2
-    hy = 4 + dy * 2
-    if dx == 0:
-        rect(img, hx, hy - 1, 1, 2, BLACK)
-    else:
-        rect(img, hx - 1, hy, 2, 1, BLACK)
+    # Helmet eye slot per facing (x, y, w, h); None = facing away, hidden.
+    slits = (
+        (9, 3, 1, 2),    # E profile
+        (9, 4, 2, 1),    # SE
+        (7, 4, 3, 1),    # S front
+        (5, 4, 2, 1),    # SW
+        (6, 3, 1, 2),    # W profile
+        None,            # NW
+        None,            # N
+        None,            # NE
+    )
+    slit = slits[facing % 8]
+    if slit is not None:
+        rect(img, slit[0], slit[1], slit[2], slit[3], BLACK)
     return img
 
 

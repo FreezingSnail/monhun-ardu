@@ -74,7 +74,7 @@ deferred option for mixed gear; when they land they use the same row layout.
 
 | file | content |
 |---|---|
-| `player_base_16x16.png` | **the base template**: one sheet, 128x16, all 8 player angles prefilled; each cell has a black head slit offset toward its facing (E/W/diagonals horizontal, N/S vertical) so the direction is readable while you redraw |
+| `player_base_16x16.png` | **the base template**: one sheet, 128x16, all 8 player angles prefilled; the head carries a helmet eye slot that is visible only when facing the viewer (S full width, SE/SW three-quarter, E/W edge-on profile) and hidden for the three away facings (N/NE/NW) — the slot is your facing read |
 | `guide_player_base_4x.png` | 4x guide: direction labels (E..NE), cell grid, anchor crosses (8,8), palette swatches |
 
 Workflow for a new player/equipment set: copy `player_base_16x16.png`, draw the

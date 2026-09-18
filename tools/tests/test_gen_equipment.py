@@ -142,12 +142,18 @@ class GenEquipmentTests(unittest.TestCase):
             img = Image.open(self.path(IMAGES_REL, generated)).convert("RGBA")
             ref = Image.open(os.path.join(ROOT, "docs", "art", reference)).convert("RGBA")
             self.assertEqual(img.tobytes(), ref.tobytes(), generated)
-            # All 8 angle cells carry the black facing slit and differ pairwise.
+            # Helmet eye slot: visible for the 5 toward-viewer facings (0..4,
+            # pairwise distinct), hidden for the 3 away facings (5..7, no black
+            # pixel; their cells are the plain helmet back).
             cells = [img.crop((i * 16, 0, i * 16 + 16, 16)) for i in range(8)]
-            for i, cell in enumerate(cells):
-                self.assertIn((0, 0, 0, 255), list(cell.getdata()), "cell %d has no slit" % i)
-            for i in range(8):
-                for j in range(i + 1, 8):
+            for i in range(5):
+                self.assertIn((0, 0, 0, 255), list(cells[i].getdata()),
+                              "cell %d has no eye slot" % i)
+            for i in range(5, 8):
+                self.assertNotIn((0, 0, 0, 255), list(cells[i].getdata()),
+                                 "cell %d must face away (no slot)" % i)
+            for i in range(5):
+                for j in range(i + 1, 5):
                     self.assertNotEqual(cells[i].tobytes(), cells[j].tobytes(),
                                         "cells %d and %d are identical" % (i, j))
 
