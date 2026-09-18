@@ -123,8 +123,8 @@
     {
       "declaration": "fxdata/equip/Sprites.txt",
       "path": "images/equip/mh_player_base_16x16.png",
-      "sha256": "554f7639591a5ef79f70947c1529075cfd8e9df99009852e9f5090a033aa8d84",
-      "size": 178,
+      "sha256": "34a13b98c43267e8607a0d58d2c11a087e2f7a6721c46ba7fd65143143a9c103",
+      "size": 233,
       "symbol": "mh_player_base"
     },
     {
@@ -249,7 +249,7 @@
     },
     {
       "path": "fxdata/equip/Sprites.txt",
-      "sha256": "d32c8cf9e6c2c8b6156280547a74fc28864d4bfa82585edba4f093aff58cd790",
+      "sha256": "d2fc33d635c5e2942e51952226496de665c459c8738d122b9d39351c01e2ee1d",
       "size": 298557,
       "symbols": [
         "mh_weapon_sword",
@@ -321,12 +321,12 @@
   "outputs": [
     {
       "path": "fxdata/fxdata-data.bin",
-      "sha256": "eb75fb2acb53e425309ece009ae93b63becb2487cf14eec8224621551da88dfb",
+      "sha256": "cfe896874a5d02f472757f5ac599ffb57b4474de7d5babb7e3c5ba2f145fa4d1",
       "size": 87593
     },
     {
       "path": "fxdata/fxdata.bin",
-      "sha256": "2e6dab9655ab4a52f1e807e7f9215e48ccb80cf5334aef73b0f482e27c19e4ac",
+      "sha256": "da62818d517b3aa22aecf7c880342450e74d4432b9cfad0b24fa757dbfe7821a",
       "size": 87808
     },
     {

@@ -35,6 +35,8 @@ SHADES = (BLACK, DARK, LIGHT, WHITE)
 SHADE_NAMES = ("black (0)", "dark (1)", "light (2)", "white (3)")
 
 DIR8_NAMES = ("E", "SE", "S", "SW", "W", "NW", "N", "NE")
+# Unit vectors in DIR8 order (fp.hpp DIR8 reduced to signs).
+DIR8_SIGNS = ((1, 0), (1, 1), (0, 1), (-1, 1), (-1, 0), (-1, -1), (0, -1), (1, -1))
 
 GRID = (90, 90, 90, 255)
 ANCHOR = (255, 0, 255, 255)
@@ -55,14 +57,25 @@ def new(w, h):
     return Image.new("RGBA", (w, h), CLEAR)
 
 
-def player_cell():
-    """Current fxplayer silhouette: shadow + head + torso + legs (mock rects)."""
+def player_cell(facing):
+    """Current fxplayer silhouette + a black head slit marking the facing.
+
+    Shadow + head + torso + legs are the mock drawPlayer rects (unchanged for
+    every angle). The slit is the facing marker: offset 2 px toward the
+    direction on the head, horizontal for E/W/diagonals, vertical for N/S."""
     img = new(CELL, CELL)
     rect(img, 2, 15, 12, 1, DARK)   # shadow
     rect(img, 5, 1, 6, 6, WHITE)    # head
     rect(img, 4, 7, 8, 6, WHITE)    # torso
     rect(img, 5, 13, 2, 2, WHITE)   # legs
     rect(img, 9, 13, 2, 2, WHITE)
+    dx, dy = DIR8_SIGNS[facing]
+    hx = 8 + dx * 2
+    hy = 4 + dy * 2
+    if dx == 0:
+        rect(img, hx, hy - 1, 1, 2, BLACK)   # N/S: vertical slit
+    else:
+        rect(img, hx - 1, hy, 2, 1, BLACK)   # E/W/diagonals: horizontal slit
     return img
 
 
@@ -102,7 +115,7 @@ def main():
 
     sheet = new(CELL * FRAMES, CELL)
     for i in range(FRAMES):
-        sheet.paste(player_cell(), (i * CELL, 0))   # all 8 angles prefilled
+        sheet.paste(player_cell(i), (i * CELL, 0))   # 8 angles, slit = facing
 
     path = os.path.join(outdir, "player_base_16x16.png")
     sheet.save(path)

@@ -142,6 +142,14 @@ class GenEquipmentTests(unittest.TestCase):
             img = Image.open(self.path(IMAGES_REL, generated)).convert("RGBA")
             ref = Image.open(os.path.join(ROOT, "docs", "art", reference)).convert("RGBA")
             self.assertEqual(img.tobytes(), ref.tobytes(), generated)
+            # All 8 angle cells carry the black facing slit and differ pairwise.
+            cells = [img.crop((i * 16, 0, i * 16 + 16, 16)) for i in range(8)]
+            for i, cell in enumerate(cells):
+                self.assertIn((0, 0, 0, 255), list(cell.getdata()), "cell %d has no slit" % i)
+            for i in range(8):
+                for j in range(i + 1, 8):
+                    self.assertNotEqual(cells[i].tobytes(), cells[j].tobytes(),
+                                        "cells %d and %d are identical" % (i, j))
 
     def test_generated_sheet_dimensions(self):
         self.assert_succeeds(self.compile())

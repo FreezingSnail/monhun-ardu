@@ -315,14 +315,24 @@ def new(w, h):
     return Image.new("RGBA", (w, h), CLEAR)
 
 
-def player_cell():
-    """docs/art/player_base_16x16.png facing 0: shadow + head + torso + legs."""
+def player_cell(facing):
+    """docs/art/player_base_16x16.png cell for one facing: mock silhouette +
+    the black head slit that marks the direction (must stay pixel-identical to
+    tools/gen-base-sheet.py)."""
     img = new(16, 16)
     rect(img, 2, 15, 12, 1, DARK)   # shadow
     rect(img, 5, 1, 6, 6, WHITE)    # head
     rect(img, 4, 7, 8, 6, WHITE)    # torso
     rect(img, 5, 13, 2, 2, WHITE)   # legs
     rect(img, 9, 13, 2, 2, WHITE)
+    signs = ((1, 0), (1, 1), (0, 1), (-1, 1), (-1, 0), (-1, -1), (0, -1), (1, -1))
+    dx, dy = signs[facing % 8]
+    hx = 8 + dx * 2
+    hy = 4 + dy * 2
+    if dx == 0:
+        rect(img, hx, hy - 1, 1, 2, BLACK)
+    else:
+        rect(img, hx - 1, hy, 2, 1, BLACK)
     return img
 
 
@@ -351,7 +361,7 @@ def placeholder_cell(item, index):
     """Placeholder pixels for one frame; None leaves the cell transparent."""
     slot = item["slot"]
     if slot == "player":
-        return player_cell()   # all 8 angle cells prefilled (docs/art template)
+        return player_cell(index)   # 8 angle cells prefilled (docs/art template)
     if slot == "shadow":
         return shadow_cell() if index == 0 else None
     if slot == "body":
