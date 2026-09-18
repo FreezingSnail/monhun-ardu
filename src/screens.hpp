@@ -78,18 +78,11 @@ inline bool screenCursorRow(const ScreenState &s, ScreenRow &row) {
     return true;
 }
 
-// Enter a screen: reset cursor/scroll/edges and load its row count.
+// Enter a screen: reset cursor/scroll/edges and load its row count off the
+// cart (the pure reset lives in screen_state.hpp screenReset()).
 inline void screenEnter(ScreenState &s, uint8_t screen, const SaveBlock &save) {
     (void)save;
-    s.screen = screen;
-    s.cursor = 0;
-    s.scroll = 0;
-    s.rowCount = screenRowCount(screen);
-    s.active = true;
-    s.prevA = false;
-    s.prevB = false;
-    s.navY = 0;
-    s.navYTimer = 0;
+    screenReset(s, screen, screenRowCount(screen));
 }
 
 // One page of the generic list. Called once per plane (same discipline as
@@ -118,9 +111,13 @@ inline void drawScreen(const ScreenState &s, const SaveBlock &save) {
         for (uint8_t j = 0; j < labelLen; j++)
             lx = textPut(sheet, lx, y, static_cast<char>(mhFxReadU8(screenCart(static_cast<uint16_t>(rowOff + 1 + j)))));
 
-        const uint16_t cost = mhFxReadU16(reinterpret_cast<const uint16_t *>(screenCart(static_cast<uint16_t>(rowOff + 1 + labelLen))));
-        const uint8_t digits = hudDigits(static_cast<int16_t>(cost));
-        drawNumber(static_cast<int16_t>(SCREEN_COST_RIGHT - digits * 4), y, static_cast<int16_t>(cost), selected ? 3 : 2);
+        const uint16_t fields = static_cast<uint16_t>(rowOff + 1 + labelLen);
+        const uint8_t flags = mhFxReadU8(screenCart(static_cast<uint16_t>(fields + 3)));
+        // Dynamic value token (qs.4): a ROW_F_ZENNY row draws the live save
+        // balance in the cost column instead of the packed row cost.
+        const int16_t value = (flags & screens::ROW_F_ZENNY) != 0 ? static_cast<int16_t>(save.zenny) : static_cast<int16_t>(mhFxReadU16(reinterpret_cast<const uint16_t *>(screenCart(fields))));
+        const uint8_t digits = hudDigits(value);
+        drawNumber(static_cast<int16_t>(SCREEN_COST_RIGHT - digits * 4), y, value, selected ? 3 : 2);
     }
 }
 

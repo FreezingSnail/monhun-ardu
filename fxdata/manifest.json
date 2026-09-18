@@ -221,8 +221,8 @@
     {
       "declaration": "fxdata/menu/Sprites.txt",
       "path": "images/menu/mh_menu_bg_128x64.png",
-      "sha256": "58cb477377efade355b86cd3d7d1d81c30558a09412eadce4fa0d2c009440f1f",
-      "size": 635,
+      "sha256": "c901048e77ce808f90cd28615dc0485a75828be8eddff41c521fae01585e0ebd",
+      "size": 624,
       "symbol": "mh_menu_bg"
     },
     {
@@ -391,8 +391,8 @@
     },
     {
       "path": "data/screens/hub.json",
-      "sha256": "c77ed5812faf00ad5313b6ba5582856a6fd0416e344e1d2dd4fdb48e175f89f7",
-      "size": 342
+      "sha256": "e2147be813b1f43d1185bfaa7bb75250992a40a26b9619444356d6c6c1977f7f",
+      "size": 441
     },
     {
       "path": "data/screens/quests.json",
@@ -498,7 +498,7 @@
     },
     {
       "path": "fxdata/menu/Sprites.txt",
-      "sha256": "208d88057b4756f86db790de8f5cc7f0fb66ff360260e71a32a1b08b9ea94107",
+      "sha256": "6321c65803e8c672d40df0fc4869cda1f6f8fe1a8fb385a860466a8f74c7bbed",
       "size": 46455,
       "symbols": [
         "mh_menu_sel",
@@ -513,7 +513,7 @@
     },
     {
       "path": "fxdata/tables/equip.bin",
-      "sha256": "52e6717f940558e4f7e2c971b6d7fb9563285316f0d7fa24fb7644ceced14953",
+      "sha256": "f4b2b715a31aef1153c3b9cedfe1a202f2084b33d6d5460009a4363afea3036c",
       "size": 876,
       "symbol": "mhEquip"
     },
@@ -537,8 +537,8 @@
     },
     {
       "path": "fxdata/tables/screens.bin",
-      "sha256": "c3dc57a3cd4efc78965774a2ebecb99b7d8e1892d27047e465af5c8ed8947ccd",
-      "size": 294,
+      "sha256": "406be686e82a4e5b13a30382c34acffa00d8b683385bcec4c4a235bb4eefba54",
+      "size": 297,
       "symbol": "mhScreens"
     },
     {
@@ -563,17 +563,17 @@
   "outputs": [
     {
       "path": "fxdata/fxdata-data.bin",
-      "sha256": "708938592b531af5d662acf5e635810646f8333bcf8f5d6d0bb34159bd2a7ecf",
-      "size": 125713
+      "sha256": "8a6d51650a5a6ef6b4831c201e76881b8fd6331099ef3ac2fa3bbce54017696f",
+      "size": 125716
     },
     {
       "path": "fxdata/fxdata.bin",
-      "sha256": "94150590f20352720640f1d1c7fbda521712828c802fa29d55086fb94f5b6e46",
+      "sha256": "342de79a8713fbd9ab3186da26c8474d03f83cc79da895fe0a4b14f5a569dc45",
       "size": 125952
     },
     {
       "path": "fxdata/fxdata.h",
-      "sha256": "ae193a550607763ed8534b3d209b73032d9a1619c1b82af8a4906265acbf94fc",
+      "sha256": "41c66fab7840e853bc4a896f34c7119bfb49ca5e97e2b8d2d3247256842af0d9",
       "size": 2031
     },
     {
@@ -583,7 +583,7 @@
     },
     {
       "path": "fxdata/tables/equip.bin",
-      "sha256": "52e6717f940558e4f7e2c971b6d7fb9563285316f0d7fa24fb7644ceced14953",
+      "sha256": "f4b2b715a31aef1153c3b9cedfe1a202f2084b33d6d5460009a4363afea3036c",
       "size": 876
     },
     {
@@ -593,8 +593,8 @@
     },
     {
       "path": "fxdata/tables/screens.bin",
-      "sha256": "c3dc57a3cd4efc78965774a2ebecb99b7d8e1892d27047e465af5c8ed8947ccd",
-      "size": 294
+      "sha256": "406be686e82a4e5b13a30382c34acffa00d8b683385bcec4c4a235bb4eefba54",
+      "size": 297
     },
     {
       "path": "fxdata/tables/smith.bin",
@@ -603,7 +603,7 @@
     },
     {
       "path": "src/fxdata.h",
-      "sha256": "ae193a550607763ed8534b3d209b73032d9a1619c1b82af8a4906265acbf94fc",
+      "sha256": "41c66fab7840e853bc4a896f34c7119bfb49ca5e97e2b8d2d3247256842af0d9",
       "size": 2031
     },
     {
@@ -628,7 +628,7 @@
     },
     {
       "path": "src/generated/equip_meta.hpp",
-      "sha256": "48b91569993f7399910f0afc0f86fdc87e15129ac0bb46ace008908d92785747",
+      "sha256": "5cb8b001b6cfac51fc60b9511e8204a590cf50c99eaeffcfbc4e8c6390e3b9d4",
       "size": 22324
     },
     {
@@ -638,8 +638,8 @@
     },
     {
       "path": "src/generated/screen_meta.hpp",
-      "sha256": "2eba7ac937ec278fd54c66fce724d49015e8d73d2b11139aac18eaa0addd5602",
-      "size": 2053
+      "sha256": "47ed8c9f97e3823c660ff87a3f3414610552800e97d64e40a0f73ec3b63f13ae",
+      "size": 2244
     },
     {
       "path": "src/generated/smith_meta.hpp",

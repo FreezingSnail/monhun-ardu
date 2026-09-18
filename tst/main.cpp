@@ -10,6 +10,7 @@
 #include "sin_test.hpp"
 #include "menu_test.hpp"
 #include "screens_test.hpp"
+#include "app_state_test.hpp"
 #include "quests_test.hpp"
 #include "smith_test.hpp"
 #include "combat_test.hpp"
@@ -27,6 +28,7 @@ int main() {
     SinSuite(runner);
     MenuSuite(runner);
     ScreenSuite(runner);
+    AppSuite(runner);
     QuestSuite(runner);
     SmithSuite(runner);
     CombatSuite(runner);

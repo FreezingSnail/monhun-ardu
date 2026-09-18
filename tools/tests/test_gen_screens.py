@@ -128,6 +128,10 @@ class GenScreensTests(unittest.TestCase):
             "constexpr uint8_t ACTION_BUY_UPGRADE = 1;",
             "constexpr uint8_t ACTION_TAKE_QUEST = 2;",
             "constexpr uint8_t ACTION_TURN_IN_QUEST = 3;",
+            "constexpr uint8_t ACTION_NONE = 4;",
+            "constexpr uint8_t ACTION_HUNT = 5;",
+            "constexpr uint8_t ACTION_OPEN_QUESTS = 6;",
+            "constexpr uint8_t ACTION_OPEN_SMITH = 7;",
             "constexpr uint8_t COND_ALWAYS = 0;",
             "constexpr uint8_t COND_ZENNY = 1;",
             "constexpr uint8_t COND_FLAG = 2;",
@@ -135,6 +139,7 @@ class GenScreensTests(unittest.TestCase):
             "constexpr uint8_t COND_QUEST = 4;",
             "constexpr uint8_t COND_UPGRADE = 5;",
             "constexpr uint8_t ROW_F_HIDE_LOCKED = 0x01;",
+            "constexpr uint8_t ROW_F_ZENNY = 0x02;",
             "constexpr uint8_t SCREEN_HUB = 0;",
             "constexpr uint16_t SCREEN_HUB_OFF = 12;",
             "constexpr uint8_t SCREEN_HUB_ROWS = 2;",
@@ -220,6 +225,29 @@ class GenScreensTests(unittest.TestCase):
     def test_unknown_flag_rejected(self):
         self.mutate("data/screens/hub.json", lambda doc: doc["rows"][0].__setitem__("flags", ["glow"]))
         self.assert_fails(self.compile(), "unknown flag 'glow'")
+
+    def test_hub_navigation_actions_compile(self):
+        # qs.4: the hub uses the navigation action set; the generated header must
+        # expose their ids (pinned by test_clean_meta_header_constants).
+        self.mutate("data/screens/hub.json",
+                    lambda doc: doc["rows"][0].update({"action": "hunt", "condition": "always"}))
+        self.assert_succeeds(self.compile())
+        blob = self.read_bytes(BLOB_REL)
+        hub = parse_def(blob, struct.unpack_from("<H", blob, DEF_OFF)[0])
+        row = parse_row(blob, hub["firstRow"])
+        self.assertEqual(row["action"], 5, "hunt action id")
+        self.assertEqual(row["cond"], 0, "always condition id")
+
+    def test_zenny_dynamic_value_flag_compiles(self):
+        self.mutate("data/screens/hub.json",
+                    lambda doc: doc["rows"][1].update({"action": "none", "flags": ["zenny"]}))
+        self.assert_succeeds(self.compile())
+        blob = self.read_bytes(BLOB_REL)
+        hub = parse_def(blob, struct.unpack_from("<H", blob, DEF_OFF)[0])
+        first = parse_row(blob, hub["firstRow"])
+        second = parse_row(blob, hub["firstRow"] + first["size"])
+        self.assertEqual(second["flags"], 2, "ROW_F_ZENNY bit")
+        self.assertEqual(second["action"], 4, "none action id")
 
     def test_label_too_long_rejected(self):
         self.mutate("data/screens/hub.json", lambda doc: doc["rows"][0].__setitem__("label", "X" * 17))

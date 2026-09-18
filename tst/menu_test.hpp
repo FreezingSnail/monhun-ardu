@@ -152,11 +152,11 @@ void MenuSuite(TestRunner &runner) {
     {
         Test t("A rising edge fires START once per press, hold stays silent");
         MenuState m;
-        t.assert(menuStep(m, MT_A), MENU_START, "press tick: START");
+        t.assert(menuStep(m, MT_A), MENU_ACCEPT, "press tick: START");
         for (int i = 0; i < 10; i++)
             t.assert(menuStep(m, MT_A), MENU_NONE, "held A: no repeat");
         t.assert(menuStep(m, MT_IDLE), MENU_NONE, "release: no action");
-        t.assert(menuStep(m, MT_A), MENU_START, "re-press fires again");
+        t.assert(menuStep(m, MT_A), MENU_ACCEPT, "re-press fires again");
         suite.addTest(t);
     }
 
@@ -164,7 +164,7 @@ void MenuSuite(TestRunner &runner) {
         Test t("same-tick nav + A applies the nav and still fires START");
         MenuState m;
         const Input rightA = Input{1, 0, true, false};
-        t.assert(menuStep(m, rightA), MENU_START, "diagonal press starts");
+        t.assert(menuStep(m, rightA), MENU_ACCEPT, "diagonal press starts");
         t.assert(m.weapon, 1, "diagonal press nav applied");
         suite.addTest(t);
     }
@@ -215,7 +215,7 @@ void MenuSuite(TestRunner &runner) {
         menuTap(m, MT_RIGHT);   // FLS
         menuTap(m, MT_DOWN);
         menuTap(m, MT_DOWN);   // HEAVY
-        t.assert(menuStep(m, MT_A), MENU_START, "start picked loadout");
+        t.assert(menuStep(m, MT_A), MENU_ACCEPT, "start picked loadout");
         Game g;
         menuStart(g, m);
         t.assert(g.weapon, W_FLAIL, "started flail");
@@ -228,7 +228,7 @@ void MenuSuite(TestRunner &runner) {
         t.assert(m.target, 2, "target pick kept");
         t.assert(menuStep(m, MT_A), MENU_NONE, "held return A does not restart");
         t.assert(menuStep(m, MT_IDLE), MENU_NONE, "release after return");
-        t.assert(menuStep(m, MT_A), MENU_START, "fresh A press starts again");
+        t.assert(menuStep(m, MT_A), MENU_ACCEPT, "fresh A press starts again");
         suite.addTest(t);
     }
 

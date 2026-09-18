@@ -54,9 +54,12 @@ LABEL_MAX = 16
 SCREEN_MAX = 255
 TIER_COUNT = 3   # N_WEAPONS (W_SWORD/W_FLAIL/W_GUN); must match core/save.hpp
 
-ACTION_NAMES = ("leave", "buy_upgrade", "take_quest", "turn_in_quest")
+ACTION_NAMES = ("leave", "buy_upgrade", "take_quest", "turn_in_quest",
+                "none", "hunt", "open_quests", "open_smith")
 COND_NAMES = ("always", "zenny", "flag", "tier", "quest", "upgrade")
-ROW_FLAGS = {"hide_locked": 0x01}
+# hide_locked: reserved. zenny: draw the live save.zenny balance in the cost
+# column instead of the row cost (dynamic value token, qs.4 hub display).
+ROW_FLAGS = {"hide_locked": 0x01, "zenny": 0x02}
 # COND_UPGRADE param packs (unlockFlag << 4) | (weaponIdx << 2) | tier (see
 # screen_state.hpp): unlock 0 = always, else 1-based quest whose done bit gates
 # the tier; weapon 0..TIER_COUNT-1; tier 1..SCREEN_MAX_TIER (2 in data).

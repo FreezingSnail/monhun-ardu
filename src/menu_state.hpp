@@ -17,8 +17,7 @@ namespace mh {
 
 enum MenuAction : int8_t {
     MENU_NONE = 0,
-    MENU_START,   // A: start the picked hunt/train
-    MENU_SCREEN   // B: open the data-driven hub screen (qs.1 stub entry)
+    MENU_ACCEPT   // A: open the hub with the picked loadout (qs.4)
 };
 
 struct MenuState {
@@ -86,21 +85,21 @@ inline void menuNavAxis(int8_t &pick, int8_t count, int8_t dir, int8_t &last, ui
 }
 
 // One menu tick: LEFT/RIGHT cycle the weapon, UP/DOWN cycle the target (both
-// wrap), A rising edge reports MENU_START exactly once per press, B rising edge
-// reports MENU_SCREEN (open the hub screen). Navigation is debounced per axis
-// (menuNavAxis): one step per tap, hold delays then repeats. Navigation works
-// while A is held too.
+// wrap), A rising edge reports MENU_ACCEPT exactly once per press (the caller
+// opens the hub; the hub's HUNT row starts the picked loadout). Navigation is
+// debounced per axis (menuNavAxis): one step per tap, hold delays then repeats.
+// Navigation works while A is held too. B is not a menu action any more (the
+// qs.1 MENU_SCREEN stub is gone: A -> hub is the real entry).
 inline MenuAction menuStep(MenuState &m, const Input &in) {
     menuNavAxis(m.weapon, MENU_WEAPON_COUNT, in.mx, m.navX, m.navXTimer);
     menuNavAxis(m.target, MENU_TARGET_COUNT, in.my, m.navY, m.navYTimer);
 
     bool aP, bP, bR;
     inputEdges(in, m.prevA, m.prevB, aP, bP, bR);
+    (void)bP;
     (void)bR;
     if (aP)
-        return MENU_START;
-    if (bP)
-        return MENU_SCREEN;
+        return MENU_ACCEPT;
     return MENU_NONE;
 }
 

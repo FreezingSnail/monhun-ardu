@@ -1,9 +1,10 @@
 #pragma once
 // Host unit tests for the generic list-screen logic (bead monhun-ardu-cgz):
 // core/save.hpp (encode/decode/checksum/roundtrip/fallback/write-on-change) and
-// screen_state.hpp (conditions, visibility, debounced nav, action switch), plus
-// the opening menu's new B -> MENU_SCREEN edge. The cart side (src/screens.hpp)
-// is device-only and is pinned by tst/fxdatatest/screens_test.hpp.
+// screen_state.hpp (conditions, visibility, debounced nav, action switch), the
+// pure screenReset() entry helper, plus the opening menu's A -> MENU_ACCEPT
+// edge (qs.4 removed the old B -> MENU_SCREEN stub). The cart side
+// (src/screens.hpp) is device-only and is pinned by tst/fxdatatest/screens_test.hpp.
 #include "test.hpp"
 #include "../src/screen_state.hpp"
 #include "../src/menu_state.hpp"
@@ -329,12 +330,14 @@ void ScreenSuite(TestRunner &runner) {
     }
 
     {
-        Test t("menu B edge opens the screen once per press, A still starts");
+        Test t("menu A edge opens the hub once per press; B is not a menu action (qs.4)");
         MenuState m;
-        t.assert(menuStep(m, ST_B), MENU_SCREEN, "B edge -> screen");
-        t.assert(menuStep(m, ST_B), MENU_NONE, "held B silent");
+        t.assert(menuStep(m, ST_B), MENU_NONE, "B is silent in the menu");
         t.assert(menuStep(m, ST_IDLE), MENU_NONE, "release silent");
-        t.assert(menuStep(m, ST_A), MENU_START, "A still starts");
+        t.assert(menuStep(m, ST_A), MENU_ACCEPT, "A edge -> accept/hub");
+        t.assert(menuStep(m, ST_A), MENU_NONE, "held A silent");
+        t.assert(menuStep(m, ST_IDLE), MENU_NONE, "release after A silent");
+        t.assert(menuStep(m, ST_A), MENU_ACCEPT, "fresh A press fires again");
         suite.addTest(t);
     }
 

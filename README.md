@@ -67,6 +67,11 @@ directly in 1/16-px units and integrated by straight addition.
 - `src/menu_state.hpp` — host-testable menu FSM (`MenuState`/`menuStep`, pick →
   mode/kind mapping, post-over return edge); no Arduino.h.
 - `src/menu.hpp` — menu render (FX glyph rows + selection underline), per plane.
+- `src/app_state.hpp` — host-testable boot-flow routing (qs.4): menu ↔ hub ↔
+  quests/smith ↔ hunt transitions, the held-button guards and the once-per-hunt
+  progress commit.
+- `src/app_setup.hpp` — device cart glue for a hunt start: arm the quest kill
+  counter from the active `QuestDef` and resolve the smith tier multipliers.
 - `src/render.hpp` — whole render path (also compiled into the perf bench so
   measured numbers describe the real loop). Arena, target, player, shells,
   effects, HUD.
@@ -184,18 +189,33 @@ data/skeletons.json + data/creatures/*.json ──tools/gen-combat.py──►�
 | Input | Action |
 |---|---|
 | LEFT / RIGHT | cycle weapon: SWD (sword) / FLS (flail) / GUN (gunshield) |
-| UP / DOWN | cycle target: LUNGE / SWEEP / HEAVY beast, or POLE |
-| A | start the selected scene |
+| UP / DOWN | cycle target: LUNGE / SWEEP / HEAVY / RAVAGER beast, or POLE |
+| A | open the HUB with the picked loadout |
 
 D-pad nav is debounced: a tap moves exactly one pick (immediate on the direction
 change), while holding waits ~300 ms (16 logic ticks) and then repeats every
 ~115 ms (6 ticks). Reversing steps at once; releasing resets the hold timer; a
 re-entry after win/loss resets it too, so a held d-pad cannot skip picks. A stays
-edge-based: one start per press. Picks wrap in both directions. Targets
-LUNGE/SWEEP/HEAVY start the matching beast variant in hunt mode; POLE starts
-train mode (the static pole, no beast). After a win or loss, A returns to the
-menu with the picks kept until reboot. While the menu is up the sim and audio are
-not stepped.
+edge-based: one open per press. Picks wrap in both directions. A opens the hub
+(qs.4); the hub's HUNT row starts the selected scene, so targets LUNGE/SWEEP/
+HEAVY start the matching beast variant in hunt mode and POLE starts train mode
+(the static pole, no beast). After a win or loss, A returns to the hub with the
+picks kept until reboot. While the menu is up the sim and audio are not stepped.
+
+### Hub / quests / smith (data-driven screens, qs.1–qs.4)
+
+| Input | Action |
+|---|---|
+| UP / DOWN | move the cursor (6 rows per page, scroll by 6) |
+| A | accept the cursor row (start hunt / open a screen / buy / take quest) |
+| B | back one level (quests/smith → hub; hub → opening menu) |
+
+The hub shows HUNT / QUESTS / SMITH plus a ZENNY row that renders the live
+`save.zenny` balance (dynamic value token). The quests board takes a kill quest
+and turns it in for its reward; the smith sells weapon upgrade tiers. Every
+state-changing action commits the 15-byte EEPROM save block once (write-on-
+change + verify read), and the hunt-end quest-progress commit runs exactly once
+per hunt.
 
 ### Target roster (`MONSTER_DEFS`, FX cart blob)
 

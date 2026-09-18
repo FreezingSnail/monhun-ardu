@@ -93,7 +93,7 @@ inline void test_menu(FxTest &test) {
     menuStep(m, idle);   // release the axis so later picks start fresh
 
     // ---- A edge fires START once per press (picks now FLS + POLE)
-    test.expectEq(static_cast<uint32_t>(menuStep(m, a)), MENU_START, F("A edge start"));
+    test.expectEq(static_cast<uint32_t>(menuStep(m, a)), MENU_ACCEPT, F("A edge start"));
     for (uint8_t i = 0; i < 4; i++)
         test.expectEq(static_cast<uint32_t>(menuStep(m, a)), MENU_NONE, F("A held no repeat"));
 

@@ -504,7 +504,7 @@ MENU_ELEMENTS = (
     (84, 34, "HEAVY", LIGHT),
     (36, 44, "RAVAGER", LIGHT),
     (68, 44, "POLE", LIGHT),
-    (4, 56, "A START", WHITE),
+    (4, 56, "A HUB", WHITE),   # qs.4: A opens the hub, HUNT lives there
 )
 
 # Selected-option order: weapons 0..2, then targets 0..4 (design order, which

@@ -2,8 +2,9 @@
   "id": 0,
   "title": "HUB",
   "rows": [
-    { "label": "BUY SWORD", "cost": 100, "action": "buy_upgrade", "condition": "zenny", "param": 0 },
-    { "label": "TAKE QUEST", "cost": 0, "action": "take_quest", "condition": "always", "param": 1 },
-    { "label": "LEAVE", "cost": 0, "action": "leave", "condition": "always", "param": 0 }
+    { "label": "HUNT", "cost": 0, "action": "hunt", "condition": "always", "param": 0 },
+    { "label": "QUESTS", "cost": 0, "action": "open_quests", "condition": "always", "param": 0 },
+    { "label": "SMITH", "cost": 0, "action": "open_smith", "condition": "always", "param": 0 },
+    { "label": "ZENNY", "cost": 0, "action": "none", "condition": "always", "param": 0, "flags": ["zenny"] }
   ]
 }

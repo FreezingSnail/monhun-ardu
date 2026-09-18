@@ -132,6 +132,23 @@ inline uint8_t screenPageStart(uint8_t cursor) {
     return static_cast<uint8_t>((cursor / SCREEN_ROWS) * SCREEN_ROWS);
 }
 
+// Enter/reset a screen. Pure: the caller supplies the row count (the device
+// reads it off the cart in screenEnter, src/screens.hpp; the boot-flow routing
+// in src/app_state.hpp uses the generated SCREEN_*_ROWS constants). Clears the
+// cursor, scroll, nav hold state and the A/B edges so the press that opened the
+// screen cannot immediately re-fire inside it.
+inline void screenReset(ScreenState &s, uint8_t screen, uint8_t rowCount) {
+    s.screen = screen;
+    s.cursor = 0;
+    s.scroll = 0;
+    s.rowCount = rowCount;
+    s.active = true;
+    s.prevA = false;
+    s.prevB = false;
+    s.navY = 0;
+    s.navYTimer = 0;
+}
+
 // One input tick: debounced vertical nav + A/B edges. The caller evaluates the
 // cursor row and dispatches the action on SCREEN_ACCEPT.
 inline ScreenEvent screenStep(ScreenState &s, const Input &in) {

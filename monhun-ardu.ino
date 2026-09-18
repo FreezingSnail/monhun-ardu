@@ -18,10 +18,12 @@
 // exact same header is compiled into the on-device perf bench, so the numbers
 // there describe this loop's real render path.
 #include "src/render.hpp"
-#include "src/menu.hpp"      // draws through render.hpp (textPut/blk) + MenuState
-#include "src/screens.hpp"   // hub/list screens + EEPROM save (qs.1)
-#include "src/quest.hpp"     // quest defs on cart + TAKE/TURN_IN state (qs.2)
-#include "src/smith.hpp"     // smith upgrade defs on cart + tier multipliers (qs.3)
+#include "src/menu.hpp"        // draws through render.hpp (textPut/blk) + MenuState
+#include "src/screens.hpp"     // hub/list screens + EEPROM save (qs.1)
+#include "src/app_state.hpp"   // boot-flow routing: menu <-> hub <-> screens <-> hunt (qs.4)
+#include "src/app_setup.hpp"   // cart-backed hunt arming: quest def + smith tier (qs.4)
+#include "src/quest.hpp"       // quest defs on cart + TAKE/TURN_IN state (qs.2)
+#include "src/smith.hpp"       // smith upgrade defs on cart + tier multipliers (qs.3)
 
 decltype(arduboy) arduboy;
 
@@ -30,8 +32,9 @@ decltype(arduboy) arduboy;
 mh::Game g;
 
 // Opening menu (bead monhun-ardu-6zb.2): boot lands here. While active it owns
-// every input edge; the sim and audio are not stepped. A starts the chosen
-// scene, and after a win/lose the same state re-opens with the picks kept.
+// every input edge; the sim and audio are not stepped. A opens the hub (qs.4)
+// carrying the picked weapon/target; the hub's HUNT row starts the hunt. The
+// picks stay live across the whole boot -> hub -> hunt -> hub round trip.
 mh::MenuState s_menu;
 
 // Audio cue edge detector. Driven from run() after stepGame(); reads Game only
@@ -39,48 +42,18 @@ mh::MenuState s_menu;
 mh::AudioState s_audio;
 
 // Persistent save + the data-driven screen state (bead monhun-ardu-cgz). The
-// save loads once in setup(); it is committed only from a hub-screen action
-// (never during a hunt) so EEPROM write cycles stay low. The screen is entered
-// from the opening menu's B edge and returns to it on B / a LEAVE row.
+// save loads once in setup(); it is committed only from a screen action or the
+// hunt-end progress commit (never mid-hunt) so EEPROM write cycles stay low.
+// The hub is entered from the opening menu's A edge (qs.4) and routes to the
+// quests/smith screens or into a hunt; B steps back one level.
 mh::SaveBlock s_save;
 mh::ScreenState s_screen;
 static const mh::SaveBackend SAVE_BACKEND = {mh::saveEepromRead, mh::saveEepromWrite};
 
-// Quest kill accounting edge (qs.2): the hunt-end commit writes the progress
-// once per hunt (never mid-hunt), and the flag also keeps the re-open menu edge
-// from re-committing.
+// Quest kill accounting edge (qs.2/qs.4): the hunt-end commit writes the
+// progress once per hunt (never mid-hunt); appHuntCommit() owns the once-only
+// latch so the save is not rewritten on every post-over tick.
 static bool s_huntOver = false;
-
-// Arm the core's kill counter from the active quest def (cart) and restore the
-// persisted progress. Called after every newGame/menuStart, so a fresh hunt
-// continues a partially-complete quest.
-static void questApplyToGame() {
-    g.questTarget = -1;
-    g.questNeed = 0;
-    g.questProgress = 0;
-    const uint8_t quest = s_save.activeQuest;
-    if (quest == mh::SAVE_QUEST_NONE || quest >= quests::QUEST_COUNT)
-        return;
-    mh::QuestDef def;
-    mh::questReadDef(quest, def);
-    g.questTarget = static_cast<int8_t>(def.targetKind);
-    g.questNeed = def.need;
-    g.questProgress = s_save.progress;
-}
-
-// Resolve the current weapon's smith tier from the save + mhSmith cart into the
-// Game damage/speed multipliers. Called at every hunt start (setup + menu
-// start) so a purchase made on the smith screen applies to the next hunt
-// without any mid-hunt cart reads.
-static void upgradeApplyToGame() {
-    g.dmgMul = mh::UPGRADE_MUL_BASE;
-    g.spdMul = mh::UPGRADE_MUL_BASE;
-    const int8_t weapon = g.weapon;
-    if (weapon < 0 || weapon >= smith::WEAPON_COUNT)
-        return;
-    const uint8_t tier = (weapon < mh::SAVE_TIER_COUNT) ? s_save.tier[weapon] : 0;
-    mh::smithResolve(static_cast<uint8_t>(weapon), tier, g.dmgMul, g.spdMul);
-}
 
 #if DEBUG_HURTBOXES
 // Runtime toggle inside the debug build: hold A+B for 30 ticks to flip. The
@@ -114,8 +87,8 @@ void setup() {
 
     mh::newGame(g, mh::W_SWORD, mh::MODE_HUNT);
     mh::saveLoad(s_save, SAVE_BACKEND);   // first boot / bad block -> defaults
-    questApplyToGame();
-    upgradeApplyToGame();
+    mh::questApplyToGame(g, s_save);
+    mh::upgradeApplyToGame(g, s_save);
 }
 
 // One input sample per logic tick, shared by the menu and the sim. The menu
@@ -133,6 +106,8 @@ static mh::Input sampleInput() {
 
 // One logic tick. Called only from needsUpdate() (never mid-plane), so the
 // whole core advances atomically between planes. pollButtons() already ran.
+// Boot flow (qs.4): menu --A--> hub --HUNT--> hunt --end+A--> hub --B--> menu;
+// hub --QUESTS/SMITH--> screen --B/LEAVE--> hub.
 void run() {
     const mh::Input in = sampleInput();
 #if DEBUG_HURTBOXES
@@ -140,59 +115,49 @@ void run() {
 #endif
     if (s_menu.active) {
         // Menu tick: no stepGame, no audio (the new game re-latches the audio
-        // snapshot on its tick 0). A starts the picked loadout and drops out;
-        // B opens the hub screen stub.
-        const mh::MenuAction act = mh::menuStep(s_menu, in);
-        if (act == mh::MENU_START) {
-            mh::menuStart(g, s_menu);
-            questApplyToGame();
-            upgradeApplyToGame();
-            s_huntOver = false;
-            s_menu.active = false;
-        } else if (act == mh::MENU_SCREEN) {
-            mh::screenEnter(s_screen, screens::SCREEN_HUB, s_save);
-            s_menu.active = false;
-        }
+        // snapshot on its tick 0). A opens the hub with the picked loadout.
+        if (mh::menuStep(s_menu, in) == mh::MENU_ACCEPT)
+            mh::appNavApply(mh::appMenuAccept(), s_menu, s_screen, s_save, g, in);
         return;
     }
     if (s_screen.active) {
-        // Screen tick: nav + row actions. A on a leave row (or B) returns to
-        // the menu; a state-changing action commits the save once.
+        // Screen tick: nav + A/B. B steps back one level (quests/smith -> hub,
+        // hub -> menu); A routes through the hub map or runs the row action.
         const mh::ScreenEvent ev = mh::screenStep(s_screen, in);
         if (ev == mh::SCREEN_BACK) {
-            s_screen.active = false;
-            s_menu.active = true;
+            mh::appNavApply(mh::appScreenBack(s_screen.screen), s_menu, s_screen, s_save, g, in);
             return;
         }
         if (ev != mh::SCREEN_ACCEPT)
             return;
         mh::ScreenRow row;
-        if (mh::screenCursorRow(s_screen, row) && mh::screenCondOk(s_save, row)) {
-            if (row.action == screens::ACTION_LEAVE) {
-                s_screen.active = false;
-                s_menu.active = true;
-                return;
+        if (!mh::screenCursorRow(s_screen, row) || !mh::screenCondOk(s_save, row))
+            return;
+        const mh::AppNav nav = mh::appScreenAccept(s_screen.screen, row);
+        if (nav != mh::APP_NAV_NONE) {
+            // Boot-flow destination (hub row, leave, hunt): a hunt start arms
+            // the quest/upgrade state and clears the hunt-end latch.
+            if (mh::appNavApply(nav, s_menu, s_screen, s_save, g, in)) {
+                mh::questApplyToGame(g, s_save);
+                mh::upgradeApplyToGame(g, s_save);
+                s_huntOver = false;
             }
-            if (mh::screenApplyAction(s_save, row))
-                mh::saveStore(s_save, SAVE_BACKEND);
+            return;
         }
+        if (mh::screenApplyAction(s_save, row))
+            mh::saveStore(s_save, SAVE_BACKEND);
         return;
     }
     mh::stepGame(g, in);
     mh::audioUpdate(s_audio, g);
-    // Hunt-end quest commit (qs.2): persist the kill progress once per hunt.
-    // The save is otherwise untouched during a hunt (write-cycle hygiene).
-    if (g.over != mh::OVER_NONE) {
-        if (!s_huntOver && s_save.activeQuest != mh::SAVE_QUEST_NONE) {
-            s_save.progress = g.questProgress;
-            mh::saveStore(s_save, SAVE_BACKEND);
-        }
-        s_huntOver = true;
-    } else {
-        s_huntOver = false;
-    }
+    // Hunt-end quest commit (qs.2/qs.4): persist the kill progress exactly once
+    // per hunt. The save is otherwise untouched during a hunt (write-cycle
+    // hygiene); appHuntCommit() owns the latch.
+    if (mh::appHuntCommit(g.over != mh::OVER_NONE, s_huntOver, s_save, g.questProgress))
+        mh::saveStore(s_save, SAVE_BACKEND);
+    // Win/lose over screen: a fresh A returns to the hub (picks preserved).
     if (mh::menuReturnStep(s_menu, g.over != mh::OVER_NONE, in))
-        s_menu.active = true;   // picks preserved until reboot
+        mh::appNavApply(mh::appHuntReturn(), s_menu, s_screen, s_save, g, in);
 }
 
 // Full block-art scene (arena, target, player, shells, effects, HUD). Read-only:

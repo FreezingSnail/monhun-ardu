@@ -15,7 +15,7 @@
 //   y=22  WEAPON SWD  FLS  GUN          (selected white + white underline)
 //   y=34  TARGET LUNGE SWEEP HEAVY      (targets wrap onto a second row so the
 //   y=44         RAVAGER POLE           4th beast + pole fit 128 px)
-//   y=56  A START                       (footer hint)
+//   y=56  A HUB                        (footer hint; A opens the hub, qs.4)
 // The bg carries the light-gray option glyphs; the selected option is covered
 // by its white sel tile, so the composite matches the old per-glyph draw.
 
