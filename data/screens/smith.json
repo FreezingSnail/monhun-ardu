@@ -1,0 +1,13 @@
+{
+  "id": 2,
+  "title": "SMITH",
+  "rows": [
+    { "label": "SWORD T1", "cost": 100, "action": "buy_upgrade", "condition": "upgrade", "param": 1 },
+    { "label": "SWORD T2", "cost": 250, "action": "buy_upgrade", "condition": "upgrade", "param": 2 },
+    { "label": "FLAIL T1", "cost": 120, "action": "buy_upgrade", "condition": "upgrade", "param": 5 },
+    { "label": "FLAIL T2", "cost": 280, "action": "buy_upgrade", "condition": "upgrade", "param": 6 },
+    { "label": "GUN T1", "cost": 90, "action": "buy_upgrade", "condition": "upgrade", "param": 9 },
+    { "label": "GUN T2", "cost": 220, "action": "buy_upgrade", "condition": "upgrade", "param": 10 },
+    { "label": "LEAVE", "cost": 0, "action": "leave", "condition": "always", "param": 0 }
+  ]
+}

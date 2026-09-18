@@ -55,8 +55,12 @@ SCREEN_MAX = 255
 TIER_COUNT = 3   # N_WEAPONS (W_SWORD/W_FLAIL/W_GUN); must match core/save.hpp
 
 ACTION_NAMES = ("leave", "buy_upgrade", "take_quest", "turn_in_quest")
-COND_NAMES = ("always", "zenny", "flag", "tier", "quest")
+COND_NAMES = ("always", "zenny", "flag", "tier", "quest", "upgrade")
 ROW_FLAGS = {"hide_locked": 0x01}
+# COND_UPGRADE param packs (unlockFlag << 4) | (weaponIdx << 2) | tier (see
+# screen_state.hpp): unlock 0 = always, else 1-based quest whose done bit gates
+# the tier; weapon 0..TIER_COUNT-1; tier 1..SCREEN_MAX_TIER (2 in data).
+UPGRADE_TIER_MAX = 3
 
 _MISSING = object()
 
@@ -169,6 +173,16 @@ def normalize_row(errors, ctx, obj):
             errors.add(ctx, "param: turn_in_quest need nibble must be 1..15, got %d" % need)
         if action not in (ACTION_NAMES.index("take_quest"), ACTION_NAMES.index("turn_in_quest")):
             errors.add(ctx, "condition 'quest' needs a take_quest/turn_in_quest action")
+    if cond == COND_NAMES.index("upgrade") and param is not None:
+        # param packs (unlock << 4) | (weapon << 2) | tier (see screen_state.hpp).
+        weapon = (param >> 2) & 3
+        tier = param & 3
+        if action != ACTION_NAMES.index("buy_upgrade"):
+            errors.add(ctx, "condition 'upgrade' needs a buy_upgrade action")
+        if weapon >= TIER_COUNT:
+            errors.add(ctx, "param: upgrade weapon index must be 0..%d, got %d" % (TIER_COUNT - 1, weapon))
+        if tier < 1 or tier > UPGRADE_TIER_MAX:
+            errors.add(ctx, "param: upgrade tier must be 1..%d, got %d" % (UPGRADE_TIER_MAX, tier))
     if None in (label, cost, action, cond, param, mask):
         return None
     return {"label": label, "cost": cost, "action": action, "flags": mask, "cond": cond, "param": param}

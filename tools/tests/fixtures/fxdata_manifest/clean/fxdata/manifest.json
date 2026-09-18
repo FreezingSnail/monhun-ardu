@@ -90,6 +90,11 @@
       "size": 8
     },
     {
+      "path": "fxdata/tables/smith.bin",
+      "sha256": "324199d3a5f820beacdd3e4878a0590ec8fc19966f47e3834abe1336659361f3",
+      "size": 9
+    },
+    {
       "path": "src/fxdata.h",
       "sha256": "b042ae69b54dce02c2a1c941372b2f17c17bbdfe68820d7e160369bea5b58591",
       "size": 140

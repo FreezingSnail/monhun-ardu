@@ -11,6 +11,7 @@
 #include "menu_test.hpp"
 #include "screens_test.hpp"
 #include "quests_test.hpp"
+#include "smith_test.hpp"
 #include "combat_test.hpp"
 #include "combat_pack_test.hpp"
 
@@ -27,6 +28,7 @@ int main() {
     MenuSuite(runner);
     ScreenSuite(runner);
     QuestSuite(runner);
+    SmithSuite(runner);
     CombatSuite(runner);
     CombatPackSuite(runner);
     runner.printSummary();

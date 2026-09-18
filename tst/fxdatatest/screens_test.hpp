@@ -51,9 +51,10 @@ static uint16_t countBits(uint8_t xa, uint8_t xb, uint8_t ya, uint8_t yb) {
 
 inline void test_screens(FxTest &test) {
     // ------------------------------------------------- generated cart rows
-    test.expectEq(screens::SCREEN_COUNT, 2, F("screen count"));
+    test.expectEq(screens::SCREEN_COUNT, 3, F("screen count"));
     test.expectEq(screens::SCREEN_HUB, 0, F("hub index"));
     test.expectEq(screens::SCREEN_QUESTS, 1, F("quests index"));
+    test.expectEq(screens::SCREEN_SMITH, 2, F("smith index"));
     test.expectEq(screenRowCount(screens::SCREEN_HUB), 3, F("hub row count"));
 
     // Title bytes come from the cart def (id u8, titleLen u8, title chars).

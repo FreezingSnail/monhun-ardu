@@ -17,11 +17,19 @@
 // is neither taken nor done; a TURN_IN_QUEST row is ready when it is the active
 // quest and progress >= need. `param` packs (need << 4) | quest id; the turn-in
 // payout is the row `cost` (the quest's reward, from data/quests/*.json).
+//
+// Smith rows (bead monhun-ardu-4ug): COND_UPGRADE rows carry a packed `param`
+// -- (unlockFlag << 4) | (weaponIdx << 2) | tier -- and are live only when the
+// tier is the weapon's next unbought tier, its unlockFlag (0 = always, else the
+// 1-based quest whose done bit gates it) holds, and zenny >= cost. "bought"
+// (tier already >= the row tier) and "locked" rows read as dead, so A does
+// nothing.
 
 #include <stdint.h>
 #include "core/input.hpp"
 #include "core/save.hpp"
 #include "quest_state.hpp"
+#include "upgrade_state.hpp"
 #include "generated/screen_meta.hpp"
 
 namespace mh {
@@ -63,8 +71,19 @@ enum ScreenEvent : int8_t {
     SCREEN_BACK      // B rising edge: return to the caller
 };
 
-// Row condition: 0 = always, zenny >= cost, save flag set, tier < max, or the
-// quest state query (action-dependent; see the header note).
+// COND_UPGRADE param decoders: (unlockFlag << 4) | (weaponIdx << 2) | tier.
+inline uint8_t screenUpgradeWeapon(uint8_t param) {
+    return static_cast<uint8_t>((param >> 2) & 3);
+}
+inline uint8_t screenUpgradeTier(uint8_t param) {
+    return static_cast<uint8_t>(param & 3);
+}
+inline uint8_t screenUpgradeUnlock(uint8_t param) {
+    return static_cast<uint8_t>((param >> 4) & 15);
+}
+
+// Row condition: 0 = always, zenny >= cost, save flag set, tier < max, quest
+// state query, or the smith upgrade availability check (see header note).
 inline bool screenCondOk(const SaveBlock &save, const ScreenRow &row) {
     switch (row.cond) {
     case screens::COND_ZENNY:
@@ -78,6 +97,17 @@ inline bool screenCondOk(const SaveBlock &save, const ScreenRow &row) {
         if (row.action == screens::ACTION_TURN_IN_QUEST)
             return questReady(save, quest, static_cast<uint8_t>((row.param >> 4) & 15));
         return questTakeable(save, quest);
+    }
+    case screens::COND_UPGRADE: {
+        const uint8_t weapon = screenUpgradeWeapon(row.param);
+        const uint8_t tier = screenUpgradeTier(row.param);
+        if (weapon >= SAVE_TIER_COUNT || tier == 0 || tier > SCREEN_MAX_TIER)
+            return false;
+        if (!questUnlocked(save, screenUpgradeUnlock(row.param)))
+            return false;
+        if (save.tier[weapon] + 1 != tier)
+            return false;
+        return save.zenny >= row.cost;
     }
     default:
         return true;
@@ -133,16 +163,28 @@ inline ScreenEvent screenStep(ScreenState &s, const Input &in) {
 
 // Apply the fixed action switch. Returns true when the save changed and must be
 // committed (the caller then calls saveStore once). Buying a tier is gated by
-// the tier cap and the zenny cost; quest rows take/turn in through
-// src/quest_state.hpp (turn-in pays the row cost, u16-clamped).
+// the tier cap and the zenny cost; COND_UPGRADE rows decode the (weapon, tier)
+// pair from `param` (see the header note) and land exactly on that tier, while
+// legacy/other rows keep the incremental behaviour for the hub stub. Quest rows
+// take/turn in through src/quest_state.hpp (turn-in pays the row cost).
 inline bool screenApplyAction(SaveBlock &save, const ScreenRow &row) {
     switch (row.action) {
     case screens::ACTION_BUY_UPGRADE: {
-        const uint8_t weapon = row.param < SAVE_TIER_COUNT ? row.param : 0;
-        if (save.tier[weapon] >= SCREEN_MAX_TIER || save.zenny < row.cost)
+        uint8_t weapon;
+        uint8_t target;
+        if (row.cond == screens::COND_UPGRADE) {
+            weapon = screenUpgradeWeapon(row.param);
+            target = screenUpgradeTier(row.param);
+            if (weapon >= SAVE_TIER_COUNT || save.tier[weapon] + 1 != target)
+                return false;
+        } else {
+            weapon = row.param < SAVE_TIER_COUNT ? row.param : 0;
+            target = static_cast<uint8_t>(save.tier[weapon] + 1);
+        }
+        if (target == 0 || target > SCREEN_MAX_TIER || save.zenny < row.cost)
             return false;
         save.zenny = static_cast<uint16_t>(save.zenny - row.cost);
-        save.tier[weapon]++;
+        save.tier[weapon] = target;
         return true;
     }
     case screens::ACTION_TAKE_QUEST:

@@ -15,6 +15,7 @@
 
 #include <stdint.h>
 #include "monster.hpp"   // updateMonster / syncMonsterTarget / damageMonster
+#include "../upgrade_state.hpp"
 
 namespace mh {
 
@@ -193,7 +194,9 @@ static void spawnShot(Game &g) {
         pr.vy = static_cast<int16_t>((dirY[i] * speedF) >> 4);
         pr.w = shellW(sh);
         pr.h = shellH(sh);
-        pr.dmg = shellDmg(sh);
+        // Smith tier damage (integer percent, truncating); captured at spawn so
+        // the in-flight projectile carries the resolved hit value.
+        pr.dmg = static_cast<uint8_t>(upgradeMul(shellDmg(sh), g.dmgMul));
         pr.life = PROJ_LIFE;
         pr.heavy = (shellPellets(sh) == 1);
     }

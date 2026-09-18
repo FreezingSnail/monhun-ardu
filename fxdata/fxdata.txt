@@ -50,6 +50,13 @@ raw_t mhScreens = "tables/screens.bin"
 // for the board rows and the per-hunt kill target.
 raw_t mhQuests = "tables/quests.bin"
 
+// Smith upgrade defs (bead monhun-ardu-4ug): data/smith/*.json compiled by
+// tools/gen-smith.py into a fixed 7 B UpgradeDef record per tier (header +
+// records, little-endian, no padding). Offsets land in smith_meta.hpp; read on
+// device through fxmem.hpp when resolving the tier damage/speed multipliers
+// (src/smith.hpp) and by the smith screen (src/screens.hpp).
+raw_t mhSmith = "tables/smith.bin"
+
 // Sprite sections: blocks/fonts/menu/equip sheets, addressed with 24-bit
 // SpritesU seeks so they may grow past the tables' 64 KiB window. Equipment
 // sheets stay last (mh_head_bandana...mh_weapon_flail).

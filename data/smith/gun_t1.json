@@ -1,0 +1,8 @@
+{
+  "weapon": "gun",
+  "tier": 1,
+  "cost": 90,
+  "dmgMul": 108,
+  "spdMul": 100,
+  "unlockFlag": 0
+}

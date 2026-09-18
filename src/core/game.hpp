@@ -651,6 +651,13 @@ struct Game {
     int8_t questTarget;   // MonsterKind to count, -1 = no active quest
     uint8_t questNeed;
     uint8_t questProgress;
+    // Smith upgrade multipliers (bead monhun-ardu-4ug): resolved from the
+    // mhSmith cart table + the save tiers at hunt start (100 = no upgrade).
+    // player.hpp scales melee damage + move speed, projectiles.hpp scales shell
+    // damage. Not part of the parity state hash; initGame defaults them to
+    // 100/100 so a default Game keeps the sim byte-identical.
+    uint8_t dmgMul;
+    uint8_t spdMul;
 };
 
 }   // namespace mh

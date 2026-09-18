@@ -133,6 +133,7 @@ class GenScreensTests(unittest.TestCase):
             "constexpr uint8_t COND_FLAG = 2;",
             "constexpr uint8_t COND_TIER = 3;",
             "constexpr uint8_t COND_QUEST = 4;",
+            "constexpr uint8_t COND_UPGRADE = 5;",
             "constexpr uint8_t ROW_F_HIDE_LOCKED = 0x01;",
             "constexpr uint8_t SCREEN_HUB = 0;",
             "constexpr uint16_t SCREEN_HUB_OFF = 12;",
@@ -257,6 +258,24 @@ class GenScreensTests(unittest.TestCase):
                     lambda doc: doc["rows"][0].update({"action": "turn_in_quest", "condition": "quest",
                                                        "param": 0}))
         self.assert_fails(self.compile(), "turn_in_quest need nibble must be 1..15")
+
+    def test_upgrade_condition_requires_buy_action(self):
+        self.mutate("data/screens/hub.json",
+                    lambda doc: doc["rows"][0].update({"action": "leave", "condition": "upgrade",
+                                                       "param": 1}))
+        self.assert_fails(self.compile(), "condition 'upgrade' needs a buy_upgrade action")
+
+    def test_upgrade_weapon_out_of_range_rejected(self):
+        self.mutate("data/screens/hub.json",
+                    lambda doc: doc["rows"][0].update({"action": "buy_upgrade", "condition": "upgrade",
+                                                       "param": (3 << 2) | 1}))
+        self.assert_fails(self.compile(), "upgrade weapon index must be 0..2")
+
+    def test_upgrade_tier_out_of_range_rejected(self):
+        self.mutate("data/screens/hub.json",
+                    lambda doc: doc["rows"][0].update({"action": "buy_upgrade", "condition": "upgrade",
+                                                       "param": 0}))
+        self.assert_fails(self.compile(), "upgrade tier must be 1..3")
 
     def test_empty_rows_rejected(self):
         self.mutate("data/screens/hub.json", lambda doc: doc.__setitem__("rows", []))

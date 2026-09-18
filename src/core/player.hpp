@@ -9,6 +9,7 @@
 
 #include <stdint.h>
 #include "game.hpp"
+#include "../upgrade_state.hpp"
 
 namespace mh {
 
@@ -72,6 +73,10 @@ void initGame(Game &g, int8_t weapon) {
     g.questTarget = -1;
     g.questNeed = 0;
     g.questProgress = 0;
+    // Smith tiers default to identity; the sketch re-resolves from the save +
+    // mhSmith cart at hunt start (bead monhun-ardu-4ug).
+    g.dmgMul = UPGRADE_MUL_BASE;
+    g.spdMul = UPGRADE_MUL_BASE;
 }
 
 static Rect meleeHitbox(const Player &p, const Attack *a) {
@@ -201,7 +206,7 @@ static void updateStance(Game &g, const WeaponDef *def) {
                 const int16_t cy = static_cast<int16_t>(p.y + (p.h >> 1));
                 if (circleRectOverlap(cx, cy, 24, g.target.rect)) {
                     if (g.target.onHit)
-                        g.target.onHit(g, 8, cx, cy, 8, 0);
+                        g.target.onHit(g, static_cast<uint8_t>(upgradeMul(8, g.dmgMul)), cx, cy, 8, 0);
                 }
             }
         }
@@ -527,6 +532,8 @@ static void updatePlayer(Game &g, const Input &inp, bool aP, bool bP, bool bR) {
             sp = (sp * 6) / 10;
         if (p.stance == ST_GUARD)
             sp = (sp * 4) / 10;
+        // Smith tier speed (integer percent, truncating); 100 = unchanged.
+        sp = static_cast<uint8_t>(upgradeMul(static_cast<int16_t>(sp), g.spdMul));
         movePlayer(p, mx, my, sp);
         applyDrift(p);
         break;
@@ -546,7 +553,11 @@ static void updatePlayer(Game &g, const Input &inp, bool aP, bool bP, bool bR) {
                 const int16_t hx = static_cast<int16_t>(hit.x + hit.w / 2);
                 const int16_t hy = static_cast<int16_t>(hit.y + hit.h / 2);
                 if (g.target.onHit) {
-                    g.target.onHit(g, attackDmg(a) * mult, hx, hy, attackPush(a), attackEffect(a));
+                    // Smith tier damage (integer percent, truncating) applied
+                    // before the riposte x2, then flows on through the existing
+                    // Target::onHit -> monsterOnHit chain.
+                    const int16_t dmg = upgradeMul(attackDmg(a), g.dmgMul);
+                    g.target.onHit(g, static_cast<uint8_t>(dmg * mult), hx, hy, attackPush(a), attackEffect(a));
                 }
             }
         }

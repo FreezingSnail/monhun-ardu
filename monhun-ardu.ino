@@ -21,6 +21,7 @@
 #include "src/menu.hpp"      // draws through render.hpp (textPut/blk) + MenuState
 #include "src/screens.hpp"   // hub/list screens + EEPROM save (qs.1)
 #include "src/quest.hpp"     // quest defs on cart + TAKE/TURN_IN state (qs.2)
+#include "src/smith.hpp"     // smith upgrade defs on cart + tier multipliers (qs.3)
 
 decltype(arduboy) arduboy;
 
@@ -67,6 +68,20 @@ static void questApplyToGame() {
     g.questProgress = s_save.progress;
 }
 
+// Resolve the current weapon's smith tier from the save + mhSmith cart into the
+// Game damage/speed multipliers. Called at every hunt start (setup + menu
+// start) so a purchase made on the smith screen applies to the next hunt
+// without any mid-hunt cart reads.
+static void upgradeApplyToGame() {
+    g.dmgMul = mh::UPGRADE_MUL_BASE;
+    g.spdMul = mh::UPGRADE_MUL_BASE;
+    const int8_t weapon = g.weapon;
+    if (weapon < 0 || weapon >= smith::WEAPON_COUNT)
+        return;
+    const uint8_t tier = (weapon < mh::SAVE_TIER_COUNT) ? s_save.tier[weapon] : 0;
+    mh::smithResolve(static_cast<uint8_t>(weapon), tier, g.dmgMul, g.spdMul);
+}
+
 #if DEBUG_HURTBOXES
 // Runtime toggle inside the debug build: hold A+B for 30 ticks to flip. The
 // buttons still reach the sim unchanged (run() never consumes them); A+B is
@@ -100,6 +115,7 @@ void setup() {
     mh::newGame(g, mh::W_SWORD, mh::MODE_HUNT);
     mh::saveLoad(s_save, SAVE_BACKEND);   // first boot / bad block -> defaults
     questApplyToGame();
+    upgradeApplyToGame();
 }
 
 // One input sample per logic tick, shared by the menu and the sim. The menu
@@ -130,6 +146,7 @@ void run() {
         if (act == mh::MENU_START) {
             mh::menuStart(g, s_menu);
             questApplyToGame();
+            upgradeApplyToGame();
             s_huntOver = false;
             s_menu.active = false;
         } else if (act == mh::MENU_SCREEN) {

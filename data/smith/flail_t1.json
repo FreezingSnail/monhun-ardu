@@ -1,0 +1,8 @@
+{
+  "weapon": "flail",
+  "tier": 1,
+  "cost": 120,
+  "dmgMul": 112,
+  "spdMul": 103,
+  "unlockFlag": 0
+}

@@ -275,6 +275,42 @@ void ScreenSuite(TestRunner &runner) {
     }
 
     {
+        Test t("COND_UPGRADE smith rows: next-tier gate, lock, bought, funds");
+        SaveBlock s;
+        saveDefaults(s);
+        s.zenny = 500;
+        // param = (unlock << 4) | (weapon << 2) | tier
+        const ScreenRow t1 = row(100, screens::ACTION_BUY_UPGRADE, screens::COND_UPGRADE, static_cast<uint8_t>((0 << 4) | (0 << 2) | 1));
+        const ScreenRow t2 = row(250, screens::ACTION_BUY_UPGRADE, screens::COND_UPGRADE, static_cast<uint8_t>((0 << 4) | (0 << 2) | 2));
+        t.assert(screenCondOk(s, t1), true, "tier 1 available");
+        t.assert(screenCondOk(s, t2), false, "tier 2 not the next tier");
+        t.assert(screenApplyAction(s, t1), true, "tier 1 bought");
+        t.assert(s.tier[0], 1, "tier 1 stored");
+        t.assert(s.zenny, 400, "zenny debited");
+        t.assert(screenCondOk(s, t1), false, "bought row dead");
+        t.assert(screenCondOk(s, t2), true, "tier 2 now available");
+        t.assert(screenApplyAction(s, t2), true, "tier 2 bought");
+        t.assert(s.tier[0], 2, "tier 2 stored");
+        t.assert(screenCondOk(s, t2), false, "max row dead");
+
+        SaveBlock locked;
+        saveDefaults(locked);
+        locked.zenny = 500;
+        const ScreenRow gate = row(100, screens::ACTION_BUY_UPGRADE, screens::COND_UPGRADE, static_cast<uint8_t>((1 << 4) | (0 << 2) | 1));
+        t.assert(screenCondOk(locked, gate), false, "locked until flag");
+        saveQuestSet(locked, 0, 1);
+        t.assert(screenCondOk(locked, gate), true, "quest done unlocks tier");
+
+        SaveBlock poor;
+        saveDefaults(poor);
+        poor.zenny = 99;
+        t.assert(screenCondOk(poor, t1), false, "one short of cost");
+        t.assert(screenApplyAction(poor, t1), false, "purchase rejected");
+        t.assert(poor.tier[0], 0, "tier unchanged");
+        suite.addTest(t);
+    }
+
+    {
         Test t("take/turn-in quest set the taken then done bits");
         SaveBlock s;
         saveDefaults(s);

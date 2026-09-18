@@ -46,6 +46,12 @@ python3 tools/gen-screens.py
 # before fxdata-build.py so the raw_t mhQuests payload exists.
 python3 tools/gen-quests.py
 
+# Smith upgrade tiers (bead monhun-ardu-4ug): compile data/smith/*.json into the
+# packed fxdata/tables/smith.bin blob + src/generated/smith_meta.hpp (upgrade
+# indices/offsets + weapon enums). Schema-validated, deterministic; runs before
+# fxdata-build.py so the raw_t mhSmith payload exists.
+python3 tools/gen-smith.py
+
 # Convert each sprite directory into a Sprites.txt of uint8_t plus-mask blobs.
 # convert-sprite.py appends to Sprites.txt (it does not truncate), so a sheet
 # renamed in gen-art.py would leave a stale symbol behind: remove the generated
