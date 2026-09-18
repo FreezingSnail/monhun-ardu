@@ -14,7 +14,7 @@ in-range pose rows, and integer-only fields.
 The placeholder art is authored from the same 4-shade primitives as
 tools/gen-art.py / tools/gen-base-sheet.py (palette copied here on purpose:
 1:1 with the L4 triplane levels). player_base matches
-docs/art/player_base_16x16.png pixel-for-pixel (facing 0 filled, 1..7 blank);
+docs/art/player_base_16x16.png pixel-for-pixel (all 8 angle cells prefilled);
 weapon/offhand placeholders stay blank for now.
 
 Blob layout (little-endian, explicit u8/i8, no padding, fixed order), following
@@ -351,7 +351,7 @@ def placeholder_cell(item, index):
     """Placeholder pixels for one frame; None leaves the cell transparent."""
     slot = item["slot"]
     if slot == "player":
-        return player_cell() if index == 0 else None
+        return player_cell()   # all 8 angle cells prefilled (docs/art template)
     if slot == "shadow":
         return shadow_cell() if index == 0 else None
     if slot == "body":

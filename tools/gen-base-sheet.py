@@ -10,10 +10,11 @@ replace the art, and it is a new player/equipment set (the pipeline reads it as
     docs/art/guide_player_base_4x.png    4x guide: direction labels, cell grid,
                                          anchor crosses, palette swatches
 
-Facing order is DIR8: 0=E, 1=SE, 2=S, 3=SW, 4=W, 5=NW, 6=N, 7=NE. Facing 0 is
-filled with the current renderer's silhouette (flat 4-shade shapes); facings
-1..7 are empty cells to draw. Guide-only annotation colors (grid gray, anchor
-magenta, label cyan) never appear in the 1x sheet.
+Facing order is DIR8: 0=E, 1=SE, 2=S, 3=SW, 4=W, 5=NW, 6=N, 7=NE. All 8 cells
+are prefilled with the current renderer's silhouette (flat 4-shade shapes) so
+every angle has a starting point; redraw each cell in place. Guide-only
+annotation colors (grid gray, anchor magenta, label cyan) never appear in the
+1x sheet.
 
 Usage: python3 tools/gen-base-sheet.py [outdir]   (default: docs/art)
 """
@@ -100,9 +101,8 @@ def main():
     os.makedirs(outdir, exist_ok=True)
 
     sheet = new(CELL * FRAMES, CELL)
-    sheet.paste(player_cell(), (0, 0))   # facing 0 filled, 1..7 blank
-    for i in range(1, FRAMES):
-        sheet.paste(new(CELL, CELL), (i * CELL, 0))
+    for i in range(FRAMES):
+        sheet.paste(player_cell(), (i * CELL, 0))   # all 8 angles prefilled
 
     path = os.path.join(outdir, "player_base_16x16.png")
     sheet.save(path)

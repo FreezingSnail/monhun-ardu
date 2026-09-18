@@ -74,7 +74,7 @@ deferred option for mixed gear; when they land they use the same row layout.
 
 | file | content |
 |---|---|
-| `player_base_16x16.png` | **the base template**: one sheet, 128x16, all 8 player angles; facing 0 filled with the current silhouette, 1..7 blank |
+| `player_base_16x16.png` | **the base template**: one sheet, 128x16, all 8 player angles, every cell prefilled with the current silhouette as a starting point to redraw |
 | `guide_player_base_4x.png` | 4x guide: direction labels (E..NE), cell grid, anchor crosses (8,8), palette swatches |
 
 Workflow for a new player/equipment set: copy `player_base_16x16.png`, draw the
