@@ -88,6 +88,9 @@ test:
 base-sheet:
 	python3 tools/gen-base-sheet.py
 
+art-dump:
+	python3 tools/gen-art.py --dims build/fxdump.json --dump
+
 test-tools:
 	python3 -m unittest discover -s tools/tests -p 'test_*.py' -v
 

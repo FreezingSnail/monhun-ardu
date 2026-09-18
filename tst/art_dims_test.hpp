@@ -444,36 +444,49 @@ void testMonsterSheets(Test &t) {
     t.assert(hb != hl ? 1 : 0, 1, "bull != longtail frame 0");
     t.assert(blobFrameHash(chicken, 0) != blobFrameHash(chicken, 4) ? 1 : 0, 1, "chicken east != west");
 
-    // Chicken: two separate legs (mask ink) at x 12/17, empty at x 5 and x 24;
-    // a crest above the head (white) and no ink at x 2, y 6.
-    t.assert(maskAt(chicken, 12, 20), 1, "chicken near leg");
-    t.assert(maskAt(chicken, 17, 20), 1, "chicken far leg");
-    t.assert(maskAt(chicken, 5, 20), 0, "chicken no outer leg");
-    t.assert(maskAt(chicken, 24, 20), 0, "chicken no far outer leg");
-    t.assert(planeAt(chicken, 2, 22, 0), 1, "chicken crest");
-    t.assert(planeAt(chicken, 0, 2, 6), 0, "chicken no tail at (2,6)");
+    // Chicken: layered tail plumes fill the left of the cell (body plane0 at
+    // (2,6) and (2,10)); two separated dark legs with a clear gap; a white comb
+    // above the head; a black eye inside the white head; a black beak.
+    t.assert(planeAt(chicken, 0, 2, 6), 1, "chicken upper tail plume");
+    t.assert(planeAt(chicken, 0, 2, 10), 1, "chicken tail plume body");
+    t.assert(maskAt(chicken, 11, 20), 1, "chicken near leg");
+    t.assert(maskAt(chicken, 16, 20), 1, "chicken far leg");
+    t.assert(maskAt(chicken, 14, 20), 0, "chicken clear between legs");
+    t.assert(maskAt(chicken, 4, 20), 0, "chicken no outer leg");
+    t.assert(planeAt(chicken, 2, 22, 0), 1, "chicken comb white");
+    t.assert(planeAt(chicken, 2, 24, 4), 0, "chicken eye not white");
+    t.assert(maskAt(chicken, 24, 4), 1, "chicken eye ink");
+    t.assert(maskAt(chicken, 30, 5), 1, "chicken beak ink");
 
-    // Bull: four legs at x 5/10/19/24, clear between; horns are head-shade ink
-    // above the low head; broad body plane0 at (10,10).
+    // Bull: a hanging tail (body plane0 at (1,10)); four separated dark legs
+    // with a clear gap; two white horns above the low head; the broad body
+    // plane0 at (10,10); a black eye inside the head.
+    t.assert(planeAt(bull, 0, 1, 10), 1, "bull tail");
     t.assert(maskAt(bull, 5, 20), 1, "bull leg 1");
     t.assert(maskAt(bull, 10, 20), 1, "bull leg 2");
     t.assert(maskAt(bull, 19, 20), 1, "bull leg 3");
     t.assert(maskAt(bull, 24, 20), 1, "bull leg 4");
     t.assert(maskAt(bull, 15, 20), 0, "bull clear between legs");
-    t.assert(planeAt(bull, 2, 24, 6), 1, "bull horn");
+    t.assert(planeAt(bull, 2, 24, 6), 1, "bull near horn");
+    t.assert(planeAt(bull, 2, 29, 6), 1, "bull far horn");
     t.assert(planeAt(bull, 0, 10, 10), 1, "bull broad body");
-    t.assert(planeAt(bull, 0, 2, 6), 0, "bull no tail at (2,6)");
+    t.assert(maskAt(bull, 25, 12), 1, "bull eye ink");
+    t.assert(planeAt(bull, 2, 25, 12), 0, "bull eye not white");
 
-    // Longtail: a thick tail fills the left of the cell (plane0 at (2,6) and
-    // (2,10)); four legs; head pushed forward.
-    t.assert(planeAt(longtail, 0, 2, 6), 1, "longtail upper tail");
+    // Longtail: a thick segmented tail fills the left of the cell (plane0 at
+    // (2,6) and (2,10)) with a dark segment line; four separated legs; a
+    // forward white head; a dark jaw line under the snout.
+    t.assert(planeAt(longtail, 0, 2, 6), 1, "longtail ridge spike");
     t.assert(planeAt(longtail, 0, 2, 10), 1, "longtail tail body");
+    t.assert(planeAt(longtail, 0, 3, 10), 0, "longtail tail segment line");
     t.assert(maskAt(longtail, 10, 20), 1, "longtail leg 1");
     t.assert(maskAt(longtail, 15, 20), 1, "longtail leg 2");
     t.assert(maskAt(longtail, 20, 20), 1, "longtail leg 3");
     t.assert(maskAt(longtail, 25, 20), 1, "longtail leg 4");
     t.assert(maskAt(longtail, 13, 20), 0, "longtail clear between legs");
     t.assert(planeAt(longtail, 2, 22, 6), 1, "longtail forward head");
+    t.assert(maskAt(longtail, 28, 11), 1, "longtail jaw ink");
+    t.assert(planeAt(longtail, 2, 28, 11), 0, "longtail jaw not white");
 }
 
 void ArtDimsSuite(TestRunner &runner) {

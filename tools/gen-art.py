@@ -393,53 +393,114 @@ def _beast_frame(draw, dead_draw, body, head, east, dead=False):
     return img
 
 
+def _beast_tone(body):
+    """Highlight/shadow accents for a state body shade, preserving the legacy
+    mapping (idle body dark + white head, recover light, flash white): the bulk
+    fill stays the state shade, the accents only sculpt it."""
+    hi = WHITE if body in (LIGHT, WHITE) else LIGHT
+    lo = DARK if body == LIGHT else BLACK
+    return hi, lo
+
+
 def _chicken_east(put, body, head):
-    # Small compact bipedal body, two-bump crest, tail-feather fan, two legs.
-    put(3, 6, 5, 4, body)             # tail-feather upper fan
-    put(2, 9, 5, 4, body)             # tail-feather lower fan
-    put(9, 8, 14, 11, body)           # body
-    put(18, 5, 5, 5, body)            # neck
-    put(20, 2, 8, 7, head)            # head
-    put(21, 0, 2, 3, head)            # crest bump
-    put(24, 0, 3, 2, head)            # crest bump
+    # Layered feather plumes on the left, a rounded body with a scalloped wing,
+    # a two-bump comb on a short neck, beak/wattle, and two bird legs with
+    # splayed feet. Legs sit in rows 19..22 so their gap and outer clearance
+    # stay readable at 1x.
+    hi, lo = _beast_tone(body)
+
+    put(0, 6, 6, 3, body)             # tail plume, upper
+    put(0, 9, 8, 4, body)             # tail plume, middle
+    put(1, 13, 6, 4, body)            # tail plume, lower
+    put(0, 6, 3, 1, hi)               # upper plume tip
+    put(0, 9, 3, 1, hi)               # middle plume tip
+    put(1, 13, 3, 1, hi)              # lower plume tip
+
+    put(7, 8, 15, 12, body)           # body
+    put(16, 10, 5, 8, hi)             # chest highlight
+    put(8, 18, 12, 2, lo)             # belly shadow
+    put(8, 10, 10, 7, body)           # wing panel
+    put(8, 10, 9, 1, hi)              # wing top
+    put(9, 13, 9, 1, lo)              # wing feather row 1
+    put(9, 15, 8, 1, lo)              # wing feather row 2
+
+    put(18, 4, 5, 5, body)            # neck
+    put(19, 1, 10, 7, head)           # head
+    put(21, 0, 3, 2, head)            # comb front
+    put(25, 0, 2, 2, head)            # comb back
+    put(28, 4, 4, 3, lo)              # beak
+    put(28, 7, 2, 2, lo)              # wattle
     put(24, 4, 2, 2, BLACK)           # eye
-    put(28, 6, 3, 2, DARK)            # beak
-    put(12, 19, 2, 3, BLACK)          # near leg
-    put(17, 19, 2, 3, BLACK)          # far leg
-    put(11, 21, 4, 1, BLACK)          # near foot
-    put(16, 21, 4, 1, BLACK)          # far foot
+
+    put(11, 19, 2, 4, lo)             # near leg
+    put(16, 19, 2, 4, lo)             # far leg
+    put(9, 22, 5, 1, lo)              # near foot
+    put(15, 22, 5, 1, lo)             # far foot
+    put(9, 21, 1, 1, lo)              # near rear toe
+    put(19, 21, 1, 1, lo)             # far rear toe
 
 
 def _bull_east(put, body, head):
-    # Broad low body on four legs, short tail, horns, head hung low.
-    put(2, 11, 3, 3, body)            # tail
-    put(4, 9, 22, 10, body)           # broad body
-    put(6, 8, 12, 3, body)            # shoulder hump
-    put(23, 10, 8, 7, head)           # low head
-    put(23, 6, 3, 3, head)            # near horn
-    put(28, 6, 3, 3, head)            # far horn
-    put(27, 12, 2, 2, BLACK)          # eye
-    put(29, 14, 3, 2, DARK)           # muzzle
-    put(5, 19, 3, 4, BLACK)           # legs x4
-    put(10, 19, 3, 4, BLACK)
-    put(19, 19, 3, 4, BLACK)
-    put(24, 19, 3, 4, BLACK)
+    # Barrel-chested body with muscle highlights and a dark underside, four
+    # hoofed legs, a hanging tail, low head with a muzzle, and two horns
+    # stepping up and inward so the curve reads at 1x.
+    hi, lo = _beast_tone(body)
+
+    put(1, 7, 2, 9, body)             # tail
+    put(0, 5, 3, 2, lo)               # tail tuft
+    put(3, 8, 22, 12, body)           # barrel body
+    put(6, 6, 12, 3, body)            # shoulder hump
+    put(4, 8, 15, 2, hi)              # back highlight
+    put(5, 11, 9, 3, hi)              # rib highlight
+    put(4, 18, 19, 2, lo)             # belly shadow
+
+    put(21, 10, 10, 9, head)          # low head
+    put(22, 9, 2, 2, head)            # ear
+    put(28, 14, 4, 4, lo)             # muzzle
+    put(28, 13, 4, 1, hi)             # muzzle bridge
+    put(25, 12, 2, 2, BLACK)          # eye
+
+    put(22, 8, 2, 3, head)            # near horn base
+    put(23, 5, 2, 3, head)            # near horn mid
+    put(24, 4, 3, 2, head)            # near horn tip
+    put(29, 8, 2, 3, head)            # far horn base
+    put(29, 5, 2, 3, head)            # far horn mid
+    put(28, 4, 3, 2, head)            # far horn tip
+
+    for lx in (5, 10, 18, 23):
+        put(lx, 18, 3, 4, body)       # leg
+        put(lx, 20, 1, 2, hi)         # shank highlight
+        put(lx - 1, 22, 4, 1, BLACK)  # hoof
 
 
 def _longtail_east(put, body, head):
-    # Bulkier body, a pronounced thick tail filling the left of the cell, head
-    # pushed forward.
-    put(0, 8, 8, 7, body)             # thick tail
-    put(0, 6, 5, 3, body)             # tail upper ridge
-    put(0, 13, 5, 3, body)            # tail lower ridge
-    put(8, 7, 16, 12, body)           # bulky body
-    put(21, 5, 10, 9, head)           # head forward
-    put(27, 8, 2, 2, BLACK)           # eye
-    put(28, 13, 4, 2, DARK)           # jaw
-    put(10, 19, 3, 4, BLACK)          # legs x4
-    put(15, 19, 3, 4, BLACK)
-    put(20, 19, 3, 4, BLACK)
-    put(25, 19, 3, 4, BLACK)
+    # Thick segmented tail filling the left of the cell with ridge spikes, a
+    # forward-leaning bulk (high chest, heavy belly), and a jawed head pushed
+    # forward of the shoulders.
+    hi, lo = _beast_tone(body)
+
+    put(0, 7, 8, 11, body)            # thick tail base
+    put(3, 8, 1, 9, lo)               # tail segment 1
+    put(5, 8, 1, 9, lo)               # tail segment 2
+    put(1, 5, 2, 2, body)             # ridge spike
+    put(3, 4, 2, 2, body)             # ridge spike
+    put(5, 5, 2, 2, body)             # ridge spike
+    put(7, 4, 2, 2, body)             # ridge spike
+    put(0, 15, 6, 2, lo)              # tail underside
+
+    put(7, 5, 16, 14, body)           # forward-leaning bulk
+    put(16, 7, 5, 10, hi)             # chest highlight
+    put(8, 17, 13, 2, lo)             # belly shadow
+
+    put(19, 3, 11, 10, head)          # head forward
+    put(28, 8, 4, 4, head)            # snout
+    put(27, 11, 4, 2, lo)             # jaw
+    put(30, 9, 1, 1, BLACK)           # nostril
+    put(24, 6, 2, 2, BLACK)           # eye
+
+    for lx in (9, 14, 19, 24):
+        put(lx, 19, 3, 3, body)       # leg
+        put(lx - 1, 22, 4, 1, BLACK)  # hoof
 
 
 def _dead_heap(img):
