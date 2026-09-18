@@ -262,20 +262,47 @@ void ShellSuite(TestRunner &runner) {
         initWorld(g, MODE_TRAIN);
         t.assert(g.pole.kind, POLE_PLAIN, "default plain");
         t.assert(g.combat.zone[COMBAT_ZONE_HEAD].hp, 0, "plain head pool 0");
+        t.assert(g.combat.zone[COMBAT_ZONE_HEAD].hpMax, 0, "plain head hpMax 0");
         t.assert(g.pole.rect.w, 20, "plain rect w");
         initPoleKind(g, POLE_SEVER);
         t.assert(g.pole.kind, POLE_SEVER, "sever kind");
         t.assert(g.combat.zone[COMBAT_ZONE_HEAD].hp, 60, "sever head pool 60");
+        t.assert(g.combat.zone[COMBAT_ZONE_HEAD].hpMax, 60, "sever head hpMax cached");
         t.assert(g.pole.rect.w, 20, "sever rect w");
         initPoleKind(g, POLE_BREAK);
         t.assert(g.combat.zone[COMBAT_ZONE_APPENDAGE].hp, 40, "break arm pool 40");
+        t.assert(g.combat.zone[COMBAT_ZONE_APPENDAGE].hpMax, 40, "break arm hpMax cached");
         t.assert(g.pole.rect.w, 28, "break rect w 28");
         t.assert(g.target.rect.w, 28, "break target rect refreshed");
         initPoleKind(g, POLE_CRACK);
         t.assert(g.combat.zone[COMBAT_ZONE_APPENDAGE].hp, 30, "crack band pool 30");
+        t.assert(g.combat.zone[COMBAT_ZONE_APPENDAGE].hpMax, 30, "crack band hpMax cached");
         t.assert(g.pole.rect.h, 36, "crack rect h");
         initPoleKind(g, 99);
         t.assert(g.pole.kind, POLE_PLAIN, "out-of-range kind clamps to plain");
+        suite.addTest(t);
+    }
+
+    {
+        Test t("pole render frame: stage from broken + hp/hpMax, flash adds 1");
+        // Intact: full pool.
+        t.assert(poleDamageStage(0, 60, 60), 0, "full pool intact stage");
+        t.assert(poleStageFrame(0, 60, 60, 0), 0, "intact frame");
+        t.assert(poleStageFrame(0, 60, 60, 1), 1, "intact flash frame");
+        // Damaged at or below half; above half stays intact.
+        t.assert(poleDamageStage(0, 31, 60), 0, "above half intact");
+        t.assert(poleDamageStage(0, 30, 60), 1, "half pool damaged");
+        t.assert(poleDamageStage(0, 1, 60), 1, "low pool damaged");
+        t.assert(poleStageFrame(0, 30, 60, 0), 2, "damaged frame");
+        t.assert(poleStageFrame(0, 30, 60, 1), 3, "damaged flash frame");
+        // Broken wins even with an intact pool (broken bit set).
+        t.assert(poleDamageStage(1, 60, 60), 2, "broken stage");
+        t.assert(poleStageFrame(1, 60, 60, 0), 4, "broken frame");
+        t.assert(poleStageFrame(1, 60, 60, 1), 5, "broken flash frame");
+        // PLAIN: no breakable zone (hpMax 0) stays stage 0 on its 2-frame sheet.
+        t.assert(poleDamageStage(0, 0, 0), 0, "no zone stage intact");
+        t.assert(poleStageFrame(0, 0, 0, 0), 0, "no zone frame normal");
+        t.assert(poleStageFrame(0, 0, 0, 1), 1, "no zone frame flash");
         suite.addTest(t);
     }
 

@@ -1520,42 +1520,146 @@ function drawMonster(ctx, g) {
   }
 }
 
+// Damage-stage selection for the breakable pole art (bead monhun-ardu-6zb.7),
+// mirroring src/core/projectiles.hpp poleDamageStage(): 0 intact, 1 damaged
+// (pool at or below half), 2 broken. Kind 0 (PLAIN) has no zone and is always
+// stage 0 (it draws its own legacy pole).
+function poleStage(pole, def) {
+  if (pole.broken) return 2;
+  if (pole.kind !== 0 && pole.hp * 2 <= def.pool) return 1;
+  return 0;
+}
+
+// Bold BLACK weapon emblems on the LIGHT head block (tools/gen-art.py mirror).
+function poleSeverEmblem(ctx, x, y, chipped) {
+  ctx.fillStyle = SHADES[0];
+  for (let i = 0; i < 6; i++) {
+    if (chipped && (i === 2 || i === 3)) continue;
+    ctx.fillRect(x + 3 + i, y + 2 + i, 3, 1);
+  }
+  ctx.fillRect(x + 2, y + 8, 5, 1);
+  if (chipped) {
+    ctx.fillRect(x + 14, y + 2, 1, 4);
+    ctx.fillRect(x + 15, y + 3, 1, 2);
+    ctx.fillRect(x + 12, y + 9, 1, 3);
+  }
+}
+
+function poleBreakEmblem(ctx, x, y, chipped, head) {
+  ctx.fillStyle = SHADES[0];
+  ctx.fillRect(x + 7, y + 4, 6, 6);
+  ctx.fillRect(x + 9, y + 2, 2, 2);
+  ctx.fillRect(x + 9, y + 10, 2, 2);
+  ctx.fillRect(x + 5, y + 6, 2, 2);
+  if (!chipped) ctx.fillRect(x + 13, y + 6, 2, 2);
+  ctx.fillRect(x + 4, y + 11, 2, 1);
+  ctx.fillRect(x + 3, y + 12, 2, 1);
+  ctx.fillStyle = SHADES[head];
+  ctx.fillRect(x + 7, y + 5, 1, 1);
+  if (chipped) {
+    ctx.fillRect(x + 10, y + 4, 1, 1);
+    ctx.fillRect(x + 11, y + 8, 2, 1);
+  }
+}
+
+function poleCrackEmblem(ctx, x, y, chipped, head) {
+  ctx.fillStyle = SHADES[0];
+  ctx.fillRect(x + 6, y + 3, 8, 1);
+  ctx.fillRect(x + 6, y + 10, 8, 1);
+  ctx.fillRect(x + 6, y + 3, 1, 8);
+  ctx.fillRect(x + 13, y + 3, 1, 8);
+  if (chipped) {
+    ctx.fillStyle = SHADES[head];
+    ctx.fillRect(x + 6, y + 3, 3, 1);
+    ctx.fillStyle = SHADES[0];
+  } else {
+    ctx.fillRect(x + 9, y + 1, 2, 2);
+  }
+  ctx.fillRect(x + 8, y + 5, 4, 1);
+  ctx.fillRect(x + 8, y + 8, 4, 1);
+  ctx.fillRect(x + 8, y + 5, 1, 4);
+  ctx.fillRect(x + 11, y + 5, 1, 4);
+  ctx.fillRect(x + 9, y + 6, 2, 2);
+  if (chipped) {
+    ctx.fillStyle = SHADES[head];
+    ctx.fillRect(x + 12, y + 9, 1, 1);
+  }
+}
+
 function drawPole(ctx, g) {
   const pole = g.pole;
   const x = Math.round(pole.x);
   const y = Math.round(pole.y);
   const kind = pole.kind | 0;
   const def = POLE_DEFS[kind] || POLE_DEFS[0];
-  // post + ring bands (shared silhouette), then the per-variant part.
-  ctx.fillStyle = SHADES[1];
-  ctx.fillRect(x + 2, y + 12, 16, 24);
+  const head = pole.hitFlash > 0 ? 3 : 2;
+
+  // PLAIN keeps the legacy draw exactly (no zone, no stage).
+  if (kind === 0) {
+    ctx.fillStyle = SHADES[1];
+    ctx.fillRect(x + 2, y + 12, 16, 24);
+    ctx.fillStyle = SHADES[0];
+    for (let i = 0; i < 3; i++) ctx.fillRect(x + 2, y + 20 + i * 7, 16, 1);
+    ctx.fillStyle = SHADES[head];
+    ctx.fillRect(x, y, 20, 16);
+    ctx.fillStyle = SHADES[0];
+    ctx.fillRect(x + 8, y + 5, 4, 4);
+    ctx.fillRect(x - 2, y + 34, 20 + 4, 2);
+    return;
+  }
+
+  const stage = poleStage(pole, def);
+
+  // SEVER's broken stage replaces the post with a stepped slanted stump.
+  if (!(kind === 1 && stage === 2)) {
+    ctx.fillStyle = SHADES[1];
+    ctx.fillRect(x + 2, y + 12, 16, 24);
+  } else {
+    for (let k = 0; k < 4; k++) {
+      const sx = 2 + k * 4, top = 13 + k * 2;
+      ctx.fillStyle = SHADES[1];
+      ctx.fillRect(x + sx, y + top, 4, 36 - top);
+      ctx.fillStyle = SHADES[0];
+      ctx.fillRect(x + sx, y + top, 4, 1);
+    }
+  }
   ctx.fillStyle = SHADES[0];
   for (let i = 0; i < 3; i++) ctx.fillRect(x + 2, y + 20 + i * 7, 16, 1);
-  ctx.fillStyle = SHADES[pole.hitFlash > 0 ? 3 : 2];
-  ctx.fillRect(x, y, 20, 16);
-  ctx.fillStyle = SHADES[0];
-  ctx.fillRect(x + 8, y + 5, 4, 4);
+
+  // Head block + weapon emblem (SEVER broken has no head to stand on).
+  if (!(kind === 1 && stage === 2)) {
+    ctx.fillStyle = SHADES[head];
+    ctx.fillRect(x, y, 20, 16);
+    if (kind === 1) poleSeverEmblem(ctx, x, y, stage === 1);
+    else if (kind === 2) poleBreakEmblem(ctx, x, y, stage === 1, head);
+    else if (kind === 3) poleCrackEmblem(ctx, x, y, stage === 1, head);
+  }
+
   if (kind === 1) {
-    if (pole.broken) {
-      // slanted-cut stump
+    if (stage === 2) {
+      // severed top block on the ground below the post
+      ctx.fillStyle = SHADES[head];
+      ctx.fillRect(x + 1, y + 36, 12, 4);
       ctx.fillStyle = SHADES[0];
-      ctx.fillRect(x + 2, y + 17, 6, 1);
-      ctx.fillRect(x + 8, y + 18, 5, 1);
-      ctx.fillRect(x + 14, y + 19, 4, 1);
-    } else {
-      // diagonal blade notch on the top block
-      ctx.fillRect(x + 3, y + 2, 1, 1);
-      ctx.fillRect(x + 4, y + 3, 1, 1);
-      ctx.fillRect(x + 5, y + 4, 1, 1);
-      ctx.fillRect(x + 6, y + 5, 1, 1);
-      ctx.fillRect(x + 7, y + 6, 1, 1);
+      ctx.fillRect(x + 1, y + 36, 12, 1);
+      ctx.fillRect(x + 4, y + 38, 2, 1);
+      ctx.fillRect(x + 10, y + 37, 1, 1);
     }
   } else if (kind === 2) {
-    if (pole.broken) {
-      ctx.fillRect(x + 18, y + 8, 1, 2);   // sheared arm stub
-      ctx.fillRect(x + 2, y + 14, 1, 3);   // stress cracks
-      ctx.fillRect(x + 5, y + 17, 1, 2);
-      ctx.fillRect(x + 11, y + 15, 1, 3);
+    if (stage === 2) {
+      ctx.fillStyle = SHADES[0];
+      ctx.fillRect(x + 18, y + 8, 1, 2);    // sheared arm stub
+      ctx.fillRect(x + 19, y + 10, 1, 2);
+      ctx.fillRect(x + 18, y + 13, 1, 2);
+      ctx.fillRect(x + 19, y + 16, 1, 2);
+      ctx.fillStyle = SHADES[2];            // fallen arm shaft
+      ctx.fillRect(x + 11, y + 36, 9, 2);
+      ctx.fillStyle = SHADES[head];         // hammer head on the ground
+      ctx.fillRect(x + 20, y + 35, 8, 4);
+      ctx.fillStyle = SHADES[0];
+      ctx.fillRect(x + 20, y + 35, 8, 1);
+      ctx.fillRect(x + 20, y + 38, 8, 1);
+      ctx.fillRect(x + 24, y + 36, 1, 1);
     } else {
       ctx.fillStyle = SHADES[2];
       ctx.fillRect(x + 20, y + 8, 8, 12);   // side arm
@@ -1567,31 +1671,46 @@ function drawPole(ctx, g) {
       ctx.fillRect(x + 22, y + 15, 1, 1);
       ctx.fillRect(x + 24, y + 11, 1, 1);
       ctx.fillRect(x + 24, y + 15, 1, 1);
+      if (stage === 1) {
+        ctx.fillRect(x + 23, y + 10, 1, 6); // crack down the arm
+        ctx.fillRect(x + 21, y + 14, 2, 1);
+      }
     }
   } else if (kind === 3) {
-    if (pole.broken) {
-      ctx.fillRect(x, y + 18, 20, 1);      // split band + jagged crack
-      ctx.fillRect(x + 2, y + 19, 1, 1);
-      ctx.fillRect(x + 5, y + 20, 1, 1);
-      ctx.fillRect(x + 8, y + 19, 1, 1);
-      ctx.fillRect(x + 11, y + 21, 1, 1);
-      ctx.fillRect(x + 14, y + 20, 1, 1);
-      ctx.fillRect(x + 17, y + 19, 1, 1);
-      ctx.fillRect(x, y + 23, 20, 1);
+    if (stage === 2) {
+      ctx.fillStyle = SHADES[0];
+      ctx.fillRect(x, y + 17, 20, 1);       // upper band chunk
+      ctx.fillRect(x, y + 18, 20, 2);
+      ctx.fillRect(x, y + 26, 20, 1);       // lower band chunk
+      ctx.fillRect(x, y + 27, 20, 2);
+      const teeth = [[2, 20], [5, 21], [8, 20], [11, 22], [14, 21], [17, 20]];
+      for (const [tx, ty] of teeth) ctx.fillRect(x + tx, y + ty, 1, 1);
+      ctx.fillStyle = SHADES[head];         // band chunk on the ground
+      ctx.fillRect(x + 1, y + 36, 12, 4);
+      ctx.fillStyle = SHADES[0];
+      ctx.fillRect(x + 1, y + 36, 12, 1);
+      ctx.fillRect(x + 4, y + 38, 2, 1);
+      ctx.fillRect(x + 10, y + 37, 1, 1);
     } else {
-      ctx.fillRect(x, y + 18, 20, 1);      // bullseye ring band
+      ctx.fillStyle = SHADES[0];
+      ctx.fillRect(x, y + 18, 20, 1);       // band ring edges
       ctx.fillRect(x, y + 27, 20, 1);
-      ctx.fillRect(x + 8, y + 21, 4, 1);
-      ctx.fillRect(x + 7, y + 22, 6, 1);
-      ctx.fillRect(x + 8, y + 23, 4, 1);
-      ctx.fillStyle = SHADES[3];
-      ctx.fillRect(x + 9, y + 22, 2, 1);
+      if (stage === 1) {
+        const hits = [[2, 19], [5, 20], [8, 19], [11, 21], [14, 20], [17, 19]];
+        for (const [tx, ty] of hits) ctx.fillRect(x + tx, y + ty, 1, 1);
+        ctx.fillRect(x, y + 23, 20, 1);
+      } else {
+        ctx.fillRect(x + 8, y + 21, 4, 1);  // clean bullseye ring band
+        ctx.fillRect(x + 7, y + 22, 6, 1);
+        ctx.fillRect(x + 8, y + 23, 4, 1);
+        ctx.fillStyle = SHADES[3];
+        ctx.fillRect(x + 9, y + 22, 2, 1);
+      }
     }
-  } else {
-    ctx.fillStyle = SHADES[0];
   }
   ctx.fillStyle = SHADES[0];
-  ctx.fillRect(x - 2, y + 34, 20 + 4, 2);
+  ctx.fillRect(x + 2, y + 34, 16, 1);
+  ctx.fillRect(x, y + 34, 20, 2);
 }
 
 function drawProjectiles(ctx, g) {
@@ -1860,7 +1979,7 @@ function boot() {
 if (typeof module !== 'undefined' && module.exports) {
   module.exports = {
     newGame, step, render, withWeapon, resetHunt, isqrt, initPoleKind,
-    damagePole, poleOnHit,
+    damagePole, poleOnHit, poleStage,
     monsterActiveWindow, monsterTellWindow,
     WEAPON_DEFS, MONSTER_ATTACKS, MONSTER_DEFS, POLE_DEFS,
     POLE_PLAIN, POLE_SEVER, POLE_BREAK, POLE_CRACK,

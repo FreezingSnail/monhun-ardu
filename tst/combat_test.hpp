@@ -387,7 +387,9 @@ void CombatSuite(TestRunner &runner) {
         t.assert(g.combat.headZone, combat_data::ZONE_LUNGE_HEAD, "head zone seeded");
         t.assert(g.combat.appendZone, combat_data::ZONE_LUNGE_APPENDAGE, "appendage zone seeded");
         t.assert(g.combat.zone[COMBAT_ZONE_HEAD].hp, combat_expect::ZONE_LUNGE_HEAD_HP, "head pool seeded");
+        t.assert(g.combat.zone[COMBAT_ZONE_HEAD].hpMax, combat_expect::ZONE_LUNGE_HEAD_HP, "head hpMax cached");
         t.assert(g.combat.zone[COMBAT_ZONE_APPENDAGE].hp, combat_expect::ZONE_LUNGE_APPENDAGE_HP, "legs pool seeded");
+        t.assert(g.combat.zone[COMBAT_ZONE_APPENDAGE].hpMax, combat_expect::ZONE_LUNGE_APPENDAGE_HP, "legs hpMax cached");
         t.assert(g.combat.zone[COMBAT_ZONE_APPENDAGE].dmgMul, combat_expect::ZONE_LUNGE_APPENDAGE_DMG_MUL, "legs dmgMul seeded");
         t.assert(g.combat.zone[COMBAT_ZONE_APPENDAGE].bodyShare, combat_expect::ZONE_LUNGE_APPENDAGE_BODY_SHARE, "legs bodyShare seeded");
         t.assert(g.combat.zoneBroken, 0, "zones intact");

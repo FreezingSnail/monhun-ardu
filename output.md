@@ -1,106 +1,105 @@
-# monhun-ardu-42n.8 — shipping: drop the USB stack via a custom main
+# monhun-ardu-6zb.7 — poles: BREAK/CRACK visual indicators (emblems, damage stage, detached-piece broken art)
 
-Status: DONE.
+Status: DONE. No commit/push. Parity fixture regen empty diff; no float; no /tmp.
 
 ## What changed
 
-- `monhun-ardu.ino`: appended a guarded USB-free entry point behind
-  `#if defined(MH_NO_USB)`: weak `initVariant()` + `int __attribute__((OS_main))
-  main(void)` that calls `init(); initVariant(); setup(); for (;;) loop();` with
-  no `serialEventRun()`. Placed after `setup()`/`loop()` so Arduino/Arduboy
-  prototype generation does not clash (compiles clean; no prototype errors).
-- `Makefile`: `-DMH_NO_USB` added to `compiler.cpp.extra_flags` in
-  `SIZE_FLAGS` (shipping only; `build`/`mini`/`size`/`debug` inherit it).
-  Comment updated to document the split: shipping USB-free, `fxtest-build`
-  (separate arduino-cli invocation, stock flags) keeps the core main so
-  `captureserial` still works.
-- `README.md`: device-layer note (USB-free shipping main, consequence: no USB
-  serial device while the game runs; upload via Cathy3K bootloader; fxtest keeps
-  USB), status-snapshot + flash/RAM-history numbers refreshed.
+### Art (`tools/gen-art.py`)
+- Variant sheets are now **6 frames in stage*2 + flash order**: intact, intact-flash,
+  damaged, damaged-flash, broken, broken-flash. `pole_variant_frames()` iterates
+  `(stage, flash)`; PLAIN keeps the legacy 2-frame `pole_frame`.
+- Bold BLACK weapon emblems on the LIGHT head block (~8x8):
+  - SEVER: 3px-wide diagonal blade + crossguard.
+  - BREAK: spiked mace ball + short handle.
+  - CRACK: gun target (concentric ring + centre dot + top tick).
+- Damaged stage: emblem chipped (blade gap / spike+ball chip / ring corner chip)
+  plus 1–3 crack lines on the breakable part.
+- Broken stage: severed piece on the ground in the 4 padding rows below the
+  36-tall art (rows 36..39):
+  - SEVER: stepped slanted stump + top block on the ground.
+  - BREAK: jagged sheared arm stub + arm (shaft + hammer head) on the ground.
+  - CRACK: split band with a DARK jagged gap + band chunk on the ground.
+- `make gen` moved the FX cart data 159977 -> 164057 B (+4080 B, cart only).
 
-## Size before/after
+### Engine
+- `CombatZoneCache` gains `uint8_t hpMax` (`src/core/game.hpp`); `combatZoneSeed`
+  fills `c.hpMax = z.hp` (`src/core/combat.hpp`), so both zone slots cache the
+  pool at load. No per-tick cart reads added. AVR asserts updated:
+  `sizeof(CombatZoneCache) == 11`, `sizeof(CombatState) == 82`.
+- Pure stage math in `src/core/projectiles.hpp`:
+  `poleDamageStage(broken, hp, hpMax)` = 2 broken / 1 damaged (`hp*2 <= hpMax`) / 0,
+  and `poleStageFrame(...)` = `stage*2 + flash`.
+- `src/render.hpp` `poleSheetFrame(sheet, broken, hp, hpMax, flash)`; `drawPole`
+  picks the breakable zone (appendage if `hpMax != 0`, else head) and reads the
+  cached `hp`/`hpMax` + `zoneBroken` bit. PLAIN (`SHEET_POLE`) keeps normal/flash.
+  New `POLE_DAMAGED`(2)/`POLE_DAMAGED_FLASH`(3)/`POLE_BROKEN`(4)/`POLE_BROKEN_FLASH`(5).
 
-| | flash | RAM (.data+.bss) | free flash |
-|---|---|---|---|
-| before (HEAD 36e9242) | **27900 / 29696** | 1882 | 1796 |
-| after (MH_NO_USB) | **25234 / 29696** | 1742 | **4462** |
+### Mock (`mock/game.js`)
+- `poleStage(pole, def)` mirrors the stage math; `drawPole` mirrors the shapes,
+  damaged chips/cracks and the ground pieces; PLAIN keeps the legacy draw.
+- Exported `poleStage`.
 
-Reclaimed: **-2666 B flash**, **-140 B RAM** (.text 27822->25194, .data 78->40,
-.bss 1804->1702). Well above the ~1-2 KB target.
+### Tests (permanent)
+- `tst/art_dims_test.hpp`: variant sheets 6 frames; every stage/flash frame
+  distinct; emblem ink on the head block (frames 0/2); ground-piece ink only in
+  frames 4/5; SEVER broken head gone, BREAK/CRACK head kept; BREAK arm ink.
+- `tst/shells_test.hpp`: `hpMax` cached for every pole zone; new render-frame
+  test (stage 0/1/2 from hp/hpMax + broken, flash adds 1; PLAIN hpMax 0).
+- `tst/combat_test.hpp`: loader caches `hpMax` for both lunge zones.
+- `tst/fxdatatest/asset_test.hpp`: pole variant frame count pinned device-side
+  from the packed blob span (sever/break/crack -> 6 frames).
+- `mock/game.test.js`: damage threshold + broken stage after a real break hit.
 
-## Symbol evidence (`avr-nm -C dist/monhun-ardu.ino.elf`)
+## Verification (exact tails)
 
-Shipping ELF, USB/CDC/Serial/PluggableUSB pattern count = **0 matches**.
-
+1. `make gen` x2 then `make gen-check` -> exit 0, empty regen diff:
 ```
-== dist (shipping, MH_NO_USB) USB/CDC/Serial matches ==
-(none)
-== main symbol ==
-000034da T main
-```
-
-Baseline (pre-change, same HEAD) had 17 matches, including `_cdcInterface`,
-`PluggableUSB()`, `serialEventRun`, `Serial_::read/write/...`,
-`vtable for Serial_`, `Serial`, `USB_SendControl(unsigned char, void const*, int)`,
-`SendInterfaces()`, `SendControl()`, `Recv()`. All gone after the change.
-
-`make mini` also compiles with `-DMH_NO_USB` (same 25234/1742; mini ELF
-overwritten in `dist` only transiently, final `dist` rebuilt as the fx shipping
-build).
-
-## fxtest unaffected
-
-`fxtest-build` compiles `tst/fxdatatest/test_*.ino` with its own arduino-cli
-invocation and stock flags (no `SIZE_FLAGS`), so it keeps the core main and USB
-CDC. Full `make fxtest-headless` green with serial capture intact (all suites
-end with a bare `P` marker, which requires working serial):
-
-```
-test_audio PASS, test_boot PASSED=4, test_combat PASSED=233,
-test_data PASSED=221, test_hub PASSED=57, test_hud PASSED=17,
-test_menu_art PASSED=81, test_menu PASSED=74, test_monster_art PASSED=31,
-test_parity PASSED=660, test_perf PASSED=5 (pUs=6373 pHz=156 lHz=52),
-test_player_art PASSED=111, test_quests PASSED=50, test_screens PASSED=78,
-test_smith PASSED=66  — all PASS
+fxdata_manifest: PASS (67 generated artifacts unchanged)
+gen-check exit=0
 ```
 
-## Boot smoke (Ardens, profiledump path supported)
-
-`build/profiler_after.txt` format matched; Ardens binary advertises
-`profiledump=`. Ran:
-
-```sh
-"$ARDENS" headless=4000 display=ssd1306 fxport=d1 \
-    profiledump=build/profiler-42n8_nousb.txt \
-    file=dist/monhun-ardu.ino.elf file=fxdata/fxdata.bin
+2. `make test` -> 0 failed:
+```
+Total Passed: 4629
+Total Failed: 0
 ```
 
-Result: **exit 0**, dump written with `cycles=35396006`,
-`cycles_with_sleep=64000005`, `cpu_active_pct=55.3`, 38 hotspot rows including
-`main` (10.47%, 0x34da-0x6076), `ArduboyG ...::paint` (15.70%),
-`SpritesU::drawPlusMaskFX` (3.78%), `mh::blkClamp`, `mh::hudBar` — game executes
-normally. **0** USB/CDC/Serial entries in the dump. Empty serial output is
-expected for this shipping ELF (no USB); the profiledump confirms execution, so
-the `captureserial` fallback was not needed.
+3. `make test-tools` -> 0 failed:
+```
+Ran 141 tests in 7.442s
+OK
+```
 
-## Gates
+4. `node --test mock/game.test.js` -> 0 fail:
+```
+tests 35
+pass 35
+fail 0
+```
 
-- `make build` (fx) clean: 25234 B.
-- `make mini` clean: 25234 B.
-- `make size`: flash=25234/29696 (4462 free) ram=1742/2560.
-- `make gen-check`: `fxdata_manifest: PASS (67 generated artifacts unchanged)`.
-- `make test`: Total Passed 4579 / Failed 0.
-- `make test-tools`: 141 tests OK.
-- `node --test mock/game.test.js`: 34/34 pass.
-- parity regen `node tools/gen-parity-fixtures.js`: `tst/fxdatatest/parity_fixtures.hpp`
-  empty diff.
-- `make fxtest-headless`: all 15 suites PASS (serial capture intact).
+5. Targeted device suites (`make fxtest-headless FXTEST_ONLY=...`):
+```
+test_parity   parity_test PASSED=660 FAILED=0
+test_assets   asset_test PASSED=259 FAILED=0
+test_menu_art test_menu_art PASSED=81 FAILED=0
+test_combat   combat_test PASSED=233 FAILED=0
+test_data     data_test PASSED=221 FAILED=0
+```
 
-## Risk callout
+6. Parity fixture regen: `node tools/gen-parity-fixtures.js` -> 0 diff lines in
+   `tst/fxdatatest/parity_fixtures.hpp`.
 
-With no CDC the OS serial port disappears while the game runs. Uploading still
-works via the Cathy3K bootloader window (`arduino-cli upload` / reset as usual);
-noted in the README device-layer bullet.
+7. `make size`:
+```
+before (HEAD df5cd75): flash=25234/29696 (4462 free)
+after:                 .text=25250 .data=40 .bss=1704
+                       flash=25290/29696 (4406 free)  ram=1744/2560
+```
+Flash delta +56 B (< 60 B investigate threshold). RAM delta +2 B (the two u8
+`hpMax` fields), matching design.
 
-No git commit/push. Files touched: `monhun-ardu.ino`, `Makefile`, `README.md`;
-`output.md` this report.
+## Generated set (staged together by make gen)
+`fxdata/blocks/Sprites.txt`, `fxdata/fxdata.bin`, `fxdata/fxdata-data.bin`,
+`fxdata/fxdata.h`, `fxdata/manifest.json`, `fxdata/tables/equip.bin`,
+`src/fxdata.h`, `src/generated/equip_meta.hpp`, and the three
+`images/blocks/fxpole_{sever,break,crack}_*.png`.

@@ -38,12 +38,15 @@ constexpr uint8_t MON_WEST = 4;
 
 // Pole sheets. The PLAIN pole keeps the original 20x40 two-frame sheet
 // (normal/flash) for byte-identical parity; each breakable variant gets its own
-// 20x40 sheet with four frames: intact, intact-flash, broken, broken-flash
-// (bead monhun-ardu-6zb.5). Frame selected by poleSheetFrame().
+// 20x40 sheet with SIX frames: stage*2 + flash, where stage 0 is intact, 1 is
+// damaged (pool at or below half) and 2 is broken (bead monhun-ardu-6zb.7).
+// Frame selected by poleSheetFrame().
 constexpr uint8_t POLE_NORMAL = 0;
 constexpr uint8_t POLE_FLASH = 1;
-constexpr uint8_t POLE_BROKEN = 2;
-constexpr uint8_t POLE_BROKEN_FLASH = 3;
+constexpr uint8_t POLE_DAMAGED = 2;
+constexpr uint8_t POLE_DAMAGED_FLASH = 3;
+constexpr uint8_t POLE_BROKEN = 4;
+constexpr uint8_t POLE_BROKEN_FLASH = 5;
 
 // 4x4 spark, light gray / white.
 constexpr uint8_t SPARK_LIGHT = 0;
@@ -275,7 +278,7 @@ static void drawArena(int16_t camX, int16_t camY) {
 // (monhun-ardu-6zb.6): the 4 pole records carry ids 1..4, so reusing a sheet for
 // a new pole record costs 0 flash and a brand-new sheet costs only its 3 B
 // uint24_t entry. Frame family is selected by the id: the plain pole keeps the
-// two-frame sheet, the breakable variants the four-frame one.
+// two-frame sheet, the breakable variants the six-frame staged one.
 constexpr uint8_t SHEET_POLE = 1;
 constexpr uint8_t SHEET_POLE_SEVER = 2;
 constexpr uint8_t SHEET_POLE_BREAK = 3;
@@ -294,14 +297,14 @@ static inline uint24_t poleSheetById(uint8_t sheet) {
     }
 }
 
-// Mock drawPole(): base post, ring bands, head, eye hole, ground plate, all
-// baked into the sheet; hit flash selects the flash frame. The plain pole sheet
-// has 2 frames (normal/flash); each breakable variant has 4 (intact, flash,
-// broken, broken-flash) driven by the shared zone broken bits + hitFlash.
-static inline uint8_t poleSheetFrame(uint8_t sheet, uint8_t broken, uint8_t flash) {
+// Mock drawPole(): base post, ring bands, head, emblem, ground plate, all baked
+// into the sheet; hit flash selects the flash frame. The plain pole sheet has 2
+// frames (normal/flash); each breakable variant has 6 (stage*2 + flash) driven
+// by its breakable zone pool + broken bit + hitFlash.
+static inline uint8_t poleSheetFrame(uint8_t sheet, uint8_t broken, uint8_t hp, uint8_t hpMax, uint8_t flash) {
     if (sheet == SHEET_POLE)
         return flash ? spr::POLE_FLASH : spr::POLE_NORMAL;
-    return static_cast<uint8_t>((broken ? spr::POLE_BROKEN : spr::POLE_NORMAL) + (flash ? 1 : 0));
+    return mh::poleStageFrame(broken, hp, hpMax, flash);
 }
 
 static void drawPole(const mh::Game &g, int16_t camX, int16_t camY) {
@@ -309,7 +312,16 @@ static void drawPole(const mh::Game &g, int16_t camX, int16_t camY) {
     const int16_t x = static_cast<int16_t>(pole.rect.x - camX);
     const int16_t y = static_cast<int16_t>(pole.rect.y - camY + mh::HUD_H);
     const uint8_t sheet = mh::combatCreatureSheet(g.combat.creature);
-    const uint8_t f = poleSheetFrame(sheet, g.combat.zoneBroken != 0 ? 1 : 0, pole.hitFlash > 0 ? 1 : 0);
+    // The breakable zone drives the stage: prefer the appendage (BREAK arm /
+    // CRACK band) and fall back to the head (SEVER top block). hpMax == 0 means
+    // no breakable zone, so PLAIN stays on its 2-frame sheet above. Everything
+    // here is cache state -- no per-tick cart reads.
+    const mh::CombatZoneCache &za = g.combat.zone[mh::COMBAT_ZONE_APPENDAGE];
+    const mh::CombatZoneCache &zh = g.combat.zone[mh::COMBAT_ZONE_HEAD];
+    const bool append = za.hpMax != 0;
+    const mh::CombatZoneCache &z = append ? za : zh;
+    const uint8_t brokenBit = append ? mh::COMBAT_ZONE_APPENDAGE_BIT : mh::COMBAT_ZONE_HEAD_BIT;
+    const uint8_t f = poleSheetFrame(sheet, (g.combat.zoneBroken & brokenBit) ? 1 : 0, z.hp, z.hpMax, pole.hitFlash > 0 ? 1 : 0);
     sprDraw(poleSheetById(sheet), x, y, FRAME(f));
 }
 

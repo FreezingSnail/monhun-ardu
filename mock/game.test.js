@@ -471,6 +471,34 @@ test('pole variants: defs, initPoleKind and plain parity', () => {
   assert.equal(g.pole.kind, 0, 'out-of-range clamps to plain');
 });
 
+test('pole variants: damage stage from hp/hpMax and broken state', () => {
+  const g = G.newGame(1, 'train');   // flail: blunt-gated BREAK arm
+  G.initPoleKind(g, G.POLE_BREAK);
+  const pole = g.pole;
+  const def = G.POLE_DEFS[G.POLE_BREAK];
+  assert.equal(G.poleStage(pole, def), 0, 'full pool intact');
+  pole.hp = 21;
+  assert.equal(G.poleStage(pole, def), 0, 'above half stays intact');
+  pole.hp = 20;
+  assert.equal(G.poleStage(pole, def), 1, 'half pool damaged');
+  pole.hp = 1;
+  assert.equal(G.poleStage(pole, def), 1, 'low pool damaged');
+  // Drain through the real hit path; broken wins regardless of pool.
+  pole.hp = 40;
+  pole.broken = 0;
+  g.pole.x = 140;
+  g.pole.y = 40;
+  G.poleOnHit(g, 20, 164, 58);
+  assert.equal(pole.hp, 20, 'blunt drains to half');
+  assert.equal(G.poleStage(pole, def), 1, 'damaged after one break hit');
+  G.poleOnHit(g, 20, 164, 58);
+  assert.equal(pole.broken, 1, 'arm snapped');
+  assert.equal(pole.hp, 0);
+  assert.equal(G.poleStage(pole, def), 2, 'broken stage after break');
+  const p = G.newGame(0, 'train');
+  assert.equal(G.poleStage(p.pole, G.POLE_DEFS[0]), 0, 'plain never leaves stage 0');
+});
+
 test('pole variants: sword severs the top, losing the head crit', () => {
   const g = G.newGame(0, 'train');
   G.initPoleKind(g, G.POLE_SEVER);

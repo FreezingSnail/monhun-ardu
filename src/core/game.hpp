@@ -456,6 +456,7 @@ struct CombatAttackCache {
 struct CombatZoneCache {
     CombatBox box;   // 4 B AVR: face-relative zone origin + size
     uint8_t hp;      // remaining zone pool
+    uint8_t hpMax;   // pool at load (render damage stage); 0 = no zone
     uint8_t dmgMul;
     uint8_t bodyShare;
     uint8_t breakTypes;

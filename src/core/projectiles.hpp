@@ -126,6 +126,20 @@ static void updatePole(Game &g) {
         g.pole.hitFlash--;
 }
 
+// Damage-stage selection for the breakable pole art (bead monhun-ardu-6zb.7).
+// Stage 0 intact, 1 damaged (pool at or below half), 2 broken; the authored
+// variant sheet is stage*2 + flash. hpMax == 0 marks a pole with no breakable
+// zone (PLAIN), which keeps its own 2-frame normal/flash sheet. Pure integer
+// math so the render path and the host frame-selection test share one source.
+inline uint8_t poleDamageStage(uint8_t broken, uint8_t hp, uint8_t hpMax) {
+    if (broken)
+        return 2;
+    return (hpMax != 0 && static_cast<uint16_t>(hp) * 2 <= hpMax) ? 1 : 0;
+}
+inline uint8_t poleStageFrame(uint8_t broken, uint8_t hp, uint8_t hpMax, uint8_t flash) {
+    return static_cast<uint8_t>(poleDamageStage(broken, hp, hpMax) * 2 + (flash ? 1 : 0));
+}
+
 static void trainAdd(TrainStats &t, int32_t tick, int16_t dmg) {
     t.ev[t.head] = TrainEvent{tick, dmg};
     t.head = static_cast<int16_t>((t.head + 1) % MAX_TRAIN_EVENTS);

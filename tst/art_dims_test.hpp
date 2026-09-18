@@ -593,11 +593,12 @@ void testTailSpin(Test &t) {
 }
 
 // -------------------------------------------- training-pole variant sheets
-// Bead monhun-ardu-6zb.5: PLAIN keeps the legacy 2-frame 20x40 sheet; each
-// breakable variant is a 4-frame sheet (intact, intact-flash, broken,
-// broken-flash). The emblems and broken art are pinned by comparing the frames
-// to each other and by requiring ink in the variant part region, so a redraw
-// that collapses a variant to the plain post fails here.
+// Beads monhun-ardu-6zb.5 / 6zb.7: PLAIN keeps the legacy 2-frame 20x40 sheet;
+// each breakable variant is a 6-frame sheet in stage*2 + flash order (intact,
+// intact-flash, damaged, damaged-flash, broken, broken-flash). The emblems are
+// pinned by requiring BLACK ink on the LIGHT head block (rows 0..15), and the
+// broken frames by requiring ink in the ground rows (36..39) below the post --
+// a redraw that collapses a stage or drops the severed piece fails here.
 void testPoleSheets(Test &t) {
     Blob plain, sever, brk, crack;
     t.assert(parseBlob("fxpole", plain, t), 1, "plain pole blob");
@@ -606,43 +607,60 @@ void testPoleSheets(Test &t) {
     t.assert(plain.h, 40, "plain pole h");
     t.assert(plain.frames, 2, "plain pole 2 frames");
 
+    // Mask ink count inside a half-open rect of one frame.
+    auto regionInk = [](const Blob &b, int frame, int x0, int y0, int x1, int y1) {
+        int n = 0;
+        for (int y = y0; y < y1; y++)
+            for (int x = x0; x < x1; x++)
+                n += bitAt(y, pixelMask(b, frame, 0, x, y / 8));
+        return n;
+    };
+
     const char *const syms[3] = {"fxpole_sever", "fxpole_break", "fxpole_crack"};
     Blob *const blobs[3] = {&sever, &brk, &crack};
     for (int vi = 0; vi < 3; vi++) {
         Blob &b = *blobs[vi];
+        const std::string tag = syms[vi];
         if (!parseBlob(syms[vi], b, t))
             continue;
-        t.assert(b.frames, 4, std::string(syms[vi]) + " 4 frames");
-        t.assert(b.h, 40, std::string(syms[vi]) + " h 40");
-        // Broken frame (index 2) must differ from the intact frame (index 0):
-        // a variant that never swaps art would fail here.
-        int diff = 0;
-        for (size_t i = 0; i < b.bytes.size() / 4; i++) {
-            if (b.bytes[i] != b.bytes[b.bytes.size() / 2 + i])
-                diff++;
-        }
-        t.assert(diff > 0, 1, std::string(syms[vi]) + " broken differs from intact");
-        // Flash frames (1, 3) differ from their non-flash pair.
-        int flash_diff = 0;
-        const size_t fb = b.bytes.size() / 4;
-        for (size_t i = 0; i < fb; i++) {
-            if (b.bytes[i] != b.bytes[fb + i])
-                flash_diff++;
-        }
-        t.assert(flash_diff > 0, 1, std::string(syms[vi]) + " flash differs from intact");
+        t.assert(b.frames, 6, tag + " 6 frames");
+        t.assert(b.h, 40, tag + " h 40");
+        const size_t fb = b.bytes.size() / 6;
+
+        // Each stage differs from its neighbours and every flash frame differs
+        // from its non-flash pair, so no stage collapses to another.
+        auto bytesDiffer = [&](size_t a, size_t c) {
+            int diff = 0;
+            for (size_t i = 0; i < fb; i++)
+                if (b.bytes[a * fb + i] != b.bytes[c * fb + i])
+                    diff++;
+            return diff;
+        };
+        t.assert(bytesDiffer(0, 1) > 0, 1, tag + " intact flash differs");
+        t.assert(bytesDiffer(2, 3) > 0, 1, tag + " damaged flash differs");
+        t.assert(bytesDiffer(4, 5) > 0, 1, tag + " broken flash differs");
+        t.assert(bytesDiffer(0, 2) > 0, 1, tag + " damaged differs from intact");
+        t.assert(bytesDiffer(2, 4) > 0, 1, tag + " broken differs from damaged");
+
+        // Emblem ink on the LIGHT head block for intact + damaged; the broken
+        // frame moves the severed piece to the ground band.
+        t.assert(regionInk(b, 0, 0, 0, b.w, 16) > 8, 1, tag + " intact head emblem ink");
+        t.assert(regionInk(b, 2, 0, 0, b.w, 16) > 8, 1, tag + " damaged head emblem ink");
+        t.assert(regionInk(b, 0, 0, 36, b.w, 40), 0, tag + " intact ground clear");
+        t.assert(regionInk(b, 2, 0, 36, b.w, 40), 0, tag + " damaged ground clear");
+        t.assert(regionInk(b, 4, 0, 36, b.w, 40) > 0, 1, tag + " broken ground piece ink");
+        t.assert(regionInk(b, 5, 0, 36, b.w, 40) > 0, 1, tag + " broken-flash ground piece ink");
+        // SEVER loses the head block when broken; BREAK/CRACK keep it.
+        if (vi == 0)
+            t.assert(regionInk(b, 4, 0, 0, b.w, 12), 0, tag + " broken head block gone");
+        else
+            t.assert(regionInk(b, 4, 0, 0, b.w, 16) > 8, 1, tag + " broken head block kept");
     }
 
     // BREAK's side arm extends the frame to 28 px and inks columns 20..27 on
     // the intact frame (the hammer against the empty background).
     t.assert(brk.w, 28, "break pole w 28");
-    int arm = 0;
-    for (int x = 20; x < 28; x++) {
-        for (int page = 0; page < 5; page++) {
-            if (pixelMask(brk, 0, 0, x, page))
-                arm++;
-        }
-    }
-    t.assert(arm > 0, 1, "break side arm has ink right of the post");
+    t.assert(regionInk(brk, 0, 20, 0, 28, 40) > 0, 1, "break side arm has ink right of the post");
 }
 
 void ArtDimsSuite(TestRunner &runner) {

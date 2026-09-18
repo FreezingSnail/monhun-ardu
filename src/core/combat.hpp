@@ -21,7 +21,7 @@
 // then appendage), drains the zone pool and flips a single broken bit per zone.
 //
 // Cache budget: CombatProfile 22 B + CombatAttackCache 21 B + body box 4 B +
-// 2x CombatZoneCache 20 B + 4 runtime zone bytes + 4 interpreter bytes = 75 B
+// 2x CombatZoneCache 22 B + 4 runtime zone bytes + 4 interpreter bytes = 75 B
 // on AVR.
 
 #include <stddef.h>
@@ -264,8 +264,8 @@ static_assert(offsetof(CombatStep, chance) == offsetof(PkStep, chance), "step mi
 static_assert(offsetof(CombatPattern, guardIdx) == offsetof(PkPattern, guardIdx), "pattern mirror drift");
 static_assert(sizeof(CombatWindow) == 9, "window cache must stay 9 B");
 static_assert(sizeof(CombatAttackCache) == 21, "attack cache must stay 21 B");
-static_assert(sizeof(CombatZoneCache) == 10, "zone cache must stay 10 B");
-static_assert(sizeof(CombatState) == 80, "CombatState must stay 80 B (zones design + collide + static flag)");
+static_assert(sizeof(CombatZoneCache) == 11, "zone cache must stay 11 B");
+static_assert(sizeof(CombatState) == 82, "CombatState must stay 82 B (zones design + collide + static flag)");
 
 // Fake cart pointer: the blob lives below 64 KB (generator hard-fails above).
 inline uint16_t combatCartAddr(uint16_t off) {
@@ -876,6 +876,7 @@ inline void combatZoneSeed(Game &g, uint8_t slot, uint8_t zoneIdx) {
     CombatZoneCache &c = g.combat.zone[slot];
     c.box = z.box;
     c.hp = z.hp;
+    c.hpMax = z.hp;
     c.dmgMul = z.dmgMul;
     c.bodyShare = z.bodyShare;
     c.breakTypes = z.breakTypes;
