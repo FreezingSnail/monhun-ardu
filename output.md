@@ -1,120 +1,118 @@
-# monhun-ardu-836 — bake flail whirl ring into one sprite (6 dots -> 1 blit)
+# monhun-ardu-z6v — bake projectile trail + flail chain/idle: BLOCKED (measured)
 
-Worker report. No commit/push/`git add` performed.
+Worker report. **No commit/push/`git add` performed. Working tree reverted to
+HEAD (a750cf0) — no source/art/generated changes remain.**
 
-## What changed
+The bead's premise ("each sprDraw pays a fixed cart seek ~156 us, so a bake
+pays for itself") does not hold on this blitter for cells bigger than ~16 px.
+Both candidate bakes were implemented, built, and measured on the real target
+(Ardens cycle-accurate ATmega32u4, `test_perf`). **(a) the projectile-trail bake
+regresses `rMx` at every cell size tried; (b) the flail chain+idle bake is
+exactly perf-neutral.** Neither improves `rMx` vs the 5496 baseline, so per the
+bead's own instruction I am reporting measured numbers + analysis instead of
+claiming a win, and I did not keep the changes.
 
-- **`tools/gen-art.py`** — new `whirlring` block sheet (48x32, 24 frames). The 6
-  orbit dots of mock `drawPlayer` are pre-composited per phase:
-  `a_i = bin_centre(f) + RING6[i]`, dot at
-  `(mul_q4(cos256(a_i), rx) + 24, mul_q4(sin256(a_i), ry) + 16)` as a 2x2 LIGHT
-  block. The Q4 table is **parsed out of `src/core/sin256.hpp`** (`load_sin65`)
-  and `mul_q4` matches `render.hpp`, so the bake is the device math, not a
-  re-derivation. `RING6` and `WHIRL_RING_FRAMES=24` are the source of truth now
-  that the render no longer walks the ring.
-- **`data/equipment/flail_ring.json`** — record now points at `fxwhirlring`
-  (`cell [48,32]`, `anchor [24,16]`, `order pose`, `frames 24`, `variants
-  0..23`). The part view's existing variant selector (same mechanism as the
-  sword slash) drives the phase.
-- **`src/render.hpp`** — whirl branch replaces the 6-dot loop with one
-  `partVariantDraw(PART_FLAIL_RING, phase, cx, cy)`:
-  `phase = ((whirlTick * ANG_WHIRL_RING) & 255) * art_dims::whirlring_frames >> 8`.
-  Ball blit unchanged, so the stance is 2 `sprDraw`s instead of 7. Removed the
-  now-dead `RING6`. The render comment keeps the mock's exact-angle reference
-  (0.35/0.55 rad ellipses -> ANG 14/22, radii from `art_dims`/fxdump).
-- **`tst/fxdatatest/player_art_test.hpp`** — goldens regenerated via the
-  documented path (PRINT_GOLDENS true -> run -> copy `G` lines -> false), regen
-  history note added.
-- Generated: `fxwhirlring_48x32.png`, `fxdata/blocks/Sprites.txt`, `fxdata.h`,
-  `art_dims.hpp` (`whirlring_frame_w/h/frames`), `equip_meta.hpp`/`equip.bin`,
-  `fxdata.bin`/`fxdata-data.bin`, `manifest.json`.
+## What was implemented and measured (then reverted)
 
-## Verification (exact commands + tails/numbers)
+Full implementations were built and run, not estimated:
 
-### 1. `make gen` x2 -> `make gen-check`
+- `tools/gen-art.py` — `DIR8` parsed out of `src/core/fp.hpp`, `trail_frames()`
+  (one frame per firing facing, ball-centre anchor) and `flail_idle_frames()`
+  (chain dot + chip, player-centre anchor); two new block sheets + equipment
+  records (`trailbake`, `flail_idle`) via the same gen-art/part-record path the
+  whirl-ring bake (monhun-ardu-836) uses.
+- `src/render.hpp` — `drawProjectiles` drew one `fxtrailbake` blit + ball;
+  the flail idle `else` branch drew one `PART_FLAIL_IDLE` blit.
+- `fxdata/fxdata.txt` — **reordered so the `raw_t` runtime tables pack before
+  the sprite sections** (see "Option 2" below). Verified: `mhEquip` at 0x000525,
+  i.e. all six 16-bit fake-pointer tables stay in the first 1.4 KiB of the
+  137 KB image, structurally immune to any future sprite growth.
+
+## Measured results (`test_perf`, hunt+train scenes)
+
+Baseline (HEAD, unchanged): `B pUs=6614 pHz=151 lHz=50 lTk=984 rMx=5496 rAv=5136 ram=424`
+— reproduced exactly before and after the revert, so the numbers below are
+directly comparable.
+
+| config | bake cell | `rMx` | delta vs 5496 | gate |
+|---|---|---|---|---|
+| (a) trail bake only | 40x40 | **6476** | **+980** | **F 12** (`pUs=7751 pHz=129 lHz=43`) |
+| (a) trail bake only | 30x30 (tight union) | **5712** | **+216** | 5/5 |
+| (a) trail bake only | 24x24 | **5712** | **+216** | 5/5 |
+| (b) flail idle bake only, bench forced onto the flail-idle path | 24x24 | 5240 | 0 (old = 5240) | 5/5 |
+| (b) flail idle bake only, same forced bench | 22x22 (tight union) | 5240 | 0 (old = 5240) | 5/5 |
+| (b) flail idle bake, unmodified bench (path not exercised) | 24x24 | 5496 | 0 | 5/5 |
+
+`test_perf` repeats are bit-stable on this model, so the 216/980 us deltas are
+real signal, not noise. The (b) A/B used a *temporary* `primeHunt` stance change
+(`ST_WHIRL` -> `ST_NONE`) purely to force the bench onto the idle branch, then
+was reverted; with the stock bench the flail-idle branch is never executed
+(hunt = `ST_WHIRL`, train = `W_GUN`), which is why (b) shows 5496 -> 5496.
+
+## Why the bakes do not pay off
+
+`SpritesU::drawPlusMaskFX` = one `FX::seekData()` (~156 us, the number the bead
+quotes) **plus** a streamed blit whose cost is `pages x cols x 3` shade passes
+(`drawBasic` in `src/external/SpritesU.hpp`). The seek is worth only ~150 us;
+enlarging a sprite cell to cover a scattered ink union costs far more than the
+seeks it removes:
+
+- **Trail (a):** the three puffs' union spans 28x28 px (`bx` up to +/-5 from
+  `vx = DIR8[i]*speedF>>4`, offsets `-bx*3-1 .. -bx-1`), i.e. 4 pages x 28 cols
+  x 3 = 336 passes minimum. Three 4x4 puffs cost 3 seeks + 36 passes. Break-even
+  would need the new cell under ~16 px, which the geometry makes impossible.
+  Measured +216 us at the tightest cell that actually holds the ink (30x30).
+- **Idle (b):** the chip (`(fx*9)>>4 - 1`, 3x3) plus the chain dot union to 21x21
+  px -> 3 pages. That exactly cancels the one seek saved: 1 seek + 198 passes
+  == 2 seeks + 48 passes, so rMx is identical at 22x22 and 24x24. Geometrically
+  incapable of a win.
+- **Cross-check:** the monhun-ardu-836 ring bake did win (-316 us) only because
+  it collapsed **six** partDraw calls (each = record read + blit) into one, i.e.
+  it had a 6-seek budget; a single 6-dot ring's ink also needs only 4 pages.
+  The trail/idle bakes each have a 1-2 seek budget, which is not enough.
+
+## Option 2 (independently useful, kept out of this bead)
+
+The `fxdata/fxdata.txt` reorder (runtime tables first, sprite `include`s last)
+removes the 64 KiB fake-pointer risk the bead flags: `mhEquip` currently sits at
+**0x00E3CF = 58,319**, only ~7 KB below the 64 KiB window, and the bead's own
+trail/idle sheets would have pushed it past it. With the reorder, all six
+`mhWeaponDefs/mhMonsterAttacks/mhMonsterDefs/mhSin65/mhCombat/mhEquip` offsets
+land at 0x000000..0x000525. It is a zero-cost structural fix and was verified
+here (gen x3 deterministic, device build clean, `test_perf` 5/5, parity
+unaffected), but it is not a `z6v` deliverable — worth its own bead.
+
+## Options for the orchestrator
+
+1. **Close z6v as won't-fix / re-scope.** The blitter's seek is cheap relative
+   to a wide cell; art bakes only win when they collapse >=4-6 blits into a
+   small cell. The trail and flail-idle cases cannot meet that bar.
+2. **File the `fxdata.txt` reorder as its own bead** (Option 2 above) — it is
+   the one real, safe improvement found while investigating the 64 KiB window.
+3. **If a real win is wanted, the change is code, not art:** add a bulk path
+   that seeks `fxtrail` once and emits the three puffs from explicit `(w,h,frame)`
+   offsets without re-seeking (`drawBasic` already supports the header-less
+   form; it needs a safe shared-seek wrapper). This is the actual ~2-seek/frame
+   saving and would not touch the goldens.
+
+## Verification performed (on the reverted tree, baseline intact)
+
 ```
-make gen   # pass 1
-make gen   # pass 2
-make gen-check
-fxdata_manifest: PASS (51 generated artifacts unchanged)
-```
-`fxdata_manifest: fxdata/manifest.json up to date (31 images, 40 inputs, 11 outputs)`.
-31 images (was 30) = the new ring PNG.
-
-### 2. `make test` + `make test-tools`
-```
-Total Passed: 3119
-Total Failed: 0
-```
-```
-Ran 81 tests in 5.059s
-OK
+make gen-check   -> fxdata_manifest: PASS (51 generated artifacts unchanged)
+make test        -> Total Passed: 3119   Total Failed: 0
+make build       -> Sketch uses 26642 bytes (89%) of program storage
+test_perf        -> B pUs=6614 pHz=151 lHz=50 lTk=984 rMx=5496 rAv=5136 ram=424
+                    perf_test PASSED=5 FAILED=0
 ```
 
-### 3. `make fxtest-headless` (full)
-```
-=== test_parity ===
-parity_test PASSED=660 FAILED=0
-=== test_perf ===
-B pUs=6614 pHz=151 lHz=50 lTk=984 rMx=5496 rAv=5136 ram=424
-perf_test PASSED=5 FAILED=0
-=== test_player_art ===
-test_player_art PASSED=111 FAILED=0
-```
-- perf **5/5**; `rMx=5496 rAv=5136 pUs=6614` vs baseline `5812 / 5292 / 6771`
-  (**rMx -316, rAv -156, pUs -157**; repeat run identical, stable).
-- `test_player_art` **111/0 with regenerated goldens**.
-
-### Golden index diff (exactly which cases changed)
-The goldens diff is a single line; only **indices 21 and 22** changed:
-| idx | case | old (p0,p1,p2) | new |
-|----|------|----------------|-----|
-| 21 | `W_FLAIL, PS_IDLE, ST_WHIRL, fx=16` | `909e0569 e234c969 e234c969` | `bdcdefbd 58a536bd 83571f35` |
-| 22 | `W_FLAIL, PS_IDLE, ST_WHIRL, fx=-16` | `28a41e99 9e3f6599 9e3f6599` | `4649f76d d1a7a46d d12b30a5` |
-Every other case is byte-identical (`git diff -U0` shows the changed values
-adjacent to unchanged 20 and 23 in the same row). Both changed cases are flail
-whirl; no non-whirl case moved.
-
-### 4. `make build` + `make size`
-```
-Sketch uses 27020 bytes (90%) of program storage space. Maximum is 29696 bytes.
-size: .text=26962 .data=58 .bss=1960
-size: flash=27020/29696 (2676 free)  ram=2018/2560
-```
-Flash delta vs 27050: **-30 B** (dropped the 6-iteration ring loop, added the
-phase mul + variant lookup).
-Cart delta: `fxdata/fxdata.bin` 96256 -> **124160 (+27904 B)**;
-`fxdata/fxdata-data.bin` 96243 -> **123917 (+27674 B)** = 27650 B ring blob
-(48x32: 1152 B/frame x 24 + 2 B header) + 24 B equip.bin growth.
-`fxdata/tables/equip.bin` 852 -> 876 (+24 B; +32 variant bytes -8 elsewhere).
-
-### Targeted whirl/perf check
-There is no dedicated whirl perf case; `primeHunt()` (`perf_test.hpp`) sets
-`p.stance = ST_WHIRL` with `whirlTick = 3`, so the hunt plane is the whirl worst
-case. Measured hunt-plane delta is the whole-suite delta above: **rMx -316 us
-(5812 -> 5496)**, i.e. the ring bake is a real win, not a regression.
-
-Analysis: replacing 5 tiny `sprDraw`s with one 48x32 blit. Cost model with the
-measured fixed seek F ~= 156 us and per-byte b: old ring = `6*(F + 12b)`
-(8x4 -> 12 B/plane-pass), new = `F + 1152b`; delta = `5F - 1080b = 316`
-=> `b ~= 0.43 us/byte`. The larger box eats most of the 5 saved seeks but not
-all. A 48x32 canvas is the minimum that holds the full ellipse (~42x30 px
-extent), so the blit area is not reducible without clipping the orbit.
+(Baseline `make test` 3119/0 and `test_perf` 5/5 confirmed both before any edit
+and after the revert, so the revert is byte-clean at HEAD.)
 
 ## Deviations / notes
 
-- **24 phases, not 32.** 32 phases (36,864 B) pushed `mhEquip` to 0x107CF
-  (67,535 B) past the 64 KiB window `core/fxmem.hpp` requires for its 16-bit
-  fake cart pointers (the blocks section is packed before the `raw_t` tables in
-  `fxdata.txt`). 24 phases (27,648 B) keeps every runtime table below the window
-  (`mhEquip` 0x77CD -> 0xE3CF). Rationale is recorded in `gen-art.py`; the epic
-  lists 24 as an accepted candidate. 256/24 = 10.67 units/frame vs the 14-unit
-  tick step, so the ring still advances smoothly.
-- Quantization is the intended visual change: baked frames sit at bin centres,
-  worst-case error 256/(2*24) = 5.33 units (~7.5 deg).
-- Pipeline bootstrap: adding a brand-new gen-art sheet is a documented two-pass
-  operation; `make gen` ran first with the sheet added (no equipment reference)
-  to publish the `fxwhirlring` symbol, then again with the equipment/render
-  change. The committed state is a single-run fixed point (`make gen-check`).
-  `gen-equipment.py` was not modified.
-- No docs/ update (out of bead scope).
+- The reported flash/cart deltas and golden changes from the bead description
+  (projectile cases, flail idle/attack cases) were **not** produced: the art
+  was reverted, so `player_art_test.hpp` goldens are unchanged and flash/cart
+  are at the 26642 B / 123917 B baseline.
+- `bd close` was **not** run: the bead's acceptance (rMx improved vs 5496) is
+  not met, and the changes that would have met it regress or are neutral.
