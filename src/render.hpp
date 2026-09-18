@@ -319,23 +319,52 @@ static void drawMonster(const mh::Game &g, int16_t camX, int16_t camY) {
     }
 }
 
-// Draw one gen-art part: the generated tables own the sheet, the frame for the
-// resolved pose and the frame-local anchor, so drawPlayer selects all three
-// without a per-weapon frame if-chain. `rx/ry` is the caller's reference point
-// (player centre, hit box, shield centre, ...); draw x = rx - anchor x.
+// The gen-art part records live in the mhEquip cart blob (equip_meta.hpp holds
+// only their offsets); one mhFxReadBytes burst fetches a record. Every read
+// happens from drawPlayer, which the render pass runs between plane blits.
+struct PartRec {
+    uint8_t sheet[3];   // uint24_t fx offset, little-endian
+    int8_t anchorX;
+    int8_t anchorY;
+    uint8_t flat;
+    uint8_t frame[equip::POSE_COUNT];
+};
+static_assert(sizeof(PartRec) == equip::PART_SIZE, "part record ABI drift");
+
+// Fake cart pointer for a byte offset into the mhEquip raw_t section.
+static inline const uint8_t *partCart(uint16_t off) {
+    return reinterpret_cast<const uint8_t *>(static_cast<uint16_t>(static_cast<uint16_t>(mhEquip) + off));
+}
+
+static inline uint24_t partSheet(const PartRec &rec) {
+    return static_cast<uint24_t>(rec.sheet[0]) | static_cast<uint24_t>(rec.sheet[1]) << 8 | static_cast<uint24_t>(rec.sheet[2]) << 16;
+}
+
+static inline void partRead(uint8_t part, PartRec &rec) {
+    mhFxReadBytes(partCart(static_cast<uint16_t>(equip::PARTS_OFF + static_cast<uint16_t>(part) * equip::PART_SIZE)), reinterpret_cast<uint8_t *>(&rec), equip::PART_SIZE);
+}
+
+// Draw one gen-art part: the generated cart record owns the sheet, the frame
+// for the resolved pose and the frame-local anchor, so drawPlayer selects all
+// three without a per-weapon frame if-chain. `rx/ry` is the caller's reference
+// point (player centre, hit box, shield centre, ...); draw x = rx - anchor x.
 static inline void partDraw(uint8_t part, uint8_t pose, int32_t rx, int32_t ry) {
-    const uint8_t fr = mhPgmReadU8(&equip::PART_FRAME[part][pose]);
+    PartRec rec;
+    partRead(part, rec);
+    const uint8_t fr = rec.frame[pose];
     // Flat parts blit a raw frame index on every plane (pre-existing guard-plate
     // behaviour the pixel oracle pins); everything else is frame * 3 + plane.
-    sprDraw(equip::partSheet(part), static_cast<int16_t>(rx - mhPgmReadI8(&equip::PART_ANCHOR_X[part])), static_cast<int16_t>(ry - mhPgmReadI8(&equip::PART_ANCHOR_Y[part])),
-            mhPgmReadU8(&equip::PART_FLAT[part]) ? fr : FRAME(fr));
+    sprDraw(partSheet(rec), static_cast<int16_t>(rx - rec.anchorX), static_cast<int16_t>(ry - rec.anchorY), rec.flat ? fr : FRAME(fr));
 }
 
 // Variant form for parts whose frame is picked by a compact selector rather
 // than a pose (the sword slash attack slot -> frames 0..4).
 static inline void partVariantDraw(uint8_t part, uint8_t variant, int32_t rx, int32_t ry) {
-    const uint8_t frame = mhPgmReadU8(&equip::PART_VARIANT[mhPgmReadU16(&equip::PART_VARIANT_OFF[part]) + variant]);
-    sprDraw(equip::partSheet(part), static_cast<int16_t>(rx - mhPgmReadI8(&equip::PART_ANCHOR_X[part])), static_cast<int16_t>(ry - mhPgmReadI8(&equip::PART_ANCHOR_Y[part])), FRAME(frame));
+    PartRec rec;
+    partRead(part, rec);
+    const uint16_t v_off = mhFxReadU16(reinterpret_cast<const uint16_t *>(partCart(static_cast<uint16_t>(equip::PART_VARIANT_OFFSETS_OFF + static_cast<uint16_t>(part) * 2))));
+    const uint8_t frame = mhFxReadU8(partCart(static_cast<uint16_t>(equip::PART_VARIANT_DATA_OFF + v_off + variant)));
+    sprDraw(partSheet(rec), static_cast<int16_t>(rx - rec.anchorX), static_cast<int16_t>(ry - rec.anchorY), FRAME(frame));
 }
 
 // Mock drawPlayer(): body, weapon overlay and effects. Every overlay shape,

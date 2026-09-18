@@ -18,10 +18,10 @@ Two record forms exist:
     docs/art/player_base_16x16.png pixel-for-pixel (all 8 angle cells
     prefilled); weapon/offhand placeholders stay blank.
   * `"source": "gen-art"` ref: the record reuses an existing gen-art sprite
-    symbol (`sheet`, validated against fxdata/fxdata.h); no PNG is authored.
-    These records also emit the player part view (`PART_*` flash tables:
-    sheet offset, anchor, per-pose frame, optional variants/flat) that the
-    render path selects from -- see tst/fxdatatest/player_art_test.hpp.
+    symbol (`sheet`, validated and resolved against fxdata/fxdata.h); no PNG is
+    authored. A 18 B part record (sheet offset, anchor, per-pose frame,
+    optional variants/flat) is packed into the same blob for the render path --
+    see tst/fxdatatest/player_art_test.hpp.
 
 The placeholder art is authored from the same 4-shade primitives as
 tools/gen-art.py / tools/gen-base-sheet.py (palette copied here on purpose:
@@ -34,6 +34,20 @@ the tools/gen-fxtables.cpp serializer pattern:
                    reserved u16
     item    19 B  slot, order, frames, cellW, cellH, anchorX i8, anchorY i8,
                    poseRow[12]
+    part    18 B  gen-art part records in PART_* order: sheet u24 (fx offset),
+                   anchorX i8, anchorY i8, flat u8, frame[12] u8  (only when
+                   the catalog has `source: "gen-art"` records)
+    varoff 2*(n+1) B  u16 variant-data index per part, then the variant bytes
+
+The part view is read on device from the mhEquip blob during the render pass
+(tools emit only the offsets into equip_meta.hpp; see src/render.hpp partDraw).
+
+Two-pass note: the baked sheet offsets come from the *previous* run's
+fxdata/fxdata.h, so adding or renaming a gen-art sheet shifts the FX image and
+`make gen` must run twice (the second pass re-bakes from the new header). The
+generated equip_meta.hpp pins every baked offset with an AVR static_assert
+against the live symbol, so a skipped pass fails the device build instead of
+shipping stale addresses.
 
 Usage:
     python3 tools/gen-equipment.py [--root DIR] [--dump]
@@ -79,6 +93,9 @@ POSES = ("idle", "attack_startup", "attack_active", "attack_recover", "parry",
          "whirl", "guard", "shove", "dodge", "deflect", "stun", "dead")
 POSE_COUNT = len(POSES)
 
+# Part-view record: sheet u24 + anchorX i8 + anchorY i8 + flat u8 + frame[12].
+PART_SIZE = 6 + POSE_COUNT
+
 # docs/equipment-framework.md cart sheet layout.
 EXPECTED_CELL = {
     "player": (16, 16),
@@ -101,8 +118,10 @@ EXPECTED_ANCHOR = {
 
 ID_RE = re.compile(r"^[a-z][a-z0-9_]*$")
 SYMBOL_RE = re.compile(r"^[A-Za-z_][A-Za-z0-9_]*$")
-# fxdata.h declares every sheet offset as `constexpr uint24_t <symbol> = ...;`.
-FX_SYMBOL_RE = re.compile(r"constexpr\s+uint24_t\s+([A-Za-z_][A-Za-z0-9_]*)\s*=")
+# fxdata.h declares every sheet offset as `constexpr uint24_t <symbol> = <n>;`.
+# The value is the sheet's absolute FX-image offset (also emitted in fxdata.h as
+# uint24_t, so parse either hex or decimal); gen-art part records bake it in.
+FX_SYMBOL_RE = re.compile(r"constexpr\s+uint24_t\s+([A-Za-z_][A-Za-z0-9_]*)\s*=\s*(0[xX][0-9A-Fa-f]+|\d+)")
 MAX_ID = 31
 
 # 4-shade RGBA palette, 1:1 with L4_Triplane (copied from tools/gen-base-sheet.py).
@@ -168,11 +187,12 @@ def read_pair(errors, ctx, obj, key, lo, hi):
 
 
 def load_fxdata_symbols(root):
-    """Sheet symbols declared by fxdata/fxdata.h (None if the header is absent)."""
+    """Sheet symbols declared by fxdata/fxdata.h -> absolute FX offsets
+    (None if the header is absent)."""
     path = os.path.join(root, FX_HEADER_REL)
     try:
         with open(path, encoding="utf-8") as handle:
-            return set(FX_SYMBOL_RE.findall(handle.read()))
+            return {name: int(value, 0) for name, value in FX_SYMBOL_RE.findall(handle.read())}
     except OSError:
         return None
 
@@ -376,7 +396,7 @@ def compile_model(errors, root):
     if errors.items:
         return None
     items.sort(key=lambda item: item["id"])
-    return {"items": items}
+    return {"items": items, "fxSymbols": fx_symbols}
 
 
 # ------------------------------------------------------------------ placeholder art
@@ -505,7 +525,35 @@ def frame_table(item):
     return table
 
 
-def pack_blob(errors, items):
+def part_section(items):
+    """Layout of the gen-art part view section (None without gen-art records).
+
+    Returns the part list and every offset the blob packer and the header
+    emitter share, so the two cannot disagree.
+    """
+    parts = [item for item in items if item["genArt"]]
+    if not parts:
+        return None
+    off = HEADER_SIZE + ITEM_SIZE * len(items)
+    variant_offsets = []
+    variant_data = []
+    for item in parts:
+        variant_offsets.append(len(variant_data))
+        variant_data.extend(item["variants"])
+    variant_offsets.append(len(variant_data))
+    if not variant_data:
+        variant_data = [0]   # keep the table addressable when no part uses one
+    return {
+        "parts": parts,
+        "parts_off": off,
+        "variants_off": off + PART_SIZE * len(parts),
+        "variant_data_off": off + PART_SIZE * len(parts) + 2 * len(variant_offsets),
+        "variant_offsets": variant_offsets,
+        "variant_data": variant_data,
+    }
+
+
+def pack_blob(errors, items, fx_symbols):
     blob = bytearray(struct.pack("<HBBHH", MAGIC, VERSION, FLAGS, len(items), 0))
     for item in items:
         cw, ch = item["cell"]
@@ -518,9 +566,27 @@ def pack_blob(errors, items):
             errors.add(item["id"], "internal: item record is %d B, want %d" % (len(record), ITEM_SIZE))
             return None
         blob += record
-    if len(blob) != HEADER_SIZE + ITEM_SIZE * len(items):
-        errors.add(BLOB_REL, "internal: blob is %d B, want %d"
-                   % (len(blob), HEADER_SIZE + ITEM_SIZE * len(items)))
+    expected = HEADER_SIZE + ITEM_SIZE * len(items)
+    layout = part_section(items)
+    if layout is not None:
+        for item in layout["parts"]:
+            value = (fx_symbols or {}).get(item["sheet"])
+            if value is None:
+                errors.add(item["id"], "internal: no fx offset for sheet %r" % item["sheet"])
+                return None
+            if not 0 <= value <= 0xFFFFFF:
+                errors.add(item["id"], "internal: sheet offset out of range: %d" % value)
+                return None
+            ax, ay = item["anchor"]
+            blob += int(value).to_bytes(3, "little")
+            blob += struct.pack("<bbB", ax, ay, 1 if item["flat"] else 0)
+            blob += bytes(item["poseRows"])
+        for v_off in layout["variant_offsets"]:
+            blob += struct.pack("<H", v_off)
+        blob += bytes(layout["variant_data"])
+        expected = layout["variant_data_off"] + len(layout["variant_data"])
+    if len(blob) != expected:
+        errors.add(BLOB_REL, "internal: blob is %d B, want %d" % (len(blob), expected))
         return None
     return bytes(blob)
 
@@ -536,20 +602,23 @@ def _emit_table(lines, decl, values, per_line):
     lines.append("};")
 
 
-def emit_meta_header(items, blob):
+def emit_meta_header(items, blob, fx_symbols):
     lines = []
     app = lines.append
     app("#pragma once")
     app("// Generated by tools/gen-equipment.py -- do not edit.")
     app("//")
     app("// Equipment catalog ABI: header (magic u16, version u8, flags u8, itemCount")
-    app("// u16, reserved u16) then fixed-size %d-byte item records, little-endian, explicit" % ITEM_SIZE)
-    app("// u8/i8, no padding. The blob is the mhEquip raw_t section (fxdata/fxdata.txt);")
-    app("// sheets are the uint24_t offsets fxdata.h exposes for fxdata/equip/Sprites.txt.")
+    app("// u16, reserved u16), fixed-size %d-byte item records, then the gen-art part" % ITEM_SIZE)
+    app("// view, little-endian, explicit u8/i8, no padding. The blob is the mhEquip")
+    app("// raw_t section (fxdata/fxdata.txt); render reads the part view on device")
+    app("// through core/fxmem.hpp (see src/render.hpp partDraw).")
     app("")
     app("#include <stdint.h>")
-    app("#include \"../core/progmem.hpp\"   // MH_PROGMEM + pgm_read_byte for the part view")
-    app("#include \"../fxdata.h\"           // gen-art sheet offsets (uint24_t symbols)")
+    if any(item["genArt"] for item in items):
+        app("#if defined(__AVR__)")
+        app("#include \"../fxdata.h\"   // live sheet symbols for the stale-blob static_assert")
+        app("#endif")
     app("")
     app("namespace equip {")
     app("")
@@ -608,84 +677,65 @@ def emit_meta_header(items, blob):
             app("    {" + ", ".join(str(v) for v in row) + "},")
         app("};")
     app("")
-    emit_part_view(lines, items)
+    emit_part_view(lines, items, fx_symbols)
     app("}   // namespace equip")
     app("")
     return "\n".join(lines)
 
 
-def emit_part_view(lines, items):
-    """Player part view for `source: "gen-art"` records.
+def emit_part_view(lines, items, fx_symbols):
+    """Player part view offsets for `source: "gen-art"` records.
 
-    The render path selects sheet + frame + anchor from these flash tables
-    instead of per-weapon if-chains. PART_FRAME[part][pose] is the resolved
-    sheet frame row for the item's poseMap; PART_VARIANT holds optional
-    per-part frame selectors (the sword slash attack frames). partSheet()
-    reads the 24-bit fx offset out of flash."""
-    parts = [item for item in items if item["genArt"]]
-    if not parts:
+    The records themselves live in the mhEquip cart blob (pack_blob's part
+    section); only the byte offsets are generated here, so the render path
+    (src/render.hpp partDraw) reads sheet + anchor + frame from the cart during
+    the render pass. See docs/equipment-framework.md and
+    tst/fxdatatest/player_art_test.hpp for the pixel oracle."""
+    layout = part_section(items)
+    if layout is None:
         return
+    parts = layout["parts"]
     app = lines.append
-    app("// ---- gen-art player part view --")
-    app("// (source \"gen-art\" records; see docs/equipment-framework.md and")
-    app("// tst/fxdatatest/player_art_test.hpp for the pixel oracle.)")
+    app("// ---- gen-art player part view (records live in the mhEquip blob) --")
+    app("// One PART_SIZE record per part at PARTS_OFF: sheet u24 (fx offset),")
+    app("// anchorX i8, anchorY i8, flat u8, frame[POSE_COUNT] u8; then the u16")
+    app("// variant index table and the variant frame bytes. Little-endian; read")
+    app("// on device through core/fxmem.hpp during the render pass.")
     app("constexpr uint8_t PART_COUNT = %d;" % len(parts))
     for i, item in enumerate(parts):
         app("constexpr uint8_t PART_%s = %d;" % (item["id"].upper(), i))
     app("")
-    app("// fx sheet offsets (uint24_t), in PART_* order.")
-    app("static const uint24_t MH_PROGMEM PART_SHEET[PART_COUNT] = {")
-    app("    " + ", ".join(item["sheet"] for item in parts) + ",")
-    app("};")
-    app("// Frame-local pivot the caller's reference point maps to:")
-    app("// draw x = ref - PART_ANCHOR_X, y = ref - PART_ANCHOR_Y.")
-    _emit_progmem_table(lines, "static const int8_t MH_PROGMEM PART_ANCHOR_X[PART_COUNT]",
-                        [item["anchor"][0] for item in parts])
-    _emit_progmem_table(lines, "static const int8_t MH_PROGMEM PART_ANCHOR_Y[PART_COUNT]",
-                        [item["anchor"][1] for item in parts])
-    app("// PART_FLAT[part]: frame index is a raw flat index (blit on every plane)")
-    app("// rather than frame * 3 + plane; documented in the record's `flat` key.")
-    _emit_progmem_table(lines, "static const uint8_t MH_PROGMEM PART_FLAT[PART_COUNT]",
-                        [1 if item["flat"] else 0 for item in parts])
-    app("// PART_FRAME[part][pose]: sheet frame for the resolved poseMap.")
-    app("static const uint8_t MH_PROGMEM PART_FRAME[PART_COUNT][POSE_COUNT] = {")
-    for item in parts:
-        app("    {" + ", ".join(str(v) for v in item["poseRows"]) + "},")
-    app("};")
-    variant_data = []
-    variant_off = []
-    for item in parts:
-        variant_off.append(len(variant_data))
-        variant_data.extend(item["variants"])
-    variant_off.append(len(variant_data))
-    app("// Optional variant selectors: PART_VARIANT[PART_VARIANT_OFF[part] + v].")
-    app("static const uint16_t MH_PROGMEM PART_VARIANT_OFF[PART_COUNT + 1] = {")
-    app("    " + ", ".join(str(v) for v in variant_off) + ",")
-    app("};")
-    if not variant_data:
-        variant_data = [0]   # keep the array well-formed when no part uses one
-    _emit_progmem_table(lines, "static const uint8_t MH_PROGMEM PART_VARIANT[%d]" % len(variant_data),
-                        variant_data)
+    app("constexpr uint16_t PARTS_OFF = %d;" % layout["parts_off"])
+    app("constexpr uint8_t PART_SIZE = %d;" % PART_SIZE)
+    app("constexpr uint8_t PART_SHEET_OFF = 0;             // u24")
+    app("constexpr uint8_t PART_ANCHOR_X_OFF = 3;          // i8")
+    app("constexpr uint8_t PART_ANCHOR_Y_OFF = 4;          // i8")
+    app("constexpr uint8_t PART_FLAT_OFF = 5;              // u8")
+    app("constexpr uint8_t PART_FRAME_OFF = 6;             // u8[POSE_COUNT]")
+    app("constexpr uint16_t PART_VARIANT_OFFSETS_OFF = %d;" % layout["variants_off"])
+    app("constexpr uint16_t PART_VARIANT_DATA_OFF = %d;" % layout["variant_data_off"])
+    app("constexpr uint8_t PART_VARIANT_COUNT = %d;" % len(layout["variant_data"]))
     app("")
-    app("// 24-bit fx offset read (three LPM bytes on AVR, plain load on host).")
-    app("inline uint24_t partSheet(uint8_t part) {")
+
+    # Pin the baked absolute sheet offsets against the live fxdata.h symbols.
+    # The values came from the previous fxdata.h, so adding/renaming a gen-art
+    # sheet needs a second `make gen` to re-bake; this AVR-only assert fails the
+    # build if that pass was skipped (stale equip.bin). Zero flash cost.
+    sheets = []
+    for item in parts:
+        if item["sheet"] not in sheets:
+            sheets.append(item["sheet"])
+    app("// Baked absolute sheet offsets (one per referenced gen-art symbol).")
+    app("// The blob stores these; a static_assert pins each against fxdata.h so a")
+    app("// stale equip.bin (one gen pass behind) cannot ship on AVR.")
+    for sheet in sheets:
+        app("constexpr uint16_t SHEET_OFF_%s = %d;" % (sheet.upper(), fx_symbols[sheet]))
     app("#if defined(__AVR__)")
-    app("    const uint8_t *p = reinterpret_cast<const uint8_t *>(&PART_SHEET[part]);")
-    app("    return static_cast<uint24_t>(pgm_read_byte(p)) |")
-    app("           static_cast<uint24_t>(pgm_read_byte(p + 1)) << 8 |")
-    app("           static_cast<uint24_t>(pgm_read_byte(p + 2)) << 16;")
-    app("#else")
-    app("    return PART_SHEET[part];")
+    for sheet in sheets:
+        app("static_assert(SHEET_OFF_%s == static_cast<uint16_t>(%s), \"equip blob stale: re-run make gen\");"
+            % (sheet.upper(), sheet))
     app("#endif")
-    app("}")
     app("")
-
-
-def _emit_progmem_table(lines, decl, values):
-    lines.append(decl + " = {")
-    for i in range(0, len(values), 12):
-        lines.append("    " + ", ".join(str(v) for v in values[i:i + 12]) + ",")
-    lines.append("};")
 
 
 # --------------------------------------------------------------------------- main
@@ -722,7 +772,7 @@ def run(root, dump):
               % (len(errors.items), "" if len(errors.items) == 1 else "s"), file=sys.stderr)
         return 1
     items = model["items"]
-    blob = pack_blob(errors, items)
+    blob = pack_blob(errors, items, model["fxSymbols"])
     if blob is None or errors.items:
         for item in errors.items:
             print("gen-equipment: error: %s" % item, file=sys.stderr)
@@ -758,7 +808,7 @@ def run(root, dump):
 
     if write_if_changed(os.path.join(root, BLOB_REL), blob):
         wrote.add(BLOB_REL)
-    header = emit_meta_header(items, blob)
+    header = emit_meta_header(items, blob, model["fxSymbols"])
     if write_if_changed(os.path.join(root, META_REL), header):
         wrote.add(META_REL)
 

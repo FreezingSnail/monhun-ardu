@@ -220,28 +220,57 @@ class GenEquipmentTests(unittest.TestCase):
         text = self.read(META_REL)
         for needle in (
             "constexpr uint8_t PART_SWORD_SLASH =",
-            "static const uint24_t MH_PROGMEM PART_SHEET[PART_COUNT] = {",
-            "static const uint8_t MH_PROGMEM PART_FLAT[PART_COUNT] = {",
-            "static const uint8_t MH_PROGMEM PART_VARIANT[6] = {",
-            "0, 0, 1, 2, 3, 4,",
-            "inline uint24_t partSheet(uint8_t part) {",
+            "constexpr uint16_t PARTS_OFF = 103;",
+            "constexpr uint8_t PART_SIZE = 18;",
+            "constexpr uint8_t PART_SHEET_OFF = 0;",
+            "constexpr uint8_t PART_ANCHOR_X_OFF = 3;",
+            "constexpr uint8_t PART_ANCHOR_Y_OFF = 4;",
+            "constexpr uint8_t PART_FLAT_OFF = 5;",
+            "constexpr uint8_t PART_FRAME_OFF = 6;",
+            "constexpr uint16_t PART_VARIANT_OFFSETS_OFF = 121;",
+            "constexpr uint16_t PART_VARIANT_DATA_OFF = 125;",
+            "constexpr uint8_t PART_VARIANT_COUNT = 6;",
         ):
             self.assertIn(needle, text)
-        # The catalog blob still carries the record (4 authored + 1 gen-art).
-        self.assertEqual(len(self.read_bytes(BLOB_REL)), 8 + 19 * 5)
+        # The catalog blob carries 4 authored + 1 gen-art item, then the part
+        # record, the u16 variant index table and the variant bytes.
+        blob = self.read_bytes(BLOB_REL)
+        self.assertEqual(len(blob), 8 + 19 * 5 + 18 + 2 * 2 + 6)
+        sheet, ax, ay, flat = struct.unpack_from("<3sbbB", blob, 103)
+        self.assertEqual(sheet, b"\x23\x01\x00")   # fxslash = 0x000123
+        self.assertEqual((ax, ay, flat), (16, 16, 0))
+        self.assertEqual(list(blob[109:121]), [0] * 12)
+        self.assertEqual(list(struct.unpack_from("<2H", blob, 121)), [0, 6])
+        self.assertEqual(list(blob[125:131]), [0, 0, 1, 2, 3, 4])
 
     def test_gen_art_unknown_sheet_rejected(self):
         self.add_gen_art(symbol="fxother")
         self.assert_fails(self.compile(), "sheet: 'fxslash' is not declared in fxdata/fxdata.h")
 
+    def test_gen_art_sheet_offset_rebakes_from_fxdata(self):
+        self.add_gen_art()
+        self.assert_succeeds(self.compile())
+        text = self.read(META_REL)
+        # Baked offset (fxslash 0x000123) and its AVR stale-blob guard.
+        self.assertIn("constexpr uint16_t SHEET_OFF_FXSLASH = 291;", text)
+        self.assertIn(
+            'static_assert(SHEET_OFF_FXSLASH == static_cast<uint16_t>(fxslash), "equip blob stale: re-run make gen");',
+            text)
+        # A shifted fxdata.h is picked up on the next run (the two-pass note):
+        # new offset lands in the blob record and the generated constant.
+        self.write_text("fxdata/fxdata.h",
+                        "using uint24_t = __uint24;\nconstexpr uint24_t fxslash = 0x000456;\n")
+        self.assert_succeeds(self.compile())
+        self.assertEqual(self.read_bytes(BLOB_REL)[103:106], b"\x56\x04\x00")
+        self.assertIn("constexpr uint16_t SHEET_OFF_FXSLASH = 1110;", self.read(META_REL))
+
     def test_gen_art_honours_flat_key(self):
         self.add_gen_art()
         self.mutate("data/equipment/sword_slash.json", lambda doc: doc.__setitem__("flat", True))
         self.assert_succeeds(self.compile())
-        # flat before the frame table: the one part carries the flat marker.
-        text = self.read(META_REL)
-        flat = text.split("PART_FLAT[PART_COUNT] = {", 1)[1].split("};", 1)[0]
-        self.assertIn("1,", flat)
+        # The record's PART_FLAT_OFF byte carries the flat marker.
+        blob = self.read_bytes(BLOB_REL)
+        self.assertEqual(blob[103 + 5], 1)
 
     # ------------------------------------------------------- schema errors
 
