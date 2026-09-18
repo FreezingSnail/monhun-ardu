@@ -8,21 +8,17 @@
 
 namespace combat_expect {
 
-constexpr uint16_t BLOB_SIZE = 704;
+constexpr uint16_t BLOB_SIZE = 616;
 constexpr uint8_t ANCHOR_SIZE = 2;
 constexpr uint8_t ATTACK_SIZE = 22;
 constexpr uint8_t CREATURE_SIZE = 17;
-constexpr uint8_t ELEM_SIZE = 2;
-constexpr uint8_t GUARD_SIZE = 9;
-constexpr uint8_t PART_SIZE = 18;
+constexpr uint8_t GUARD_SIZE = 8;
 constexpr uint8_t PATTERN_SIZE = 3;
-constexpr uint8_t PREDICATE_SIZE = 3;
 constexpr uint8_t PROFILE_SIZE = 22;
-constexpr uint8_t REF_SIZE = 1;
-constexpr uint8_t SKELETON_SIZE = 4;
-constexpr uint8_t STAGE_SIZE = 10;
+constexpr uint8_t SKELETON_SIZE = 2;
 constexpr uint8_t STEP_SIZE = 4;
 constexpr uint8_t WINDOW_SIZE = 10;
+constexpr uint8_t ZONE_SIZE = 12;
 
 constexpr uint16_t CREATURE_HEAVY_HP = 320;
 constexpr uint8_t CREATURE_HEAVY_SPD = 3;
@@ -63,6 +59,12 @@ constexpr uint16_t ATTACK_RAVAGER_BITE_DMG = 10;
 constexpr uint8_t PATTERN_RAVAGER_P_ENRAGED_MIN_DIST = 0;
 constexpr uint8_t PATTERN_RAVAGER_P_ENRAGED_MAX_DIST = 255;
 constexpr uint8_t PATTERN_RAVAGER_P_ENRAGED_CHANCE = 100;
+constexpr uint8_t ZONE_RAVAGER_HEAD_HP = 40;
+constexpr uint8_t ZONE_RAVAGER_HEAD_DMG_MUL = 130;
+constexpr uint8_t ZONE_RAVAGER_HEAD_BODY_SHARE = 100;
+constexpr uint8_t ZONE_RAVAGER_APPENDAGE_HP = 60;
+constexpr uint8_t ZONE_RAVAGER_APPENDAGE_DMG_MUL = 150;
+constexpr uint8_t ZONE_RAVAGER_APPENDAGE_BODY_SHARE = 40;
 constexpr uint16_t CREATURE_SWEEP_HP = 150;
 constexpr uint8_t CREATURE_SWEEP_SPD = 7;
 constexpr uint8_t CREATURE_SWEEP_W = 28;
@@ -77,12 +79,12 @@ constexpr uint8_t PATTERN_SWEEP_P_SWEEP_MIN_DIST = 0;
 constexpr uint8_t PATTERN_SWEEP_P_SWEEP_MAX_DIST = 255;
 constexpr uint8_t PATTERN_SWEEP_P_SWEEP_CHANCE = 100;
 
-// sha256 of fxdata/tables/combat.bin: 943018030ed9183e301f2a624988f0b038492ecb24db88391448956fd074dd9c
+// sha256 of fxdata/tables/combat.bin: d72d0a106492a03b55c17e132dcfdb11e3c4acda6e9fd0ba40a42112825a9941
 constexpr uint8_t BLOB_SHA256[32] = {
-    0x94, 0x30, 0x18, 0x03, 0x0E, 0xD9, 0x18, 0x3E,
-    0x30, 0x1F, 0x2A, 0x62, 0x49, 0x88, 0xF0, 0xB0,
-    0x38, 0x49, 0x2E, 0xCB, 0x24, 0xDB, 0x88, 0x39,
-    0x14, 0x48, 0x95, 0x6F, 0xD0, 0x74, 0xDD, 0x9C,
+    0xD7, 0x2D, 0x0A, 0x10, 0x64, 0x92, 0xA0, 0x3B,
+    0x55, 0xC1, 0x7E, 0x13, 0x2D, 0xCF, 0xDB, 0x11,
+    0xE3, 0xC4, 0xAC, 0xDA, 0x6E, 0x9F, 0xD0, 0xBA,
+    0x40, 0xA4, 0x21, 0x12, 0x82, 0x5A, 0x99, 0x41,
 };
 
 }   // namespace combat_expect

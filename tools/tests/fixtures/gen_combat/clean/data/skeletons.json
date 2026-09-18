@@ -3,18 +3,6 @@
   "skeletons": [
     {
       "id": "beast_16x12",
-      "parts": [
-        {
-          "id": "body",
-          "box": { "ox": 0, "oy": 0, "w": 16, "h": 12 },
-          "dmgMul": 100,
-          "hp": 0,
-          "bodyShare": 100,
-          "breakTypes": [],
-          "hurtOn": true,
-          "stages": []
-        }
-      ],
       "anchors": [
         { "id": "origin", "ox": 0, "oy": 0 }
       ]

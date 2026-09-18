@@ -1,5 +1,13 @@
 # Creature Framework — design draft (v1)
 
+> **Shipping note (monhun-ardu-cgk):** the generic parts/stages/elements/
+> predicate schema described below was replaced in the shipping build by the
+> fixed 3-hitzone model — body (implicit, wins ties) + head + appendage
+> records, a single broken record per zone, `zonesBroken` guard mask, head
+> hits feeding the stagger meter. See `build/zones-design.md` and
+> `src/core/combat.hpp`. Sections below are the superseded reference for the
+> generic model; keep them only for historical context.
+
 Status: draft for review. No code filed yet. Companion spikes recorded in
 `/var/folders/.../opencode/SPIKE-REPORT.md` (1a flash budget, 1b FX reads,
 1c LUNGE parity proof).
@@ -69,7 +77,11 @@ out  = out * elemMul(part, elem) / 100
 body += out * bodyShare / 100
 ```
 
-## 4. Skeleton / parts
+## 4. Skeleton / parts (superseded by the 3-hitzone model)
+
+Shipping schema is `"zones"` on the creature (head/appendage records; body
+implicit); skeletons only carry the body box + anchors now. The `"parts"`
+schema below is the retired generic draft.
 
 ```jsonc
 // data/skeletons.json — all skeletons

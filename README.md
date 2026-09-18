@@ -12,11 +12,11 @@ port of a browser prototype (`mock/`), verified tick-for-tick against it.
 |---|---|
 | Vertical-slice sim | Ported + parity-verified (20 scenes / 1269 ticks / 660 device asserts) |
 | Device render + HUD + audio | Working (block/FX-sprite art, cue tones; HUD text/FX glyphs + bars — `7y3` clamp fixed) |
-| Host unit tests | `make test` — **3117 passed / 0 failed** |
-| Device tests (Ardens) | boot 4, assets 254, audio 14, menu 59, hud 17, parity 660, data 221, combat 195, perf 5 — all PASS |
-| Perf gate (`monhun-ardu-8v7`, re-verified `42n.6` + `7y3` + `ljj.2` + `ljj.7`) | **PASS.** plane 156 Hz (≥135), logic 52 Hz (≥45), render max 5040 µs (≤7407), tick 984 µs, RAM free 408 B |
+| Host unit tests | `make test` — **3144 passed / 0 failed** |
+| Device tests (Ardens) | boot 4, assets 262, audio 14, menu 59, hud 17, parity 660, data 221, combat 184, perf 5 — all PASS |
+| Perf gate (`monhun-ardu-8v7`, re-verified `42n.6` + `7y3` + `ljj.2` + `ljj.7` + `cgk`) | **PASS.** plane 153 Hz (≥135), logic 51 Hz (≥45), render max 5392 µs (≤7407), tick 988 µs, RAM free 409 B |
 | Perf tooling | Headless Ardens profiler dump (`profiledump=<path>`, local patch) + on-device cycle bench (`test_perf`) |
-| Shipping build | flash **29400 / 29696 B** (99%), RAM **2018 / 2560 B** (542 free) |
+| Shipping build | flash **28242 / 29696 B** (95%), RAM **2029 / 2560 B** (531 free) |
 | FX data image | **21768 B** of 16 MB used |
 
 Speculative gameplay status: combat (sword / flail / gunshield), monster FSM,
@@ -49,7 +49,7 @@ mock/game.js ──port──► src/core/*.hpp ──shared verbatim──► h
 | `monster.hpp` | Monster FSM, attack cycle, windup, hit resolution, `pushApart` |
 | `projectiles.hpp` | Shells (`ball`/`scatter`), effects, training pole, damage numbers, `trainDps`, `stepWorld` |
 | `world.hpp` | Screen geometry constants, camera (int px, clamped), mode handling (hunt/train), `newGame`, `withWeapon`, `resetHunt`, `stepGame` |
-| `combat.hpp` | Combat blob loader (`ljj.2`): one production reader over the generated `combat_data.hpp` (host) / `mhCombat` blob (AVR), `creatureLoad`/`attackLoad` caches in `Game::combat` (50 B), guard eval with deterministic tick-derived chance, damage/stagger routing, part stages. No behavior wiring yet (migrations `ljj.3`–`.5`) |
+| `combat.hpp` | Combat blob loader (`ljj.2`, reworked by `cgk`): one production reader over the generated `combat_data.hpp` (host) / `mhCombat` blob (AVR), `creatureLoad`/`attackLoad` caches in `Game::combat`, guard eval with deterministic tick-derived chance, and the fixed 3-hitzone resolve (implicit body + optional head/appendage records). No per-tick cart reads |
 | `input.hpp` | Edge flags + B-hold detection (`aP`, `bP`, `bR`, `bHeld`), no Arduino headers |
 | `progmem.hpp` | Portable flash-read shim: `MH_PROGMEM` + typed `mhPgmRead*`; identity on host |
 
@@ -106,11 +106,12 @@ data/skeletons.json + data/creatures/*.json ──tools/gen-combat.py──►�
   `mhFxRead*`), exercised by `tst/combat_test.hpp`,
   `tst/combat_pack_test.hpp` and the Ardens `test_combat`; the game runs the
   pattern interpreter from migrations `ljj.3`–`.5`, and `data/creatures/
-  ravager.json` is the first creature with a breakable part (tail pool + stages +
-  pattern-swap guard, `ljj.8`). The parts machinery is folded out of the
-  `test_perf` and `test_parity` images with `-DMH_COMBAT_PARTS=0` (see
-  `src/core/game.hpp`), whose scenes never run the ravager; shipping and
-  `test_combat` keep it.
+  ravager.json` is the first creature with zones (head + appendage, `cgk`,
+  replacing the N-part machinery of `ljj.6`/`ljj.8`): body implicit, one u8
+  pool + one broken record per zone, broken-mask guards. The zones machinery is
+  folded out of the `test_perf` and `test_parity` images with
+  `-DMH_COMBAT_PARTS=0` (see `src/core/game.hpp`), whose scenes never run the
+  ravager; shipping and `test_combat` keep it.
 - Current blobs: `fxmonster`, `fxplayer`, `fxpole`, `fxball`, `fxscatter`,
   `fxspark`, `fxfontw`, `fxfontg`, the overlay/effect sheets and the raw
   content tables (`mhWeaponDefs`, `mhMonsterAttacks`, `mhMonsterDefs`,

@@ -160,22 +160,22 @@ void MonsterSuite(TestRunner &runner) {
     }
 
     {
-        Test t("body box is the skeleton part box; player hits route through it");
+        Test t("body box is creature w/h; player hits route through it");
         Game g;
         newHunt(g);
-        // Cached box == the blob's skeleton body part for this creature.
+        // Cached box == the blob's creature w/h at origin for this creature.
         CombatBox expected;
         t.assert(combatCreatureBodyBox(monsterCreatureId(MON_LUNGE), expected), 1, "lunge body box readable");
-        t.assert(g.combat.body.w, expected.w, "cached box w from skeleton");
-        t.assert(g.combat.body.h, expected.h, "cached box h from skeleton");
-        t.assert(g.combat.bodyFirst, combatSkeletonFirstPart(combatCreatureSkeletonIdx(g.combat.creature)), "cached hurtbox list head");
-        t.assert(g.combat.bodyCount, 1, "cached hurtbox list count");
-        // A landed melee hit resolves the part; all multipliers are 100, so the
-        // part damage equals the raw attack damage.
+        t.assert(g.combat.body.w, expected.w, "cached box w from creature");
+        t.assert(g.combat.body.h, expected.h, "cached box h from creature");
+        t.assert(g.combat.body.ox, 0, "cached box ox at origin");
+        t.assert(g.combat.body.oy, 0, "cached box oy at origin");
+        // A landed melee hit resolves the implicit body; the body multiplier is
+        // always 100, so the damage equals the raw attack damage.
         const CombatBodyHit r = combatResolveBodyHit(g, 12);
-        const uint8_t skeletonIdx = combatCreatureSkeletonIdx(g.combat.creature);
-        t.assert(r.partIdx, combatSkeletonFirstPart(skeletonIdx), "resolved body part idx");
-        t.assert(r.dmg, 12, "part damage unchanged");
+        t.assert(r.zone, COMBAT_NO_ZONE, "resolved body (no zone)");
+        t.assert(r.mul, 100, "body multiplier neutral");
+        t.assert(r.dmg, 12, "body damage unchanged");
         suite.addTest(t);
     }
 

@@ -2,10 +2,10 @@
 """Unit tests for tools/gen-combat.py (run: make test-tools).
 
 The clean fixture under fixtures/gen_combat/clean is a minimal, fully featured
-schema tree (skeleton with two parts, stages, multipliers, one creature with an
-attack, two windows... one window, two patterns steps). Every failure case
-copies it to build/tests/gen_combat/ and mutates the copy, so the tests stay
-read-only on the repository fixtures and never write into /tmp.
+schema tree (skeleton with anchors, one creature with an attack, one window,
+head + appendage zones, a zones-broken guard, a two-step pattern). Every failure
+case copies it to build/tests/gen_combat/ and mutates the copy, so the tests
+stay read-only on the repository fixtures and never write into /tmp.
 """
 import hashlib
 import json
@@ -101,10 +101,12 @@ class GenCombatTests(unittest.TestCase):
     def test_dump_mode_lists_model_and_writes_nothing(self):
         result = self.compile("--dump")
         self.assert_succeeds(result)
-        self.assertIn("creature beast (skeleton beast_16x12", result.stdout)
+        self.assertIn("creature beast (skeleton beast_16x12, stats w16 h12 hp80 spd4, spawn 100,32) zones appendage D150 HP30 S40 ST20 head D120 HP10 S100 ST5", result.stdout)
+        self.assertIn("zone head: box(10,2,6,6) dmgMul 120 hp 10 share 100 break 0x02 stagger 5 brokenOverride 120 hurtOff 1 disable -", result.stdout)
+        self.assertIn("zone appendage: box(-6,4,8,4) dmgMul 150 hp 30 share 40 break 0x01 stagger 20 brokenOverride 200 hurtOff 1 disable jab", result.stdout)
         self.assertIn("attack jab: windup20 active6 recover30 dmg7 move lunge(20) windows 1", result.stdout)
         self.assertIn("window 0: t[0,6] box(8,0,12,10) dmgMul 100", result.stdout)
-        self.assertIn("pattern p_jab: guard minDist0 maxDist36 hp[0,100] player0x01 cd0 chance100", result.stdout)
+        self.assertIn("pattern p_jab: guard minDist0 maxDist36 hp[0,100] player0x01 cd0 chance100 zonesBroken appendage", result.stdout)
         self.assertIn("step 0: ATK beast.jab after2 chance100", result.stdout)
         self.assertIn("step 1: WAIT 5 after0", result.stdout)
         self.assertFalse(os.path.exists(self.path(BLOB_REL)))
@@ -133,6 +135,11 @@ class GenCombatTests(unittest.TestCase):
                     lambda doc: doc["attacks"][0]["windows"][0].__setitem__("dmgMul", 300))
         self.assert_fails(self.compile(), "windows[0]: dmgMul: out of range 0..255: 300")
 
+    def test_zone_hp_range_rejected(self):
+        self.mutate("data/creatures/beast.json",
+                    lambda doc: doc["zones"]["appendage"].__setitem__("hp", 300))
+        self.assert_fails(self.compile(), "zones.appendage: hp: out of range 0..255: 300")
+
     def test_phys_enum_membership(self):
         self.mutate("data/creatures/beast.json", lambda doc: doc["attacks"][0].__setitem__("phys", "FIRE"))
         self.assert_fails(self.compile(), "attacks[0]: phys: unknown value 'FIRE' (want one of BLUNT, SHOT, SLASH)")
@@ -141,11 +148,12 @@ class GenCombatTests(unittest.TestCase):
         self.mutate("data/creatures/beast.json", lambda doc: doc["attacks"][0].__setitem__("elem", "SLASH"))
         self.assert_fails(self.compile(), "attacks[0]: elem: unknown value 'SLASH'")
 
-    def test_stage_thresholds_must_descend(self):
-        self.mutate("data/creatures/beast.json",
-                    lambda doc: doc["parts"][0]["stages"][1].__setitem__("at", 60))
-        self.assert_fails(self.compile(),
-                          "parts[0].stages[1]: at: stage thresholds must be strictly descending (got 60 after 50)")
+    def test_unknown_zone_rejected(self):
+        def add_zone(doc):
+            doc["zones"]["wing"] = json.loads(json.dumps(doc["zones"]["head"]))
+
+        self.mutate("data/creatures/beast.json", add_zone)
+        self.assert_fails(self.compile(), "zones: unknown zone 'wing' (want head or appendage)")
 
     def test_window_must_fit_active_phase(self):
         self.mutate("data/creatures/beast.json",
@@ -174,24 +182,20 @@ class GenCombatTests(unittest.TestCase):
         self.mutate("data/creatures/beast.json", lambda doc: doc.__setitem__("skeleton", "quad_64x48"))
         self.assert_fails(self.compile(), "skeleton: unknown skeleton id 'quad_64x48'")
 
-    def test_unknown_part_predicate_rejected(self):
+    def test_unknown_zones_broken_rejected(self):
         self.mutate("data/creatures/beast.json",
-                    lambda doc: doc["patterns"][0]["guard"].__setitem__("parts", {"wing": ">=1"}))
-        self.assert_fails(self.compile(), "parts: unknown part id 'wing'")
+                    lambda doc: doc["patterns"][0]["guard"].__setitem__("zonesBroken", ["wing"]))
+        self.assert_fails(self.compile(), "zonesBroken[0]: unknown zone 'wing' (want head or appendage)")
 
-    def test_unknown_stage_attack_ref_rejected(self):
+    def test_duplicate_zones_broken_rejected(self):
         self.mutate("data/creatures/beast.json",
-                    lambda doc: doc["parts"][0]["stages"][0].__setitem__("disableAttacks", ["kick"]))
-        self.assert_fails(self.compile(), "disableAttacks[0]: unknown attack id 'kick'")
+                    lambda doc: doc["patterns"][0]["guard"].__setitem__("zonesBroken", ["appendage", "appendage"]))
+        self.assert_fails(self.compile(), "zonesBroken[1]: duplicate zone 'appendage'")
 
-    def test_part_override_skeleton_collision_rejected(self):
-        def collide(doc):
-            part = json.loads(json.dumps(doc["parts"][0]))
-            part["id"] = "body"
-            doc["parts"].append(part)
-
-        self.mutate("data/creatures/beast.json", collide)
-        self.assert_fails(self.compile(), "parts[1]: part override id 'body' collides with skeleton part")
+    def test_unknown_zone_disable_ref_rejected(self):
+        self.mutate("data/creatures/beast.json",
+                    lambda doc: doc["zones"]["appendage"]["broken"].__setitem__("disableAttacks", ["kick"]))
+        self.assert_fails(self.compile(), "zones.appendage.broken: disableAttacks[0]: unknown attack id 'kick'")
 
     def test_duplicate_local_attack_id_rejected(self):
         def duplicate(doc):
@@ -237,7 +241,8 @@ class GenCombatTests(unittest.TestCase):
         # The interpreter gates generic machinery on these constexpr bools, so a
         # wrong fact silently changes shipping behaviour. The clean fixture has
         # a stagger meter, a WAIT step, a step `after`, a two-step pattern, a
-        # player-flag guard and one window; no multi-window attack.
+        # player-flag + zones-broken guard, head + appendage zones and one
+        # window; no multi-window attack.
         self.assert_succeeds(self.compile())
         text = self.read(META_REL)
         facts = dict(re.findall(r"^constexpr bool ([A-Z0-9_]+) = (true|false);$", text, re.M))
@@ -250,12 +255,12 @@ class GenCombatTests(unittest.TestCase):
             "HAS_MULTI_STEP": "true",
             "HAS_MULTI_WINDOW": "false",
             "HAS_SIMPLE_GUARDS": "false",
-            "HAS_PARTS": "true",
+            "HAS_ZONES": "true",
             "HAS_GUARD_HP": "false",
             "HAS_GUARD_PLAYER": "true",
             "HAS_GUARD_COOLDOWN": "false",
             "HAS_GUARD_CHANCE": "false",
-            "HAS_GUARD_PARTS": "true",
+            "HAS_GUARD_ZONES": "true",
         }
         self.assertEqual(facts, expected)
 
@@ -272,22 +277,20 @@ class GenCombatTests(unittest.TestCase):
         self.assertEqual(meta["CREATURES_COUNT"], 1)
         self.assertEqual(meta["PROFILES_COUNT"], 1)
         self.assertEqual(meta["SKELETONS_COUNT"], 1)
-        self.assertEqual(meta["PARTS_COUNT"], 2)
-        self.assertEqual(meta["STAGES_COUNT"], 2)
+        self.assertEqual(meta["ZONES_COUNT"], 2)
         self.assertEqual(meta["ANCHORS_COUNT"], 1)
-        self.assertEqual(meta["ELEMS_COUNT"], 1)
-        self.assertEqual(meta["REFS_COUNT"], 2)
         self.assertEqual(meta["ATTACKS_COUNT"], 1)
         self.assertEqual(meta["WINDOWS_COUNT"], 1)
         self.assertEqual(meta["PATTERNS_COUNT"], 1)
         self.assertEqual(meta["GUARDS_COUNT"], 1)
-        self.assertEqual(meta["PREDICATES_COUNT"], 1)
         self.assertEqual(meta["STEPS_COUNT"], 2)
+        for i in range(4):
+            self.assertEqual(self.read_int16(blob, 24 + i * 2), 0)
         # sections must tile the blob without gaps or padding.
-        sections = ["CREATURES", "PROFILES", "SKELETONS", "PARTS", "STAGES", "ANCHORS",
-                    "ELEMS", "REFS", "ATTACKS", "WINDOWS", "PATTERNS", "GUARDS", "PREDICATES", "STEPS"]
-        records = ["CREATURE", "PROFILE", "SKELETON", "PART", "STAGE", "ANCHOR", "ELEM", "REF",
-                   "ATTACK", "WINDOW", "PATTERN", "GUARD", "PREDICATE", "STEP"]
+        sections = ["CREATURES", "PROFILES", "SKELETONS", "ZONES", "ANCHORS",
+                    "ATTACKS", "WINDOWS", "PATTERNS", "GUARDS", "STEPS"]
+        records = ["CREATURE", "PROFILE", "SKELETON", "ZONE", "ANCHOR",
+                   "ATTACK", "WINDOW", "PATTERN", "GUARD", "STEP"]
         for i, section in enumerate(sections):
             end = meta["%s_OFF" % section] + meta["%s_SIZE" % records[i]] * meta["%s_COUNT" % section]
             if i + 1 < len(sections):
@@ -295,31 +298,30 @@ class GenCombatTests(unittest.TestCase):
             else:
                 self.assertEqual(end, meta["SIZE"], section)
 
+    @staticmethod
+    def read_int16(blob, off):
+        return blob[off] | (blob[off + 1] << 8)
+
     def test_blob_record_payloads(self):
         self.assert_succeeds(self.compile())
         blob = self.blob()
         meta = self.meta_constants()
 
         creature = blob[meta["CREATURE_BEAST_OFF"]:meta["CREATURE_BEAST_OFF"] + meta["CREATURE_SIZE"]]
-        self.assertEqual(creature, bytes([0, 0, 1, 1, 0, 1, 0, 1, 16, 12, 4, 80, 0, 100, 0, 32, 0]))
+        self.assertEqual(creature, bytes([0, 0, 0, 1, 0, 1, 0, 1, 16, 12, 4, 80, 0, 100, 0, 32, 0]))
 
         profile = blob[meta["PROFILE_BEAST_OFF"]:meta["PROFILE_BEAST_OFF"] + meta["PROFILE_SIZE"]]
-        self.assertEqual(profile, bytes([30, 18, 36, 8, 10, 6, 10, 40, 1, 2, 40, 0, 20, 0,
+        self.assertEqual(profile, bytes([30, 18, 36, 8, 10, 6, 10, 40, 1, 3, 40, 0, 20, 0,
                                          60, 0, 90, 0, 20, 0, 15, 0]))
 
         skeleton = blob[meta["SKELETON_BEAST_16X12_OFF"]:meta["SKELETON_BEAST_16X12_OFF"] + meta["SKELETON_SIZE"]]
-        self.assertEqual(skeleton, bytes([0, 1, 0, 1]))
+        self.assertEqual(skeleton, bytes([0, 1]))
 
-        body = blob[meta["PART_BEAST_16X12_BODY_OFF"]:meta["PART_BEAST_16X12_BODY_OFF"] + meta["PART_SIZE"]]
-        self.assertEqual(body, bytes([0, 0, 16, 12, 100, 100, 0, 1, 100, 100, 100, 0, 0, 0, 0, 0, 0, 0]))
+        head = blob[meta["ZONE_BEAST_HEAD_OFF"]:meta["ZONE_BEAST_HEAD_OFF"] + meta["ZONE_SIZE"]]
+        self.assertEqual(head, bytes([10, 2, 6, 6, 10, 120, 100, 2, 5, 120, 1, 0]))
 
-        tail = blob[meta["PART_BEAST_TAIL_OFF"]:meta["PART_BEAST_TAIL_OFF"] + meta["PART_SIZE"]]
-        self.assertEqual(tail, bytes([0xFA, 4, 8, 4, 150, 40, 1, 1, 150, 75, 100, 0, 2, 0, 1, 30, 0, 0]))
-
-        stage0 = blob[meta["STAGE_BEAST_TAIL_0_OFF"]:meta["STAGE_BEAST_TAIL_0_OFF"] + meta["STAGE_SIZE"]]
-        self.assertEqual(stage0, bytes([50, 0, 100, 0, 20, 2, 0, 1, 1, 0]))
-        stage1 = blob[meta["STAGE_BEAST_TAIL_1_OFF"]:meta["STAGE_BEAST_TAIL_1_OFF"] + meta["STAGE_SIZE"]]
-        self.assertEqual(stage1, bytes([0, 3, 200, 0, 0, 0, 1, 0, 1, 1]))
+        tail = blob[meta["ZONE_BEAST_APPENDAGE_OFF"]:meta["ZONE_BEAST_APPENDAGE_OFF"] + meta["ZONE_SIZE"]]
+        self.assertEqual(tail, bytes([0xFA, 4, 8, 4, 30, 150, 40, 1, 20, 200, 3, 1]))
 
         attack = blob[meta["ATTACK_BEAST_JAB_OFF"]:meta["ATTACK_BEAST_JAB_OFF"] + meta["ATTACK_SIZE"]]
         self.assertEqual(attack, bytes([1, 20, 0, 0, 0, 1, 1, 1, 2, 4, 10, 1, 0, 1,
@@ -331,14 +333,7 @@ class GenCombatTests(unittest.TestCase):
         pattern = blob[meta["PATTERN_BEAST_P_JAB_OFF"]:meta["PATTERN_BEAST_P_JAB_OFF"] + meta["PATTERN_SIZE"]]
         self.assertEqual(pattern, bytes([0, 2, 0]))
         guard = blob[meta["GUARD_BEAST_P_JAB_OFF"]:meta["GUARD_BEAST_P_JAB_OFF"] + meta["GUARD_SIZE"]]
-        self.assertEqual(guard, bytes([0, 36, 0, 100, 1, 0, 100, 0, 1]))
-        predicate = blob[meta["PREDICATES_OFF"]:meta["PREDICATES_OFF"] + meta["PREDICATE_SIZE"]]
-        self.assertEqual(predicate, bytes([1, 0, 1]))   # tail part idx, '>=', stage 1
-
-        elems = blob[meta["ELEMS_OFF"]:meta["ELEMS_OFF"] + meta["ELEM_SIZE"] * meta["ELEMS_COUNT"]]
-        self.assertEqual(elems, bytes([1, 200]))        # FIRE at 200%
-        self.assertEqual(blob[meta["REFS_OFF"]], 0)     # disable attack 0
-        self.assertEqual(blob[meta["REFS_OFF"] + 1], 0) # enable attack 0
+        self.assertEqual(guard, bytes([0, 36, 0, 100, 1, 0, 100, 2]))   # zone bit 2 = appendage
 
         step0 = blob[meta["STEP_BEAST_P_JAB_0_OFF"]:meta["STEP_BEAST_P_JAB_0_OFF"] + meta["STEP_SIZE"]]
         self.assertEqual(step0, bytes([0, 0, 2, 100]))
@@ -358,8 +353,8 @@ class GenCombatTests(unittest.TestCase):
             if match:
                 expect[match.group(2)] = int(match.group(3), 0)
         meta = self.meta_constants()
-        for record in ("CREATURE", "PROFILE", "SKELETON", "PART", "STAGE", "ANCHOR", "ELEM",
-                       "REF", "ATTACK", "WINDOW", "PATTERN", "GUARD", "PREDICATE", "STEP"):
+        for record in ("CREATURE", "PROFILE", "SKELETON", "ZONE", "ANCHOR",
+                       "ATTACK", "WINDOW", "PATTERN", "GUARD", "STEP"):
             self.assertEqual(expect["%s_SIZE" % record], meta["%s_SIZE" % record])
         self.assertEqual(expect["BLOB_SIZE"], len(blob))
         self.assertEqual(expect["CREATURE_BEAST_HP"], 80)
@@ -369,6 +364,8 @@ class GenCombatTests(unittest.TestCase):
         self.assertEqual(expect["ATTACK_BEAST_JAB_WINDUP"], 20)
         self.assertEqual(expect["ATTACK_BEAST_JAB_DMG"], 7)
         self.assertEqual(expect["PATTERN_BEAST_P_JAB_MAX_DIST"], 36)
+        self.assertEqual(expect["ZONE_BEAST_HEAD_DMG_MUL"], 120)
+        self.assertEqual(expect["ZONE_BEAST_APPENDAGE_HP"], 30)
         match = re.search(r"BLOB_SHA256\[32\] = \{(.*?)\};", text, re.S)
         digest = bytes(int(value, 16) for value in re.findall(r"0x([0-9A-F]{2})", match.group(1)))
         self.assertEqual(digest, hashlib.sha256(blob).digest())
@@ -377,11 +374,12 @@ class GenCombatTests(unittest.TestCase):
         self.assert_succeeds(self.compile())
         text = self.read(DATA_REL)
         for needle in ("struct Creature {", "struct Attack {", "struct Guard {", "struct Window {",
-                       "std::array<Creature, 1> CREATURES", "std::array<Attack, 1> ATTACKS",
+                       "struct Zone {", "std::array<Creature, 1> CREATURES", "std::array<Attack, 1> ATTACKS",
                        "std::array<Guard, 1> GUARDS", "std::array<Step, 2> STEPS"):
             self.assertIn(needle, text)
         self.assertIn("constexpr uint8_t CREATURE_BEAST = 0;", text)
         self.assertIn("constexpr uint8_t ATTACK_BEAST_JAB = 0;", text)
+        self.assertIn("constexpr uint8_t ZONE_BEAST_APPENDAGE = 1;", text)
 
 
 if __name__ == "__main__":

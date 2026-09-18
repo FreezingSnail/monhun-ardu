@@ -1,6 +1,6 @@
 // Perf/parity-bench carve (mirrors test_perf.ino and perf_test.hpp's
 // MH_AUDIO=0): the parity fixtures replay only MON_LUNGE/SWEEP/HEAVY, which
-// never run a breakable-part/multi-window/stagger/parts-guard path, so this
+// never run a zone/multi-window/stagger/zones-guard path, so this
 // image compiles the ravager machinery out (MH_COMBAT_PARTS=0, see
 // src/core/game.hpp) and keeps the flash headroom the full machinery needs.
 // The shipped-3 guards are dist-only and their attacks single-window, so the

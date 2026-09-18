@@ -1,15 +1,15 @@
 #pragma once
-// Host unit tests for src/core/combat.hpp (bead monhun-ardu-ljj.2).
+// Host unit tests for src/core/combat.hpp (beads monhun-ardu-ljj.2, cgk).
 //
 // Permanent, co-located suite. Covers the host read path (generated
 // combat_data.hpp) against the loader, cache lifecycle, guard evaluation
-// (inclusive ranges, predicates, player flags, cooldown, deterministic chance),
-// damage/stagger routing reference vectors, part stages + break-effect
-// projections, and the creature fallback.
+// (inclusive ranges, zones-broken clause, player flags, cooldown, deterministic
+// chance), damage routing and the fixed 3-hitzone resolve (body implicit, head
+// + appendage records), zone pools/break bits and the creature fallback.
 //
-// ljj.8: the shipped blob now carries the ravager's breakable tail (one
-// per-creature override part, 2 stage records, 1 element and 1 parts-predicate
-// guard), so the part/stage/stagger/pattern-swap paths below run against real
+// cgk: the shipped blob carries the ravager head (dmgMul 130, staggerOnHit 12)
+// and appendage tail (dmgMul 150, share 40, SLASH, broken override 200) plus
+// the zonesBroken enrage guard, so the zone/stagger paths run against real
 // records; the synthetic value-helper vectors stay as boundary coverage.
 #include "test.hpp"
 #include "../src/core/world.hpp"           // game + player + projectiles + monster (combat) + addEffect
@@ -27,8 +27,8 @@ void CombatSuite(TestRunner &runner) {
             const combat_data::Creature &h = combat_data::CREATURES[i];
             t.assert(c.skeletonIdx, h.skeletonIdx, "creature skeletonIdx");
             t.assert(c.profileIdx, h.profileIdx, "creature profileIdx");
-            t.assert(c.firstPart, h.firstPart, "creature firstPart");
-            t.assert(c.partCount, h.partCount, "creature partCount");
+            t.assert(c.headZone, h.headZone, "creature headZone");
+            t.assert(c.appendZone, h.appendZone, "creature appendZone");
             t.assert(c.firstAttack, h.firstAttack, "creature firstAttack");
             t.assert(c.attackCount, h.attackCount, "creature attackCount");
             t.assert(c.firstPattern, h.firstPattern, "creature firstPattern");
@@ -40,6 +40,8 @@ void CombatSuite(TestRunner &runner) {
             t.assert(c.spawnX, h.spawnX, "creature spawnX");
             t.assert(c.spawnY, h.spawnY, "creature spawnY");
             t.assert(combatCreatureFirstAttack(i), h.firstAttack, "creature firstAttack accessor");
+            t.assert(combatCreatureHeadZone(i), h.headZone, "creature headZone accessor");
+            t.assert(combatCreatureAppendZone(i), h.appendZone, "creature appendZone accessor");
         }
         // Migration A scaffold: slot 0 of every shipped creature is its lunge.
         t.assert(combatCreatureFirstAttack(combat_data::CREATURE_LUNGE), combat_data::ATTACK_LUNGE_LUNGE, "lunge creature first attack");
@@ -62,7 +64,7 @@ void CombatSuite(TestRunner &runner) {
             t.assert(p.retreatDen, h.retreatDen, "profile retreatDen");
             t.assert(p.staggerMax, h.staggerMax, "profile staggerMax");
             t.assert(p.staggerDecay, h.staggerDecay, "profile staggerDecay");
-            t.assert(p.partCount, h.partCount, "profile partCount");
+            t.assert(p.zoneFlags, h.zoneFlags, "profile zoneFlags");
             t.assert(p.cdBase, h.cdBase, "profile cdBase");
             t.assert(p.cdJitter, h.cdJitter, "profile cdJitter");
             t.assert(p.spawnT, h.spawnT, "profile spawnT");
@@ -74,57 +76,36 @@ void CombatSuite(TestRunner &runner) {
     }
 
     {
-        Test t("skeleton + part records match combat_data.hpp");
+        Test t("skeleton + zone records match combat_data.hpp");
         for (uint8_t i = 0; i < combat::SKELETONS_COUNT; i++) {
             const CombatSkeleton s = combatSkeletonRead(i);
             const combat_data::Skeleton &h = combat_data::SKELETONS[i];
-            t.assert(s.firstPart, h.firstPart, "skeleton firstPart");
-            t.assert(s.partCount, h.partCount, "skeleton partCount");
             t.assert(s.firstAnchor, h.firstAnchor, "skeleton firstAnchor");
             t.assert(s.anchorCount, h.anchorCount, "skeleton anchorCount");
         }
-        for (uint8_t i = 0; i < combat::PARTS_COUNT; i++) {
-            const CombatPart p = combatPartRead(i);
-            const combat_data::Part &h = combat_data::PARTS[i];
-            t.assert(p.box.ox, h.box.ox, "part box.ox");
-            t.assert(p.box.oy, h.box.oy, "part box.oy");
-            t.assert(p.box.w, h.box.w, "part box.w");
-            t.assert(p.box.h, h.box.h, "part box.h");
-            t.assert(p.dmgMul, h.dmgMul, "part dmgMul");
-            t.assert(p.bodyShare, h.bodyShare, "part bodyShare");
-            t.assert(p.breakTypes, h.breakTypes, "part breakTypes");
-            t.assert(p.hurtOn, h.hurtOn, "part hurtOn");
-            t.assert(p.physSlash, h.physSlash, "part physSlash");
-            t.assert(p.physBlunt, h.physBlunt, "part physBlunt");
-            t.assert(p.physShot, h.physShot, "part physShot");
-            t.assert(p.firstStage, h.firstStage, "part firstStage");
-            t.assert(p.stageCount, h.stageCount, "part stageCount");
-            t.assert(p.firstElem, h.firstElem, "part firstElem");
-            t.assert(p.elemCount, h.elemCount, "part elemCount");
-            t.assert(p.hp, h.hp, "part hp");
-            t.assert(p.flags, h.flags, "part flags");
-            t.assert(combatPartDmgMul(i), h.dmgMul, "part dmgMul accessor");
-            t.assert(combatPartBodyShare(i), h.bodyShare, "part bodyShare accessor");
-            t.assert(combatPartHurtOn(i), h.hurtOn, "part hurtOn accessor");
-            t.assert(combatPartPhysSlash(i), h.physSlash, "part physSlash accessor");
-            t.assert(combatPartPhysBlunt(i), h.physBlunt, "part physBlunt accessor");
-            t.assert(combatPartPhysShot(i), h.physShot, "part physShot accessor");
-            t.assert(combatPartFirstStage(i), h.firstStage, "part firstStage accessor");
-            t.assert(combatPartStageCount(i), h.stageCount, "part stageCount accessor");
-            t.assert(combatPartFirstElem(i), h.firstElem, "part firstElem accessor");
-            t.assert(combatPartElemCount(i), h.elemCount, "part elemCount accessor");
-            t.assert(combatPartHp(i), h.hp, "part hp accessor");
+        for (uint8_t i = 0; i < combat::ZONES_COUNT; i++) {
+            const CombatZone p = combatZoneRead(i);
+            const combat_data::Zone &h = combat_data::ZONES[i];
+            t.assert(p.box.ox, h.box.ox, "zone box.ox");
+            t.assert(p.box.oy, h.box.oy, "zone box.oy");
+            t.assert(p.box.w, h.box.w, "zone box.w");
+            t.assert(p.box.h, h.box.h, "zone box.h");
+            t.assert(p.hp, h.hp, "zone hp");
+            t.assert(p.dmgMul, h.dmgMul, "zone dmgMul");
+            t.assert(p.bodyShare, h.bodyShare, "zone bodyShare");
+            t.assert(p.breakTypes, h.breakTypes, "zone breakTypes");
+            t.assert(p.staggerOnHit, h.staggerOnHit, "zone staggerOnHit");
+            t.assert(p.brokenDmgMul, h.brokenDmgMul, "zone brokenDmgMul");
+            t.assert(p.brokenFlags, h.brokenFlags, "zone brokenFlags");
+            t.assert(p.unlockMask, h.unlockMask, "zone unlockMask");
         }
         suite.addTest(t);
     }
 
     {
-        Test t("body box + spawn accessors match combat_data.hpp (migration B)");
-        // ljj.8: the ravager tail is the only part with a pool/stage list.
-        t.assert(combat::STAGES_COUNT, 2, "ravager tail stage records");
-        t.assert(combat::PARTS_COUNT, 4, "skeleton bodies + ravager tail");
-        t.assert(combat::PREDICATES_COUNT, 1, "ravager enrage part predicate");
-        t.assert(combat::ELEMS_COUNT, 1, "ravager tail FIRE element multiplier");
+        Test t("body box + spawn accessors match combat_data.hpp");
+        // cgk: the ravager declares head + appendage; the shipped 3 have none.
+        t.assert(combat::ZONES_COUNT, 2, "ravager head + appendage");
         t.assert(combat::ATTACKS_COUNT, 8, "3x2 shipped + ravager bite/tail_sweep");
         t.assert(combat::WINDOWS_COUNT, 9, "ravager tail_sweep is two windows");
         t.assert(combat::PATTERNS_COUNT, 8, "ravager adds p_enraged");
@@ -132,26 +113,21 @@ void CombatSuite(TestRunner &runner) {
         for (uint8_t i = 0; i < combat::CREATURES_COUNT; i++) {
             const combat_data::Creature &h = combat_data::CREATURES[i];
             t.assert(combatCreatureSkeletonIdx(i), h.skeletonIdx, "creature skeletonIdx accessor");
-            t.assert(combatCreatureFirstPart(i), h.firstPart, "creature firstPart accessor");
-            t.assert(combatCreaturePartCount(i), h.partCount, "creature partCount accessor");
             const CombatSpawn s = combatCreatureSpawnRead(i);
             t.assert(s.hp, h.hp, "creature spawn hp");
             t.assert(s.spd, h.spd, "creature spawn spd");
             t.assert(s.x, h.spawnX, "creature spawn x");
             t.assert(s.y, h.spawnY, "creature spawn y");
-            const CombatSkeleton sk = combatSkeletonRead(h.skeletonIdx);
-            t.assert(combatSkeletonFirstPart(h.skeletonIdx), sk.firstPart, "skeleton firstPart accessor");
-            t.assert(combatSkeletonPartCount(h.skeletonIdx), sk.partCount, "skeleton partCount accessor");
-            const combat_data::Part &hp = combat_data::PARTS[sk.firstPart];
             CombatBox box = {0, 0, 0, 0};
-            const bool ok = combatCreatureBodyBox(i, box);
+            uint8_t headZone = COMBAT_NO_ZONE, appendZone = COMBAT_NO_ZONE;
+            const bool ok = combatCreatureBodyBox(i, box, headZone, appendZone);
             t.assert(ok, 1, "body box found");
-            t.assert(box.ox, hp.box.ox, "body box ox");
-            t.assert(box.oy, hp.box.oy, "body box oy");
-            t.assert(box.w, hp.box.w, "body box w");
-            t.assert(box.h, hp.box.h, "body box h");
+            t.assert(box.ox, 0, "body box ox");
+            t.assert(box.oy, 0, "body box oy");
             t.assert(box.w, h.w, "body box w == creature w");
             t.assert(box.h, h.h, "body box h == creature h");
+            t.assert(headZone, h.headZone, "body box head zone");
+            t.assert(appendZone, h.appendZone, "body box append zone");
         }
         // Pinned shipped sizes (parity contract: LUNGE 32x24, SWEEP 28x22,
         // HEAVY 40x28).
@@ -172,16 +148,15 @@ void CombatSuite(TestRunner &runner) {
     }
 
     {
-        Test t("combatResolveBodyHit: shipped hurtbox list is one body part");
+        Test t("combatResolveBodyHit: implicit body routes base damage");
         const uint8_t kinds[3] = {combat_data::CREATURE_LUNGE, combat_data::CREATURE_SWEEP, combat_data::CREATURE_HEAVY};
         for (uint8_t i = 0; i < 3; i++) {
             Game g;
             creatureLoad(g, kinds[i]);
-            const combat_data::Creature &h = combat_data::CREATURES[kinds[i]];
             const CombatBodyHit r = combatResolveBodyHit(g, 12);
-            t.assert(r.partIdx, combat_data::SKELETONS[h.skeletonIdx].firstPart, "resolved part idx from skeleton");
+            t.assert(r.zone, COMBAT_NO_ZONE, "body hit has no zone");
             t.assert(r.mul, 100, "neutral multiplier");
-            t.assert(r.dmg, 12, "part damage unchanged (share 100)");
+            t.assert(r.dmg, 12, "body damage unchanged");
         }
         Game g;
         creatureLoad(g, combat_data::CREATURE_LUNGE);
@@ -253,8 +228,7 @@ void CombatSuite(TestRunner &runner) {
             t.assert(g.playerFlags, h.playerFlags, "guard playerFlags");
             t.assert(g.cooldown, h.cooldown, "guard cooldown");
             t.assert(g.chance, h.chance, "guard chance");
-            t.assert(g.firstPartPred, h.firstPartPred, "guard firstPartPred");
-            t.assert(g.partPredCount, h.partPredCount, "guard partPredCount");
+            t.assert(g.zonesBroken, h.zonesBroken, "guard zonesBroken");
         }
         for (uint8_t i = 0; i < combat::STEPS_COUNT; i++) {
             const CombatStep s = combatStepRead(i);
@@ -273,7 +247,7 @@ void CombatSuite(TestRunner &runner) {
     }
 
     {
-        Test t("creatureLoad caches profile, resets stages, falls back on bad id");
+        Test t("creatureLoad caches profile, resets zones, falls back on bad id");
         Game g;
         const uint8_t idx = creatureLoad(g, combat_data::CREATURE_LUNGE);
         const combat_data::Profile &hp = combat_data::PROFILES[combat_data::CREATURES[combat_data::CREATURE_LUNGE].profileIdx];
@@ -284,27 +258,46 @@ void CombatSuite(TestRunner &runner) {
         t.assert(g.combat.profile.cdBase, hp.cdBase, "cache cdBase");
         t.assert(g.combat.profile.cdJitter, hp.cdJitter, "cache cdJitter");
         t.assert(g.combat.profile.spawnCd, hp.spawnCd, "cache spawnCd");
-        t.assert(g.combat.profile.partCount, hp.partCount, "cache partCount");
-        t.assert(g.combat.bodyFirst, combat_data::SKELETONS[combat_data::CREATURES[combat_data::CREATURE_LUNGE].skeletonIdx].firstPart, "cache bodyFirst");
-        t.assert(g.combat.bodyCount, 1, "cache bodyCount");
+        t.assert(g.combat.profile.zoneFlags, hp.zoneFlags, "cache zoneFlags");
         t.assert(g.combat.body.w, 32, "cache body box w");
         t.assert(g.combat.body.h, 24, "cache body box h");
-        t.assert(g.combat.stages, 0, "stages start intact");
+        t.assert(g.combat.headZone, COMBAT_NO_ZONE, "no head zone");
+        t.assert(g.combat.appendZone, COMBAT_NO_ZONE, "no appendage zone");
+        t.assert(g.combat.zoneBroken, 0, "zones intact");
         t.assert(g.combat.patternIdx, COMBAT_NO_PATTERN, "pattern cursor reset");
         t.assert(g.combat.stepIdx, 0, "step cursor reset");
         t.assert(g.combat.stepT, 0, "step timer reset");
         t.assert(g.combat.stagger, 0, "stagger reset");
         t.assert(g.combat.attack.windup, 0, "attack cache cleared");
 
-        combatPartStageSet(g, 0, 2);
-        t.assert(combatPartStageGet(g, 0), 2, "stage set before reload");
+        g.combat.zoneBroken = 0xFF;   // dirty before reload
         const uint8_t fallback = creatureLoad(g, 99);
         const combat_data::Profile &hh = combat_data::PROFILES[combat_data::CREATURES[combat_data::CREATURE_HEAVY].profileIdx];
         t.assert(fallback, 0, "bad id falls back to creature 0");
         t.assert(g.combat.creature, 0, "fallback cache creature");
         t.assert(g.combat.profile.attackDist, hh.attackDist, "fallback profile");
-        t.assert(g.combat.profile.partCount, hh.partCount, "fallback partCount");
-        t.assert(combatPartStageGet(g, 0), 0, "reload resets stages");
+        t.assert(g.combat.profile.zoneFlags, hh.zoneFlags, "fallback zoneFlags");
+        t.assert(g.combat.zoneBroken, 0, "reload resets broken bits");
+        suite.addTest(t);
+    }
+
+    {
+        Test t("creatureLoad seeds the ravager zone cache (head + appendage)");
+        Game g;
+        creatureLoad(g, combat_data::CREATURE_RAVAGER);
+        const CombatZone head = combatZoneRead(combat_data::ZONE_RAVAGER_HEAD);
+        const CombatZone tail = combatZoneRead(combat_data::ZONE_RAVAGER_APPENDAGE);
+        t.assert(g.combat.headZone, combat_data::ZONE_RAVAGER_HEAD, "head zone index");
+        t.assert(g.combat.appendZone, combat_data::ZONE_RAVAGER_APPENDAGE, "appendage zone index");
+        t.assert(g.combat.zone[0].hp, head.hp, "head pool seeded");
+        t.assert(g.combat.zone[0].dmgMul, head.dmgMul, "head dmgMul seeded");
+        t.assert(g.combat.zone[0].staggerOnHit, head.staggerOnHit, "head stagger seeded");
+        t.assert(g.combat.zone[1].hp, tail.hp, "tail pool seeded");
+        t.assert(g.combat.zone[1].dmgMul, tail.dmgMul, "tail dmgMul seeded");
+        t.assert(g.combat.zone[1].bodyShare, tail.bodyShare, "tail bodyShare seeded");
+        t.assert(g.combat.zone[1].breakTypes, PHYS_SLASH, "tail breakTypes seeded");
+        t.assert(g.combat.zone[1].staggerOnHit, tail.staggerOnHit, "tail stagger seeded");
+        t.assert(g.combat.zone[1].unlockMask, tail.unlockMask, "tail unlockMask seeded");
         suite.addTest(t);
     }
 
@@ -400,7 +393,7 @@ void CombatSuite(TestRunner &runner) {
     }
 
     {
-        Test t("guard clauses: inclusive integer pure helpers");
+        Test t("guard clauses: inclusive integer pure helpers + zones mask");
         t.assert(combatGuardDistOk(33, 255, 33), 1, "min inclusive");
         t.assert(combatGuardDistOk(33, 255, 32), 0, "below min");
         t.assert(combatGuardDistOk(0, 32, 32), 1, "max inclusive");
@@ -419,25 +412,12 @@ void CombatSuite(TestRunner &runner) {
         t.assert(combatGuardCooldownOk(0, 0), 1, "zero cooldown");
         t.assert(combatGuardCooldownOk(10, 10), 1, "cooldown boundary");
         t.assert(combatGuardCooldownOk(10, 9), 0, "cooldown unmet");
-        suite.addTest(t);
-    }
-
-    {
-        Test t("guard predicates: >=, <=, == against packed part stages");
-        CombatPredicate ge = {3, PRED_GE, 1};
-        CombatPredicate le = {3, PRED_LE, 1};
-        CombatPredicate eq = {3, PRED_EQ, 2};
-        t.assert(combatPredicatePasses(ge, 0), 0, "ge stage 0");
-        t.assert(combatPredicatePasses(ge, static_cast<uint16_t>(1u << 6)), 1, "ge stage 1");
-        t.assert(combatPredicatePasses(ge, static_cast<uint16_t>(2u << 6)), 1, "ge stage 2");
-        t.assert(combatPredicatePasses(le, 0), 1, "le stage 0");
-        t.assert(combatPredicatePasses(le, static_cast<uint16_t>(1u << 6)), 1, "le stage 1");
-        t.assert(combatPredicatePasses(le, static_cast<uint16_t>(2u << 6)), 0, "le stage 2");
-        t.assert(combatPredicatePasses(eq, static_cast<uint16_t>(1u << 6)), 0, "eq stage 1");
-        t.assert(combatPredicatePasses(eq, static_cast<uint16_t>(2u << 6)), 1, "eq stage 2");
-        t.assert(combatPredicatePasses(eq, static_cast<uint16_t>(3u << 6)), 0, "eq stage 3");
-        CombatPredicate unknown = {0, 200, 0};
-        t.assert(combatPredicatePasses(unknown, 0xFFFF), 0, "unknown op rejects");
+        // zonesBroken mask: every listed zone must be broken.
+        t.assert(combatGuardZonesOk(0, 0), 1, "no zone requirement");
+        t.assert(combatGuardZonesOk(0, COMBAT_ZONE_HEAD_BIT), 1, "no requirement, broken head");
+        t.assert(combatGuardZonesOk(COMBAT_ZONE_APPENDAGE_BIT, COMBAT_ZONE_APPENDAGE_BIT), 1, "required zone broken");
+        t.assert(combatGuardZonesOk(COMBAT_ZONE_APPENDAGE_BIT, COMBAT_ZONE_HEAD_BIT), 0, "wrong zone broken");
+        t.assert(combatGuardZonesOk(COMBAT_ZONE_HEAD_BIT | COMBAT_ZONE_APPENDAGE_BIT, COMBAT_ZONE_APPENDAGE_BIT), 0, "one of two missing");
         suite.addTest(t);
     }
 
@@ -473,237 +453,137 @@ void CombatSuite(TestRunner &runner) {
         t.assert(combatMulPercent(9, 150), 13, "9*150/100 truncates to 13");
         t.assert(combatMulPercent(13, 150), 19, "13*150/100 truncates to 19");
         t.assert(combatMulPercent(65535, 255), 167114, "32-bit intermediate");
-        t.assert(combatPartMul(100, 100, 100), 100, "neutral chain");
-        t.assert(combatPartMul(150, 100, 100), 150, "dmgMul only");
-        t.assert(combatPartMul(100, 150, 100), 150, "phys only");
-        t.assert(combatPartMul(150, 150, 200), 450, "full chain truncating");
-        t.assert(combatPartMul(99, 99, 99), 97, "chain truncates at each step");   // 99*99/100=98, 98*99/100=97
-        t.assert(combatMulBeats(150, 5, 100, 1), 1, "higher multiplier wins");
-        t.assert(combatMulBeats(100, 5, 150, 1), 0, "lower multiplier loses");
-        t.assert(combatMulBeats(100, 1, 100, 5), 1, "tie -> lower part id wins");
-        t.assert(combatMulBeats(100, 5, 100, 1), 0, "tie -> higher part id loses");
         suite.addTest(t);
     }
 
+    // ------------------------------------------------ cgk 3-zone resolve
     {
-        Test t("resolveHit: routing, tie-break, stagger (shipped records)");
-        Game g;
-        creatureLoad(g, combat_data::CREATURE_LUNGE);
-        const uint8_t body = combat::PART_QUAD_32X24_BODY;
+        Test t("ravager zone records: head + tail spot values");
+        const CombatZone head = combatZoneRead(combat_data::ZONE_RAVAGER_HEAD);
+        t.assert(head.box.ox, 20, "head ox");
+        t.assert(head.box.oy, 4, "head oy");
+        t.assert(head.box.w, 12, "head w");
+        t.assert(head.box.h, 12, "head h");
+        t.assert(head.dmgMul, 130, "head dmgMul");
+        t.assert(head.hp, 40, "head pool hp");
+        t.assert(head.bodyShare, 100, "head bodyShare");
+        t.assert(head.breakTypes, PHYS_SLASH, "head breakTypes slash only");
+        t.assert(head.staggerOnHit, 12, "head staggerOnHit");
+        t.assert(head.brokenDmgMul, 130, "head broken override");
+        t.assert(head.brokenFlags, COMBAT_BROKEN_HURT_OFF, "head broken hurtOff");
 
-        const uint8_t one[1] = {body};
-        CombatHitResult r = combatResolveHit(g, 12, PHYS_BLUNT, ELEM_NONE, 100, 0, one, 1);
-        t.assert(r.partIdx, body, "lunge hit part");
-        t.assert(r.mul, 100, "neutral multiplier");
-        t.assert(r.partDmg, 12, "part damage 12");
-        t.assert(r.bodyDmg, 12, "body damage 12 (share 100)");
-        t.assert(r.stagger, 0, "stagger gain 0");
-
-        r = combatResolveHit(g, 12, PHYS_BLUNT, ELEM_NONE, 50, 0, one, 1);
-        t.assert(r.partDmg, 6, "window 50 halves damage");
-        t.assert(r.bodyDmg, 6, "window 50 halves body share");
-
-        r = combatResolveHit(g, 13, PHYS_BLUNT, ELEM_NONE, 100, 11, one, 1);
-        t.assert(r.partDmg, 13, "base 13 passes through");
-        t.assert(r.stagger, 11, "stagger scales by neutral mul");
-
-        r = combatResolveHit(g, 0, PHYS_BLUNT, ELEM_NONE, 100, 0, one, 1);
-        t.assert(r.partDmg, 0, "zero base stays zero");
-        t.assert(r.bodyDmg, 0, "zero base body");
-
-        // Overlap tie-break: all shipped parts are 100/100/100, so the lowest
-        // candidate part id must win regardless of candidate order.
-        const uint8_t tie[3] = {2, 1, 0};
-        r = combatResolveHit(g, 12, PHYS_BLUNT, ELEM_NONE, 100, 0, tie, 3);
-        t.assert(r.partIdx, 0, "tie -> lowest part id (0)");
-        const uint8_t tie2[2] = {2, 1};
-        r = combatResolveHit(g, 12, PHYS_BLUNT, ELEM_NONE, 100, 0, tie2, 2);
-        t.assert(r.partIdx, 1, "tie -> lowest part id (1)");
-
-        r = combatResolveHit(g, 12, PHYS_BLUNT, ELEM_NONE, 100, 0, nullptr, 0);
-        t.assert(r.partIdx, COMBAT_NO_PART, "no candidates -> no part");
-        t.assert(r.partDmg, 0, "no candidates -> no damage");
-        const uint8_t bad[2] = {200, 201};
-        r = combatResolveHit(g, 12, PHYS_BLUNT, ELEM_NONE, 100, 0, bad, 2);
-        t.assert(r.partIdx, COMBAT_NO_PART, "out-of-range candidates ignored");
-
-        const CombatPart b = combatPartRead(body);
-        t.assert(combatPartPhysMul(body, PHYS_BLUNT), b.physBlunt, "phys lookup blunt");
-        t.assert(combatPartPhysMul(body, PHYS_SLASH), b.physSlash, "phys lookup slash");
-        t.assert(combatPartPhysMul(body, 0), 100, "no phys -> neutral");
-        t.assert(combatPartElemMul(body, ELEM_NONE), 100, "no elem -> neutral");
-        t.assert(combatPartElemMul(body, ELEM_FIRE), 100, "absent elem -> neutral");
-        suite.addTest(t);
-    }
-
-    {
-        Test t("part stages: bitfield, threshold fold, break-effect projections");
-        t.assert(combatStageCross(0, 30, 30), 1, "pct == at crosses");
-        t.assert(combatStageCross(0, 31, 30), 0, "pct > at holds");
-        t.assert(combatStageCross(1, 0, 0), 2, "second threshold crosses");
-        t.assert(combatStageCross(2, 5, 4), 2, "later threshold holds");
-        t.assert(combatStageCross(2, 5, 5), 3, "later threshold crosses");
-
-        CombatStage st;
-        st.at = 0;
-        st.flags = 0;
-        st.dmgMulOverride = 0;
-        st.speedMul = 0;
-        st.stagger = 0;
-        st.cue = 0;
-        st.firstDisable = 0;
-        st.disableCount = 0;
-        st.firstEnable = 0;
-        st.enableCount = 0;
-        t.assert(combatStageDmgMul(st, 100), 100, "no flag -> base dmgMul");
-        t.assert(combatStageSpeedMul(st, 100), 100, "no flag -> base speedMul");
-        t.assert(combatStageHurtOff(st), 0, "no flag -> still hurtable");
-        st.flags = COMBAT_STAGE_FLAG_DMG_MUL | COMBAT_STAGE_FLAG_SPEED_MUL | COMBAT_STAGE_FLAG_HURT_OFF;
-        st.dmgMulOverride = 200;
-        st.speedMul = 50;
-        st.stagger = 30;
-        st.cue = 2;
-        t.assert(combatStageDmgMul(st, 100), 200, "override dmgMul");
-        t.assert(combatStageSpeedMul(st, 100), 50, "override speedMul");
-        t.assert(combatStageHurtOff(st), 1, "hurt off flag");
-        t.assert(combatStageStagger(st), 30, "stage stagger");
-        t.assert(combatStageCue(st), 2, "stage cue");
-
-        Game g;
-        creatureLoad(g, combat_data::CREATURE_LUNGE);
-        t.assert(combatPartStageGet(g, 0), 0, "stages start 0");
-        combatPartStageSet(g, 0, 1);
-        t.assert(combatPartStageGet(g, 0), 1, "part 0 stage 1");
-        combatPartStageSet(g, 3, 3);
-        t.assert(combatPartStageGet(g, 3), 3, "part 3 stage 3");
-        t.assert(combatPartStageGet(g, 0), 1, "part bitfields independent");
-        combatPartStageSet(g, 0, 9);
-        t.assert(combatPartStageGet(g, 0), COMBAT_STAGE_MAX, "stage saturates");
-        combatPartStageSet(g, 8, 1);
-        t.assert(combatPartStageGet(g, 8), 0, "parts >= 8 untracked");
-        combatPartStageSet(g, 0, 0);
-        t.assert(combatPartStageGet(g, 0), 0, "stage clears");
-
-        // No shipped stage records: threshold queries stay intact, effect
-        // projections stay neutral, attack gating stays enabled.
-        t.assert(combatPartStageCount(combat::PART_QUAD_32X24_BODY), 0, "shipped part has no stages");
-        t.assert(combatPartStageForHp(combat::PART_QUAD_32X24_BODY, 100, 100), 0, "no stages -> stage 0");
-        t.assert(combatPartStageForHp(combat::PART_QUAD_32X24_BODY, 0, 0), 0, "hpMax 0 -> stage 0");
-        t.assert(combatPartDmgMulNow(g, combat::PART_QUAD_32X24_BODY), 100, "effective dmgMul neutral");
-        t.assert(combatPartHurtOff(g, combat::PART_QUAD_32X24_BODY), 0, "body part hurtable");
-        t.assert(combatPartSpeedMulNow(g, combat::PART_QUAD_32X24_BODY), 100, "effective speedMul neutral");
-        t.assert(combatPartStaggerNow(g, combat::PART_QUAD_32X24_BODY), 0, "stage stagger 0");
-        t.assert(combatPartCueNow(g, combat::PART_QUAD_32X24_BODY), 0, "stage cue none");
-        t.assert(combatAttackDisabled(g, combat_data::ATTACK_LUNGE_LUNGE), 0, "lunge enabled");
-        t.assert(combatAttackDisabled(g, combat_data::ATTACK_LUNGE_SWEEP), 0, "sweep enabled");
-        suite.addTest(t);
-    }
-
-    // ------------------------------------------------ ljj.8 breakable tail
-    {
-        Test t("ravager tail part: record, pool, stages, break effects");
-        const CombatPart tail = combatPartRead(combat_data::PART_RAVAGER_TAIL);
+        const CombatZone tail = combatZoneRead(combat_data::ZONE_RAVAGER_APPENDAGE);
         t.assert(tail.box.ox, -14, "tail ox");
         t.assert(tail.box.oy, 8, "tail oy");
         t.assert(tail.box.w, 18, "tail w");
         t.assert(tail.box.h, 10, "tail h");
         t.assert(tail.dmgMul, 150, "tail dmgMul");
+        t.assert(tail.hp, 60, "tail pool hp");
         t.assert(tail.bodyShare, 40, "tail bodyShare");
         t.assert(tail.breakTypes, PHYS_SLASH, "tail breakTypes slash only");
-        t.assert(tail.hurtOn, 1, "tail hurtOn");
-        t.assert(tail.hp, 60, "tail pool hp");
-        t.assert(tail.physSlash, 150, "tail physSlash");
-        t.assert(tail.physBlunt, 75, "tail physBlunt");
-        t.assert(tail.stageCount, 2, "tail stage records");
-        t.assert(combatPartElemMul(combat_data::PART_RAVAGER_TAIL, ELEM_FIRE), 200, "tail FIRE x2");
-        t.assert(combatPartElemMul(combat_data::PART_RAVAGER_TAIL, ELEM_ICE), 100, "absent elem neutral");
-
-        Game g;
-        creatureLoad(g, combat_data::CREATURE_RAVAGER);
-        t.assert(g.combat.bodyCount, 1, "ravager skeleton body part");
-        t.assert(g.combat.overFirst, combat_data::PART_RAVAGER_TAIL, "override part head");
-        t.assert(g.combat.overCount, 1, "override part count");
-        t.assert(g.combat.partHp[g.combat.bodyCount], 60, "tail pool seeded from record");
-
-        // Descending thresholds at 30% and 0 hp.
-        t.assert(combatPartStageForHp(combat_data::PART_RAVAGER_TAIL, 60, 60), 0, "intact at full hp");
-        t.assert(combatPartStageForHp(combat_data::PART_RAVAGER_TAIL, 19, 60), 0, "pct 31 above 30");
-        t.assert(combatPartStageForHp(combat_data::PART_RAVAGER_TAIL, 18, 60), 1, "pct 30 crosses stage 1");
-        t.assert(combatPartStageForHp(combat_data::PART_RAVAGER_TAIL, 1, 60), 1, "between thresholds");
-        t.assert(combatPartStageForHp(combat_data::PART_RAVAGER_TAIL, 0, 60), 2, "hp 0 crosses stage 2");
-
-        t.assert(combatPartDmgMulNow(g, combat_data::PART_RAVAGER_TAIL), 150, "stage 0 base dmgMul");
-        t.assert(combatPartHurtOff(g, combat_data::PART_RAVAGER_TAIL), 0, "stage 0 hurtable");
-        t.assert(combatPartStaggerNow(g, combat_data::PART_RAVAGER_TAIL), 0, "stage 0 no stagger");
-        t.assert(combatPartSpeedMulNow(g, combat_data::PART_RAVAGER_TAIL), 100, "stage 0 speed 100");
-        t.assert(combatPartCueNow(g, combat_data::PART_RAVAGER_TAIL), 0, "stage 0 cue none");
-        t.assert(combatAttackDisabled(g, combat_data::ATTACK_RAVAGER_TAIL_SWEEP), 0, "stage 0 sweep enabled");
-
-        combatPartStageSet(g, combat_data::PART_RAVAGER_TAIL, 1);
-        t.assert(combatPartDmgMulNow(g, combat_data::PART_RAVAGER_TAIL), 150, "stage 1 keeps dmgMul");
-        t.assert(combatPartStaggerNow(g, combat_data::PART_RAVAGER_TAIL), 30, "stage 1 stagger 30");
-        t.assert(combatPartSpeedMulNow(g, combat_data::PART_RAVAGER_TAIL), 100, "stage 1 speed override");
-        t.assert(combatPartCueNow(g, combat_data::PART_RAVAGER_TAIL), 2, "stage 1 part_break cue");
-        t.assert(combatPartHurtOff(g, combat_data::PART_RAVAGER_TAIL), 0, "stage 1 still hurtable");
-        t.assert(combatAttackDisabled(g, combat_data::ATTACK_RAVAGER_TAIL_SWEEP), 1, "stage 1 disables tail_sweep");
-        t.assert(combatAttackDisabled(g, combat_data::ATTACK_RAVAGER_BITE), 0, "stage 1 keeps bite");
-
-        combatPartStageSet(g, combat_data::PART_RAVAGER_TAIL, 2);
-        t.assert(combatPartDmgMulNow(g, combat_data::PART_RAVAGER_TAIL), 200, "stage 2 dmgMul override");
-        t.assert(combatPartHurtOff(g, combat_data::PART_RAVAGER_TAIL), 1, "stage 2 hurt off");
+        t.assert(tail.staggerOnHit, 30, "tail staggerOnHit");
+        t.assert(tail.brokenDmgMul, 200, "tail broken override 200");
+        t.assert(tail.brokenFlags, COMBAT_BROKEN_HURT_OFF | COMBAT_BROKEN_CUE, "tail broken hurtOff + cue");
+        t.assert(tail.unlockMask, static_cast<uint8_t>(1u << combat_data::ATTACK_RAVAGER_TAIL_SWEEP), "tail unlock disables tail_sweep");
         suite.addTest(t);
     }
 
     {
-        Test t("ravager part hit resolution: containment, multiplier, pool, break");
+        Test t("zone hit resolve: containment, multipliers, pool drain, break");
         Game g;
         creatureLoad(g, combat_data::CREATURE_RAVAGER);
         Monster &m = g.monster;
         m.x = 100;
         m.y = 40;
-        m.fx = 16;   // face east: tail rect x 86..104, y 48..58; body x 100..132, y 40..64
+        m.fx = 16;   // face east: head x 120..132 y 44..56; tail x 86..104 y 48..58
         m.fy = 0;
-        const uint8_t body = combat_data::PART_QUAD_32X24_BODY;
 
-        // Body-only point: neutral body part wins.
-        CombatBodyHit r = combatPartHitResolve(g, 10, PHYS_BLUNT, 120, 50);
-        t.assert(r.partIdx, body, "body-only hit part");
+        // Body-only point: implicit body wins at neutral multiplier.
+        CombatBodyHit r = combatZoneHitResolve(g, 10, PHYS_BLUNT, 102, 42);
+        t.assert(r.zone, COMBAT_NO_ZONE, "body-only zone");
         t.assert(r.mul, 100, "body-only mul neutral");
         t.assert(r.dmg, 10, "body-only damage");
 
-        // Overlap: tail mul 150*75/100 = 112 beats the body's 100; the pool
-        // drains by the blunt-routed 10*150/100*75/100 = 11.
-        r = combatPartHitResolve(g, 10, PHYS_BLUNT, 100, 50);
-        t.assert(r.partIdx, combat_data::PART_RAVAGER_TAIL, "tail wins on higher mul");
-        t.assert(r.mul, 112, "tail blunt mul");
-        t.assert(g.combat.partHp[g.combat.bodyCount], 49, "blunt hit drains 11");
+        // Head point: 10*130/100 = 13 out; share 100 -> 13 body.
+        r = combatZoneHitResolve(g, 10, PHYS_BLUNT, 125, 48);
+        t.assert(r.zone, COMBAT_ZONE_HEAD, "head wins forward");
+        t.assert(r.mul, 130, "head multiplier");
+        t.assert(r.dmg, 13, "head body share 100");
+        t.assert(g.combat.zone[COMBAT_ZONE_HEAD].hp, 27, "head pool 40-13");
 
-        // Slash chain: 10*150/100=15, 15*150/100=22 out; body 22*40/100=8.
-        r = combatPartHitResolve(g, 10, PHYS_SLASH, 100, 50);
-        t.assert(r.partIdx, combat_data::PART_RAVAGER_TAIL, "slash tail part");
-        t.assert(r.mul, 225, "slash tail mul 150*150/100");
-        t.assert(r.dmg, 8, "slash body-share 40");
-        t.assert(g.combat.partHp[g.combat.bodyCount], 27, "pool 49 - 22 (stage 0)");
-        t.assert(combatPartStageGet(g, combat_data::PART_RAVAGER_TAIL), 0, "still intact");
+        // Blunt is not a head/hit break type? head breakTypes are SLASH: pool
+        // drains but no break bit.
+        t.assert(g.combat.zoneBroken & COMBAT_ZONE_HEAD_BIT, 0, "blunt head does not break");
 
-        // 27 - 22 = 5 -> pct 8 crosses stage 1 -> tail_sweep disabled.
-        combatPartHitResolve(g, 10, PHYS_SLASH, 100, 50);
-        t.assert(g.combat.partHp[g.combat.bodyCount], 5, "pool 5");
-        t.assert(combatPartStageGet(g, combat_data::PART_RAVAGER_TAIL), 1, "stage 1 break");
-        t.assert(combatAttackDisabled(g, combat_data::ATTACK_RAVAGER_TAIL_SWEEP), 1, "sweep disabled");
+        // Tail point: 10*150/100 = 15 out; share 40 -> 6 body.
+        r = combatZoneHitResolve(g, 10, PHYS_BLUNT, 95, 52);
+        t.assert(r.zone, COMBAT_ZONE_APPENDAGE, "tail wins behind");
+        t.assert(r.mul, 150, "tail multiplier");
+        t.assert(r.dmg, 6, "tail body share 40");
+        t.assert(g.combat.zone[COMBAT_ZONE_APPENDAGE].hp, 45, "tail pool 60-15");
 
-        // 5 - 22 -> 0, pct 0 crosses stage 2 -> hurt off, body takes the hit.
-        combatPartHitResolve(g, 10, PHYS_SLASH, 100, 50);
-        t.assert(g.combat.partHp[g.combat.bodyCount], 0, "pool floors at 0");
-        t.assert(combatPartStageGet(g, combat_data::PART_RAVAGER_TAIL), 2, "stage 2 break");
-        r = combatPartHitResolve(g, 10, PHYS_SLASH, 100, 50);
-        t.assert(r.partIdx, body, "broken tail no longer absorbs hits");
-        t.assert(r.dmg, 10, "broken tail routes full body damage");
+        // Tie rule: an explicit 100 zone does not beat the implicit body.
+        g.combat.zone[COMBAT_ZONE_HEAD].dmgMul = 100;
+        r = combatZoneHitResolve(g, 10, PHYS_BLUNT, 125, 48);
+        t.assert(r.zone, COMBAT_NO_ZONE, "body wins mul tie");
+        // Head/appendage tie: overlapping boxes, equal muls -> head wins.
+        g.combat.zone[COMBAT_ZONE_HEAD].dmgMul = 130;
+        g.combat.zone[COMBAT_ZONE_APPENDAGE].box = g.combat.zone[COMBAT_ZONE_HEAD].box;
+        g.combat.zone[COMBAT_ZONE_APPENDAGE].dmgMul = 130;
+        r = combatZoneHitResolve(g, 10, PHYS_BLUNT, 125, 48);
+        t.assert(r.zone, COMBAT_ZONE_HEAD, "head wins head/tail tie");
         suite.addTest(t);
     }
 
     {
-        Test t("ravager multi-window tail_sweep + enrage parts guard");
+        Test t("zone break: slash drains tail to 0, flips the broken bit");
+        Game g;
+        creatureLoad(g, combat_data::CREATURE_RAVAGER);
+        Monster &m = g.monster;
+        m.x = 100;
+        m.y = 40;
+        m.fx = 16;
+        m.fy = 0;
+
+        // 10*150/100 = 15 per slash hit; 60 -> 45 -> 30 -> 15 -> 0.
+        for (int i = 0; i < 4; i++) {
+            const CombatBodyHit r = combatZoneHitResolve(g, 10, PHYS_SLASH, 95, 52);
+            t.assert(r.zone, COMBAT_ZONE_APPENDAGE, "slash hits tail while intact");
+        }
+        t.assert(g.combat.zone[COMBAT_ZONE_APPENDAGE].hp, 0, "tail pool floors at 0");
+        t.assert(g.combat.zoneBroken & COMBAT_ZONE_APPENDAGE_BIT, COMBAT_ZONE_APPENDAGE_BIT, "tail broken bit set");
+
+        // Broken zone leaves the candidate set: a tail point now routes body.
+        const CombatBodyHit r = combatZoneHitResolve(g, 10, PHYS_SLASH, 95, 52);
+        t.assert(r.zone, COMBAT_NO_ZONE, "broken tail routes to body");
+        t.assert(r.dmg, 10, "body takes the full hit");
+
+        // A body/head point is unaffected by the broken tail.
+        const CombatBodyHit h = combatZoneHitResolve(g, 10, PHYS_SLASH, 125, 48);
+        t.assert(h.zone, COMBAT_ZONE_HEAD, "head still absorbs");
+        suite.addTest(t);
+    }
+
+    {
+        Test t("combatAttackDisabled: broken tail disables tail_sweep only");
+        Game g;
+        creatureLoad(g, combat_data::CREATURE_RAVAGER);
+        t.assert(combatAttackDisabled(g, combat_data::ATTACK_RAVAGER_TAIL_SWEEP), 0, "sweep enabled intact");
+        t.assert(combatAttackDisabled(g, combat_data::ATTACK_RAVAGER_BITE), 0, "bite enabled intact");
+        g.combat.zoneBroken = COMBAT_ZONE_APPENDAGE_BIT;
+        t.assert(combatAttackDisabled(g, combat_data::ATTACK_RAVAGER_TAIL_SWEEP), 1, "broken tail disables sweep");
+        t.assert(combatAttackDisabled(g, combat_data::ATTACK_RAVAGER_BITE), 0, "broken tail keeps bite");
+        // Head has no unlock mask: breaking it disables nothing.
+        g.combat.zoneBroken = COMBAT_ZONE_HEAD_BIT;
+        t.assert(combatAttackDisabled(g, combat_data::ATTACK_RAVAGER_TAIL_SWEEP), 0, "broken head disables nothing");
+        // Shipped 3 have no zones: the guard folds the whole path out.
+        creatureLoad(g, combat_data::CREATURE_LUNGE);
+        t.assert(combatAttackDisabled(g, combat_data::ATTACK_LUNGE_LUNGE), 0, "no zones -> attack enabled");
+        suite.addTest(t);
+    }
+
+    {
+        Test t("ravager multi-window tail_sweep + enrage zones guard");
         t.assert(combatAttackWindowCount(combat_data::ATTACK_RAVAGER_TAIL_SWEEP), 2, "two tail_sweep windows");
         const CombatWindow w0 = combatWindowRead(combat_data::WINDOW_RAVAGER_TAIL_SWEEP_0);
         const CombatWindow w1 = combatWindowRead(combat_data::WINDOW_RAVAGER_TAIL_SWEEP_1);
@@ -716,9 +596,11 @@ void CombatSuite(TestRunner &runner) {
         t.assert(combatAttackFirstWindow(combat_data::ATTACK_RAVAGER_TAIL_SWEEP), combat_data::WINDOW_RAVAGER_TAIL_SWEEP_0, "first window idx");
         t.assert(combatStepRef(combat_data::STEP_RAVAGER_P_SWEEP_0), combat_data::ATTACK_RAVAGER_TAIL_SWEEP, "sweep step attack");
 
-        // Enrage pattern is ordered first and guarded only on the tail stage.
+        // Enrage pattern is ordered first and guarded only on the tail broken bit.
         t.assertLessThan(combat_data::PATTERN_RAVAGER_P_ENRAGED, combat_data::PATTERN_RAVAGER_P_SWEEP, "enrage listed first");
         t.assert(combatStepRef(combat_data::STEP_RAVAGER_P_ENRAGED_0), combat_data::ATTACK_RAVAGER_BITE, "enrage uses bite");
+        const CombatGuard enrage = combatGuardRead(combat_data::GUARD_RAVAGER_P_ENRAGED);
+        t.assert(enrage.zonesBroken, COMBAT_ZONE_APPENDAGE_BIT, "enrage requires the broken appendage");
 
         Game g;
         creatureLoad(g, combat_data::CREATURE_RAVAGER);
@@ -726,7 +608,7 @@ void CombatSuite(TestRunner &runner) {
         t.assert(combatGuardPasses(g, combat_data::PATTERN_RAVAGER_P_ENRAGED, in), 0, "intact tail -> not enraged");
         in.dist = 255;
         t.assert(combatGuardPasses(g, combat_data::PATTERN_RAVAGER_P_ENRAGED, in), 0, "enrage ignores distance while intact");
-        combatPartStageSet(g, combat_data::PART_RAVAGER_TAIL, 1);
+        g.combat.zoneBroken = COMBAT_ZONE_APPENDAGE_BIT;
         t.assert(combatGuardPasses(g, combat_data::PATTERN_RAVAGER_P_ENRAGED, in), 1, "broken tail -> enraged");
         t.assert(combatGuardPasses(g, combat_data::PATTERN_RAVAGER_P_SWEEP, in), 0, "p_sweep distance clause still applies");
         suite.addTest(t);
@@ -735,19 +617,19 @@ void CombatSuite(TestRunner &runner) {
     {
         Test t("part art frame linkage (fxtail sheet)");
         t.assert(art_dims::tail_frames, 4, "tail sheet frames");
-        t.assert(art_dims::tail_frame_w, 18, "tail frame w == part box w");
-        t.assert(art_dims::tail_frame_h, 10, "tail frame h == part box h");
+        t.assert(art_dims::tail_frame_w, 18, "tail frame w == zone box w");
+        t.assert(art_dims::tail_frame_h, 10, "tail frame h == zone box h");
         t.assert(combatPartArtFrame(false, 0), 0, "east intact frame");
         t.assert(combatPartArtFrame(false, 1), 1, "east broken frame");
         t.assert(combatPartArtFrame(true, 0), 2, "west intact frame");
         t.assert(combatPartArtFrame(true, 1), 3, "west broken frame");
-        for (uint8_t stage = 0; stage < 4; stage++)
-            t.assert(combatPartArtFrame((stage & 2) != 0, (stage & 1) != 0) < art_dims::tail_frames, 1, "frame in range");
+        for (uint8_t broken = 0; broken < 2; broken++)
+            t.assert(combatPartArtFrame(broken != 0, broken) < art_dims::tail_frames, 1, "frame in range");
         suite.addTest(t);
     }
 
     {
-        Test t("stagger meter: broken-tail stage stagger trips STAGGER");
+        Test t("stagger meter: head hit feeds staggerOnHit and trips STAGGER");
         Game g;
         initGame(g, W_SWORD);
         initMonster(g, MON_RAVAGER);
@@ -756,13 +638,15 @@ void CombatSuite(TestRunner &runner) {
         m.y = 40;
         m.fx = 16;
         m.fy = 0;
-        combatPartStageSet(g, combat_data::PART_RAVAGER_TAIL, 1);
         t.assert(g.combat.profile.staggerMax, 60, "ravager stagger threshold");
         t.assert(g.combat.stagger, 0, "meter starts empty");
-        // monsterOnHit resolves the tail (stage 1) -> stage stagger 30.
-        monsterOnHit(g, 10, 100, 50, 0, 0);
-        t.assert(g.combat.stagger, 30, "stage-1 hit adds 30");
-        monsterOnHit(g, 10, 100, 50, 0, 0);
+        // Head hit (125,48) -> +staggerOnHit 12.
+        monsterOnHit(g, 10, 125, 48, 0, 0);
+        t.assert(g.combat.stagger, 12, "head hit adds 12");
+        // Tail hits add 30 each; 12 + 30 = 42, +30 = 72 -> trips.
+        monsterOnHit(g, 10, 95, 52, 0, 0);
+        t.assert(g.combat.stagger, 42, "tail hit adds 30");
+        monsterOnHit(g, 10, 95, 52, 0, 0);
         t.assert(m.state, MS_STAGGER, "meter trips STAGGER");
         t.assert(m.t, g.combat.profile.staggerRecoverT, "STAGGER recovery timer");
         t.assert(g.combat.stagger, 0, "meter resets on trip");

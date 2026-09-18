@@ -2,17 +2,17 @@
 """Authoring contact sheet: creature JSON -> PNG attack-window review (ljj.6).
 
 The fight is authored in data/creatures/*.json and data/skeletons.json; this
-tool renders those numbers back as a picture so windows, timings and the part
+tool renders those numbers back as a picture so windows, timings and the zone
 geometry can be eyeballed without flashing the device:
 
   - a tick timeline per attack: one 3 px column per tick, shaded by phase
     (dark = windup, light = active, mid = recover) with the hit-window spans
     highlighted along the bottom,
-  - one preview cell per hit window at 1 world px per pixel: the body part box
-    (from the skeleton) and the window box (face-relative centre offset) drawn
+  - one preview cell per hit window at 1 world px per pixel: the implicit body
+    box (creature w/h) and the window box (face-relative centre offset) drawn
     to the same scale, so the arc of a multi-window sweep is visible,
-  - a per-creature header with the stats and the effective part list
-    (dmgMul/physMul/hp/bodyShare/breakTypes/stages).
+  - a per-creature header with the stats and the zone list
+    (dmgMul/hp/bodyShare/staggerOnHit).
 
 Usage:
     python3 tools/contact_sheet.py                     # all creatures
@@ -170,21 +170,19 @@ def render(creatures, skeletons, only=None):
 
 def draw_creature_band(draw, creature, skeleton, y, width):
     stats = creature["stats"]
-    parts = []
-    for part in creature.get("parts", []):
-        stages = part.get("stages", [])
-        parts.append("%s D%d HP%d S%d B%d ST%d" % (
-            part["id"], part["dmgMul"], part["hp"], part["bodyShare"],
-            1 if part.get("breakTypes") else 0, len(stages)))
+    zones = []
+    for name, zone in sorted(creature.get("zones", {}).items()):
+        zones.append("%s D%d HP%d S%d ST%d" % (
+            name, zone["dmgMul"], zone["hp"], zone["bodyShare"], zone.get("staggerOnHit", 0)))
     text(draw, MARGIN, y, "CREATURE %s (%s) HP%d SPD%d %s" % (
-        creature["id"], skeleton["id"], stats["hp"], stats["spd"], " ".join(parts)))
+        creature["id"], skeleton["id"], stats["hp"], stats["spd"], " ".join(zones)))
     y += TEXT_H + 4
     for attack in creature["attacks"]:
-        y = draw_attack_band(draw, attack, skeleton, y)
+        y = draw_attack_band(draw, attack, int(creature["stats"]["w"]), int(creature["stats"]["h"]), y)
     return y + MARGIN
 
 
-def draw_attack_band(draw, attack, skeleton, y):
+def draw_attack_band(draw, attack, body_w, body_h, y):
     windup = int(attack["windup"])
     active = int(attack["active"])
     recover = int(attack["recover"])
@@ -211,15 +209,14 @@ def draw_attack_band(draw, attack, skeleton, y):
     y += 4 + 12 + 4
 
     # per-window previews at 1 world px per pixel
-    body = skeleton["parts"][0]["box"]
     bx = MARGIN
     for wi, window in enumerate(attack.get("windows", [])):
         box = window["box"]
         cx = bx + PREVIEW_W // 2
         cy = y + PREVIEW_H // 2
-        # body part (skeleton first box) centred in the cell
-        draw.rectangle([cx - body["w"] // 2, cy - body["h"] // 2,
-                        cx + body["w"] // 2 - 1, cy + body["h"] // 2 - 1], outline=DARK)
+        # implicit body box (creature w/h) centred in the cell
+        draw.rectangle([cx - body_w // 2, cy - body_h // 2,
+                        cx + body_w // 2 - 1, cy + body_h // 2 - 1], outline=DARK)
         # window box: face-relative centre offset (docs section 5), drawn east
         draw.rectangle([cx + box["ox"] - box["w"] // 2, cy + box["oy"] - box["h"] // 2,
                         cx + box["ox"] + box["w"] // 2 - 1, cy + box["oy"] + box["h"] // 2 - 1],

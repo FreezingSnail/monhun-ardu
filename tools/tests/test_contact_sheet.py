@@ -26,9 +26,6 @@ SKELETONS = {
     "version": 1,
     "skeletons": [{
         "id": "quad_32x24",
-        "parts": [{"id": "body", "box": {"ox": 0, "oy": 0, "w": 32, "h": 24},
-                   "dmgMul": 100, "hp": 0, "bodyShare": 100, "breakTypes": [],
-                   "hurtOn": True, "stages": []}],
         "anchors": [{"id": "origin", "ox": 0, "oy": 0}],
     }],
 }
@@ -41,6 +38,12 @@ CREATURE = {
         "engageDist": 36, "keepDist": 24, "attackDist": 42, "circleNum": 8,
         "circleDen": 10, "retreatNum": 6, "retreatDen": 10, "cdBase": 50,
         "cdJitter": 30, "spawnT": 90, "spawnCd": 120, "stunRecoverT": 24,
+    },
+    "zones": {
+        "head": {"box": {"ox": 10, "oy": 2, "w": 8, "h": 8}, "dmgMul": 120, "hp": 20,
+                 "bodyShare": 100, "breakTypes": ["SLASH"], "hurtOn": True, "staggerOnHit": 5},
+        "appendage": {"box": {"ox": -6, "oy": 4, "w": 10, "h": 6}, "dmgMul": 150, "hp": 30,
+                      "bodyShare": 40, "breakTypes": ["SLASH"], "hurtOn": True, "staggerOnHit": 10},
     },
     "attacks": [{
         "id": "triple", "windup": 10, "active": 9, "recover": 20, "dmg": 9,

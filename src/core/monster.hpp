@@ -80,23 +80,12 @@ static void monsterWindowNext(Game &g) {
 }
 
 // Keep Game::target (the live hurt box + callbacks) in step with the beast.
-// Migration B: m.w/m.h are the cached skeleton body box (initMonster), so the
-// hurt rect mirrors the blob-loaded geometry; m.x/m.y is the body anchor.
-// ljj.6: a creature with per-creature parts (tail) grows the hurt rect to the
-// cached union of its part rects, so melee/projectiles can reach the appendage.
-// The union is rebuilt only when the facing changed (combatPartRectsRefresh
-// reads the face-relative boxes); per-tick cost is four stores.
+// The body is implicit (build/zones-design.md): m.w/m.h are the creature w/h
+// cached at spawn, m.x/m.y is the body anchor. Zones are tested at the landed
+// hit point, so the target rect stays the body rect.
 static void syncMonsterTarget(Game &g) {
     Monster &m = g.monster;
     g.target.alive = (m.state != MS_DEAD);
-    if (PARTS_ENABLED && (g.combat.bodyCount + g.combat.overCount) > 1) {
-        const CombatBox &h = g.combat.partsHurt;
-        g.target.rect.x = static_cast<int16_t>(m.x + h.ox);
-        g.target.rect.y = static_cast<int16_t>(m.y + h.oy);
-        g.target.rect.w = h.w;
-        g.target.rect.h = h.h;
-        return;
-    }
     g.target.rect.x = m.x;
     g.target.rect.y = m.y;
     g.target.rect.w = m.w;
@@ -188,24 +177,26 @@ static void monsterOnHit(Game &g, int dmg, int hx, int hy, int push, int effect)
     Monster &m = g.monster;
     if (m.state == MS_DEAD)
         return;
+    // 3-hitzone resolve: the body is implicit; optional head/appendage rects
+    // replace it on a higher dmgMul, a drained zone pool flips its broken bit.
+    // Images without zones use the body-only path.
     CombatBodyHit hit;
-    if (PARTS_ENABLED && (g.combat.bodyCount + g.combat.overCount) > 1) {
-        hit = combatPartHitResolve(g, dmg, playerPhys(g), static_cast<int16_t>(hx), static_cast<int16_t>(hy));
-    } else {
+    if (ZONES_ENABLED)
+        hit = combatZoneHitResolve(g, dmg, playerPhys(g), static_cast<int16_t>(hx), static_cast<int16_t>(hy));
+    else
         hit = combatResolveBodyHit(g, dmg);
-    }
-    if (hit.partIdx == COMBAT_NO_PART)
-        return;
     damageMonster(g, static_cast<int16_t>(hit.dmg), static_cast<int16_t>(hx), static_cast<int16_t>(hy));
     if (m.state == MS_DEAD)
         return;
-    // Stagger meter (docs section 7). profile.staggerMax == 0 on the shipped 3
-    // (STAGGER_ENABLED false), so the guard folds the whole meter out; the
-    // part stage stagger is the part-break interrupt channel (combat::STAGES_COUNT
-    // > 0 only once a breakable part ships). PARTS_ENABLED folds this with the
-    // rest of the parts machinery in images that compile it out.
-    if (PARTS_ENABLED && STAGGER_ENABLED && combat::STAGES_COUNT > 0 && g.combat.profile.staggerMax > 0)
-        monsterStaggerAdd(g, combatPartStaggerNow(g, hit.partIdx));
+    // Stagger meter (docs section 7): a zone hit feeds the hit zone's
+    // staggerOnHit. profile.staggerMax == 0 on the shipped 3 (STAGGER_ENABLED
+    // false), so the guard folds the whole meter out; ZONES_ENABLED folds it
+    // with the rest of the zone machinery in carved images.
+    if (ZONES_ENABLED && STAGGER_ENABLED && g.combat.profile.staggerMax > 0) {
+        const uint8_t amount = combatZoneStagger(g, hit.zone);
+        if (amount)
+            monsterStaggerAdd(g, amount);
+    }
     if (effect == 1 && m.stun < 70)
         m.stun = 70;   // trip
     if (push)
@@ -344,7 +335,7 @@ static void patternStepsGeneric(Game &g) {
             continue;   // skip immediately; `after` still delays the next step
         // Part-stage attack gating (ljj.6): a crossed stage can disable an
         // attack (docs section 4); data with no parts/stages folds this out.
-        if (PARTS_ENABLED && combatAttackDisabled(g, s.ref))
+        if (ZONES_ENABLED && combatAttackDisabled(g, s.ref))
             continue;
         monsterAttackSet(g, s.ref);
         m.state = MS_WINDUP;
@@ -366,7 +357,7 @@ static void patternStepsSingle(Game &g) {
     const uint8_t ref = combatStepRef(combatPatternFirstStep(c.patternIdx));
     c.patternIdx = COMBAT_NO_PATTERN;
     c.stepT = 0;
-    if (PARTS_ENABLED && combatAttackDisabled(g, ref))
+    if (ZONES_ENABLED && combatAttackDisabled(g, ref))
         return;   // stage-disabled step: cursor cleared, decision retries
     monsterAttackSet(g, ref);
     Monster &m = g.monster;

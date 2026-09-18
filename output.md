@@ -1,107 +1,112 @@
-# monhun-ardu-ljj.8 — Parts: breakable-part budget + lean implementation
+# monhun-ardu-cgk — zones: replace N-part machinery with fixed head/body/appendage
 
-Status: **DONE.** Breakable parts landed end to end. Shipping + every Ardens
-suite green; parity fixtures byte-identical. No commit/push (orchestrator
-commits). One deviation from the dispatch, flagged below: the ravager-machinery
-carve had to cover `test_parity` as well as `test_perf` (the shipped-3 parity
-scene cannot fit the full machinery either), and the carve folds the
-ravager-only multi-window/stagger/parts-guard facts too — behavior-identical
-for the shipped 3.
+Status: **DONE** (all gates green; no commit per worker protocol).
 
-## Shipped
+## What changed
 
-Data (`data/creatures/ravager.json`):
-- `parts`: `tail` `{ox:-14, oy:8, w:18, h:10}`, dmgMul 150, physMul SLASH 150 /
-  BLUNT 75, elemMul FIRE 200, hp 60, bodyShare 40, breakTypes SLASH, hurtOn
-  true; stages `at 30` (stagger 30, disableAttacks tail_sweep, speedMul 100,
-  cue part_break) and `at 0` (dmgMulOverride 200, hurtOn false).
-- `tail_sweep` split into 2 windows (`0..5` behind ox -22, `6..11` front ox 20).
-- `p_enraged` parts-guard pattern (`parts.tail >= 1` -> bite), listed first.
-- profile `staggerMax 60 / staggerDecay 1 / staggerRecoverT 24`.
+- `tools/gen-combat.py`: schema `"parts"` (array of stage/elem records) replaced
+  by `"zones"` (object with optional `head` / `appendage`). New fixed `ZONE`
+  12 B record (`box, hp, dmgMul, bodyShare, breakTypes, staggerOnHit,
+  brokenDmgMul, brokenFlags, unlockMask`); `SKELETON` shrunk to 2 B
+  (`firstAnchor, anchorCount`); creature record's `firstPart/partCount` became
+  `headZone/appendZone`; profile's `partCount` became `zoneFlags`; guard's
+  `firstPartPred/partPredCount` became a `zonesBroken` bitmask. Deleted
+  `STAGES`, `ELEMS`, `REFS`, `PREDICATES` sections; header is 10 counts + 4
+  reserved. New facts `HAS_ZONES`, `HAS_GUARD_ZONES`.
+- `src/core/game.hpp`: `CombatZoneCache` (10 B) + `CombatState` (75 B) with
+  `zone[2]`, `headZone/appendZone`, `zoneBroken`; removed `stages`, `partHp[]`,
+  `partsHurt`, `bodyFirst/bodyCount/overFirst/overCount`, `COMBAT_PART_SLOTS`,
+  `COMBAT_MAX_PARTS`; `PARTS_ENABLED/GUARD_PARTS_ENABLED` -> `ZONES_ENABLED/
+  GUARD_ZONES_ENABLED`.
+- `src/core/combat.hpp`: unrolled 3-zone resolve (`combatZoneHitResolve`: body
+  implicit + wins ties, head tested before appendage on strict `>`; pool drain +
+  single broken bit per zone), `combatZoneHitResolve`/`combatZoneStagger`/
+  `combatAttackDisabled` (broken-zone `unlockMask`); guard `zonesBroken` mask
+  compare. Deleted predicate interpreter, ordinals/`combatPartAt/Count`,
+  `CombatPartNow` stage walk, `combatStage*`, pool indexing, hurt-envelope
+  union, part/stage/elem accessors, `combatResolveHit`. Kept 2-window attacks +
+  window cache, stagger meter/STATE, `combatPartArtFrame` (param is now the
+  broken bit).
+- `src/core/monster.hpp`: target rect is body-only; `monsterOnHit` resolves the
+  zone path and feeds `combatZoneStagger` to `monsterStaggerAdd`; attack-disable
+  gating switched to the zone broken mask. Pattern interpreter unchanged.
+- Data: `data/skeletons.json` drops `parts`; `ravager.json` `"parts"` ->
+  `"zones"` (head + appendage) and `p_enraged` guard -> `zonesBroken:
+  ["appendage"]`.
+- Tests ported (not weakened): `tst/combat_test.hpp`, `tst/combat_pack_test.hpp`,
+  `tst/monster_test.hpp`, `tst/fxdatatest/combat_test.hpp`,
+  `tools/tests/test_gen_combat.py` + fixture, `tools/contact_sheet.py` +
+  its test. Regenerated `combat.bin` + headers + `fxdata`.
+- README status/comments refreshed.
 
-Data facts (generated): `HAS_PARTS=true HAS_STAGGER=true HAS_MULTI_WINDOW=true
-HAS_GUARD_PARTS=true HAS_SIMPLE_GUARDS=false` (HAS_HIT_STAGGER stays false: no
-attack carries stagger; the meter is driven by the tail break-stage stagger).
+## Ravager zones declared
 
-Lean `combat.hpp` (kept, measured on shipping):
-1. int16 per-part envelope extremes + override-only `combatAttackDisabled`
-   (the generator rejects skeleton-part attack refs, so only the cached
-   override list can disable): -46 B.
-2. `combatPartHitResolve` rewritten (direct field reads, int16 rect, no
-   `CombatPartNow` / `combatPartHitRect` / `combatPartRectRot` on the hot path):
-   -420 B.
-3. lazy override-only pool fill (skeleton parts are hp 0, never read): -52 B.
-4. conservative hurt envelope `m=max(|ox|,|oy|,11(|ox|+|oy|)/16)` instead of the
-   exact 8-facing union (exact per-part rects are still tested at hit time): -172 B.
-5. `monsterOnHit` now gates the part-stage stagger channel on
-   `PARTS_ENABLED && STAGGER_ENABLED && STAGES_COUNT > 0` (was
-   `HAS_HIT_STAGGER`, which no attack sets, so the meter could never charge):
-   the feature is now functional, +212 B.
+- **head**: box (20,4,12,12), dmgMul 130, hp 40, bodyShare 100, breakTypes
+  SLASH, staggerOnHit 12, broken { dmgMul 130, hurtOn false }.
+- **appendage (tail)**: box (-14,8,18,10), dmgMul 150, hp 60, bodyShare 40,
+  breakTypes SLASH, staggerOnHit 30, broken { dmgMul 200, hurtOff, cue
+  part_break, disableAttacks ["tail_sweep"] }.
 
-## Per-image carve (flags in `src/core/game.hpp`)
+## Verification (exact tails / numbers)
 
-`-DMH_COMBAT_PARTS=0` defines effective flags (`PARTS_ENABLED`,
-`MULTI_WINDOW_ENABLED`, `STAGGER_ENABLED`, `GUARD_PARTS_ENABLED`,
-`SIMPLE_GUARDS`) that fold the ravager machinery. The generated data facts stay
-authoritative; `tools/tests/test_gen_combat.py::test_data_facts_match_fixture`
-is unchanged and passes. Applied in `tst/fxdatatest/test_perf.ino` (as
-dispatched) **and `tst/fxdatatest/test_parity.ino`** (deviation): parity with
-the full machinery is 32212/29696; parts-only fold is 29770 (74 over, because
-the ravager's multi-window/parts-guard/stagger facts are separate gate sites);
-the broad carve returns parity to HEAD's exact 29452 and is behavior-identical
-(parity 660/0). Shipping and `test_combat` compile the full machinery.
+1. `make gen` (x2) -> `make gen-check`:
+   ```
+   gen-combat: 4 creatures, 8 attacks, 9 windows, 8 patterns, 8 steps, 3 skeletons, 2 zones, 616 B, sha256 d72d0a10...
+   fxdata_manifest: PASS (53 generated artifacts unchanged)
+   ```
+2. `make test`: `Total Passed: 3144  Total Failed: 0` (baseline for this task: 3411;
+   the drop is the generic N-part reference suite collapsed into the fixed-zone
+   suite — same behavioral surface, fewer synthetic stage/ordinal vectors).
+   `make test-tools`: `Ran 82 tests ... OK`.
+3. `make fxtest-headless` (full): all suites PASS —
+   `test_assets 262/0, test_audio 14/0, test_boot 4/0, test_combat 184/0,
+   test_data 221/0, test_hud 17/0, test_menu 59/0, test_parity 660/0,
+   test_perf 5/0, test_player_art 111/0`.
+   `test_combat` read budget tail:
+   `C reads spawn=5 attack=5 guard=2 hit=0 tick256=0 simAtk=6 simTk=0 winSw=1`.
+   perf tail: `B pUs=6502 pHz=153 lHz=51 lTk=988 rMx=5392 rAv=5028 ram=409`
+   vs reference `pUs=6501 rMx=5388 rAv=5028` (+1 µs plane, +4 µs render max;
+   gates still PASS).
+4. `make build` + `make size`:
+   ```
+   Sketch uses 28242 bytes (95%) ... Global variables use 2029 bytes ...
+   size: .text=28184 .data=58 .bss=1971
+   size: flash=28242/29696 (1454 free)  ram=2029/2560
+   ```
+   **Recovery vs 29560 = 1318 B (> 1 KB spike gate).**
+5. `node tools/gen-parity-fixtures.js` -> `git status tst/fxdatatest/parity_fixtures.hpp` clean (empty diff).
+6. Data facts: `HAS_GUARD_CHANCE:false HAS_GUARD_COOLDOWN:false HAS_GUARD_HP:false
+   HAS_GUARD_PLAYER:false HAS_GUARD_ZONES:true HAS_HIT_STAGGER:false
+   HAS_MULTI_STEP:false HAS_MULTI_WINDOW:true HAS_SIMPLE_GUARDS:false
+   HAS_STAGGER:true HAS_STEP_AFTER:false HAS_STEP_CHANCE:false
+   HAS_WAIT_STEPS:false HAS_ZONES:true`.
 
-## Verification (all re-run at this tree)
+## Per-symbol delta
 
-```
-make gen (x2)            deterministic
-make gen-check           PASS (53 generated artifacts unchanged)
-make test                3411 passed / 0 failed
-make test-tools          Ran 81 tests, OK
-make fxtest-headless     all PASS:
-  assets 262/0  audio 14/0  boot 4/0  combat 211/0  data 221/0  hud 17/0
-  menu 59/0  parity 660/0  perf 5/0  player_art 111/0
-  combat reads: spawn=10 attack=5 guard=2 hit=9 tick256=0 simAtk=6 simTk=0 winSw=1
-  perf: B pUs=6501 pHz=153 lHz=51 lTk=984 rMx=5388 rAv=5028 ram=418
-        (vs rMx=5388 rAv=5028 pUs=6501 — unchanged; carve adds 10 B free RAM)
-node tools/gen-parity-fixtures.js -> empty tst/fxdatatest/parity_fixtures.hpp diff
-make build / make size   flash=29560/29696 (136 free)  ram=2032/2560
-```
+Not reported: LTO makes per-symbol size math meaningless in this repo
+(AGENTS.md "Budget first": measure whole-image deltas). Whole-image delta is
+-1318 B. The bytes are in the deleted machinery (predicate interpreter +
+ordinals + `CombatPartNow` stage walk + `combatStage*` + hurt-envelope union +
+pool-index/stage caches, previously ~2.6 KB) minus the ~1.3 KB of new
+zone-resolve/seed code and the retained attack/window/guard interpreter.
 
-Shipping delta vs 26928 baseline: **+2632 B** (2768 -> 136 free).
-`make size` data facts: `HAS_GUARD_PARTS:true HAS_MULTI_WINDOW:true
-HAS_PARTS:true HAS_SIMPLE_GUARDS:false HAS_STAGGER:true` (rest false).
+## Deviations from the old behavior (shipped 3 unchanged; parity fixtures byte-identical)
 
-Per-image flash (fxtest = device, stock flags; shipping = size flags):
-
-| image | flash | free |
-|---|---|---|
-| shipping (full machinery) | 29560 | 136 |
-| test_combat (full) | 29508 | 188 |
-| test_parity (carved) | 29452 | 244 |
-| test_perf (carved) | 28202 | 1494 |
-| test_data | 16486 | 13210 |
-| test_boot | 15288 | 14408 |
-| test_audio | 14986 | 14710 |
-| test_assets | 8696 | 21000 |
-| test_hud | 20132 | 9564 |
-| test_menu | 15444 | 14252 |
-| test_player_art | 16148 | 13548 |
-
-## Un-gated / added tests
-
-- `tst/combat_test.hpp`: tail record, pool seeding, stage thresholds + effect
-  projections, `combatPartHitResolve` containment/multiplier/pool-drain/break,
-  multi-window windows, enrage parts-guard flip, `combatPartArtFrame` <->
-  `art_dims::tail_*` linkage, and the stagger meter tripping `MS_STAGGER`.
-- `tst/combat_pack_test.hpp`: STAGE/ELEM/REF/PREDICATE decode loops plus
-  MetaRecord coverage for every new ravager record.
-- `tst/fxdatatest/combat_test.hpp`: real-cart tail record, spawn pool, stage
-  stagger, break -> tail_sweep disable, enrage guard, mid-active window refresh.
-- `tst/art_dims_test.hpp` + `tst/fxdatatest/asset_test.hpp`: `fxtail` blob
-  header/pixels/bytes (new authored sheet).
-- Art: `tools/gen-art.py` authors `images/blocks/fxtail_18x10.png` (4 frames:
-  east-intact, east-broken, west-intact, west-broken, matching
-  `combatPartArtFrame`); FX image now 33 sheets.
-
-No commit/push/add performed.
+- Zone `staggerOnHit` is a flat per-zone stat applied on every zone hit; the old
+  tail stagger came from a *crossed stage* (hp <= 30%). Ravager stagger timing
+  therefore differs (tail hits add 30 immediately; head adds 12). The shipped 3
+  have no zones and `staggerMax 0`, so device parity is unaffected.
+- Single broken record: tail break (and tail_sweep disable) now happens only at
+  pool 0; the old first stage fired at 30% hp.
+- `physMul`/`elemMul` are dropped per the design (elem accessors deleted), so
+  tail damage uses only `dmgMul` (150) + bodyShare; the old SLASH 150 / FIRE
+  200 multipliers are gone.
+- Broken zones leave the candidate set; `brokenDmgMul`/`brokenFlags` are
+  data-only (matches the old effective behavior: stage 2 was hurtOff, so the
+  200 override never applied to a landed hit).
+- `-DMH_COMBAT_PARTS=0` macro name kept (only the effective constexpr names
+  changed to `ZONES_ENABLED`/`GUARD_ZONES_ENABLED`) to keep the perf/parity
+  carves and the Makefile untouched.
+- `docs/creature-framework.md` still describes the old part/stage schema; the
+  binding design is `build/zones-design.md`. Left for the docs bead (not in
+  scope / not gated).

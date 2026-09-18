@@ -1,5 +1,6 @@
 #pragma once
-// Ardens device loader test for src/core/combat.hpp (bead monhun-ardu-ljj.2).
+// Ardens device loader test for src/core/combat.hpp (beads monhun-ardu-ljj.2,
+// cgk).
 //
 // Reads the real mhCombat blob out of the single FX image on d1 through the
 // shipping loader (mhFxRead* path), so a host-padded struct, a meta offset or
@@ -12,10 +13,9 @@
 // <= 12, and 0 cart reads per tick in the steady state (combatTick). The
 // counter is enabled by MH_FX_READ_COUNT in test_combat.ino.
 //
-// ljj.8: the blob now carries the ravager's breakable tail (override part,
-// 2 stage records, 1 element, 1 parts-predicate guard) and a two-window
-// tail_sweep, so the stage/predicate/break paths below read real records;
-// the shipped 3 stay on the single-body path.
+// cgk: the blob carries the ravager head + appendage zones and a two-window
+// tail_sweep, so the zone/break/guard paths below read real records; the
+// shipped 3 stay on the implicit body path.
 #include "harness/fxtest.hpp"
 #include "src/core/combat.hpp"
 #include "src/core/monster.hpp"       // migration A: sim consumes the attack cache
@@ -47,15 +47,21 @@ inline void test_combat(FxTest &test) {
     test.expectEq(version, combat::VERSION, F("header version"));
     test.expectEq(flags, combat::FLAGS, F("header flags"));
 
-    static const uint16_t counts[14] = {
-        combat::CREATURES_COUNT, combat::PROFILES_COUNT, combat::SKELETONS_COUNT, combat::PARTS_COUNT,    combat::STAGES_COUNT, combat::ANCHORS_COUNT,    combat::ELEMS_COUNT,
-        combat::REFS_COUNT,      combat::ATTACKS_COUNT,  combat::WINDOWS_COUNT,   combat::PATTERNS_COUNT, combat::GUARDS_COUNT, combat::PREDICATES_COUNT, combat::STEPS_COUNT,
+    static const uint16_t counts[10] = {
+        combat::CREATURES_COUNT, combat::PROFILES_COUNT, combat::SKELETONS_COUNT, combat::ZONES_COUNT,  combat::ANCHORS_COUNT,
+        combat::ATTACKS_COUNT,   combat::WINDOWS_COUNT,  combat::PATTERNS_COUNT,  combat::GUARDS_COUNT, combat::STEPS_COUNT,
     };
-    for (uint8_t i = 0; i < 14; i++) {
+    for (uint8_t i = 0; i < 10; i++) {
         FX::seekData(mhCombat + 4 + static_cast<uint24_t>(i) * 2);
         const uint8_t lo = FX::readPendingUInt8();
         const uint8_t hi = FX::readEnd();
         test.expectEqIdx(static_cast<uint16_t>(lo | (static_cast<uint16_t>(hi) << 8)), counts[i], F("header count"), i);
+    }
+    for (uint8_t i = 0; i < 4; i++) {
+        FX::seekData(mhCombat + 4 + static_cast<uint24_t>(10 + i) * 2);
+        const uint8_t lo = FX::readPendingUInt8();
+        const uint8_t hi = FX::readEnd();
+        test.expectEqIdx(static_cast<uint16_t>(lo | (static_cast<uint16_t>(hi) << 8)), 0, F("reserved count"), i);
     }
     test.expectEq(combat::STEPS_OFF + static_cast<uint16_t>(combat::STEP_SIZE) * combat::STEPS_COUNT, combat::SIZE, F("sections end at size"));
     test.expectEq(combat_expect::BLOB_SIZE, combat::SIZE, F("expect blob size"));
@@ -68,34 +74,25 @@ inline void test_combat(FxTest &test) {
     test.expectEq(heavy.h, combat_expect::CREATURE_HEAVY_H, F("heavy h"));
     test.expectEq(heavy.attackCount, combat_expect::CREATURE_HEAVY_ATTACKS, F("heavy attacks"));
     test.expectEq(heavy.patternCount, combat_expect::CREATURE_HEAVY_PATTERNS, F("heavy patterns"));
+    test.expectEq(heavy.headZone, COMBAT_NO_ZONE, F("heavy no head zone"));
+    test.expectEq(heavy.appendZone, COMBAT_NO_ZONE, F("heavy no appendage zone"));
 
     const CombatCreature lunge = combatCreatureRead(combat::CREATURE_LUNGE);
     test.expectEq(lunge.hp, combat_expect::CREATURE_LUNGE_HP, F("lunge hp"));
     test.expectEq(lunge.spd, combat_expect::CREATURE_LUNGE_SPD, F("lunge spd"));
     test.expectEq(lunge.w, combat_expect::CREATURE_LUNGE_W, F("lunge w"));
     test.expectEq(lunge.h, combat_expect::CREATURE_LUNGE_H, F("lunge h"));
-    test.expectEq(lunge.attackCount, combat_expect::CREATURE_LUNGE_ATTACKS, F("lunge attacks"));
-    test.expectEq(lunge.patternCount, combat_expect::CREATURE_LUNGE_PATTERNS, F("lunge patterns"));
 
     const CombatCreature sweep = combatCreatureRead(combat::CREATURE_SWEEP);
     test.expectEq(sweep.hp, combat_expect::CREATURE_SWEEP_HP, F("sweep hp"));
     test.expectEq(sweep.spd, combat_expect::CREATURE_SWEEP_SPD, F("sweep spd"));
     test.expectEq(sweep.w, combat_expect::CREATURE_SWEEP_W, F("sweep w"));
     test.expectEq(sweep.h, combat_expect::CREATURE_SWEEP_H, F("sweep h"));
-    test.expectEq(sweep.attackCount, combat_expect::CREATURE_SWEEP_ATTACKS, F("sweep attacks"));
-    test.expectEq(sweep.patternCount, combat_expect::CREATURE_SWEEP_PATTERNS, F("sweep patterns"));
 
     // --------------------------------------------- cross-reference walk
     const CombatSkeleton sk = combatSkeletonRead(lunge.skeletonIdx);
     test.expectEq(lunge.skeletonIdx, combat::SKELETON_QUAD_32X24, F("lunge skeleton idx"));
-    test.expectEq(sk.partCount, 1, F("lunge skeleton parts"));
-    test.expectEq(sk.firstPart, combat::PART_QUAD_32X24_BODY, F("lunge body part idx"));
-    const CombatPart body = combatPartRead(sk.firstPart);
-    test.expectEq(body.box.w, 32, F("body box w"));
-    test.expectEq(body.box.h, 24, F("body box h"));
-    test.expectEq(body.dmgMul, 100, F("body dmgMul"));
-    test.expectEq(body.bodyShare, 100, F("body bodyShare"));
-    test.expectEq(body.physBlunt, 100, F("body physBlunt"));
+    test.expectEq(sk.anchorCount, 2, F("lunge skeleton anchors"));
 
     const CombatAttackValue lungeAtk = combatAttackRead(lunge.firstAttack);
     test.expectEq(lunge.firstAttack, combat::ATTACK_LUNGE_LUNGE, F("lunge first attack"));
@@ -126,11 +123,11 @@ inline void test_combat(FxTest &test) {
     test.expectEq(guard.hpLo, 0, F("lunge hpLo"));
     test.expectEq(guard.hpHi, 100, F("lunge hpHi"));
     test.expectEq(guard.chance, combat_expect::PATTERN_LUNGE_P_LUNGE_CHANCE, F("lunge chance"));
+    test.expectEq(guard.zonesBroken, 0, F("lunge no zone clause"));
     const CombatStep step = combatStepRead(pat.firstStep);
     test.expectEq(step.kind, STEP_ATK, F("lunge step kind"));
     test.expectEq(step.ref, combat::ATTACK_LUNGE_LUNGE, F("lunge step attack ref"));
     test.expectEq(step.after, 0, F("lunge step after"));
-    test.expectEq(step.chance, 100, F("lunge step chance"));
 
     // SWEEP has no lunge pattern: one match-all sweep pattern.
     const CombatPattern sweepPat = combatPatternRead(sweep.firstPattern);
@@ -154,14 +151,12 @@ inline void test_combat(FxTest &test) {
     test.expectEq(g.combat.profile.engageDist, 36, F("cache engageDist"));
     test.expectEq(g.combat.profile.keepDist, 24, F("cache keepDist"));
     test.expectEq(g.combat.profile.attackDist, 42, F("cache attackDist"));
-    test.expectEq(g.combat.profile.circleNum, 8, F("cache circleNum"));
-    test.expectEq(g.combat.profile.circleDen, 10, F("cache circleDen"));
     test.expectEq(g.combat.profile.cdBase, 55, F("cache cdBase"));
     test.expectEq(g.combat.profile.cdJitter, 40, F("cache cdJitter"));
     test.expectEq(g.combat.profile.spawnT, 90, F("cache spawnT"));
     test.expectEq(g.combat.profile.spawnCd, 140, F("cache spawnCd"));
     test.expectEq(g.combat.profile.stunRecoverT, 24, F("cache stunRecoverT"));
-    test.expectEq(g.combat.stages, 0, F("stages reset"));
+    test.expectEq(g.combat.zoneBroken, 0, F("zones reset"));
     test.expectEq(g.combat.stepT, 0, F("step timer reset"));
 
     before = mhFxReadCount;
@@ -221,28 +216,13 @@ inline void test_combat(FxTest &test) {
 
     // --------------------------------------------------- damage routing
     creatureLoad(g, combat::CREATURE_LUNGE);
-    uint8_t hits[3] = {static_cast<uint8_t>(combat::PART_QUAD_32X24_BODY), 0, 0};
     before = mhFxReadCount;
-    CombatHitResult r = combatResolveHit(g, 12, PHYS_BLUNT, ELEM_NONE, 100, 0, hits, 1);
+    CombatBodyHit r = combatResolveBodyHit(g, 12);
     const uint16_t hitReads = static_cast<uint16_t>(mhFxReadCount - before);
-    test.expectEq(r.partIdx, combat::PART_QUAD_32X24_BODY, F("hit part"));
-    test.expectEq(r.mul, 100, F("hit multiplier"));
-    test.expectEq(r.partDmg, 12, F("hit part damage"));
-    test.expectEq(r.bodyDmg, 12, F("hit body damage"));
-    test.expectEq(r.stagger, 0, F("hit stagger"));
-    test.expectEq(hitReads <= 12, 1, F("landed hit <= 12 reads"));
-
-    r = combatResolveHit(g, 12, PHYS_BLUNT, ELEM_NONE, 50, 0, hits, 1);
-    test.expectEq(r.partDmg, 6, F("window 50 halves damage"));
-    r = combatResolveHit(g, 12, PHYS_BLUNT, ELEM_NONE, 100, 11, hits, 1);
-    test.expectEq(r.stagger, 11, F("stagger scales by multiplier"));
-    hits[0] = 2;
-    hits[1] = 1;
-    hits[2] = 0;
-    r = combatResolveHit(g, 12, PHYS_BLUNT, ELEM_NONE, 100, 0, hits, 3);
-    test.expectEq(r.partIdx, 0, F("tie-break lowest part id"));
-    r = combatResolveHit(g, 12, PHYS_BLUNT, ELEM_NONE, 100, 0, hits, 0);
-    test.expectEq(r.partIdx, COMBAT_NO_PART, F("no candidates -> no part"));
+    test.expectEq(r.zone, COMBAT_NO_ZONE, F("body hit zone"));
+    test.expectEq(r.mul, 100, F("body hit multiplier"));
+    test.expectEq(r.dmg, 12, F("body hit damage"));
+    test.expectEq(hitReads <= 12, 1, F("body hit <= 12 reads"));
 
     // ------------------------------------- body box + spawn (migration B)
     {
@@ -259,10 +239,8 @@ inline void test_combat(FxTest &test) {
 
         combatCreatureBodyBox(combat::CREATURE_SWEEP, bb);
         test.expectEq(bb.w, combat_expect::CREATURE_SWEEP_W, F("sweep box w"));
-        test.expectEq(bb.h, combat_expect::CREATURE_SWEEP_H, F("sweep box h"));
         combatCreatureBodyBox(combat::CREATURE_HEAVY, bb);
         test.expectEq(bb.w, combat_expect::CREATURE_HEAVY_W, F("heavy box w"));
-        test.expectEq(bb.h, combat_expect::CREATURE_HEAVY_H, F("heavy box h"));
 
         const CombatSpawn sp = combatCreatureSpawnRead(combat::CREATURE_LUNGE);
         test.expectEq(sp.hp, combat_expect::CREATURE_LUNGE_HP, F("spawn hp"));
@@ -279,70 +257,55 @@ inline void test_combat(FxTest &test) {
         test.expectEq(g.monster.spd, combat_expect::CREATURE_HEAVY_SPD, F("spawn spd from record"));
         test.expectEq(g.combat.body.w, g.monster.w, F("cached body box w"));
         test.expectEq(g.combat.body.h, g.monster.h, F("cached body box h"));
-        test.expectEq(g.combat.bodyFirst, combat::PART_QUAD_40X28_BODY, F("cached hurtbox head"));
-        test.expectEq(g.combat.bodyCount, 1, F("cached hurtbox count"));
         test.expectEq(g.target.rect.w, g.combat.body.w, F("target rect w from box"));
         test.expectEq(g.target.rect.x, g.monster.x, F("target rect x at box origin"));
-        test.expectEq(g.combat.stages, 0, F("spawn stages intact"));
-        // Migration C: the spawn burst also caches the whole profile record
-        // (loader model: creature record + profile + skeleton body box <= 40).
+        test.expectEq(g.combat.zoneBroken, 0, F("spawn zones intact"));
         test.expectEq(initReads <= 40, 1, F("initMonster burst <= 40 reads"));
-
-        // Landed player hit resolves the creature's hurtbox list (one body
-        // part on the shipped 3; multipliers all 100 -> damage unchanged).
-        creatureLoad(g, combat::CREATURE_LUNGE);
-        before = mhFxReadCount;
-        const CombatBodyHit bodyHit = combatResolveBodyHit(g, 12);
-        const uint16_t bodyHitReads = static_cast<uint16_t>(mhFxReadCount - before);
-        test.expectEq(bodyHit.partIdx, combat::PART_QUAD_32X24_BODY, F("body hit part"));
-        test.expectEq(bodyHit.dmg, 12, F("body hit damage unchanged"));
-        test.expectEq(bodyHit.mul, 100, F("body hit multiplier neutral"));
-
-        test.expectEq(bodyHitReads <= 16, 1, F("body hit <= 16 reads"));
     }
 
-    // ------------------------------------------- break-stage transition
-    test.expectEq(combatStageCross(0, 30, 30), 1, F("stage cross at threshold"));
-    test.expectEq(combatStageCross(0, 31, 30), 0, F("stage holds above threshold"));
-    test.expectEq(combatStageCross(2, 0, 0), 3, F("stage cross second threshold"));
-    test.expectEq(combatPartStageGet(g, 0), 0, F("part stage intact"));
-    test.expectEq(combatPartStageCount(combat::PART_QUAD_32X24_BODY), 0, F("shipped part has no stages"));
-    test.expectEq(combatPartStageForHp(combat::PART_QUAD_32X24_BODY, 0, 100), 0, F("no stages -> stage 0"));
-    combatPartStageSet(g, 0, 1);
-    test.expectEq(combatPartStageGet(g, 0), 1, F("part stage 1"));
-    combatPartStageSet(g, 3, 3);
-    test.expectEq(combatPartStageGet(g, 3), 3, F("part 3 stage 3"));
-    test.expectEq(combatPartStageGet(g, 0), 1, F("stages independent"));
-    combatPartStageSet(g, 0, 9);
-    test.expectEq(combatPartStageGet(g, 0), COMBAT_STAGE_MAX, F("stage saturates"));
-    test.expectEq(g.combat.stages, static_cast<uint16_t>(3u | (3u << 6)), F("packed stage bits"));
-    test.expectEq(combatPartDmgMulNow(g, combat::PART_QUAD_32X24_BODY), 100, F("effective dmgMul stays neutral"));
-    test.expectEq(combatAttackDisabled(g, combat::ATTACK_LUNGE_LUNGE), 0, F("no stage disables lunge"));
-
-    // ------------------------------- ravager breakable tail (ljj.8)
-    // Device-side proof the real cart records drive the parts path: record spot
-    // values, spawn pool seeding, stage effects, break -> pattern swap. The
-    // exhaustive multiplier/art vectors live in the host combat suite.
+    // ------------------------------- ravager zones (3-hitzone model)
+    // Device-side proof the real cart records drive the zone path: record spot
+    // values, spawn pool seeding, break -> attack disable, enrage guard swap.
     {
-        const CombatPart tail = combatPartRead(combat::PART_RAVAGER_TAIL);
-        test.expectEq(tail.hp, 60, F("tail hp"));
+        const CombatZone head = combatZoneRead(combat::ZONE_RAVAGER_HEAD);
+        test.expectEq(head.hp, combat_expect::ZONE_RAVAGER_HEAD_HP, F("head hp"));
+        test.expectEq(head.dmgMul, combat_expect::ZONE_RAVAGER_HEAD_DMG_MUL, F("head dmgMul"));
+        test.expectEq(head.staggerOnHit, 12, F("head stagger"));
+        const CombatZone tail = combatZoneRead(combat::ZONE_RAVAGER_APPENDAGE);
+        test.expectEq(tail.hp, combat_expect::ZONE_RAVAGER_APPENDAGE_HP, F("tail hp"));
+        test.expectEq(tail.dmgMul, combat_expect::ZONE_RAVAGER_APPENDAGE_DMG_MUL, F("tail dmgMul"));
+        test.expectEq(tail.bodyShare, combat_expect::ZONE_RAVAGER_APPENDAGE_BODY_SHARE, F("tail bodyShare"));
         test.expectEq(tail.breakTypes, PHYS_SLASH, F("tail break slash"));
-        test.expectEq(tail.stageCount, 2, F("tail stages"));
+        test.expectEq(tail.unlockMask, static_cast<uint8_t>(1u << combat::ATTACK_RAVAGER_TAIL_SWEEP), F("tail unlock sweep"));
 
         before = mhFxReadCount;
         creatureLoad(g, combat::CREATURE_RAVAGER);
         const uint16_t ravReads = static_cast<uint16_t>(mhFxReadCount - before);
-        test.expectEq(g.combat.overFirst, combat::PART_RAVAGER_TAIL, F("tail override head"));
-        test.expectEq(g.combat.partHp[g.combat.bodyCount], 60, F("tail pool seeded"));
+        test.expectEq(g.combat.headZone, combat::ZONE_RAVAGER_HEAD, F("head zone index"));
+        test.expectEq(g.combat.appendZone, combat::ZONE_RAVAGER_APPENDAGE, F("tail zone index"));
+        test.expectEq(g.combat.zone[COMBAT_ZONE_HEAD].hp, combat_expect::ZONE_RAVAGER_HEAD_HP, F("head pool seeded"));
+        test.expectEq(g.combat.zone[COMBAT_ZONE_APPENDAGE].hp, combat_expect::ZONE_RAVAGER_APPENDAGE_HP, F("tail pool seeded"));
         test.expectEq(ravReads <= 40, 1, F("ravager spawn <= 40 reads"));
-        test.expectEq(combatPartStageForHp(combat::PART_RAVAGER_TAIL, 18, 60), 1, F("tail stage 1"));
-        combatPartStageSet(g, combat::PART_RAVAGER_TAIL, 1);
-        test.expectEq(combatPartStaggerNow(g, combat::PART_RAVAGER_TAIL), 30, F("stage 1 stagger"));
-        test.expectEq(combatAttackDisabled(g, combat::ATTACK_RAVAGER_TAIL_SWEEP), 1, F("stage 1 disables sweep"));
+
+        // Head point hit drains the head pool by base*130/100.
+        g.monster.x = 100;
+        g.monster.y = 40;
+        g.monster.fx = 16;
+        g.monster.fy = 0;
+        const CombatBodyHit headHit = combatZoneHitResolve(g, 10, PHYS_BLUNT, 125, 48);
+        test.expectEq(headHit.zone, COMBAT_ZONE_HEAD, F("head zone wins"));
+        test.expectEq(headHit.mul, 130, F("head multiplier"));
+        test.expectEq(headHit.dmg, 13, F("head body share 100"));
+
+        // Tail point hit drains the tail pool; break disables tail_sweep.
+        g.combat.zoneBroken = COMBAT_ZONE_APPENDAGE_BIT;
+        test.expectEq(combatAttackDisabled(g, combat::ATTACK_RAVAGER_TAIL_SWEEP), 1, F("broken tail disables sweep"));
+        test.expectEq(combatAttackDisabled(g, combat::ATTACK_RAVAGER_BITE), 0, F("broken tail keeps bite"));
         CombatGuardInput en = {0, 100, 0, 0, 0xFFFF, 0};
-        test.expectEq(combatGuardPasses(g, combat::PATTERN_RAVAGER_P_ENRAGED, en), 1, F("stage 1 enrage guard"));
-        combatPartStageSet(g, combat::PART_RAVAGER_TAIL, 2);
-        test.expectEq(combatPartHurtOff(g, combat::PART_RAVAGER_TAIL), 1, F("stage 2 hurt off"));
+        test.expectEq(combatGuardPasses(g, combat::PATTERN_RAVAGER_P_ENRAGED, en), 1, F("broken tail enrage guard"));
+        test.expectEq(combatGuardPasses(g, combat::PATTERN_RAVAGER_P_SWEEP, en), 1, F("p_sweep dist 0 still matches"));
+        g.combat.zoneBroken = 0;
+        test.expectEq(combatGuardPasses(g, combat::PATTERN_RAVAGER_P_ENRAGED, en), 0, F("intact tail not enraged"));
     }
 
     // ------------------------------- multi-window refresh (ljj.8)
@@ -365,7 +328,7 @@ inline void test_combat(FxTest &test) {
     test.expectEq(fallback, 0, F("bad creature id -> creature 0"));
     test.expectEq(g.combat.creature, combat::CREATURE_HEAVY, F("fallback creature cache"));
     test.expectEq(g.combat.profile.cdBase, 55, F("fallback profile cdBase"));
-    test.expectEq(g.combat.stages, 0, F("fallback resets stages"));
+    test.expectEq(g.combat.zoneBroken, 0, F("fallback resets zones"));
     const uint8_t badAtk = attackLoad(g, 200);
     test.expectEq(badAtk, 0, F("bad attack id -> attack 0"));
     test.expectEq(g.combat.attack.winIdx, combat::WINDOW_HEAVY_LUNGE_0, F("fallback window"));

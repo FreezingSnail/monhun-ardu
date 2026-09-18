@@ -19,23 +19,28 @@
     "staggerDecay": 1,
     "staggerRecoverT": 24
   },
-  "parts": [
-    {
-      "id": "tail",
+  "zones": {
+    "head": {
+      "box": { "ox": 20, "oy": 4, "w": 12, "h": 12 },
+      "dmgMul": 130,
+      "hp": 40,
+      "bodyShare": 100,
+      "breakTypes": ["SLASH"],
+      "hurtOn": true,
+      "staggerOnHit": 12,
+      "broken": { "dmgMul": 130, "hurtOn": false }
+    },
+    "appendage": {
       "box": { "ox": -14, "oy": 8, "w": 18, "h": 10 },
       "dmgMul": 150,
-      "physMul": { "SLASH": 150, "BLUNT": 75 },
-      "elemMul": { "FIRE": 200 },
       "hp": 60,
       "bodyShare": 40,
       "breakTypes": ["SLASH"],
       "hurtOn": true,
-      "stages": [
-        { "at": 30, "stagger": 30, "disableAttacks": ["tail_sweep"], "speedMul": 100, "cue": "part_break" },
-        { "at": 0, "dmgMulOverride": 200, "hurtOn": false }
-      ]
+      "staggerOnHit": 30,
+      "broken": { "dmgMul": 200, "hurtOn": false, "cue": "part_break", "disableAttacks": ["tail_sweep"] }
     }
-  ],
+  },
   "attacks": [
     {
       "id": "bite",
@@ -76,7 +81,7 @@
   "patterns": [
     {
       "id": "p_enraged",
-      "guard": { "parts": { "tail": ">=1" }, "chance": 100 },
+      "guard": { "zonesBroken": ["appendage"], "chance": 100 },
       "steps": [ { "atk": "bite", "after": 0 } ]
     },
     {

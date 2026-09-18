@@ -1,5 +1,5 @@
 #pragma once
-// Host pack-parity suite for the combat blob (bead monhun-ardu-ljj.2).
+// Host pack-parity suite for the combat blob (beads monhun-ardu-ljj.2, cgk).
 //
 // Reads fxdata/tables/combat.bin from disk (make test runs from the repo root),
 // verifies the pinned sha256 from src/generated/combat_expect.hpp, the header
@@ -189,37 +189,32 @@ void CombatPackSuite(TestRunner &runner) {
         t.assert(combat_expect::BLOB_SIZE, combat::SIZE, "expect blob size");
         t.assert(combat_data::VERSION, combat::VERSION, "host data version");
 
-        // Header counts: 14 little-endian u16 after magic/version/flags.
+        // Header counts: 10 little-endian u16 after magic/version/flags, then 4
+        // reserved (0).
         t.assert(b16(blob, 4), combat::CREATURES_COUNT, "count creatures");
         t.assert(b16(blob, 6), combat::PROFILES_COUNT, "count profiles");
         t.assert(b16(blob, 8), combat::SKELETONS_COUNT, "count skeletons");
-        t.assert(b16(blob, 10), combat::PARTS_COUNT, "count parts");
-        t.assert(b16(blob, 12), combat::STAGES_COUNT, "count stages");
-        t.assert(b16(blob, 14), combat::ANCHORS_COUNT, "count anchors");
-        t.assert(b16(blob, 16), combat::ELEMS_COUNT, "count elems");
-        t.assert(b16(blob, 18), combat::REFS_COUNT, "count refs");
-        t.assert(b16(blob, 20), combat::ATTACKS_COUNT, "count attacks");
-        t.assert(b16(blob, 22), combat::WINDOWS_COUNT, "count windows");
-        t.assert(b16(blob, 24), combat::PATTERNS_COUNT, "count patterns");
-        t.assert(b16(blob, 26), combat::GUARDS_COUNT, "count guards");
-        t.assert(b16(blob, 28), combat::PREDICATES_COUNT, "count predicates");
-        t.assert(b16(blob, 30), combat::STEPS_COUNT, "count steps");
+        t.assert(b16(blob, 10), combat::ZONES_COUNT, "count zones");
+        t.assert(b16(blob, 12), combat::ANCHORS_COUNT, "count anchors");
+        t.assert(b16(blob, 14), combat::ATTACKS_COUNT, "count attacks");
+        t.assert(b16(blob, 16), combat::WINDOWS_COUNT, "count windows");
+        t.assert(b16(blob, 18), combat::PATTERNS_COUNT, "count patterns");
+        t.assert(b16(blob, 20), combat::GUARDS_COUNT, "count guards");
+        t.assert(b16(blob, 22), combat::STEPS_COUNT, "count steps");
+        for (uint8_t i = 0; i < 4; i++)
+            t.assert(b16(blob, 24 + i * 2), 0, "reserved header count");
 
         // Sections tile the blob with no gaps or padding.
         t.assert(combat::CREATURES_OFF, combat::HEADER_SIZE, "creatures start after header");
         t.assert(combat::PROFILES_OFF, combat::CREATURES_OFF + combat::CREATURE_SIZE * combat::CREATURES_COUNT, "creatures tile");
         t.assert(combat::SKELETONS_OFF, combat::PROFILES_OFF + combat::PROFILE_SIZE * combat::PROFILES_COUNT, "profiles tile");
-        t.assert(combat::PARTS_OFF, combat::SKELETONS_OFF + combat::SKELETON_SIZE * combat::SKELETONS_COUNT, "skeletons tile");
-        t.assert(combat::STAGES_OFF, combat::PARTS_OFF + combat::PART_SIZE * combat::PARTS_COUNT, "parts tile");
-        t.assert(combat::ANCHORS_OFF, combat::STAGES_OFF + combat::STAGE_SIZE * combat::STAGES_COUNT, "stages tile");
-        t.assert(combat::ELEMS_OFF, combat::ANCHORS_OFF + combat::ANCHOR_SIZE * combat::ANCHORS_COUNT, "anchors tile");
-        t.assert(combat::REFS_OFF, combat::ELEMS_OFF + combat::ELEM_SIZE * combat::ELEMS_COUNT, "elems tile");
-        t.assert(combat::ATTACKS_OFF, combat::REFS_OFF + combat::REF_SIZE * combat::REFS_COUNT, "refs tile");
+        t.assert(combat::ZONES_OFF, combat::SKELETONS_OFF + combat::SKELETON_SIZE * combat::SKELETONS_COUNT, "skeletons tile");
+        t.assert(combat::ANCHORS_OFF, combat::ZONES_OFF + combat::ZONE_SIZE * combat::ZONES_COUNT, "zones tile");
+        t.assert(combat::ATTACKS_OFF, combat::ANCHORS_OFF + combat::ANCHOR_SIZE * combat::ANCHORS_COUNT, "anchors tile");
         t.assert(combat::WINDOWS_OFF, combat::ATTACKS_OFF + combat::ATTACK_SIZE * combat::ATTACKS_COUNT, "attacks tile");
         t.assert(combat::PATTERNS_OFF, combat::WINDOWS_OFF + combat::WINDOW_SIZE * combat::WINDOWS_COUNT, "windows tile");
         t.assert(combat::GUARDS_OFF, combat::PATTERNS_OFF + combat::PATTERN_SIZE * combat::PATTERNS_COUNT, "patterns tile");
-        t.assert(combat::PREDICATES_OFF, combat::GUARDS_OFF + combat::GUARD_SIZE * combat::GUARDS_COUNT, "guards tile");
-        t.assert(combat::STEPS_OFF, combat::PREDICATES_OFF + combat::PREDICATE_SIZE * combat::PREDICATES_COUNT, "predicates tile");
+        t.assert(combat::STEPS_OFF, combat::GUARDS_OFF + combat::GUARD_SIZE * combat::GUARDS_COUNT, "guards tile");
         t.assert(combat::STEPS_OFF + combat::STEP_SIZE * combat::STEPS_COUNT, combat::SIZE, "steps end at blob size");
 
         Sha256 sha;
@@ -236,16 +231,17 @@ void CombatPackSuite(TestRunner &runner) {
         static const MetaRecord records[] = {
             {"CREATURE_HEAVY", combat::CREATURE_HEAVY_OFF, combat::CREATURES_OFF, combat::CREATURE_HEAVY, combat::CREATURE_SIZE, combat::CREATURES_COUNT},
             {"CREATURE_LUNGE", combat::CREATURE_LUNGE_OFF, combat::CREATURES_OFF, combat::CREATURE_LUNGE, combat::CREATURE_SIZE, combat::CREATURES_COUNT},
+            {"CREATURE_RAVAGER", combat::CREATURE_RAVAGER_OFF, combat::CREATURES_OFF, combat::CREATURE_RAVAGER, combat::CREATURE_SIZE, combat::CREATURES_COUNT},
             {"CREATURE_SWEEP", combat::CREATURE_SWEEP_OFF, combat::CREATURES_OFF, combat::CREATURE_SWEEP, combat::CREATURE_SIZE, combat::CREATURES_COUNT},
             {"PROFILE_HEAVY", combat::PROFILE_HEAVY_OFF, combat::PROFILES_OFF, 0, combat::PROFILE_SIZE, combat::PROFILES_COUNT},
             {"PROFILE_LUNGE", combat::PROFILE_LUNGE_OFF, combat::PROFILES_OFF, 1, combat::PROFILE_SIZE, combat::PROFILES_COUNT},
+            {"PROFILE_RAVAGER", combat::PROFILE_RAVAGER_OFF, combat::PROFILES_OFF, 2, combat::PROFILE_SIZE, combat::PROFILES_COUNT},
             {"PROFILE_SWEEP", combat::PROFILE_SWEEP_OFF, combat::PROFILES_OFF, 3, combat::PROFILE_SIZE, combat::PROFILES_COUNT},
             {"SKELETON_QUAD_28X22", combat::SKELETON_QUAD_28X22_OFF, combat::SKELETONS_OFF, combat::SKELETON_QUAD_28X22, combat::SKELETON_SIZE, combat::SKELETONS_COUNT},
             {"SKELETON_QUAD_32X24", combat::SKELETON_QUAD_32X24_OFF, combat::SKELETONS_OFF, combat::SKELETON_QUAD_32X24, combat::SKELETON_SIZE, combat::SKELETONS_COUNT},
             {"SKELETON_QUAD_40X28", combat::SKELETON_QUAD_40X28_OFF, combat::SKELETONS_OFF, combat::SKELETON_QUAD_40X28, combat::SKELETON_SIZE, combat::SKELETONS_COUNT},
-            {"PART_QUAD_28X22_BODY", combat::PART_QUAD_28X22_BODY_OFF, combat::PARTS_OFF, combat::PART_QUAD_28X22_BODY, combat::PART_SIZE, combat::PARTS_COUNT},
-            {"PART_QUAD_32X24_BODY", combat::PART_QUAD_32X24_BODY_OFF, combat::PARTS_OFF, combat::PART_QUAD_32X24_BODY, combat::PART_SIZE, combat::PARTS_COUNT},
-            {"PART_QUAD_40X28_BODY", combat::PART_QUAD_40X28_BODY_OFF, combat::PARTS_OFF, combat::PART_QUAD_40X28_BODY, combat::PART_SIZE, combat::PARTS_COUNT},
+            {"ZONE_RAVAGER_HEAD", combat::ZONE_RAVAGER_HEAD_OFF, combat::ZONES_OFF, combat::ZONE_RAVAGER_HEAD, combat::ZONE_SIZE, combat::ZONES_COUNT},
+            {"ZONE_RAVAGER_APPENDAGE", combat::ZONE_RAVAGER_APPENDAGE_OFF, combat::ZONES_OFF, combat::ZONE_RAVAGER_APPENDAGE, combat::ZONE_SIZE, combat::ZONES_COUNT},
             {"ANCHOR_QUAD_28X22_ORIGIN", combat::ANCHOR_QUAD_28X22_ORIGIN_OFF, combat::ANCHORS_OFF, 0, combat::ANCHOR_SIZE, combat::ANCHORS_COUNT},
             {"ANCHOR_QUAD_28X22_HEAD", combat::ANCHOR_QUAD_28X22_HEAD_OFF, combat::ANCHORS_OFF, 1, combat::ANCHOR_SIZE, combat::ANCHORS_COUNT},
             {"ANCHOR_QUAD_32X24_ORIGIN", combat::ANCHOR_QUAD_32X24_ORIGIN_OFF, combat::ANCHORS_OFF, 2, combat::ANCHOR_SIZE, combat::ANCHORS_COUNT},
@@ -256,49 +252,43 @@ void CombatPackSuite(TestRunner &runner) {
             {"ATTACK_HEAVY_SWEEP", combat::ATTACK_HEAVY_SWEEP_OFF, combat::ATTACKS_OFF, combat::ATTACK_HEAVY_SWEEP, combat::ATTACK_SIZE, combat::ATTACKS_COUNT},
             {"ATTACK_LUNGE_LUNGE", combat::ATTACK_LUNGE_LUNGE_OFF, combat::ATTACKS_OFF, combat::ATTACK_LUNGE_LUNGE, combat::ATTACK_SIZE, combat::ATTACKS_COUNT},
             {"ATTACK_LUNGE_SWEEP", combat::ATTACK_LUNGE_SWEEP_OFF, combat::ATTACKS_OFF, combat::ATTACK_LUNGE_SWEEP, combat::ATTACK_SIZE, combat::ATTACKS_COUNT},
+            {"ATTACK_RAVAGER_BITE", combat::ATTACK_RAVAGER_BITE_OFF, combat::ATTACKS_OFF, combat::ATTACK_RAVAGER_BITE, combat::ATTACK_SIZE, combat::ATTACKS_COUNT},
+            {"ATTACK_RAVAGER_TAIL_SWEEP", combat::ATTACK_RAVAGER_TAIL_SWEEP_OFF, combat::ATTACKS_OFF, combat::ATTACK_RAVAGER_TAIL_SWEEP, combat::ATTACK_SIZE, combat::ATTACKS_COUNT},
             {"ATTACK_SWEEP_LUNGE", combat::ATTACK_SWEEP_LUNGE_OFF, combat::ATTACKS_OFF, combat::ATTACK_SWEEP_LUNGE, combat::ATTACK_SIZE, combat::ATTACKS_COUNT},
             {"ATTACK_SWEEP_SWEEP", combat::ATTACK_SWEEP_SWEEP_OFF, combat::ATTACKS_OFF, combat::ATTACK_SWEEP_SWEEP, combat::ATTACK_SIZE, combat::ATTACKS_COUNT},
             {"WINDOW_HEAVY_LUNGE_0", combat::WINDOW_HEAVY_LUNGE_0_OFF, combat::WINDOWS_OFF, combat::WINDOW_HEAVY_LUNGE_0, combat::WINDOW_SIZE, combat::WINDOWS_COUNT},
             {"WINDOW_HEAVY_SWEEP_0", combat::WINDOW_HEAVY_SWEEP_0_OFF, combat::WINDOWS_OFF, combat::WINDOW_HEAVY_SWEEP_0, combat::WINDOW_SIZE, combat::WINDOWS_COUNT},
             {"WINDOW_LUNGE_LUNGE_0", combat::WINDOW_LUNGE_LUNGE_0_OFF, combat::WINDOWS_OFF, combat::WINDOW_LUNGE_LUNGE_0, combat::WINDOW_SIZE, combat::WINDOWS_COUNT},
             {"WINDOW_LUNGE_SWEEP_0", combat::WINDOW_LUNGE_SWEEP_0_OFF, combat::WINDOWS_OFF, combat::WINDOW_LUNGE_SWEEP_0, combat::WINDOW_SIZE, combat::WINDOWS_COUNT},
+            {"WINDOW_RAVAGER_BITE_0", combat::WINDOW_RAVAGER_BITE_0_OFF, combat::WINDOWS_OFF, combat::WINDOW_RAVAGER_BITE_0, combat::WINDOW_SIZE, combat::WINDOWS_COUNT},
+            {"WINDOW_RAVAGER_TAIL_SWEEP_0", combat::WINDOW_RAVAGER_TAIL_SWEEP_0_OFF, combat::WINDOWS_OFF, combat::WINDOW_RAVAGER_TAIL_SWEEP_0, combat::WINDOW_SIZE, combat::WINDOWS_COUNT},
+            {"WINDOW_RAVAGER_TAIL_SWEEP_1", combat::WINDOW_RAVAGER_TAIL_SWEEP_1_OFF, combat::WINDOWS_OFF, combat::WINDOW_RAVAGER_TAIL_SWEEP_1, combat::WINDOW_SIZE, combat::WINDOWS_COUNT},
             {"WINDOW_SWEEP_LUNGE_0", combat::WINDOW_SWEEP_LUNGE_0_OFF, combat::WINDOWS_OFF, combat::WINDOW_SWEEP_LUNGE_0, combat::WINDOW_SIZE, combat::WINDOWS_COUNT},
             {"WINDOW_SWEEP_SWEEP_0", combat::WINDOW_SWEEP_SWEEP_0_OFF, combat::WINDOWS_OFF, combat::WINDOW_SWEEP_SWEEP_0, combat::WINDOW_SIZE, combat::WINDOWS_COUNT},
             {"PATTERN_HEAVY_P_LUNGE", combat::PATTERN_HEAVY_P_LUNGE_OFF, combat::PATTERNS_OFF, combat::PATTERN_HEAVY_P_LUNGE, combat::PATTERN_SIZE, combat::PATTERNS_COUNT},
             {"PATTERN_HEAVY_P_SWEEP", combat::PATTERN_HEAVY_P_SWEEP_OFF, combat::PATTERNS_OFF, combat::PATTERN_HEAVY_P_SWEEP, combat::PATTERN_SIZE, combat::PATTERNS_COUNT},
             {"PATTERN_LUNGE_P_LUNGE", combat::PATTERN_LUNGE_P_LUNGE_OFF, combat::PATTERNS_OFF, combat::PATTERN_LUNGE_P_LUNGE, combat::PATTERN_SIZE, combat::PATTERNS_COUNT},
             {"PATTERN_LUNGE_P_SWEEP", combat::PATTERN_LUNGE_P_SWEEP_OFF, combat::PATTERNS_OFF, combat::PATTERN_LUNGE_P_SWEEP, combat::PATTERN_SIZE, combat::PATTERNS_COUNT},
+            {"PATTERN_RAVAGER_P_BITE", combat::PATTERN_RAVAGER_P_BITE_OFF, combat::PATTERNS_OFF, combat::PATTERN_RAVAGER_P_BITE, combat::PATTERN_SIZE, combat::PATTERNS_COUNT},
+            {"PATTERN_RAVAGER_P_ENRAGED", combat::PATTERN_RAVAGER_P_ENRAGED_OFF, combat::PATTERNS_OFF, combat::PATTERN_RAVAGER_P_ENRAGED, combat::PATTERN_SIZE, combat::PATTERNS_COUNT},
+            {"PATTERN_RAVAGER_P_SWEEP", combat::PATTERN_RAVAGER_P_SWEEP_OFF, combat::PATTERNS_OFF, combat::PATTERN_RAVAGER_P_SWEEP, combat::PATTERN_SIZE, combat::PATTERNS_COUNT},
             {"PATTERN_SWEEP_P_SWEEP", combat::PATTERN_SWEEP_P_SWEEP_OFF, combat::PATTERNS_OFF, combat::PATTERN_SWEEP_P_SWEEP, combat::PATTERN_SIZE, combat::PATTERNS_COUNT},
             {"GUARD_HEAVY_P_LUNGE", combat::GUARD_HEAVY_P_LUNGE_OFF, combat::GUARDS_OFF, combat::GUARD_HEAVY_P_LUNGE, combat::GUARD_SIZE, combat::GUARDS_COUNT},
             {"GUARD_HEAVY_P_SWEEP", combat::GUARD_HEAVY_P_SWEEP_OFF, combat::GUARDS_OFF, combat::GUARD_HEAVY_P_SWEEP, combat::GUARD_SIZE, combat::GUARDS_COUNT},
             {"GUARD_LUNGE_P_LUNGE", combat::GUARD_LUNGE_P_LUNGE_OFF, combat::GUARDS_OFF, combat::GUARD_LUNGE_P_LUNGE, combat::GUARD_SIZE, combat::GUARDS_COUNT},
             {"GUARD_LUNGE_P_SWEEP", combat::GUARD_LUNGE_P_SWEEP_OFF, combat::GUARDS_OFF, combat::GUARD_LUNGE_P_SWEEP, combat::GUARD_SIZE, combat::GUARDS_COUNT},
+            {"GUARD_RAVAGER_P_BITE", combat::GUARD_RAVAGER_P_BITE_OFF, combat::GUARDS_OFF, combat::GUARD_RAVAGER_P_BITE, combat::GUARD_SIZE, combat::GUARDS_COUNT},
+            {"GUARD_RAVAGER_P_ENRAGED", combat::GUARD_RAVAGER_P_ENRAGED_OFF, combat::GUARDS_OFF, combat::GUARD_RAVAGER_P_ENRAGED, combat::GUARD_SIZE, combat::GUARDS_COUNT},
+            {"GUARD_RAVAGER_P_SWEEP", combat::GUARD_RAVAGER_P_SWEEP_OFF, combat::GUARDS_OFF, combat::GUARD_RAVAGER_P_SWEEP, combat::GUARD_SIZE, combat::GUARDS_COUNT},
             {"GUARD_SWEEP_P_SWEEP", combat::GUARD_SWEEP_P_SWEEP_OFF, combat::GUARDS_OFF, combat::GUARD_SWEEP_P_SWEEP, combat::GUARD_SIZE, combat::GUARDS_COUNT},
             {"STEP_HEAVY_P_LUNGE_0", combat::STEP_HEAVY_P_LUNGE_0_OFF, combat::STEPS_OFF, combat::STEP_HEAVY_P_LUNGE_0, combat::STEP_SIZE, combat::STEPS_COUNT},
             {"STEP_HEAVY_P_SWEEP_0", combat::STEP_HEAVY_P_SWEEP_0_OFF, combat::STEPS_OFF, combat::STEP_HEAVY_P_SWEEP_0, combat::STEP_SIZE, combat::STEPS_COUNT},
             {"STEP_LUNGE_P_LUNGE_0", combat::STEP_LUNGE_P_LUNGE_0_OFF, combat::STEPS_OFF, combat::STEP_LUNGE_P_LUNGE_0, combat::STEP_SIZE, combat::STEPS_COUNT},
             {"STEP_LUNGE_P_SWEEP_0", combat::STEP_LUNGE_P_SWEEP_0_OFF, combat::STEPS_OFF, combat::STEP_LUNGE_P_SWEEP_0, combat::STEP_SIZE, combat::STEPS_COUNT},
-            {"STEP_SWEEP_P_SWEEP_0", combat::STEP_SWEEP_P_SWEEP_0_OFF, combat::STEPS_OFF, combat::STEP_SWEEP_P_SWEEP_0, combat::STEP_SIZE, combat::STEPS_COUNT},
-            // ljj.8 breakable-part records (ravager tail + multi-window attack).
-            {"CREATURE_RAVAGER", combat::CREATURE_RAVAGER_OFF, combat::CREATURES_OFF, combat::CREATURE_RAVAGER, combat::CREATURE_SIZE, combat::CREATURES_COUNT},
-            {"PROFILE_RAVAGER", combat::PROFILE_RAVAGER_OFF, combat::PROFILES_OFF, 2, combat::PROFILE_SIZE, combat::PROFILES_COUNT},
-            {"PART_RAVAGER_TAIL", combat::PART_RAVAGER_TAIL_OFF, combat::PARTS_OFF, combat::PART_RAVAGER_TAIL, combat::PART_SIZE, combat::PARTS_COUNT},
-            {"STAGE_RAVAGER_TAIL_0", combat::STAGE_RAVAGER_TAIL_0_OFF, combat::STAGES_OFF, 0, combat::STAGE_SIZE, combat::STAGES_COUNT},
-            {"STAGE_RAVAGER_TAIL_1", combat::STAGE_RAVAGER_TAIL_1_OFF, combat::STAGES_OFF, 1, combat::STAGE_SIZE, combat::STAGES_COUNT},
-            {"ATTACK_RAVAGER_BITE", combat::ATTACK_RAVAGER_BITE_OFF, combat::ATTACKS_OFF, combat::ATTACK_RAVAGER_BITE, combat::ATTACK_SIZE, combat::ATTACKS_COUNT},
-            {"ATTACK_RAVAGER_TAIL_SWEEP", combat::ATTACK_RAVAGER_TAIL_SWEEP_OFF, combat::ATTACKS_OFF, combat::ATTACK_RAVAGER_TAIL_SWEEP, combat::ATTACK_SIZE, combat::ATTACKS_COUNT},
-            {"WINDOW_RAVAGER_BITE_0", combat::WINDOW_RAVAGER_BITE_0_OFF, combat::WINDOWS_OFF, combat::WINDOW_RAVAGER_BITE_0, combat::WINDOW_SIZE, combat::WINDOWS_COUNT},
-            {"WINDOW_RAVAGER_TAIL_SWEEP_0", combat::WINDOW_RAVAGER_TAIL_SWEEP_0_OFF, combat::WINDOWS_OFF, combat::WINDOW_RAVAGER_TAIL_SWEEP_0, combat::WINDOW_SIZE, combat::WINDOWS_COUNT},
-            {"WINDOW_RAVAGER_TAIL_SWEEP_1", combat::WINDOW_RAVAGER_TAIL_SWEEP_1_OFF, combat::WINDOWS_OFF, combat::WINDOW_RAVAGER_TAIL_SWEEP_1, combat::WINDOW_SIZE, combat::WINDOWS_COUNT},
-            {"PATTERN_RAVAGER_P_ENRAGED", combat::PATTERN_RAVAGER_P_ENRAGED_OFF, combat::PATTERNS_OFF, combat::PATTERN_RAVAGER_P_ENRAGED, combat::PATTERN_SIZE, combat::PATTERNS_COUNT},
-            {"PATTERN_RAVAGER_P_SWEEP", combat::PATTERN_RAVAGER_P_SWEEP_OFF, combat::PATTERNS_OFF, combat::PATTERN_RAVAGER_P_SWEEP, combat::PATTERN_SIZE, combat::PATTERNS_COUNT},
-            {"PATTERN_RAVAGER_P_BITE", combat::PATTERN_RAVAGER_P_BITE_OFF, combat::PATTERNS_OFF, combat::PATTERN_RAVAGER_P_BITE, combat::PATTERN_SIZE, combat::PATTERNS_COUNT},
-            {"GUARD_RAVAGER_P_ENRAGED", combat::GUARD_RAVAGER_P_ENRAGED_OFF, combat::GUARDS_OFF, combat::GUARD_RAVAGER_P_ENRAGED, combat::GUARD_SIZE, combat::GUARDS_COUNT},
-            {"GUARD_RAVAGER_P_SWEEP", combat::GUARD_RAVAGER_P_SWEEP_OFF, combat::GUARDS_OFF, combat::GUARD_RAVAGER_P_SWEEP, combat::GUARD_SIZE, combat::GUARDS_COUNT},
-            {"GUARD_RAVAGER_P_BITE", combat::GUARD_RAVAGER_P_BITE_OFF, combat::GUARDS_OFF, combat::GUARD_RAVAGER_P_BITE, combat::GUARD_SIZE, combat::GUARDS_COUNT},
+            {"STEP_RAVAGER_P_BITE_0", combat::STEP_RAVAGER_P_BITE_0_OFF, combat::STEPS_OFF, combat::STEP_RAVAGER_P_BITE_0, combat::STEP_SIZE, combat::STEPS_COUNT},
             {"STEP_RAVAGER_P_ENRAGED_0", combat::STEP_RAVAGER_P_ENRAGED_0_OFF, combat::STEPS_OFF, combat::STEP_RAVAGER_P_ENRAGED_0, combat::STEP_SIZE, combat::STEPS_COUNT},
             {"STEP_RAVAGER_P_SWEEP_0", combat::STEP_RAVAGER_P_SWEEP_0_OFF, combat::STEPS_OFF, combat::STEP_RAVAGER_P_SWEEP_0, combat::STEP_SIZE, combat::STEPS_COUNT},
-            {"STEP_RAVAGER_P_BITE_0", combat::STEP_RAVAGER_P_BITE_0_OFF, combat::STEPS_OFF, combat::STEP_RAVAGER_P_BITE_0, combat::STEP_SIZE, combat::STEPS_COUNT},
+            {"STEP_SWEEP_P_SWEEP_0", combat::STEP_SWEEP_P_SWEEP_0_OFF, combat::STEPS_OFF, combat::STEP_SWEEP_P_SWEEP_0, combat::STEP_SIZE, combat::STEPS_COUNT},
         };
         for (const MetaRecord &r : records) {
             t.assert(r.off, static_cast<int>(r.sectionOff) + r.idx * r.size, std::string("offset ") + r.name);
@@ -315,8 +305,8 @@ void CombatPackSuite(TestRunner &runner) {
             const combat_data::Creature &h = combat_data::CREATURES[i];
             t.assert(b8(blob, o + 0), h.skeletonIdx, "blob creature skeletonIdx");
             t.assert(b8(blob, o + 1), h.profileIdx, "blob creature profileIdx");
-            t.assert(b8(blob, o + 2), h.firstPart, "blob creature firstPart");
-            t.assert(b8(blob, o + 3), h.partCount, "blob creature partCount");
+            t.assert(b8(blob, o + 2), h.headZone, "blob creature headZone");
+            t.assert(b8(blob, o + 3), h.appendZone, "blob creature appendZone");
             t.assert(b8(blob, o + 4), h.firstAttack, "blob creature firstAttack");
             t.assert(b8(blob, o + 5), h.attackCount, "blob creature attackCount");
             t.assert(b8(blob, o + 6), h.firstPattern, "blob creature firstPattern");
@@ -340,7 +330,7 @@ void CombatPackSuite(TestRunner &runner) {
             t.assert(b8(blob, o + 6), h.retreatDen, "blob profile retreatDen");
             t.assert(b8(blob, o + 7), h.staggerMax, "blob profile staggerMax");
             t.assert(b8(blob, o + 8), h.staggerDecay, "blob profile staggerDecay");
-            t.assert(b8(blob, o + 9), h.partCount, "blob profile partCount");
+            t.assert(b8(blob, o + 9), h.zoneFlags, "blob profile zoneFlags");
             t.assert(b16(blob, o + 10), h.cdBase, "blob profile cdBase");
             t.assert(b16(blob, o + 12), h.cdJitter, "blob profile cdJitter");
             t.assert(b16(blob, o + 14), h.spawnT, "blob profile spawnT");
@@ -351,54 +341,24 @@ void CombatPackSuite(TestRunner &runner) {
         for (uint8_t i = 0; i < combat::SKELETONS_COUNT; i++) {
             const size_t o = static_cast<size_t>(combat::SKELETONS_OFF) + i * combat::SKELETON_SIZE;
             const combat_data::Skeleton &h = combat_data::SKELETONS[i];
-            t.assert(b8(blob, o + 0), h.firstPart, "blob skeleton firstPart");
-            t.assert(b8(blob, o + 1), h.partCount, "blob skeleton partCount");
-            t.assert(b8(blob, o + 2), h.firstAnchor, "blob skeleton firstAnchor");
-            t.assert(b8(blob, o + 3), h.anchorCount, "blob skeleton anchorCount");
+            t.assert(b8(blob, o + 0), h.firstAnchor, "blob skeleton firstAnchor");
+            t.assert(b8(blob, o + 1), h.anchorCount, "blob skeleton anchorCount");
         }
-        for (uint8_t i = 0; i < combat::PARTS_COUNT; i++) {
-            const size_t o = static_cast<size_t>(combat::PARTS_OFF) + i * combat::PART_SIZE;
-            const combat_data::Part &h = combat_data::PARTS[i];
-            t.assert(bi8(blob, o + 0), h.box.ox, "blob part box.ox");
-            t.assert(bi8(blob, o + 1), h.box.oy, "blob part box.oy");
-            t.assert(b8(blob, o + 2), h.box.w, "blob part box.w");
-            t.assert(b8(blob, o + 3), h.box.h, "blob part box.h");
-            t.assert(b8(blob, o + 4), h.dmgMul, "blob part dmgMul");
-            t.assert(b8(blob, o + 5), h.bodyShare, "blob part bodyShare");
-            t.assert(b8(blob, o + 6), h.breakTypes, "blob part breakTypes");
-            t.assert(b8(blob, o + 7), h.hurtOn, "blob part hurtOn");
-            t.assert(b8(blob, o + 8), h.physSlash, "blob part physSlash");
-            t.assert(b8(blob, o + 9), h.physBlunt, "blob part physBlunt");
-            t.assert(b8(blob, o + 10), h.physShot, "blob part physShot");
-            t.assert(b8(blob, o + 11), h.firstStage, "blob part firstStage");
-            t.assert(b8(blob, o + 12), h.stageCount, "blob part stageCount");
-            t.assert(b8(blob, o + 13), h.firstElem, "blob part firstElem");
-            t.assert(b8(blob, o + 14), h.elemCount, "blob part elemCount");
-            t.assert(b16(blob, o + 15), h.hp, "blob part hp");
-            t.assert(b8(blob, o + 17), h.flags, "blob part flags");
-        }
-        for (uint8_t i = 0; i < combat::STAGES_COUNT; i++) {
-            const size_t o = static_cast<size_t>(combat::STAGES_OFF) + i * combat::STAGE_SIZE;
-            const combat_data::Stage &h = combat_data::STAGES[i];
-            t.assert(b8(blob, o + 0), h.at, "blob stage at");
-            t.assert(b8(blob, o + 1), h.flags, "blob stage flags");
-            t.assert(b8(blob, o + 2), h.dmgMulOverride, "blob stage dmgMulOverride");
-            t.assert(b8(blob, o + 3), h.speedMul, "blob stage speedMul");
-            t.assert(b8(blob, o + 4), h.stagger, "blob stage stagger");
-            t.assert(b8(blob, o + 5), h.cue, "blob stage cue");
-            t.assert(b8(blob, o + 6), h.firstDisable, "blob stage firstDisable");
-            t.assert(b8(blob, o + 7), h.disableCount, "blob stage disableCount");
-            t.assert(b8(blob, o + 8), h.firstEnable, "blob stage firstEnable");
-            t.assert(b8(blob, o + 9), h.enableCount, "blob stage enableCount");
-        }
-        for (uint8_t i = 0; i < combat::ELEMS_COUNT; i++) {
-            const size_t o = static_cast<size_t>(combat::ELEMS_OFF) + i * combat::ELEM_SIZE;
-            t.assert(b8(blob, o + 0), combat_data::ELEMS[i].elem, "blob elem");
-            t.assert(b8(blob, o + 1), combat_data::ELEMS[i].mul, "blob elem mul");
-        }
-        for (uint8_t i = 0; i < combat::REFS_COUNT; i++) {
-            const size_t o = static_cast<size_t>(combat::REFS_OFF) + i * combat::REF_SIZE;
-            t.assert(b8(blob, o + 0), combat_data::REFS[i].attackIdx, "blob ref attackIdx");
+        for (uint8_t i = 0; i < combat::ZONES_COUNT; i++) {
+            const size_t o = static_cast<size_t>(combat::ZONES_OFF) + i * combat::ZONE_SIZE;
+            const combat_data::Zone &h = combat_data::ZONES[i];
+            t.assert(bi8(blob, o + 0), h.box.ox, "blob zone box.ox");
+            t.assert(bi8(blob, o + 1), h.box.oy, "blob zone box.oy");
+            t.assert(b8(blob, o + 2), h.box.w, "blob zone box.w");
+            t.assert(b8(blob, o + 3), h.box.h, "blob zone box.h");
+            t.assert(b8(blob, o + 4), h.hp, "blob zone hp");
+            t.assert(b8(blob, o + 5), h.dmgMul, "blob zone dmgMul");
+            t.assert(b8(blob, o + 6), h.bodyShare, "blob zone bodyShare");
+            t.assert(b8(blob, o + 7), h.breakTypes, "blob zone breakTypes");
+            t.assert(b8(blob, o + 8), h.staggerOnHit, "blob zone staggerOnHit");
+            t.assert(b8(blob, o + 9), h.brokenDmgMul, "blob zone brokenDmgMul");
+            t.assert(b8(blob, o + 10), h.brokenFlags, "blob zone brokenFlags");
+            t.assert(b8(blob, o + 11), h.unlockMask, "blob zone unlockMask");
         }
         for (uint8_t i = 0; i < combat::ATTACKS_COUNT; i++) {
             const size_t o = static_cast<size_t>(combat::ATTACKS_OFF) + i * combat::ATTACK_SIZE;
@@ -451,8 +411,7 @@ void CombatPackSuite(TestRunner &runner) {
             t.assert(b8(blob, o + 4), h.playerFlags, "blob guard playerFlags");
             t.assert(b8(blob, o + 5), h.cooldown, "blob guard cooldown");
             t.assert(b8(blob, o + 6), h.chance, "blob guard chance");
-            t.assert(b8(blob, o + 7), h.firstPartPred, "blob guard firstPartPred");
-            t.assert(b8(blob, o + 8), h.partPredCount, "blob guard partPredCount");
+            t.assert(b8(blob, o + 7), h.zonesBroken, "blob guard zonesBroken");
         }
         for (uint8_t i = 0; i < combat::STEPS_COUNT; i++) {
             const size_t o = static_cast<size_t>(combat::STEPS_OFF) + i * combat::STEP_SIZE;
@@ -467,13 +426,6 @@ void CombatPackSuite(TestRunner &runner) {
             t.assert(bi8(blob, o + 0), combat_data::ANCHORS[i].ox, "blob anchor ox");
             t.assert(bi8(blob, o + 1), combat_data::ANCHORS[i].oy, "blob anchor oy");
         }
-        for (uint8_t i = 0; i < combat::PREDICATES_COUNT; i++) {
-            const size_t o = static_cast<size_t>(combat::PREDICATES_OFF) + i * combat::PREDICATE_SIZE;
-            const combat_data::Predicate &h = combat_data::PREDICATES[i];
-            t.assert(b8(blob, o + 0), h.partIdx, "blob predicate partIdx");
-            t.assert(b8(blob, o + 1), h.op, "blob predicate op");
-            t.assert(b8(blob, o + 2), h.stage, "blob predicate stage");
-        }
         suite.addTest(t);
     }
 
@@ -487,6 +439,10 @@ void CombatPackSuite(TestRunner &runner) {
         t.assert(b8(blob, static_cast<size_t>(combat::CREATURE_LUNGE_OFF) + 10), combat_expect::CREATURE_LUNGE_SPD, "expect lunge spd");
         t.assert(b16(blob, static_cast<size_t>(combat::CREATURE_SWEEP_OFF) + 11), combat_expect::CREATURE_SWEEP_HP, "expect sweep hp");
         t.assert(b8(blob, static_cast<size_t>(combat::CREATURE_SWEEP_OFF) + 10), combat_expect::CREATURE_SWEEP_SPD, "expect sweep spd");
+        t.assert(b8(blob, static_cast<size_t>(combat::ZONE_RAVAGER_HEAD_OFF) + 4), combat_expect::ZONE_RAVAGER_HEAD_HP, "expect head hp");
+        t.assert(b8(blob, static_cast<size_t>(combat::ZONE_RAVAGER_HEAD_OFF) + 5), combat_expect::ZONE_RAVAGER_HEAD_DMG_MUL, "expect head dmgMul");
+        t.assert(b8(blob, static_cast<size_t>(combat::ZONE_RAVAGER_APPENDAGE_OFF) + 4), combat_expect::ZONE_RAVAGER_APPENDAGE_HP, "expect tail hp");
+        t.assert(b8(blob, static_cast<size_t>(combat::ZONE_RAVAGER_APPENDAGE_OFF) + 5), combat_expect::ZONE_RAVAGER_APPENDAGE_DMG_MUL, "expect tail dmgMul");
         t.assert(b16(blob, static_cast<size_t>(combat::ATTACK_HEAVY_LUNGE_OFF) + 14), combat_expect::ATTACK_HEAVY_LUNGE_WINDUP, "expect heavy lunge windup");
         t.assert(b16(blob, static_cast<size_t>(combat::ATTACK_HEAVY_LUNGE_OFF) + 16), combat_expect::ATTACK_HEAVY_LUNGE_ACTIVE, "expect heavy lunge active");
         t.assert(b16(blob, static_cast<size_t>(combat::ATTACK_HEAVY_LUNGE_OFF) + 18), combat_expect::ATTACK_HEAVY_LUNGE_RECOVER, "expect heavy lunge recover");

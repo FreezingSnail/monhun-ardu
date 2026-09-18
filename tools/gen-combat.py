@@ -7,40 +7,39 @@
         -> src/generated/combat_meta.hpp     (VERSION, SIZE, per-record offsets)
         -> src/generated/combat_expect.hpp   (record sizes, spot values, sha256)
 
-Schema and reference values live in docs/creature-framework.md (sections 3-8
-and 11). Validation is strict: unknown/missing keys, integer-only quantized
-fields (floats and bools rejected), ranges, phys/elem enum membership,
-descending stage thresholds, windows inside [0, active], guard ordering,
+3-hitzone model (build/zones-design.md): the body is implicit (creature HP and
+creature w/h, wins ties); a creature may declare a `head` and/or an `appendage`
+zone. Zones carry a u8 pool, dmgMul, bodyShare, breakTypes, staggerOnHit and a
+single broken record (brokenDmgMul / brokenFlags / unlockMask); there are no
+stage tables, element tables or predicate tables. Validation stays strict:
+unknown/missing keys, integer-only quantized fields (floats and bools rejected),
+ranges, phys enum membership, windows inside [0, active], guard ordering,
 resolvable local refs, unique local ids and u8/u16 section limits.
 
 Blob layout (little-endian, explicit u8/u16, no padding, fixed section order):
 
-    header     32 B  magic u16, version u8, flags u8, 14x u16 section counts
-    creature   17 B  skeletonIdx, profileIdx, firstPart, partCount,
+    header     32 B  magic u16, version u8, flags u8, 10x u16 counts + 4x u16 reserved
+    creature   17 B  skeletonIdx, profileIdx, headZone, appendZone,
                      firstAttack, attackCount, firstPattern, patternCount,
                      w, h, spd, hp u16, spawnX u16, spawnY u16
     profile    22 B  engageDist, keepDist, attackDist, circleNum, circleDen,
                      retreatNum, retreatDen, staggerMax, staggerDecay,
-                     partCount (effective), cdBase u16, cdJitter u16, spawnT u16,
-                     spawnCd u16, stunRecoverT u16, staggerRecoverT u16
-    skeleton    4 B  firstPart, partCount, firstAnchor, anchorCount
-    part       18 B  box(ox i8, oy i8, w, h), dmgMul, bodyShare, breakTypes,
-                     hurtOn, physSlash, physBlunt, physShot, firstStage,
-                     stageCount, firstElem, elemCount, hp u16, flags
-    stage      10 B  at, flags, dmgMulOverride, speedMul, stagger, cue,
-                     firstDisable, disableCount, firstEnable, enableCount
+                     zoneFlags (bit0 head, bit1 appendage), cdBase u16,
+                     cdJitter u16, spawnT u16, spawnCd u16, stunRecoverT u16,
+                     staggerRecoverT u16
+    skeleton    2 B  firstAnchor, anchorCount
+    zone       12 B  box(ox i8, oy i8, w, h), hp, dmgMul, bodyShare, breakTypes,
+                     staggerOnHit, brokenDmgMul, brokenFlags (bit0 hurtOff,
+                     bit1 cue), unlockMask (bit per global attack idx)
     anchor      2 B  ox i8, oy i8
-    elem        2 B  elem, mul
-    ref         1 B  attackIdx
     attack     22 B  moveType, moveSpeedF, moveDx i8, moveDy i8, facing, phys,
                      elem, onHitEffect, onHitPush i8, onHitStun, stagger, cue,
                      firstWindow, windowCount, windup u16, active u16,
                      recover u16, dmg u16
     window     10 B  t0 u16, t1 u16, box(ox i8, oy i8, w, h), dmgMul, flags
     pattern     3 B  firstStep, stepCount, guardIdx
-    guard       9 B  minDist, maxDist, hpLo, hpHi, playerFlags, cooldown,
-                     chance, firstPartPred, partPredCount
-    predicate   3 B  partIdx, op, stage
+    guard       8 B  minDist, maxDist, hpLo, hpHi, playerFlags, cooldown,
+                     chance, zonesBroken (bitmask)
     step        4 B  kind (0 ATK / 1 WAIT), ref (attackIdx or ticks), after,
                      chance
 
@@ -79,43 +78,43 @@ MOVE_TYPES = {"none": 0, "lunge": 1, "charge": 2, "hop": 3}
 FACINGS = {"track": 0, "lock-at-windup": 1}
 ON_HIT_EFFECTS = {"none": 0, "trip": 1, "stun": 2}
 CUES = {"none": 0, "windup": 1, "part_break": 2}
-PRED_OPS = {">=": 0, "<=": 1, "==": 2}
 STEP_ATK = 0
 STEP_WAIT = 1
+
+# Fixed 3-hitzone model (build/zones-design.md): body is implicit, these are
+# the two optional per-creature records. Bit order is the zone flag / broken
+# bit contract shared with src/core/combat.hpp.
+ZONE_NAMES = ("head", "appendage")
+ZONE_HEAD = 0x01
+ZONE_APPENDAGE = 0x02
+COMBAT_NO_ZONE = 0xFF
 
 SIZES = {
     "CREATURE": 17,
     "PROFILE": 22,
-    "SKELETON": 4,
-    "PART": 18,
-    "STAGE": 10,
+    "SKELETON": 2,
+    "ZONE": 12,
     "ANCHOR": 2,
-    "ELEM": 2,
-    "REF": 1,
     "ATTACK": 22,
     "WINDOW": 10,
     "PATTERN": 3,
-    "GUARD": 9,
-    "PREDICATE": 3,
+    "GUARD": 8,
     "STEP": 4,
 }
 SECTION_RECORD = {
     "CREATURES": "CREATURE",
     "PROFILES": "PROFILE",
     "SKELETONS": "SKELETON",
-    "PARTS": "PART",
-    "STAGES": "STAGE",
+    "ZONES": "ZONE",
     "ANCHORS": "ANCHOR",
-    "ELEMS": "ELEM",
-    "REFS": "REF",
     "ATTACKS": "ATTACK",
     "WINDOWS": "WINDOW",
     "PATTERNS": "PATTERN",
     "GUARDS": "GUARD",
-    "PREDICATES": "PREDICATE",
     "STEPS": "STEP",
 }
 SECTION_ORDER = list(SECTION_RECORD)
+RESERVED_COUNTS = 4
 
 _MISSING = object()
 
@@ -204,7 +203,7 @@ def read_id(errors, ctx, obj, key, seen=None):
     return value
 
 
-def read_id_list(errors, ctx, obj, key, known):
+def read_attack_id_list(errors, ctx, obj, key, known):
     if not isinstance(obj, dict) or key not in obj:
         return []
     value = obj[key]
@@ -251,73 +250,33 @@ def normalize_break_types(errors, ctx, value):
     return mask
 
 
-def normalize_mul_map(errors, ctx, value, table, label):
-    result = {}
-    if value is None:
-        return result
-    if not isinstance(value, dict):
-        errors.add(ctx, "%s: expected an object mapping names to percents" % label)
-        return result
-    for name in sorted(value):
-        if name not in table:
-            errors.add(ctx, "%s: unknown name %r (want one of %s)" % (label, name, ", ".join(sorted(table))))
-            continue
-        mul = value[name]
-        if not is_int(mul):
-            errors.add(ctx, "%s.%s: expected an integer, got %r" % (label, name, mul))
-            continue
-        if not 0 <= mul <= 255:
-            errors.add(ctx, "%s.%s: out of range 0..255: %d" % (label, name, mul))
-            continue
-        result[table[name]] = mul
-    return result
-
-
-def normalize_stages(errors, ctx, value, attack_ids):
-    if not isinstance(value, list):
-        errors.add(ctx, "stages: expected an array")
-        return []
-    stages = []
-    previous_at = None
-    for i, obj in enumerate(value):
-        c = "%s[%d]" % (ctx, i)
-        check_keys(errors, c, obj, {"at"}, {"stagger", "speedMul", "cue", "dmgMulOverride", "hurtOn", "disableAttacks", "enableAttacks"})
-        at = read_int(errors, c, obj, "at", 0, 100)
-        if at is not None:
-            if previous_at is not None and at >= previous_at:
-                errors.add(c, "at: stage thresholds must be strictly descending (got %d after %d)" % (at, previous_at))
-            previous_at = at
-        hurt_on = None
-        if "hurtOn" in obj:
-            hurt_on = read_bool(errors, c, obj, "hurtOn")
-        stage = {
-            "at": at if at is not None else 0,
-            "stagger": read_int(errors, c, obj, "stagger", 0, 255, default=0),
-            "speedMul": read_int(errors, c, obj, "speedMul", 0, 255, default=0),
-            "dmgMulOverride": read_int(errors, c, obj, "dmgMulOverride", 0, 255, default=100),
-            "cue": read_enum(errors, c, obj, "cue", CUES, default=0),
-            "disable": read_id_list(errors, c, obj, "disableAttacks", attack_ids),
-            "enable": read_id_list(errors, c, obj, "enableAttacks", attack_ids),
-            "hurtOn": hurt_on,
-            "flags": (0x01 if hurt_on is not None else 0) | (0x02 if "dmgMulOverride" in obj else 0) | (0x04 if "speedMul" in obj else 0),
-        }
-        stages.append(stage)
-    return stages
-
-
-def normalize_part(errors, ctx, obj, attack_ids):
-    check_keys(errors, ctx, obj, {"id", "box", "dmgMul", "hp", "bodyShare", "breakTypes", "hurtOn", "stages"}, {"physMul", "elemMul"})
+def normalize_zone(errors, ctx, obj, attack_ids):
+    check_keys(errors, ctx, obj, {"box", "dmgMul", "hp", "bodyShare", "breakTypes", "hurtOn"}, {"staggerOnHit", "broken"})
+    dmg_mul = read_int(errors, ctx, obj, "dmgMul", 0, 255)
+    broken = obj.get("broken")
+    broken_dmg = dmg_mul if dmg_mul is not None else 100
+    broken_hurt_off = 0
+    broken_cue = 0
+    broken_disable = []
+    if broken is not None:
+        check_keys(errors, ctx + ".broken", broken, set(), {"dmgMul", "hurtOn", "cue", "disableAttacks"})
+        broken_dmg = read_int(errors, ctx + ".broken", broken, "dmgMul", 0, 255, default=broken_dmg if broken_dmg is not None else 100)
+        hurt = read_bool(errors, ctx + ".broken", broken, "hurtOn", default=1)
+        broken_hurt_off = 0 if hurt else 1
+        broken_cue = read_enum(errors, ctx + ".broken", broken, "cue", CUES, default=0) or 0
+        broken_disable = read_attack_id_list(errors, ctx + ".broken", broken, "disableAttacks", attack_ids)
     return {
-        "id": read_id(errors, ctx, obj, "id"),
         "box": normalize_box(errors, ctx + ".box", obj.get("box")),
-        "dmgMul": read_int(errors, ctx, obj, "dmgMul", 0, 255),
-        "hp": read_int(errors, ctx, obj, "hp", 0, 65535),
+        "dmgMul": dmg_mul,
+        "hp": read_int(errors, ctx, obj, "hp", 0, 255),
         "bodyShare": read_int(errors, ctx, obj, "bodyShare", 0, 255),
         "breakTypes": normalize_break_types(errors, ctx, obj.get("breakTypes")),
         "hurtOn": read_bool(errors, ctx, obj, "hurtOn"),
-        "stages": normalize_stages(errors, ctx + ".stages", obj.get("stages"), attack_ids),
-        "phys": normalize_mul_map(errors, ctx, obj.get("physMul"), PHYS, "physMul"),
-        "elems": normalize_mul_map(errors, ctx, obj.get("elemMul"), ELEMS, "elemMul"),
+        "staggerOnHit": read_int(errors, ctx, obj, "staggerOnHit", 0, 255, default=0),
+        "brokenDmgMul": broken_dmg if broken_dmg is not None else 100,
+        "brokenHurtOff": broken_hurt_off,
+        "brokenCue": broken_cue,
+        "brokenDisable": broken_disable,
     }
 
 
@@ -398,11 +357,11 @@ def normalize_attack(errors, ctx, obj):
     }
 
 
-def normalize_guard(errors, ctx, obj, part_lookup):
-    guard = {"minDist": 0, "maxDist": 255, "hpLo": 0, "hpHi": 100, "playerFlags": 0, "cooldown": 0, "chance": 100, "parts": []}
+def normalize_guard(errors, ctx, obj):
+    guard = {"minDist": 0, "maxDist": 255, "hpLo": 0, "hpHi": 100, "playerFlags": 0, "cooldown": 0, "chance": 100, "zonesBroken": []}
     if obj is None:
         return guard
-    check_keys(errors, ctx, obj, set(), {"minDist", "maxDist", "hpBand", "parts", "player", "cooldown", "chance"})
+    check_keys(errors, ctx, obj, set(), {"minDist", "maxDist", "hpBand", "zonesBroken", "player", "cooldown", "chance"})
     guard["minDist"] = read_int(errors, ctx, obj, "minDist", 0, 255, default=0)
     guard["maxDist"] = read_int(errors, ctx, obj, "maxDist", 0, 255, default=255)
     if guard["minDist"] is not None and guard["maxDist"] is not None and guard["minDist"] > guard["maxDist"]:
@@ -419,28 +378,19 @@ def normalize_guard(errors, ctx, obj, part_lookup):
                     errors.add(ctx, "hpBand is inverted: lo %d > hi %d" % (lo, hi))
                 guard["hpLo"] = lo
                 guard["hpHi"] = hi
-    if "parts" in obj:
-        parts = obj["parts"]
-        if not isinstance(parts, dict):
-            errors.add(ctx, "parts: expected an object of part-id predicates")
+    if "zonesBroken" in obj:
+        zones = obj["zonesBroken"]
+        if not isinstance(zones, list):
+            errors.add(ctx, "zonesBroken: expected an array of zone names")
         else:
-            for part_id in sorted(parts):
-                value = parts[part_id]
-                if not isinstance(part_id, str) or part_id not in part_lookup:
-                    errors.add(ctx, "parts: unknown part id %r" % part_id)
+            for i, name in enumerate(zones):
+                if not isinstance(name, str) or name not in ZONE_NAMES:
+                    errors.add(ctx, "zonesBroken[%d]: unknown zone %r (want head or appendage)" % (i, name))
                     continue
-                if not isinstance(value, str):
-                    errors.add(ctx, "parts.%s: expected a comparison string like '>=1'" % part_id)
+                if name in guard["zonesBroken"]:
+                    errors.add(ctx, "zonesBroken[%d]: duplicate zone '%s'" % (i, name))
                     continue
-                match = re.match(r"^\s*(>=|<=|==)\s*(\d+)\s*$", value)
-                if not match:
-                    errors.add(ctx, "parts.%s: malformed comparison %r (want '>=N', '<=N' or '==N')" % (part_id, value))
-                    continue
-                stage = int(match.group(2))
-                if stage > 255:
-                    errors.add(ctx, "parts.%s: stage limit %d > 255" % (part_id, stage))
-                    continue
-                guard["parts"].append((part_lookup[part_id], PRED_OPS[match.group(1)], stage))
+                guard["zonesBroken"].append(name)
     player = obj.get("player")
     if player is not None:
         check_keys(errors, ctx + ".player", player, set(), {"attacking"})
@@ -453,7 +403,7 @@ def normalize_guard(errors, ctx, obj, part_lookup):
     return guard
 
 
-def normalize_pattern(errors, ctx, obj, attack_ids, part_lookup):
+def normalize_pattern(errors, ctx, obj, attack_ids):
     check_keys(errors, ctx, obj, {"id", "steps"}, {"guard"})
     raw_steps = obj.get("steps")
     if not isinstance(raw_steps, list) or not raw_steps:
@@ -490,7 +440,7 @@ def normalize_pattern(errors, ctx, obj, attack_ids, part_lookup):
             errors.add(c, "expected either an 'atk' or a 'wait' step")
     return {
         "id": read_id(errors, ctx, obj, "id"),
-        "guard": normalize_guard(errors, ctx + ".guard", obj.get("guard"), part_lookup),
+        "guard": normalize_guard(errors, ctx + ".guard", obj.get("guard")),
         "steps": steps,
     }
 
@@ -549,22 +499,8 @@ def compile_model(errors, root):
     skeleton_ids = set()
     for i, obj in enumerate(raw_skeletons):
         ctx = "data/skeletons.json: skeletons[%d]" % i
-        check_keys(errors, ctx, obj, {"id", "parts", "anchors"})
+        check_keys(errors, ctx, obj, {"id", "anchors"})
         sid = read_id(errors, ctx, obj, "id", skeleton_ids)
-        raw_parts = obj.get("parts")
-        if not isinstance(raw_parts, list) or not raw_parts:
-            errors.add(ctx, "parts: expected a non-empty array")
-            raw_parts = []
-        part_ids = set()
-        parts = []
-        for j, part in enumerate(raw_parts):
-            pc = "%s.parts[%d]" % (ctx, j)
-            part = normalize_part(errors, pc, part, set())
-            if part["id"] is not None:
-                if part["id"] in part_ids:
-                    errors.add(pc, "duplicate local id '%s'" % part["id"])
-                part_ids.add(part["id"])
-            parts.append(part)
         raw_anchors = obj.get("anchors")
         if not isinstance(raw_anchors, list):
             errors.add(ctx, "anchors: expected an array")
@@ -580,7 +516,7 @@ def compile_model(errors, root):
                 "oy": read_int(errors, ac, anchor, "oy", -128, 127),
             })
         if sid is not None:
-            skeletons.append({"id": sid, "parts": parts, "anchors": anchors, "partIds": part_ids})
+            skeletons.append({"id": sid, "anchors": anchors})
     if errors.items:
         return None
     skeletons.sort(key=lambda skeleton: skeleton["id"])
@@ -602,7 +538,7 @@ def compile_model(errors, root):
         obj = load_json(errors, path)
         if obj is None:
             continue
-        check_keys(errors, ctx, obj, {"id", "skeleton", "stats", "profile", "attacks", "patterns"}, {"parts"})
+        check_keys(errors, ctx, obj, {"id", "skeleton", "stats", "profile", "attacks", "patterns"}, {"zones"})
         cid = read_id(errors, ctx, obj, "id")
         if cid is not None:
             if cid != os.path.splitext(name)[0]:
@@ -632,29 +568,18 @@ def compile_model(errors, root):
                     errors.add(ac, "duplicate local id '%s'" % attack["id"])
                 attack_ids.add(attack["id"])
             attacks.append(attack)
-        raw_parts = obj.get("parts", [])
-        if not isinstance(raw_parts, list):
-            errors.add(ctx, "parts: expected an array")
-            raw_parts = []
-        overrides = []
-        override_ids = set()
-        for i, part in enumerate(raw_parts):
-            pc = "%s.parts[%d]" % (ctx, i)
-            part = normalize_part(errors, pc, part, attack_ids)
-            if part["id"] is not None:
-                if part["id"] in override_ids:
-                    errors.add(pc, "duplicate local id '%s'" % part["id"])
-                if part["id"] in skeleton["partIds"]:
-                    errors.add(pc, "part override id '%s' collides with skeleton part" % part["id"])
-                override_ids.add(part["id"])
-            overrides.append(part)
-        part_lookup = {}
-        for part in skeleton["parts"]:
-            if part["id"] is not None:
-                part_lookup[part["id"]] = ("skeleton", skeleton["id"], part["id"])
-        for part in overrides:
-            if part["id"] is not None:
-                part_lookup[part["id"]] = ("creature", cid, part["id"])
+        raw_zones = obj.get("zones")
+        zones = {}
+        if raw_zones is not None:
+            if not isinstance(raw_zones, dict):
+                errors.add(ctx, "zones: expected an object")
+            else:
+                for name_key in sorted(raw_zones):
+                    if name_key not in ZONE_NAMES:
+                        errors.add(ctx, "zones: unknown zone '%s' (want head or appendage)" % name_key)
+                        continue
+                    zc = "%s.zones.%s" % (ctx, name_key)
+                    zones[name_key] = normalize_zone(errors, zc, raw_zones[name_key], attack_ids)
         raw_patterns = obj.get("patterns")
         if not isinstance(raw_patterns, list) or not raw_patterns:
             errors.add(ctx, "patterns: expected a non-empty array")
@@ -663,7 +588,7 @@ def compile_model(errors, root):
         pattern_ids = set()
         for i, pattern in enumerate(raw_patterns):
             pc = "%s.patterns[%d]" % (ctx, i)
-            pattern = normalize_pattern(errors, pc, pattern, attack_ids, part_lookup)
+            pattern = normalize_pattern(errors, pc, pattern, attack_ids)
             if pattern["id"] is not None:
                 if pattern["id"] in pattern_ids:
                     errors.add(pc, "duplicate local id '%s'" % pattern["id"])
@@ -682,27 +607,13 @@ def compile_model(errors, root):
             },
             "profile": profile,
             "attacks": attacks,
-            "parts": overrides,
+            "zones": zones,
             "patterns": patterns,
-            "effectiveParts": len(skeleton["parts"]) + len(overrides),
         })
     if errors.items:
         return None
     creatures.sort(key=lambda creature: creature["id"])
     return {"skeletons": skeletons, "creatures": creatures}
-
-
-def lookup_part(model, key):
-    owner_kind, owner_id, part_id = key
-    if owner_kind == "skeleton":
-        owner = next(s for s in model["skeletons"] if s["id"] == owner_id)
-    else:
-        owner = next(c for c in model["creatures"] if c["id"] == owner_id)
-    return next(p for p in owner["parts"] if p["id"] == part_id)
-
-
-def part_phys(part, name):
-    return part["phys"].get(PHYS[name], 100)
 
 
 def u8(value):
@@ -717,24 +628,20 @@ def u16(value):
     return bytes([value & 0xFF, (value >> 8) & 0xFF])
 
 
+def zone_flag(name):
+    return ZONE_HEAD if name == "head" else ZONE_APPENDAGE
+
+
 def build_layout(model):
     """Derive every global index, offset-independent, in deterministic order."""
     creatures = model["creatures"]
     skeletons = model["skeletons"]
-    layout = {"creatures": [], "skeletons": [], "parts": [], "stages": [], "anchors": [],
-              "elems": [], "refs": [], "attacks": [], "windows": [], "patterns": [],
-              "guards": [], "predicates": [], "steps": []}
+    layout = {"creatures": [], "skeletons": [], "zones": [], "anchors": [],
+              "attacks": [], "windows": [], "patterns": [], "guards": [], "steps": []}
 
-    # global part order: skeleton parts (skeletons sorted, source order), then
-    # creature override parts (creatures sorted, source order).
-    part_keys = []
-    for skeleton in skeletons:
-        for part in skeleton["parts"]:
-            part_keys.append(("skeleton", skeleton["id"], part["id"]))
-    for creature in creatures:
-        for part in creature["parts"]:
-            part_keys.append(("creature", creature["id"], part["id"]))
-    part_index = {key: i for i, key in enumerate(part_keys)}
+    # Fixed zone order per creature: head then appendage (only present records).
+    zone_keys = [(c["id"], name) for c in creatures for name in ZONE_NAMES if name in c["zones"]]
+    zone_index = {key: i for i, key in enumerate(zone_keys)}
 
     attack_keys = [(c["id"], a["id"]) for c in creatures for a in c["attacks"]]
     attack_index = {key: i for i, key in enumerate(attack_keys)}
@@ -745,63 +652,29 @@ def build_layout(model):
     step_keys = [(c["id"], p["id"], i) for c in creatures for p in c["patterns"] for i in range(len(p["steps"]))]
     step_index = {key: i for i, key in enumerate(step_keys)}
 
-    stage_index = 0
-    elem_index = 0
-    ref_index = 0
-    predicate_index = 0
-    for key in part_keys:
-        part = lookup_part(model, key)
-        layout["parts"].append({
-            "key": key,
-            "part": part,
-            "first_stage": stage_index,
-            "stage_count": len(part["stages"]),
-            "first_elem": elem_index,
-            "elem_count": len(part["elems"]),
-        })
-        for i, stage in enumerate(part["stages"]):
-            owner_id = key[1]
-            first_disable = ref_index
-            first_enable = ref_index + len(stage["disable"])
-            layout["stages"].append({
-                "key": key,
-                "index": i,
-                "stage": stage,
-                "first_disable": first_disable,
-                "disable_count": len(stage["disable"]),
-                "first_enable": first_enable,
-                "enable_count": len(stage["enable"]),
-            })
-            for attack_id in stage["disable"] + stage["enable"]:
-                if key[0] == "skeleton":
-                    raise AssertionError("skeleton part stage cannot reference attacks")
-                layout["refs"].append(attack_index[(owner_id, attack_id)])
-            ref_index += len(stage["disable"]) + len(stage["enable"])
-            stage_index += 1
-        for elem in sorted(part["elems"]):
-            layout["elems"].append((elem, part["elems"][elem]))
-            elem_index += 1
-
     anchor_index = 0
     for skeleton in skeletons:
-        skeleton_layout = {
-            "skeleton": skeleton,
-            "first_part": part_index[("skeleton", skeleton["id"], skeleton["parts"][0]["id"])] if skeleton["parts"] else 0,
-            "first_anchor": anchor_index,
-        }
-        layout["skeletons"].append(skeleton_layout)
+        layout["skeletons"].append({"skeleton": skeleton, "first_anchor": anchor_index})
         for anchor in skeleton["anchors"]:
             layout["anchors"].append({"skeleton": skeleton, "anchor": anchor})
             anchor_index += 1
 
     for creature in creatures:
         cid = creature["id"]
+        head_idx = zone_index.get((cid, "head"), COMBAT_NO_ZONE)
+        append_idx = zone_index.get((cid, "appendage"), COMBAT_NO_ZONE)
         layout["creatures"].append({
             "creature": creature,
-            "first_part": part_index[("creature", cid, creature["parts"][0]["id"])] if creature["parts"] else 0,
+            "head_zone": head_idx,
+            "append_zone": append_idx,
             "first_attack": attack_index[(cid, creature["attacks"][0]["id"])],
             "first_pattern": pattern_index[(cid, creature["patterns"][0]["id"])],
         })
+        for name in ZONE_NAMES:
+            if name in creature["zones"]:
+                layout["zones"].append({"key": (cid, name), "creature": creature, "name": name,
+                                        "zone": creature["zones"][name],
+                                        "unlock": zone_unlock_mask(creature, creature["zones"][name], attack_index)})
         for attack in creature["attacks"]:
             layout["attacks"].append({
                 "creature": creature,
@@ -811,21 +684,21 @@ def build_layout(model):
             for i, window in enumerate(attack["windows"]):
                 layout["windows"].append({"creature": creature, "attack": attack, "window": window, "index": i})
         for pattern in creature["patterns"]:
+            mask = 0
+            for name in pattern["guard"]["zonesBroken"]:
+                mask |= zone_flag(name)
             layout["patterns"].append({
                 "creature": creature,
                 "pattern": pattern,
                 "first_step": step_index[(cid, pattern["id"], 0)] if pattern["steps"] else 0,
                 "guard_idx": pattern_index[(cid, pattern["id"])],
             })
-            layout["guards"].append({"creature": creature, "pattern": pattern, "guard": pattern["guard"], "first_pred": predicate_index})
+            layout["guards"].append({"creature": creature, "pattern": pattern, "guard": pattern["guard"], "zones_mask": mask})
             for i, step in enumerate(pattern["steps"]):
                 layout["steps"].append({"creature": creature, "pattern": pattern, "step": step, "index": i})
-            for part_key, op, stage in pattern["guard"]["parts"]:
-                layout["predicates"].append((part_index[part_key], op, stage))
-                predicate_index += 1
 
     indices = {
-        "part": part_index,
+        "zone": zone_index,
         "attack": attack_index,
         "window": window_index,
         "pattern": pattern_index,
@@ -834,9 +707,16 @@ def build_layout(model):
     return layout, indices
 
 
+def zone_unlock_mask(creature, zone, attack_index):
+    mask = 0
+    for attack_id in zone["brokenDisable"]:
+        mask |= 1 << attack_index[(creature["id"], attack_id)]
+    return mask
+
+
 def pack_model(errors, model):
     layout, index_maps = build_layout(model)
-    part_index = index_maps["part"]
+    zone_index = index_maps["zone"]
     attack_index = index_maps["attack"]
     window_index = index_maps["window"]
     pattern_index = index_maps["pattern"]
@@ -844,16 +724,18 @@ def pack_model(errors, model):
 
     counts = {
         "CREATURES": len(layout["creatures"]), "PROFILES": len(layout["creatures"]),
-        "SKELETONS": len(layout["skeletons"]), "PARTS": len(layout["parts"]),
-        "STAGES": len(layout["stages"]), "ANCHORS": len(layout["anchors"]),
-        "ELEMS": len(layout["elems"]), "REFS": len(layout["refs"]),
+        "SKELETONS": len(layout["skeletons"]), "ZONES": len(layout["zones"]),
+        "ANCHORS": len(layout["anchors"]),
         "ATTACKS": len(layout["attacks"]), "WINDOWS": len(layout["windows"]),
         "PATTERNS": len(layout["patterns"]), "GUARDS": len(layout["guards"]),
-        "PREDICATES": len(layout["predicates"]), "STEPS": len(layout["steps"]),
+        "STEPS": len(layout["steps"]),
     }
     for section, count in counts.items():
         if count > 255:
             errors.add("data", "size limit: %d %ss exceed the 255 record limit" % (count, section.lower().rstrip("s")))
+    # unlockMask is a u8 bit per global attack index.
+    if counts["ATTACKS"] > 8:
+        errors.add("data", "size limit: unlockMask is a u8 bit per attack; %d attacks exceed 8" % counts["ATTACKS"])
     if errors.items:
         return None
 
@@ -880,7 +762,7 @@ def pack_model(errors, model):
         stats = creature["stats"]
         record("CREATURE", b"".join([
             u8(model["skeletons"].index(creature["skeleton"])), u8(i),
-            u8(entry["first_part"]), u8(len(creature["parts"])),
+            u8(entry["head_zone"]), u8(entry["append_zone"]),
             u8(entry["first_attack"]), u8(len(creature["attacks"])),
             u8(entry["first_pattern"]), u8(len(creature["patterns"])),
             u8(stats["w"]), u8(stats["h"]), u8(stats["spd"]),
@@ -893,12 +775,16 @@ def pack_model(errors, model):
         creature = entry["creature"]
         offsets["PROFILE_%s_OFF" % creature["id"].upper()] = mark("profile")
         profile = creature["profile"]
+        zone_flags = 0
+        for name in ZONE_NAMES:
+            if name in creature["zones"]:
+                zone_flags |= zone_flag(name)
         record("PROFILE", b"".join([
             u8(profile["engageDist"]), u8(profile["keepDist"]), u8(profile["attackDist"]),
             u8(profile["circleNum"]), u8(profile["circleDen"]),
             u8(profile["retreatNum"]), u8(profile["retreatDen"]),
             u8(profile["staggerMax"]), u8(profile["staggerDecay"]),
-            u8(creature["effectiveParts"]),
+            u8(zone_flags),
             u16(profile["cdBase"]), u16(profile["cdJitter"]), u16(profile["spawnT"]),
             u16(profile["spawnCd"]), u16(profile["stunRecoverT"]), u16(profile["staggerRecoverT"]),
         ]))
@@ -910,40 +796,28 @@ def pack_model(errors, model):
         indices["SKELETON_%s" % skeleton["id"].upper()] = i
         offsets["SKELETON_%s_OFF" % skeleton["id"].upper()] = mark("skeleton")
         record("SKELETON", b"".join([
-            u8(entry["first_part"]), u8(len(skeleton["parts"])),
             u8(entry["first_anchor"]), u8(len(skeleton["anchors"])),
         ]))
 
-    # parts
-    section_off["PARTS"] = mark("parts")
-    for entry in layout["parts"]:
+    # zones
+    section_off["ZONES"] = mark("zones")
+    for entry in layout["zones"]:
         key = entry["key"]
-        part = entry["part"]
-        owner_name = key[1].upper()
-        indices["PART_%s_%s" % (owner_name, key[2].upper())] = part_index[key]
-        offsets["PART_%s_%s_OFF" % (owner_name, key[2].upper())] = mark("part")
-        box = part["box"]
-        record("PART", b"".join([
+        zone = entry["zone"]
+        owner_name = key[0].upper()
+        zone_name = key[1].upper()
+        indices["ZONE_%s_%s" % (owner_name, zone_name)] = zone_index[key]
+        offsets["ZONE_%s_%s_OFF" % (owner_name, zone_name)] = mark("zone")
+        box = zone["box"]
+        broken_flags = (0x01 if zone["brokenHurtOff"] else 0) | (0x02 if zone["brokenCue"] else 0)
+        unlock = zone_unlock_mask(entry["creature"], zone, attack_index)
+        if unlock > 255:
+            errors.add("data", "unlockMask overflows u8 for %s %s" % (key[0], key[1]))
+            return None
+        record("ZONE", b"".join([
             i8(box["ox"]), i8(box["oy"]), u8(box["w"]), u8(box["h"]),
-            u8(part["dmgMul"]), u8(part["bodyShare"]), u8(part["breakTypes"] or 0), u8(part["hurtOn"]),
-            u8(part_phys(part, "SLASH")), u8(part_phys(part, "BLUNT")), u8(part_phys(part, "SHOT")),
-            u8(entry["first_stage"]), u8(entry["stage_count"]),
-            u8(entry["first_elem"]), u8(entry["elem_count"]),
-            u16(part["hp"]), u8(0),
-        ]))
-
-    # stages
-    section_off["STAGES"] = mark("stages")
-    for entry in layout["stages"]:
-        owner_name = entry["key"][1].upper()
-        part_name = entry["key"][2].upper()
-        stage = entry["stage"]
-        offsets["STAGE_%s_%s_%d_OFF" % (owner_name, part_name, entry["index"])] = mark("stage")
-        record("STAGE", b"".join([
-            u8(stage["at"]), u8(stage["flags"]), u8(stage["dmgMulOverride"]), u8(stage["speedMul"]),
-            u8(stage["stagger"]), u8(stage["cue"]),
-            u8(entry["first_disable"]), u8(entry["disable_count"]),
-            u8(entry["first_enable"]), u8(entry["enable_count"]),
+            u8(zone["hp"]), u8(zone["dmgMul"]), u8(zone["bodyShare"]), u8(zone["breakTypes"] or 0),
+            u8(zone["staggerOnHit"]), u8(zone["brokenDmgMul"]), u8(broken_flags), u8(unlock),
         ]))
 
     # anchors
@@ -953,16 +827,6 @@ def pack_model(errors, model):
         anchor = entry["anchor"]
         offsets["ANCHOR_%s_%s_OFF" % (skeleton["id"].upper(), anchor["id"].upper())] = mark("anchor")
         record("ANCHOR", i8(anchor["ox"]) + i8(anchor["oy"]))
-
-    # elems
-    section_off["ELEMS"] = mark("elems")
-    for elem, mul in layout["elems"]:
-        record("ELEM", u8(elem) + u8(mul))
-
-    # refs
-    section_off["REFS"] = mark("refs")
-    for attack_ref in layout["refs"]:
-        record("REF", u8(attack_ref))
 
     # attacks
     section_off["ATTACKS"] = mark("attacks")
@@ -1026,13 +890,8 @@ def pack_model(errors, model):
             u8(guard["hpLo"]), u8(guard["hpHi"]), u8(guard["playerFlags"]),
             u8(guard["cooldown"] if guard["cooldown"] is not None else 0),
             u8(guard["chance"] if guard["chance"] is not None else 100),
-            u8(entry["first_pred"]), u8(len(guard["parts"])),
+            u8(entry["zones_mask"]),
         ]))
-
-    # predicates
-    section_off["PREDICATES"] = mark("predicates")
-    for part_ref, op, stage in layout["predicates"]:
-        record("PREDICATE", u8(part_ref) + u8(op) + u8(stage))
 
     # steps
     section_off["STEPS"] = mark("steps")
@@ -1053,6 +912,8 @@ def pack_model(errors, model):
     header = bytearray(u16(MAGIC) + u8(VERSION) + u8(FLAGS))
     for section in SECTION_ORDER:
         header.extend(u16(section_count[section]))
+    for _ in range(RESERVED_COUNTS):
+        header.extend(u16(0))
     assert len(header) == HEADER_SIZE
     blob = bytes(header) + bytes(body)
     if len(blob) >= 65536:
@@ -1086,10 +947,10 @@ def emit_data_header(model, compiled):
     app("#pragma once")
     app("// Generated by tools/gen-combat.py -- do not edit.")
     app("//")
-    app("// Host-side plain structs and arrays (docs/creature-framework.md section 8).")
-    app("// Field order matches the packed FX blob byte order; the host reads members")
-    app("// directly, so host struct padding is irrelevant. The device reads the blob")
-    app("// with the offsets in combat_meta.hpp instead.")
+    app("// Host-side plain structs and arrays (build/zones-design.md). Field order")
+    app("// matches the packed FX blob byte order; the host reads members directly,")
+    app("// so host struct padding is irrelevant. The device reads the blob with the")
+    app("// offsets in combat_meta.hpp instead.")
     app("")
     app("#include <array>")
     app("#include <stdint.h>")
@@ -1118,36 +979,18 @@ def emit_data_header(model, compiled):
     app("    uint8_t engageDist, keepDist, attackDist;")
     app("    uint8_t circleNum, circleDen, retreatNum, retreatDen;")
     app("    uint8_t staggerMax, staggerDecay;")
-    app("    uint8_t partCount;")
+    app("    uint8_t zoneFlags;")
     app("    uint16_t cdBase, cdJitter, spawnT, spawnCd, stunRecoverT, staggerRecoverT;")
     app("};")
     app("")
     app("struct Skeleton {")
-    app("    uint8_t firstPart, partCount;")
     app("    uint8_t firstAnchor, anchorCount;")
     app("};")
     app("")
-    app("struct Stage {")
-    app("    uint8_t at, flags, dmgMulOverride, speedMul, stagger, cue;")
-    app("    uint8_t firstDisable, disableCount, firstEnable, enableCount;")
-    app("};")
-    app("")
-    app("struct Elem {")
-    app("    uint8_t elem;")
-    app("    uint8_t mul;")
-    app("};")
-    app("")
-    app("struct Ref {")
-    app("    uint8_t attackIdx;")
-    app("};")
-    app("")
-    app("struct Part {")
+    app("struct Zone {")
     app("    Box box;")
-    app("    uint8_t dmgMul, bodyShare, breakTypes, hurtOn;")
-    app("    uint8_t physSlash, physBlunt, physShot;")
-    app("    uint8_t firstStage, stageCount, firstElem, elemCount;")
-    app("    uint16_t hp;")
-    app("    uint8_t flags;")
+    app("    uint8_t hp, dmgMul, bodyShare, breakTypes, staggerOnHit;")
+    app("    uint8_t brokenDmgMul, brokenFlags, unlockMask;")
     app("};")
     app("")
     app("struct Anchor {")
@@ -1171,11 +1014,7 @@ def emit_data_header(model, compiled):
     app("")
     app("struct Guard {")
     app("    uint8_t minDist, maxDist, hpLo, hpHi, playerFlags, cooldown, chance;")
-    app("    uint8_t firstPartPred, partPredCount;")
-    app("};")
-    app("")
-    app("struct Predicate {")
-    app("    uint8_t partIdx, op, stage;")
+    app("    uint8_t zonesBroken;")
     app("};")
     app("")
     app("struct Step {")
@@ -1184,7 +1023,7 @@ def emit_data_header(model, compiled):
     app("")
     app("struct Creature {")
     app("    uint8_t skeletonIdx, profileIdx;")
-    app("    uint8_t firstPart, partCount;")
+    app("    uint8_t headZone, appendZone;")
     app("    uint8_t firstAttack, attackCount;")
     app("    uint8_t firstPattern, patternCount;")
     app("    uint8_t w, h, spd;")
@@ -1206,50 +1045,40 @@ def emit_data_header(model, compiled):
                 stats = creature["stats"]
                 app("    {%d, %d, %d, %d, %d, %d, %d, %d, %d, %d, %d, %d, %d, %d}," % (
                     model["skeletons"].index(creature["skeleton"]), compiled["indices"]["CREATURE_%s" % creature["id"].upper()],
-                    entry["first_part"], len(creature["parts"]), entry["first_attack"], len(creature["attacks"]),
+                    entry["head_zone"], entry["append_zone"], entry["first_attack"], len(creature["attacks"]),
                     entry["first_pattern"], len(creature["patterns"]),
                     stats["w"], stats["h"], stats["spd"], stats["hp"], stats["spawnX"], stats["spawnY"]))
         elif section == "PROFILES":
             for entry in layout["creatures"]:
                 creature = entry["creature"]
                 profile = creature["profile"]
+                zone_flags = 0
+                for name in ZONE_NAMES:
+                    if name in creature["zones"]:
+                        zone_flags |= zone_flag(name)
                 app("    {%d, %d, %d, %d, %d, %d, %d, %d, %d, %d, %d, %d, %d, %d, %d, %d}," % (
                     profile["engageDist"], profile["keepDist"], profile["attackDist"],
                     profile["circleNum"], profile["circleDen"], profile["retreatNum"], profile["retreatDen"],
-                    profile["staggerMax"], profile["staggerDecay"], creature["effectiveParts"],
+                    profile["staggerMax"], profile["staggerDecay"], zone_flags,
                     profile["cdBase"], profile["cdJitter"], profile["spawnT"], profile["spawnCd"],
                     profile["stunRecoverT"], profile["staggerRecoverT"]))
         elif section == "SKELETONS":
             for entry in layout["skeletons"]:
                 skeleton = entry["skeleton"]
-                app("    {%d, %d, %d, %d}," % (entry["first_part"], len(skeleton["parts"]),
-                                               entry["first_anchor"], len(skeleton["anchors"])))
-        elif section == "PARTS":
-            for entry in layout["parts"]:
-                key = entry["key"]
-                part = entry["part"]
-                app("    {{%d, %d, %d, %d}, %d, %d, %d, %d, %d, %d, %d, %d, %d, %d, %d, %d, %d}," % (
-                    part["box"]["ox"], part["box"]["oy"], part["box"]["w"], part["box"]["h"],
-                    part["dmgMul"], part["bodyShare"], part["breakTypes"] or 0, part["hurtOn"],
-                    part_phys(part, "SLASH"), part_phys(part, "BLUNT"), part_phys(part, "SHOT"),
-                    entry["first_stage"], entry["stage_count"], entry["first_elem"], entry["elem_count"],
-                    part["hp"], 0))
-        elif section == "STAGES":
-            for entry in layout["stages"]:
-                stage = entry["stage"]
-                app("    {%d, %d, %d, %d, %d, %d, %d, %d, %d, %d}," % (
-                    stage["at"], stage["flags"], stage["dmgMulOverride"], stage["speedMul"],
-                    stage["stagger"], stage["cue"], entry["first_disable"], entry["disable_count"],
-                    entry["first_enable"], entry["enable_count"]))
+                app("    {%d, %d}," % (entry["first_anchor"], len(skeleton["anchors"])))
+        elif section == "ZONES":
+            for entry in layout["zones"]:
+                zone = entry["zone"]
+                box = zone["box"]
+                broken_flags = (0x01 if zone["brokenHurtOff"] else 0) | (0x02 if zone["brokenCue"] else 0)
+                unlock = entry["unlock"]
+                app("    {{%d, %d, %d, %d}, %d, %d, %d, %d, %d, %d, %d, %d}," % (
+                    box["ox"], box["oy"], box["w"], box["h"], zone["hp"], zone["dmgMul"],
+                    zone["bodyShare"], zone["breakTypes"] or 0, zone["staggerOnHit"],
+                    zone["brokenDmgMul"], broken_flags, unlock))
         elif section == "ANCHORS":
             for entry in layout["anchors"]:
                 app("    {%d, %d}," % (entry["anchor"]["ox"], entry["anchor"]["oy"]))
-        elif section == "ELEMS":
-            for elem, mul in layout["elems"]:
-                app("    {%d, %d}," % (elem, mul))
-        elif section == "REFS":
-            for attack_ref in layout["refs"]:
-                app("    {%d}," % attack_ref)
         elif section == "ATTACKS":
             for entry in layout["attacks"]:
                 attack = entry["attack"]
@@ -1272,16 +1101,13 @@ def emit_data_header(model, compiled):
         elif section == "GUARDS":
             for entry in layout["guards"]:
                 guard = entry["guard"]
-                app("    {%d, %d, %d, %d, %d, %d, %d, %d, %d}," % (
+                app("    {%d, %d, %d, %d, %d, %d, %d, %d}," % (
                     guard["minDist"] if guard["minDist"] is not None else 0,
                     guard["maxDist"] if guard["maxDist"] is not None else 255,
                     guard["hpLo"], guard["hpHi"], guard["playerFlags"],
                     guard["cooldown"] if guard["cooldown"] is not None else 0,
                     guard["chance"] if guard["chance"] is not None else 100,
-                    entry["first_pred"], len(guard["parts"])))
-        elif section == "PREDICATES":
-            for part_ref, op, stage in layout["predicates"]:
-                app("    {%d, %d, %d}," % (part_ref, op, stage))
+                    entry["zones_mask"]))
         elif section == "STEPS":
             for entry in layout["steps"]:
                 step = entry["step"]
@@ -1319,9 +1145,8 @@ def data_facts(model):
     has_guard_player = False
     has_guard_cooldown = False
     has_guard_chance = False
-    has_guard_parts = False
-    has_parts = any(part["hp"] > 0 or part["stages"] for skeleton in model["skeletons"] for part in skeleton["parts"])
-    has_parts = has_parts or any(part["hp"] > 0 or part["stages"] for creature in model["creatures"] for part in creature["parts"])
+    has_guard_zones = False
+    has_zones = any(c["zones"] for c in model["creatures"])
     for creature in model["creatures"]:
         for attack in creature["attacks"]:
             if len(attack["windows"]) > 1:
@@ -1331,7 +1156,7 @@ def data_facts(model):
         for pattern in creature["patterns"]:
             guard = pattern["guard"]
             if guard["hpLo"] != 0 or guard["hpHi"] != 100 or guard["playerFlags"] != 0 \
-                    or guard["cooldown"] != 0 or guard["chance"] != 100 or guard["parts"]:
+                    or guard["cooldown"] != 0 or guard["chance"] != 100 or guard["zonesBroken"]:
                 simple_guards = False
             if guard["hpLo"] != 0 or guard["hpHi"] != 100:
                 has_guard_hp = True
@@ -1341,8 +1166,8 @@ def data_facts(model):
                 has_guard_cooldown = True
             if guard["chance"] != 100:
                 has_guard_chance = True
-            if guard["parts"]:
-                has_guard_parts = True
+            if guard["zonesBroken"]:
+                has_guard_zones = True
             if len(pattern["steps"]) > 1:
                 has_multi_step = True
             for step in pattern["steps"]:
@@ -1361,12 +1186,12 @@ def data_facts(model):
         "HAS_MULTI_STEP": has_multi_step,
         "HAS_MULTI_WINDOW": has_multi_window,
         "HAS_SIMPLE_GUARDS": simple_guards,
-        "HAS_PARTS": has_parts,
+        "HAS_ZONES": has_zones,
         "HAS_GUARD_HP": has_guard_hp,
         "HAS_GUARD_PLAYER": has_guard_player,
         "HAS_GUARD_COOLDOWN": has_guard_cooldown,
         "HAS_GUARD_CHANCE": has_guard_chance,
-        "HAS_GUARD_PARTS": has_guard_parts,
+        "HAS_GUARD_ZONES": has_guard_zones,
     }
 
 
@@ -1376,10 +1201,10 @@ def emit_meta_header(model, compiled):
     app("#pragma once")
     app("// Generated by tools/gen-combat.py -- do not edit.")
     app("//")
-    app("// Combat blob ABI: header (magic u16, version u8, flags u8, 14x u16 counts)")
-    app("// then fixed-size record arrays, little-endian, explicit u8/u16, no padding.")
-    app("// Offsets are absolute byte offsets into the mhCombat raw_t section")
-    app("// (fxdata/fxdata.txt): on AVR the loader reads mhCombat + <offset>.")
+    app("// Combat blob ABI: header (magic u16, version u8, flags u8, 10x u16 counts")
+    app("// + 4x u16 reserved) then fixed-size record arrays, little-endian, explicit")
+    app("// u8/u16, no padding. Offsets are absolute byte offsets into the mhCombat")
+    app("// raw_t section (fxdata/fxdata.txt): on AVR the loader reads mhCombat + off.")
     app("")
     app("#include <stdint.h>")
     app("")
@@ -1401,8 +1226,8 @@ def emit_meta_header(model, compiled):
         app("constexpr uint16_t %s_OFF = %d;" % (section, compiled["section_off"][section]))
         app("constexpr uint16_t %s_COUNT = %d;" % (section, compiled["section_count"][section]))
     app("")
-    for record in sorted(SIZES):
-        app("constexpr uint8_t %s_SIZE = %d;" % (record, SIZES[record]))
+    for record_name in sorted(SIZES):
+        app("constexpr uint8_t %s_SIZE = %d;" % (record_name, SIZES[record_name]))
     app("")
     app("// Per-record offsets and indices (creatures sorted by id; attacks, windows,")
     app("// patterns, guards and steps keep source order inside each creature).")
@@ -1431,8 +1256,8 @@ def emit_expect_header(model, compiled):
     app("namespace combat_expect {")
     app("")
     app("constexpr uint16_t BLOB_SIZE = %d;" % len(compiled["blob"]))
-    for record in sorted(SIZES):
-        app("constexpr uint8_t %s_SIZE = %d;" % (record, SIZES[record]))
+    for record_name in sorted(SIZES):
+        app("constexpr uint8_t %s_SIZE = %d;" % (record_name, SIZES[record_name]))
     app("")
     for creature in model["creatures"]:
         cid = creature["id"].upper()
@@ -1453,6 +1278,12 @@ def emit_expect_header(model, compiled):
         app("constexpr uint8_t PATTERN_%s_%s_MIN_DIST = %d;" % (cid, first_pattern["id"].upper(), guard["minDist"]))
         app("constexpr uint8_t PATTERN_%s_%s_MAX_DIST = %d;" % (cid, first_pattern["id"].upper(), guard["maxDist"]))
         app("constexpr uint8_t PATTERN_%s_%s_CHANCE = %d;" % (cid, first_pattern["id"].upper(), guard["chance"]))
+        for name in ZONE_NAMES:
+            if name in creature["zones"]:
+                zone = creature["zones"][name]
+                app("constexpr uint8_t ZONE_%s_%s_HP = %d;" % (cid, name.upper(), zone["hp"]))
+                app("constexpr uint8_t ZONE_%s_%s_DMG_MUL = %d;" % (cid, name.upper(), zone["dmgMul"]))
+                app("constexpr uint8_t ZONE_%s_%s_BODY_SHARE = %d;" % (cid, name.upper(), zone["bodyShare"]))
     app("")
     app("// sha256 of fxdata/tables/combat.bin: %s" % digest)
     app("constexpr uint8_t BLOB_SHA256[32] = {")
@@ -1470,8 +1301,18 @@ def dump_model(model, compiled):
     for creature in model["creatures"]:
         cid = creature["id"]
         stats = creature["stats"]
-        print("creature %s (skeleton %s, stats w%d h%d hp%d spd%d, spawn %d,%d)" % (
-            cid, creature["skeleton"]["id"], stats["w"], stats["h"], stats["hp"], stats["spd"], stats["spawnX"], stats["spawnY"]))
+        zones = " ".join("%s D%d HP%d S%d ST%d" % (
+            name, z["dmgMul"], z["hp"], z["bodyShare"], z["staggerOnHit"]) for name, z in sorted(creature["zones"].items()))
+        print("creature %s (skeleton %s, stats w%d h%d hp%d spd%d, spawn %d,%d) zones %s" % (
+            cid, creature["skeleton"]["id"], stats["w"], stats["h"], stats["hp"], stats["spd"], stats["spawnX"], stats["spawnY"], zones or "-"))
+        for name in ZONE_NAMES:
+            if name not in creature["zones"]:
+                continue
+            zone = creature["zones"][name]
+            print("  zone %s: box(%d,%d,%d,%d) dmgMul %d hp %d share %d break 0x%02X stagger %d brokenOverride %d hurtOff %d disable %s" % (
+                name, zone["box"]["ox"], zone["box"]["oy"], zone["box"]["w"], zone["box"]["h"],
+                zone["dmgMul"], zone["hp"], zone["bodyShare"], zone["breakTypes"], zone["staggerOnHit"],
+                zone["brokenDmgMul"], zone["brokenHurtOff"], ",".join(zone["brokenDisable"]) or "-"))
         for attack in creature["attacks"]:
             move = {0: "none", 1: "lunge", 2: "charge", 3: "hop"}[attack["moveType"]]
             detail = ""
@@ -1487,9 +1328,9 @@ def dump_model(model, compiled):
                     i, window["t0"], window["t1"], box["ox"], box["oy"], box["w"], box["h"], window["dmgMul"]))
         for pattern in creature["patterns"]:
             guard = pattern["guard"]
-            print("  pattern %s: guard minDist%d maxDist%d hp[%d,%d] player0x%02X cd%d chance%d" % (
+            print("  pattern %s: guard minDist%d maxDist%d hp[%d,%d] player0x%02X cd%d chance%d zonesBroken %s" % (
                 pattern["id"], guard["minDist"], guard["maxDist"], guard["hpLo"], guard["hpHi"],
-                guard["playerFlags"], guard["cooldown"], guard["chance"]))
+                guard["playerFlags"], guard["cooldown"], guard["chance"], ",".join(guard["zonesBroken"]) or "-"))
             for i, step in enumerate(pattern["steps"]):
                 if step["kind"] == STEP_ATK:
                     print("    step %d: ATK %s.%s after%d chance%d" % (i, cid, step["ref"], step["after"], step["chance"]))
@@ -1532,11 +1373,11 @@ def run(root, dump):
     if write_if_changed(os.path.join(root, EXPECT_HPP_REL), emit_expect_header(model, compiled)):
         changed.append(EXPECT_HPP_REL)
     digest = hashlib.sha256(compiled["blob"]).hexdigest()
-    print("gen-combat: %d creatures, %d attacks, %d windows, %d patterns, %d steps, %d skeletons, %d parts, %d B, sha256 %s" % (
+    print("gen-combat: %d creatures, %d attacks, %d windows, %d patterns, %d steps, %d skeletons, %d zones, %d B, sha256 %s" % (
         compiled["section_count"]["CREATURES"], compiled["section_count"]["ATTACKS"],
         compiled["section_count"]["WINDOWS"], compiled["section_count"]["PATTERNS"],
         compiled["section_count"]["STEPS"], compiled["section_count"]["SKELETONS"],
-        compiled["section_count"]["PARTS"], len(compiled["blob"]), digest))
+        compiled["section_count"]["ZONES"], len(compiled["blob"]), digest))
     for path in (BLOB_REL, DATA_HPP_REL, META_HPP_REL, EXPECT_HPP_REL):
         print("gen-combat: %s%s" % (path, "" if path in changed else " (unchanged)"))
     return 0

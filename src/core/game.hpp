@@ -11,11 +11,11 @@
 #include "fp.hpp"
 #include "input.hpp"
 #include "fxmem.hpp"                      // FX cart offsets + mhFxRead* field readers (identity on host)
-#include "../generated/combat_meta.hpp"   // data facts (HAS_PARTS) size the part caches
+#include "../generated/combat_meta.hpp"   // data facts (HAS_ZONES) gate the zone caches
 
-// Per-image parts carve (mirrors MH_AUDIO in src/audio.hpp): the on-device
+// Per-image zones carve (mirrors MH_AUDIO in src/audio.hpp): the on-device
 // perf bench and parity scenes run only MON_LUNGE/SWEEP/HEAVY, which never run a
-// breakable-part, multi-window, stagger or parts-guard path, so those images
+// breakable-zone, multi-window, stagger or zones-guard path, so those images
 // compile the ravager machinery out with -DMH_COMBAT_PARTS=0 and keep their
 // flash headroom. Shipping and test_combat keep the generated facts (default
 // 1). The generated data facts stay authoritative; these effective flags only
@@ -28,10 +28,10 @@
 
 namespace mh {
 
-constexpr bool PARTS_ENABLED = combat::HAS_PARTS && MH_COMBAT_PARTS;
+constexpr bool ZONES_ENABLED = combat::HAS_ZONES && MH_COMBAT_PARTS;
 constexpr bool MULTI_WINDOW_ENABLED = combat::HAS_MULTI_WINDOW && MH_COMBAT_PARTS;
 constexpr bool STAGGER_ENABLED = combat::HAS_STAGGER && MH_COMBAT_PARTS;
-constexpr bool GUARD_PARTS_ENABLED = combat::HAS_GUARD_PARTS && MH_COMBAT_PARTS;
+constexpr bool GUARD_ZONES_ENABLED = combat::HAS_GUARD_ZONES && MH_COMBAT_PARTS;
 // A carved image only has dist-only guards, so the fast path is correct there.
 constexpr bool SIMPLE_GUARDS = combat::HAS_SIMPLE_GUARDS || !MH_COMBAT_PARTS;
 
@@ -388,18 +388,17 @@ struct CombatBox {
     uint8_t w, h;
 };
 
-// Part stage bits are 2 per part; up to 8 effective parts are tracked (docs
-// section 4). The live part caches (pools + boxes) are sized by the data fact,
-// so a build with no part pools pays one placeholder slot instead of eight.
-constexpr uint8_t COMBAT_MAX_PARTS = 8;
-constexpr uint8_t COMBAT_PART_SLOTS = PARTS_ENABLED ? COMBAT_MAX_PARTS : 1;
+// Fixed zone slots (build/zones-design.md): slot 0 head, slot 1 appendage.
+// combat.hpp's COMBAT_ZONE_COUNT/bit constants mirror this order.
+constexpr uint8_t COMBAT_ZONE_SLOTS = 2;
 
 // Full profile record mirror (16 fields, blob ABI order). Read whole at spawn
-// and cached; the interpreter consumes the cache at decision time.
+// and cached; the interpreter consumes the cache at decision time. zoneFlags
+// carries the per-creature zone presence bits (build/zones-design.md).
 struct CombatProfile {
     uint8_t engageDist, keepDist, attackDist;
     uint8_t circleNum, circleDen, retreatNum, retreatDen;
-    uint8_t staggerMax, staggerDecay, partCount;
+    uint8_t staggerMax, staggerDecay, zoneFlags;
     uint16_t cdBase, cdJitter, spawnT, spawnCd, stunRecoverT, staggerRecoverT;
 };
 
@@ -437,33 +436,34 @@ struct CombatAttackCache {
     CombatWindow win;
 };
 
-// Combat runtime state: which creature was loaded, the creature's body part
-// box (migration B: hurt/collide geometry read once at spawn), 2-bit part
-// stages for up to 8 effective parts (saturating; parts beyond slot 7 are not
-// stage-tracked), and the pattern step cursor (stepIdx + 256-tick countdown
-// stepT).
-//
-// ljj.6 adds the live part caches for the first breakable-part creature
-// (docs section 4): effective part ordinals run skeleton parts first, then the
-// creature override list (bodyFirst/bodyCount and overFirst/overCount are the
-// two global lists); partHp[k] is the remaining pool (0 = no pool) and
-// partsHurt the facing-independent hurt envelope of all part rects (union over
-// the 8 facings, anchor-relative to m.x/m.y), so the per-tick target sync is
-// four stores and hit resolution/render rotate one box for the current facing.
-// The arrays exist only when the shipped blob declares pools/stages
-// (PARTS_ENABLED); otherwise they fold to 1 slot.
+// Live scalars of one zone record (build/zones-design.md). Box + multipliers +
+// the remaining pool + the single broken-record fields the runtime needs. The
+// record's brokenDmgMul/brokenFlags are data-only (a broken zone leaves the
+// candidate set), so they are not cached.
+struct CombatZoneCache {
+    CombatBox box;   // 4 B AVR: face-relative zone origin + size
+    uint8_t hp;      // remaining zone pool
+    uint8_t dmgMul;
+    uint8_t bodyShare;
+    uint8_t breakTypes;
+    uint8_t staggerOnHit;
+    uint8_t unlockMask;   // attacks disabled while this zone is broken
+};
+
+// Combat runtime state: which creature was loaded, the implicit body box (the
+// creature w/h at (0,0)), the two optional zone slots (slot 0 head, slot 1
+// appendage; headZone/appendZone hold the global ZONES index or COMBAT_NO_ZONE)
+// and the single broken bit per zone. The pattern step cursor
+// (stepIdx + 256-tick countdown stepT) and stagger meter are unchanged.
 struct CombatState {
-    CombatProfile profile;      // 22 B AVR
-    CombatAttackCache attack;   // 21 B AVR
-    CombatBox body;             // 4 B AVR: skeleton body part box (spawn cache)
-    uint8_t bodyFirst;          // hurtbox-list head (skeleton parts)
-    uint8_t bodyCount;
-    uint8_t overFirst;   // per-creature part override list head
-    uint8_t overCount;
-    uint8_t creature;                     // index into CREATURES
-    uint16_t stages;                      // 2 bits x 8 parts, 0 = intact
-    uint16_t partHp[COMBAT_PART_SLOTS];   // live part pools (0 = no pool)
-    CombatBox partsHurt;                  // union of part rects over all facings
+    CombatProfile profile;                     // 22 B AVR
+    CombatAttackCache attack;                  // 21 B AVR
+    CombatBox body;                            // 4 B AVR
+    CombatZoneCache zone[COMBAT_ZONE_SLOTS];   // 20 B AVR
+    uint8_t headZone;                          // global ZONE index or COMBAT_NO_ZONE
+    uint8_t appendZone;
+    uint8_t creature;     // index into CREATURES
+    uint8_t zoneBroken;   // bit0 head, bit1 appendage
     uint8_t patternIdx;
     uint8_t stepIdx;
     uint8_t stepT;     // 8-bit countdown: step `after`/WAIT ticks cap at 255

@@ -19,23 +19,28 @@
     "staggerDecay": 1,
     "staggerRecoverT": 15
   },
-  "parts": [
-    {
-      "id": "tail",
+  "zones": {
+    "head": {
+      "box": { "ox": 10, "oy": 2, "w": 6, "h": 6 },
+      "dmgMul": 120,
+      "hp": 10,
+      "bodyShare": 100,
+      "breakTypes": ["BLUNT"],
+      "hurtOn": true,
+      "staggerOnHit": 5,
+      "broken": { "dmgMul": 120, "hurtOn": false }
+    },
+    "appendage": {
       "box": { "ox": -6, "oy": 4, "w": 8, "h": 4 },
       "dmgMul": 150,
-      "physMul": { "SLASH": 150, "BLUNT": 75 },
-      "elemMul": { "FIRE": 200 },
       "hp": 30,
       "bodyShare": 40,
       "breakTypes": ["SLASH"],
       "hurtOn": true,
-      "stages": [
-        { "at": 50, "stagger": 20, "disableAttacks": ["jab"], "cue": "part_break" },
-        { "at": 0, "dmgMulOverride": 200, "hurtOn": false, "enableAttacks": ["jab"] }
-      ]
+      "staggerOnHit": 20,
+      "broken": { "dmgMul": 200, "hurtOn": false, "cue": "part_break", "disableAttacks": ["jab"] }
     }
-  ],
+  },
   "attacks": [
     {
       "id": "jab",
@@ -62,7 +67,7 @@
         "minDist": 0,
         "maxDist": 36,
         "hpBand": [0, 100],
-        "parts": { "tail": ">=1" },
+        "zonesBroken": ["appendage"],
         "player": { "attacking": true },
         "cooldown": 0,
         "chance": 100
