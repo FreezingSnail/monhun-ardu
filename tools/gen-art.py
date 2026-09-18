@@ -37,6 +37,7 @@ frame layout for the render bead + the host dims-drift test (tst/art_dims_test.h
 import argparse
 import json
 import os
+import re
 import sys
 
 from PIL import Image
@@ -52,6 +53,60 @@ WHITE = (255, 255, 255, 255)
 
 SHADES = (BLACK, DARK, LIGHT, WHITE)
 SHADE_NAMES = ("black", "dark", "light", "white")
+
+
+# ------------------------------------------------- whirl ring trig source
+# The flail whirl ring is 6 dots on the mock's exact ellipse
+# (round(cos(a) * rx), round(sin(a) * ry)) at a = tick*0.35 rad + i*60deg. The
+# device drew them through the Q4 sine LUT (src/core/sin256.hpp) and mulQ4()
+# rounding in src/render.hpp; the baked multi-phase sheet must use the *same*
+# table + rounding so each frame is pixel-identical to the old six blits at that
+# frame's angle. SIN65 is parsed straight out of the core header (the single
+# source gen-fxtables.cpp also packs to the cart), so the bake cannot drift from
+# the device table. RING6 is the 42.667-unit (60deg) ring offset set the render
+# used; the frame count is the render phase selector
+# (art_dims::whirlring_frames).
+#
+# 24 phases, not 32: the sheet lands in the blocks section, which is packed
+# *before* the raw_t runtime tables in fxdata.txt. At 48x32 a frame is 1152 B,
+# so 32 phases (36,864 B) pushes mhEquip past the 64 KiB 16-bit fake-pointer
+# window fxmem.hpp requires; 24 phases (27,648 B) keeps every runtime table
+# below it (mhEquip ~0x77CD -> ~0xE3CD). 256/24 = 10.67 units of ring angle
+# per frame vs the 14-unit tick step, so the motion stays smooth.
+RING6 = (0, 43, 85, 128, 171, 213)
+WHIRL_RING_FRAMES = 24
+
+
+def load_sin65():
+    path = os.path.join(ROOT, "src", "core", "sin256.hpp")
+    with open(path, encoding="utf-8") as handle:
+        text = handle.read()
+    start = text.index("SIN65[65] = {")
+    body = text[start:text.index("};", start)]
+    values = [int(v) for v in re.findall(r"-?\d+", body.split("{", 1)[1])]
+    if len(values) != 65:
+        raise SystemExit("gen-art: SIN65 parse got %d values, want 65" % len(values))
+    return values
+
+
+SIN65 = load_sin65()
+
+
+def sin256(a):
+    a &= 255
+    q = a >> 6
+    k = a & 63
+    i = (64 - k) if (q & 1) else k
+    v = SIN65[i]
+    return -v if (q & 2) else v
+
+
+def cos256(a):
+    return sin256(a + 64)
+
+
+def mul_q4(a, b):
+    return (a * b + 8) >> 4
 
 
 def rect(img, x, y, w, h, color):
@@ -168,6 +223,25 @@ def sheet_size(rects):
 #   "dot top-left"   frame origin == the dot's top-left
 
 
+def whirl_ring_frames(dims):
+    """Bake the 6 whirl orbit dots into WHIRL_RING_FRAMES phase frames.
+
+    Frame f represents the device ring angle bin [f*256/N, (f+1)*256/N); its
+    dots are placed at the bin-centre angle so the worst-case quantization error
+    is 256/(2N) units. Each dot is the old 2x2 LIGHT blit on the exact ellipse,
+    translated into the 48x32 frame local space (player centre at 24,16)."""
+    rx, ry = dims.whirl.rx, dims.whirl.ry
+    frames = []
+    for f in range(WHIRL_RING_FRAMES):
+        base = ((2 * f + 1) * 256) // (2 * WHIRL_RING_FRAMES)
+        blocks = []
+        for off in RING6:
+            a = (base + off) & 255
+            blocks.append((LIGHT, mul_q4(cos256(a), rx) + 24, mul_q4(sin256(a), ry) + 16, 2, 2))
+        frames.append(blocks)
+    return frames
+
+
 def icon_defs(dims):
     d = attack_boxes(dims)
     lunge, sweep = d["monster"]["lunge"], d["monster"]["sweep"]
@@ -211,6 +285,15 @@ def icon_defs(dims):
                     [(LIGHT, (32 - sweep[0]) // 2, (24 - sweep[1]) // 2, sweep[0], sweep[1]), (WHITE, 14, 10, 4, 4)]]},
         {"id": "chip", "w": 8, "h": 8, "anchor": "chip top-left",
          "frames": [[(WHITE, 0, 0, 3, 3)], [(WHITE, 0, 0, 4, 4)]]},
+        # Flail whirl ring (bead monhun-ardu-836): the 6 orbit dots of
+        # mock/game.js drawPlayer pre-composited into one sprite frame per
+        # quantized ring phase. 48x32 holds the full ellipse (rx=20, ry=14 from
+        # fxdump) with a 2 px margin; the frame origin is the player centre, so
+        # the equipment record anchors at (24,16). Each frame is baked at the
+        # bin-centre angle of its phase (see render.hpp for the phase selector);
+        # the 6 dots are placed with the device's SIN65/mulQ4 math.
+        {"id": "whirlring", "w": 48, "h": 32, "anchor": "player centre",
+         "frames": whirl_ring_frames(dims)},
     ]
 
 

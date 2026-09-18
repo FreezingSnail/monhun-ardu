@@ -34,6 +34,12 @@
 // cases are the ones whose weapon overlay covers the head/body pixels (2, 4,
 // 10 spin/0.6-arc slash, 27..33 gun plate/reload, 35 gun stun, 36 gun
 // i-frames): their overlay shapes are byte-identical to before.
+//
+// Bead monhun-ardu-836 baked the flail whirl ring's 6 dots into one 24-phase
+// sprite (src/render.hpp partVariantDraw). Changed cases: exactly 21 and 22 (both
+// W_FLAIL + ST_WHIRL, E/W facing at whirlTick 3) -- the ring dot positions move
+// by up to the 256/(2*24) angular quantization. Every other case is
+// byte-identical (the ball blit and all non-whirl draws are untouched).
 
 #include "harness/fxtest.hpp"
 #include "src/core/world.hpp"
@@ -117,7 +123,7 @@ static const uint32_t MH_PROGMEM GOLDEN[CASE_COUNT][3] = {
     {0x8d024a25u, 0x19543b25u, 0xb76fbb91u}, {0xe739e1abu, 0x8f6871abu, 0xf75a8eb9u}, {0xfc85c4cdu, 0x13a869cdu, 0x356d8145u}, {0x6d4eb357u, 0xa7c60857u, 0x3a895d57u},
     {0xa38365c0u, 0x46b905c0u, 0x37e7b108u}, {0x3ec19436u, 0x3ab58236u, 0x3ab58236u}, {0x82915ce0u, 0x411204e0u, 0x411204e0u}, {0x93745722u, 0x7b8f7622u, 0x7b8f7622u},
     {0x69a0e3f8u, 0xd2289bf8u, 0xd2289bf8u}, {0x8d8428d4u, 0x759f47d4u, 0x759f47d4u}, {0x5957643fu, 0x4172833fu, 0x4172833fu}, {0x8d8428d4u, 0x759f47d4u, 0x759f47d4u},
-    {0xaf464173u, 0x3aa3ee73u, 0x3aa3ee73u}, {0x909e0569u, 0xe234c969u, 0xe234c969u}, {0x28a41e99u, 0x9e3f6599u, 0x9e3f6599u}, {0x9a8287e1u, 0x1f0c3be1u, 0x1e747583u},
+    {0xaf464173u, 0x3aa3ee73u, 0x3aa3ee73u}, {0xbdcdefbdu, 0x58a536bdu, 0x83571f35u}, {0x4649f76du, 0xd1a7a46du, 0xd12b30a5u}, {0x9a8287e1u, 0x1f0c3be1u, 0x1e747583u},
     {0x93745722u, 0x7b8f7622u, 0x3ce8cb2au}, {0x10a28740u, 0xf618c040u, 0xf618c040u}, {0x93745722u, 0x7b8f7622u, 0x7b8f7622u}, {0xe56a836fu, 0x1d4a306fu, 0xb373bcd7u},
     {0xd9c2ad2fu, 0xedb3832fu, 0xcacdbe57u}, {0x30469935u, 0x51a89135u, 0x51a89135u}, {0xe56a836fu, 0x1d4a306fu, 0xb373bcd7u}, {0xe56a836fu, 0x1d4a306fu, 0xb373bcd7u},
     {0x46724db1u, 0x67d445b1u, 0xf8c93455u}, {0xc19b9b2fu, 0x1fb93e2fu, 0xb373bcd7u}, {0xe56a836fu, 0x1d4a306fu, 0xb845c6bbu}, {0x474a642du, 0xc098f32du, 0x606e0819u},

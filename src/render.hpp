@@ -111,8 +111,9 @@ constexpr uint8_t ANG_PLAYER_STUN = 12;
 constexpr uint8_t ANG_MONSTER_STUN = 14;
 constexpr uint8_t ANG_SHAKE_X = 69;
 constexpr uint8_t ANG_SHAKE_Y = 94;
-// 6-ring offsets: i*60deg in 256/turn units (42.667 -> rounded).
-static const uint8_t MH_PROGMEM RING6[6] = {0, 43, 85, 128, 171, 213};
+// The 6-ring offsets (i*60deg in 256/turn units) and the whirl phase bake live
+// in tools/gen-art.py: the ring is one pre-composited sprite (monhun-ardu-836),
+// so the render no longer walks the ring dots.
 
 // Page masks for the direct framebuffer rect fill. MH_MASK_TOP[top] has bits
 // top..7 set, MH_MASK_BOT[bot] bits 0..bot; a page slice mask is the AND of the
@@ -446,11 +447,22 @@ static void drawPlayer(const mh::Game &g, int16_t camX, int16_t camY) {
         }
     } else if (g.weapon == mh::W_FLAIL) {
         if (p.stance == mh::ST_WHIRL) {
+            // Mock drawPlayer() whirl: six 2x2 light dots on the exact ellipse
+            // (cx + round(cos(a)*20), cy + round(sin(a)*14)) at ring angle
+            // a = tick*0.35 rad + i*60deg, then the white ball at tick*0.55 rad.
+            // The rates fold to 256-units/turn as ANG_WHIRL_RING/BALL
+            // (0.35 rad -> 14, 0.55 -> 22), and the ellipse radii come from
+            // art_dims (fxdump), so the mock stays the orbit reference.
+            //
+            // The 6 dots are pre-composited into one 24-phase sprite by
+            // tools/gen-art.py (bead monhun-ardu-836) using the same SIN65 Q4
+            // table + mulQ4 rounding, so one ring blit replaces six. Phase =
+            // the ring angle's bin: (ang * phases) >> 8; the baked frames sit
+            // at the bin centres, so the worst-case angular error is
+            // 256/(2*phases) units -- the intentional quantization.
             const uint8_t ang = static_cast<uint8_t>(p.whirlTick * ANG_WHIRL_RING);
-            for (uint8_t i = 0; i < 6; i++) {
-                const uint8_t ai = static_cast<uint8_t>(ang + mhPgmReadU8(&RING6[i]));
-                partDraw(equip::PART_FLAIL_RING, equip::POSE_WHIRL, face, cx + mulQ4(cos256(ai), 20), cy + mulQ4(sin256(ai), 14));
-            }
+            const uint8_t phase = static_cast<uint8_t>((static_cast<uint16_t>(ang) * art_dims::whirlring_frames) >> 8);
+            partVariantDraw(equip::PART_FLAIL_RING, phase, cx, cy);
             const uint8_t ba = static_cast<uint8_t>(p.whirlTick * ANG_WHIRL_BALL);
             partDraw(equip::PART_FLAIL_BALL, equip::POSE_WHIRL, face, cx + mulQ4(cos256(ba), 20), cy + mulQ4(sin256(ba), 14));
         } else if (p.state == mh::PS_ATTACK || p.state == mh::PS_SPECIAL) {

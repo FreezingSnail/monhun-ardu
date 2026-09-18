@@ -109,6 +109,9 @@ constexpr uint8_t telegraph_frames = 4;
 constexpr uint8_t chip_frame_w = 8;
 constexpr uint8_t chip_frame_h = 8;
 constexpr uint8_t chip_frames = 2;
+constexpr uint8_t whirlring_frame_w = 48;
+constexpr uint8_t whirlring_frame_h = 32;
+constexpr uint8_t whirlring_frames = 24;
 
 // Sword slash: 32x32 frame, hit box (hw x hh) centred with the 4x4
 // white core at slash_core_x/y (the hit-box centre). Frame order: 12x10

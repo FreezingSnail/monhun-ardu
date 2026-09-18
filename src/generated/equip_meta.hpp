@@ -17,7 +17,7 @@ namespace equip {
 constexpr uint16_t MAGIC = 0x4551;
 constexpr uint8_t VERSION = 1;
 constexpr uint8_t FLAGS = 0x00;
-constexpr uint16_t SIZE = 852;
+constexpr uint16_t SIZE = 876;
 constexpr uint8_t HEADER_SIZE = 8;
 constexpr uint8_t ITEM_SIZE = 19;
 constexpr uint8_t FACINGS = 8;
@@ -85,7 +85,7 @@ constexpr const char *SHEET_DEFLECT = "fxdeflect";
 constexpr const char *SHEET_ERASE = "fxerase";
 constexpr const char *SHEET_FLAIL_BALL = "fxwhirl";
 constexpr const char *SHEET_FLAIL_CHAIN = "fxwhirl";
-constexpr const char *SHEET_FLAIL_RING = "fxwhirl";
+constexpr const char *SHEET_FLAIL_RING = "fxwhirlring";
 constexpr const char *SHEET_FLAIL_STUN = "fxwhirl";
 constexpr const char *SHEET_GUN_GUARD = "fxguard";
 constexpr const char *SHEET_GUN_RELOAD = "fxreload";
@@ -115,27 +115,27 @@ constexpr uint8_t ITEM_ORDER[ITEM_COUNT] = {
     2, 2, 2, 2, 1, 1, 1,
 };
 constexpr uint8_t ITEM_FRAMES[ITEM_COUNT] = {
-    16, 2, 1, 1, 4, 4, 4, 4,
+    16, 2, 1, 1, 4, 4, 24, 4,
     3, 1, 8, 8, 8, 8, 2, 1,
     1, 1, 1, 5, 24, 24, 24,
 };
 constexpr uint8_t ITEM_CELL_W[ITEM_COUNT] = {
-    16, 8, 24, 4, 8, 8, 8, 8,
+    16, 8, 24, 4, 8, 8, 48, 8,
     12, 10, 16, 16, 16, 16, 16, 16,
     8, 24, 24, 32, 32, 32, 32,
 };
 constexpr uint8_t ITEM_CELL_H[ITEM_COUNT] = {
-    16, 8, 16, 16, 4, 4, 4, 4,
+    16, 8, 16, 16, 4, 4, 32, 4,
     16, 8, 16, 16, 16, 16, 16, 16,
     8, 16, 24, 32, 32, 32, 32,
 };
 constexpr int8_t ITEM_ANCHOR_X[ITEM_COUNT] = {
-    8, 2, 12, 2, 2, 0, 0, 0,
+    8, 2, 12, 2, 2, 0, 24, 0,
     6, 5, 8, 8, 8, 8, 8, 8,
     1, 12, 2, 16, 16, 16, 16,
 };
 constexpr int8_t ITEM_ANCHOR_Y[ITEM_COUNT] = {
-    8, 2, 8, 5, 2, 0, 0, 0,
+    8, 2, 8, 5, 2, 0, 16, 0,
     8, 14, 8, 8, 8, 8, 8, 8,
     1, 12, 2, 16, 16, 16, 16,
 };
@@ -574,7 +574,7 @@ constexpr uint8_t PART_FRAMES_OFF = 6;            // u8
 constexpr uint8_t PART_FRAME_OFF = 7;             // u8[POSE_COUNT]
 constexpr uint16_t PART_VARIANT_OFFSETS_OFF = 806;
 constexpr uint16_t PART_VARIANT_DATA_OFF = 846;
-constexpr uint8_t PART_VARIANT_COUNT = 6;
+constexpr uint8_t PART_VARIANT_COUNT = 30;
 
 // Default draw set (data/equipment/sets/default.json): the render
 // slot loop draws these part ids, so re-skinning the player is a
@@ -585,27 +585,29 @@ constexpr uint8_t DEFAULT_HEAD = PART_HEAD_BASE;
 // Baked absolute sheet offsets (one per referenced part symbol).
 // The blob stores these; a static_assert pins each against fxdata.h so a
 // stale equip.bin (one gen pass behind) cannot ship on AVR.
-constexpr uint32_t SHEET_OFF_MH_BODY_BASE = 54569;
+constexpr uint32_t SHEET_OFF_MH_BODY_BASE = 82243;
 constexpr uint32_t SHEET_OFF_FXCHIP = 5190;
 constexpr uint32_t SHEET_OFF_FXDEFLECT = 0;
-constexpr uint32_t SHEET_OFF_FXERASE = 10476;
-constexpr uint32_t SHEET_OFF_FXWHIRL = 7068;
+constexpr uint32_t SHEET_OFF_FXERASE = 38126;
+constexpr uint32_t SHEET_OFF_FXWHIRL = 34718;
+constexpr uint32_t SHEET_OFF_FXWHIRLRING = 6924;
 constexpr uint32_t SHEET_OFF_FXGUARD = 6490;
-constexpr uint32_t SHEET_OFF_FXRELOAD = 10388;
-constexpr uint32_t SHEET_OFF_MH_HEAD_BANDANA = 31521;
-constexpr uint32_t SHEET_OFF_MH_HEAD_BASE = 76271;
-constexpr uint32_t SHEET_OFF_MH_HEAD_HELM = 51493;
-constexpr uint32_t SHEET_OFF_FXPLAYER = 7262;
-constexpr uint32_t SHEET_OFF_MH_SHADOW_BASE = 57643;
+constexpr uint32_t SHEET_OFF_FXRELOAD = 38038;
+constexpr uint32_t SHEET_OFF_MH_HEAD_BANDANA = 59195;
+constexpr uint32_t SHEET_OFF_MH_HEAD_BASE = 103945;
+constexpr uint32_t SHEET_OFF_MH_HEAD_HELM = 79167;
+constexpr uint32_t SHEET_OFF_FXPLAYER = 34912;
+constexpr uint32_t SHEET_OFF_MH_SHADOW_BASE = 85317;
 constexpr uint32_t SHEET_OFF_FXPARRY = 290;
-constexpr uint32_t SHEET_OFF_FXRIPSPECIAL = 7648;
-constexpr uint32_t SHEET_OFF_FXSLASH = 10526;
+constexpr uint32_t SHEET_OFF_FXRIPSPECIAL = 35298;
+constexpr uint32_t SHEET_OFF_FXSLASH = 38176;
 #if defined(__AVR__)
 static_assert(SHEET_OFF_MH_BODY_BASE == static_cast<uint32_t>(mh_body_base), "equip blob stale: re-run make gen");
 static_assert(SHEET_OFF_FXCHIP == static_cast<uint32_t>(fxchip), "equip blob stale: re-run make gen");
 static_assert(SHEET_OFF_FXDEFLECT == static_cast<uint32_t>(fxdeflect), "equip blob stale: re-run make gen");
 static_assert(SHEET_OFF_FXERASE == static_cast<uint32_t>(fxerase), "equip blob stale: re-run make gen");
 static_assert(SHEET_OFF_FXWHIRL == static_cast<uint32_t>(fxwhirl), "equip blob stale: re-run make gen");
+static_assert(SHEET_OFF_FXWHIRLRING == static_cast<uint32_t>(fxwhirlring), "equip blob stale: re-run make gen");
 static_assert(SHEET_OFF_FXGUARD == static_cast<uint32_t>(fxguard), "equip blob stale: re-run make gen");
 static_assert(SHEET_OFF_FXRELOAD == static_cast<uint32_t>(fxreload), "equip blob stale: re-run make gen");
 static_assert(SHEET_OFF_MH_HEAD_BANDANA == static_cast<uint32_t>(mh_head_bandana), "equip blob stale: re-run make gen");
