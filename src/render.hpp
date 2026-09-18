@@ -346,9 +346,9 @@ static void drawMonster(const mh::Game &g, int16_t camX, int16_t camY) {
     // contract (east intact / east broken / west intact / west broken). Only the
     // heavy 24x16 sheet is drawn here; the legacy ravager fxtail is 18x10 (not a
     // multiple-of-8 SpritesU page stride) and stays unoverlaid. During a locked
-    // (spin) attack the resting tail is replaced by the whipping fxtail_spin
-    // overlay below, so it is skipped here.
-    const bool spinning = m.state == mh::MS_ATTACK && m.atkIdx != mh::COMBAT_NO_ATTACK && g.combat.attack.facing == mh::COMBAT_FACING_LOCK;
+    // (spin) windup/attack the resting tail is replaced by the whipping
+    // fxtail_spin overlay below, so it is skipped here.
+    const bool spinning = (m.state == mh::MS_WINDUP || m.state == mh::MS_ATTACK) && m.atkIdx != mh::COMBAT_NO_ATTACK && mh::combatFacingLockV(g.combat.attack.facing);
     if (g.monsterKind == mh::MON_HEAVY && g.combat.appendZone != mh::COMBAT_NO_ZONE && !spinning) {
         const mh::CombatBox &zb = g.combat.zone[mh::COMBAT_ZONE_APPENDAGE].box;
         int32_t dx, dy;
@@ -364,9 +364,11 @@ static void drawMonster(const mh::Game &g, int16_t camX, int16_t camY) {
     }
 
     // Spin tail overlay (heavy's tail_spin, 4-frame 24x24 sheet): while the
-    // locked attack is active, the tail whips 360. The frame is the world
-    // direction of the active window's face-relative offset (|dx| > |dy| -> E/W
-    // else S/N), so the whip leads the hit box. Frame origin is the body centre.
+    // locked attack winds up and strikes, the tail whips toward the hunter. The
+    // frame is the world direction of the cached window's face-relative offset
+    // (|dx| > |dy| -> E/W else S/N). Windup caches window 0, so the tail points
+    // at the hunter as the tell; the attack step then leads the active hit box.
+    // Frame origin is the body centre.
     if (spinning) {
         int32_t sdx, sdy;
         mh::combatFaceOffset(m.fx, m.fy, g.combat.attack.win.box, sdx, sdy);
@@ -380,25 +382,19 @@ static void drawMonster(const mh::Game &g, int16_t camX, int16_t camY) {
         sprDraw(fxtail_spin, static_cast<int16_t>(x + (w >> 1) - 12), static_cast<int16_t>(y + (h >> 1) - 12), FRAME(sf));
     }
 
-    // Telegraph: the cached window box itself (migration A), so the tell is the
-    // real hit window for every attack (bite's small box, tail_spin's four
-    // rotated boxes) instead of one fixed sprite. Same face-relative centre and
-    // size the hit test uses, so no cart read happens during paint. The mock's
-    // windup box is shade 1 with a 2x2 shade-2 core; the attack box shade 2
-    // with a 4x4 shade-3 core.
+    // Telegraph core marker at the cached window centre (migration A): the same
+    // face-relative centre the hit test uses, so no cart read happens during
+    // paint. Only the core is drawn (windup 2x2 shade 2, attack 4x4 shade 3) --
+    // the full-window box fill read as a debug hurt zone on playtest (nch.2).
     if (m.state == mh::MS_WINDUP || m.state == mh::MS_ATTACK) {
         if (m.atkIdx != mh::COMBAT_NO_ATTACK) {
             int32_t dx, dy;
             mh::combatFaceOffset(m.fx, m.fy, g.combat.attack.win.box, dx, dy);
             const int16_t ax = static_cast<int16_t>(x + w / 2 + dx);
             const int16_t ay = static_cast<int16_t>(y + h / 2 + dy);
-            const int16_t bw = g.combat.attack.win.box.w;
-            const int16_t bh = g.combat.attack.win.box.h;
             if (m.state == mh::MS_WINDUP) {
-                blk(static_cast<int16_t>(ax - (bw >> 1)), static_cast<int16_t>(ay - (bh >> 1)), bw, bh, 1);
                 blk(static_cast<int16_t>(ax - 1), static_cast<int16_t>(ay - 1), 2, 2, 2);
             } else {
-                blk(static_cast<int16_t>(ax - (bw >> 1)), static_cast<int16_t>(ay - (bh >> 1)), bw, bh, 2);
                 blk(static_cast<int16_t>(ax - 2), static_cast<int16_t>(ay - 2), 4, 4, 3);
             }
         }

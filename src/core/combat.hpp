@@ -74,10 +74,19 @@ enum GuardPlayer : uint8_t {
     GUARD_PLAYER_ATTACKING = 0x01
 };
 // Attack facing mode (tools/gen-combat.py FACINGS): track recomputes the
-// facing vector from the player delta every tick; lock-at-windup freezes the
-// windup-start facing through WINDUP + ATTACK (heavy's tail_spin).
+// facing vector from the player delta every tick; the lock modes freeze the
+// windup-start facing through WINDUP + ATTACK. lock-at-windup keeps that
+// tracked vector; lock-away negates it once at windup entry so the beast turns
+// its back to the hunter (heavy's tail_spin, nch.2).
 constexpr uint8_t COMBAT_FACING_TRACK = 0;
 constexpr uint8_t COMBAT_FACING_LOCK = 1;
+constexpr uint8_t COMBAT_FACING_LOCK_AWAY = 2;
+
+// True for either lock mode: the per-tick facing recompute is skipped and the
+// windup-start vector survives WINDUP + ATTACK.
+inline bool combatFacingLockV(uint8_t facing) {
+    return facing == COMBAT_FACING_LOCK || facing == COMBAT_FACING_LOCK_AWAY;
+}
 
 // Fixed zone model (build/zones-design.md): zone slot 0 is the head, slot 1 the
 // appendage; the broken bitmask uses the same bit order and matches the

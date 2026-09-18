@@ -182,7 +182,9 @@ const MONSTER_ATTACKS = {
   // HEAVY kit (nch.1): bite lunges and tracks; tail_spin locks its facing at
   // windup and whips four contiguous windows (behind -> north -> front ->
   // south). `windows` entries are face-relative box centres (ox/oy, w/h),
-  // matching the C++ CombatWindow decode.
+  // matching the C++ CombatWindow decode. `lock-away` (nch.2) negates the
+  // tracked vector once at windup entry so the tail -- window 0 behind the
+  // turned-away back -- points at the hunter.
   bite: {
     kind: 'bite', windup: 30, active: 8, recover: 40, dmg: 10, speedF: 26,
     phys: 'BLUNT', facing: 'track',
@@ -190,7 +192,7 @@ const MONSTER_ATTACKS = {
   },
   tailSpin: {
     kind: 'tailSpin', windup: 42, active: 20, recover: 55, dmg: 8,
-    phys: 'BLUNT', facing: 'lock-at-windup',
+    phys: 'BLUNT', facing: 'lock-away',
     windows: [
       { t0: 0, t1: 5, ox: -20, oy: 0, w: 24, h: 16, dmgMul: 100 },
       { t0: 6, t1: 10, ox: 0, oy: -22, w: 16, h: 24, dmgMul: 100 },
@@ -790,9 +792,9 @@ function updateMonster(g) {
   const dy = (p.y + (p.h >> 1)) - (m.y + (m.h >> 1));
   const dist = isqrt(dx * dx + dy * dy);
   const di = dirIndexFromDelta(dx, dy);
-  // Facing: lock-at-windup attacks freeze the windup-start vector through
-  // windup + attack (nch.1 tail_spin); every legacy lunge/sweep tracks.
-  const lockFace = m.atk && m.atk.facing === 'lock-at-windup' &&
+  // Facing: lock attacks freeze the windup-start vector through windup + attack
+  // (nch.1 tail_spin); every legacy lunge/sweep tracks.
+  const lockFace = m.atk && (m.atk.facing === 'lock-at-windup' || m.atk.facing === 'lock-away') &&
                    (m.state === 'windup' || m.state === 'attack');
   if (!lockFace) m.face = { x: DIR8[di].x, y: DIR8[di].y };
 
@@ -825,7 +827,13 @@ function updateMonster(g) {
       const a = m.atk;
       m.t++;
       if (a.speedF && m.t <= a.active) addVel(m, m.lvx, m.lvy);
-      if (m.t <= a.active && monsterHitsPlayer(g, a)) playerHit(g, a.dmg, m);
+      if (m.t <= a.active && monsterHitsPlayer(g, a)) {
+        // Lock-away tail hits push the hunter radially away from the beast; the
+        // turned-away facing would pull them inward. Legacy/track keep the
+        // facing-vector knockback.
+        const knock = a.facing === 'lock-away' ? DIR8[di] : m.face;
+        playerHit(g, a.dmg, m, knock);
+      }
       if (m.t > a.active + a.recover) {
         m.state = 'pursue';
         m.cd = 55 + (g.tick % 40);
@@ -855,6 +863,10 @@ function chooseAttack(g, dist) {
     m.atk = dist <= 24 ? MONSTER_ATTACKS.tailSpin : MONSTER_ATTACKS.bite;
   else
     m.atk = def.atkDist >= 0 && dist > def.atkDist ? MONSTER_ATTACKS.lunge : MONSTER_ATTACKS.sweep;
+  // nch.2: lock-away turns the back to the hunter once, reusing the tracked
+  // vector updateMonster just computed this tick (tail_spin window 0 then points
+  // back at the hunter).
+  if (m.atk.facing === 'lock-away') m.face = { x: -m.face.x, y: -m.face.y };
   m.state = 'windup';
   m.t = m.atk.windup;
   m.windupMax = m.atk.windup;
@@ -897,9 +909,12 @@ function monsterHitsPlayer(g, a) {
   return rectsOverlap(r, g.player);
 }
 
-function playerHit(g, dmg, m) {
+function playerHit(g, dmg, m, knock) {
   const p = g.player;
   if (p.iT > 0) return;
+  // Knockback vector: the attack's facing by default; a lock-away tail hit
+  // passes the radial beast->player direction instead.
+  const k = knock || m.face;
 
   if (p.state === 'deflect' && p.t > 0) {
     m.stun = 28;
@@ -920,8 +935,8 @@ function playerHit(g, dmg, m) {
     p.stam -= 22;
     if (p.stam < 0) p.stam = 0;
     p.hp -= Math.max(1, (dmg * 25 / 100) | 0);
-    p.vx = (m.face.x * 19) >> 4;
-    p.vy = (m.face.y * 19) >> 4;
+    p.vx = (k.x * 19) >> 4;
+    p.vy = (k.y * 19) >> 4;
     g.freeze = Math.max(g.freeze, 3);
     g.shake = Math.max(g.shake, 2);
     if (p.stam <= 0) {
@@ -936,8 +951,8 @@ function playerHit(g, dmg, m) {
 
   p.hp -= dmg;
   p.iT = 34;
-  p.vx = (m.face.x * 35) >> 4;
-  p.vy = (m.face.y * 35) >> 4;
+  p.vx = (k.x * 35) >> 4;
+  p.vy = (k.y * 35) >> 4;
   p.state = 'idle';
   p.t = 0;
   p.atk = null;
@@ -1423,30 +1438,24 @@ function drawMonster(ctx, g) {
 
   if (m.state === 'windup' || m.state === 'attack') {
     const a = m.atk;
-    // Window-path attacks telegraph the real hit box (face-relative centre +
-    // size); legacy reach attacks keep the published scalar projection.
-    let ax, ay, hw, hh;
+    // Core marker at the window/hit centre. Window-path attacks use the real
+    // face-relative box centre; legacy reach attacks keep the published scalar
+    // projection. The full-window box fill is gone (nch.2: it read as a debug
+    // hurt zone) -- only the core tell remains.
+    let ax, ay;
     const win = monsterTellWindow(m, a);
     if (win) {
       const d = facePoint(m.face.x, m.face.y, win.ox, win.oy);
       ax = x + m.w / 2 + d.x;
       ay = y + m.h / 2 + d.y;
-      hw = win.w;
-      hh = win.h;
     } else {
       ax = x + m.w / 2 + m.face.x * a.reach;
       ay = y + m.h / 2 + m.face.y * a.reach;
-      hw = a.hw;
-      hh = a.hh;
     }
     if (m.state === 'windup') {
-      ctx.fillStyle = SHADES[1];
-      ctx.fillRect(Math.round(ax - hw / 2), Math.round(ay - hh / 2), hw, hh);
       ctx.fillStyle = SHADES[2];
       ctx.fillRect(Math.round(ax) - 1, Math.round(ay) - 1, 2, 2);
     } else {
-      ctx.fillStyle = SHADES[2];
-      ctx.fillRect(Math.round(ax - hw / 2), Math.round(ay - hh / 2), hw, hh);
       ctx.fillStyle = SHADES[3];
       ctx.fillRect(Math.round(ax) - 2, Math.round(ay) - 2, 4, 4);
     }

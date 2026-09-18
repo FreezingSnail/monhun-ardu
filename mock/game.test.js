@@ -344,9 +344,9 @@ test('monster variants: SWEEP never lunges, HEAVY spins inside 24 else bites', (
     G.step(g, inp({}));
     assert.equal(m.atk.kind, 'tailSpin', 'heavy spins at dist ' + d);
   }
-  // The spin is a four-window, contiguous, face-locking attack.
+  // The spin is a four-window, contiguous, lock-away attack.
   const spin = G.MONSTER_ATTACKS.tailSpin;
-  assert.equal(spin.facing, 'lock-at-windup');
+  assert.equal(spin.facing, 'lock-away');
   assert.equal(spin.windows.length, 4);
   assert.deepEqual(spin.windows.map(w => [w.t0, w.t1]), [[0, 5], [6, 10], [11, 15], [16, 20]]);
   assert.ok(spin.windows[0].ox < 0 && spin.windows[2].ox > 0, 'whips back then front');
@@ -361,28 +361,50 @@ test('monster variants: SWEEP never lunges, HEAVY spins inside 24 else bites', (
   assert.equal(inside.monster.atk.kind, 'sweep', 'legacy sweep at 32');
 });
 
-test('monster variants: heavy tail_spin locks facing and hits through its window', () => {
+test('monster variants: heavy tail_spin turns away at windup, frozen through attack', () => {
+  const g = G.newGame(0, 'hunt', 2);
+  const m = park(g);
+  // Hunter east of the beast -> tracked vector +x; lock-away negates it once on
+  // windup entry so the beast faces west, tail toward the hunter.
+  m.x = 80;
+  m.y = 40;
+  g.player.x = 110;
+  g.player.y = m.y + (m.h >> 1) - (g.player.h >> 1);
+  m.state = 'pursue';
+  m.t = 0;
+  m.cd = 0;
+  G.step(g, inp({}));
+  assert.equal(m.atk.kind, 'tailSpin', 'spin selected inside 24');
+  assert.equal(m.state, 'windup', 'windup entered');
+  assert.ok(m.face.x < 0, 'beast turned its back (faces west)');
+  assert.equal(m.face.y, 0, 'level turn-away');
+
+  // Facing stays frozen through the attack even with the hunter behind.
+  m.t = 1;
+  G.step(g, inp({}));
+  assert.equal(m.state, 'attack');
+  g.player.x = 0;
+  g.player.y = 0;
+  G.step(g, inp({}));
+  assert.ok(m.face.x < 0, 'facing frozen through the attack');
+});
+
+test('monster variants: lock-away tail hit knocks the hunter away from the beast', () => {
   const g = G.newGame(0, 'hunt', 2);
   const m = park(g);
   m.x = 100;
-  m.y = 40;
+  m.y = 40;    // centre (120,54)
   m.atk = G.MONSTER_ATTACKS.tailSpin;
   m.state = 'attack';
   m.t = 0;
-  m.face = { x: 16, y: 0 };   // face east
-  // w0 sweeps behind: face-relative ox -20 from the body centre (120,54).
-  g.player.x = 92;
-  g.player.y = 48;
+  m.face = { x: -16, y: 0 };  // turned away; window 0 rotates onto the hunter side
+  g.player.x = 130;
+  g.player.y = 46;
+  g.player.iT = 0;
   const hp0 = g.player.hp;
   G.step(g, inp({}));
-  assert.ok(g.player.hp < hp0, 'spin window hit the player behind the beast');
-
-  // Facing stays east through the active phase even with the player to the
-  // west, and it is NOT recomputed while the player is behind.
-  g.player.x = 20;
-  g.player.y = 40;
-  ticks(g, 5);
-  assert.ok(m.face.x > 0, 'facing stays locked east during the spin');
+  assert.ok(g.player.hp < hp0, 'tail window hit lands');
+  assert.ok(g.player.vx > 0, 'radial knock pushes east, away from the beast');
 });
 
 test('monster variants: window telegraph mirrors the C++ window cache', () => {

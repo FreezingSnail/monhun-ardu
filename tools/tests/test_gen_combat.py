@@ -148,6 +148,21 @@ class GenCombatTests(unittest.TestCase):
         self.mutate("data/creatures/beast.json", lambda doc: doc["attacks"][0].__setitem__("elem", "SLASH"))
         self.assert_fails(self.compile(), "attacks[0]: elem: unknown value 'SLASH'")
 
+    def test_facing_enum_membership(self):
+        self.mutate("data/creatures/beast.json", lambda doc: doc["attacks"][0].__setitem__("facing", "spin"))
+        self.assert_fails(self.compile(), "attacks[0]: facing: unknown value 'spin'"
+                          " (want one of lock-at-windup, lock-away, track)")
+
+    def test_facing_lock_away_encodes_two(self):
+        # nch.2: the FACINGS table grows lock-away = 2; the packed attack record
+        # carries it in the facing byte (offset 4, after moveType/speed/moveDx/moveDy).
+        self.mutate("data/creatures/beast.json", lambda doc: doc["attacks"][0].__setitem__("facing", "lock-away"))
+        self.assert_succeeds(self.compile())
+        blob = self.blob()
+        meta = self.meta_constants()
+        attack = blob[meta["ATTACK_BEAST_JAB_OFF"]:meta["ATTACK_BEAST_JAB_OFF"] + meta["ATTACK_SIZE"]]
+        self.assertEqual(attack[4], 2)
+
     def test_unknown_zone_rejected(self):
         def add_zone(doc):
             doc["zones"]["wing"] = json.loads(json.dumps(doc["zones"]["head"]))

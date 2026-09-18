@@ -324,15 +324,20 @@ The long-tail's inherited generic `lunge`/`sweep` (initial-creature boxes, the
 - `bite` — short forward lunge (windup 30 / active 8 / recover 40, dmg 10,
   window 18x14 @ ox 14), track facing.
 - `tail_spin` — stationary 360 tail whip (windup 42 / active 20 / recover 55,
-  dmg 8), **`facing: lock-at-windup`** (the engine now consumes the facing
-  field; track attacks keep the per-tick recompute), four contiguous windows
-  (24x16 behind -> 16x24 side -> 24x16 front -> 16x24 side). The active window
-  drives the hit test and the telegraph; a 4-frame `fxtail_spin` overlay shows
-  the tail leading it.
+  dmg 8), **`facing: lock-away`** (nch.2; `lock-at-windup` keeps the tracked
+  vector, `lock-away` negates it once at windup entry so the beast turns its back
+  to the hunter and window 0's behind-the-back tail points at them), four
+  contiguous windows (24x16 behind -> 16x24 side -> 24x16 front -> 16x24 side).
+  The active window drives the hit test; a 4-frame `fxtail_spin` overlay is drawn
+  through windup + attack, its frame chosen from the cached window's world
+  direction. A lock-away hit knocks the hunter radially away from the beast
+  (legacy attacks keep the facing-vector push).
 - Selection: `tail_spin` at dist <= 24, `bite` beyond; breaking the tail
   (`zones.appendage`) disables `tail_spin` and forces `bite`.
-- Telegraphs are now the cached window box itself (block fill + core), so every
-  attack tells its real hit area; the fixed 32x24 telegraph sheet is gone.
+- Telegraphs are the core marker at the cached window centre (windup 2x2 shade 2,
+  attack 4x4 shade 3). The nch.1 full-window block fill read as a debug hurt
+  zone on playtest and was removed in nch.2; the fixed 32x24 telegraph sheet is
+  gone since nch.1.
 - Mock parity: bite/tailSpin use a new `windows[]`/lock path in `MONSTER_ATTACKS`
   (`monsterActiveWindow`/`monsterTellWindow`); the legacy lunge/sweep path is
   value-identical, so all 20 parity scenes stay byte-identical.

@@ -58,7 +58,7 @@
       "phys": "BLUNT",
       "elem": "NONE",
       "move": { "type": "none" },
-      "facing": "lock-at-windup",
+      "facing": "lock-away",
       "windows": [
         { "t0": 0, "t1": 5, "box": { "ox": -20, "oy": 0, "w": 24, "h": 16 }, "dmgMul": 100 },
         { "t0": 6, "t1": 10, "box": { "ox": 0, "oy": -22, "w": 16, "h": 24 }, "dmgMul": 100 },

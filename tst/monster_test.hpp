@@ -209,6 +209,63 @@ void MonsterSuite(TestRunner &runner) {
     }
 
     {
+        Test t("heavy tail_spin: lock-away turns the back at windup, frozen after");
+        Game g;
+        newGame(g, W_SWORD, MODE_HUNT, MON_HEAVY);
+        Monster &m = g.monster;
+        Player &p = g.player;
+        // Hunter due east of the beast centre: the tracked vector is +E, then
+        // lock-away negates it once at windup entry so the tail (window 0 behind
+        // the turned-away back) points at the hunter.
+        m.x = 80;
+        m.y = 40;
+        p.x = 110;
+        p.y = static_cast<int16_t>(m.y + (m.h >> 1) - (p.h >> 1));
+        p.iT = 0;
+        m.state = MS_PURSUE;
+        m.cd = 0;
+        updateMonster(g);
+        t.assert(m.atkIdx, combat::ATTACK_HEAVY_TAIL_SPIN, "spin selected inside 24");
+        t.assert(m.state, MS_WINDUP, "windup entered");
+        t.assert(m.fx, -fp::FP, "turned away from the hunter");
+        t.assert(m.fy, 0, "level turn-away");
+
+        // Release into attack, then move the hunter behind the beast: the
+        // lock-away facing stays put through WINDUP + ATTACK.
+        m.t = 1;
+        beast(g, 1);
+        t.assert(m.state, MS_ATTACK, "released into attack");
+        p.x = 0;
+        p.y = 0;
+        beast(g, 1);
+        t.assert(m.fx, -fp::FP, "facing frozen through attack");
+        suite.addTest(t);
+    }
+
+    {
+        Test t("heavy tail_spin: lock-away window hit knocks the hunter radially away");
+        Game g;
+        newGame(g, W_SWORD, MODE_HUNT, MON_HEAVY);
+        Monster &m = g.monster;
+        Player &p = g.player;
+        m.x = 100;
+        m.y = 40;   // centre (120,54)
+        m.fx = -fp::FP;
+        m.fy = 0;   // turned away; window 0 (ox -20) rotates onto the hunter side
+        monsterAttackSet(g, combat::ATTACK_HEAVY_TAIL_SPIN);
+        m.state = MS_ATTACK;
+        m.t = 0;
+        p.x = 130;
+        p.y = 46;
+        p.iT = 0;
+        const uint8_t hp0 = p.hp;
+        updateMonster(g);
+        t.assertLessThan(p.hp, hp0, "tail window hit lands");
+        t.assertGreaterThan(p.vx, 0, "radial knock pushes east, away from the beast");
+        suite.addTest(t);
+    }
+
+    {
         Test t("withWeapon/resetHunt preserve the chosen beast kind");
         Game g;
         newGame(g, W_SWORD, MODE_HUNT, MON_HEAVY);

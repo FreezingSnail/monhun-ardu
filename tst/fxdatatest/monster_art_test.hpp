@@ -105,6 +105,20 @@ static void setupSpin(Game &g, uint8_t window, int8_t fx) {
     g.combat.attack.win.box.h = 1;
 }
 
+// nch.2: park HEAVY in the locked tail_spin WINDUP with the FULL cached window
+// (no shrink). The spin tell now draws in windup too, and the window box fill is
+// gone, so a full-size box must not erase the plane-2 tip cap or paint any fill.
+static void setupSpinWindup(Game &g, uint8_t window, int8_t fx) {
+    setupBeast(g, MON_HEAVY, fx, 0);
+    Monster &m = g.monster;
+    m.state = MS_WINDUP;
+    m.atkIdx = combat::ATTACK_HEAVY_TAIL_SPIN;
+    m.windupMax = 42;
+    m.t = 38;   // (windupMax - t) / 4 == 1 -> odd -> no windup flash
+    g.combat.attack.facing = COMBAT_FACING_LOCK_AWAY;
+    g.combat.attack.win = combatWindowRead(window);   // full box, no shrink
+}
+
 inline void test_monster_art(FxTest &test) {
     arduboy.startGray();
 
@@ -182,6 +196,24 @@ inline void test_monster_art(FxTest &test) {
     renderMonster(g, 2);
     test.expectEq(bitAt(59, 52), 1, F("spin south cap plane2"));
     test.expectEq(bitAt(59, 30), 0, F("spin south north cap clear"));
+
+    // ---- nch.2 windup tell: the spin overlay draws during MS_WINDUP too, and
+    // the window box fill is gone. Window 1 (oy -22, north frame) is full size:
+    // its box spans x52..67, y8..31, so the old shade-1 windup fill would ink
+    // the x52..67 y10..17 region on at least one plane. It must stay clear on
+    // every plane while the white spin cap survives at the body centre.
+    setupSpinWindup(g, combat::WINDOW_HEAVY_TAIL_SPIN_1, 16);   // north frame
+    uint16_t fillBits = 0;
+    for (uint8_t plane = 0; plane < 3; plane++) {
+        renderMonster(g, plane);
+        fillBits = static_cast<uint16_t>(fillBits + countRegionBit(52, 10, 16, 8));
+    }
+    test.expectEq(fillBits, 0, F("windup no window box fill"));
+    renderMonster(g, 2);
+    test.expectEq(bitAt(59, 30), 1, F("windup spin north cap plane2"));
+    test.expectEq(bitAt(59, 52), 0, F("windup north south cap clear"));
+    // The resting tail_heavy overlay is skipped during the windup spin too.
+    test.expectEq(bitAt(E_TAIL_X, TAIL_Y + 8), 0, F("windup spin skips resting tail cap"));
 }
 
 }   // namespace monsterart

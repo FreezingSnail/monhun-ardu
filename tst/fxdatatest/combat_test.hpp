@@ -104,7 +104,8 @@ inline void test_combat(FxTest &test) {
     test.expectEq(biteWin.box.w, 18, F("heavy bite w"));
     const CombatAttackValue heavySpin = combatAttackRead(combat::ATTACK_HEAVY_TAIL_SPIN);
     test.expectEq(heavySpin.windowCount, 4, F("heavy spin four windows"));
-    test.expectEq(heavySpin.facing, COMBAT_FACING_LOCK, F("heavy spin locks facing"));
+    test.expectEq(heavySpin.facing, COMBAT_FACING_LOCK_AWAY, F("heavy spin locks away"));
+    test.expectEq(COMBAT_FACING_LOCK_AWAY, 2, F("lock-away facing value"));
     const CombatWindow spin0 = combatWindowRead(combat::WINDOW_HEAVY_TAIL_SPIN_0);
     const CombatWindow spin1 = combatWindowRead(combat::WINDOW_HEAVY_TAIL_SPIN_1);
     const CombatWindow spin2 = combatWindowRead(combat::WINDOW_HEAVY_TAIL_SPIN_2);

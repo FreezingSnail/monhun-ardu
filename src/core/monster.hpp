@@ -68,6 +68,18 @@ static uint8_t monsterAttackSet(Game &g, uint8_t attackIdx) {
     return loaded;
 }
 
+// Windup entry facing (nch.2): a lock-away attack turns the beast's back to the
+// hunter by negating the tracked vector just computed this tick from the player
+// delta. Called right after monsterAttackSet in both pattern runners; track and
+// lock-at-windup attacks are byte-identical.
+static void monsterFacingWindup(Game &g) {
+    if (g.combat.attack.facing != COMBAT_FACING_LOCK_AWAY)
+        return;
+    Monster &m = g.monster;
+    m.fx = static_cast<int16_t>(-m.fx);
+    m.fy = static_cast<int16_t>(-m.fy);
+}
+
 // Multi-window attacks (docs section 5): once the cached window's t1 is past,
 // refresh the next contiguous window. Shipped attacks declare one window, so
 // winRemain stays 0 and this path never issues a cart read.
@@ -363,6 +375,7 @@ static void patternStepsGeneric(Game &g) {
         if (ZONES_ENABLED && combatAttackDisabled(g, s.ref))
             continue;
         monsterAttackSet(g, s.ref);
+        monsterFacingWindup(g);
         m.state = MS_WINDUP;
         m.t = static_cast<int16_t>(g.combat.attack.windup);
         m.windupMax = m.t;
@@ -386,6 +399,7 @@ static void patternStepsSingle(Game &g) {
         return;   // stage-disabled step: cursor cleared, decision retries
     monsterAttackSet(g, ref);
     Monster &m = g.monster;
+    monsterFacingWindup(g);
     m.state = MS_WINDUP;
     m.t = static_cast<int16_t>(g.combat.attack.windup);
     m.windupMax = m.t;
@@ -517,11 +531,12 @@ static void updateMonster(Game &g) {
     const int16_t dist = fp::isqrt(dx * dx + dy * dy);
     const int8_t di = fp::dirIndexFromDelta(dx, dy);
     // Facing (docs section 7): track attacks recompute the unit vector from the
-    // player delta every tick. A lock-at-windup attack (heavy's tail_spin)
-    // freezes the windup-start facing through WINDUP + ATTACK; every shipped
-    // lunge/sweep is track, so parity stays byte-identical. dist/di still feed
-    // PURSUE movement and the circle step while locked.
-    const bool facingLocked = m.atkIdx != COMBAT_NO_ATTACK && g.combat.attack.facing == COMBAT_FACING_LOCK && (m.state == MS_WINDUP || m.state == MS_ATTACK);
+    // player delta every tick. A lock attack (heavy's tail_spin) freezes the
+    // windup-start facing through WINDUP + ATTACK; lock-away additionally turned
+    // the vector away at windup entry. Every shipped lunge/sweep is track, so
+    // parity stays byte-identical. dist/di still feed PURSUE movement and the
+    // circle step while locked.
+    const bool facingLocked = m.atkIdx != COMBAT_NO_ATTACK && combatFacingLockV(g.combat.attack.facing) && (m.state == MS_WINDUP || m.state == MS_ATTACK);
     if (!facingLocked) {
         m.fx = fp::dir8X(di);
         m.fy = fp::dir8Y(di);
@@ -581,7 +596,16 @@ static void updateMonster(Game &g) {
             monsterWindowNext(g);
         const uint16_t t16 = static_cast<uint16_t>(m.t);
         if (t16 >= g.combat.attack.win.t0 && t16 <= g.combat.attack.win.t1 && monsterHitsPlayer(g)) {
-            playerHurt(g, g.combat.attack.dmg, m.fx, m.fy);
+            // Knockback direction: legacy/track attacks push along the facing
+            // vector; a lock-away tail hit pushes the hunter radially away from
+            // the beast (the turned-away facing would pull them inward).
+            int16_t kx = m.fx;
+            int16_t ky = m.fy;
+            if (g.combat.attack.facing == COMBAT_FACING_LOCK_AWAY) {
+                kx = fp::dir8X(di);
+                ky = fp::dir8Y(di);
+            }
+            playerHurt(g, g.combat.attack.dmg, kx, ky);
             if (p.hp == 0) {
                 if (g.over == OVER_NONE)
                     g.over = OVER_LOSE;

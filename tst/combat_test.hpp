@@ -653,7 +653,8 @@ void CombatSuite(TestRunner &runner) {
         t.assert(combatAttackWindowCount(combat_data::ATTACK_HEAVY_BITE), 1, "bite single window");
         t.assert(combatAttackWindowCount(combat_data::ATTACK_HEAVY_TAIL_SPIN), 4, "tail_spin four windows");
         t.assert(combatAttackFacing(combat_data::ATTACK_HEAVY_BITE), COMBAT_FACING_TRACK, "bite tracks");
-        t.assert(combatAttackFacing(combat_data::ATTACK_HEAVY_TAIL_SPIN), COMBAT_FACING_LOCK, "tail_spin locks");
+        t.assert(combatAttackFacing(combat_data::ATTACK_HEAVY_TAIL_SPIN), COMBAT_FACING_LOCK_AWAY, "tail_spin locks away");
+        t.assert(COMBAT_FACING_LOCK_AWAY, 2, "lock-away facing value");
         const CombatWindow bite = combatWindowRead(combat_data::WINDOW_HEAVY_BITE_0);
         t.assert(bite.t0, 0, "bite t0");
         t.assert(bite.t1, 8, "bite t1");
