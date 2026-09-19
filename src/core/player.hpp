@@ -150,6 +150,28 @@ static void applyDrift(Player &p, uint8_t mult = 13) {
         p.vy = 0;
 }
 
+// Shared lunge impulse (mock's `if (a.lunge)` block): convert the move's
+// lunge magnitude into a fixed-velocity kick along the current facing.
+static void applyLunge(Player &p, const Attack *a) {
+    const int16_t lunge = attackLunge(a);
+    if (lunge) {
+        p.vx = (p.fx * lunge) >> 4;
+        p.vy = (p.fy * lunge) >> 4;
+    }
+}
+
+// Shared attack-entry tail: pay the move's stamina with the mock's clamp, then
+// arm the attack. Callers keep their own guards and state clears around this.
+static void beginAttack(Game &g, const Attack *a) {
+    Player &p = g.player;
+    const int16_t stam = attackStam(a);
+    p.stam = (stam >= p.stam) ? 0 : static_cast<uint8_t>(p.stam - stam);
+    p.state = PS_ATTACK;
+    p.atk = a;
+    p.t = 0;
+    p.hitDone = false;
+}
+
 static void startAttack(Game &g, const WeaponDef *def, bool alt = false) {
     Player &p = g.player;
     if (p.sheathed)
@@ -166,19 +188,10 @@ static void startAttack(Game &g, const WeaponDef *def, bool alt = false) {
         a = weaponAttack(def, p.chain < 2 ? p.chain : 2);
     if (p.stam < 1)
         return;
-    const int16_t stam = attackStam(a);
-    p.stam = (stam >= p.stam) ? 0 : static_cast<uint8_t>(p.stam - stam);
-    p.state = PS_ATTACK;
-    p.atk = a;
-    p.t = 0;
-    p.hitDone = false;
+    beginAttack(g, a);
     if (STAGE3_ENABLED)
         p.finWin = false;   // new attack clears the finisher window
-    const int16_t lunge = attackLunge(a);
-    if (lunge) {
-        p.vx = (p.fx * lunge) >> 4;
-        p.vy = (p.fy * lunge) >> 4;
-    }
+    applyLunge(p, a);
     if (CHARGE_ENABLED)
         p.chargeArmed = true;   // hold A through this swing -> charge
 }
@@ -194,21 +207,13 @@ static bool startChargeAttack(Game &g, const WeaponDef *def) {
     const int16_t stam = attackStam(a);
     if (p.stam < stam)
         return false;
-    p.stam = (stam >= p.stam) ? 0 : static_cast<uint8_t>(p.stam - stam);
-    p.state = PS_ATTACK;
-    p.atk = a;
-    p.t = 0;
-    p.hitDone = false;
+    beginAttack(g, a);
     p.chain = 0;
     p.chainWin = 0;
     p.chainLock = 0;
     if (STAGE3_ENABLED)
         p.finWin = false;
-    const int16_t lunge = attackLunge(a);
-    if (lunge) {
-        p.vx = (p.fx * lunge) >> 4;
-        p.vy = (p.fy * lunge) >> 4;
-    }
+    applyLunge(p, a);
     return true;
 }
 
@@ -240,19 +245,13 @@ static bool startRollAttack(Game &g, const WeaponDef *def) {
     const int16_t stam = attackStam(a);
     if (p.stam < stam)
         return false;
-    p.stam = (stam >= p.stam) ? 0 : static_cast<uint8_t>(p.stam - stam);
-    p.state = PS_ATTACK;
-    p.atk = a;
-    p.t = 0;
-    p.hitDone = false;
+    beginAttack(g, a);
+    // No finWin clear here: the mock's startRollAttack leaves the finisher
+    // window alone (unlike startChargeAttack / branch entry).
     p.chain = 0;
     p.chainWin = 0;
     p.chainLock = 0;
-    const int16_t lunge = attackLunge(a);
-    if (lunge) {
-        p.vx = (p.fx * lunge) >> 4;
-        p.vy = (p.fy * lunge) >> 4;
-    }
+    applyLunge(p, a);
     return true;
 }
 
@@ -384,20 +383,12 @@ static bool tryBranch(Game &g, const WeaponDef *def, const Input &inp) {
         // Demo: ammo unlimited (no decrement here either); reload still arms.
         p.reload = 45;
     }
-    p.stam -= atkStam;
-    p.state = PS_ATTACK;
-    p.atk = atk;
-    p.t = 0;
-    p.hitDone = false;
+    beginAttack(g, atk);
     p.chain = 0;
     p.chainWin = 0;
     if (STAGE3_ENABLED)
         p.finWin = false;
-    const int16_t lunge = attackLunge(atk);
-    if (lunge) {
-        p.vx = (p.fx * lunge) >> 4;
-        p.vy = (p.fy * lunge) >> 4;
-    }
+    applyLunge(p, atk);
     if (CHARGE_ENABLED)
         p.chargeArmed = false;   // branch attacks do not charge
     return true;
@@ -856,7 +847,7 @@ static void updatePlayer(Game &g, const Input &inp, bool aP, bool bP, bool bR) {
                 const bool fired = weaponHasCharge(def) ? startChargeAttack(g, def) : weaponHasChargeShells(def) ? fireChargeShot(g, def) : false;
                 if (!fired)
                     p.state = PS_IDLE;
-                p.chargeArmed = false;
+                // chargeArmed was already cleared by the top-of-tick release.
             }
             applyDrift(p);
         }
