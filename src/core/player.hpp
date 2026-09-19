@@ -40,6 +40,7 @@ void Player::init(int8_t weapon) {
     hitDone = false;
     chain = 0;
     chainWin = 0;
+    finWin = false;
     aBuffer = 0;
     sheathed = false;
     sheatheLatch = false;
@@ -167,6 +168,8 @@ static void startAttack(Game &g, const WeaponDef *def, bool alt = false) {
     p.atk = a;
     p.t = 0;
     p.hitDone = false;
+    if (STAGE3_ENABLED)
+        p.finWin = false;   // new attack clears the finisher window
     const int16_t lunge = attackLunge(a);
     if (lunge) {
         p.vx = (p.fx * lunge) >> 4;
@@ -283,15 +286,16 @@ static bool tryBranch(Game &g, const WeaponDef *def, const Input &inp) {
     if (p.state == PS_ATTACK && p.atk) {
         if (p.t < attackStartup(p.atk) + attackActive(p.atk))
             return false;                        // only from recovery
-        stage = p.chain < 2 ? p.chain + 1 : 3;   // stage 3 has no branch (finisher out of scope)
+        stage = p.chain < 2 ? p.chain + 1 : 3;   // chain 2 recovery -> stage 3
     } else if (p.state == PS_IDLE && p.chainWin > 0) {
-        stage = p.chain;   // finWin stage-3 branch is out of scope; chain only
+        stage = (STAGE3_ENABLED && p.finWin) ? 3 : p.chain;   // finisher done: B is stage 3
     } else {
         return false;
     }
 
     const Branch *br = nullptr;
-    for (int16_t i = 0; i < 2; i++) {
+    const int16_t branchCount = STAGE3_ENABLED ? 3 : 2;   // stage 3 folded out for parity
+    for (int16_t i = 0; i < branchCount; i++) {
         const Branch *b = weaponBranch(def, i);
         if (branchStage(b) == stage) {
             br = b;
@@ -312,6 +316,8 @@ static bool tryBranch(Game &g, const WeaponDef *def, const Input &inp) {
         p.t = 0;
         p.chain = 0;
         p.chainWin = 0;
+        if (STAGE3_ENABLED)
+            p.finWin = false;
         return true;
     }
 
@@ -332,6 +338,8 @@ static bool tryBranch(Game &g, const WeaponDef *def, const Input &inp) {
     p.hitDone = false;
     p.chain = 0;
     p.chainWin = 0;
+    if (STAGE3_ENABLED)
+        p.finWin = false;
     const int16_t lunge = attackLunge(atk);
     if (lunge) {
         p.vx = (p.fx * lunge) >> 4;
@@ -571,8 +579,11 @@ static void updatePlayer(Game &g, const Input &inp, bool aP, bool bP, bool bR) {
             p.chainWin = CHAIN_WIN;   // window opens after the recovery
     } else if (p.chainWin > 0 && p.state == PS_IDLE) {
         p.chainWin--;
-        if (p.chainWin == 0)
+        if (p.chainWin == 0) {
             p.chain = 0;
+            if (STAGE3_ENABLED)
+                p.finWin = false;   // window expired: the finisher offer is gone
+        }
     }
     if (p.aBuffer > 0)
         p.aBuffer--;
@@ -622,7 +633,7 @@ static void updatePlayer(Game &g, const Input &inp, bool aP, bool bP, bool bR) {
     if (B_BRANCH_BUFFER_ENABLED && bP && !sheatheConsumed) {
         const Attack *a = p.atk;
         const bool inRecovery = p.state == PS_ATTACK && a && p.t >= attackStartup(a) + attackActive(a);
-        const bool inLock = p.state == PS_IDLE && p.chain > 0 && p.chainLock > 0;
+        const bool inLock = p.state == PS_IDLE && p.chainLock > 0 && (p.chain > 0 || (STAGE3_ENABLED && p.finWin));
         if (inRecovery || inLock)
             p.bBuffer = B_BRANCH_BUFFER;
     }
@@ -735,6 +746,8 @@ static void updatePlayer(Game &g, const Input &inp, bool aP, bool bP, bool bR) {
                 p.state = PS_IDLE;
                 const bool finisher = p.chain >= 2;
                 p.chain = p.chain < 2 ? p.chain + 1 : 0;
+                if (STAGE3_ENABLED)
+                    p.finWin = finisher;   // next B in the window is the stage-3 branch
                 p.chainLock = finisher ? COMBO_LOCK : CHAIN_GAP;
                 p.chainWin = 0;   // window opens when the lock ends
             } else {
@@ -742,6 +755,8 @@ static void updatePlayer(Game &g, const Input &inp, bool aP, bool bP, bool bR) {
                 p.chain = 0;
                 p.chainWin = 0;
                 p.chainLock = 0;
+                if (STAGE3_ENABLED)
+                    p.finWin = false;
             }
             p.t = 0;
             p.atk = nullptr;

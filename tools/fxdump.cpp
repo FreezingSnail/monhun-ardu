@@ -56,7 +56,7 @@ int main() {
         // art pipeline can tell an attack branch (id != ATK_NONE) from a stance
         // branch (id == ATK_NONE, all-zero box).
         printf("      \"branches\": [\n");
-        for (int b = 0; b < 2; b++) {
+        for (int b = 0; b < 3; b++) {
             const Attack *br = branchAtk(weaponBranch(d, b));
             printf("        {");
             putNum("id", attackId(br));
@@ -66,7 +66,7 @@ int main() {
             putNum("hh", attackHh(br));
             printf(", ");
             putNum("reach", attackReach(br));
-            printf("}%s\n", b < 1 ? "," : "");
+            printf("}%s\n", b < 2 ? "," : "");
         }
         printf("      ]\n");
         printf("    }%s\n", w < 2 ? "," : "");

@@ -64,6 +64,14 @@ constexpr bool B_BRANCH_BUFFER_ENABLED = MH_B_BRANCH_BUFFER;
 #define MH_ROLL_ALT 1
 #endif
 constexpr bool ROLL_ALT_ENABLED = MH_ROLL_ALT;
+// Stage-3 finisher carve (same pattern as MH_SHEATHE): no test_parity scene
+// taps B after a finisher (A A A then B), so the finWin writes, the idle
+// stage-3 mapping and the bBuffer inLock extension fold out of that image;
+// the host suite keeps covering the finisher path.
+#ifndef MH_STAGE3
+#define MH_STAGE3 1
+#endif
+constexpr bool STAGE3_ENABLED = MH_STAGE3;
 constexpr int16_t WORLD_W = 256;
 constexpr int16_t WORLD_H = 112;
 
@@ -153,14 +161,14 @@ struct WeaponDef {
     int16_t spd;   // 1/16 px per tick
     Attack attacks[3];
     Attack special;
-    Branch branches[2];
+    Branch branches[3];
     bool canCancel;   // may tap-B out of an attack into dodge
     ShellDef shells[2];
     Attack roll;   // A out of dodge/deflect/shove (bead monhun-ardu-8xx)
     Attack alt;    // direction+A opener, replaces combo hit 1 at chain 0
 };
 
-// On AVR the table lives on the FX cart as one packed 678 B blob (bead
+// On AVR the table lives on the FX cart as one packed 759 B blob (bead
 // monhun-ardu-42n.1): the shim below exposes the same `WEAPON_DEFS[i]` /
 // `&WEAPON_DEFS[i]` syntax, but every element is a fake 16-bit pointer into
 // the cart's address space (the fxdata.h blob offset). Nothing dereferences it
@@ -170,7 +178,7 @@ struct WeaponDef {
 static_assert(sizeof(Attack) == 23, "Attack must match packed FX blob size");
 static_assert(sizeof(Branch) == 27, "Branch must match packed FX blob size");
 static_assert(sizeof(ShellDef) == 15, "ShellDef must match packed FX blob size");
-static_assert(sizeof(WeaponDef) == 226, "WeaponDef must match packed FX blob size");
+static_assert(sizeof(WeaponDef) == 253, "WeaponDef must match packed FX blob size");
 
 struct FxWeaponDefsRom {
     const WeaponDef &operator[](int16_t i) const {
@@ -186,7 +194,9 @@ MH_PROGMEM const WeaponDef WEAPON_DEFS[3] = {
         18,
         {{3, 5, 8, 9, 13, 12, 10, 9, 0, 0, 0, false, ATK_NONE}, {3, 5, 8, 10, 13, 12, 10, 9, 0, 0, 0, false, ATK_NONE}, {5, 6, 14, 17, 16, 18, 14, 15, 0, 0, 0, false, ATK_NONE}},
         {4, 6, 16, 24, 18, 20, 16, 20, 0, 0, 0, false, ATK_NONE},
-        {{1, ST_NONE, 0, {3, 5, 12, 12, 18, 14, 12, 10, 42, 0, 0, false, ATK_STEPSLASH}}, {2, ST_NONE, 0, {5, 7, 15, 20, 12, 28, 26, 16, 0, 0, 0, false, ATK_SPINCUT}}},
+        {{1, ST_NONE, 0, {3, 5, 12, 12, 18, 14, 12, 10, 42, 0, 0, false, ATK_STEPSLASH}},
+         {2, ST_NONE, 0, {5, 7, 15, 20, 12, 28, 26, 16, 0, 0, 0, false, ATK_SPINCUT}},
+         {3, ST_NONE, 0, {8, 4, 20, 26, 16, 20, 22, 18, 0, 0, 0, false, ATK_NONE}}},
         true,
         {{0, 0, 0, 0, 0, 0, 0, 0}, {0, 0, 0, 0, 0, 0, 0, 0}},
         {4, 5, 10, 12, 15, 16, 14, 10, 0, 0, 0, false, ATK_NONE},    // rollslash
@@ -198,7 +208,9 @@ MH_PROGMEM const WeaponDef WEAPON_DEFS[3] = {
         15,
         {{8, 6, 9, 14, 19, 20, 16, 13, 0, 0, 0, false, ATK_NONE}, {6, 6, 9, 17, 21, 22, 16, 12, 0, 0, 0, false, ATK_NONE}, {5, 7, 15, 25, 24, 24, 20, 17, 0, 0, 0, false, ATK_NONE}},
         {4, 8, 14, 27, 32, 14, 18, 22, 0, 0, 0, false, ATK_NONE},
-        {{1, ST_WHIRL, 50, {0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, false, ATK_NONE}}, {2, ST_NONE, 0, {5, 6, 16, 12, 22, 22, 14, 14, 0, 0, 1, false, ATK_TRIP}}},
+        {{1, ST_WHIRL, 50, {0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, false, ATK_NONE}},
+         {2, ST_NONE, 0, {5, 6, 16, 12, 22, 22, 14, 14, 0, 0, 1, false, ATK_TRIP}},
+         {3, ST_NONE, 0, {10, 6, 24, 32, 24, 32, 24, 24, 0, 12, 1, false, ATK_NONE}}},
         false,
         {{0, 0, 0, 0, 0, 0, 0, 0}, {0, 0, 0, 0, 0, 0, 0, 0}},
         {4, 6, 13, 15, 20, 24, 16, 10, 0, 0, 0, false, ATK_NONE},   // rollsweep
@@ -210,7 +222,9 @@ MH_PROGMEM const WeaponDef WEAPON_DEFS[3] = {
         9,
         {{5, 4, 11, 6, 11, 14, 12, 8, 0, 0, 0, false, ATK_NONE}, {5, 4, 11, 7, 11, 14, 12, 8, 0, 0, 0, false, ATK_NONE}, {7, 5, 15, 11, 13, 16, 14, 13, 0, 0, 0, false, ATK_NONE}},
         {0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, false, ATK_NONE},   // gunshield fires shells, no melee special
-        {{1, ST_NONE, 0, {4, 5, 16, 22, 15, 18, 16, 6, 0, 0, 0, true, ATK_POINTBLANK}}, {2, ST_NONE, 0, {4, 4, 12, 9, 14, 16, 14, 8, 0, 12, 0, false, ATK_GUARDBASH}}},
+        {{1, ST_NONE, 0, {4, 5, 16, 22, 15, 18, 16, 6, 0, 0, 0, true, ATK_POINTBLANK}},
+         {2, ST_NONE, 0, {4, 4, 12, 9, 14, 16, 14, 8, 0, 12, 0, false, ATK_GUARDBASH}},
+         {3, ST_NONE, 0, {6, 3, 20, 30, 16, 24, 18, 16, 0, 16, 0, false, ATK_NONE}}},
         true,
         {{2, 28, 35, 7, 6, 70, 6, 1}, {5, 7, 42, 4, 4, 30, 5, 3}},
         {3, 4, 12, 8, 14, 16, 14, 8, 30, 10, 0, false, ATK_NONE},    // shieldbash (lunge 30, push 10)
@@ -417,6 +431,7 @@ struct Player : fp::FpBody, fp::FpStam {
     const Attack *atk;
     bool hitDone;
     uint8_t chain, chainWin, aBuffer;   // chain 0..2, windows <= CHAIN_WIN/A_BUFFER
+    bool finWin;                        // combo finisher done: the next B is the stage-3 branch
     // Sheathe combo (ddab): stowed flag + latch (suppresses B until release),
     // double-tap Down tracker (seqT alive, seq2 armed on the second press) and
     // the A/B chord grace; combo debounce lock + B branch tap buffer.

@@ -28,20 +28,21 @@ inline void test_data(FxTest &test) {
     test.expectEq(sizeof(Attack), 23, F("sizeof Attack"));
     test.expectEq(sizeof(Branch), 27, F("sizeof Branch"));
     test.expectEq(sizeof(ShellDef), 15, F("sizeof ShellDef"));
-    test.expectEq(sizeof(WeaponDef), 226, F("sizeof WeaponDef"));
+    test.expectEq(sizeof(WeaponDef), 253, F("sizeof WeaponDef"));
     test.expectEq(sizeof(MonsterAttack), 17, F("sizeof MonsterAttack"));
     test.expectEq(sizeof(MonsterDef), 11, F("sizeof MonsterDef"));
 
     const WeaponDef *w0 = &WEAPON_DEFS[0];
     const WeaponDef *w1 = &WEAPON_DEFS[1];
     const WeaponDef *w2 = &WEAPON_DEFS[2];
-    test.expectEq(off(w0, w1), 226, F("weapon stride 1"));
-    test.expectEq(off(w0, w2), 452, F("weapon stride 2"));
+    test.expectEq(off(w0, w1), 253, F("weapon stride 1"));
+    test.expectEq(off(w0, w2), 506, F("weapon stride 2"));
     test.expectEq(off(&MONSTER_ATTACKS[0], &MONSTER_ATTACKS[1]), 17, F("monster stride"));
     test.expectEq(off(&MONSTER_DEFS[0], &MONSTER_DEFS[1]), 11, F("monsterdef stride 1"));
     test.expectEq(off(&MONSTER_DEFS[0], &MONSTER_DEFS[2]), 22, F("monsterdef stride 2"));
     test.expectEq(off(&w0->attacks[0], &w0->attacks[1]), 23, F("attack stride"));
     test.expectEq(off(&w0->branches[0], &w0->branches[1]), 27, F("branch stride"));
+    test.expectEq(off(&w0->branches[1], &w0->branches[2]), 27, F("branch stride 2"));
     test.expectEq(off(&w0->shells[0], &w0->shells[1]), 15, F("shell stride"));
 
     // ----------------------------------------------- WeaponDef field map
@@ -50,10 +51,10 @@ inline void test_data(FxTest &test) {
     test.expectEq(off(w0, &w0->attacks), 3, F("weapon.attacks off"));
     test.expectEq(off(w0, &w0->special), 72, F("weapon.special off"));
     test.expectEq(off(w0, &w0->branches), 95, F("weapon.branches off"));
-    test.expectEq(off(w0, &w0->canCancel), 149, F("weapon.canCancel off"));
-    test.expectEq(off(w0, &w0->shells), 150, F("weapon.shells off"));
-    test.expectEq(off(w0, &w0->roll), 180, F("weapon.roll off"));
-    test.expectEq(off(w0, &w0->alt), 203, F("weapon.alt off"));
+    test.expectEq(off(w0, &w0->canCancel), 176, F("weapon.canCancel off"));
+    test.expectEq(off(w0, &w0->shells), 177, F("weapon.shells off"));
+    test.expectEq(off(w0, &w0->roll), 207, F("weapon.roll off"));
+    test.expectEq(off(w0, &w0->alt), 230, F("weapon.alt off"));
 
     const Attack *a = &w0->attacks[0];
     test.expectEq(off(a, &a->lunge), 16, F("attack.lunge off"));
@@ -153,6 +154,25 @@ inline void test_data(FxTest &test) {
     test.expectEq(attackHh(branchAtk(b1)), 26, F("spincut hh"));
     test.expectEq(attackId(branchAtk(b1)), ATK_SPINCUT, F("spincut id"));
 
+    // stage 3 (7pw): no device AtkId for the mock names, so ATK_NONE like roll/alt
+    const Branch *b2 = weaponBranch(w0, 2);
+    test.expectEq(branchStage(b2), 3, F("helmsplit stage"));
+    test.expectEq(branchStance(b2), ST_NONE, F("helmsplit stance"));
+    test.expectEq(branchAutoT(b2), 0, F("helmsplit auto"));
+    test.expectEq(attackStartup(branchAtk(b2)), 8, F("helmsplit startup"));
+    test.expectEq(attackActive(branchAtk(b2)), 4, F("helmsplit active"));
+    test.expectEq(attackRecover(branchAtk(b2)), 20, F("helmsplit recover"));
+    test.expectEq(attackDmg(branchAtk(b2)), 26, F("helmsplit dmg"));
+    test.expectEq(attackReach(branchAtk(b2)), 16, F("helmsplit reach"));
+    test.expectEq(attackHw(branchAtk(b2)), 20, F("helmsplit hw"));
+    test.expectEq(attackHh(branchAtk(b2)), 22, F("helmsplit hh"));
+    test.expectEq(attackStam(branchAtk(b2)), 18, F("helmsplit stam"));
+    test.expectEq(attackLunge(branchAtk(b2)), 0, F("helmsplit lunge"));
+    test.expectEq(attackPush(branchAtk(b2)), 0, F("helmsplit push"));
+    test.expectEq(attackEffect(branchAtk(b2)), 0, F("helmsplit effect"));
+    test.expectEq(attackShell(branchAtk(b2)), 0, F("helmsplit shell"));
+    test.expectEq(attackId(branchAtk(b2)), ATK_NONE, F("helmsplit id"));
+
     const ShellDef *ss0 = weaponShell(w0, 0);
     const ShellDef *ss1 = weaponShell(w0, 1);
     test.expectEq(shellCount(ss0), 0, F("sword shell0 count"));
@@ -198,6 +218,22 @@ inline void test_data(FxTest &test) {
     test.expectEq(attackEffect(branchAtk(fb1)), 1, F("trip effect"));
     test.expectEq(attackShell(branchAtk(fb1)), 0, F("trip shell"));
     test.expectEq(attackId(branchAtk(fb1)), ATK_TRIP, F("trip id"));
+
+    const Branch *fb2 = weaponBranch(w1, 2);
+    test.expectEq(branchStage(fb2), 3, F("earthslam stage"));
+    test.expectEq(branchStance(fb2), ST_NONE, F("earthslam stance"));
+    test.expectEq(attackStartup(branchAtk(fb2)), 10, F("earthslam startup"));
+    test.expectEq(attackActive(branchAtk(fb2)), 6, F("earthslam active"));
+    test.expectEq(attackRecover(branchAtk(fb2)), 24, F("earthslam recover"));
+    test.expectEq(attackDmg(branchAtk(fb2)), 32, F("earthslam dmg"));
+    test.expectEq(attackReach(branchAtk(fb2)), 24, F("earthslam reach"));
+    test.expectEq(attackHw(branchAtk(fb2)), 32, F("earthslam hw"));
+    test.expectEq(attackHh(branchAtk(fb2)), 24, F("earthslam hh"));
+    test.expectEq(attackStam(branchAtk(fb2)), 24, F("earthslam stam"));
+    test.expectEq(attackPush(branchAtk(fb2)), 12, F("earthslam push"));
+    test.expectEq(attackEffect(branchAtk(fb2)), 1, F("earthslam effect"));
+    test.expectEq(attackShell(branchAtk(fb2)), 0, F("earthslam shell"));
+    test.expectEq(attackId(branchAtk(fb2)), ATK_NONE, F("earthslam id"));
 
     // ---------------------------------------- gunshield values (mock/game.js)
     test.expectEq(weaponId(w2), W_GUN, F("gun id"));
@@ -247,6 +283,23 @@ inline void test_data(FxTest &test) {
     test.expectEq(attackEffect(branchAtk(gb1)), 0, F("guardbash effect"));
     test.expectEq(attackShell(branchAtk(gb1)), 0, F("guardbash shell"));
     test.expectEq(attackId(branchAtk(gb1)), ATK_GUARDBASH, F("guardbash id"));
+
+    const Branch *gb2 = weaponBranch(w2, 2);
+    test.expectEq(branchStage(gb2), 3, F("cannonblast stage"));
+    test.expectEq(branchStance(gb2), ST_NONE, F("cannonblast stance"));
+    test.expectEq(attackStartup(branchAtk(gb2)), 6, F("cannonblast startup"));
+    test.expectEq(attackActive(branchAtk(gb2)), 3, F("cannonblast active"));
+    test.expectEq(attackRecover(branchAtk(gb2)), 20, F("cannonblast recover"));
+    test.expectEq(attackDmg(branchAtk(gb2)), 30, F("cannonblast dmg"));
+    test.expectEq(attackReach(branchAtk(gb2)), 16, F("cannonblast reach"));
+    test.expectEq(attackHw(branchAtk(gb2)), 24, F("cannonblast hw"));
+    test.expectEq(attackHh(branchAtk(gb2)), 18, F("cannonblast hh"));
+    test.expectEq(attackStam(branchAtk(gb2)), 16, F("cannonblast stam"));
+    test.expectEq(attackLunge(branchAtk(gb2)), 0, F("cannonblast lunge"));
+    test.expectEq(attackPush(branchAtk(gb2)), 16, F("cannonblast push"));
+    test.expectEq(attackEffect(branchAtk(gb2)), 0, F("cannonblast effect"));
+    test.expectEq(attackShell(branchAtk(gb2)), 0, F("cannonblast shell"));
+    test.expectEq(attackId(branchAtk(gb2)), ATK_NONE, F("cannonblast id"));
 
     const ShellDef *ball = weaponShell(w2, 0);
     test.expectEq(shellCount(ball), 2, F("ball count"));

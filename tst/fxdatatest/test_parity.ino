@@ -17,6 +17,11 @@
 // fields are unaffected.
 #define MH_ROLL_ALT 0
 
+// Stage-3 finisher carve (7pw): no fixture scene B-taps after a finisher, so
+// the finWin writes / idle stage-3 mapping / inLock extension fold out; the
+// host suite covers the finisher path.
+#define MH_STAGE3 0
+
 #include "harness/fx_globals.hpp"
 #include "parity_test.hpp"
 

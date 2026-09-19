@@ -605,7 +605,7 @@
     },
     {
       "path": "fxdata/tables/equip.bin",
-      "sha256": "66be06a451e27ae889afc3d1e69bf4f581026279afb601f1fa022d42a503f16e",
+      "sha256": "7a68c4a3011d274ed7d5613b493b235e64e36a77d12618498086795c32b29a1b",
       "size": 876,
       "symbol": "mhEquip"
     },
@@ -647,25 +647,25 @@
     },
     {
       "path": "fxdata/tables/weapondefs.bin",
-      "sha256": "d8e241850a7b7537c842bd52ad119ce604c3ca72bca80edfe962b75db6a68f9a",
-      "size": 678,
+      "sha256": "a490424055993ce57ae30ee8b459ddf7e6d1a42462420547aeed160ffbdb8ac3",
+      "size": 759,
       "symbol": "mhWeaponDefs"
     }
   ],
   "outputs": [
     {
       "path": "fxdata/fxdata-data.bin",
-      "sha256": "05085fbe1ba28438fc1e02e036a98f33f9bada07a72b5099e69688134baf96da",
-      "size": 174501
+      "sha256": "c9a378dbbbe85d0f66e67634b8dbabce6f774ab1a3b805b1a2741615c06d48a6",
+      "size": 174582
     },
     {
       "path": "fxdata/fxdata.bin",
-      "sha256": "df7d666b97e3b3539388cd2706b61396ec363abed0bf766ce4e1553c8cd710e6",
+      "sha256": "98f7369fe9e769e4f8618768ee1b2cbb16ea467fc0c6a08b85ad7b4660db4f42",
       "size": 174592
     },
     {
       "path": "fxdata/fxdata.h",
-      "sha256": "d68bfd73f4a371db9bcfb2d60d242407078ca802557e26f0a63938730d23e9a8",
+      "sha256": "63e153174f28aa05c893d98a82aeaf650cdd37c30ffc727682566df0b412d3e4",
       "size": 2435
     },
     {
@@ -675,7 +675,7 @@
     },
     {
       "path": "fxdata/tables/equip.bin",
-      "sha256": "66be06a451e27ae889afc3d1e69bf4f581026279afb601f1fa022d42a503f16e",
+      "sha256": "7a68c4a3011d274ed7d5613b493b235e64e36a77d12618498086795c32b29a1b",
       "size": 876
     },
     {
@@ -695,13 +695,13 @@
     },
     {
       "path": "src/fxdata.h",
-      "sha256": "d68bfd73f4a371db9bcfb2d60d242407078ca802557e26f0a63938730d23e9a8",
+      "sha256": "63e153174f28aa05c893d98a82aeaf650cdd37c30ffc727682566df0b412d3e4",
       "size": 2435
     },
     {
       "path": "src/generated/art_dims.hpp",
-      "sha256": "0185224addd6e1776e301f31d7a089719a8a0b0bf11efa4e1b29622b9cd32539",
-      "size": 6113
+      "sha256": "066f112e228f81d1d9862143631bee14afe7f21299380c47a55e0bd623fd1853",
+      "size": 6503
     },
     {
       "path": "src/generated/combat_data.hpp",
@@ -720,7 +720,7 @@
     },
     {
       "path": "src/generated/equip_meta.hpp",
-      "sha256": "dc873ca08b4b920c880d0157431bade480a11c384c8d8062777f33a680f15993",
+      "sha256": "d485d2a7a2721489a23d66551b8d82de602ac86abbd5ec2f062ff1eef00fd276",
       "size": 22331
     },
     {

@@ -148,6 +148,17 @@ void PlayerSuite(TestRunner &runner) {
         // gunshield
         t.assert(WEAPON_DEFS[W_GUN].branches[0].atk.shell, true, "pointblank shell");
         t.assert(WEAPON_DEFS[W_GUN].branches[1].atk.push, 12, "guardbash push");
+        // stage 3 (7pw)
+        t.assert(WEAPON_DEFS[W_SWORD].branches[2].stage, 3, "helmsplit stage");
+        t.assert(WEAPON_DEFS[W_SWORD].branches[2].atk.dmg, 26, "helmsplit dmg");
+        t.assert(WEAPON_DEFS[W_SWORD].branches[2].atk.reach, 16, "helmsplit reach");
+        t.assert(WEAPON_DEFS[W_FLAIL].branches[2].stage, 3, "earthslam stage");
+        t.assert(WEAPON_DEFS[W_FLAIL].branches[2].atk.dmg, 32, "earthslam dmg");
+        t.assert(WEAPON_DEFS[W_FLAIL].branches[2].atk.push, 12, "earthslam push");
+        t.assert(WEAPON_DEFS[W_FLAIL].branches[2].atk.effect, 1, "earthslam trip");
+        t.assert(WEAPON_DEFS[W_GUN].branches[2].stage, 3, "cannonblast stage");
+        t.assert(WEAPON_DEFS[W_GUN].branches[2].atk.dmg, 30, "cannonblast dmg");
+        t.assert(WEAPON_DEFS[W_GUN].branches[2].atk.push, 16, "cannonblast push");
         t.assert(WEAPON_DEFS[W_GUN].shells[0].count, 2, "ball count");
         t.assert(WEAPON_DEFS[W_GUN].shells[0].dmg, 28, "ball dmg");
         t.assert(WEAPON_DEFS[W_GUN].shells[0].reload, 70, "ball reload");
@@ -601,6 +612,69 @@ void PlayerSuite(TestRunner &runner) {
             stepN(g, 1);
         t.assert(g.player.state, PS_ATTACK, "queued branch fires when the window opens");
         t.assert(g.player.atk->id, ATK_SPINCUT, "stage-2 branch runs");
+        suite.addTest(t);
+    }
+
+    // -------------------------------------- stage-3 finisher (7pw)
+    {
+        Test t("stage-3 finisher: A A A then B runs the finisher branch (all weapons)");
+        const int8_t ws[3] = {W_SWORD, W_FLAIL, W_GUN};
+        const int16_t fdmg[3] = {26, 32, 30};
+        const int16_t freach[3] = {16, 24, 16};
+        for (int k = 0; k < 3; k++) {
+            Game g;
+            initGame(g, ws[k]);
+            t.assert(comboHit(g) ? 1 : 0, 1, "hit 1");
+            waitIdle(g);
+            t.assert(comboHit(g) ? 1 : 0, 1, "hit 2");
+            waitIdle(g);
+            t.assert(comboHit(g) ? 1 : 0, 1, "hit 3 (finisher)");
+            waitIdle(g);
+            t.assert(g.player.finWin, true, "finWin armed");
+            t.assert(g.player.chain, 0, "chain reset for the finisher");
+            stepN(g, 1, Input{0, 0, false, true});   // tap B: queues through the finisher lock
+            stepN(g, 1);
+            t.assertGreaterThan(g.player.bBuffer, 0, "finisher branch queued");
+            for (int i = 0; i < 60 && g.player.state != PS_ATTACK; i++)
+                stepN(g, 1);
+            t.assert(g.player.state, PS_ATTACK, "finisher branch runs");
+            t.assert(g.player.atk->dmg, fdmg[k], "finisher dmg");
+            t.assert(g.player.atk->reach, freach[k], "finisher reach");
+            t.assert(g.player.finWin, false, "branch clears finWin");
+        }
+        suite.addTest(t);
+    }
+
+    {
+        Test t("stage-3 finWin: cleared on window expiry and by a fresh attack");
+        Game g;
+        initGame(g, W_SWORD);
+        t.assert(comboHit(g) ? 1 : 0, 1, "hit 1");
+        waitIdle(g);
+        t.assert(comboHit(g) ? 1 : 0, 1, "hit 2");
+        waitIdle(g);
+        t.assert(comboHit(g) ? 1 : 0, 1, "hit 3 (finisher)");
+        waitIdle(g);
+        t.assert(g.player.finWin, true, "finWin armed");
+        stepN(g, COMBO_LOCK);   // lock expires -> the combo window opens
+        t.assert(g.player.chainWin, CHAIN_WIN, "window open after the lock");
+        stepN(g, 1, Input{0, 0, true, false});   // A instead of B: fresh attack
+        t.assert(g.player.state, PS_ATTACK, "fresh attack starts");
+        t.assert(g.player.finWin, false, "startAttack clears finWin");
+
+        Game h;
+        initGame(h, W_SWORD);
+        t.assert(comboHit(h) ? 1 : 0, 1, "hit 1");
+        waitIdle(h);
+        t.assert(comboHit(h) ? 1 : 0, 1, "hit 2");
+        waitIdle(h);
+        t.assert(comboHit(h) ? 1 : 0, 1, "hit 3 (finisher)");
+        waitIdle(h);
+        stepN(h, COMBO_LOCK);   // lock -> chainWin = CHAIN_WIN
+        t.assert(h.player.finWin, true, "finWin armed in the window");
+        stepN(h, CHAIN_WIN);   // let the window expire in idle
+        t.assert(h.player.chainWin, 0, "window expired");
+        t.assert(h.player.finWin, false, "expiry clears finWin");
         suite.addTest(t);
     }
 
