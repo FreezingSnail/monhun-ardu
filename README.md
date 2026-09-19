@@ -1,8 +1,24 @@
 # monhun-ardu
 
 Monster-Hunter-style top-down duel game for **Arduboy FX** (ATmega32u4), rendered
-in 4-shade grayscale via ArduboyG `L4_Triplane`. The combat sim is a direct C++
-port of a browser prototype (`mock/`), verified tick-for-tick against it.
+in 4-shade grayscale via ArduboyG `L4_Triplane`. `src/` is the source of truth;
+`mock/` is the legacy browser prototype the sim was originally ported from (its
+parity image stays runnable as diagnostics, not as a commit gate).
+
+---
+
+## Demo
+
+![monhun-ardu gameplay](docs/media/demo.gif)
+
+Download `monhun-ardu-<version>.arduboy` from
+[Releases](https://github.com/FreezingSnail/monhun-ardu/releases) and flash it
+with the Arduboy Toolset, MrBlinky's
+[uploader.py](https://github.com/MrBlinky/Arduboy-Python-Utilities), or Ardens.
+The archive carries both the Arduboy FX and the Arduboy Mini program plus the
+single FX data image (`flashdata`); the plain hex files are attached for manual
+flashing. Controls are below; no USB serial device comes up while the game runs
+(see the shipping-build note).
 
 ---
 
@@ -12,12 +28,12 @@ port of a browser prototype (`mock/`), verified tick-for-tick against it.
 |---|---|
 | Vertical-slice sim | Ported + parity-verified (20 scenes / 1269 ticks / 660 device asserts) |
 | Device render + HUD + audio | Working (block/FX-sprite art, cue tones; HUD text/FX glyphs + bars — `7y3` clamp fixed) |
-| Host unit tests | `make test` — **3144 passed / 0 failed** |
-| Device tests (Ardens) | boot 4, assets 262, audio 14, menu 59, hud 17, parity 660, data 221, combat 184, perf 5 — all PASS |
-| Perf gate (`monhun-ardu-8v7`, re-verified `42n.6` + `7y3` + `ljj.2` + `ljj.7` + `cgk`) | **PASS.** plane 153 Hz (≥135), logic 51 Hz (≥45), render max 5392 µs (≤7407), tick 988 µs, RAM free 409 B |
+| Host unit tests | `make test` — **5277 passed / 0 failed** |
+| Device tests (Ardens) | 16 suites / 2266 asserts — boot 4, assets 270, audio 17, menu 78, menu_art 81, hud 17, parity 660, data 368, combat 293, hub 57, monster_art 111, player_art 111, quests 50, screens 78, smith 66, perf 5 — all PASS |
+| Perf gate (`monhun-ardu-8v7`, re-verified through `kt7.7`) | **PASS.** plane 156 Hz (≥135), logic 52 Hz (≥45), render max 4868 µs (≤7407), tick 540 µs, RAM free 572 B (bench) |
 | Perf tooling | Headless Ardens profiler dump (`profiledump=<path>`, local patch) + on-device cycle bench (`test_perf`) |
-| Shipping build | flash **25234 / 29696 B** (85%), RAM **1742 / 2560 B** (818 free); USB-free, see below |
-| FX data image | **21768 B** of 16 MB used |
+| Shipping build | flash **27470 / 29696 B** (92%), RAM **1760 / 2560 B** (800 free); USB-free, see below |
+| FX data image | **182016 B** of 16 MB used |
 
 Speculative gameplay status: combat (sword / flail / gunshield), monster FSM,
 training pole + DPS mode, camera/world clamps, HUD, audio cues all in place.
@@ -195,8 +211,7 @@ data/skeletons.json + data/creatures/*.json ──tools/gen-combat.py──►�
 
 - `L4_Triplane` + `ABG_TIMER1` + `ABG_SYNC_PARK_ROW` (`src/common.hpp`).
 - Measured under load (bench): **156 Hz plane sweep, 52 Hz logic**, render max
-  5056 µs/plane, logic tick 988 µs, 417 B free RAM (the `ljj.2` combat loader
-  cache reserves 50 B until migrations use it). Mock runs 60 Hz; tick order
+  4868 µs/plane, logic tick 540 µs, 572 B free RAM. Mock runs 60 Hz; tick order
   is equivalent.
 - Debug overlay `DEBUG_HURTBOXES=1` (hold A+B to toggle). Off by default; the
   overlay build is flash-tight and only for development.
@@ -279,9 +294,8 @@ hunt exit.
 ## Commands
 
 ```sh
-make test               # host unit tests (3117 asserts)
-make fxtest-headless    # Ardens device tests (boot/assets/audio/menu/parity/data/combat/perf)
-                        #   single suite: make fxtest-headless FXTEST_ONLY=test_combat
+make test               # host unit tests (5277 asserts)
+make fxtest-headless    # Ardens device tests (16 suites; FXTEST_ONLY=test_combat for one)
 make size               # whole-image flash/RAM report + compile-time data facts
 make gen-check          # regen determinism + generated header sync
 make build              # compile shipping sketch (output in dist/)
@@ -340,8 +354,8 @@ Notes:
    (`80bbfb0`), and `blk()`'s `fillRect`/`drawFastVLine` path was replaced with
    direct masked framebuffer writes (`816767d`) — render max 13312 → 3984 µs,
    plane 82 → 156 Hz, logic 27 → 52 Hz, profiler `mh::blk` share 29% → 3.6%.
-   Any new feature must fit flash (4462 B free) and keep the perf gates green.
-2. **Flash headroom**: shipping 25234/29696 B (4462 B free) after the
+   Any new feature must fit flash (2226 B free) and keep the perf gates green.
+2. **Flash headroom**: shipping 27470/29696 B (2226 B free) after the
    USB-stack removal (`42n.8`: custom USB-free `main()`, -2666 B flash /
    -140 B RAM, see the device-layer note), the content-table offload
    (`42n.1`-`42n.4`), the sine-LUT shrink (`42n.7`; the
@@ -365,10 +379,10 @@ Notes:
    in `Game::combat` (22 B profile + 21 B attack/window + 7 B runtime = 50 B)
    → 2000 B. FX sprite data stays on the cart, so RAM grew little through the
    art pass; the USB-stack removal (`42n.8`) then dropped it to **1742 B
-   (818 free)**.
-4. **Mock accuracy vs speed**: the sim is parity-locked to the mock by 660 device
-   asserts. Any future tuning change must either update the mock + fixtures in
-   the same commit or be expressed as render/parameter-only changes.
+   (818 free)**, and the latest build measures **1760 B (800 free)**.
+4. **Mock is legacy**: `src/` is the source of truth. The mock/device parity
+   image (`test_parity`, 660 asserts) stays runnable as legacy diagnostics but
+   is no longer a commit gate; do not update `mock/` or regenerate its fixtures.
 5. **FX/OLED SPI sharing**: all FX reads must stay inside the
    enable/park/disable bracket; per-access cost measured at ~150 cycles (~9 µs
    at 16 MHz: 4-byte seek command at 8 MHz SPI + `readEnd`; static count from
