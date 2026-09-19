@@ -301,18 +301,23 @@ inline void test_monster_art(FxTest &test) {
 
     // ---- nch.8 chicken attack overlay: during the peck/leap windup+attack
     // drawMonster swaps the generic BEAST_POSES coil/lunge frame for the
-    // 4-frame fxchickenatk sheet, frame = (ordinal << 1) | (west). The peck
-    // keeps the feet planted (y21) and drives the beak down the facing edge;
-    // the leap raises the body to y2 and tucks the feet to y18 with the planted
-    // row clear. Facing moves the all-WHITE head to the facing side (the only
-    // white ink in the cell; tail/legs are dark/light), so plane 2 reads it.
+    // 4-frame fxchickenatk sheet, frame = (ordinal << 1) | (west). Both attacks
+    // LOWER the head (peck to rows 4..9, leap to rows 3..8) with the BLACK beak
+    // as an erase notch at the lowered head's front edge -- no beak/wattle wedge
+    // below the head. The peck keeps the feet planted (y21); the leap raises the
+    // body to y2 and tucks the feet to y18 with the planted row clear. The head
+    // is the only WHITE ink in the cell (tail/legs are dark/light), so plane 2
+    // reads its lowered rows, the high idle rows stay clear and the beak/eye
+    // erase notches read as 0.
     setupChickenAttack(g, combat::ATTACK_LUNGE_PECK, MS_WINDUP, 16);   // peck E
     renderMonster(g, 0);
     test.expectEq(bitAt(BX + 12, BY + 21), 1, F("chicken peck east foot planted"));
     test.expectEq(bitAt(BX + 10, BY + 2), 0, F("chicken peck east body not raised"));
-    test.expectEq(bitAt(BX + 27, BY + 2), 0, F("chicken peck east eye black"));
     renderMonster(g, 2);
-    test.expectEq(bitAt(BX + 30, BY + 1), 1, F("chicken peck east head white forward"));
+    test.expectEq(bitAt(BX + 27, BY + 5), 1, F("chicken peck east lowered head white"));
+    test.expectEq(bitAt(BX + 25, BY + 5), 0, F("chicken peck east eye black"));
+    test.expectEq(bitAt(BX + 28, BY + 7), 0, F("chicken peck east beak notch"));
+    test.expectEq(bitAt(BX + 25, BY + 1), 0, F("chicken peck east high head gone"));
     test.expectEq(countRegionBit(static_cast<uint8_t>(BX), static_cast<uint8_t>(BY), 12, 20), 0, F("chicken peck east left band clear"));
 
     setupChickenAttack(g, combat::ATTACK_LUNGE_LEAP, MS_ATTACK, 16);   // leap E
@@ -321,7 +326,9 @@ inline void test_monster_art(FxTest &test) {
     test.expectEq(bitAt(BX + 12, BY + 18), 1, F("chicken leap east feet tucked"));
     test.expectEq(bitAt(BX + 12, BY + 21), 0, F("chicken leap east planted row clear"));
     renderMonster(g, 2);
-    test.expectEq(bitAt(BX + 30, BY + 1), 0, F("chicken leap east head not forward"));
+    test.expectEq(bitAt(BX + 27, BY + 5), 1, F("chicken leap east lowered head white"));
+    test.expectEq(bitAt(BX + 28, BY + 7), 0, F("chicken leap east beak notch"));
+    test.expectEq(bitAt(BX + 25, BY + 1), 0, F("chicken leap east high head gone"));
 
     setupChickenAttack(g, combat::ATTACK_LUNGE_PECK, MS_WINDUP, -16);   // peck W
     renderMonster(g, 0);

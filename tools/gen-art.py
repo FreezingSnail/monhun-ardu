@@ -701,10 +701,11 @@ def longtail_frames():
 # ---- Chicken attack sheet (bead monhun-ardu-nch.8). The whole chicken is drawn
 # from this 4-frame 32x24 sheet during the peck/leap windup+attack instead of
 # the generic BEAST_POSES coil/lunge frame, so both attacks read as bespoke
-# poses. Frame order is [peck E, peck W, leap E, leap W]: the peck thrusts the
-# head/neck forward (head shifted ~+5 px, neck stretched, body leaned 1 px) and
-# the leap raises the body ~2 px with the legs folded/tucked (knees up, shanks
-# shortened) and the plumes/wing raised. Frames are authored east and mirrored
+# poses. Frame order is [peck E, peck W, leap E, leap W]: both attacks LOWER
+# the head into the target (peck to rows 4..9 with the body leaned 1 px, leap to
+# rows 3..8 off the raised body) with the beak at the lowered head's front edge;
+# the leap also raises the body ~2 px, folds/tucks the legs (knees up, shanks
+# shortened) and lifts the plumes/wing. Frames are authored east and mirrored
 # by the _beast_frame put wrapper, exactly like the idle/windup/attack frames.
 # Windup and attack share the pose: the overlay has no windup-flash frame, so
 # the telegraph window + tell carry the timing (same trade as fxtailspin).
@@ -712,8 +713,11 @@ def _chicken_attack_east(put, body, head, leap):
     hi, lo = _beast_tone(body)
 
     if leap:
-        # Plumes/wing raised with the body (~2 px). The head stays low so the
-        # white comb remains readable against the top of the cell.
+        # Plumes/wing raised with the body (~2 px). The head LOWERS into the
+        # charge (head-down posture) instead of holding the idle head high: the
+        # neck angles down off the raised body, the head drops to rows 3..8 and
+        # the beak sits at the lowered head's front edge -- no beak/wattle wedge
+        # is added below the head.
         put(0, 1, 6, 3, body)         # tail plume, upper
         put(0, 4, 8, 4, body)         # tail plume, middle
         put(1, 8, 6, 3, body)         # tail plume, lower
@@ -729,13 +733,12 @@ def _chicken_attack_east(put, body, head, leap):
         put(8, 7, 9, 1, lo)           # wing feather row 1
         put(8, 9, 8, 1, lo)           # wing feather row 2
 
-        put(17, 0, 5, 4, body)        # neck
-        put(18, 0, 11, 6, head)       # head tucked into the raised body
-        put(20, 0, 3, 1, head)        # comb front
-        put(24, 0, 2, 1, head)        # comb back
-        put(28, 3, 4, 3, lo)          # beak
-        put(28, 6, 2, 2, lo)          # wattle
-        put(23, 2, 2, 2, BLACK)       # eye
+        put(17, 3, 5, 4, body)        # neck angled down into the charge
+        put(20, 3, 10, 6, head)       # head lowered (rows 3..8, was 0..5)
+        put(22, 2, 3, 1, head)        # comb front
+        put(26, 2, 2, 1, head)        # comb back
+        put(28, 6, 2, 2, lo)          # beak at the lowered head's front edge
+        put(24, 4, 2, 2, BLACK)       # eye
 
         # Legs folded/tucked: knees up, shanks shortened, feet lifted off the
         # planted y21 row to y18 so the leap reads as airborne.
@@ -755,9 +758,10 @@ def _chicken_attack_east(put, body, head, leap):
         put(18, 18, 2, 1, LIGHT)      # far foot front highlight
         return
 
-    # Peck: body leans 1 px forward, the neck stretches and the head thrusts
-    # ~+5 px forward and down onto the target. The beak/wattle are driven below
-    # the head and held inside the cell edge so they stay readable.
+    # Peck: body leans 1 px forward, the neck angles down and the head lowers
+    # onto the target (rows 4..9) instead of holding the idle head high while
+    # the beak/wattle are driven below it -- the beak sits at the lowered head's
+    # front edge, so no separate beak wedge is added.
     put(0, 3, 6, 3, body)             # tail plume, upper
     put(0, 6, 8, 4, body)             # tail plume, middle
     put(1, 10, 6, 3, body)            # tail plume, lower
@@ -773,13 +777,12 @@ def _chicken_attack_east(put, body, head, leap):
     put(9, 9, 9, 1, lo)               # wing feather row 1
     put(9, 11, 8, 1, lo)              # wing feather row 2
 
-    put(19, 2, 8, 4, body)            # neck stretched forward
-    put(23, 1, 9, 6, head)            # head thrust forward
-    put(25, 0, 3, 1, head)            # comb front
-    put(29, 0, 2, 1, head)            # comb back
-    put(29, 5, 3, 3, lo)              # beak driven down onto the target
-    put(29, 8, 2, 2, lo)              # wattle
-    put(27, 2, 2, 2, BLACK)           # eye
+    put(18, 4, 6, 5, body)            # neck angled down to the lowered head
+    put(21, 4, 9, 6, head)            # head lowered onto the target (rows 4..9)
+    put(23, 3, 3, 1, head)            # comb front
+    put(27, 3, 2, 1, head)            # comb back
+    put(28, 7, 2, 2, lo)              # beak at the lowered head's front edge
+    put(24, 5, 2, 2, BLACK)           # eye
 
     put(12, 13, 2, 4, DARK)           # near thigh
     put(11, 16, 4, 2, DARK)           # near knee
