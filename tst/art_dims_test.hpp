@@ -619,6 +619,147 @@ void testBullAttackSheet(Test &t) {
             t.assert(h[i] != h[j] ? 1 : 0, 1, "bullatk frames distinct");
 }
 
+// ------------------------------------------- breakable-zone part overlays (kt7.6)
+
+// The four demo-roster part sheets share the heavy tail overlay contract:
+// 4 frames in combatPartArtFrame order, west frames the exact horizontal mirror
+// of east, both broken frames differing from their intact partner and carrying
+// shade-0 (mask on, all three planes off) erase pixels over the part the intact
+// frame repaints. Frame dimensions match the data zone boxes padded to a
+// multiple-of-8 height for the SpritesU plus-mask page stride.
+bool partFrameMirrors(const Blob &b, int a, int c) {
+    for (int shade = 0; shade < 3; shade++)
+        for (int page = 0; page < (b.h + 7) / 8; page++)
+            for (int x = 0; x < b.w; x++) {
+                if (pixelData(b, a, shade, x, page) != pixelData(b, c, shade, b.w - 1 - x, page))
+                    return false;
+                if (pixelMask(b, a, shade, x, page) != pixelMask(b, c, shade, b.w - 1 - x, page))
+                    return false;
+            }
+    return true;
+}
+
+// Count opaque shade-0 pixels (mask 1, every plane 0): the erasers a broken
+// frame draws over the baked part before the damaged variant.
+int partErasePixels(const Blob &b, int frame) {
+    int n = 0;
+    for (int page = 0; page < (b.h + 7) / 8; page++)
+        for (int x = 0; x < b.w; x++)
+            for (int y = page * 8; y < page * 8 + 8; y++) {
+                if (bitAt(y, pixelMask(b, frame, 0, x, page)) == 0)
+                    continue;
+                if (bitAt(y, pixelData(b, frame, 0, x, page)) == 0 && bitAt(y, pixelData(b, frame, 1, x, page)) == 0 && bitAt(y, pixelData(b, frame, 2, x, page)) == 0)
+                    n++;
+            }
+    return n;
+}
+
+void testZonePartSheets(Test &t) {
+    std::cout << "---------- breakable-zone part overlays ----------" << std::endl;
+
+    // Chicken head (lunge.json head box 18,0,11x7): frame-local (0,0) = cell
+    // (18,0). East intact is the baked white head with its black eye/beak; the
+    // broken frame erases it and drops a dark neck stump at the body end.
+    Blob ch;
+    if (parseBlob("fxhead_chicken", ch, t)) {
+        t.assert(ch.w, art_dims::head_chicken_frame_w, "chicken head blob frame w");
+        t.assert(ch.h, art_dims::head_chicken_frame_h, "chicken head blob frame h");
+        t.assert(ch.frames, art_dims::head_chicken_frames, "chicken head blob frames");
+        t.assert(art_dims::head_chicken_frame_w, 11, "chicken head frame w");
+        t.assert(art_dims::head_chicken_frame_h, 8, "chicken head frame h");
+        t.assert(art_dims::head_chicken_frames, 4, "chicken head frames");
+        t.assert(planeAtF(ch, 0, 2, 7, 1), 1, "chicken head east white crown");
+        t.assert(maskAtF(ch, 0, 5, 2), 1, "chicken head east eye ink");
+        t.assert(planeAtF(ch, 0, 0, 5, 2), 0, "chicken head east eye black");
+        t.assert(maskAtF(ch, 0, 10, 3), 1, "chicken head east beak ink");
+        t.assert(maskAtF(ch, 0, 0, 7), 0, "chicken head east bottom row clear");
+        t.assert(planeAtF(ch, 1, 2, 7, 1), 0, "chicken head broken crown erased");
+        t.assert(planeAtF(ch, 1, 0, 1, 2), 1, "chicken head broken stump plane0");
+        t.assert(partErasePixels(ch, 1) > 0 ? 1 : 0, 1, "chicken head east broken erase pixels");
+        t.assert(partErasePixels(ch, 3) > 0 ? 1 : 0, 1, "chicken head west broken erase pixels");
+        t.assert(partFrameMirrors(ch, 0, 2) ? 1 : 0, 1, "chicken head west intact mirrors east");
+        t.assert(partFrameMirrors(ch, 1, 3) ? 1 : 0, 1, "chicken head west broken mirrors east");
+        t.assert(blobFrameHash(ch, 0) != blobFrameHash(ch, 1) ? 1 : 0, 1, "chicken head broken != intact");
+    }
+
+    // Chicken legs (lunge.json appendage box 9,0,9x24): frame-local (0,0) =
+    // cell (9,0). East intact is the baked DARK legs with LIGHT shank/foot
+    // highlights; the broken frame shears them below the thigh.
+    Blob cl;
+    if (parseBlob("fxlegs_chicken", cl, t)) {
+        t.assert(cl.w, art_dims::legs_chicken_frame_w, "chicken legs blob frame w");
+        t.assert(cl.h, art_dims::legs_chicken_frame_h, "chicken legs blob frame h");
+        t.assert(cl.frames, art_dims::legs_chicken_frames, "chicken legs blob frames");
+        t.assert(art_dims::legs_chicken_frame_w, 9, "chicken legs frame w");
+        t.assert(art_dims::legs_chicken_frame_h, 24, "chicken legs frame h");
+        t.assert(art_dims::legs_chicken_frames, 4, "chicken legs frames");
+        t.assert(planeAtF(cl, 0, 0, 2, 20), 1, "chicken legs east near shank plane0");
+        t.assert(planeAtF(cl, 0, 0, 7, 20), 1, "chicken legs east far shank plane0");
+        t.assert(maskAtF(cl, 0, 5, 20), 0, "chicken legs east gap clear");
+        t.assert(planeAtF(cl, 0, 0, 0, 21), 1, "chicken legs east foot plane0");
+        t.assert(planeAtF(cl, 1, 0, 2, 20), 0, "chicken legs broken shank erased");
+        t.assert(planeAtF(cl, 1, 0, 2, 13), 1, "chicken legs broken thigh stump plane0");
+        t.assert(partErasePixels(cl, 1) > 0 ? 1 : 0, 1, "chicken legs east broken erase pixels");
+        t.assert(partErasePixels(cl, 3) > 0 ? 1 : 0, 1, "chicken legs west broken erase pixels");
+        t.assert(partFrameMirrors(cl, 0, 2) ? 1 : 0, 1, "chicken legs west intact mirrors east");
+        t.assert(partFrameMirrors(cl, 1, 3) ? 1 : 0, 1, "chicken legs west broken mirrors east");
+        t.assert(blobFrameHash(cl, 0) != blobFrameHash(cl, 1) ? 1 : 0, 1, "chicken legs broken != intact");
+    }
+
+    // Bull head (sweep.json head box 17,-4,12x10): frame-local (0,0) = cell
+    // (17,-4), so the baked horns and head top land in frame rows 8..15. East
+    // intact is the white horn/ear art; the broken frame erases the horn band
+    // and draws short dark stumps while repainting the head top.
+    Blob bh;
+    if (parseBlob("fxhead_bull", bh, t)) {
+        t.assert(bh.w, art_dims::head_bull_frame_w, "bull head blob frame w");
+        t.assert(bh.h, art_dims::head_bull_frame_h, "bull head blob frame h");
+        t.assert(bh.frames, art_dims::head_bull_frames, "bull head blob frames");
+        t.assert(art_dims::head_bull_frame_w, 12, "bull head frame w");
+        t.assert(art_dims::head_bull_frame_h, 16, "bull head frame h");
+        t.assert(art_dims::head_bull_frames, 4, "bull head frames");
+        t.assert(planeAtF(bh, 0, 2, 6, 9), 1, "bull head east horn mid white");
+        t.assert(planeAtF(bh, 0, 2, 8, 8), 1, "bull head east horn tip white");
+        t.assert(planeAtF(bh, 0, 2, 6, 14), 1, "bull head east head top white");
+        t.assert(maskAtF(bh, 0, 4, 8), 0, "bull head east above horn clear");
+        t.assert(maskAtF(bh, 1, 6, 9), 1, "bull head broken horn erase covered");
+        t.assert(planeAtF(bh, 1, 2, 6, 9), 0, "bull head broken horn erased");
+        t.assert(planeAtF(bh, 1, 0, 5, 12), 1, "bull head broken horn stump plane0");
+        t.assert(planeAtF(bh, 1, 2, 6, 14), 1, "bull head broken head top stays white");
+        t.assert(partErasePixels(bh, 1) > 0 ? 1 : 0, 1, "bull head east broken erase pixels");
+        t.assert(partErasePixels(bh, 3) > 0 ? 1 : 0, 1, "bull head west broken erase pixels");
+        t.assert(partFrameMirrors(bh, 0, 2) ? 1 : 0, 1, "bull head west intact mirrors east");
+        t.assert(partFrameMirrors(bh, 1, 3) ? 1 : 0, 1, "bull head west broken mirrors east");
+        t.assert(blobFrameHash(bh, 0) != blobFrameHash(bh, 1) ? 1 : 0, 1, "bull head broken != intact");
+    }
+
+    // Bull hooves (sweep.json appendage box 4,12,20x10): frame-local (0,0) =
+    // cell (4,12). East intact is the baked DARK legs with LIGHT shanks and
+    // BLACK hooves; the broken frame cuts them to short stumps with no hooves.
+    Blob bv;
+    if (parseBlob("fxhooves_bull", bv, t)) {
+        t.assert(bv.w, art_dims::hooves_bull_frame_w, "bull hooves blob frame w");
+        t.assert(bv.h, art_dims::hooves_bull_frame_h, "bull hooves blob frame h");
+        t.assert(bv.frames, art_dims::hooves_bull_frames, "bull hooves blob frames");
+        t.assert(art_dims::hooves_bull_frame_w, 20, "bull hooves frame w");
+        t.assert(art_dims::hooves_bull_frame_h, 16, "bull hooves frame h");
+        t.assert(art_dims::hooves_bull_frames, 4, "bull hooves frames");
+        t.assert(planeAtF(bv, 0, 0, 1, 6), 1, "bull hooves east leg plane0");
+        t.assert(planeAtF(bv, 0, 0, 6, 6), 1, "bull hooves east second leg plane0");
+        t.assert(maskAtF(bv, 0, 4, 6), 0, "bull hooves east leg gap clear");
+        t.assert(maskAtF(bv, 0, 1, 10), 1, "bull hooves east hoof ink");
+        t.assert(planeAtF(bv, 0, 0, 1, 10), 0, "bull hooves east hoof black eraser");
+        t.assert(planeAtF(bv, 1, 0, 1, 9), 0, "bull hooves broken shank erased");
+        t.assert(planeAtF(bv, 1, 0, 1, 6), 1, "bull hooves broken stump plane0");
+        t.assert(planeAtF(bv, 1, 0, 1, 10), 0, "bull hooves broken hoof erased");
+        t.assert(partErasePixels(bv, 1) > 0 ? 1 : 0, 1, "bull hooves east broken erase pixels");
+        t.assert(partErasePixels(bv, 3) > 0 ? 1 : 0, 1, "bull hooves west broken erase pixels");
+        t.assert(partFrameMirrors(bv, 0, 2) ? 1 : 0, 1, "bull hooves west intact mirrors east");
+        t.assert(partFrameMirrors(bv, 1, 3) ? 1 : 0, 1, "bull hooves west broken mirrors east");
+        t.assert(blobFrameHash(bv, 0) != blobFrameHash(bv, 1) ? 1 : 0, 1, "bull hooves broken != intact");
+    }
+}
+
 // ------------------------------------------- heavy long-tail overlay (4t4)
 
 // fxtail_heavy is the HEAVY appendage overlay: 24x16x4 in combatPartArtFrame
@@ -949,6 +1090,11 @@ void ArtDimsSuite(TestRunner &runner) {
     {
         Test t("bull attack overlay is a 4-frame stomp/gore mirror sheet");
         testBullAttackSheet(t);
+        suite.addTest(t);
+    }
+    {
+        Test t("breakable-zone part overlays are 4-frame mirror sheets");
+        testZonePartSheets(t);
         suite.addTest(t);
     }
     {

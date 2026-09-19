@@ -585,22 +585,22 @@ constexpr uint8_t DEFAULT_HEAD = PART_HEAD_BASE;
 // Baked absolute sheet offsets (one per referenced part symbol).
 // The blob stores these; a static_assert pins each against fxdata.h so a
 // stale equip.bin (one gen pass behind) cannot ship on AVR.
-constexpr uint32_t SHEET_OFF_MH_BODY_BASE = 137797;
+constexpr uint32_t SHEET_OFF_MH_BODY_BASE = 140253;
 constexpr uint32_t SHEET_OFF_FXCHIP = 20773;
 constexpr uint32_t SHEET_OFF_FXDEFLECT = 4251;
-constexpr uint32_t SHEET_OFF_FXERASE = 94333;
-constexpr uint32_t SHEET_OFF_FXWHIRL = 79111;
+constexpr uint32_t SHEET_OFF_FXERASE = 96789;
+constexpr uint32_t SHEET_OFF_FXWHIRL = 80073;
 constexpr uint32_t SHEET_OFF_FXWHIRLRING = 30573;
 constexpr uint32_t SHEET_OFF_FXGUARD = 22073;
-constexpr uint32_t SHEET_OFF_FXRELOAD = 89923;
-constexpr uint32_t SHEET_OFF_MH_HEAD_BANDANA = 114749;
-constexpr uint32_t SHEET_OFF_MH_HEAD_BASE = 159499;
-constexpr uint32_t SHEET_OFF_MH_HEAD_HELM = 134721;
-constexpr uint32_t SHEET_OFF_FXPLAYER = 79305;
-constexpr uint32_t SHEET_OFF_MH_SHADOW_BASE = 140871;
+constexpr uint32_t SHEET_OFF_FXRELOAD = 92379;
+constexpr uint32_t SHEET_OFF_MH_HEAD_BANDANA = 117205;
+constexpr uint32_t SHEET_OFF_MH_HEAD_BASE = 161955;
+constexpr uint32_t SHEET_OFF_MH_HEAD_HELM = 137177;
+constexpr uint32_t SHEET_OFF_FXPLAYER = 80533;
+constexpr uint32_t SHEET_OFF_MH_SHADOW_BASE = 143327;
 constexpr uint32_t SHEET_OFF_FXPARRY = 15873;
-constexpr uint32_t SHEET_OFF_FXRIPSPECIAL = 79691;
-constexpr uint32_t SHEET_OFF_FXSLASH = 94961;
+constexpr uint32_t SHEET_OFF_FXRIPSPECIAL = 80919;
+constexpr uint32_t SHEET_OFF_FXSLASH = 97417;
 #if defined(__AVR__)
 static_assert(SHEET_OFF_MH_BODY_BASE == static_cast<uint32_t>(mh_body_base), "equip blob stale: re-run make gen");
 static_assert(SHEET_OFF_FXCHIP == static_cast<uint32_t>(fxchip), "equip blob stale: re-run make gen");

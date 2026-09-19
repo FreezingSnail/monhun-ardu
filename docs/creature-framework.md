@@ -291,7 +291,19 @@ Phases (each gated by `make test` + `fxtest-headless` parity 660/0):
 - `hitOnce` per window, cancel windows, telegraph overrides — deferred.
 - Pack-parity baseline management; blob version mismatch policy (hard fail vs
   fallback creature).
-- Broken-part art path (gen-art code-mock vs hand PNG).
+- Broken-part art path (gen-art code-mock vs hand PNG): **done for the demo
+  roster** (bead kt7.6). Every breakable zone on LUNGE/SWEEP/HEAVY draws its
+  part from a 4-frame `combatPartArtFrame` gen-art sheet at the cached
+  face-relative zone box origin (`drawZonePart` in `src/render.hpp`):
+  `fxhead_chicken`/`fxlegs_chicken` (lunge head/appendage),
+  `fxhead_bull`/`fxhooves_bull` (sweep horns/hooves) and the 4t4
+  `fxtail_heavy` (heavy tail). Intact frames repaint the baked part; broken
+  frames erase it with shade-0 pixels on all planes and draw the damaged
+  variant. HEAVY's resting tail is skipped during the locked spin and the
+  chicken/bull parts during their whole-body attack sheets (the posed part is
+  already in `fxchickenatk`/`fxbullatk`); RAVAGER keeps the legacy 18x10
+  `fxtail` unoverlaid (not a multiple-of-8 SpritesU page stride). Hand-PNG
+  authoring remains unused.
 - VM revisit trigger (define the first fight that declarative guards cannot
   express).
 - Docs/authoring ownership: agents draft JSON, owner tunes numbers.

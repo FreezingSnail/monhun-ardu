@@ -128,8 +128,12 @@ data/skeletons.json + data/creatures/*.json ──tools/gen-combat.py──►�
   ravager.json` was the first creature with zones (head + appendage, `cgk`, and
   `heavy.json` gained its appendage/long-tail zone in `4t4`), replacing the
   N-part machinery of `ljj.6`/`ljj.8`: body implicit, one u8 pool + one broken
-  record per zone, broken-mask guards. The shipping heavy tail overlays the
-  `fxtail_heavy` 24x16 sheet at the zone box (`src/render.hpp` drawMonster); the
+  record per zone, broken-mask guards. Every breakable demo-roster zone overlays
+  its part at the cached zone box (`src/render.hpp` `drawZonePart`): the heavy
+  `fxtail_heavy` 24x16 tail (`4t4`) plus the `kt7.6` chicken `fxhead_chicken`/
+  `fxlegs_chicken` and bull `fxhead_bull`/`fxhooves_bull` 4-frame sheets, broken
+  variants erasing the baked part with shade-0 pixels (RAVAGER keeps the legacy
+  18x10 `fxtail` unoverlaid; page stride). The
   zones machinery is
   folded out of the `test_perf` and `test_parity` images with
   `-DMH_COMBAT_PARTS=0` (see `src/core/game.hpp`), whose scenes never run the

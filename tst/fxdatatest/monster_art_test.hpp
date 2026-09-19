@@ -362,6 +362,87 @@ inline void test_monster_art(FxTest &test) {
     test.expectEq(bitAt(BX + 1, BY + 12), 1, F("bull gore west horn forward"));
     renderMonster(g, 0);
     test.expectEq(bitAt(BX + 30, BY + 3), 1, F("bull gore west tail raised"));
+
+    // ---- kt7.6 breakable-zone part overlays: at rest (no attack sheet) each
+    // breakable demo-roster zone draws its part overlay at the cached zone box
+    // origin -- the same face-relative world rect the hit test uses -- so broken
+    // zones erase the baked part and show the damaged variant. The zone box
+    // origins are lunge head (18,0), lunge appendage (9,0), sweep head (17,-4)
+    // and sweep appendage (4,12); west rotates them (dx -ox, dy -oy).
+
+    // Chicken head east: overlay at (BX+18, BY), intact white head, broken
+    // erases it and drops the dark stump.
+    setupBeast(g, MON_LUNGE, 16, 0);
+    renderMonster(g, 2);
+    test.expectEq(bitAt(BX + 24, BY + 1), 1, F("chicken head east white crown"));
+    test.expectEq(bitAt(BX + 24, BY - 1), 0, F("chicken head east above frame clear"));
+    g.combat.zoneBroken = COMBAT_ZONE_HEAD_BIT;
+    renderMonster(g, 2);
+    test.expectEq(bitAt(BX + 24, BY + 1), 0, F("chicken broken head erased"));
+    renderMonster(g, 0);
+    test.expectEq(bitAt(BX + 19, BY + 2), 1, F("chicken broken neck stump plane0"));
+
+    // Chicken head west: the rotated box puts the overlay left of the cell, so
+    // only the overlay can ink that band; east facing leaves it clear.
+    setupBeast(g, MON_LUNGE, -16, 0);
+    renderMonster(g, 2);
+    test.expectEq(countRegionBit(static_cast<uint8_t>(BX - 18), static_cast<uint8_t>(BY), 11, 8) > 0 ? 1 : 0, 1, F("chicken head west overlay white"));
+    setupBeast(g, MON_LUNGE, 16, 0);
+    renderMonster(g, 2);
+    test.expectEq(countRegionBit(static_cast<uint8_t>(BX - 18), static_cast<uint8_t>(BY), 11, 8), 0, F("chicken head east no west band"));
+
+    // Chicken legs east: overlay at (BX+9, BY); broken erases the shank.
+    setupBeast(g, MON_LUNGE, 16, 0);
+    renderMonster(g, 0);
+    test.expectEq(bitAt(BX + 9, BY + 21), 1, F("chicken legs east foot at zone origin"));
+    g.combat.zoneBroken = COMBAT_ZONE_APPENDAGE_BIT;
+    renderMonster(g, 0);
+    test.expectEq(bitAt(BX + 11, BY + 20), 0, F("chicken broken shank erased"));
+    test.expectEq(bitAt(BX + 11, BY + 13), 1, F("chicken broken thigh stump plane0"));
+
+    // Chicken legs west: rotated box left of the cell; only the overlay inks it.
+    setupBeast(g, MON_LUNGE, -16, 0);
+    renderMonster(g, 0);
+    test.expectEq(bitAt(BX - 9, BY + 21), 1, F("chicken legs west foot at zone origin"));
+
+    // Bull head east: overlay at (BX+17, BY-4) so the white horn mid lands at
+    // (BX+23, BY+5); broken erases the horn band and keeps the head top.
+    setupBeast(g, MON_SWEEP, 16, 0);
+    renderMonster(g, 2);
+    test.expectEq(bitAt(BX + 23, BY + 5), 1, F("bull head east horn white"));
+    test.expectEq(bitAt(BX + 21, BY + 10), 1, F("bull head east head top white"));
+    g.combat.zoneBroken = COMBAT_ZONE_HEAD_BIT;
+    renderMonster(g, 2);
+    test.expectEq(bitAt(BX + 23, BY + 5), 0, F("bull broken horn erased"));
+    test.expectEq(bitAt(BX + 21, BY + 10), 1, F("bull broken head top stays"));
+    renderMonster(g, 0);
+    test.expectEq(bitAt(BX + 22, BY + 8), 1, F("bull broken horn stump plane0"));
+
+    // Bull head west: rotated box above-left of the cell; east leaves it clear.
+    setupBeast(g, MON_SWEEP, -16, 0);
+    renderMonster(g, 2);
+    test.expectEq(countRegionBit(static_cast<uint8_t>(BX - 17), static_cast<uint8_t>(BY + 4), 12, 16) > 0 ? 1 : 0, 1, F("bull head west overlay white"));
+    setupBeast(g, MON_SWEEP, 16, 0);
+    renderMonster(g, 2);
+    test.expectEq(countRegionBit(static_cast<uint8_t>(BX - 17), static_cast<uint8_t>(BY + 4), 12, 16), 0, F("bull head east no west band"));
+
+    // Bull hooves east: overlay at (BX+4, BY+12); broken cuts the shank.
+    setupBeast(g, MON_SWEEP, 16, 0);
+    renderMonster(g, 0);
+    test.expectEq(bitAt(BX + 5, BY + 21), 1, F("bull hooves east leg at zone origin"));
+    g.combat.zoneBroken = COMBAT_ZONE_APPENDAGE_BIT;
+    renderMonster(g, 0);
+    test.expectEq(bitAt(BX + 5, BY + 21), 0, F("bull broken shank erased"));
+    test.expectEq(bitAt(BX + 5, BY + 18), 1, F("bull broken leg stump plane0"));
+
+    // Bull hooves west: rotated box above-left of the cell; only the overlay
+    // can ink that band, and east facing leaves it clear.
+    setupBeast(g, MON_SWEEP, -16, 0);
+    renderMonster(g, 0);
+    test.expectEq(countRegionBit(static_cast<uint8_t>(BX - 4), static_cast<uint8_t>(BY - 12), 20, 16) > 0 ? 1 : 0, 1, F("bull hooves west overlay ink"));
+    setupBeast(g, MON_SWEEP, 16, 0);
+    renderMonster(g, 0);
+    test.expectEq(countRegionBit(static_cast<uint8_t>(BX - 4), static_cast<uint8_t>(BY - 12), 20, 16), 0, F("bull hooves east no west band"));
 }
 
 }   // namespace monsterart

@@ -1,102 +1,92 @@
-# monhun-ardu-nch.11 — longtail: tail-inclusive collide box (closes 7vr)
+# monhun-ardu-kt7.6 — device: broken-part art overlays for chicken/bull zones
 
 Status: **PASS** (not committed; orchestrator commits)
 
 ## What changed
 
-- `data/creatures/heavy.json`: added top-level `"collide": { "ox": -8, "oy": 3,
-  "w": 48, "h": 22 }` (default body box was `{0,0,40,28}`; negative ox extends
-  behind the body over the tail base). Numbers exactly as owner-approved draft.
-- `mock/game.js`: `MONSTER_DEFS[2]` (kind `heavy`) got the mirrored
-  `collide: { ox: -8, oy: 3, w: 48, h: 22 }`; comment note added.
-- `mock/game.test.js`: permanent test
-  `HEAVY tail-inclusive collide blocks behind, tail still reachable` — asserts the
-  def collide values, that a hunter fully behind the body is outside the
-  body-only box but inside the extended box, that `pushApart` resolves the
-  overlap, and that the tail zone (`ox -24, oy 0, 24x16`) still routes the
-  appendage at mul 150 from behind.
-- `docs/creature-framework.md`: demo-collide table long-tail row updated from
-  "collide still body-only" to done with the box values.
-- `tst/fxdatatest/combat_test.hpp`: added symbolic heavy-collide record spot
-  checks (`CREATURE_HEAVY_COLLIDE_*`); updated the two `initMonster(MON_HEAVY)`
-  target-rect pins that expected the body box to expect the collide box
-  (`w` 40->48, `x` m.x -> m.x-8).
-- `make gen` regenerated (never hand-edited): `fxdata/tables/combat.bin`,
-  `fxdata/fxdata.bin`, `fxdata/fxdata-data.bin`, `fxdata/manifest.json`,
-  `src/generated/combat_data.hpp`, `src/generated/combat_expect.hpp`
-  (`CREATURE_HEAVY_COLLIDE_OX=-8 OY=3 W=48 H=22`; `BLOB_SIZE` unchanged 1019,
-  sha256 updated).
-
-No README change: the target-roster section does not mention collide boxes.
-No engine/render change. Data-only.
+- `tools/gen-art.py`: four new `icon_defs` 4-frame sheets in
+  combatPartArtFrame order (east intact / east broken / west intact / west
+  broken), authored east and mirrored west via `_zone_part_defs` +
+  `_mirror_rect`:
+  - `head_chicken` 11x8, `lunge.json` head box (18,0,11x7): baked white head +
+    black eye/beak/wattle; broken erases the head and drops a dark neck stump.
+  - `legs_chicken` 9x24, `lunge.json` appendage box (9,0,9x24): baked DARK legs
+    + LIGHT shank/foot highlights; broken shears them below the thigh.
+  - `head_bull` 12x16, `sweep.json` head box (17,-4,12x10): baked white
+    horns/ear + head top; broken erases the horn band, draws short dark stumps,
+    repaints the head top.
+  - `hooves_bull` 20x16, `sweep.json` appendage box (4,12,20x10): baked DARK
+    legs + LIGHT shanks + BLACK hooves; broken cuts stumps with no hooves.
+  Broken frames erase the baked part with shade-0 (BLACK) pixels on all three
+  planes before the damaged variant. Heights are multiples of 8 (SpritesU
+  plus-mask page stride). Art is at `cell pixel - zone box origin`, clipped to
+  the frame, so intact frames repaint the baked part.
+- `src/render.hpp`: generalized the 4t4 heavy appendage overlay into one
+  `drawZonePart(g, x, y, sheet, zoneIdx, zoneBit)` helper (cached zone box +
+  `combatFaceOffset` + `combatPartArtFrame`); HEAVY output identical (skipped
+  during spinning). Dispatch: LUNGE `fxhead_chicken` (head) + `fxlegs_chicken`
+  (appendage); SWEEP `fxhead_bull` + `fxhooves_bull`; RAVAGER unchanged. Part
+  overlays skip the whole-body attack sheets (`fxchickenatk`/`fxbullatk`) so the
+  posed part is not overpainted. No mock/data/sim change; parity untouched.
+- Generated via `make gen`: `images/blocks/fxhead_chicken_11x8.png`,
+  `fxlegs_chicken_9x24.png`, `fxhead_bull_12x16.png`, `fxhooves_bull_20x16.png`,
+  `fxdata/blocks/Sprites.txt`, `fxdata/fxdata.bin`, `fxdata/fxdata-data.bin`,
+  `fxdata/fxdata.h`, `fxdata/manifest.json`, `fxdata/tables/equip.bin`,
+  `src/fxdata.h`, `src/generated/art_dims.hpp`, `src/generated/equip_meta.hpp`.
+- Tests (permanent, co-located):
+  - `tst/art_dims_test.hpp`: `testZonePartSheets` + `partFrameMirrors` /
+    `partErasePixels` helpers — dims/frames, exact E/W mirror, broken differs
+    from intact, broken has erase pixels (73 asserts).
+  - `tst/fxdatatest/asset_test.hpp`: `blobHeader` for the four new sheets.
+  - `tst/fxdatatest/monster_art_test.hpp`: world-rect frame-pick checks per
+    creature/zone E/W and broken vs intact (real drawMonster pixels).
+- Docs: `docs/creature-framework.md` open item "Broken-part art path" marked
+  done for the demo roster (heavy/ravager noted); `README.md` zone/overlay note.
 
 ## Verification (exact tails)
 
-`node --test mock/game.test.js`:
-```
-ℹ tests 77
-ℹ pass 77
-ℹ fail 0
-```
+- `make gen-check` -> `fxdata_manifest: PASS (74 generated artifacts unchanged)` (exit 0)
+- `make test` -> `Total Passed: 5271` / `Total Failed: 0`
+- `make test-tools` -> `Ran 152 tests in 7.876s` / `OK`
+- `make fxtest-headless FXTEST_ONLY=test_monster_art` -> `test_monster_art PASSED=91 FAILED=0`
+- `make fxtest-headless FXTEST_ONLY=test_parity` -> `parity_test PASSED=660 FAILED=0`
+- `node tools/gen-parity-fixtures.js` -> `scenes=20 ticks=1269 snapshots=32 cpFields=20`; `git diff --stat tst/fxdatatest/parity_fixtures.hpp` -> empty
+- `make fxtest-headless` (full, extra) -> all 15 suites PASS
+- `make size`:
 
-`node tools/gen-parity-fixtures.js` (run twice) + empty diff:
 ```
-$ git diff --stat tst/fxdatatest/parity_fixtures.hpp
-(no output, exit 0)
-$ git status --short tst/fxdatatest/parity_fixtures.hpp
-(no output)
-```
-Parity fixtures byte-identical (no parity scene spawns def 2).
-
-`make gen-check`:
-```
-fxdata_manifest: PASS (70 generated artifacts unchanged)
-EXIT=0
-```
-
-`make test`:
-```
-Total Passed: 5198
-Total Failed: 0
-EXIT=0
-```
-
-`make fxtest-headless FXTEST_ONLY=test_combat`:
-```
-combat_test PASSED=293 FAILED=0
-test_combat: PASS
-EXIT=0
-```
-(First run FAILED=2 on the two target-rect pins that still expected the body
-box; updated to the collide box, now 293/0.)
-
-`make fxtest-headless FXTEST_ONLY=test_parity`:
-```
-parity_test PASSED=660 FAILED=0
-test_parity: PASS
-EXIT=0
-```
-
-`make size`:
-```
-size: .text=27126 .data=40 .bss=1719
-size: flash=27166/29696 (2530 free)  ram=1759/2560
+size: .text=27348 .data=40 .bss=1719
+size: flash=27388/29696 (2308 free)  ram=1759/2560
 size: data facts: HAS_GUARD_CHANCE:false HAS_GUARD_COOLDOWN:false HAS_GUARD_HP:false HAS_GUARD_PLAYER:false HAS_GUARD_ZONES:true HAS_HIT_STAGGER:false HAS_MULTI_STEP:false HAS_MULTI_WINDOW:true HAS_SIMPLE_GUARDS:false HAS_STAGGER:true HAS_STEP_AFTER:false HAS_STEP_CHANCE:false HAS_WAIT_STEPS:false HAS_ZONES:true
 ```
-Flash/RAM identical to baseline `dbabff4` (27166/29696, 2530 free; RAM
-1759/2560, 801 free): collide numbers are a same-size field edit, no fact flip,
-no engine path change.
 
-## Deviations
+## Budget
 
-None. Owner-approved draft numbers kept exact; no test required a box change.
+| | baseline 67fec8d | after | delta |
+|---|---|---|---|
+| flash | 27166/29696 (2530 free) | 27388/29696 (2308 free) | **+222 B** |
+| RAM | 1759/2560 | 1759/2560 | 0 B |
+| fxdata/fxdata.bin | 179712 | 182016 | +2304 B |
+| fxdata/fxdata-data.bin | 179471 | 181927 | +2456 B |
+| data facts | unchanged | unchanged | no HAS_* flip |
 
-## Notes
++222 B is the render helper + 4-way dispatch (sheets are cart image, not program
+flash). Fits with 2308 B free; no zone data trimmed.
 
-- Unrelated pre-existing dirty files left untouched: `.gitignore`,
-  `docs/dev-flow.md`, `.github/`, `recording_20260918184558.gif`,
-  `tools/package-arduboy.py`, `tools/tests/test_package_arduboy.py`.
-- No `git add` / commit / push.
-- Closes `monhun-ardu-nch.11` and `monhun-ardu-7vr` (all three demo monsters now
-  carry per-creature collide/hurt boxes: chicken lunge, bull sweep, long-tail
-  heavy).
+## Deviations / notes
+
+- Chicken-head "(top 7 rows)" note holds exactly (box h 7, frame h 8). The bull
+  notes said "top 10 rows", but the bull boxes are not cell-aligned: head
+  (17,-4) sits 4 px above the cell, so baked horns/head-top land in frame rows
+  8..15, and appendage (4,12) puts baked legs in frame rows 6..10. Art follows
+  the design's hard "repaint as baked" rule at the exact frame sizes; the bull
+  muzzle/eye fall below the 16-row frames and stay baked. Frame dims/origins are
+  exactly as specified.
+- `make gen` must run twice after a sheet-count change: `gen-equipment.py`
+  (before `fxdata-build.py` in `tools/gen.sh`) reads the previous
+  `fxdata/fxdata.h`, so the first pass emits stale `SHEET_OFF_*` asserts; the
+  stable tree from the second pass passes `gen-check`.
+- Overlays land at the cached rotated zone box (the exact rect the hit test
+  uses), matching the 4t4 heavy-tail contract. On west facing an interior box
+  (e.g. chicken head 18,0 -> dx -18) therefore sits left of the mirrored baked
+  art; no sim/data change, cosmetic only.

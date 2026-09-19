@@ -345,6 +345,23 @@ static inline uint24_t monsterSheet(int8_t kind) {
     return fxmonster_lunge;
 }
 
+// Zone part-art overlay (bead monhun-ardu-kt7.6): draw one breakable zone's
+// part from its 4-frame combatPartArtFrame sheet (east intact / east broken /
+// west intact / west broken) at the cached face-relative zone box origin -- the
+// same body anchor + DIR8 rotation the hit test uses (combatZoneContains), so
+// the overlay world rect and the hurt zone cannot drift. `zoneIdx` is the slot
+// (COMBAT_ZONE_HEAD/APPENDAGE) whose cached box gives the offset; `zoneBit` is
+// the matching zoneBroken bit. Every sheet's frame height is a multiple of 8 so
+// the SpritesU plus-mask page stride is exact.
+static void drawZonePart(const mh::Game &g, int16_t x, int16_t y, uint24_t sheet, uint8_t zoneIdx, uint8_t zoneBit) {
+    const mh::CombatBox &zb = g.combat.zone[zoneIdx].box;
+    int32_t dx, dy;
+    mh::combatFaceOffset(g.monster.fx, g.monster.fy, zb, dx, dy);
+    const uint8_t broken = (g.combat.zoneBroken & zoneBit) ? 1 : 0;
+    const uint8_t f = mh::combatPartArtFrame(g.monster.fx < 0, broken);
+    sprDraw(sheet, static_cast<int16_t>(x + dx), static_cast<int16_t>(y + dy), FRAME(f));
+}
+
 // Mock drawMonster(): dead heap, feet, body, head + eyes, stun sparkle, and the
 // windup/attack telegraph box.
 static void drawMonster(const mh::Game &g, int16_t camX, int16_t camY) {
@@ -456,22 +473,27 @@ static void drawMonster(const mh::Game &g, int16_t camX, int16_t camY) {
     if (m.state == mh::MS_DEAD)
         return;
 
-    // Breakable appendage overlay (bead monhun-ardu-4t4): HEAVY's long tail.
-    // The appendage zone cache holds the face-relative box the hit test uses
-    // (combatZoneContains), so the overlay lands on the same world rect: body
-    // anchor + DIR8 rotation of (ox, oy). Frames are the combatPartArtFrame
-    // contract (east intact / east broken / west intact / west broken). Only the
-    // heavy 24x16 sheet is drawn here; the legacy ravager fxtail is 18x10 (not a
-    // multiple-of-8 SpritesU page stride) and stays unoverlaid. During a locked
-    // (spin) windup/attack the resting tail is replaced by the whipping art, so
-    // it is skipped here.
-    if (g.monsterKind == mh::MON_HEAVY && g.combat.appendZone != mh::COMBAT_NO_ZONE && !spinning) {
-        const mh::CombatBox &zb = g.combat.zone[mh::COMBAT_ZONE_APPENDAGE].box;
-        int32_t dx, dy;
-        mh::combatFaceOffset(m.fx, m.fy, zb, dx, dy);
-        const uint8_t broken = (g.combat.zoneBroken & mh::COMBAT_ZONE_APPENDAGE_BIT) ? 1 : 0;
-        const uint8_t tf = mh::combatPartArtFrame(m.fx < 0, broken);
-        sprDraw(fxtail_heavy, static_cast<int16_t>(x + dx), static_cast<int16_t>(y + dy), FRAME(tf));
+    // Breakable-zone part overlays (monhun-ardu-4t4 heavy tail; kt7.6 chicken and
+    // bull). Each sheet draws its part at the zone's cached face-relative box
+    // origin (drawZonePart), i.e. the same world rect the hit test uses. Skips:
+    // HEAVY's resting tail during the locked spin (the rotating fxtailspin sheet
+    // carries the posed tail); the chicken/bull parts during their whole-body
+    // attack sheets (fxchickenatk / fxbullatk already draw the posed part).
+    // RAVAGER keeps the legacy 18x10 fxtail unoverlaid (not a multiple-of-8
+    // SpritesU page stride), exactly as before.
+    if (g.monsterKind == mh::MON_HEAVY) {
+        if (g.combat.appendZone != mh::COMBAT_NO_ZONE && !spinning)
+            drawZonePart(g, x, y, fxtail_heavy, mh::COMBAT_ZONE_APPENDAGE, mh::COMBAT_ZONE_APPENDAGE_BIT);
+    } else if (g.monsterKind == mh::MON_LUNGE && !chickenAtk) {
+        if (g.combat.headZone != mh::COMBAT_NO_ZONE)
+            drawZonePart(g, x, y, fxhead_chicken, mh::COMBAT_ZONE_HEAD, mh::COMBAT_ZONE_HEAD_BIT);
+        if (g.combat.appendZone != mh::COMBAT_NO_ZONE)
+            drawZonePart(g, x, y, fxlegs_chicken, mh::COMBAT_ZONE_APPENDAGE, mh::COMBAT_ZONE_APPENDAGE_BIT);
+    } else if (g.monsterKind == mh::MON_SWEEP && !bullAtk) {
+        if (g.combat.headZone != mh::COMBAT_NO_ZONE)
+            drawZonePart(g, x, y, fxhead_bull, mh::COMBAT_ZONE_HEAD, mh::COMBAT_ZONE_HEAD_BIT);
+        if (g.combat.appendZone != mh::COMBAT_NO_ZONE)
+            drawZonePart(g, x, y, fxhooves_bull, mh::COMBAT_ZONE_APPENDAGE, mh::COMBAT_ZONE_APPENDAGE_BIT);
     }
 
     if (m.stun > 0) {

@@ -326,6 +326,21 @@ def icon_defs(dims):
         # 24 is a multiple of 8 so the SpritesU plus-mask page stride is exact.
         {"id": "bullatk", "w": 32, "h": 24, "anchor": "body top-left",
          "frames": bullatk_frames()},
+        # Breakable-zone part overlays (bead monhun-ardu-kt7.6): one 4-frame
+        # combatPartArtFrame() sheet per breakable demo-roster zone, drawn at the
+        # face-relative zone box origin (the same world rect the hit test uses).
+        # Frame sizes match the data boxes (lunge.json head 11x7 / appendage 9x24;
+        # sweep.json head 12x10 / appendage 20x10) padded up to a multiple-of-8
+        # height for the SpritesU plus-mask page stride. Frames are authored
+        # facing east and mirrored west, exactly like the heavy tail_heavy sheet.
+        {"id": "head_chicken", "w": 11, "h": 8, "anchor": "part box top-left",
+         "frames": head_chicken_defs()},
+        {"id": "legs_chicken", "w": 9, "h": 24, "anchor": "part box top-left",
+         "frames": legs_chicken_defs()},
+        {"id": "head_bull", "w": 12, "h": 16, "anchor": "part box top-left",
+         "frames": head_bull_defs()},
+        {"id": "hooves_bull", "w": 20, "h": 16, "anchor": "part box top-left",
+         "frames": hooves_bull_defs()},
     ] + hud_defs()
 
 
@@ -896,6 +911,144 @@ def bullatk_frames():
             frames.append(_image_blocks(
                 _beast_frame(_bull_attack_pose(gore), _bull_dead, DARK, WHITE, east)))
     return frames
+
+
+# ---- Breakable-zone part overlays (bead monhun-ardu-kt7.6). Same treatment as
+# the heavy long-tail overlay (4t4): every breakable demo-roster zone draws its
+# visible part from a 4-frame combatPartArtFrame() sheet at the face-relative
+# zone box origin, so the art lands on the exact rect the hit test uses. Frame
+# order is east intact / east broken / west intact / west broken; west frames are
+# the exact horizontal mirror of east. Intact frames repaint the baked part;
+# broken frames first erase the baked part with shade-0 (BLACK) pixels on all
+# three planes and then draw the damaged variant, so the overlay replaces the
+# baked art everywhere the frame covers. Art is authored in frame-local
+# coordinates (part cell pixel - zone box origin), clipped to the frame: the
+# muzzle / lower head outside a frame stays baked and visible. Every height is a
+# multiple of 8 so SpritesU's plus-mask page stride is exact.
+def _zone_part_defs(east_intact, east_broken, w):
+    return [east_intact, east_broken,
+            _mirror_rect(east_intact, w), _mirror_rect(east_broken, w)]
+
+
+def head_chicken_defs():
+    # lunge.json head box (18, 0, 11, 7): frame-local (0,0) = cell (18, 0). The
+    # baked white head (rows 0..5) with its black eye, beak and wattle. Broken =
+    # the head erased and replaced by a torn dark neck stump at the body end.
+    east_intact = [
+        (WHITE, 0, 0, 11, 6),    # head
+        (BLACK, 5, 2, 2, 2),     # eye
+        (BLACK, 10, 3, 1, 3),    # beak (cell x28 edge)
+        (BLACK, 10, 6, 1, 1),    # wattle
+    ]
+    east_broken = [
+        (BLACK, 0, 0, 11, 6),    # erase the baked head
+        (DARK, 0, 1, 4, 4),      # torn neck stump
+        (LIGHT, 0, 1, 3, 1),     # stump highlight
+        (BLACK, 3, 0, 2, 2),     # wound notch
+    ]
+    return _zone_part_defs(east_intact, east_broken, 11)
+
+
+def legs_chicken_defs():
+    # lunge.json appendage box (9, 0, 9, 24): frame-local (0,0) = cell (9, 0).
+    # The baked DARK legs with LIGHT shank/foot highlights; the far leg's outer
+    # toe is clipped (frame width 9). Broken = the legs sheared at the thigh,
+    # leaving short dark stumps.
+    east_intact = [
+        (DARK, 2, 13, 2, 4),     # near thigh
+        (DARK, 1, 16, 4, 2),     # near knee
+        (DARK, 2, 18, 2, 3),     # near shank
+        (LIGHT, 2, 18, 1, 3),    # near shank highlight
+        (DARK, 0, 20, 1, 1),     # near rear toe
+        (DARK, 0, 21, 5, 1),     # near foot
+        (LIGHT, 1, 21, 2, 1),    # near foot front highlight
+        (DARK, 7, 13, 2, 4),     # far thigh
+        (DARK, 6, 16, 3, 2),     # far knee (outer column clipped)
+        (DARK, 7, 18, 2, 3),     # far shank
+        (LIGHT, 7, 18, 1, 3),    # far shank highlight
+        (DARK, 6, 21, 3, 1),     # far foot (outer columns clipped)
+    ]
+    east_broken = [
+        (BLACK, 2, 13, 2, 4),    # erase the legs (exact baked rects, so the
+        (BLACK, 1, 16, 4, 2),    # body between them is untouched)
+        (BLACK, 2, 18, 2, 3),
+        (BLACK, 0, 20, 1, 1),
+        (BLACK, 0, 21, 5, 1),
+        (BLACK, 7, 13, 2, 4),
+        (BLACK, 6, 16, 3, 2),
+        (BLACK, 7, 18, 2, 3),
+        (BLACK, 6, 21, 3, 1),
+        (DARK, 2, 13, 2, 2),     # near thigh stump
+        (LIGHT, 2, 13, 1, 1),    # stump highlight
+        (DARK, 7, 13, 2, 2),     # far thigh stump
+        (LIGHT, 7, 13, 1, 1),    # stump highlight
+        (BLACK, 1, 15, 7, 1),    # torn lower edge
+    ]
+    return _zone_part_defs(east_intact, east_broken, 9)
+
+
+def head_bull_defs():
+    # sweep.json head box (17, -4, 12, 10): frame-local (0,0) = cell (17, -4).
+    # The baked white horns/ear and the head top land in frame rows 8..15; the
+    # muzzle/eye sit below the 16-row frame and stay baked. Broken = the horns
+    # erased and snapped back to short dark stumps with the head top repainted.
+    east_intact = [
+        (WHITE, 4, 14, 8, 2),    # head top (cell y10..11)
+        (WHITE, 5, 13, 2, 2),    # ear
+        (WHITE, 5, 12, 2, 3),    # near horn base
+        (WHITE, 6, 9, 2, 3),     # near horn mid
+        (WHITE, 7, 8, 3, 2),     # near horn tip
+        (WHITE, 11, 8, 1, 2),    # far horn tip (outer columns clipped)
+    ]
+    east_broken = [
+        (BLACK, 4, 8, 8, 6),     # erase the horn band
+        (WHITE, 4, 14, 8, 2),    # head top stays
+        (WHITE, 5, 13, 2, 2),    # ear stays
+        (DARK, 5, 11, 2, 3),     # near horn stump
+        (LIGHT, 5, 11, 1, 1),    # stump highlight
+        (DARK, 8, 11, 2, 3),     # far horn stump
+        (BLACK, 6, 9, 2, 2),     # snapped gap
+    ]
+    return _zone_part_defs(east_intact, east_broken, 12)
+
+
+def hooves_bull_defs():
+    # sweep.json appendage box (4, 12, 20, 10): frame-local (0,0) = cell (4, 12).
+    # The baked DARK legs with LIGHT shank highlights and BLACK hooves land in
+    # frame rows 6..10; the fourth leg's outer columns are clipped. Broken = the
+    # legs erased and cut to short stumps with no hooves.
+    east_intact = [
+        (DARK, 1, 6, 3, 4),      # leg 1
+        (LIGHT, 1, 8, 1, 2),     # shank highlight
+        (BLACK, 0, 10, 4, 1),    # hoof
+        (DARK, 6, 6, 3, 4),      # leg 2
+        (LIGHT, 6, 8, 1, 2),
+        (BLACK, 5, 10, 4, 1),
+        (DARK, 14, 6, 3, 4),     # leg 3
+        (LIGHT, 14, 8, 1, 2),
+        (BLACK, 13, 10, 4, 1),
+        (DARK, 19, 6, 1, 4),     # leg 4 (outer columns clipped)
+        (LIGHT, 19, 8, 1, 2),
+        (BLACK, 18, 10, 2, 1),
+    ]
+    east_broken = [
+        (BLACK, 1, 6, 3, 4),     # erase the legs (exact baked rects)
+        (BLACK, 6, 6, 3, 4),
+        (BLACK, 14, 6, 3, 4),
+        (BLACK, 19, 6, 1, 4),
+        (BLACK, 0, 10, 4, 1),    # erase the hooves
+        (BLACK, 5, 10, 4, 1),
+        (BLACK, 13, 10, 4, 1),
+        (BLACK, 18, 10, 2, 1),
+        (DARK, 1, 6, 3, 2),      # leg stumps (no hooves)
+        (DARK, 6, 6, 3, 2),
+        (DARK, 14, 6, 3, 2),
+        (DARK, 19, 6, 1, 2),
+        (LIGHT, 1, 8, 1, 1),     # stump highlights
+        (LIGHT, 6, 8, 1, 1),
+        (LIGHT, 14, 8, 1, 1),
+    ]
+    return _zone_part_defs(east_intact, east_broken, 20)
 
 
 # ---- HEAVY real spin sheet (bead monhun-ardu-nch.3). The whole longtail

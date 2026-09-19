@@ -52,10 +52,38 @@
     },
     {
       "declaration": "fxdata/blocks/Sprites.txt",
+      "path": "images/blocks/fxhead_bull_12x16.png",
+      "sha256": "2eeeacf5790d74d3f1f9a4dfe15592c980aee9d658b4518ab2eabdf9c48a2701",
+      "size": 193,
+      "symbol": "fxhead_bull"
+    },
+    {
+      "declaration": "fxdata/blocks/Sprites.txt",
+      "path": "images/blocks/fxhead_chicken_11x8.png",
+      "sha256": "ab94fef09605ffd9bd743cb08703b6cc4b08288e3dbc15e12a0e4fe71ac3717d",
+      "size": 169,
+      "symbol": "fxhead_chicken"
+    },
+    {
+      "declaration": "fxdata/blocks/Sprites.txt",
+      "path": "images/blocks/fxhooves_bull_20x16.png",
+      "sha256": "911f5aa5b207eb5f7947bec16f0c23e05e2a3d1ea0e54f78c440367d935c53de",
+      "size": 196,
+      "symbol": "fxhooves_bull"
+    },
+    {
+      "declaration": "fxdata/blocks/Sprites.txt",
       "path": "images/blocks/fxhud_16x8.png",
       "sha256": "281303316d84f0ff851b0bbd5c48513c17430e7ed5c1aef3261cc29cc45c9685",
       "size": 223,
       "symbol": "fxhud"
+    },
+    {
+      "declaration": "fxdata/blocks/Sprites.txt",
+      "path": "images/blocks/fxlegs_chicken_9x24.png",
+      "sha256": "9935191cf77b60d5f97695c471906ce2cfd782ec09730a52da9d9c45bfd8ac60",
+      "size": 210,
+      "symbol": "fxlegs_chicken"
     },
     {
       "declaration": "fxdata/blocks/Sprites.txt",
@@ -538,8 +566,8 @@
     },
     {
       "path": "fxdata/blocks/Sprites.txt",
-      "sha256": "e6a9cada9e0384d71271cf6a1e39b55f4125d9f7daea58da31080136d48dbea3",
-      "size": 501891,
+      "sha256": "b6364f0251905c963b5dbc9f814a05bf855c31b7ea222d56fd22d308a4eeb3bf",
+      "size": 514923,
       "symbols": [
         "fxtail",
         "fxdeflect",
@@ -558,12 +586,16 @@
         "fxchickenatk",
         "fxmonster_heavy",
         "fxbullatk",
+        "fxhooves_bull",
         "fxtrail",
         "fxwhirl",
+        "fxhead_chicken",
         "fxplayer",
         "fxripspecial",
         "fxtail_heavy",
+        "fxhead_bull",
         "fxpole_crack",
+        "fxlegs_chicken",
         "fxpole_break",
         "fxreload",
         "fxscatter",
@@ -621,7 +653,7 @@
     },
     {
       "path": "fxdata/tables/equip.bin",
-      "sha256": "a673ed153ee7c6bd9dbbdf72944c17c1c71b06b664b79b2dd24e9c2e4de2d4a3",
+      "sha256": "76f7ab3f499b2b7da180eada68110c7f82cccab9ef75e114af24f926daff0722",
       "size": 876,
       "symbol": "mhEquip"
     },
@@ -671,18 +703,18 @@
   "outputs": [
     {
       "path": "fxdata/fxdata-data.bin",
-      "sha256": "17a1329a6374813f5de8c0940863fc03c298a2664ccdacbe2957d427d1c4e5bf",
-      "size": 179471
+      "sha256": "c68a9b1435bd4d4ac269727a6da06e239753cb9d357d772864ce458497873b86",
+      "size": 181927
     },
     {
       "path": "fxdata/fxdata.bin",
-      "sha256": "876de0e55aa566067214e58750124ed9d718b116a3f52e17f51460e009003267",
-      "size": 179712
+      "sha256": "579a5dbb1ea3e762aa155090898fc9e94c15ab99d692ae45d3940cfc6574b007",
+      "size": 182016
     },
     {
       "path": "fxdata/fxdata.h",
-      "sha256": "03c0bdc71161b5272a1810d1df34b2e6d573fce6a88a9ae1e27bb83be1cf7fe8",
-      "size": 2520
+      "sha256": "33dc43a302d77a55959f85a018b8a6edfa384c91f30ef98922ef35a6e5a1ee02",
+      "size": 2700
     },
     {
       "path": "fxdata/tables/combat.bin",
@@ -691,7 +723,7 @@
     },
     {
       "path": "fxdata/tables/equip.bin",
-      "sha256": "a673ed153ee7c6bd9dbbdf72944c17c1c71b06b664b79b2dd24e9c2e4de2d4a3",
+      "sha256": "76f7ab3f499b2b7da180eada68110c7f82cccab9ef75e114af24f926daff0722",
       "size": 876
     },
     {
@@ -711,13 +743,13 @@
     },
     {
       "path": "src/fxdata.h",
-      "sha256": "03c0bdc71161b5272a1810d1df34b2e6d573fce6a88a9ae1e27bb83be1cf7fe8",
-      "size": 2520
+      "sha256": "33dc43a302d77a55959f85a018b8a6edfa384c91f30ef98922ef35a6e5a1ee02",
+      "size": 2700
     },
     {
       "path": "src/generated/art_dims.hpp",
-      "sha256": "e649e0620bdd6f506bf60f1a69c4e17e06f479f031dfc2e32d304dd7c142b885",
-      "size": 6748
+      "sha256": "4a35cc4d716e511f7969f41af4337c0a2053e70d6f3eff751a553d762d1807ba",
+      "size": 7266
     },
     {
       "path": "src/generated/combat_data.hpp",
@@ -736,7 +768,7 @@
     },
     {
       "path": "src/generated/equip_meta.hpp",
-      "sha256": "28c131f8589d09cfa6f1662707e3eb3b56dec5e3d33783356207c514bcb39db6",
+      "sha256": "1a4ead4233e8b7d3eacb0299cf103c18c38adf65c50dfcb4fd51f2b6dca99314",
       "size": 22331
     },
     {
