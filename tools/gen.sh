@@ -52,6 +52,14 @@ python3 tools/gen-quests.py
 # fxdata-build.py so the raw_t mhSmith payload exists.
 python3 tools/gen-smith.py
 
+# Room-graph data (bead monhun-ardu-fie.3): data/map.json compiled by
+# tools/gen-zones.py into the packed fxdata/tables/zones.bin graph blob +
+# src/generated/zone_{data,meta}.hpp, plus the 3x 1bpp page-major room layer
+# arrays in fxdata/maps/Sprites.txt (declare the mhZones raw_t and the maps
+# include in fxdata.txt before fxdata-build). Placeholder PNGs under
+# images/maps/ are authored only when missing, so fie.5's refined art survives.
+python3 tools/gen-zones.py
+
 # Convert each sprite directory into a Sprites.txt of uint8_t plus-mask blobs.
 # convert-sprite.py appends to Sprites.txt (it does not truncate), so a sheet
 # renamed in gen-art.py would leave a stale symbol behind: remove the generated

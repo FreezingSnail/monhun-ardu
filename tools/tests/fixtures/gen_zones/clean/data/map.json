@@ -1,0 +1,90 @@
+{
+  "version": 1,
+  "rooms": [
+    {
+      "id": "camp",
+      "w": 16,
+      "h": 8,
+      "image": "images/maps/mh_map_camp_16x8.png",
+      "props": [
+        {
+          "type": "tent",
+          "x": 2,
+          "y": 0,
+          "sheet": "mh_map_tent",
+          "frame": 0,
+          "w": 4,
+          "h": 4
+        }
+      ],
+      "spawns": {
+        "entry": {
+          "x": 1,
+          "y": 6
+        },
+        "from_area": {
+          "x": 14,
+          "y": 6
+        }
+      },
+      "doors": [
+        {
+          "x": 12,
+          "y": 0,
+          "w": 4,
+          "h": 8,
+          "to": "area",
+          "toSpawn": "from_camp"
+        },
+        {
+          "x": 0,
+          "y": 0,
+          "w": 4,
+          "h": 8,
+          "to": "menu"
+        }
+      ],
+      "heal": [
+        {
+          "x": 2,
+          "y": 0,
+          "w": 4,
+          "h": 4
+        }
+      ],
+      "monster": null
+    },
+    {
+      "id": "area",
+      "w": 16,
+      "h": 8,
+      "image": "images/maps/mh_map_area_16x8.png",
+      "props": [],
+      "spawns": {
+        "from_camp": {
+          "x": 1,
+          "y": 6
+        },
+        "start": {
+          "x": 12,
+          "y": 4
+        }
+      },
+      "doors": [
+        {
+          "x": 0,
+          "y": 0,
+          "w": 4,
+          "h": 8,
+          "to": "camp",
+          "toSpawn": "from_area"
+        }
+      ],
+      "heal": [],
+      "monster": {
+        "kind": "lunge",
+        "spawn": "start"
+      }
+    }
+  ]
+}

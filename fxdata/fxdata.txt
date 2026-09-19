@@ -57,10 +57,18 @@ raw_t mhQuests = "tables/quests.bin"
 // (src/smith.hpp) and by the smith screen (src/screens.hpp).
 raw_t mhSmith = "tables/smith.bin"
 
+// Room-graph blob (bead monhun-ardu-fie.3): data/map.json compiled by
+// tools/gen-zones.py into the header + fixed-size room/door/spawn/prop/heal
+// records from docs/map-zones.md (little-endian, no padding). Offsets land in
+// zone_meta.hpp; read on device through fxmem.hpp during scene load (fie.4).
+raw_t mhZones = "tables/zones.bin"
+
 // Sprite sections: blocks/fonts/menu/equip sheets, addressed with 24-bit
 // SpritesU seeks so they may grow past the tables' 64 KiB window. Equipment
-// sheets stay last (mh_head_bandana...mh_weapon_flail).
+// sheets stay after the base sheets; room layer arrays (maps/Sprites.txt, fie.5)
+// follow them and are addressed with seekData like any other sprite.
 include "blocks/Sprites.txt"
 include "fonts/Sprites.txt"
 include "menu/Sprites.txt"
 include "equip/Sprites.txt"
+include "maps/Sprites.txt"

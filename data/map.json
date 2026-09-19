@@ -1,0 +1,117 @@
+{
+  "version": 1,
+  "rooms": [
+    {
+      "id": "camp",
+      "w": 128,
+      "h": 56,
+      "image": "images/maps/mh_map_camp_128x56.png",
+      "props": [
+        {
+          "type": "tent",
+          "x": 40,
+          "y": 8,
+          "sheet": "mh_map_tent",
+          "frame": 0,
+          "w": 32,
+          "h": 24
+        }
+      ],
+      "spawns": {
+        "entry": {
+          "x": 20,
+          "y": 44
+        },
+        "from_area": {
+          "x": 104,
+          "y": 40
+        }
+      },
+      "doors": [
+        {
+          "x": 120,
+          "y": 24,
+          "w": 8,
+          "h": 24,
+          "to": "area",
+          "toSpawn": "from_camp"
+        }
+      ],
+      "heal": [
+        {
+          "x": 40,
+          "y": 8,
+          "w": 32,
+          "h": 24
+        }
+      ],
+      "monster": null
+    },
+    {
+      "id": "area",
+      "w": 384,
+      "h": 112,
+      "image": "images/maps/mh_map_area_384x112.png",
+      "props": [],
+      "spawns": {
+        "from_camp": {
+          "x": 8,
+          "y": 80
+        },
+        "start": {
+          "x": 320,
+          "y": 72
+        }
+      },
+      "doors": [
+        {
+          "x": 0,
+          "y": 72,
+          "w": 8,
+          "h": 24,
+          "to": "camp",
+          "toSpawn": "from_area"
+        }
+      ],
+      "heal": [],
+      "monster": {
+        "kind": "lunge",
+        "spawn": "start"
+      }
+    },
+    {
+      "id": "pole_room",
+      "w": 128,
+      "h": 56,
+      "image": "images/maps/mh_map_pole_room_128x56.png",
+      "props": [
+        {
+          "type": "pole",
+          "x": 54,
+          "y": 8,
+          "sheet": "fxpole",
+          "frame": 0,
+          "w": 20,
+          "h": 40
+        }
+      ],
+      "spawns": {
+        "start": {
+          "x": 16,
+          "y": 44
+        }
+      },
+      "doors": [
+        {
+          "x": 0,
+          "y": 24,
+          "w": 8,
+          "h": 24,
+          "to": "menu"
+        }
+      ],
+      "heal": [],
+      "monster": null
+    }
+  ]
+}
