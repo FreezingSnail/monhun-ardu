@@ -394,10 +394,12 @@ function monsterTellWindow(m, a) {
 // tracked facing for six ticks, so a leap can be flanked.
 // nch.9: the bull holds at keepDist 18 (faceHold 10) with a legs/hooves
 // collide box (1,14,26,8) so the wide low stance blocks at the feet only.
+// nch.11: the long-tail's collide box extends behind the body (ox -8) over the
+// tail base (48x22), so the tail is hittable from behind while still blocking.
 const MONSTER_DEFS = [
   { kind: 'lunge', w: 32, h: 24, hp: 200, spd: 5, atkDist: 32, keepDist: 16, faceHold: 6, collide: { ox: 9, oy: 11, w: 12, h: 13 } },
   { kind: 'sweep', w: 28, h: 22, hp: 150, spd: 7, atkDist: -1, keepDist: 18, faceHold: 10, collide: { ox: 1, oy: 14, w: 26, h: 8 } },
-  { kind: 'heavy', w: 40, h: 28, hp: 320, spd: 3, atkDist: 24, keepDist: 12, spinDist: 30, faceHold: 10 },
+  { kind: 'heavy', w: 40, h: 28, hp: 320, spd: 3, atkDist: 24, keepDist: 12, spinDist: 30, faceHold: 10, collide: { ox: -8, oy: 3, w: 48, h: 22 } },
 ];
 
 // Fixed 3-hitzone model (build/zones-design.md), mirrored from

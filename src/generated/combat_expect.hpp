@@ -30,10 +30,10 @@ constexpr uint8_t CREATURE_HEAVY_STATIC = 0;
 constexpr uint8_t CREATURE_HEAVY_SHEET = 0;
 constexpr uint8_t CREATURE_HEAVY_BROKEN_W = 0;
 constexpr uint8_t CREATURE_HEAVY_BROKEN_H = 0;
-constexpr int8_t CREATURE_HEAVY_COLLIDE_OX = 0;
-constexpr int8_t CREATURE_HEAVY_COLLIDE_OY = 0;
-constexpr uint8_t CREATURE_HEAVY_COLLIDE_W = 40;
-constexpr uint8_t CREATURE_HEAVY_COLLIDE_H = 28;
+constexpr int8_t CREATURE_HEAVY_COLLIDE_OX = -8;
+constexpr int8_t CREATURE_HEAVY_COLLIDE_OY = 3;
+constexpr uint8_t CREATURE_HEAVY_COLLIDE_W = 48;
+constexpr uint8_t CREATURE_HEAVY_COLLIDE_H = 22;
 constexpr uint8_t PROFILE_HEAVY_FACE_HOLD = 10;
 constexpr uint16_t ATTACK_HEAVY_BITE_WINDUP = 30;
 constexpr uint16_t ATTACK_HEAVY_BITE_ACTIVE = 8;
@@ -202,12 +202,12 @@ constexpr uint8_t ZONE_SWEEP_APPENDAGE_HP = 60;
 constexpr uint8_t ZONE_SWEEP_APPENDAGE_DMG_MUL = 150;
 constexpr uint8_t ZONE_SWEEP_APPENDAGE_BODY_SHARE = 40;
 
-// sha256 of fxdata/tables/combat.bin: 8a49bf8c154fd47016b71d6d7c4ad4208f416ec6dd4b0d830229b286acc8fdcc
+// sha256 of fxdata/tables/combat.bin: c52c612b315b11dd11a57edd9ee59b39f944e52da9a5b615a9c5fdb9cfceea4b
 constexpr uint8_t BLOB_SHA256[32] = {
-    0x8A, 0x49, 0xBF, 0x8C, 0x15, 0x4F, 0xD4, 0x70,
-    0x16, 0xB7, 0x1D, 0x6D, 0x7C, 0x4A, 0xD4, 0x20,
-    0x8F, 0x41, 0x6E, 0xC6, 0xDD, 0x4B, 0x0D, 0x83,
-    0x02, 0x29, 0xB2, 0x86, 0xAC, 0xC8, 0xFD, 0xCC,
+    0xC5, 0x2C, 0x61, 0x2B, 0x31, 0x5B, 0x11, 0xDD,
+    0x11, 0xA5, 0x7E, 0xDD, 0x9E, 0xE5, 0x9B, 0x39,
+    0xF9, 0x44, 0xE5, 0x2D, 0xA9, 0xA5, 0xB6, 0x15,
+    0xA9, 0xC5, 0xFD, 0xB9, 0xCF, 0xCE, 0xEA, 0x4B,
 };
 
 }   // namespace combat_expect

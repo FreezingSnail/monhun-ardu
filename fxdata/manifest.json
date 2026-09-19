@@ -313,8 +313,8 @@
   "inputs": [
     {
       "path": "data/creatures/heavy.json",
-      "sha256": "8c1fba3ee6dd574a5172769252d81c72b2e2bbed9a0e22fc9f7aa988b90cee11",
-      "size": 2354
+      "sha256": "64352f698104c16bdfa0348ac675f0a824bef991abedbc12fda35b148ccb4f9e",
+      "size": 2408
     },
     {
       "path": "data/creatures/lunge.json",
@@ -615,7 +615,7 @@
     },
     {
       "path": "fxdata/tables/combat.bin",
-      "sha256": "8a49bf8c154fd47016b71d6d7c4ad4208f416ec6dd4b0d830229b286acc8fdcc",
+      "sha256": "c52c612b315b11dd11a57edd9ee59b39f944e52da9a5b615a9c5fdb9cfceea4b",
       "size": 1019,
       "symbol": "mhCombat"
     },
@@ -671,12 +671,12 @@
   "outputs": [
     {
       "path": "fxdata/fxdata-data.bin",
-      "sha256": "4802a74af02ca2bf8494610dfb8a268b7d0576a1d34e4a77e5083007a2bab44a",
+      "sha256": "17a1329a6374813f5de8c0940863fc03c298a2664ccdacbe2957d427d1c4e5bf",
       "size": 179471
     },
     {
       "path": "fxdata/fxdata.bin",
-      "sha256": "221e58463ee107b7e407607d062480b2c9913f787198f0e53026456ba6bc2cda",
+      "sha256": "876de0e55aa566067214e58750124ed9d718b116a3f52e17f51460e009003267",
       "size": 179712
     },
     {
@@ -686,7 +686,7 @@
     },
     {
       "path": "fxdata/tables/combat.bin",
-      "sha256": "8a49bf8c154fd47016b71d6d7c4ad4208f416ec6dd4b0d830229b286acc8fdcc",
+      "sha256": "c52c612b315b11dd11a57edd9ee59b39f944e52da9a5b615a9c5fdb9cfceea4b",
       "size": 1019
     },
     {
@@ -721,13 +721,13 @@
     },
     {
       "path": "src/generated/combat_data.hpp",
-      "sha256": "2003390d7b3545d4a0931534934a10fdbc63543ac49558c3d21b42b347a7eb23",
-      "size": 9704
+      "sha256": "f8c8695dc5f820e947c708334aa7a5fd6312411fcf75b603cb42057f4de7499d",
+      "size": 9705
     },
     {
       "path": "src/generated/combat_expect.hpp",
-      "sha256": "a939ba89a8cba3af82ca4506d11e02deb2d352ab42d9c59ff0650fadb731a942",
-      "size": 9950
+      "sha256": "e11bcf7dd85a2485a866017f8490bc47a0445e2394e422a0b056ba18925cae2f",
+      "size": 9951
     },
     {
       "path": "src/generated/combat_meta.hpp",

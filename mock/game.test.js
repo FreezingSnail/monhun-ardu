@@ -601,6 +601,47 @@ test('monster variants: HEAVY faceHold commits facing; flank hit lands the tail'
   assert.equal(body.zone, null, 'same world point no longer in the tail');
 });
 
+test('monster variants: HEAVY tail-inclusive collide blocks behind, tail still reachable', () => {
+  const g = G.newGame(0, 'hunt', 2);
+  const m = park(g);
+  const def = G.MONSTER_DEFS[2];
+  // nch.11: the collide box extends behind the body (ox -8) over the tail base.
+  assert.deepEqual(def.collide, { ox: -8, oy: 3, w: 48, h: 22 }, 'heavy tail-inclusive collide');
+  m.x = 100;
+  m.y = 40;
+  m.face = { x: 16, y: 0 };
+  const p = g.player;
+  // Stand fully behind the body (right edge == body left) inside the extended
+  // box but outside the body-only rect: the old body box left this overlap
+  // unresolved, the tail-inclusive box must push apart.
+  const c = def.collide;
+  p.x = m.x - p.w;   // right edge == body left (m.x)
+  p.y = m.y + 6;     // inside the collide oy 3..25 band
+  assert.ok(!(p.x < m.x + def.w && p.x + p.w > m.x), 'body-only box misses the hunter');
+  assert.ok(p.x < m.x + c.ox + c.w && p.x + p.w > m.x + c.ox &&
+            p.y < m.y + c.oy + c.h && p.y + p.h > m.y + c.oy,
+            'extended box overlaps the hunter behind the beast');
+  G.step(g, inp({}));
+  const cx = m.x + c.ox;
+  const cy = m.y + c.oy;
+  assert.ok(p.x + p.w <= cx || p.x >= cx + c.w ||
+            p.y + p.h <= cy || p.y >= cy + c.h,
+            'pushApart resolves the extended tail collide');
+  // The tail zone (ox -24, oy 0, 24x16) still sits behind the body: a point
+  // there routes the appendage despite the collide box covering the base.
+  const gz = G.newGame(0, 'hunt', 2);
+  const mz = park(gz);
+  mz.x = 100;
+  mz.y = 40;
+  mz.face = { x: 16, y: 0 };
+  const tx = mz.x - 12;
+  const ty = mz.y + 8;
+  assert.ok(G.zoneContains(gz, { ox: -24, oy: 0, w: 24, h: 16 }, tx, ty), 'behind point is in the tail zone');
+  const tail = G.zoneHitResolve(gz, 10, 1, tx, ty);
+  assert.equal(tail.zone, 'appendage', 'tail zone still reachable from behind');
+  assert.equal(tail.mul, 150, 'tail multiplier 150');
+});
+
 test('monster variants: HEAVY hunter pressing in sees repeated tail_spin', () => {
   const g = G.newGame(0, 'hunt', 2);
   g.monster.hp = 100000; // survive the whole probe

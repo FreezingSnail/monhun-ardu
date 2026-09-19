@@ -305,7 +305,7 @@ boxes**, authored per creature (not inherited as one generic body box):
 |---|---|---|
 | chicken (lunge) | legs only — player walks under the raised body | head + legs (appendage) — **done** (monhun-ardu-76y) |
 | bull (sweep) | legs/hooves region `(ox 1, oy 14, 26x8)`, wide low stance | head/horns + hooves (appendage) — **done** (monhun-ardu-nch.9) |
-| long-tail (heavy) | body + tail base (tail is hittable behind the body) | head + long tail (appendage) — tail zone/art **done**, collide still body-only |
+| long-tail (heavy) | body + tail base `(ox -8, oy 3, 48x22)`, so the tail is hittable behind the body | head + long tail (appendage) — **done** (monhun-ardu-nch.11) |
 
 Implementation notes:
 - Data: creature `stats.collide` box (optional; default body box) + `zones`

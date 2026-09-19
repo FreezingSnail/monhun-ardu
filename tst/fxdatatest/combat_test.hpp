@@ -78,6 +78,11 @@ inline void test_combat(FxTest &test) {
     test.expectEq(heavy.patternCount, combat_expect::CREATURE_HEAVY_PATTERNS, F("heavy patterns"));
     test.expectEq(heavy.headZone, COMBAT_NO_ZONE, F("heavy no head zone"));
     test.expectEq(heavy.appendZone, combat::ZONE_HEAVY_APPENDAGE, F("heavy appendage zone"));
+    // nch.11: long-tail collide box includes the tail base behind the body.
+    test.expectEq(heavy.collide.ox, combat_expect::CREATURE_HEAVY_COLLIDE_OX, F("heavy tail collide ox"));
+    test.expectEq(heavy.collide.oy, combat_expect::CREATURE_HEAVY_COLLIDE_OY, F("heavy tail collide oy"));
+    test.expectEq(heavy.collide.w, combat_expect::CREATURE_HEAVY_COLLIDE_W, F("heavy tail collide w"));
+    test.expectEq(heavy.collide.h, combat_expect::CREATURE_HEAVY_COLLIDE_H, F("heavy tail collide h"));
 
     // 4t4: heavy's long tail is a real appendage record with the overlay box.
     const CombatZone heavyTail = combatZoneRead(combat::ZONE_HEAVY_APPENDAGE);
@@ -391,8 +396,9 @@ inline void test_combat(FxTest &test) {
         test.expectEq(g.monster.spd, combat_expect::CREATURE_HEAVY_SPD, F("spawn spd from record"));
         test.expectEq(g.combat.body.w, g.monster.w, F("cached body box w"));
         test.expectEq(g.combat.body.h, g.monster.h, F("cached body box h"));
-        test.expectEq(g.target.rect.w, g.combat.body.w, F("target rect w from box"));
-        test.expectEq(g.target.rect.x, g.monster.x, F("target rect x at box origin"));
+        // nch.11: HEAVY's target rect is the tail-inclusive collide box, not body.
+        test.expectEq(g.target.rect.w, combat_expect::CREATURE_HEAVY_COLLIDE_W, F("target rect w from collide box"));
+        test.expectEq(g.target.rect.x, g.monster.x + combat_expect::CREATURE_HEAVY_COLLIDE_OX, F("target rect x at collide box origin"));
         test.expectEq(g.combat.zoneBroken, 0, F("spawn zones intact"));
         test.expectEq(initReads <= 40, 1, F("initMonster burst <= 40 reads"));
     }

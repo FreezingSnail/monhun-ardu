@@ -2,6 +2,7 @@
   "id": "heavy",
   "skeleton": "longtail",
   "stats": { "w": 40, "h": 28, "hp": 320, "spd": 3, "spawnX": 200, "spawnY": 40 },
+  "collide": { "ox": -8, "oy": 3, "w": 48, "h": 22 },
   "profile": {
     "engageDist": 36,
     "keepDist": 12,
