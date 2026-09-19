@@ -239,13 +239,16 @@ static void armPoleTarget(Game &g) {
 // ---------------------------------------------------------------- projectiles
 
 // Mock fireShell(): muzzle spark + 1 ball or 3 spread pellets, spawned 13 px
-// along each direction from the player centre captured at fire time.
+// along each direction from the player centre captured at fire time. Shot codes
+// 1/2 are the normal shells; 3/4 are the ynb charged ball (level 1/2), read
+// from the weapon's chargeShells slot and spawned through the same math.
 static void spawnShot(Game &g) {
     const int8_t shot = g.lastShot;
     g.lastShot = 0;
-    if (shot < 1 || shot > 2)
+    if (shot < 1 || shot > 4)
         return;
-    const ShellDef *sh = weaponShell(&WEAPON_DEFS[g.weapon], shot - 1);
+    const bool charged = shot >= 3;
+    const ShellDef *sh = charged ? weaponChargeShell(&WEAPON_DEFS[g.weapon], static_cast<int16_t>(shot - 3)) : weaponShell(&WEAPON_DEFS[g.weapon], static_cast<int16_t>(shot - 1));
     const int16_t cx = g.lastShotX;
     const int16_t cy = g.lastShotY;
     const int8_t fx = g.lastShotFx;

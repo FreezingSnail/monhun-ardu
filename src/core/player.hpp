@@ -64,6 +64,10 @@ void Player::init(int8_t weapon) {
     reload = 0;
     shells[0] = shellCount(weaponShell(&WEAPON_DEFS[W_GUN], 0));
     shells[1] = shellCount(weaponShell(&WEAPON_DEFS[W_GUN], 1));
+    pA = false;
+    aHold = 0;
+    chargeT = 0;
+    chargeArmed = false;
 }
 
 void initGame(Game &g, int8_t weapon) {
@@ -175,10 +179,59 @@ static void startAttack(Game &g, const WeaponDef *def, bool alt = false) {
         p.vx = (p.fx * lunge) >> 4;
         p.vy = (p.fy * lunge) >> 4;
     }
+    if (CHARGE_ENABLED)
+        p.chargeArmed = true;   // hold A through this swing -> charge
 }
 
-// Roll attack, ported from mock/game.js startRollAttack(): A out of a dodge
-// (or the flail deflect / gun evade-shove) cancels into the weapon's roll move;
+// Held-A charge helpers (monhun-ardu-ynb), ported from mock/game.js
+// startChargeAttack() / fireChargeShot(). Reached only from the PS_CHARGE
+// release, which is itself gated by CHARGE_ENABLED.
+static bool startChargeAttack(Game &g, const WeaponDef *def) {
+    Player &p = g.player;
+    const Attack *a = weaponCharge(def, p.chargeT >= CHARGE_L2 ? 1 : 0);
+    if (!a)
+        return false;
+    const int16_t stam = attackStam(a);
+    if (p.stam < stam)
+        return false;
+    p.stam = (stam >= p.stam) ? 0 : static_cast<uint8_t>(p.stam - stam);
+    p.state = PS_ATTACK;
+    p.atk = a;
+    p.t = 0;
+    p.hitDone = false;
+    p.chain = 0;
+    p.chainWin = 0;
+    p.chainLock = 0;
+    if (STAGE3_ENABLED)
+        p.finWin = false;
+    const int16_t lunge = attackLunge(a);
+    if (lunge) {
+        p.vx = (p.fx * lunge) >> 4;
+        p.vy = (p.fy * lunge) >> 4;
+    }
+    return true;
+}
+
+static bool fireChargeShot(Game &g, const WeaponDef *def) {
+    Player &p = g.player;
+    const bool l2 = p.chargeT >= CHARGE_L2;
+    const ShellDef *sh = weaponChargeShell(def, l2 ? 1 : 0);
+    const int16_t stam = shellStam(sh);
+    if (p.stam < stam)
+        return false;
+    p.stam = static_cast<uint8_t>(p.stam - stam);
+    p.reload = static_cast<uint8_t>(shellReload(sh));
+    // Charged ball codes: 3 = level 1, 4 = level 2 (projectiles.hpp spawnShot
+    // reads weaponChargeShell(def, shot - 3)); 1/2 stay the normal shells.
+    g.lastShot = l2 ? 4 : 3;
+    g.lastShotX = static_cast<uint8_t>(p.x + (p.w >> 1));
+    g.lastShotY = static_cast<uint8_t>(p.y + (p.h >> 1));
+    g.lastShotFx = p.fx;
+    g.lastShotFy = p.fy;
+    return true;
+}
+
+// Roll attack, ported from mock/game.js startRollAttack(): A out of a dodge// (or the flail deflect / gun evade-shove) cancels into the weapon's roll move;
 // dodge i-frames keep ticking. Gun shield bash carries lunge 30 so it moves the
 // hunter forward; sword/flail roll moves stop in place.
 static bool startRollAttack(Game &g, const WeaponDef *def) {
@@ -345,6 +398,8 @@ static bool tryBranch(Game &g, const WeaponDef *def, const Input &inp) {
         p.vx = (p.fx * lunge) >> 4;
         p.vy = (p.fy * lunge) >> 4;
     }
+    if (CHARGE_ENABLED)
+        p.chargeArmed = false;   // branch attacks do not charge
     return true;
 }
 
@@ -588,6 +643,18 @@ static void updatePlayer(Game &g, const Input &inp, bool aP, bool bP, bool bR) {
     if (p.aBuffer > 0)
         p.aBuffer--;
 
+    // A press/hold/release: charge attacks build after a swing while A is held
+    // (CHARGE_MIN), then release fires level 1 (or level 2 at CHARGE_L2). Folded
+    // out of the parity image by CHARGE_ENABLED (its scenes never hold A).
+    bool aR = false;
+    if (CHARGE_ENABLED) {
+        aR = !inp.a && p.pA;
+        p.pA = inp.a;
+        p.aHold = inp.a ? static_cast<uint8_t>(p.aHold + 1 > 255 ? 255 : p.aHold + 1) : 0;
+        if (aR)
+            p.chargeArmed = false;
+    }
+
     // Sheathe prototype (ddab): double-tap Down then an A+B chord within the
     // grace, then the combo check (consumes the press pair so it cannot also
     // attack/dodge/stance). SHEATHE_ENABLED folds this whole path out of the
@@ -779,8 +846,30 @@ static void updatePlayer(Game &g, const Input &inp, bool aP, bool bP, bool bR) {
             p.state = PS_IDLE;
         break;
     }
+    case PS_CHARGE: {
+        // rooted windup; release fires the level-1 or level-2 charge. The whole
+        // body folds out of the parity image (CHARGE_ENABLED), which never
+        // enters the state.
+        if (CHARGE_ENABLED) {
+            p.chargeT = static_cast<uint8_t>(p.chargeT + 1 > 255 ? 255 : p.chargeT + 1);
+            if (aR) {
+                const bool fired = weaponHasCharge(def) ? startChargeAttack(g, def) : weaponHasChargeShells(def) ? fireChargeShot(g, def) : false;
+                if (!fired)
+                    p.state = PS_IDLE;
+                p.chargeArmed = false;
+            }
+            applyDrift(p);
+        }
+        break;
+    }
     default:
         p.state = PS_IDLE;
+    }
+
+    // held A past the swing -> charge stance (weapons with charge data only)
+    if (CHARGE_ENABLED && p.state == PS_IDLE && p.chargeArmed && inp.a && p.aHold >= CHARGE_MIN && (weaponHasCharge(def) || weaponHasChargeShells(def))) {
+        p.state = PS_CHARGE;
+        p.chargeT = 0;
     }
 
     if (p.stance != ST_NONE)

@@ -571,5 +571,45 @@ void ShellSuite(TestRunner &runner) {
         suite.addTest(t);
     }
 
+    {
+        Test t("charged ball spawn: shot code 3/4 reads weaponChargeShell through the same math");
+        Game g;
+        initGame(g, W_GUN);
+        initWorld(g, MODE_HUNT);
+        // code 3: level-1 charge ball (dmg 34, speedF 45, 7x6, heavy)
+        armShot(g, 3, 104, 68, 16, 0);
+        t.assert(g.projN, 1, "one charged ball");
+        t.assert(g.proj[0].x, 104, "spawn x = player centre");
+        t.assert(g.proj[0].y, 68, "spawn y = player centre");
+        t.assert(g.proj[0].subX, 13, "spawn subX = facing*13");
+        t.assert(g.proj[0].vx, 45, "level-1 speedF");
+        t.assert(g.proj[0].w, 7, "level-1 w");
+        t.assert(g.proj[0].h, 6, "level-1 h");
+        t.assert(g.proj[0].dmg, 34, "level-1 dmg");
+        t.assert(g.proj[0].life, 90, "charged ball life");
+        t.assert(g.proj[0].heavy, 1, "charged ball is heavy");
+        t.assert(g.fxN, 1, "muzzle effect");
+
+        // code 4: level-2 charge ball (dmg 46, speedF 55, 8x8, heavy)
+        Game g2;
+        initGame(g2, W_GUN);
+        initWorld(g2, MODE_HUNT);
+        armShot(g2, 4, 104, 68, 16, 0);
+        t.assert(g2.projN, 1, "one level-2 ball");
+        t.assert(g2.proj[0].vx, 55, "level-2 speedF");
+        t.assert(g2.proj[0].w, 8, "level-2 w");
+        t.assert(g2.proj[0].h, 8, "level-2 h");
+        t.assert(g2.proj[0].dmg, 46, "level-2 dmg");
+        t.assert(g2.proj[0].heavy, 1, "level-2 ball is heavy");
+
+        // out-of-range codes still ignored
+        Game g3;
+        initGame(g3, W_GUN);
+        initWorld(g3, MODE_HUNT);
+        armShot(g3, 5, 104, 68, 16, 0);
+        t.assert(g3.projN, 0, "code 5 spawns nothing");
+        suite.addTest(t);
+    }
+
     runner.addTestSuite(suite);
 }

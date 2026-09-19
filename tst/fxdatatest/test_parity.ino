@@ -22,6 +22,11 @@
 // host suite covers the finisher path.
 #define MH_STAGE3 0
 
+// Charge carve (ynb): no fixture scene holds A past a swing, so the A-hold
+// counter, PS_CHARGE entry and the charge release fold out of this image; the
+// host suite (tst/player_test.hpp) covers the flail/gun charge paths.
+#define MH_CHARGE 0
+
 #include "harness/fx_globals.hpp"
 #include "parity_test.hpp"
 

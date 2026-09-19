@@ -568,6 +568,15 @@ static void drawPlayer(const mh::Game &g, int16_t camX, int16_t camY) {
     partDraw(equip::DEFAULT_BODY, p.state == mh::PS_DODGE ? equip::POSE_DODGE : equip::POSE_IDLE, face, cx, cy);
     partDraw(equip::DEFAULT_HEAD, equip::POSE_IDLE, face, cx, cy);
 
+    // Charge meter above the hunter (mock drawPlayer): 16 px bar at cx-8, y-4,
+    // 2 px tall; fill fraction min(1, chargeT/CHARGE_L2); light gray normally,
+    // white at/above CHARGE_L2. Only the ynb charge stance draws it.
+    if (p.state == mh::PS_CHARGE) {
+        const int16_t fill = (p.chargeT * 16 + (mh::CHARGE_L2 >> 1)) / mh::CHARGE_L2;
+        const int16_t w = fill < 1 ? 1 : (fill > 16 ? 16 : fill);
+        blk(static_cast<int16_t>(cx - 8), static_cast<int16_t>(y - 4), w, 2, p.chargeT >= mh::CHARGE_L2 ? 3 : 2);
+    }
+
     // Shared attack timing (sword and flail read the same startup/active/reach;
     // the two weapon branches below only scale the reach differently).
     const mh::Attack *a = (p.state == mh::PS_ATTACK || p.state == mh::PS_SPECIAL) ? p.atk : nullptr;

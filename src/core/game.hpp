@@ -72,6 +72,16 @@ constexpr bool ROLL_ALT_ENABLED = MH_ROLL_ALT;
 #define MH_STAGE3 1
 #endif
 constexpr bool STAGE3_ENABLED = MH_STAGE3;
+// Charge carve (monhun-ardu-ynb, same pattern as MH_SHEATHE): no test_parity
+// scene holds A past a swing, so the A-hold counter, the PS_CHARGE stance entry
+// and the charge release fold out of that image; the host suite (and the
+// shipping build, MH_CHARGE default 1) keeps covering them.
+#ifndef MH_CHARGE
+#define MH_CHARGE 1
+#endif
+constexpr bool CHARGE_ENABLED = MH_CHARGE;
+constexpr int16_t CHARGE_MIN = 14;   // A held this long past the swing -> charge stance
+constexpr int16_t CHARGE_L2 = 20;    // extra charge ticks for level 2 (bar flashes white)
 constexpr int16_t WORLD_W = 256;
 constexpr int16_t WORLD_H = 112;
 
@@ -100,7 +110,8 @@ enum PState : int8_t {
     PS_DODGE,
     PS_DEFLECT,
     PS_SHOVE,
-    PS_STUN
+    PS_STUN,
+    PS_CHARGE   // appended (ynb): existing 0..6 values must not move
 };
 enum Stance : int8_t {
     ST_NONE = 0,
@@ -164,12 +175,14 @@ struct WeaponDef {
     Branch branches[3];
     bool canCancel;   // may tap-B out of an attack into dodge
     ShellDef shells[2];
-    Attack roll;   // A out of dodge/deflect/shove (bead monhun-ardu-8xx)
-    Attack alt;    // direction+A opener, replaces combo hit 1 at chain 0
+    Attack roll;                // A out of dodge/deflect/shove (bead monhun-ardu-8xx)
+    Attack alt;                 // direction+A opener, replaces combo hit 1 at chain 0
+    Attack charge[2];           // held-A release melee (ynb); zero = no charge data
+    ShellDef chargeShells[2];   // held-A release shells (ynb); zero = no charge data
 };
 
-// On AVR the table lives on the FX cart as one packed 759 B blob (bead
-// monhun-ardu-42n.1): the shim below exposes the same `WEAPON_DEFS[i]` /
+// On AVR the table lives on the FX cart as one packed 987 B blob (bead
+// monhun-ardu-ynb: 759 B base + 3 x 76 B charge/chargeShells per weapon): the shim below exposes the same `WEAPON_DEFS[i]` /
 // `&WEAPON_DEFS[i]` syntax, but every element is a fake 16-bit pointer into
 // the cart's address space (the fxdata.h blob offset). Nothing dereferences it
 // on MCU; the accessors read fields through mhFxRead*. The host keeps the
@@ -178,7 +191,7 @@ struct WeaponDef {
 static_assert(sizeof(Attack) == 23, "Attack must match packed FX blob size");
 static_assert(sizeof(Branch) == 27, "Branch must match packed FX blob size");
 static_assert(sizeof(ShellDef) == 15, "ShellDef must match packed FX blob size");
-static_assert(sizeof(WeaponDef) == 253, "WeaponDef must match packed FX blob size");
+static_assert(sizeof(WeaponDef) == 329, "WeaponDef must match packed FX blob size");
 
 struct FxWeaponDefsRom {
     const WeaponDef &operator[](int16_t i) const {
@@ -199,8 +212,10 @@ MH_PROGMEM const WeaponDef WEAPON_DEFS[3] = {
          {3, ST_NONE, 0, {8, 4, 20, 26, 16, 20, 22, 18, 0, 0, 0, false, ATK_NONE}}},
         true,
         {{0, 0, 0, 0, 0, 0, 0, 0}, {0, 0, 0, 0, 0, 0, 0, 0}},
-        {4, 5, 10, 12, 15, 16, 14, 10, 0, 0, 0, false, ATK_NONE},    // rollslash
-        {6, 4, 12, 14, 22, 10, 10, 12, 20, 0, 0, false, ATK_NONE},   // thrust (lunge 20)
+        {4, 5, 10, 12, 15, 16, 14, 10, 0, 0, 0, false, ATK_NONE},                                                   // rollslash
+        {6, 4, 12, 14, 22, 10, 10, 12, 20, 0, 0, false, ATK_NONE},                                                  // thrust (lunge 20)
+        {{0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, false, ATK_NONE}, {0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, false, ATK_NONE}},   // no charge
+        {{0, 0, 0, 0, 0, 0, 0, 0}, {0, 0, 0, 0, 0, 0, 0, 0}},                                                       // no charge shells
     },
     // flail: slow momentum chain, deflect step, whirl stance + ball throw
     {
@@ -213,8 +228,11 @@ MH_PROGMEM const WeaponDef WEAPON_DEFS[3] = {
          {3, ST_NONE, 0, {10, 6, 24, 32, 24, 32, 24, 24, 0, 12, 1, false, ATK_NONE}}},
         false,
         {{0, 0, 0, 0, 0, 0, 0, 0}, {0, 0, 0, 0, 0, 0, 0, 0}},
-        {4, 6, 13, 15, 20, 24, 16, 10, 0, 0, 0, false, ATK_NONE},   // rollsweep
-        {6, 6, 14, 18, 22, 30, 14, 14, 0, 0, 0, false, ATK_NONE},   // widesweep
+        {4, 6, 13, 15, 20, 24, 16, 10, 0, 0, 0, false, ATK_NONE},     // rollsweep
+        {6, 6, 14, 18, 22, 30, 14, 14, 0, 0, 0, false, ATK_NONE},     // widesweep
+        {{4, 6, 14, 24, 26, 28, 18, 14, 0, 0, 0, false, ATK_NONE},    // chargeslam1
+         {5, 8, 20, 36, 28, 34, 24, 22, 0, 0, 1, false, ATK_NONE}},   // chargeslam2 (trip)
+        {{0, 0, 0, 0, 0, 0, 0, 0}, {0, 0, 0, 0, 0, 0, 0, 0}},         // no charge shells
     },
     // gunshield: slow walk, shove, guard stance + gun (ball / scatter)
     {
@@ -227,8 +245,10 @@ MH_PROGMEM const WeaponDef WEAPON_DEFS[3] = {
          {3, ST_NONE, 0, {6, 3, 20, 30, 16, 24, 18, 16, 0, 16, 0, false, ATK_NONE}}},
         true,
         {{2, 28, 35, 7, 6, 70, 6, 1}, {5, 7, 42, 4, 4, 30, 5, 3}},
-        {3, 4, 12, 8, 14, 16, 14, 8, 30, 10, 0, false, ATK_NONE},    // shieldbash (lunge 30, push 10)
-        {4, 5, 14, 10, 15, 18, 16, 9, 18, 14, 0, false, ATK_NONE},   // shieldcharge (lunge 18, push 14)
+        {3, 4, 12, 8, 14, 16, 14, 8, 30, 10, 0, false, ATK_NONE},                                                   // shieldbash (lunge 30, push 10)
+        {4, 5, 14, 10, 15, 18, 16, 9, 18, 14, 0, false, ATK_NONE},                                                  // shieldcharge (lunge 18, push 14)
+        {{0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, false, ATK_NONE}, {0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, false, ATK_NONE}},   // no melee charge
+        {{0, 34, 45, 7, 6, 70, 12, 1}, {0, 46, 55, 8, 8, 70, 18, 1}},                                               // charge ball L1/L2
     },
 };
 #endif   // __AVR__
@@ -265,6 +285,25 @@ inline const Branch *weaponBranch(const WeaponDef *d, int16_t i) {
 }
 inline const ShellDef *weaponShell(const WeaponDef *d, int16_t i) {
     return &d->shells[i];
+}
+// Held-A release data (ynb). A weapon "has charge data" when its level-1 entry
+// is non-zero (the mock's `def.charge` / `def.chargeShells` truthiness).
+inline const Attack *weaponCharge(const WeaponDef *d, int16_t i) {
+    return &d->charge[i];
+}
+inline const ShellDef *weaponChargeShell(const WeaponDef *d, int16_t i) {
+    return &d->chargeShells[i];
+}
+// "Has charge data" tests: the mock checks the truthiness of def.charge /
+// def.chargeShells (absent for weapons that cannot charge). The packed table
+// always carries the slots, so a zeroed level-1 entry stands in for absence;
+// the level-1 dmg is the single read that distinguishes the shipped sets
+// (flail charge dmg 24, gun chargeShell dmg 34, all others 0).
+inline bool weaponHasCharge(const WeaponDef *d) {
+    return mhFxReadI16(&d->charge[0].dmg) != 0;
+}
+inline bool weaponHasChargeShells(const WeaponDef *d) {
+    return mhFxReadI16(&d->chargeShells[0].dmg) != 0;
 }
 
 inline int16_t attackStartup(const Attack *a) {
@@ -451,6 +490,13 @@ struct Player : fp::FpBody, fp::FpStam {
     int8_t shell;   // 0 ball, 1 scatter
     uint8_t reload;
     uint8_t shells[2];
+    // Charge attack (ynb): A-hold counter + previous-A edge, the charge stance
+    // timer and the "swing is chargeable" latch (set by startAttack, cleared on
+    // A release). Appended last so existing hashed/state fields do not move.
+    bool pA;
+    uint8_t aHold;
+    uint8_t chargeT;
+    bool chargeArmed;
 
     void init(int8_t weapon);
 };

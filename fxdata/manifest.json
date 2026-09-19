@@ -605,7 +605,7 @@
     },
     {
       "path": "fxdata/tables/equip.bin",
-      "sha256": "7a68c4a3011d274ed7d5613b493b235e64e36a77d12618498086795c32b29a1b",
+      "sha256": "e8fdb73e59f3ea58417c28c2e3dec1776a3ae9afcf68f16091049eacffcde19c",
       "size": 876,
       "symbol": "mhEquip"
     },
@@ -647,25 +647,25 @@
     },
     {
       "path": "fxdata/tables/weapondefs.bin",
-      "sha256": "a490424055993ce57ae30ee8b459ddf7e6d1a42462420547aeed160ffbdb8ac3",
-      "size": 759,
+      "sha256": "214a0c18674cfc6a0bb792da935b4bd52498a04614d44a4d82f4dfcdcf461d2c",
+      "size": 987,
       "symbol": "mhWeaponDefs"
     }
   ],
   "outputs": [
     {
       "path": "fxdata/fxdata-data.bin",
-      "sha256": "c9a378dbbbe85d0f66e67634b8dbabce6f774ab1a3b805b1a2741615c06d48a6",
-      "size": 174582
+      "sha256": "836bd1fdca9713cd63df0d3d1f16aeb1f8d6ae991fc5a0dd7aa673138494eaec",
+      "size": 174810
     },
     {
       "path": "fxdata/fxdata.bin",
-      "sha256": "98f7369fe9e769e4f8618768ee1b2cbb16ea467fc0c6a08b85ad7b4660db4f42",
-      "size": 174592
+      "sha256": "64087806145f321eb3c375f2beb1f1896d51e33ed5568b3a3c558492a38056de",
+      "size": 174848
     },
     {
       "path": "fxdata/fxdata.h",
-      "sha256": "63e153174f28aa05c893d98a82aeaf650cdd37c30ffc727682566df0b412d3e4",
+      "sha256": "838e05bd5b22fbb32e8c27ffd80e1c8691c55d31ec8677b906aed83ce0e2e535",
       "size": 2435
     },
     {
@@ -675,7 +675,7 @@
     },
     {
       "path": "fxdata/tables/equip.bin",
-      "sha256": "7a68c4a3011d274ed7d5613b493b235e64e36a77d12618498086795c32b29a1b",
+      "sha256": "e8fdb73e59f3ea58417c28c2e3dec1776a3ae9afcf68f16091049eacffcde19c",
       "size": 876
     },
     {
@@ -695,7 +695,7 @@
     },
     {
       "path": "src/fxdata.h",
-      "sha256": "63e153174f28aa05c893d98a82aeaf650cdd37c30ffc727682566df0b412d3e4",
+      "sha256": "838e05bd5b22fbb32e8c27ffd80e1c8691c55d31ec8677b906aed83ce0e2e535",
       "size": 2435
     },
     {
@@ -720,7 +720,7 @@
     },
     {
       "path": "src/generated/equip_meta.hpp",
-      "sha256": "d485d2a7a2721489a23d66551b8d82de602ac86abbd5ec2f062ff1eef00fd276",
+      "sha256": "8785d20d39ae90908b976fccf4bc6bfadf5847a8e329e4ad2ff16bda977468b3",
       "size": 22331
     },
     {

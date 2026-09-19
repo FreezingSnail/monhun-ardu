@@ -4,8 +4,8 @@
 // x86 struct layout is padded, so values are written explicitly, never memcpy'd.
 //
 // Deterministic: fixed traversal, little-endian bytes, no timestamps. Output
-// sizes are asserted per struct (WeaponDef 253, Attack 23, Branch 27, ShellDef
-// 15, MonsterAttack 17, MonsterDef 11) and per file (759 / 34 / 44).
+// sizes are asserted per struct (WeaponDef 329, Attack 23, Branch 27, ShellDef
+// 15, MonsterAttack 17, MonsterDef 11) and per file (987 / 34 / 44).
 //
 // Usage: gen-fxtables [outdir]   (default: fxdata/tables)
 
@@ -24,7 +24,7 @@ using namespace mh;
 
 namespace {
 
-constexpr size_t WEAPON_DEFS_BYTES = 759;
+constexpr size_t WEAPON_DEFS_BYTES = 987;
 constexpr size_t MONSTER_ATTACKS_BYTES = 34;
 constexpr size_t MONSTER_DEFS_BYTES = 44;
 constexpr size_t SIN65_BYTES = 65;
@@ -103,7 +103,11 @@ void putWeapon(const WeaponDef &d) {
         putShell(d.shells[i]);
     putAttack(d.roll);
     putAttack(d.alt);
-    require(g_bytes.size() - start == 253, "WeaponDef size");
+    for (int i = 0; i < 2; i++)
+        putAttack(d.charge[i]);
+    for (int i = 0; i < 2; i++)
+        putShell(d.chargeShells[i]);
+    require(g_bytes.size() - start == 329, "WeaponDef size");
 }
 
 void putMonsterAttack(const MonsterAttack &a) {
