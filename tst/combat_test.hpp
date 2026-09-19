@@ -46,7 +46,7 @@ void CombatSuite(TestRunner &runner) {
         }
         // Migration A scaffold: slot 0 of every shipped creature is its opener.
         t.assert(combatCreatureFirstAttack(combat_data::CREATURE_LUNGE), combat_data::ATTACK_LUNGE_PECK, "lunge creature first attack");
-        t.assert(combatCreatureFirstAttack(combat_data::CREATURE_SWEEP), combat_data::ATTACK_SWEEP_LUNGE, "sweep creature first attack");
+        t.assert(combatCreatureFirstAttack(combat_data::CREATURE_SWEEP), combat_data::ATTACK_SWEEP_STOMP, "sweep creature first attack");
         t.assert(combatCreatureFirstAttack(combat_data::CREATURE_HEAVY), combat_data::ATTACK_HEAVY_BITE, "heavy creature first attack");
         suite.addTest(t);
     }
@@ -76,12 +76,16 @@ void CombatSuite(TestRunner &runner) {
         }
         // nch.4: heavy commits its turn (faceHold 10) and holds ground at 12;
         // nch.7: the chicken commits for 6 (faceHold) and holds at keepDist 16.
+        // nch.9: the bull commits for 10 (faceHold) and holds at keepDist 18.
         const CombatProfile heavy = combatProfileRead(combatCreatureProfileIdx(combat_data::CREATURE_HEAVY));
         t.assert(heavy.faceHold, 10, "heavy faceHold");
         t.assert(heavy.keepDist, 12, "heavy keepDist 12");
         const CombatProfile lunge = combatProfileRead(combatCreatureProfileIdx(combat_data::CREATURE_LUNGE));
         t.assert(lunge.faceHold, 6, "chicken faceHold 6");
         t.assert(lunge.keepDist, 16, "chicken keepDist 16");
+        const CombatProfile sweep = combatProfileRead(combatCreatureProfileIdx(combat_data::CREATURE_SWEEP));
+        t.assert(sweep.faceHold, combat_expect::PROFILE_SWEEP_FACE_HOLD, "bull faceHold 10");
+        t.assert(sweep.keepDist, 18, "bull keepDist 18");
         suite.addTest(t);
     }
 
@@ -116,16 +120,17 @@ void CombatSuite(TestRunner &runner) {
         Test t("body box + spawn accessors match combat_data.hpp");
         // cgk: the ravager declares head + appendage. 4t4 added the heavy
         // appendage (long tail). 76y added the chicken's lunge head + legs
-        // (appendage) zones.
+        // (appendage) zones. nch.9 added the bull's head (horns) + appendage
+        // (hooves) zones.
         // 6zb.9: each variant carries ONE whole-pole zone (the old per-variant
         // head zones are gone): plain head + 3 variant appendages = 4 pole zones.
-        t.assert(combat::ZONES_COUNT, 9, "heavy tail + ravager + lunge head/legs + 4 pole zone records");
+        t.assert(combat::ZONES_COUNT, 11, "heavy tail + ravager + lunge + sweep + 4 pole zone records");
         t.assert(combat::CREATURES_COUNT, 8, "3 demo beasts + ravager + 4 static poles");
         t.assert(combat::SKELETONS_COUNT, 5, "bull/chicken/longtail/quad + pole");
         t.assert(combat::ATTACKS_COUNT, 8, "3x2 shipped + ravager bite/tail_sweep");
-        t.assert(combat::WINDOWS_COUNT, 12, "3 single-window + ravager 2 + heavy bite 1 + tail_spin 4");
-        t.assert(combat::PATTERNS_COUNT, 8, "ravager adds p_enraged; heavy swaps lunge/sweep for spin/bite");
-        t.assert(combat::GUARDS_COUNT, 8, "one guard per pattern");
+        t.assert(combat::WINDOWS_COUNT, 13, "4 single-window + ravager 2 + heavy bite 1 + tail_spin 4 + sweep gore 2");
+        t.assert(combat::PATTERNS_COUNT, 9, "ravager p_enraged; heavy spin/bite; sweep p_stomp/p_gore");
+        t.assert(combat::GUARDS_COUNT, 9, "one guard per pattern");
         for (uint8_t i = 0; i < combat::CREATURES_COUNT; i++) {
             const combat_data::Creature &h = combat_data::CREATURES[i];
             t.assert(combatCreatureSkeletonIdx(i), h.skeletonIdx, "creature skeletonIdx accessor");
@@ -151,12 +156,18 @@ void CombatSuite(TestRunner &runner) {
             t.assert(cb.h, h.collide.h, "collide box h");
         }
         // Default collide box is the body box; the chicken authors its legs-
-        // only rect (9,11,12,13) so the hunter can overlap the raised body.
+        // only rect (9,11,12,13) and the bull (nch.9) its wide low hooves rect
+        // (1,14,26,8) so the hunter can overlap the raised body.
         CombatBox cbox = combatCreatureCollideBox(combat_data::CREATURE_SWEEP);
-        t.assert(cbox.ox, 0, "sweep collide defaults to body ox");
-        t.assert(cbox.oy, 0, "sweep collide defaults to body oy");
-        t.assert(cbox.w, 28, "sweep collide body w");
-        t.assert(cbox.h, 22, "sweep collide body h");
+        t.assert(cbox.ox, combat_expect::CREATURE_SWEEP_COLLIDE_OX, "sweep hooves collide ox");
+        t.assert(cbox.oy, combat_expect::CREATURE_SWEEP_COLLIDE_OY, "sweep hooves collide oy");
+        t.assert(cbox.w, combat_expect::CREATURE_SWEEP_COLLIDE_W, "sweep hooves collide w");
+        t.assert(cbox.h, combat_expect::CREATURE_SWEEP_COLLIDE_H, "sweep hooves collide h");
+        cbox = combatCreatureCollideBox(combat_data::CREATURE_RAVAGER);
+        t.assert(cbox.ox, 0, "ravager collide defaults to body ox");
+        t.assert(cbox.oy, 0, "ravager collide defaults to body oy");
+        t.assert(cbox.w, 32, "ravager collide body w");
+        t.assert(cbox.h, 24, "ravager collide body h");
         cbox = combatCreatureCollideBox(combat_data::CREATURE_LUNGE);
         t.assert(cbox.ox, 9, "lunge legs collide ox");
         t.assert(cbox.oy, 11, "lunge legs collide oy");
@@ -543,10 +554,20 @@ void CombatSuite(TestRunner &runner) {
         t.assert(combatGuardPasses(g, combat_data::PATTERN_HEAVY_P_BITE, in), 1, "heavy bite dist 31 accepted");
 
         creatureLoad(g, combat_data::CREATURE_SWEEP);
+        // Bull (nch.9): p_stomp 0..24, p_gore 24..255; both match at the
+        // inclusive 24 boundary (source order picks stomp).
+        in.dist = 24;
+        t.assert(combatGuardPasses(g, combat_data::PATTERN_SWEEP_P_STOMP, in), 1, "stomp dist 24 accepted");
+        t.assert(combatGuardPasses(g, combat_data::PATTERN_SWEEP_P_GORE, in), 1, "gore dist 24 accepted (stomp wins order)");
+        in.dist = 25;
+        t.assert(combatGuardPasses(g, combat_data::PATTERN_SWEEP_P_STOMP, in), 0, "stomp dist 25 rejected");
+        t.assert(combatGuardPasses(g, combat_data::PATTERN_SWEEP_P_GORE, in), 1, "gore dist 25 accepted");
         in.dist = 0;
-        t.assert(combatGuardPasses(g, combat_data::PATTERN_SWEEP_P_SWEEP, in), 1, "sweep always matches 0");
+        t.assert(combatGuardPasses(g, combat_data::PATTERN_SWEEP_P_STOMP, in), 1, "stomp dist 0 accepted");
+        t.assert(combatGuardPasses(g, combat_data::PATTERN_SWEEP_P_GORE, in), 0, "gore dist 0 rejected");
         in.dist = 255;
-        t.assert(combatGuardPasses(g, combat_data::PATTERN_SWEEP_P_SWEEP, in), 1, "sweep always matches 255");
+        t.assert(combatGuardPasses(g, combat_data::PATTERN_SWEEP_P_STOMP, in), 0, "stomp dist 255 rejected");
+        t.assert(combatGuardPasses(g, combat_data::PATTERN_SWEEP_P_GORE, in), 1, "gore dist 255 accepted");
         t.assert(combatGuardPasses(g, 99, in), 0, "unknown pattern rejected");
         suite.addTest(t);
     }
@@ -644,6 +665,37 @@ void CombatSuite(TestRunner &runner) {
         t.assert(tail.brokenDmgMul, 200, "tail broken override 200");
         t.assert(tail.brokenFlags, COMBAT_BROKEN_HURT_OFF | COMBAT_BROKEN_CUE, "tail broken hurtOff + cue");
         t.assert(tail.unlockMask, static_cast<uint8_t>(1u << combat_data::ATTACK_RAVAGER_TAIL_SWEEP), "tail unlock disables tail_sweep");
+        suite.addTest(t);
+    }
+
+    {
+        Test t("bull zone records: horns head + hooves appendage (nch.9)");
+        const CombatZone head = combatZoneRead(combat_data::ZONE_SWEEP_HEAD);
+        t.assert(head.box.ox, 17, "bull head ox");
+        t.assert(head.box.oy, -4, "bull head oy");
+        t.assert(head.box.w, 12, "bull head w");
+        t.assert(head.box.h, 10, "bull head h");
+        t.assert(head.dmgMul, combat_expect::ZONE_SWEEP_HEAD_DMG_MUL, "bull head dmgMul");
+        t.assert(head.hp, combat_expect::ZONE_SWEEP_HEAD_HP, "bull head pool hp");
+        t.assert(head.bodyShare, combat_expect::ZONE_SWEEP_HEAD_BODY_SHARE, "bull head bodyShare");
+        t.assert(head.breakTypes, PHYS_SLASH, "bull head breakTypes slash only");
+        t.assert(head.staggerOnHit, 12, "bull head staggerOnHit");
+        t.assert(head.brokenFlags, COMBAT_BROKEN_HURT_OFF, "bull head broken hurtOff");
+        t.assert(head.unlockMask, 0, "bull head disables nothing");
+
+        const CombatZone hooves = combatZoneRead(combat_data::ZONE_SWEEP_APPENDAGE);
+        t.assert(hooves.box.ox, 4, "bull hooves ox");
+        t.assert(hooves.box.oy, 12, "bull hooves oy");
+        t.assert(hooves.box.w, 20, "bull hooves w");
+        t.assert(hooves.box.h, 10, "bull hooves h");
+        t.assert(hooves.dmgMul, combat_expect::ZONE_SWEEP_APPENDAGE_DMG_MUL, "bull hooves dmgMul");
+        t.assert(hooves.hp, combat_expect::ZONE_SWEEP_APPENDAGE_HP, "bull hooves pool hp");
+        t.assert(hooves.bodyShare, combat_expect::ZONE_SWEEP_APPENDAGE_BODY_SHARE, "bull hooves bodyShare");
+        t.assert(hooves.breakTypes, PHYS_SLASH, "bull hooves breakTypes slash only");
+        t.assert(hooves.staggerOnHit, 30, "bull hooves staggerOnHit");
+        t.assert(hooves.brokenDmgMul, 200, "bull hooves broken override 200");
+        t.assert(hooves.brokenFlags, COMBAT_BROKEN_HURT_OFF | COMBAT_BROKEN_CUE, "bull hooves broken hurtOff + cue");
+        t.assert(hooves.unlockMask, static_cast<uint8_t>(1u << combat_data::ATTACK_SWEEP_STOMP), "bull hooves disable stomp");
         suite.addTest(t);
     }
 
@@ -751,6 +803,14 @@ void CombatSuite(TestRunner &runner) {
         g.combat.zoneBroken = COMBAT_ZONE_APPENDAGE_BIT;
         t.assert(combatAttackDisabled(g, combat_data::ATTACK_LUNGE_LEAP), 1, "broken legs disable leap");
         t.assert(combatAttackDisabled(g, combat_data::ATTACK_LUNGE_PECK), 0, "broken legs keep peck");
+        // Bull (nch.9): the hooves' broken record disables the stomp only.
+        creatureLoad(g, combat_data::CREATURE_SWEEP);
+        g.combat.zoneBroken = 0;
+        t.assert(combatAttackDisabled(g, combat_data::ATTACK_SWEEP_STOMP), 0, "intact hooves -> stomp enabled");
+        t.assert(combatAttackDisabled(g, combat_data::ATTACK_SWEEP_GORE), 0, "intact hooves -> gore enabled");
+        g.combat.zoneBroken = COMBAT_ZONE_APPENDAGE_BIT;
+        t.assert(combatAttackDisabled(g, combat_data::ATTACK_SWEEP_STOMP), 1, "broken hooves disable stomp");
+        t.assert(combatAttackDisabled(g, combat_data::ATTACK_SWEEP_GORE), 0, "broken hooves keep gore");
         suite.addTest(t);
     }
 

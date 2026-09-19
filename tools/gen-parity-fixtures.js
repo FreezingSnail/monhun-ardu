@@ -30,7 +30,12 @@ const CP_STRIDE = 64;
 const PSTATE = { idle: 0, attack: 1, special: 2, dodge: 3, deflect: 4, shove: 5, stun: 6 };
 const STANCE = { parry: 1, whirl: 2, guard: 3 };
 const MSTATE = { idle: 0, pursue: 1, windup: 2, attack: 3, recover: 4, dead: 5 };
-const MODO = { lunge: 0, sweep: 1 };
+// Monster attack kind for the hash/override, mirroring the C++ fold
+// `moveType == MOVE_LUNGE ? MK_LUNGE : MK_SWEEP`: 0 = lunging, 1 = stationary.
+// The bull's stomp (move none) hashes 1 and gore (lunge) 0; the parity scene
+// that preloads an attack uses stomp, so the C++ override loads the same
+// single-window record.
+const MODO = { lunge: 0, sweep: 1, stomp: 1, gore: 0 };
 const SHELL = { ball: 0, scatter: 1 };
 const OVER = { win: 1, lose: 2 };
 const ATKID = { stepslash: 1, spincut: 2, trip: 3, pointblank: 4, guardbash: 5 };
@@ -193,7 +198,7 @@ const SCENARIOS = [
     setup: g => {
       const m = park(g);
       m.x = g.player.x + 20; m.y = g.player.y;
-      m.state = 'attack'; m.atk = G.MONSTER_ATTACKS.sweep; m.t = 0;
+      m.state = 'attack'; m.atk = G.MONSTER_ATTACKS.stomp; m.t = 0;
       m.face = { x: -16, y: 0 };
     },
     inputs: () => rep(10, {}) },

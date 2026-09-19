@@ -5,7 +5,8 @@
 // crit zone, stun->recover, knockback ints, and the player-hit routing.
 #include "test.hpp"
 #include "../src/core/monster.hpp"
-#include "../src/core/world.hpp"   // newGame / withWeapon / resetHunt
+#include "../src/core/world.hpp"                // newGame / withWeapon / resetHunt
+#include "../src/generated/combat_expect.hpp"   // bull collide box pins
 
 using namespace mh;
 
@@ -133,10 +134,12 @@ void MonsterSuite(TestRunner &runner) {
         t.assert(m.fy, 0, "facing flat");
         t.assert(m.circleDir, 1, "circle dir right");
         t.assert(m.state, MS_IDLE, "starts idle");
-        t.assert(g.target.rect.w, 28, "hurt box synced from box");
-        t.assert(g.target.rect.h, 22, "hurt box height from box");
-        t.assert(g.target.rect.x, m.x, "hurt box x at box origin");
-        t.assert(g.target.rect.y, m.y, "hurt box y at box origin");
+        // nch.9: the bull authors a legs/hooves collide box (1,14,26,8), so the
+        // synced hurt box is that rect, not the body box.
+        t.assert(g.target.rect.w, combat_expect::CREATURE_SWEEP_COLLIDE_W, "hurt box synced from collide");
+        t.assert(g.target.rect.h, combat_expect::CREATURE_SWEEP_COLLIDE_H, "hurt box height from collide");
+        t.assert(g.target.rect.x, m.x + combat_expect::CREATURE_SWEEP_COLLIDE_OX, "hurt box x at collide origin");
+        t.assert(g.target.rect.y, m.y + combat_expect::CREATURE_SWEEP_COLLIDE_OY, "hurt box y at collide origin");
 
         Game g2;
         newGame(g2, W_SWORD, MODE_HUNT, MON_HEAVY);
@@ -180,14 +183,18 @@ void MonsterSuite(TestRunner &runner) {
     }
 
     {
-        Test t("chooseAttack variants: SWEEP never lunges, HEAVY spins inside 30, CHICKEN pecks/leaps");
+        Test t("chooseAttack variants: BULL stomps/gores, HEAVY spins inside 30, CHICKEN pecks/leaps");
         Game g;
         newGame(g, W_SWORD, MODE_HUNT, MON_SWEEP);
         Monster &m = g.monster;
-        for (int32_t d = 10; d <= 41; d += 11) {
-            chooseAttack(g, d);
-            t.assert(m.atkIdx, combat::ATTACK_SWEEP_SWEEP, "sweep def never lunges");
-        }
+        chooseAttack(g, 24);
+        t.assert(m.atkIdx, combat::ATTACK_SWEEP_STOMP, "bull stomps at 24");
+        chooseAttack(g, 0);
+        t.assert(m.atkIdx, combat::ATTACK_SWEEP_STOMP, "bull stomps at 0");
+        chooseAttack(g, 25);
+        t.assert(m.atkIdx, combat::ATTACK_SWEEP_GORE, "bull gores at 25");
+        chooseAttack(g, 41);
+        t.assert(m.atkIdx, combat::ATTACK_SWEEP_GORE, "bull gores at 41");
         Game g2;
         newGame(g2, W_SWORD, MODE_HUNT, MON_HEAVY);
         Monster &h = g2.monster;

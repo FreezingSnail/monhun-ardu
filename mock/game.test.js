@@ -322,13 +322,25 @@ test('monster variants: roster + spawn stats per def, default is legacy LUNGE', 
   assert.equal(d.monster.hp, 200);
 });
 
-test('monster variants: SWEEP never lunges, HEAVY spins inside 24 else bites', () => {
-  const sweep = G.newGame(0, 'hunt', 1);
-  for (const d of [10, 33, 41]) {
-    const m = placeAtDistance(sweep, d);
-    G.step(sweep, inp({}));
-    assert.equal(m.atk.kind, 'sweep', 'sweep variant at dist ' + d);
+test('monster variants: BULL stomps/gored, HEAVY spins inside 24 else bites', () => {
+  // BULL (nch.9) kit: stomp at dist <= 24 (p_stomp first), gore 25..41.
+  for (const d of [0, 10, 24]) {
+    const g = G.newGame(0, 'hunt', 1);
+    const m = placeAtDistance(g, d);
+    G.step(g, inp({}));
+    assert.equal(m.atk.kind, 'stomp', 'bull stomps at dist ' + d);
   }
+  for (const d of [25, 33, 41]) {
+    const g = G.newGame(0, 'hunt', 1);
+    const m = placeAtDistance(g, d);
+    G.step(g, inp({}));
+    assert.equal(m.atk.kind, 'gore', 'bull gores at dist ' + d);
+  }
+  // The two new attacks carry the authored windows (horns then trample).
+  assert.equal(G.MONSTER_ATTACKS.stomp.windows.length, 1);
+  assert.deepEqual(G.MONSTER_ATTACKS.stomp.windows[0], { t0: 0, t1: 10, ox: 10, oy: 2, w: 24, h: 14, dmgMul: 100 });
+  assert.equal(G.MONSTER_ATTACKS.gore.windows.length, 2);
+  assert.deepEqual(G.MONSTER_ATTACKS.gore.windows.map(w => [w.t0, w.t1]), [[0, 6], [7, 12]]);
 
   // HEAVY (nch.4) kit: tail_spin at dist <= 30, bite from 31 out to the
   // pursue engage gate at 42.
@@ -409,6 +421,105 @@ test('monster variants: CHICKEN broken legs force peck at leap range', () => {
   G.step(g, inp({}));
   assert.equal(m.atk.kind, 'peck', 'broken legs fall back to the close peck');
   assert.notEqual(m.atk.kind, 'leap', 'the leap is disabled while legs are broken');
+});
+
+test('monster variants: BULL gore locks facing at windup; hunter flanks behind', () => {
+  const g = G.newGame(0, 'hunt', 1);
+  const m = g.monster;
+  // Hunter due east at gore range: facing refreshes east, then p_gore commits it.
+  m.x = 80;
+  m.y = 40;
+  g.player.x = m.x + (m.w >> 1) + 32 - (g.player.w >> 1);
+  g.player.y = m.y + (m.h >> 1) - (g.player.h >> 1);
+  m.state = 'pursue';
+  m.t = 0;
+  m.cd = 0;
+  G.step(g, inp({}));
+  assert.equal(m.atk.kind, 'gore', 'gore chosen at range');
+  assert.equal(m.state, 'windup');
+  assert.equal(m.face.x, 16, 'gore commits the east facing at windup');
+  assert.equal(m.face.y, 0, 'level east');
+  // Cross behind during windup: lock-at-windup freezes the vector.
+  g.player.x = 20;
+  for (let i = 0; i < G.MONSTER_ATTACKS.gore.windup; i++) G.step(g, inp({}));
+  assert.equal(m.state, 'attack', 'windup completed into the gore');
+  assert.equal(m.face.x, 16, 'facing stays committed through the gore');
+  assert.equal(m.face.y, 0, 'facing stays level');
+});
+
+test('monster variants: BULL gore trample window catches after the horns miss', () => {
+  const g = G.newGame(0, 'hunt', 1);
+  const m = g.monster;
+  m.x = 100;
+  m.y = 40;
+  m.face = { x: 16, y: 0 };
+  m.atk = G.MONSTER_ATTACKS.gore;
+  m.state = 'attack';
+  m.t = 0;
+  m.lvx = 0;
+  m.lvy = 0;
+  // Hunter low and outside the hooves collide box: under the horns box (y ends
+  // at 54) but inside the wider/lower trample box (y ends at 60).
+  g.player.x = m.x + 28;
+  g.player.y = m.y + 15;
+  const hp0 = g.player.hp;
+  for (let i = 0; i < 6; i++) G.step(g, inp({}));
+  assert.equal(g.player.hp, hp0, 'horn window misses the low hunter');
+  G.step(g, inp({}));
+  assert.ok(g.player.hp < hp0, 'trample window catches the low hunter');
+});
+
+test('monster variants: BULL broken hooves skip the disabled stomp', () => {
+  const g = G.newGame(0, 'hunt', 1);
+  const m = park(g);
+  m.zones.appendage.broken = true;   // disableAttacks: ['stomp']
+  placeAtDistance(g, 10);
+  G.step(g, inp({}));
+  assert.equal(m.atk.kind, 'gore', 'broken hooves fall back to the gore');
+  assert.notEqual(m.atk.kind, 'stomp', 'the stomp is disabled while hooves are broken');
+  // At gore range the gore is chosen regardless.
+  const g2 = G.newGame(0, 'hunt', 1);
+  const m2 = park(g2);
+  m2.zones.appendage.broken = true;
+  placeAtDistance(g2, 33);
+  G.step(g2, inp({}));
+  assert.equal(m2.atk.kind, 'gore', 'gore still chosen at range with broken hooves');
+});
+
+test('monster variants: BULL hooves collide blocks while the head routes horn hits', () => {
+  const g = G.newGame(0, 'hunt', 1);
+  const m = park(g);
+  m.x = 100;
+  m.y = 40;
+  const p = g.player;
+  // Above the hooves box (y < m.y+14) the raised body is pass-through: the
+  // hunter can stand in the body rect without a push.
+  p.x = 108;
+  p.y = 30;
+  G.step(g, inp({}));
+  assert.equal(p.x, 108, 'player above the hooves keeps x');
+  assert.equal(p.y, 30, 'player above the hooves keeps y (body passes over)');
+  // Inside the hooves box the collide rect resolves the overlap.
+  p.x = 108;
+  p.y = 50;
+  G.step(g, inp({}));
+  const hx = m.x + 1;
+  const hy = m.y + 14;
+  assert.ok(p.x + p.w <= hx || p.x >= hx + 26 || p.y + p.h <= hy || p.y >= hy + 8,
+            'hooves collide box no longer overlaps the player');
+  // Fresh beast for the zone routing: horn box (ox 17, oy -4) -> x 117..129,
+  // y 36..46; hooves box (ox 4, oy 12) -> x 104..124, y 52..62.
+  const gz = G.newGame(0, 'hunt', 1);
+  const mz = park(gz);
+  mz.x = 100;
+  mz.y = 40;
+  mz.face = { x: 16, y: 0 };
+  const horn = G.zoneHitResolve(gz, 10, 1, 120, 40);
+  assert.equal(horn.zone, 'head', 'horn point routes the head zone');
+  assert.equal(horn.mul, 130, 'head multiplier 130');
+  const hoof = G.zoneHitResolve(gz, 10, 1, 108, 56);
+  assert.equal(hoof.zone, 'appendage', 'hooves point routes the appendage');
+  assert.equal(hoof.mul, 150, 'hooves multiplier 150');
 });
 
 test('monster variants: heavy tail_spin turns away at windup, frozen through attack', () => {

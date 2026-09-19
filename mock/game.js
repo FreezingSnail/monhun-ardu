@@ -302,10 +302,10 @@ const WEAPON_DEFS = [
 ];
 
 const MONSTER_ATTACKS = {
-  // Legacy kit (defs 1): single window via reach/hw/hh, byte-identical to the
-  // published lunge/sweep so parity fixtures do not move. The sweep creature
-  // still authors both, so `monster_sweep_hit` keeps loading MONSTER_ATTACKS.
-  // sweep directly; the chicken no longer uses these.
+  // Legacy kit: single window via reach/hw/hh, kept as the value-identical
+  // reference the pre-data-driven sim used. No roster kind selects these now
+  // (chicken nch.7, bull nch.9), but mock/game.test.js still exercises the
+  // legacy reach path through them.
   lunge: { kind: 'lunge', windup: 40, active: 10, recover: 55, speedF: 34, dmg: 12, reach: 12, hw: 24, hh: 22 },
   sweep: { kind: 'sweep', windup: 48, active: 12, recover: 60, dmg: 9, reach: 17, hw: 32, hh: 24 },
   // CHICKEN kit (nch.7): peck is the close jab (window ox 14, oy -6), leap is
@@ -321,6 +321,23 @@ const MONSTER_ATTACKS = {
     kind: 'leap', windup: 34, active: 10, recover: 48, dmg: 12, speedF: 42,
     phys: 'BLUNT', facing: 'lock-at-windup', reach: 12, hw: 18, hh: 16,
     windows: [{ t0: 0, t1: 10, ox: 12, oy: -2, w: 18, h: 16, dmgMul: 100 }],
+  },
+  // BULL kit (nch.9): stomp is the stationary close slam (move none, window
+  // ox 10, oy 2), gore is the committed charge with two contiguous windows
+  // (horns ox 16 -> trample ox 12, facing lock-at-windup). reach/hw/hh mirror
+  // window 0's ox/w/h so the fixture hash matches the C++ cached win.box.
+  stomp: {
+    kind: 'stomp', windup: 36, active: 10, recover: 44, dmg: 9,
+    phys: 'BLUNT', facing: 'track', reach: 10, hw: 24, hh: 14,
+    windows: [{ t0: 0, t1: 10, ox: 10, oy: 2, w: 24, h: 14, dmgMul: 100 }],
+  },
+  gore: {
+    kind: 'gore', windup: 46, active: 12, recover: 55, dmg: 14, speedF: 34,
+    phys: 'BLUNT', facing: 'lock-at-windup', reach: 16, hw: 16, hh: 10,
+    windows: [
+      { t0: 0, t1: 6, ox: 16, oy: -2, w: 16, h: 10, dmgMul: 100 },
+      { t0: 7, t1: 12, ox: 12, oy: 2, w: 20, h: 14, dmgMul: 100 },
+    ],
   },
   // HEAVY kit (nch.1): bite lunges and tracks; tail_spin locks its facing at
   // windup and whips four contiguous windows (behind -> north -> front ->
@@ -373,14 +390,13 @@ function monsterTellWindow(m, a) {
 // the body box (ox/oy 0, w/h = def w/h), matching the C++ creature default.
 // nch.4: HEAVY holds ground at keepDist 12 and spins inside spinDist 30; its
 // faceHold commits the tracked facing for 10 ticks so the hunter can flank.
-// SWEEP leaves faceHold/keepDist/spinDist unset (0/24/24); the chicken (nch.7)
-// and heavy set them. A species that leaves faceHold unset recomputes facing
-// every tick, matching the C++ profile default 0.
+// nch.7: the chicken holds at keepDist 16 and its faceHold 6 commits the
+// tracked facing for six ticks, so a leap can be flanked.
+// nch.9: the bull holds at keepDist 18 (faceHold 10) with a legs/hooves
+// collide box (1,14,26,8) so the wide low stance blocks at the feet only.
 const MONSTER_DEFS = [
-  // nch.7: the chicken holds at keepDist 16 and its faceHold 6 commits the
-  // tracked facing for six ticks, so a leap can be flanked while it winds up.
   { kind: 'lunge', w: 32, h: 24, hp: 200, spd: 5, atkDist: 32, keepDist: 16, faceHold: 6, collide: { ox: 9, oy: 11, w: 12, h: 13 } },
-  { kind: 'sweep', w: 28, h: 22, hp: 150, spd: 7, atkDist: -1 },
+  { kind: 'sweep', w: 28, h: 22, hp: 150, spd: 7, atkDist: -1, keepDist: 18, faceHold: 10, collide: { ox: 1, oy: 14, w: 26, h: 8 } },
   { kind: 'heavy', w: 40, h: 28, hp: 320, spd: 3, atkDist: 24, keepDist: 12, spinDist: 30, faceHold: 10 },
 ];
 
@@ -397,6 +413,12 @@ const MONSTER_ZONES = {
     // slashing player hits, matching combat_data ZONES.
     head: { ox: 18, oy: 0, w: 11, h: 7, dmgMul: 130, hp: 40, bodyShare: 100, breakTypes: 1, staggerOnHit: 12 },
     appendage: { ox: 9, oy: 0, w: 9, h: 24, dmgMul: 150, hp: 60, bodyShare: 40, breakTypes: 1, staggerOnHit: 30, disableAttacks: ['leap'] },
+  },
+  // nch.9: the bull's horns (head) and hooves (appendage) mirror sweep.json.
+  // Breaking the hooves (SLASH) disables the stomp; the head has no list.
+  sweep: {
+    head: { ox: 17, oy: -4, w: 12, h: 10, dmgMul: 130, hp: 40, bodyShare: 100, breakTypes: 1, staggerOnHit: 12 },
+    appendage: { ox: 4, oy: 12, w: 20, h: 10, dmgMul: 150, hp: 60, bodyShare: 40, breakTypes: 1, staggerOnHit: 30, disableAttacks: ['stomp'] },
   },
   heavy: {
     // ox -24 sits the tail behind the body so a flanking hit lands here.
@@ -1350,7 +1372,9 @@ function monsterAttackDisabled(m, kind) {
 // legacy "lunge beyond 32px" rule; negative atkDist (sweep) never lunges. HEAVY
 // (nch.1) runs the new kit: tail_spin inside spinDist (30, nch.4) else bite.
 // CHICKEN (nch.7) runs peck inside 28 else leap; a broken legs zone disables
-// the leap, so selection falls back to the close peck.
+// the leap, so selection falls back to the close peck. BULL (nch.9) runs stomp
+// inside 24 else gore; a broken hooves zone disables the stomp, so selection
+// falls back to the gore.
 function chooseAttack(g, dist) {
   const m = g.monster;
   const def = MONSTER_DEFS[g.monsterIndex];
@@ -1359,6 +1383,10 @@ function chooseAttack(g, dist) {
   else if (def.kind === 'lunge') {
     m.atk = dist <= 28 ? MONSTER_ATTACKS.peck : MONSTER_ATTACKS.leap;
     if (monsterAttackDisabled(m, m.atk.kind)) m.atk = MONSTER_ATTACKS.peck;
+  } else if (def.kind === 'sweep') {
+    m.atk = dist <= 24 ? MONSTER_ATTACKS.stomp : MONSTER_ATTACKS.gore;
+    if (monsterAttackDisabled(m, m.atk.kind))
+      m.atk = m.atk.kind === 'stomp' ? MONSTER_ATTACKS.gore : MONSTER_ATTACKS.stomp;
   } else
     m.atk = def.atkDist >= 0 && dist > def.atkDist ? MONSTER_ATTACKS.lunge : MONSTER_ATTACKS.sweep;
   // nch.2: lock-away turns the back to the hunter once, reusing the tracked

@@ -304,7 +304,7 @@ boxes**, authored per creature (not inherited as one generic body box):
 | creature | collide box | hurt zones |
 |---|---|---|
 | chicken (lunge) | legs only — player walks under the raised body | head + legs (appendage) — **done** (monhun-ardu-76y) |
-| bull (sweep) | legs/hooves region, wide low stance | head/horns + body; hooves as appendage if breakable |
+| bull (sweep) | legs/hooves region `(ox 1, oy 14, 26x8)`, wide low stance | head/horns + hooves (appendage) — **done** (monhun-ardu-nch.9) |
 | long-tail (heavy) | body + tail base (tail is hittable behind the body) | head + long tail (appendage) — tail zone/art **done**, collide still body-only |
 
 Implementation notes:
@@ -370,4 +370,37 @@ replaced by a two-attack kit, same treatment as the long-tail nch.1:
   `combat.attack.win.box`. `faceHold` 6 moves the per-tick face cadence, so two
   scene hashes move (`beast_no_shove_idle` 40/40 ticks, `camera_world_clamp`
   3/220) and `tst/fxdatatest/parity_fixtures.hpp` is regenerated in the same
-  change (`monster_sweep_hit` still loads the legacy sweep record).
+  change.
+
+## Bull attack kit (owner design, 2026-09-18 — bead nch.9)
+
+The bull's inherited generic `lunge`/`sweep` (the 32x24 sweep telegraph) are
+replaced by a two-attack kit, same treatment as the long-tail nch.1/chicken
+nch.7:
+
+- `stomp` — stationary close slam (windup 36 / active 10 / recover 44, dmg 9,
+  `move none`), window 24x14 @ ox 10, oy 2, **`facing: track`**. The window box
+  is the real hit test and the telegraph.
+- `gore` — committed charge (windup 46 / active 12 / recover 55, dmg 14, lunge
+  speedF 34), two contiguous windows, **`facing: lock-at-windup`**: horns 16x10
+  @ ox 16, oy -2 (t 1..6) then trample 20x14 @ ox 12, oy 2 (t 7..12). The
+  committed vector is frozen through windup + attack, so the hunter can step
+  behind the charge.
+- Selection (source order): `p_stomp` guard `maxDist 24` → stomp; `p_gore` guard
+  `minDist 24` plus `hpBand [0,100]` → gore. So stomp ≤ 24 px, gore 25..41 px
+  (pursue re-decides under `attackDist` 42).
+- `keepDist` 18 holds the stomp/threat band; `faceHold` 10 commits the tracked
+  facing for ten ticks (same mechanism as the long-tail nch.4) so a gore can be
+  flanked.
+- Zones (7vr): head/horns 12x10 @ ox 17, oy -4 (dmgMul 130, hp 40, share 100,
+  SLASH, stagger 12) and hooves/appendage 20x10 @ ox 4, oy 12 (dmgMul 150,
+  hp 60, share 40, SLASH, stagger 30). Breaking the hooves disables `stomp`
+  (`broken.disableAttacks`); the head has no disable list. `collide`
+  `(ox 1, oy 14, 26x8)` covers only the wide low leg stance, so the body region
+  passes over the hunter.
+- Mock parity: stomp/gore use the `windows[]` path in `MONSTER_ATTACKS`; their
+  `reach/hw/hh` mirror window 0 so the fixture hash matches the C++ cached
+  `combat.attack.win.box`. `keepDist` 18, `faceHold` 10 and the hooves collide
+  box move the `monster_sweep_hit` scene, where the mock loads the bull's
+  single-window `stomp` (the C++ override loads the same record) and
+  `tst/fxdatatest/parity_fixtures.hpp` is regenerated in the same change.

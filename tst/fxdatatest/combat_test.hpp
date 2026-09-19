@@ -152,6 +152,65 @@ inline void test_combat(FxTest &test) {
     test.expectEq(sweep.spd, combat_expect::CREATURE_SWEEP_SPD, F("sweep spd"));
     test.expectEq(sweep.w, combat_expect::CREATURE_SWEEP_W, F("sweep w"));
     test.expectEq(sweep.h, combat_expect::CREATURE_SWEEP_H, F("sweep h"));
+    // nch.9: bull horns/hooves zones and the wide low hooves collide box.
+    test.expectEq(sweep.headZone, combat::ZONE_SWEEP_HEAD, F("sweep head zone"));
+    test.expectEq(sweep.appendZone, combat::ZONE_SWEEP_APPENDAGE, F("sweep hooves zone"));
+    test.expectEq(sweep.collide.ox, combat_expect::CREATURE_SWEEP_COLLIDE_OX, F("sweep hooves collide ox"));
+    test.expectEq(sweep.collide.oy, combat_expect::CREATURE_SWEEP_COLLIDE_OY, F("sweep hooves collide oy"));
+    test.expectEq(sweep.collide.w, combat_expect::CREATURE_SWEEP_COLLIDE_W, F("sweep hooves collide w"));
+    test.expectEq(sweep.collide.h, combat_expect::CREATURE_SWEEP_COLLIDE_H, F("sweep hooves collide h"));
+    const CombatZone bullHead = combatZoneRead(combat::ZONE_SWEEP_HEAD);
+    test.expectEq(bullHead.box.ox, 17, F("bull head ox"));
+    test.expectEq(static_cast<uint32_t>(bullHead.box.oy), static_cast<uint32_t>(-4), F("bull head oy"));
+    test.expectEq(bullHead.box.w, 12, F("bull head w"));
+    test.expectEq(bullHead.box.h, 10, F("bull head h"));
+    test.expectEq(bullHead.dmgMul, combat_expect::ZONE_SWEEP_HEAD_DMG_MUL, F("bull head dmgMul"));
+    test.expectEq(bullHead.hp, combat_expect::ZONE_SWEEP_HEAD_HP, F("bull head hp"));
+    const CombatZone bullHooves = combatZoneRead(combat::ZONE_SWEEP_APPENDAGE);
+    test.expectEq(bullHooves.box.ox, 4, F("bull hooves ox"));
+    test.expectEq(bullHooves.box.oy, 12, F("bull hooves oy"));
+    test.expectEq(bullHooves.box.w, 20, F("bull hooves w"));
+    test.expectEq(bullHooves.box.h, 10, F("bull hooves h"));
+    test.expectEq(bullHooves.dmgMul, combat_expect::ZONE_SWEEP_APPENDAGE_DMG_MUL, F("bull hooves dmgMul"));
+    test.expectEq(bullHooves.unlockMask, static_cast<uint8_t>(1u << combat::ATTACK_SWEEP_STOMP), F("bull hooves disable stomp"));
+
+    // nch.9: the bull swaps lunge/sweep for stomp + a two-window gore.
+    const CombatAttackValue bullStomp = combatAttackRead(combat::ATTACK_SWEEP_STOMP);
+    test.expectEq(sweep.firstAttack, combat::ATTACK_SWEEP_STOMP, F("bull first attack stomp"));
+    test.expectEq(bullStomp.windup, combat_expect::ATTACK_SWEEP_STOMP_WINDUP, F("bull stomp windup"));
+    test.expectEq(bullStomp.active, combat_expect::ATTACK_SWEEP_STOMP_ACTIVE, F("bull stomp active"));
+    test.expectEq(bullStomp.recover, combat_expect::ATTACK_SWEEP_STOMP_RECOVER, F("bull stomp recover"));
+    test.expectEq(bullStomp.dmg, combat_expect::ATTACK_SWEEP_STOMP_DMG, F("bull stomp dmg"));
+    test.expectEq(bullStomp.moveType, 0, F("bull stomp stationary"));
+    test.expectEq(bullStomp.firstWindow, combat::WINDOW_SWEEP_STOMP_0, F("bull stomp window"));
+    const CombatWindow stompWin = combatWindowRead(bullStomp.firstWindow);
+    test.expectEq(stompWin.t0, 0, F("bull stomp t0"));
+    test.expectEq(stompWin.t1, 10, F("bull stomp t1"));
+    test.expectEq(stompWin.box.ox, 10, F("bull stomp ox"));
+    test.expectEq(stompWin.box.oy, 2, F("bull stomp oy"));
+    test.expectEq(stompWin.box.w, 24, F("bull stomp w"));
+    test.expectEq(stompWin.box.h, 14, F("bull stomp h"));
+    const CombatAttackValue bullGore = combatAttackRead(combat::ATTACK_SWEEP_GORE);
+    test.expectEq(bullGore.windup, 46, F("bull gore windup"));
+    test.expectEq(bullGore.active, 12, F("bull gore active"));
+    test.expectEq(bullGore.recover, 55, F("bull gore recover"));
+    test.expectEq(bullGore.dmg, 14, F("bull gore dmg"));
+    test.expectEq(bullGore.moveType, 1, F("bull gore lunges"));
+    test.expectEq(bullGore.moveSpeedF, 34, F("bull gore speedF"));
+    test.expectEq(bullGore.facing, COMBAT_FACING_LOCK, F("bull gore locks at windup"));
+    test.expectEq(bullGore.windowCount, 2, F("bull gore two windows"));
+    const CombatWindow gore0 = combatWindowRead(combat::WINDOW_SWEEP_GORE_0);
+    const CombatWindow gore1 = combatWindowRead(combat::WINDOW_SWEEP_GORE_1);
+    test.expectEq(gore0.t0, 0, F("gore0 t0"));
+    test.expectEq(gore0.t1, 6, F("gore0 t1"));
+    test.expectEq(gore0.box.ox, 16, F("gore0 horns ox"));
+    test.expectEq(static_cast<uint32_t>(gore0.box.oy), static_cast<uint32_t>(-2), F("gore0 horns oy"));
+    test.expectEq(gore1.t0, 7, F("gore1 t0"));
+    test.expectEq(gore1.t1, 12, F("gore1 t1"));
+    test.expectEq(gore1.box.ox, 12, F("gore1 trample ox"));
+    test.expectEq(gore1.box.oy, 2, F("gore1 trample oy"));
+    test.expectEq(gore1.box.w, 20, F("gore1 trample w"));
+    test.expectEq(gore1.box.h, 14, F("gore1 trample h"));
 
     // --------------------------------------------- cross-reference walk
     const CombatSkeleton sk = combatSkeletonRead(lunge.skeletonIdx);
@@ -193,14 +252,19 @@ inline void test_combat(FxTest &test) {
     test.expectEq(step.ref, combat::ATTACK_LUNGE_PECK, F("lunge step attack ref"));
     test.expectEq(step.after, 0, F("lunge step after"));
 
-    // SWEEP has no lunge pattern: one match-all sweep pattern.
+    // BULL (nch.9) opens with p_stomp (<=24) then p_gore (>=24).
     const CombatPattern sweepPat = combatPatternRead(sweep.firstPattern);
-    test.expectEq(sweep.patternCount, 1, F("sweep single pattern"));
-    test.expectEq(sweepPat.guardIdx, combat::GUARD_SWEEP_P_SWEEP, F("sweep guard idx"));
+    test.expectEq(sweep.patternCount, 2, F("bull two patterns"));
+    test.expectEq(sweepPat.guardIdx, combat::GUARD_SWEEP_P_STOMP, F("bull stomp guard idx"));
     const CombatGuard sweepGuard = combatGuardRead(sweepPat.guardIdx);
-    test.expectEq(sweepGuard.minDist, combat_expect::PATTERN_SWEEP_P_SWEEP_MIN_DIST, F("sweep minDist"));
-    test.expectEq(sweepGuard.maxDist, combat_expect::PATTERN_SWEEP_P_SWEEP_MAX_DIST, F("sweep maxDist"));
-    test.expectEq(sweepGuard.chance, combat_expect::PATTERN_SWEEP_P_SWEEP_CHANCE, F("sweep chance"));
+    test.expectEq(sweepGuard.minDist, combat_expect::PATTERN_SWEEP_P_STOMP_MIN_DIST, F("bull stomp minDist"));
+    test.expectEq(sweepGuard.maxDist, combat_expect::PATTERN_SWEEP_P_STOMP_MAX_DIST, F("bull stomp maxDist"));
+    test.expectEq(sweepGuard.chance, combat_expect::PATTERN_SWEEP_P_STOMP_CHANCE, F("bull stomp chance"));
+    const CombatPattern sweepGorePat = combatPatternRead(static_cast<uint8_t>(sweep.firstPattern + 1));
+    test.expectEq(sweepGorePat.guardIdx, combat::GUARD_SWEEP_P_GORE, F("bull gore guard idx"));
+    const CombatGuard sweepGoreGuard = combatGuardRead(sweepGorePat.guardIdx);
+    test.expectEq(sweepGoreGuard.minDist, 24, F("bull gore minDist"));
+    test.expectEq(sweepGoreGuard.maxDist, 255, F("bull gore maxDist"));
 
     // -------------------------------------------------- loader read budget
     static Game g;

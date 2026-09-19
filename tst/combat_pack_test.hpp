@@ -246,6 +246,8 @@ void CombatPackSuite(TestRunner &runner) {
             {"SKELETON_QUAD_32X24", combat::SKELETON_QUAD_32X24_OFF, combat::SKELETONS_OFF, combat::SKELETON_QUAD_32X24, combat::SKELETON_SIZE, combat::SKELETONS_COUNT},
             {"ZONE_RAVAGER_HEAD", combat::ZONE_RAVAGER_HEAD_OFF, combat::ZONES_OFF, combat::ZONE_RAVAGER_HEAD, combat::ZONE_SIZE, combat::ZONES_COUNT},
             {"ZONE_RAVAGER_APPENDAGE", combat::ZONE_RAVAGER_APPENDAGE_OFF, combat::ZONES_OFF, combat::ZONE_RAVAGER_APPENDAGE, combat::ZONE_SIZE, combat::ZONES_COUNT},
+            {"ZONE_SWEEP_HEAD", combat::ZONE_SWEEP_HEAD_OFF, combat::ZONES_OFF, combat::ZONE_SWEEP_HEAD, combat::ZONE_SIZE, combat::ZONES_COUNT},
+            {"ZONE_SWEEP_APPENDAGE", combat::ZONE_SWEEP_APPENDAGE_OFF, combat::ZONES_OFF, combat::ZONE_SWEEP_APPENDAGE, combat::ZONE_SIZE, combat::ZONES_COUNT},
             {"ZONE_POLE_HEAD", combat::ZONE_POLE_HEAD_OFF, combat::ZONES_OFF, combat::ZONE_POLE_HEAD, combat::ZONE_SIZE, combat::ZONES_COUNT},
             {"ZONE_POLE_BREAK_APPENDAGE", combat::ZONE_POLE_BREAK_APPENDAGE_OFF, combat::ZONES_OFF, combat::ZONE_POLE_BREAK_APPENDAGE, combat::ZONE_SIZE, combat::ZONES_COUNT},
             {"ZONE_POLE_CRACK_APPENDAGE", combat::ZONE_POLE_CRACK_APPENDAGE_OFF, combat::ZONES_OFF, combat::ZONE_POLE_CRACK_APPENDAGE, combat::ZONE_SIZE, combat::ZONES_COUNT},
@@ -266,8 +268,8 @@ void CombatPackSuite(TestRunner &runner) {
             {"ATTACK_LUNGE_LEAP", combat::ATTACK_LUNGE_LEAP_OFF, combat::ATTACKS_OFF, combat::ATTACK_LUNGE_LEAP, combat::ATTACK_SIZE, combat::ATTACKS_COUNT},
             {"ATTACK_RAVAGER_BITE", combat::ATTACK_RAVAGER_BITE_OFF, combat::ATTACKS_OFF, combat::ATTACK_RAVAGER_BITE, combat::ATTACK_SIZE, combat::ATTACKS_COUNT},
             {"ATTACK_RAVAGER_TAIL_SWEEP", combat::ATTACK_RAVAGER_TAIL_SWEEP_OFF, combat::ATTACKS_OFF, combat::ATTACK_RAVAGER_TAIL_SWEEP, combat::ATTACK_SIZE, combat::ATTACKS_COUNT},
-            {"ATTACK_SWEEP_LUNGE", combat::ATTACK_SWEEP_LUNGE_OFF, combat::ATTACKS_OFF, combat::ATTACK_SWEEP_LUNGE, combat::ATTACK_SIZE, combat::ATTACKS_COUNT},
-            {"ATTACK_SWEEP_SWEEP", combat::ATTACK_SWEEP_SWEEP_OFF, combat::ATTACKS_OFF, combat::ATTACK_SWEEP_SWEEP, combat::ATTACK_SIZE, combat::ATTACKS_COUNT},
+            {"ATTACK_SWEEP_STOMP", combat::ATTACK_SWEEP_STOMP_OFF, combat::ATTACKS_OFF, combat::ATTACK_SWEEP_STOMP, combat::ATTACK_SIZE, combat::ATTACKS_COUNT},
+            {"ATTACK_SWEEP_GORE", combat::ATTACK_SWEEP_GORE_OFF, combat::ATTACKS_OFF, combat::ATTACK_SWEEP_GORE, combat::ATTACK_SIZE, combat::ATTACKS_COUNT},
             {"WINDOW_HEAVY_BITE_0", combat::WINDOW_HEAVY_BITE_0_OFF, combat::WINDOWS_OFF, combat::WINDOW_HEAVY_BITE_0, combat::WINDOW_SIZE, combat::WINDOWS_COUNT},
             {"WINDOW_HEAVY_TAIL_SPIN_0", combat::WINDOW_HEAVY_TAIL_SPIN_0_OFF, combat::WINDOWS_OFF, combat::WINDOW_HEAVY_TAIL_SPIN_0, combat::WINDOW_SIZE, combat::WINDOWS_COUNT},
             {"WINDOW_HEAVY_TAIL_SPIN_1", combat::WINDOW_HEAVY_TAIL_SPIN_1_OFF, combat::WINDOWS_OFF, combat::WINDOW_HEAVY_TAIL_SPIN_1, combat::WINDOW_SIZE, combat::WINDOWS_COUNT},
@@ -278,8 +280,9 @@ void CombatPackSuite(TestRunner &runner) {
             {"WINDOW_RAVAGER_BITE_0", combat::WINDOW_RAVAGER_BITE_0_OFF, combat::WINDOWS_OFF, combat::WINDOW_RAVAGER_BITE_0, combat::WINDOW_SIZE, combat::WINDOWS_COUNT},
             {"WINDOW_RAVAGER_TAIL_SWEEP_0", combat::WINDOW_RAVAGER_TAIL_SWEEP_0_OFF, combat::WINDOWS_OFF, combat::WINDOW_RAVAGER_TAIL_SWEEP_0, combat::WINDOW_SIZE, combat::WINDOWS_COUNT},
             {"WINDOW_RAVAGER_TAIL_SWEEP_1", combat::WINDOW_RAVAGER_TAIL_SWEEP_1_OFF, combat::WINDOWS_OFF, combat::WINDOW_RAVAGER_TAIL_SWEEP_1, combat::WINDOW_SIZE, combat::WINDOWS_COUNT},
-            {"WINDOW_SWEEP_LUNGE_0", combat::WINDOW_SWEEP_LUNGE_0_OFF, combat::WINDOWS_OFF, combat::WINDOW_SWEEP_LUNGE_0, combat::WINDOW_SIZE, combat::WINDOWS_COUNT},
-            {"WINDOW_SWEEP_SWEEP_0", combat::WINDOW_SWEEP_SWEEP_0_OFF, combat::WINDOWS_OFF, combat::WINDOW_SWEEP_SWEEP_0, combat::WINDOW_SIZE, combat::WINDOWS_COUNT},
+            {"WINDOW_SWEEP_STOMP_0", combat::WINDOW_SWEEP_STOMP_0_OFF, combat::WINDOWS_OFF, combat::WINDOW_SWEEP_STOMP_0, combat::WINDOW_SIZE, combat::WINDOWS_COUNT},
+            {"WINDOW_SWEEP_GORE_0", combat::WINDOW_SWEEP_GORE_0_OFF, combat::WINDOWS_OFF, combat::WINDOW_SWEEP_GORE_0, combat::WINDOW_SIZE, combat::WINDOWS_COUNT},
+            {"WINDOW_SWEEP_GORE_1", combat::WINDOW_SWEEP_GORE_1_OFF, combat::WINDOWS_OFF, combat::WINDOW_SWEEP_GORE_1, combat::WINDOW_SIZE, combat::WINDOWS_COUNT},
             {"PATTERN_HEAVY_P_SPIN", combat::PATTERN_HEAVY_P_SPIN_OFF, combat::PATTERNS_OFF, combat::PATTERN_HEAVY_P_SPIN, combat::PATTERN_SIZE, combat::PATTERNS_COUNT},
             {"PATTERN_HEAVY_P_BITE", combat::PATTERN_HEAVY_P_BITE_OFF, combat::PATTERNS_OFF, combat::PATTERN_HEAVY_P_BITE, combat::PATTERN_SIZE, combat::PATTERNS_COUNT},
             {"PATTERN_LUNGE_P_PECK", combat::PATTERN_LUNGE_P_PECK_OFF, combat::PATTERNS_OFF, combat::PATTERN_LUNGE_P_PECK, combat::PATTERN_SIZE, combat::PATTERNS_COUNT},
@@ -287,7 +290,8 @@ void CombatPackSuite(TestRunner &runner) {
             {"PATTERN_RAVAGER_P_BITE", combat::PATTERN_RAVAGER_P_BITE_OFF, combat::PATTERNS_OFF, combat::PATTERN_RAVAGER_P_BITE, combat::PATTERN_SIZE, combat::PATTERNS_COUNT},
             {"PATTERN_RAVAGER_P_ENRAGED", combat::PATTERN_RAVAGER_P_ENRAGED_OFF, combat::PATTERNS_OFF, combat::PATTERN_RAVAGER_P_ENRAGED, combat::PATTERN_SIZE, combat::PATTERNS_COUNT},
             {"PATTERN_RAVAGER_P_SWEEP", combat::PATTERN_RAVAGER_P_SWEEP_OFF, combat::PATTERNS_OFF, combat::PATTERN_RAVAGER_P_SWEEP, combat::PATTERN_SIZE, combat::PATTERNS_COUNT},
-            {"PATTERN_SWEEP_P_SWEEP", combat::PATTERN_SWEEP_P_SWEEP_OFF, combat::PATTERNS_OFF, combat::PATTERN_SWEEP_P_SWEEP, combat::PATTERN_SIZE, combat::PATTERNS_COUNT},
+            {"PATTERN_SWEEP_P_STOMP", combat::PATTERN_SWEEP_P_STOMP_OFF, combat::PATTERNS_OFF, combat::PATTERN_SWEEP_P_STOMP, combat::PATTERN_SIZE, combat::PATTERNS_COUNT},
+            {"PATTERN_SWEEP_P_GORE", combat::PATTERN_SWEEP_P_GORE_OFF, combat::PATTERNS_OFF, combat::PATTERN_SWEEP_P_GORE, combat::PATTERN_SIZE, combat::PATTERNS_COUNT},
             {"GUARD_HEAVY_P_SPIN", combat::GUARD_HEAVY_P_SPIN_OFF, combat::GUARDS_OFF, combat::GUARD_HEAVY_P_SPIN, combat::GUARD_SIZE, combat::GUARDS_COUNT},
             {"GUARD_HEAVY_P_BITE", combat::GUARD_HEAVY_P_BITE_OFF, combat::GUARDS_OFF, combat::GUARD_HEAVY_P_BITE, combat::GUARD_SIZE, combat::GUARDS_COUNT},
             {"GUARD_LUNGE_P_PECK", combat::GUARD_LUNGE_P_PECK_OFF, combat::GUARDS_OFF, combat::GUARD_LUNGE_P_PECK, combat::GUARD_SIZE, combat::GUARDS_COUNT},
@@ -295,7 +299,8 @@ void CombatPackSuite(TestRunner &runner) {
             {"GUARD_RAVAGER_P_BITE", combat::GUARD_RAVAGER_P_BITE_OFF, combat::GUARDS_OFF, combat::GUARD_RAVAGER_P_BITE, combat::GUARD_SIZE, combat::GUARDS_COUNT},
             {"GUARD_RAVAGER_P_ENRAGED", combat::GUARD_RAVAGER_P_ENRAGED_OFF, combat::GUARDS_OFF, combat::GUARD_RAVAGER_P_ENRAGED, combat::GUARD_SIZE, combat::GUARDS_COUNT},
             {"GUARD_RAVAGER_P_SWEEP", combat::GUARD_RAVAGER_P_SWEEP_OFF, combat::GUARDS_OFF, combat::GUARD_RAVAGER_P_SWEEP, combat::GUARD_SIZE, combat::GUARDS_COUNT},
-            {"GUARD_SWEEP_P_SWEEP", combat::GUARD_SWEEP_P_SWEEP_OFF, combat::GUARDS_OFF, combat::GUARD_SWEEP_P_SWEEP, combat::GUARD_SIZE, combat::GUARDS_COUNT},
+            {"GUARD_SWEEP_P_STOMP", combat::GUARD_SWEEP_P_STOMP_OFF, combat::GUARDS_OFF, combat::GUARD_SWEEP_P_STOMP, combat::GUARD_SIZE, combat::GUARDS_COUNT},
+            {"GUARD_SWEEP_P_GORE", combat::GUARD_SWEEP_P_GORE_OFF, combat::GUARDS_OFF, combat::GUARD_SWEEP_P_GORE, combat::GUARD_SIZE, combat::GUARDS_COUNT},
             {"STEP_HEAVY_P_SPIN_0", combat::STEP_HEAVY_P_SPIN_0_OFF, combat::STEPS_OFF, combat::STEP_HEAVY_P_SPIN_0, combat::STEP_SIZE, combat::STEPS_COUNT},
             {"STEP_HEAVY_P_BITE_0", combat::STEP_HEAVY_P_BITE_0_OFF, combat::STEPS_OFF, combat::STEP_HEAVY_P_BITE_0, combat::STEP_SIZE, combat::STEPS_COUNT},
             {"STEP_LUNGE_P_PECK_0", combat::STEP_LUNGE_P_PECK_0_OFF, combat::STEPS_OFF, combat::STEP_LUNGE_P_PECK_0, combat::STEP_SIZE, combat::STEPS_COUNT},
@@ -303,7 +308,8 @@ void CombatPackSuite(TestRunner &runner) {
             {"STEP_RAVAGER_P_BITE_0", combat::STEP_RAVAGER_P_BITE_0_OFF, combat::STEPS_OFF, combat::STEP_RAVAGER_P_BITE_0, combat::STEP_SIZE, combat::STEPS_COUNT},
             {"STEP_RAVAGER_P_ENRAGED_0", combat::STEP_RAVAGER_P_ENRAGED_0_OFF, combat::STEPS_OFF, combat::STEP_RAVAGER_P_ENRAGED_0, combat::STEP_SIZE, combat::STEPS_COUNT},
             {"STEP_RAVAGER_P_SWEEP_0", combat::STEP_RAVAGER_P_SWEEP_0_OFF, combat::STEPS_OFF, combat::STEP_RAVAGER_P_SWEEP_0, combat::STEP_SIZE, combat::STEPS_COUNT},
-            {"STEP_SWEEP_P_SWEEP_0", combat::STEP_SWEEP_P_SWEEP_0_OFF, combat::STEPS_OFF, combat::STEP_SWEEP_P_SWEEP_0, combat::STEP_SIZE, combat::STEPS_COUNT},
+            {"STEP_SWEEP_P_STOMP_0", combat::STEP_SWEEP_P_STOMP_0_OFF, combat::STEPS_OFF, combat::STEP_SWEEP_P_STOMP_0, combat::STEP_SIZE, combat::STEPS_COUNT},
+            {"STEP_SWEEP_P_GORE_0", combat::STEP_SWEEP_P_GORE_0_OFF, combat::STEPS_OFF, combat::STEP_SWEEP_P_GORE_0, combat::STEP_SIZE, combat::STEPS_COUNT},
         };
         for (const MetaRecord &r : records) {
             t.assert(r.off, static_cast<int>(r.sectionOff) + r.idx * r.size, std::string("offset ") + r.name);
@@ -482,7 +488,7 @@ void CombatPackSuite(TestRunner &runner) {
         t.assert(b8(blob, static_cast<size_t>(combat::GUARD_HEAVY_P_BITE_OFF) + 1), 255, "expect heavy bite maxDist");
         t.assert(b8(blob, static_cast<size_t>(combat::GUARD_LUNGE_P_PECK_OFF) + 0), combat_expect::PATTERN_LUNGE_P_PECK_MIN_DIST, "expect lunge minDist");
         t.assert(b8(blob, static_cast<size_t>(combat::GUARD_LUNGE_P_PECK_OFF) + 1), combat_expect::PATTERN_LUNGE_P_PECK_MAX_DIST, "expect lunge maxDist");
-        t.assert(b8(blob, static_cast<size_t>(combat::GUARD_SWEEP_P_SWEEP_OFF) + 6), combat_expect::PATTERN_SWEEP_P_SWEEP_CHANCE, "expect sweep chance");
+        t.assert(b8(blob, static_cast<size_t>(combat::GUARD_SWEEP_P_STOMP_OFF) + 6), combat_expect::PATTERN_SWEEP_P_STOMP_CHANCE, "expect sweep stomp chance");
         suite.addTest(t);
     }
 
