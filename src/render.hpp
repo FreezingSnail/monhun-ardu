@@ -347,19 +347,27 @@ static inline uint24_t monsterSheet(int8_t kind) {
 
 // Zone part-art overlay (bead monhun-ardu-kt7.6): draw one breakable zone's
 // part from its 4-frame combatPartArtFrame sheet (east intact / east broken /
-// west intact / west broken) at the cached face-relative zone box origin -- the
-// same body anchor + DIR8 rotation the hit test uses (combatZoneContains), so
-// the overlay world rect and the hurt zone cannot drift. `zoneIdx` is the slot
+// west intact / west broken). The 32x24 beast sheets are 2-facing (east / west
+// mirror), so the baked part art sits at the authored box for east and at the
+// cell mirror (monster_w - ox - w) for west; the overlay snaps to that facing
+// frame -- it must NOT rotate with the DIR8 hit-test offset (combatFaceOffset):
+// rotating detaches the part from the baked body art whenever the beast faces
+// west/N/S/diagonals (doubled chicken head/legs, floating bull horns/hooves,
+// and the heavy tail parked above the body when the hunter passes under it).
+// The fx sign picks the same frame the body sheet uses (fx >= 0 east), so the
+// intact frame repaints the baked part exactly and the broken frame's shade-0
+// erase lands on it. The hurt zones keep their face-relative rotation
+// (combatZoneContains); only the paint is snapped. `zoneIdx` is the slot
 // (COMBAT_ZONE_HEAD/APPENDAGE) whose cached box gives the offset; `zoneBit` is
 // the matching zoneBroken bit. Every sheet's frame height is a multiple of 8 so
 // the SpritesU plus-mask page stride is exact.
 static void drawZonePart(const mh::Game &g, int16_t x, int16_t y, uint24_t sheet, uint8_t zoneIdx, uint8_t zoneBit) {
     const mh::CombatBox &zb = g.combat.zone[zoneIdx].box;
-    int32_t dx, dy;
-    mh::combatFaceOffset(g.monster.fx, g.monster.fy, zb, dx, dy);
+    const bool west = g.monster.fx < 0;
+    const int16_t ox = static_cast<int16_t>(west ? art_dims::monster_w - zb.ox - zb.w : zb.ox);
     const uint8_t broken = (g.combat.zoneBroken & zoneBit) ? 1 : 0;
-    const uint8_t f = mh::combatPartArtFrame(g.monster.fx < 0, broken);
-    sprDraw(sheet, static_cast<int16_t>(x + dx), static_cast<int16_t>(y + dy), FRAME(f));
+    const uint8_t f = mh::combatPartArtFrame(west, broken);
+    sprDraw(sheet, static_cast<int16_t>(x + ox), static_cast<int16_t>(y + zb.oy), FRAME(f));
 }
 
 // Mock drawMonster(): dead heap, feet, body, head + eyes, stun sparkle, and the

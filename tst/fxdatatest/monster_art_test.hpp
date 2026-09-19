@@ -8,9 +8,11 @@
 //   * east: the 24x16 fxtail_heavy overlay sits entirely LEFT of the 32x24 body
 //     sprite (body at screen x=40 -> tail x=16..39), so ink at x=16 proves the
 //     overlay is drawn offset at its appendage-zone anchor and x=15 stays clear
-//   * the zone anchor is the same face-relative box the hit test uses
-//     (combatFaceOffset), so the world rect and the hit zone cannot drift
-//   * west: the mirrored frame lands on the RIGHT of the body (x=64..87) while
+//   * the overlay snaps to the sprite facing frame, not the DIR8 hit-test
+//     rotation: for west it lands at the cell mirror (monster_w - ox - w), so
+//     the art stays glued to the baked part instead of detaching when the beast
+//     faces west/N/S/diagonals
+//   * west: the mirrored frame lands on the RIGHT of the body (x=72..95) while
 //     the east tail band is empty -- the facing mirror really flips
 //   * broken: the east/west stub frames keep ink at the body end and clear the
 //     tip, proving combatPartArtFrame() selects the stage frame
@@ -35,9 +37,11 @@ using namespace mh;
 // Monster cell draw origin for monster x=40, y=20, cam 0: (40, 20 + HUD_H=8).
 constexpr int16_t BX = 40;
 constexpr int16_t BY = 20 + HUD_H;   // 28
-// East intact tail band (zone origin 40-24, 28) and the west mirror (40+24, 28).
+// East intact tail band (zone origin 40-24, 28) and the west mirror snapped to
+// the sprite cell: 32 - ox - w = 32+24-24 = 32 (origin 40+32), so the west
+// overlay spans x=72..95 with its root (frame x0..9) against the sprite edge.
 constexpr int16_t E_TAIL_X = BX - 24;   // 16
-constexpr int16_t W_TAIL_X = BX + 24;   // 64
+constexpr int16_t W_TAIL_X = BX + 32;   // 72
 constexpr int16_t TAIL_Y = BY;          // 28
 constexpr int16_t TAIL_W = 24;
 constexpr int16_t TAIL_H = 16;
@@ -181,13 +185,22 @@ inline void test_monster_art(FxTest &test) {
     test.expectEq(bitAt(E_TAIL_X + 22, TAIL_Y + 5), 1, F("east tail root highlight plane2"));
     test.expectEq(bitAt(E_TAIL_X + 20, TAIL_Y + 9), 0, F("east tail body not white"));
 
-    // ---- west intact: west frame on the right, east band empty.
+    // ---- west intact: west frame on the right at the snapped cell mirror
+    // (32 - ox - w = 32), east band empty.
     setupBeast(g, MON_HEAVY, -16, 0);
     renderMonster(g, 0);
     test.expectEq(bitAt(W_TAIL_X + 23, TAIL_Y + 9), 1, F("west tail tip plane0"));
     test.expectEq(bitAt(W_TAIL_X + 24, TAIL_Y + 9), 0, F("west tail offset clear one right"));
     test.expectEq(bitAt(W_TAIL_X, TAIL_Y + 9), 1, F("west tail root plane0"));
     test.expectEq(countRegionBit(static_cast<uint8_t>(E_TAIL_X), static_cast<uint8_t>(TAIL_Y), TAIL_W, TAIL_H), 0, F("west facing east band empty"));
+
+    // ---- facing S (hunter under the tail): the overlay snaps to the east-frame
+    // sprite (fx=0 -> east), so the tail stays behind the body instead of
+    // rotating 24 px above it.
+    setupBeast(g, MON_HEAVY, 0, 16);
+    renderMonster(g, 0);
+    test.expectEq(bitAt(E_TAIL_X, TAIL_Y + 9), 1, F("south-facing tail stays east plane0"));
+    test.expectEq(countRegionBit(static_cast<uint8_t>(BX), static_cast<uint8_t>(BY - 24), TAIL_W, TAIL_H), 0, F("south-facing no tail above body"));
 
     // ---- broken stages: stub at the body end, tip cleared.
     setupBeast(g, MON_HEAVY, 16, 0);
@@ -364,11 +377,12 @@ inline void test_monster_art(FxTest &test) {
     test.expectEq(bitAt(BX + 30, BY + 3), 1, F("bull gore west tail raised"));
 
     // ---- kt7.6 breakable-zone part overlays: at rest (no attack sheet) each
-    // breakable demo-roster zone draws its part overlay at the cached zone box
-    // origin -- the same face-relative world rect the hit test uses -- so broken
-    // zones erase the baked part and show the damaged variant. The zone box
-    // origins are lunge head (18,0), lunge appendage (9,0), sweep head (17,-4)
-    // and sweep appendage (4,12); west rotates them (dx -ox, dy -oy).
+    // breakable demo-roster zone draws its part overlay snapped to the sprite
+    // facing frame (east at the authored box, west at the cell mirror
+    // monster_w - ox - w), so the broken zone's shade-0 erase lands on the
+    // baked part. The zone box origins are lunge head (18,0), lunge appendage
+    // (9,0), sweep head (17,-4) and sweep appendage (4,12); west mirrors them
+    // about the 32-px cell (32 - ox - w), never rotating with the DIR8 facing.
 
     // Chicken head east: overlay at (BX+18, BY), intact white head, broken
     // erases it and drops the dark stump.
@@ -382,11 +396,16 @@ inline void test_monster_art(FxTest &test) {
     renderMonster(g, 0);
     test.expectEq(bitAt(BX + 19, BY + 2), 1, F("chicken broken neck stump plane0"));
 
-    // Chicken head west: the rotated box puts the overlay left of the cell, so
-    // only the overlay can ink that band; east facing leaves it clear.
+    // Chicken head west: snapped to the cell mirror (origin 32-18-11 = 3), so
+    // the overlay repaints the baked west head in-cell; the band left of the
+    // cell the old rotation inked stays clear.
     setupBeast(g, MON_LUNGE, -16, 0);
     renderMonster(g, 2);
-    test.expectEq(countRegionBit(static_cast<uint8_t>(BX - 18), static_cast<uint8_t>(BY), 11, 8) > 0 ? 1 : 0, 1, F("chicken head west overlay white"));
+    test.expectEq(countRegionBit(static_cast<uint8_t>(BX + 3), static_cast<uint8_t>(BY), 11, 8) > 0 ? 1 : 0, 1, F("chicken head west overlay white"));
+    test.expectEq(countRegionBit(static_cast<uint8_t>(BX - 18), static_cast<uint8_t>(BY), 11, 8), 0, F("chicken head west no rotated band"));
+    g.combat.zoneBroken = COMBAT_ZONE_HEAD_BIT;
+    renderMonster(g, 2);
+    test.expectEq(countRegionBit(static_cast<uint8_t>(BX + 3), static_cast<uint8_t>(BY), 11, 8), 0, F("chicken broken west head erased"));
     setupBeast(g, MON_LUNGE, 16, 0);
     renderMonster(g, 2);
     test.expectEq(countRegionBit(static_cast<uint8_t>(BX - 18), static_cast<uint8_t>(BY), 11, 8), 0, F("chicken head east no west band"));
@@ -400,10 +419,15 @@ inline void test_monster_art(FxTest &test) {
     test.expectEq(bitAt(BX + 11, BY + 20), 0, F("chicken broken shank erased"));
     test.expectEq(bitAt(BX + 11, BY + 13), 1, F("chicken broken thigh stump plane0"));
 
-    // Chicken legs west: rotated box left of the cell; only the overlay inks it.
+    // Chicken legs west: snapped mirror (origin 32-9-9 = 14); broken erases the
+    // baked west shank at (BX+19, BY+20) and drops the stump at (BX+19, BY+13).
     setupBeast(g, MON_LUNGE, -16, 0);
     renderMonster(g, 0);
-    test.expectEq(bitAt(BX - 9, BY + 21), 1, F("chicken legs west foot at zone origin"));
+    test.expectEq(bitAt(BX + 19, BY + 20), 1, F("chicken legs west shank ink"));
+    g.combat.zoneBroken = COMBAT_ZONE_APPENDAGE_BIT;
+    renderMonster(g, 0);
+    test.expectEq(bitAt(BX + 19, BY + 20), 0, F("chicken broken west shank erased"));
+    test.expectEq(bitAt(BX + 19, BY + 13), 1, F("chicken broken west thigh stump plane0"));
 
     // Bull head east: overlay at (BX+17, BY-4) so the white horn mid lands at
     // (BX+23, BY+5); broken erases the horn band and keeps the head top.
@@ -418,10 +442,18 @@ inline void test_monster_art(FxTest &test) {
     renderMonster(g, 0);
     test.expectEq(bitAt(BX + 22, BY + 8), 1, F("bull broken horn stump plane0"));
 
-    // Bull head west: rotated box above-left of the cell; east leaves it clear.
+    // Bull head west: snapped mirror (origin 32-17-12 = 3) keeps the white horn
+    // at (BX+5, BY+4) and the head top at (BX+3, BY+10); the old rotated band
+    // above-left of the cell stays clear.
     setupBeast(g, MON_SWEEP, -16, 0);
     renderMonster(g, 2);
-    test.expectEq(countRegionBit(static_cast<uint8_t>(BX - 17), static_cast<uint8_t>(BY + 4), 12, 16) > 0 ? 1 : 0, 1, F("bull head west overlay white"));
+    test.expectEq(bitAt(BX + 5, BY + 4), 1, F("bull head west horn white"));
+    test.expectEq(bitAt(BX + 3, BY + 10), 1, F("bull head west head top white"));
+    test.expectEq(countRegionBit(static_cast<uint8_t>(BX - 17), static_cast<uint8_t>(BY + 4), 12, 16), 0, F("bull head west no rotated band"));
+    g.combat.zoneBroken = COMBAT_ZONE_HEAD_BIT;
+    renderMonster(g, 2);
+    test.expectEq(bitAt(BX + 5, BY + 4), 0, F("bull broken west horn erased"));
+    test.expectEq(bitAt(BX + 3, BY + 10), 1, F("bull broken west head top stays"));
     setupBeast(g, MON_SWEEP, 16, 0);
     renderMonster(g, 2);
     test.expectEq(countRegionBit(static_cast<uint8_t>(BX - 17), static_cast<uint8_t>(BY + 4), 12, 16), 0, F("bull head east no west band"));
@@ -435,14 +467,31 @@ inline void test_monster_art(FxTest &test) {
     test.expectEq(bitAt(BX + 5, BY + 21), 0, F("bull broken shank erased"));
     test.expectEq(bitAt(BX + 5, BY + 18), 1, F("bull broken leg stump plane0"));
 
-    // Bull hooves west: rotated box above-left of the cell; only the overlay
-    // can ink that band, and east facing leaves it clear.
+    // Bull hooves west: snapped mirror (origin 32-4-20 = 8); broken erases the
+    // baked west far leg at (BX+24, BY+21) and drops the stump at (BX+24, BY+18).
     setupBeast(g, MON_SWEEP, -16, 0);
     renderMonster(g, 0);
-    test.expectEq(countRegionBit(static_cast<uint8_t>(BX - 4), static_cast<uint8_t>(BY - 12), 20, 16) > 0 ? 1 : 0, 1, F("bull hooves west overlay ink"));
+    test.expectEq(bitAt(BX + 24, BY + 21), 1, F("bull hooves west far leg ink"));
+    g.combat.zoneBroken = COMBAT_ZONE_APPENDAGE_BIT;
+    renderMonster(g, 0);
+    test.expectEq(bitAt(BX + 24, BY + 21), 0, F("bull broken west shank erased"));
+    test.expectEq(bitAt(BX + 24, BY + 18), 1, F("bull broken west leg stump plane0"));
+    test.expectEq(countRegionBit(static_cast<uint8_t>(BX - 4), static_cast<uint8_t>(BY - 12), 20, 16), 0, F("bull hooves west no rotated band"));
     setupBeast(g, MON_SWEEP, 16, 0);
     renderMonster(g, 0);
     test.expectEq(countRegionBit(static_cast<uint8_t>(BX - 4), static_cast<uint8_t>(BY - 12), 20, 16), 0, F("bull hooves east no west band"));
+
+    // Facing N/S must not rotate the parts off the 2-facing sprite (fx=0 keeps
+    // the east positions): the chicken head stays at (BX+18..29) and the bull
+    // horns stay at (BX+17, BY-4), with the bands the rotation would ink clear.
+    setupBeast(g, MON_LUNGE, 0, 16);
+    renderMonster(g, 2);
+    test.expectEq(countRegionBit(static_cast<uint8_t>(BX + 18), static_cast<uint8_t>(BY), 11, 8) > 0 ? 1 : 0, 1, F("chicken head south stays east"));
+    test.expectEq(countRegionBit(static_cast<uint8_t>(BX), static_cast<uint8_t>(BY + 18), 11, 8), 0, F("chicken head south no rotated band"));
+
+    setupBeast(g, MON_SWEEP, 0, 16);
+    renderMonster(g, 2);
+    test.expectEq(countRegionBit(static_cast<uint8_t>(BX + 4), static_cast<uint8_t>(BY + 17), 12, 16), 0, F("bull horns south no rotated band"));
 }
 
 }   // namespace monsterart

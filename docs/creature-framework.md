@@ -293,8 +293,13 @@ Phases (each gated by `make test` + `fxtest-headless` parity 660/0):
   fallback creature).
 - Broken-part art path (gen-art code-mock vs hand PNG): **done for the demo
   roster** (bead kt7.6). Every breakable zone on LUNGE/SWEEP/HEAVY draws its
-  part from a 4-frame `combatPartArtFrame` gen-art sheet at the cached
-  face-relative zone box origin (`drawZonePart` in `src/render.hpp`):
+  part from a 4-frame `combatPartArtFrame` gen-art sheet snapped to the
+  sprite facing frame (`drawZonePart` in `src/render.hpp`): east at the
+  authored zone box, west at the cell mirror (`monster_w - ox - w`) -- the
+  overlay does NOT rotate with the DIR8 hit-test offset, because the 32x24
+  beast sheets are 2-facing and a rotated origin detaches the part from the
+  baked body art (doubled chicken parts, floating bull horns/hooves, tail
+  parked above the body when the hunter passes under the HEAVY):
   `fxhead_chicken`/`fxlegs_chicken` (lunge head/appendage),
   `fxhead_bull`/`fxhooves_bull` (sweep horns/hooves) and the 4t4
   `fxtail_heavy` (heavy tail). Intact frames repaint the baked part; broken
