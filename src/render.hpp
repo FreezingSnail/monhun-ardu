@@ -466,25 +466,29 @@ __attribute__((noinline)) static void drawRoom(const Game &g, int16_t camX, int1
 // two shipped sheets resolve (tent in images/blocks, the training pole in the
 // blocks section). Static decoration only -- props have no hit test.
 static inline uint24_t propSheet(uint8_t sheet) {
-    if (sheet == zone::SHEET_MH_MAP_TENT)
-        return mh_map_tent;
-    return fxpole;   // zone::SHEET_FXPOLE
+    return sheet ? fxpole : mh_map_tent;   // SHEET_MH_MAP_TENT 0, else SHEET_FXPOLE
 }
 
 static void drawProps(const Game &g, int16_t camX, int16_t camY) {
+    // Hoist the camera->screen add once per call; a prop loop otherwise repeats
+    // the same -camX / +HUD_H-camY per record.
+    const int16_t px = static_cast<int16_t>(-camX);
+    const int16_t oy = static_cast<int16_t>(HUD_H - camY);
     for (uint8_t i = 0; i < g.roomPropCount; i++) {
         const ZoneProp p = zonePropRead(static_cast<uint8_t>(g.roomFirstProp + i));
-        sprDraw(propSheet(p.sheet), static_cast<int16_t>(p.x - camX), static_cast<int16_t>(p.y - camY + HUD_H), FRAME(p.frame));
+        sprDraw(propSheet(p.sheet), static_cast<int16_t>(p.x + px), static_cast<int16_t>(p.y + oy), FRAME(p.frame));
     }
 }
 
 // Door-cross black wipe: loadRoom arms Game::fade (FADE_TICKS) and stepGame
-// decays it. A cheap arena blk() on every plane -- no cart traffic while
-// fading. Covers the scene but not the HUD strip.
+// decays it. Collapsed to the cheapest wipe that still covers a door cross:
+// a full-arena shade-0 blk() on every plane, no per-tick height math and no
+// cart traffic. The 4-tick arm/decay times the blackout; covers the scene but
+// not the HUD strip (minY clip).
 static inline void drawFade(const Game &g) {
     if (g.fade == 0)
         return;
-    blk(0, HUD_H, SCREEN_W, static_cast<int16_t>(g.fade * (ARENA_H / FADE_TICKS)), 0);
+    blk(0, HUD_H, SCREEN_W, ARENA_H, 0);
 }
 #endif   // MH_ROOM_BOUNDS
 

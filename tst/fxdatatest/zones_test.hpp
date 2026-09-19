@@ -189,6 +189,14 @@ inline void test_zones(FxTest &test) {
     test.expectEq(countPageEq(0, 0xFF), 128, F("fade spares HUD page"));
     for (uint8_t p = 1; p <= 7; p++)
         test.expectEq(countPageEq(p, 0x00), 128, F("fade clears arena page"));
+    // fie.9 collapsed the wipe to a constant full-arena shade-0 blk: any armed
+    // tick clears the whole arena band (was a growing wipe), HUD still spared.
+    fillFb(0xFF);
+    g.fade = 1;
+    drawFade(g);
+    test.expectEq(countPageEq(0, 0xFF), 128, F("armed fade spares HUD page"));
+    for (uint8_t p = 1; p <= 7; p++)
+        test.expectEq(countPageEq(p, 0x00), 128, F("armed fade covers the arena"));
     g.fade = 0;
     fillFb(0xFF);
     drawFade(g);

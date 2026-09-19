@@ -139,17 +139,24 @@ inline ZoneHeal zoneHealRead(uint8_t i) {
     return v;
 }
 
+// Prop records are tiny (9 B) and read together, so fetch the whole record in
+// one FX transaction (one seek + 9 byte reads) instead of seven per-field
+// mhFxRead* seeks with their own offset math. The unpack below is the packed
+// little-endian ABI (zone_meta.hpp PROP_*_OFF); the local buffer replaces the
+// per-field cart reads, so the render path does no per-field seeking.
 inline ZoneProp zonePropRead(uint8_t i) {
     using namespace zdetail;
     const uint16_t b = static_cast<uint16_t>(zone::PROPS_OFF + i * zone::PROP_SIZE);
+    uint8_t r[zone::PROP_SIZE];
+    mhFxReadBytes(reinterpret_cast<const uint8_t *>(zoneCartAddr(b)), r, zone::PROP_SIZE);
     ZoneProp v;
-    v.type = zoneReadU8(b + zone::PROP_TYPE_OFF);
-    v.x = zoneReadU16(b + zone::PROP_X_OFF);
-    v.y = zoneReadU16(b + zone::PROP_Y_OFF);
-    v.sheet = zoneReadU8(b + zone::PROP_SHEET_OFF);
-    v.frame = zoneReadU8(b + zone::PROP_FRAME_OFF);
-    v.w = zoneReadU8(b + zone::PROP_W_OFF);
-    v.h = zoneReadU8(b + zone::PROP_H_OFF);
+    v.type = r[zone::PROP_TYPE_OFF];
+    v.x = static_cast<uint16_t>(r[zone::PROP_X_OFF] | (static_cast<uint16_t>(r[zone::PROP_X_OFF + 1]) << 8));
+    v.y = static_cast<uint16_t>(r[zone::PROP_Y_OFF] | (static_cast<uint16_t>(r[zone::PROP_Y_OFF + 1]) << 8));
+    v.sheet = r[zone::PROP_SHEET_OFF];
+    v.frame = r[zone::PROP_FRAME_OFF];
+    v.w = r[zone::PROP_W_OFF];
+    v.h = r[zone::PROP_H_OFF];
     return v;
 }
 
