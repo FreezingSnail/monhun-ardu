@@ -371,6 +371,18 @@ static void drawMonster(const mh::Game &g, int16_t camX, int16_t camY) {
     // flash frame (the tell + telegraph core carry the timing).
     const bool spinning = (m.state == mh::MS_WINDUP || m.state == mh::MS_ATTACK) && m.atkIdx != mh::COMBAT_NO_ATTACK && mh::combatFacingLockV(g.combat.attack.facing);
     const bool spinSheet = spinning && g.monsterKind == mh::MON_HEAVY;
+    // Chicken attack overlay (bead monhun-ardu-nch.8): during the peck/leap
+    // windup+attack the whole chicken is drawn from the 4-frame 32x24
+    // fxchickenatk sheet instead of the generic BEAST_POSES coil/lunge frame, so
+    // both attacks read as bespoke art. MON_LUNGE is the chicken roster kind
+    // (monsterCreatureId maps it to data/creatures/lunge.json). Frame order is
+    // [peck E, peck W, leap E, leap W]: ordinal 0 = peck, 1 = leap, taken from
+    // the attack index relative to the creature's first authored attack so the
+    // mapping keeps following the JSON attack order without a literal index;
+    // frame = (ordinal << 1) | (west). Windup and attack share the pose (the
+    // overlay has no windup-flash frame; the tell + telegraph carry the timing,
+    // same trade as fxtailspin). Cosmetic only: no hit-test or window change.
+    const bool chickenAtk = g.monsterKind == mh::MON_LUNGE && (m.state == mh::MS_WINDUP || m.state == mh::MS_ATTACK) && m.atkIdx != mh::COMBAT_NO_ATTACK;
     uint8_t f;
     if (g.monsterKind == mh::MON_RAVAGER) {
         // Legacy fxmonster sheet: idle/recover/flash/dead x facing.
@@ -411,6 +423,13 @@ static void drawMonster(const mh::Game &g, int16_t camX, int16_t camY) {
         const uint8_t start8 = static_cast<uint8_t>(fp::dirIndexFromDelta(m.fx, m.fy)) & 7;
         const uint8_t spinF = (m.state == mh::MS_WINDUP) ? start8 : mh::spinSheetFrame(start8, m.t, static_cast<int16_t>(g.combat.attack.active));
         sprDraw(fxtailspin, static_cast<int16_t>(x + (w >> 1) - 20), static_cast<int16_t>(y + (h >> 1) - 20), FRAME(spinF));
+    } else if (chickenAtk) {
+        // Ordinal from the creature's first attack (peck; leap is +1 in the
+        // authored attack order): no literal record index, and the sheet frame
+        // selects facing with the low bit.
+        const uint8_t ordinal = static_cast<uint8_t>(m.atkIdx - mh::combatCreatureFirstAttack(combat::CREATURE_LUNGE));
+        const uint8_t cf = static_cast<uint8_t>((ordinal << 1) | (m.fx < 0 ? 1 : 0));
+        sprDraw(fxchickenatk, x, y, FRAME(cf));
     } else {
         sprDraw(monsterSheet(g.monsterKind), x, y, FRAME(f));
     }

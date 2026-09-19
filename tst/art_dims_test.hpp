@@ -486,6 +486,70 @@ void testMonsterSheets(Test &t) {
     t.assert(planeAt(longtail, 2, 28, 11), 0, "longtail jaw not white");
 }
 
+// ------------------------------------------- chicken attack overlay (nch.8)
+
+// fxchickenatk is the chicken's peck/leap overlay: a 4-frame 32x24 sheet in
+// [peck E, peck W, leap E, leap W] order, drawn during both windup and attack.
+// The peck leans the body forward and drives the head/beak down onto the
+// target; the leap lifts the body 2 px and folds the legs (feet at y18 vs the
+// planted y21). West frames must be the exact horizontal mirror of east.
+void testChickenAttackSheet(Test &t) {
+    std::cout << "---------- chicken attack sheet ----------" << std::endl;
+    Blob atk;
+    if (!parseBlob("fxchickenatk", atk, t))
+        return;
+    t.assert(atk.w, art_dims::chickenatk_frame_w, "chickenatk blob frame w");
+    t.assert(atk.h, art_dims::chickenatk_frame_h, "chickenatk blob frame h");
+    t.assert(atk.frames, art_dims::chickenatk_frames, "chickenatk blob frames");
+    t.assert(art_dims::chickenatk_frame_w, 32, "chickenatk frame w");
+    t.assert(art_dims::chickenatk_frame_h, 24, "chickenatk frame h");
+    t.assert(art_dims::chickenatk_frames, 4, "chickenatk frames");
+
+    // Frame 0 peck E: feet stay planted (dark ink at y21) and the head/beak are
+    // driven down the right edge; the clear raised-body row proves this is not
+    // the leap. The eye/beak are the body-tone `lo` (BLACK for the dark idle
+    // body), so they pin as opaque erasers: mask 1, plane 0 clear.
+    t.assert(planeAtF(atk, 0, 0, 12, 21), 1, "peck foot planted plane0");
+    t.assert(maskAtF(atk, 0, 10, 2), 0, "peck body not raised");
+    t.assert(maskAtF(atk, 0, 30, 6), 1, "peck beak ink");
+    t.assert(planeAtF(atk, 0, 0, 30, 6), 0, "peck beak black eraser");
+    t.assert(maskAtF(atk, 0, 30, 7), 1, "peck down beak row ink");
+    t.assert(maskAtF(atk, 0, 27, 2), 1, "peck eye ink");
+    t.assert(planeAtF(atk, 0, 0, 27, 2), 0, "peck eye black eraser");
+    t.assert(planeAtF(atk, 0, 2, 30, 1), 1, "peck head white plane2");
+    t.assert(planeAtF(atk, 0, 2, 2, 1), 0, "peck head not on the tail side");
+
+    // Frame 2 leap E: body raised (ink at y2), legs tucked (ink at y18), the
+    // planted y21 row clear, and no down-driven beak at the peck pixel.
+    t.assert(planeAtF(atk, 2, 0, 10, 2), 1, "leap raised body plane0");
+    t.assert(planeAtF(atk, 2, 0, 12, 18), 1, "leap tucked foot plane0");
+    t.assert(maskAtF(atk, 2, 12, 21), 0, "leap planted row clear");
+    t.assert(maskAtF(atk, 2, 30, 7), 0, "leap no down beak");
+
+    // West frames are the exact horizontal mirrors (1<->0, 3<->2).
+    auto mirrored = [&](int a, int b) {
+        for (int shade = 0; shade < 3; shade++)
+            for (int page = 0; page < 3; page++)
+                for (int x = 0; x < atk.w; x++) {
+                    if (pixelData(atk, a, shade, x, page) != pixelData(atk, b, shade, atk.w - 1 - x, page))
+                        return false;
+                    if (pixelMask(atk, a, shade, x, page) != pixelMask(atk, b, shade, atk.w - 1 - x, page))
+                        return false;
+                }
+        return true;
+    };
+    t.assert(mirrored(0, 1) ? 1 : 0, 1, "chickenatk west peck mirrors east");
+    t.assert(mirrored(2, 3) ? 1 : 0, 1, "chickenatk west leap mirrors east");
+
+    // All four frames differ, so both attacks and both facings are distinct.
+    uint32_t h[4];
+    for (int i = 0; i < 4; i++)
+        h[i] = blobFrameHash(atk, i);
+    for (int i = 0; i < 4; i++)
+        for (int j = i + 1; j < 4; j++)
+            t.assert(h[i] != h[j] ? 1 : 0, 1, "chickenatk frames distinct");
+}
+
 // ------------------------------------------- heavy long-tail overlay (4t4)
 
 // fxtail_heavy is the HEAVY appendage overlay: 24x16x4 in combatPartArtFrame
@@ -806,6 +870,11 @@ void ArtDimsSuite(TestRunner &runner) {
     {
         Test t("heavy tail overlay is a 24x16 mirror sheet");
         testHeavyTail(t);
+        suite.addTest(t);
+    }
+    {
+        Test t("chicken attack overlay is a 4-frame peck/leap mirror sheet");
+        testChickenAttackSheet(t);
         suite.addTest(t);
     }
     {

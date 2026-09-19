@@ -123,6 +123,25 @@ static void setupSpinWindup(Game &g, uint8_t window, int8_t fx, int8_t fy = 0) {
     g.combat.attack.win = combatWindowRead(window);   // full box, no shrink
 }
 
+// nch.8: park the chicken (MON_LUNGE) in a peck/leap WINDUP or ATTACK so
+// drawMonster swaps the generic BEAST_POSES frame for the 4-frame fxchickenatk
+// sheet. The cached window box is shrunk to 1x1 at the body centre (like
+// setupSpinAttack) so the telegraph core stays inside the centre band the
+// facing checks exclude; the frame pick depends only on atkIdx + m.fx.
+static void setupChickenAttack(Game &g, uint8_t atk, uint8_t state, int8_t fx) {
+    setupBeast(g, MON_LUNGE, fx, 0);
+    Monster &m = g.monster;
+    m.state = state;
+    m.atkIdx = atk;
+    m.windupMax = 22;
+    m.t = 20;   // windup flash phase, ignored by the overlay
+    g.combat.attack.win = combatWindowRead(atk == combat::ATTACK_LUNGE_LEAP ? combat::WINDOW_LUNGE_LEAP_0 : combat::WINDOW_LUNGE_PECK_0);
+    g.combat.attack.win.box.ox = 0;
+    g.combat.attack.win.box.oy = 0;
+    g.combat.attack.win.box.w = 1;
+    g.combat.attack.win.box.h = 1;
+}
+
 inline void test_monster_art(FxTest &test) {
     arduboy.startGray();
 
@@ -247,6 +266,43 @@ inline void test_monster_art(FxTest &test) {
     renderMonster(g, 2);
     test.expectEq(countRegionBit(40, 46, 40, 16) > 0 ? 1 : 0, 1, F("windup away south head bottom"));
     test.expectEq(countRegionBit(40, 22, 40, 16), 0, F("windup away south top band clear"));
+
+    // ---- nch.8 chicken attack overlay: during the peck/leap windup+attack
+    // drawMonster swaps the generic BEAST_POSES coil/lunge frame for the
+    // 4-frame fxchickenatk sheet, frame = (ordinal << 1) | (west). The peck
+    // keeps the feet planted (y21) and drives the beak down the facing edge;
+    // the leap raises the body to y2 and tucks the feet to y18 with the planted
+    // row clear. Facing moves the all-WHITE head to the facing side (the only
+    // white ink in the cell; tail/legs are dark/light), so plane 2 reads it.
+    setupChickenAttack(g, combat::ATTACK_LUNGE_PECK, MS_WINDUP, 16);   // peck E
+    renderMonster(g, 0);
+    test.expectEq(bitAt(BX + 12, BY + 21), 1, F("chicken peck east foot planted"));
+    test.expectEq(bitAt(BX + 10, BY + 2), 0, F("chicken peck east body not raised"));
+    test.expectEq(bitAt(BX + 27, BY + 2), 0, F("chicken peck east eye black"));
+    renderMonster(g, 2);
+    test.expectEq(bitAt(BX + 30, BY + 1), 1, F("chicken peck east head white forward"));
+    test.expectEq(countRegionBit(static_cast<uint8_t>(BX), static_cast<uint8_t>(BY), 12, 20), 0, F("chicken peck east left band clear"));
+
+    setupChickenAttack(g, combat::ATTACK_LUNGE_LEAP, MS_ATTACK, 16);   // leap E
+    renderMonster(g, 0);
+    test.expectEq(bitAt(BX + 10, BY + 2), 1, F("chicken leap east body raised"));
+    test.expectEq(bitAt(BX + 12, BY + 18), 1, F("chicken leap east feet tucked"));
+    test.expectEq(bitAt(BX + 12, BY + 21), 0, F("chicken leap east planted row clear"));
+    renderMonster(g, 2);
+    test.expectEq(bitAt(BX + 30, BY + 1), 0, F("chicken leap east head not forward"));
+
+    setupChickenAttack(g, combat::ATTACK_LUNGE_PECK, MS_WINDUP, -16);   // peck W
+    renderMonster(g, 0);
+    test.expectEq(bitAt(BX + 18, BY + 21), 1, F("chicken peck west foot planted"));
+    test.expectEq(bitAt(BX + 16, BY + 21), 0, F("chicken peck west foot gap clear"));
+    renderMonster(g, 2);
+    test.expectEq(countRegionBit(static_cast<uint8_t>(BX + 20), static_cast<uint8_t>(BY), 12, 20), 0, F("chicken peck west right band clear"));
+    test.expectEq(countRegionBit(static_cast<uint8_t>(BX), static_cast<uint8_t>(BY), 12, 20) > 0 ? 1 : 0, 1, F("chicken peck west head left"));
+
+    setupChickenAttack(g, combat::ATTACK_LUNGE_LEAP, MS_ATTACK, -16);   // leap W
+    renderMonster(g, 0);
+    test.expectEq(bitAt(BX + 18, BY + 18), 1, F("chicken leap west feet tucked"));
+    test.expectEq(bitAt(BX + 18, BY + 21), 0, F("chicken leap west planted row clear"));
 }
 
 }   // namespace monsterart

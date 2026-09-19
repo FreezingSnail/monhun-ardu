@@ -312,6 +312,13 @@ def icon_defs(dims):
         # locked tail_spin attack. Frame origin is the body centre.
         {"id": "tailspin", "w": 40, "h": 40, "anchor": "body centre",
          "frames": tailspin_frames()},
+        # Chicken attack sheet (bead monhun-ardu-nch.8): 4 frames 32x24 in the
+        # order [peck E, peck W, leap E, leap W]. Drawn instead of the generic
+        # BEAST_POSES frame during the chicken's peck/leap WINDUP+ATTACK. Frame
+        # origin is the body top-left like the normal 32x24 beast sheet; height
+        # 24 is a multiple of 8 so the SpritesU plus-mask page stride is exact.
+        {"id": "chickenatk", "w": 32, "h": 24, "anchor": "body top-left",
+         "frames": chickenatk_frames()},
     ] + hud_defs()
 
 
@@ -667,6 +674,123 @@ def bull_frames():
 
 def longtail_frames():
     return _beast_frames(_longtail_east, _longtail_dead)
+
+
+# ---- Chicken attack sheet (bead monhun-ardu-nch.8). The whole chicken is drawn
+# from this 4-frame 32x24 sheet during the peck/leap windup+attack instead of
+# the generic BEAST_POSES coil/lunge frame, so both attacks read as bespoke
+# poses. Frame order is [peck E, peck W, leap E, leap W]: the peck thrusts the
+# head/neck forward (head shifted ~+5 px, neck stretched, body leaned 1 px) and
+# the leap raises the body ~2 px with the legs folded/tucked (knees up, shanks
+# shortened) and the plumes/wing raised. Frames are authored east and mirrored
+# by the _beast_frame put wrapper, exactly like the idle/windup/attack frames.
+# Windup and attack share the pose: the overlay has no windup-flash frame, so
+# the telegraph window + tell carry the timing (same trade as fxtailspin).
+def _chicken_attack_east(put, body, head, leap):
+    hi, lo = _beast_tone(body)
+
+    if leap:
+        # Plumes/wing raised with the body (~2 px). The head stays low so the
+        # white comb remains readable against the top of the cell.
+        put(0, 1, 6, 3, body)         # tail plume, upper
+        put(0, 4, 8, 4, body)         # tail plume, middle
+        put(1, 8, 6, 3, body)         # tail plume, lower
+        put(0, 1, 3, 1, hi)
+        put(0, 4, 3, 1, hi)
+        put(1, 8, 3, 1, hi)
+
+        put(6, 2, 15, 10, body)       # raised body
+        put(15, 3, 5, 7, hi)          # chest highlight
+        put(7, 10, 12, 2, lo)         # belly shadow
+        put(7, 4, 10, 6, body)        # wing panel raised
+        put(7, 4, 9, 1, hi)           # wing top
+        put(8, 7, 9, 1, lo)           # wing feather row 1
+        put(8, 9, 8, 1, lo)           # wing feather row 2
+
+        put(17, 0, 5, 4, body)        # neck
+        put(18, 0, 11, 6, head)       # head tucked into the raised body
+        put(20, 0, 3, 1, head)        # comb front
+        put(24, 0, 2, 1, head)        # comb back
+        put(28, 3, 4, 3, lo)          # beak
+        put(28, 6, 2, 2, lo)          # wattle
+        put(23, 2, 2, 2, BLACK)       # eye
+
+        # Legs folded/tucked: knees up, shanks shortened, feet lifted off the
+        # planted y21 row to y18 so the leap reads as airborne.
+        put(11, 11, 2, 3, DARK)       # near thigh
+        put(10, 13, 4, 2, DARK)       # near knee
+        put(11, 15, 2, 2, DARK)       # near shank
+        put(11, 15, 1, 2, LIGHT)      # near shank highlight
+        put(10, 18, 5, 1, DARK)       # near foot
+        put(10, 17, 1, 1, DARK)       # near rear toe
+        put(11, 18, 2, 1, LIGHT)      # near foot front highlight
+        put(16, 11, 2, 3, DARK)       # far thigh
+        put(15, 13, 4, 2, DARK)       # far knee
+        put(16, 15, 2, 2, DARK)       # far shank
+        put(16, 15, 1, 2, LIGHT)      # far shank highlight
+        put(15, 18, 5, 1, DARK)       # far foot
+        put(19, 17, 1, 1, DARK)       # far rear toe
+        put(18, 18, 2, 1, LIGHT)      # far foot front highlight
+        return
+
+    # Peck: body leans 1 px forward, the neck stretches and the head thrusts
+    # ~+5 px forward and down onto the target. The beak/wattle are driven below
+    # the head and held inside the cell edge so they stay readable.
+    put(0, 3, 6, 3, body)             # tail plume, upper
+    put(0, 6, 8, 4, body)             # tail plume, middle
+    put(1, 10, 6, 3, body)            # tail plume, lower
+    put(0, 3, 3, 1, hi)
+    put(0, 6, 3, 1, hi)
+    put(1, 10, 3, 1, hi)
+
+    put(7, 4, 15, 10, body)           # body leaned 1 px
+    put(16, 5, 5, 7, hi)              # chest highlight
+    put(8, 12, 12, 2, lo)             # belly shadow
+    put(8, 6, 10, 6, body)            # wing panel
+    put(8, 6, 9, 1, hi)               # wing top
+    put(9, 9, 9, 1, lo)               # wing feather row 1
+    put(9, 11, 8, 1, lo)              # wing feather row 2
+
+    put(19, 2, 8, 4, body)            # neck stretched forward
+    put(23, 1, 9, 6, head)            # head thrust forward
+    put(25, 0, 3, 1, head)            # comb front
+    put(29, 0, 2, 1, head)            # comb back
+    put(29, 5, 3, 3, lo)              # beak driven down onto the target
+    put(29, 8, 2, 2, lo)              # wattle
+    put(27, 2, 2, 2, BLACK)           # eye
+
+    put(12, 13, 2, 4, DARK)           # near thigh
+    put(11, 16, 4, 2, DARK)           # near knee
+    put(12, 18, 2, 3, DARK)           # near shank
+    put(12, 18, 1, 3, LIGHT)          # near shank highlight
+    put(10, 21, 5, 1, DARK)           # near foot
+    put(10, 20, 1, 1, DARK)           # near rear toe
+    put(11, 21, 2, 1, LIGHT)          # near foot front highlight
+    put(17, 13, 2, 4, DARK)           # far thigh
+    put(16, 16, 4, 2, DARK)           # far knee
+    put(17, 18, 2, 3, DARK)           # far shank
+    put(17, 18, 1, 3, LIGHT)          # far shank highlight
+    put(16, 21, 5, 1, DARK)           # far foot
+    put(20, 20, 1, 1, DARK)           # far rear toe
+    put(19, 21, 2, 1, LIGHT)          # far foot front highlight
+
+
+def _chicken_attack_pose(leap):
+    def draw(put, body, head):
+        _chicken_attack_east(put, body, head, leap)
+    return draw
+
+
+def chickenatk_frames():
+    """[peck E, peck W, leap E, leap W] as rect-block frame defs, so
+    check_sheets/render_icon re-composite each authored pose exactly (the
+    tailspin icon pattern)."""
+    frames = []
+    for leap in (False, True):
+        for east in (True, False):
+            frames.append(_image_blocks(
+                _beast_frame(_chicken_attack_pose(leap), _chicken_dead, DARK, WHITE, east)))
+    return frames
 
 
 # ---- HEAVY real spin sheet (bead monhun-ardu-nch.3). The whole longtail

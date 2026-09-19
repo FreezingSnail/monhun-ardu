@@ -1,68 +1,135 @@
-# monhun-ardu-nch.7 — chicken: peck + leap kit, turn commitment, window telegraphs
+# monhun-ardu-nch.8 — chicken: attack art overlay (peck + leap)
 
-Baseline HEAD `1eabbc0`. Worker spawn was cancelled mid-run; the tree was
-inspected, verification finished inline, and the result below is what is
-committed. Pre-existing unrelated dirty files (`.gitignore`, `docs/dev-flow.md`,
-`.github/`, `recording_20260918184558.gif`, `tools/package-arduboy.py`,
-`tools/tests/test_package_arduboy.py`) were left untouched.
+Status: **PASS** (not committed; orchestrator commits)
 
 ## What changed
 
-Data `data/creatures/lunge.json` (owner-approved kit, replaces inherited
-generic `lunge`+`sweep`):
+- `tools/gen-art.py`: new `_chicken_attack_east` peck/leap poses + `chickenatk_frames()`
+  ([peck E, peck W, leap E, leap W], authored east, `_beast_frame` west mirror) and a
+  `chickenatk` icon_defs entry (32x24, 4 frames, body top-left anchor). `make gen`
+  emits `fxchickenatk`, `images/blocks/fxchickenatk_32x24.png`, and
+  `art_dims::chickenatk_frame_w/h/frames`.
+- `src/render.hpp` `drawMonster`: when `monsterKind == MON_LUNGE` and state is
+  `MS_WINDUP`/`MS_ATTACK` and `atkIdx != COMBAT_NO_ATTACK`, draw `fxchickenatk` instead
+  of the `BEAST_POSES` beast frame. Ordinal = `m.atkIdx -
+  combatCreatureFirstAttack(combat::CREATURE_LUNGE)` (0 = peck, 1 = leap, following the
+  authored attack order); frame = `(ordinal << 1) | (m.fx < 0 ? 1 : 0)`. Windup/attack
+  share the pose (no windup-flash frame; tell + telegraph carry timing, fxtailspin
+  trade). No hit-test/window/cart change beyond the frame pick.
+- Host oracle `tst/art_dims_test.hpp`: `testChickenAttackSheet` (frame layout, peck/leap
+  signatures, exact west mirror, all 4 frames distinct).
+- Device tests: `tst/fxdatatest/asset_test.hpp` blobHeader `fxchickenatk` (32x24);
+  `tst/fxdatatest/monster_art_test.hpp` `setupChickenAttack` + frame-pick checks
+  (peck E/W, leap E/W, windup+attack).
+- Generated sets regenerated: `images/blocks/fxchickenatk_32x24.png`, `fxdata/**`,
+  `src/fxdata.h`, `src/generated/art_dims.hpp`, `src/generated/equip_meta.hpp`
+  (equip sheet offsets shift with the new blob; static_asserts pin them).
 
-- `peck`: W22 / A6 / R30, dmg 7, BLUNT, lunge speedF 18, `facing track`,
-  window 12x10 @ (ox 14, oy -6).
-- `leap`: W34 / A10 / R48, dmg 12, BLUNT, lunge speedF 42,
-  `facing lock-at-windup`, window 18x16 @ (ox 12, oy -2).
-- profile `keepDist` 24 -> 16, `faceHold` 0 -> 6.
-- patterns `p_peck` (maxDist 28) / `p_leap` (minDist 28..255, hpBand 0..100).
-- `zones.appendage.broken.disableAttacks` ["sweep"] -> ["leap"].
+Cosmetic only: `mock/`, `data/creatures/`, sim logic untouched. Parity fixtures
+byte-identical (empty diff after regen). No `git add`/commit.
 
-Mock `mock/game.js`:
+## Budget (flash-gated)
 
-- `MONSTER_ATTACKS.peck`/`leap` windows-path entries (legacy `lunge`/`sweep`
-  kept: parity scene `monster_sweep_hit` loads `sweep` directly).
-- `MONSTER_DEFS[0]` keepDist/faceHold; chicken branch in `chooseAttack`; new
-  `monsterAttackDisabled()` mirroring C++ `combatAttackDisabled`; zone
-  `disableAttacks` list on the chicken legs.
-- `mock/game.test.js`: 3 new permanent tests (range split, leap
-  lock-at-windup + flank, broken legs fall back to peck).
+Baseline HEAD `d6a6ef7` (re-measured, matches the task):
 
-Generated + tests: combat blob (`fxdata/tables/combat.bin`, `fxdata*.bin`,
-`manifest.json`), `src/generated/combat_*.hpp`, parity fixtures; host/device
-test expectations updated to the new symbolic records (`ATTACK_LUNGE_PECK` /
-`ATTACK_LUNGE_LEAP`, etc.), parity override mapping now loads the SWEEP
-creature's legacy records for fixture attack kind 0/1.
+```
+size: flash=26954/29696 (2742 free)  ram=1759/2560
+size: data facts: HAS_GUARD_CHANCE:false HAS_GUARD_COOLDOWN:false HAS_GUARD_HP:false HAS_GUARD_PLAYER:false HAS_GUARD_ZONES:true HAS_HIT_STAGGER:false HAS_MULTI_STEP:false HAS_MULTI_WINDOW:true HAS_SIMPLE_GUARDS:false HAS_STAGGER:true HAS_STEP_AFTER:false HAS_STEP_CHANCE:false HAS_WAIT_STEPS:false HAS_ZONES:true
+```
 
-Docs: `docs/creature-framework.md` chicken kit section; README LUNGE row.
+After:
 
-## Verification (exact)
+```
+size: .text=27002 .data=40 .bss=1719
+size: flash=27042/29696 (2654 free)  ram=1759/2560
+size: data facts: HAS_GUARD_CHANCE:false HAS_GUARD_COOLDOWN:false HAS_GUARD_HP:false HAS_GUARD_PLAYER:false HAS_GUARD_ZONES:true HAS_HIT_STAGGER:false HAS_MULTI_STEP:false HAS_MULTI_WINDOW:true HAS_SIMPLE_GUARDS:false HAS_STAGGER:true HAS_STEP_AFTER:false HAS_STEP_CHANCE:false HAS_WAIT_STEPS:false HAS_ZONES:true
+```
 
-- `node --test mock/game.test.js` -> tests 72, pass 72, fail 0
-- `node tools/gen-parity-fixtures.js` twice -> md5
-  `fab30655c9fa53efedf14664195ef4ea` both runs (idempotent)
-- `make gen-check` -> `fxdata_manifest: PASS (68 generated artifacts unchanged)`
-- `make test` -> `Total Passed: 4990`, `Total Failed: 0` (baseline 4981)
-- `make fxtest-headless FXTEST_ONLY=test_parity` -> `PASSED=660 FAILED=0`
-- full `make fxtest-headless` -> 16/16 suites PASS, all FAILED=0:
-  assets 258, audio 17, boot 4, combat 237, data 368, hub 57, hud 17,
-  menu_art 81, menu 78, monster_art 38, parity 660, perf 5, player_art 111,
-  quests 50, screens 78, smith 66
-- `make size` -> `.text=26914 .data=40 .bss=1719`;
-  `flash=26954/29696 (2742 free)`, `ram=1759/2560 (801 free)`; HAS_* facts
-  unchanged. Data-only bead: zero MCU delta.
+- **Flash delta: +88 B** (26954 -> 27042; free 2742 -> 2654). Fits with 2654 B free.
+- **RAM delta: 0 B** (1759/2560, 801 free).
+- **No `HAS_*` fact flipped.**
+- FX cart blob grew (not MCU flash): `FX_DATA_BYTES` 174810 -> 177116 (+2306;
+  4 frames x 32x24 plus-mask = 2304 B + 2 B header). Rides `fxdata.bin`, headroom ample.
 
-## Parity scene movement (def 0 default, per-scene hash ranges)
+## Verification (exact tails)
 
-- `beast_no_shove_idle` 40/40 ticks moved (faceHold cadence)
-- `camera_world_clamp` 3/220 moved
-- other 18 scenes byte-identical, `monster_sweep_hit` included.
+`make gen-check`:
 
-## Deviations
+```
+fxdata_manifest: fxdata/manifest.json up to date (43 images, 59 inputs, 17 outputs)
+gen.sh: FX data + src/fxdata.h regenerated
+fxdata_manifest: PASS (69 generated artifacts unchanged)
+```
 
-- Worker cancelled mid-run; inline completion + full gate by orchestrator, no
-  partial work left.
-- `docs/creature-framework.md` note corrected to the measured 2/20 moved
-  scenes (draft wording implied all 20).
-- No engine code change (data-only, as designed).
+`make test`:
+
+```
+---------- chicken attack overlay is a 4-frame peck/leap mirror sheet ----------
+Passed: 27
+Failed: 0
+...
+Total Passed: 5017
+Total Failed: 0
+```
+
+`make test-tools`:
+
+```
+----------------------------------------------------------------------
+Ran 152 tests in 8.714s
+
+OK
+```
+
+`make fxtest-headless FXTEST_ONLY=test_monster_art`:
+
+```
+=== test_monster_art ===
+test_monster_art PASSED=53 FAILED=0
+P
+test_monster_art: PASS
+```
+
+`make fxtest-headless FXTEST_ONLY=test_parity` (fixtures unchanged):
+
+```
+=== test_parity ===
+parity_test PASSED=660 FAILED=0
+P
+test_parity: PASS
+```
+
+`node tools/gen-parity-fixtures.js` + `git diff --stat tst/fxdatatest/parity_fixtures.hpp`:
+
+```
+wrote tst/fxdatatest/parity_fixtures.hpp
+scenes=20 ticks=1269 snapshots=32 cpFields=20
+(no diff output -> empty diff)
+```
+
+Extra (device sheet-metadata suite touched): `make fxtest-headless FXTEST_ONLY=test_assets`:
+
+```
+=== test_assets ===
+asset_test PASSED=260 FAILED=0
+P
+test_assets: PASS
+```
+
+## Deviations / notes
+
+- Design says `g.monsterKind == mh::MON_CHICKEN`; the roster enum has no `MON_CHICKEN` —
+  the chicken is `MON_LUNGE` (SKELETON_CHICKEN, lunge.json). Used `mh::MON_LUNGE`.
+- Peck "head shifted ~+5 px": the base chicken head/beak already reach the 32 px cell
+  edge, so the literal shift is capped. The peck reads via a stretched neck, a head
+  moved ~+4 px forward/down, and the beak driven down the facing edge; beak/wattle/eye
+  stay in-cell and readable. The design's clipping trade for placeholder poses was not
+  needed.
+- `_beast_tone` maps `lo` to BLACK for the DARK idle body, so the peck beak/wattle/eye
+  are the opaque black erasers of the base chicken art (readable against the white
+  head) — host/device reds adjusted accordingly.
+- Added a host art oracle plus lean device frame-pick checks (monster_art_test) beyond
+  pure blob headers, so the new render branch has a permanent gate.
+- Note: the first `make gen-check` after the first `make gen` reported stale
+  equip/fxdata artifacts; consecutive `make gen`+hash runs are byte-identical and the
+  re-run passes (snapshot race, not nondeterminism).

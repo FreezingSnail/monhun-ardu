@@ -234,6 +234,13 @@ inline void test_assets(FxTest &test) {
     // pixel suite (tst/art_dims_test.hpp) checks the rotation bands and shades.
     blobHeader(fxtailspin, 40, 40, test, F("tail spin sheet w/h"));
 
+    // Chicken attack sheet (bead monhun-ardu-nch.8): 4 frames 32x24 in
+    // [peck E, peck W, leap E, leap W] order, drawn during the peck/leap
+    // windup+attack. Header identity only here; the host pixel suite
+    // (tst/art_dims_test.hpp) checks the poses/mirrors and
+    // tst/fxdatatest/monster_art_test.hpp checks the render frame pick.
+    blobHeader(fxchickenatk, 32, 24, test, F("chicken attack w/h"));
+
     // Demo beast sheets (epic monhun-ardu-nch): one 32x24x8 sheet per roster
     // beast -- LUNGE chicken, SWEEP bull, HEAVY longtail -- and RAVAGER keeps
     // the legacy fxmonster. Header identity only here; the host pixel suite
