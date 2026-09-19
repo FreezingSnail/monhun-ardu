@@ -1,99 +1,101 @@
-# monhun-ardu-fie.3 — Map data: room graph JSON schema + gen-zones.py + generated meta/blob
+# monhun-ardu-fie.4 — Core: room runtime — per-room bounds, doors, spawns, monster persistence, heal
 
-Status: **PASS** (not committed; orchestrator commits). Finished the two untracked
-partials (`data/map.json`, `tools/gen-zones.py`) rather than reverting them.
+Status: **PASS** (not committed; orchestrator commits)
 
 ## What changed
 
-- `tools/gen-zones.py` (finished the partial):
-  - **Bug fix (crash at `--dump`)**: `normalize_monster` stored `kind` as the
-    `read_enum` *index* while `pack_model`/`emit_*` re-ran `MONSTER_KINDS.index()`
-    on it. Added `read_enum_name` (keeps the validated symbolic name) and used it
-    for monster `kind`; prop `type` keeps the index form. `--dump` now clean.
-  - **Bug fix (prop record)**: pack format was `"<BBHHBBB"` (x truncated to u8,
-    fields shifted). Corrected to `"<BHHBBBB"` = type u8, x u16, y u16, sheet u8,
-    frame u8, w u8, h u8 (matches `zone_meta` `PROP_*_OFF` and the doc layout).
-  - **Bug fix (meta ids)**: `DOOR_/PROP_/HEAL_<ROOM>_n` names used the *global*
-    section index while `zone_data.hpp` used the room-local index. Both now use
-    `entry["local"]`, so host/meta symbols match.
-  - **Bug fix (meta widths)**: `ROOM_<ID>_W/_H` were `uint8_t`; the 384-px area
-    room cannot fit. Now `uint16_t`; added
-    `ROOM_<ID>_IMAGE_LAYER_BYTES` (w*h/8) and `ROOM_<ID>_IMAGE_SIZE` (3 layers).
-  - **Room layer conversion (fie.2 format)**: new `room_layers()` decodes each
-    room PNG to 3x 1bpp page-major planes, `layer[p*(w*h/8) + (y/8)*w + x]`, bit
-    `y&7`; thresholds 64/128/192 mirror `convert-sprite.py get_shade`; alpha<128
-    erases to shade 0. `emit_maps_sprites()` writes `fxdata/maps/Sprites.txt`
-    (`uint8_t mh_map_<id>[] = {...}`, sorted by room id). `clean_stale_images()`
-    drops orphan `images/maps/*.png`.
-  - Outputs: `images/maps/*.png` placeholders (only when missing),
-    `fxdata/maps/Sprites.txt`, `fxdata/tables/zones.bin`, `src/generated/zone_data.hpp`,
-    `src/generated/zone_meta.hpp`.
-- `fxdata/fxdata.txt`: `raw_t mhZones = "tables/zones.bin"` (after `mhSmith`,
-  before the include block) + `include "maps/Sprites.txt"`.
-- `tools/gen.sh`: runs `python3 tools/gen-zones.py` after gen-smith, before the
-  sprite converts + `fxdata-build.py`.
-- `tools/fxdata_manifest.py`: `GENERATED_GLOBS` now snapshots `images/maps/*.png`
-  and `fxdata/maps/Sprites.txt` (zones.bin is a `raw_t` payload input + matched
-  by the existing `fxdata/tables/*.bin` glob).
-- `docs/map-zones.md`: JSON schema, packed blob, symbolic-id ABI, the layer
-  format (the fie.5 `seekData` contract) and the two-pass note.
-- `tools/tests/test_gen_zones.py` (+ fixture `fixtures/gen_zones/clean`):
-  26 native `unittest` cases — clean blob layout, symbolic meta constants,
-  determinism, `--dump` smoke, 3-plane arrays, layer pixel round-trip,
-  schema/id/cross-ref/integer/rect errors, reserved `"menu"` sentinel, and
-  room/spawn size limits. Uses `build/tests/`, never `/tmp`.
+- `src/core/game.hpp`:
+  - `MH_ROOM_BOUNDS` carve (default 1), same pattern as `MH_SHEATHE`. The
+    parity/hub images fold the whole room runtime back to legacy `WORLD_W/H`;
+    shipping/perf keep runtime bounds.
+  - `camX/camY` widened `uint8_t` -> `int16_t` (384 px room needs CAM_MAX_X 256).
+  - New room-runtime fields on `Game`: `roomW/roomH`, `roomId`,
+    `roomMonsterKind`, `roomFirstDoor/roomDoorCount`, `roomFirstHeal/roomHealCount`,
+    `doorLatch`, `menuRequest`.
+  - `roomBoundW/H(g)` helpers (fold to `WORLD_W/H` when carved).
+- `src/core/zones.hpp` (new): room-graph loader mirroring `core/combat.hpp` —
+  host reads `src/generated/zone_data.hpp` (identity), AVR reads the packed
+  `mhZones` blob at `zone_meta.hpp` offsets via `mhFxRead*`. Value structs
+  `ZoneRoom/ZoneDoor/ZoneSpawn/ZoneHeal`, readers `zoneRoomRead/zoneDoorRead/
+  zoneSpawnRead/zoneHealRead`, and `roomIsSafe(g)`.
+- `src/core/world.hpp`:
+  - `loadRoom(g, roomId, spawn)`: installs the room record, places the hunter at
+    a global spawn, clears projectiles/effects, resets the camera clamp, arms the
+    door latch. Monster is **not** reset (hp/zones/pos/FSM persist). Safe room
+    clears the target.
+  - `updateDoors(g)` in `stepGame`: player-rect overlap with any door rect ->
+    transition at `door.toSpawn`; `DOOR_MENU` sets `menuRequest` only (core never
+    switches screens); post-spawn latch clears once the hunter leaves every door.
+  - `tryHeal(g, bP)`: sheathed B-press edge inside a heal rect -> hp/stam to max
+    + spark (existing effect path, `HEAL_SPARK_LIFE = 8`). No heal unsheathed.
+  - Hold-B sheathed in camp at exactly `HOLD_TICKS` sets `menuRequest` (shared
+    hold constant, no new magic number).
+  - `updateActiveTarget` handles safe rooms (no target); `camMaxX/Y` per room.
+- `src/core/player.hpp`: `clampPlayer(p, roomW, roomH)`; `initGame` defaults the
+  room fields to legacy extents + live room (carved out for parity).
+- `src/core/monster.hpp`: `clampMonster` uses active-room extents.
+- `src/core/projectiles.hpp`: projectile cull uses active-room extents;
+  `stepWorldBody` skips monster/target updates in a safe room.
+- `src/render.hpp`: `drawArena(camX, camY, roomW, roomH)` (live dims, border per
+  active room); `renderScene` clamps the camera to the active room. fie.5
+  replaces the arena placeholder with the room-image blit.
+- `tst/fxdatatest/test_parity.ino` + `test_hub.ino`: `#define MH_ROOM_BOUNDS 0`
+  carve (both images are at the board flash limit; neither loads a room, and
+  every fixture extent equals `WORLD_W/H`, so behavior is byte-identical).
+- Tests: new `tst/zone_test.hpp` (registered in `tst/main.cpp`); new case in
+  `tst/world_test.hpp`. Permanent, native, co-located. Symbolic `zone::*` ids
+  only, never literal record indices.
 
-## New/changed interfaces
+## Tests (12 cases / 74 asserts)
 
-- Blob ABI unchanged from the bead schema: header 16 B (`0x5A52`, v1), room 18 B,
-  door 10 B, spawn 4 B, prop 9 B, heal 6 B; LE, no padding. `monsterKind` =
-  `MONSTER_*`/`MONSTER_NONE`; `toRoom`/`toSpawn` = `DOOR_MENU`/`0xFF` for menu.
-- `zone::ROOM_*`, `SPAWN_*`, `DOOR_*`, `PROP_*`, `HEAL_*`, `*_OFF`, `PROP_*`,
-  `MONSTER_*`, `DOOR_MENU`, `ROOM_<ID>_IMAGE_OFF/_LAYER_BYTES/_SIZE` in
-  `zone_meta.hpp` (fie.4/fie.5 read these; no literal record indices).
-- Layer contract: `seekData(mh_map_<id> + plane*ROOM_<ID>_IMAGE_LAYER_BYTES +
-  (y/8)*W + x)`.
+Room record load (extents/monster kind/spawn placement), transient clear +
+camera reset, door latch (no ping-pong on spawn-in-door), area->camp round-trip
+spawn, menu-door request, per-room player clamps at 128x56 and 384x112,
+per-room monster clamps, monster persistence across a door round-trip
+(hp/x/y/state/stun/kind), safe-room behavior (no target, beast untouched, player
+still walks), heal requires sheathed + inside rect (unsheathed/outside no-op),
+hold-B flag gating (sheathed in camp yes; unsheathed no; outside camp no).
 
-## Verification (exact tails / numbers)
+## Verification (exact tails)
 
-- `python3 tools/gen-zones.py --dump` (bare `python3` is denied by this session's
-  shell sandbox; ran the same interpreter as `/opt/homebrew/bin/python3`):
+- `make test` -> `Total Passed: 5361` / `Total Failed: 0`
+- `make fxtest-headless` (full, 16 suites) -> all PASS:
+  assets 270, audio 17, boot 4, combat 293, data 368, hub 57, hud 17,
+  menu_art 81, menu 78, monster_art 111, parity 660, perf 5, player_art 111,
+  quests 50, screens 78, smith 66.
+- `FXTEST_ONLY=test_parity make fxtest-headless` ->
+  `Sketch uses 29680 bytes` / `parity_test PASSED=660 FAILED=0` / `P`
+- `make gen-check` -> `fxdata_manifest: PASS (81 generated artifacts unchanged)`
+- `make test-tools` -> `Ran 178 tests in 11.105s` / `OK`
+- `make size`:
   ```
-  gen-zones: 3 rooms, 3 doors, 5 spawns, 2 props, 1 heals, 144 B blob
+  size: .text=28986 .data=40 .bss=1736
+  size: flash=29026/29696 (670 free)  ram=1776/2560
+  size: data facts: HAS_GUARD_CHANCE:false HAS_GUARD_COOLDOWN:false HAS_GUARD_HP:false HAS_GUARD_PLAYER:false HAS_GUARD_ZONES:true HAS_HIT_STAGGER:false HAS_MULTI_STEP:false HAS_MULTI_WINDOW:true HAS_SIMPLE_GUARDS:false HAS_STAGGER:true HAS_STEP_AFTER:false HAS_STEP_CHANCE:false HAS_WAIT_STEPS:false HAS_ZONES:true
   ```
-- `make gen` (stable second pass) idempotency (sha256 of `images/maps`,
-  `fxdata/maps`, `src/generated`, `fxdata/tables` before vs after):
-  ```
-  before: 486a19139a4e515ff5f23c8cef4af687999a47c6b0f3c4e467efa8fa91c47f38  -
-  after:  486a19139a4e515ff5f23c8cef4af687999a47c6b0f3c4e467efa8fa91c47f38  -
-  IDEMPOTENT: second make gen produced identical artifacts
-  ```
-- `make gen-check`:
-  ```
-  fxdata_manifest: PASS (81 generated artifacts unchanged)
-  ```
-- `make test-tools`:
-  ```
-  Ran 178 tests in 9.863s
-  OK
-  ```
-  (26 of them the new `test_gen_zones`.)
-- `make test`:
-  ```
-  Total Passed: 5277
-  Total Failed: 0
-  ```
-- Generated sizes: `fxdata/tables/zones.bin` 144 B; `fxdata/maps/Sprites.txt`
-  85825 B; `fxdata/fxdata-data.bin` 203575 B; `fxdata/fxdata.bin` 203776 B;
-  `zone_data.hpp` 3154 B; `zone_meta.hpp` 7497 B. Placeholder PNGs: area 526 B,
-  camp/pole_room 264 B each.
 
-## Notes / deviations
+## Budget
 
-- `make gen` needs two passes after adding `mhZones`/maps (raw table inserted
-  before the sprite block shifts baked FX offsets; `zone_meta`/`equip_meta`
-  AVR `static_assert`s force it). The committed tree is the stable pass and
-  `gen-check` is clean.
-- `mh_map_tent` prop sheet is intentionally unresolved this bead (`RESOLVED =
-  false`); fie.5 authors it.
-- No commit/push. Generated set left staged-ready for the orchestrator.
+| | baseline 7e82b3c | after | delta |
+|---|---|---|---|
+| flash | 27474/29696 (2222 free) | 29026/29696 (670 free) | **+1552 B** |
+| RAM | 1760/2560 | 1776/2560 | **+16 B** |
+| data facts | unchanged | unchanged | no `HAS_*` flip |
+
++1552 B is the room loader (`zones.hpp` readers) + door/heal/latch logic +
+per-room clamp/camera indirection, over the spike's +286 B bounds-only
+prototype. Fits with 670 B free; no zone data trimmed.
+
+## Deviations / notes
+
+- `MH_ROOM_BOUNDS` carve added to **test_hub** as well as test_parity: the
+  room runtime pushed test_hub to 29828 B (132 B over); with the carve it is
+  27772 B. Neither image exercises rooms.
+- `Game::menuRequest` is a plain flag the app layer consumes (fie.6); the core
+  never switches to the menu, per acceptance. No menu routing wired here.
+- `loadRoom` takes a global spawn index (`zone::SPAWN_*`), matching the blob's
+  `door.toSpawn`/`monsterSpawn` representation; invalid ids fall back to 0.
+- Door/heal rects are read from the blob on demand (door/heal sections are tiny
+  and the checks are edge-driven), so `Game` caches only scalars.
+- No float/double in core (grep clean; only comments mention the words).
+- Not committed/pushed (orchestrator commits).

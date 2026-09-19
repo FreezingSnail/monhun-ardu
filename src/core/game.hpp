@@ -88,6 +88,16 @@ constexpr bool CHARGE_ENABLED = MH_CHARGE;
 #define MH_PUSH_MOVE 1
 #endif
 constexpr bool PUSH_MOVE_ENABLED = MH_PUSH_MOVE;
+// Active-room bounds carve (bead monhun-ardu-fie.4, same pattern as MH_SHEATHE):
+// the parity image is at the board flash limit, so its clamp/camera/cull
+// expressions — and the whole room runtime — fold back to the legacy WORLD_W/H
+// constants. Every parity fixture room extent equals WORLD_W/H and no scene
+// calls loadRoom, so behavior stays byte-identical; shipping/perf keep the
+// runtime active-room bounds.
+#ifndef MH_ROOM_BOUNDS
+#define MH_ROOM_BOUNDS 1
+#endif
+constexpr bool ROOM_BOUNDS_ENABLED = MH_ROOM_BOUNDS;
 constexpr int16_t CHARGE_MIN = 14;   // A held this long past the swing -> charge stance
 constexpr int16_t CHARGE_L2 = 20;    // extra charge ticks for level 2 (bar flashes white)
 constexpr int16_t WORLD_W = 256;
@@ -773,7 +783,26 @@ struct Game {
     int8_t over;          // Over: 0 none, 1 win, 2 lose
     int8_t mode;          // Mode: hunt or train (hrd)
     int8_t monsterKind;   // MonsterKind: chosen demo beast variant (6zb)
-    uint8_t camX, camY;   // camera top-left in world px: 0..CAM_MAX_X/Y
+    // Camera top-left in world px. int16 (not uint8) so a room wider than
+    // 256 px can scroll: CAM_MAX_X for a 384 px room is 256, which overflows a
+    // byte. roomW/roomH are the active-room extents that bound the camera,
+    // clamps and projectile cull; they default to the legacy WORLD_W/H so every
+    // existing (non-room) scene is byte-identical.
+    int16_t camX, camY;
+    int16_t roomW, roomH;
+    // Room runtime (bead monhun-ardu-fie.4). Cached from the active room record
+    // at loadRoom: per-tick door/heal checks read only these scalars (plus the
+    // door/heal rects off the blob on demand), never the room record again.
+    // roomMonsterKind == zone::MONSTER_NONE marks a safe room (no monster/target
+    // updates); default 0 keeps every pre-room scene a live hunt.
+    uint8_t roomId;
+    uint8_t roomMonsterKind;
+    uint16_t roomFirstDoor;
+    uint8_t roomDoorCount;
+    uint16_t roomFirstHeal;
+    uint8_t roomHealCount;
+    bool doorLatch;     // suppress doors until the player leaves every door rect
+    bool menuRequest;   // menu door / hold-B sheathed in camp: app layer consumes
     bool prevA, prevB;
     // Set by updatePlayer(): the player's fixed-point state changed this tick
     // (input move, drift, knockback). pushApart uses it to resolve a body
@@ -808,5 +837,15 @@ struct Game {
     uint8_t dmgMul;
     uint8_t spdMul;
 };
+
+// Active-room extents for the bound expressions. With ROOM_BOUNDS_ENABLED
+// carved out (parity image) these fold to the legacy WORLD_W/H constants, so
+// the clamps/camera/cull drop back to the exact pre-room code and flash.
+static inline int16_t roomBoundW(const Game &g) {
+    return ROOM_BOUNDS_ENABLED ? g.roomW : WORLD_W;
+}
+static inline int16_t roomBoundH(const Game &g) {
+    return ROOM_BOUNDS_ENABLED ? g.roomH : WORLD_H;
+}
 
 }   // namespace mh

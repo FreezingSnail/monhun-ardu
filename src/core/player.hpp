@@ -77,6 +77,21 @@ void initGame(Game &g, int8_t weapon) {
     g.weapon = weapon;
     g.prevA = g.prevB = false;
     g.playerMoved = false;
+    // Legacy world extents + a live (non-safe) room; loadRoom overrides these
+    // for a map room. Carved out of the parity image, whose extents stay the
+    // legacy constants and which never calls loadRoom.
+    if (ROOM_BOUNDS_ENABLED) {
+        g.roomW = WORLD_W;
+        g.roomH = WORLD_H;
+        g.roomId = 0;
+        g.roomMonsterKind = 0;   // MONSTER_LUNGE: a pre-room hunt is never safe
+        g.roomFirstDoor = 0;
+        g.roomDoorCount = 0;
+        g.roomFirstHeal = 0;
+        g.roomHealCount = 0;
+        g.doorLatch = false;
+        g.menuRequest = false;
+    }
     g.player.init(weapon);
     g.target = Target{};
     g.lastShot = 0;
@@ -107,15 +122,18 @@ static Rect meleeHitbox(const Player &p, const Attack *a) {
     return r;
 }
 
-static void clampPlayer(Player &p) {
+// Clamp the hunter to the active-room extents (Game::roomW/roomH, legacy
+// WORLD_W/H by default). Extents are passed explicitly so the helper stays a
+// pure function of Player.
+static void clampPlayer(Player &p, int16_t roomW, int16_t roomH) {
     if (p.x < 0)
         p.x = 0;
-    if (p.x > WORLD_W - p.w)
-        p.x = WORLD_W - p.w;
+    if (p.x > roomW - p.w)
+        p.x = roomW - p.w;
     if (p.y < 0)
         p.y = 0;
-    if (p.y > WORLD_H - p.h)
-        p.y = WORLD_H - p.h;
+    if (p.y > roomH - p.h)
+        p.y = roomH - p.h;
 }
 
 static void movePlayer(Player &p, int8_t mx, int8_t my, uint8_t spd, bool lockFacing) {
@@ -870,7 +888,7 @@ static void updatePlayer(Game &g, const Input &inp, bool aP, bool bP, bool bR) {
 
     if (p.stance != ST_NONE)
         updateStance(g, def);
-    clampPlayer(p);
+    clampPlayer(p, roomBoundW(g), roomBoundH(g));
     // Movement intent for pushApart (monster.hpp): any fixed-point change counts,
     // including a sub-pixel step with no pixel movement, so a hunter pressing
     // into a body keeps resolving on the player side instead of shoving it.

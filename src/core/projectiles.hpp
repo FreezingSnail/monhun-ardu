@@ -15,6 +15,7 @@
 
 #include <stdint.h>
 #include "monster.hpp"   // updateMonster / syncMonsterTarget / damageMonster
+#include "zones.hpp"     // roomIsSafe (safe-room monster skip)
 #include "../upgrade_state.hpp"
 
 namespace mh {
@@ -331,7 +332,7 @@ static void updateProjectiles(Game &g) {
         // sub-pixel of the margin survives one extra tick. Compare the same way.
         const int32_t fpx = pr.x * 16 + pr.subX;
         const int32_t fpy = pr.y * 16 + pr.subY;
-        if (pr.life <= 0 || fpx < -(8 << 4) || fpx > (WORLD_W + 8) << 4 || fpy < -(8 << 4) || fpy > (WORLD_H + 8) << 4) {
+        if (pr.life <= 0 || fpx < -(8 << 4) || fpx > (static_cast<int32_t>(roomBoundW(g)) + 8) << 4 || fpy < -(8 << 4) || fpy > (static_cast<int32_t>(roomBoundH(g)) + 8) << 4) {
             removeProjectile(g, i);
         }
     }
@@ -343,20 +344,27 @@ static void updateProjectiles(Game &g) {
 // Edges are supplied by the caller so stepGame() can run them before the
 // over/freeze gate (mock computes edges every tick, frozen or not).
 static void stepWorldBody(Game &g, const Input &inp, bool aP, bool bP, bool bR) {
+    // Safe room (hunt only): the room record carries no monster, so the beast
+    // and target are left untouched while the player controls / HUD / doors
+    // stay live. Room bounds are carved out of the parity image, so this folds
+    // to the pre-room two-branch dispatch there.
+    const bool safe = g.mode != MODE_TRAIN && roomIsSafe(g);
     if (g.mode == MODE_TRAIN)
         armPoleTarget(g);
-    else
+    else if (!safe)
         syncMonsterTarget(g);
+    else
+        g.target.alive = false;
     updatePlayer(g, inp, aP, bP, bR);
     if (g.lastShot)
         spawnShot(g);
     if (g.mode == MODE_TRAIN)
         updatePole(g);
-    else
+    else if (!safe)
         updateMonster(g);
     if (g.mode == MODE_TRAIN)
         armPoleTarget(g);
-    else
+    else if (!safe)
         syncMonsterTarget(g);
     updateProjectiles(g);
     updateEffects(g);

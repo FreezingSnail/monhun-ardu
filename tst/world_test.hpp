@@ -111,6 +111,27 @@ void WorldSuite(TestRunner &runner) {
     }
 
     {
+        Test t("default room extents are the legacy world; camera uses the active room");
+        Game g;
+        newGame(g, W_SWORD, MODE_HUNT);
+        t.assert(g.roomW, WORLD_W, "default roomW = WORLD_W");
+        t.assert(g.roomH, WORLD_H, "default roomH = WORLD_H");
+        t.assert(camMaxX(g), CAM_MAX_X, "default camMaxX");
+        t.assert(camMaxY(g), CAM_MAX_Y, "default camMaxY");
+        // A 128x56 room pins both camera axes at 0 (screen-sized room).
+        loadRoom(g, zone::ROOM_CAMP, zone::SPAWN_CAMP_ENTRY);
+        t.assert(camMaxX(g), 0, "camp camMaxX pinned to 0");
+        t.assert(camMaxY(g), 0, "camp camMaxY pinned to 0");
+        t.assert(g.camX, 0, "camp camera x pinned");
+        t.assert(g.camY, 0, "camp camera y pinned");
+        // A 384x112 room allows horizontal scroll past the legacy CAM_MAX_X.
+        loadRoom(g, zone::ROOM_AREA, zone::SPAWN_AREA_START);
+        t.assert(camMaxX(g), 256, "area camMaxX = 384-128");
+        t.assert(camMaxY(g), 56, "area camMaxY = 112-56");
+        suite.addTest(t);
+    }
+
+    {
         Test t("idle player does not slide over 120 ticks of zero input");
         Game g;
         newGame(g, W_SWORD, MODE_HUNT);

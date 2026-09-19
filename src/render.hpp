@@ -242,16 +242,18 @@ static void drawNumber(int16_t x, int16_t y, int16_t value, uint8_t shade) {
 }
 
 // Mock drawArena(): deterministic 1 px dots + world border.
-// The mock's three per-dot signed 16-bit modulos (i*7%3, i*53%WORLD_W,
-// i*29%WORLD_H) lower to __divmodhi4 on AVR and dominated the plane budget, so
+// The mock's three per-dot signed 16-bit modulos (i*7%3, i*53%roomW,
+// i*29%roomH) lower to __divmodhi4 on AVR and dominated the plane budget, so
 // the dot field is walked with incremental counters instead. They produce the
 // exact same dot positions: (i*7)%3 == i%3 (a 3-phase counter), and each world
 // coord advances by its fixed step with a single conditional wrap (step is
 // always < the modulus, so one subtract bounds it). Integer-only, no float.
-static void drawArena(int16_t camX, int16_t camY) {
+// `roomW`/`roomH` are the active-room extents (legacy WORLD_W/H by default);
+// fie.5 replaces this placeholder field with the room-image blit.
+static void drawArena(int16_t camX, int16_t camY, int16_t roomW, int16_t roomH) {
     uint8_t phase = 0;   // i % 3
-    int16_t wx = 0;      // (i * 53) % WORLD_W
-    int16_t wy = 0;      // (i * 29) % WORLD_H
+    int16_t wx = 0;      // (i * 53) % roomW
+    int16_t wy = 0;      // (i * 29) % roomH
     for (int16_t i = 0; i < 260; i++) {
         if (phase != 0) {
             const int16_t sx = static_cast<int16_t>(wx - camX);
@@ -262,18 +264,18 @@ static void drawArena(int16_t camX, int16_t camY) {
         if (++phase >= 3)
             phase = 0;
         wx += 53;
-        if (wx >= mh::WORLD_W)
-            wx -= mh::WORLD_W;
+        if (wx >= roomW)
+            wx -= roomW;
         wy += 29;
-        if (wy >= mh::WORLD_H)
-            wy -= mh::WORLD_H;
+        if (wy >= roomH)
+            wy -= roomH;
     }
     const int16_t lx = static_cast<int16_t>(-camX);
     const int16_t ly = static_cast<int16_t>(mh::HUD_H - camY);
-    blk(lx, ly, mh::WORLD_W, 1, 2);
-    blk(lx, ly + mh::WORLD_H - 1, mh::WORLD_W, 1, 2);
-    blk(lx, ly, 1, mh::WORLD_H, 2);
-    blk(lx + mh::WORLD_W - 1, ly, 1, mh::WORLD_H, 2);
+    blk(lx, ly, roomW, 1, 2);
+    blk(lx, ly + roomH - 1, roomW, 1, 2);
+    blk(lx, ly, 1, roomH, 2);
+    blk(lx + roomW - 1, ly, 1, roomH, 2);
 }
 
 // Static-prop sheet dispatch is table-driven off the creature record's sheet id
@@ -1042,17 +1044,20 @@ static void drawHud(const mh::Game &g) {
 // `wire` only has an effect when DEBUG_HURTBOXES is compiled in; shipping builds
 // pass false and the overlay is preprocessed out.
 static void renderScene(const mh::Game &g, bool wire) {
-    // Camera clamp to world bounds; also guards against an unclamped Game.
+    // Camera clamp to the active-room bounds; also guards against an unclamped
+    // Game. camX/camY are int16 so a >256 px room can scroll.
     int16_t camX = g.camX;
     int16_t camY = g.camY;
+    const int16_t camMx = mh::camMaxX(g);
+    const int16_t camMy = mh::camMaxY(g);
     if (camX < 0)
         camX = 0;
-    else if (camX > mh::CAM_MAX_X)
-        camX = mh::CAM_MAX_X;
+    else if (camX > camMx)
+        camX = camMx;
     if (camY < 0)
         camY = 0;
-    else if (camY > mh::CAM_MAX_Y)
-        camY = mh::CAM_MAX_Y;
+    else if (camY > camMy)
+        camY = camMy;
 
     // Mock g.shake has no Game field yet (freeze is not gated/decayed), so the
     // render derives an equivalent tick-based int offset from the decaying hit
@@ -1070,7 +1075,7 @@ static void renderScene(const mh::Game &g, bool wire) {
     const int16_t ecX = static_cast<int16_t>(camX - shakeX);
     const int16_t ecY = static_cast<int16_t>(camY - shakeY);
 
-    drawArena(ecX, ecY);
+    drawArena(ecX, ecY, mh::roomBoundW(g), mh::roomBoundH(g));
     if (g.mode == mh::MODE_TRAIN)
         drawPole(g, ecX, ecY);
     else

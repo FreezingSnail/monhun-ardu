@@ -16,6 +16,7 @@
 #include "combat_test.hpp"
 #include "combat_pack_test.hpp"
 #include "render_math_test.hpp"
+#include "zone_test.hpp"
 
 int main() {
     TestRunner runner;
@@ -35,6 +36,7 @@ int main() {
     CombatSuite(runner);
     CombatPackSuite(runner);
     rendermathtest::RenderMathSuite(runner);
+    ZoneSuite(runner);
     runner.printSummary();
     return runner.fail() ? 1 : 0;
 }

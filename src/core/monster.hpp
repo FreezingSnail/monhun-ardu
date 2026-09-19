@@ -125,14 +125,16 @@ static void syncMonsterTarget(Game &g) {
 
 static void clampMonster(Game &g) {
     Monster &m = g.monster;
+    const int16_t rw = roomBoundW(g);
+    const int16_t rh = roomBoundH(g);
     if (m.x < 0)
         m.x = 0;
-    if (m.x > WORLD_W - m.w)
-        m.x = WORLD_W - m.w;
+    if (m.x > rw - m.w)
+        m.x = rw - m.w;
     if (m.y < 0)
         m.y = 0;
-    if (m.y > WORLD_H - m.h)
-        m.y = WORLD_H - m.h;
+    if (m.y > rh - m.h)
+        m.y = rh - m.h;
 }
 
 static void knockMonsterAway(Game &g, Monster &m, int16_t cx, int16_t cy, uint8_t amt) {

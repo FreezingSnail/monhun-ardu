@@ -34,6 +34,13 @@
 // walking-into-beast case.
 #define MH_PUSH_MOVE 0
 
+// Active-room-bounds carve (monhun-ardu-fie.4): this image is at the board
+// flash limit, so the room runtime (roomW/roomH clamps, camera clamp,
+// projectile cull, door/heal/hold-B logic) folds back to the legacy WORLD_W/H
+// constants. Every fixture extent equals WORLD_W/H and no scene calls loadRoom,
+// so behavior is byte-identical. Shipping/perf keep the runtime room bounds.
+#define MH_ROOM_BOUNDS 0
+
 #include "harness/fx_globals.hpp"
 #include "parity_test.hpp"
 
