@@ -33,6 +33,15 @@ void zparkBeast(Game &g, int16_t x, int16_t y) {
     g.monster.y = y;
 }
 
+// One full-flow melee swing: tap A (sheathed draws + swings) through stepGame,
+// then run the swing out to idle. Exercises the same Target::onHit path a real
+// hit uses, not a direct handler call.
+void zswing(Game &g) {
+    stepGame(g, Input{0, 0, true, false});
+    for (int i = 0; i < 80 && g.player.state != PS_IDLE; i++)
+        zticks(g, 1, Z_IDLE);
+}
+
 // Player rect overlaps a world rect? (same body-rect rule the door/heal checks
 // use, kept here so the test states the geometry explicitly).
 bool zOverlap(int16_t px, int16_t py, int16_t pw, int16_t ph, int16_t x, int16_t y, int16_t w, int16_t h) {
@@ -334,6 +343,52 @@ void ZoneSuite(TestRunner &runner) {
         for (int16_t i = 0; i < HOLD_TICKS; i++)
             stepGame(a, Z_B);
         t.assert(a.menuRequest, 0, "sheathed hold outside camp does not request");
+        suite.addTest(t);
+    }
+
+    {
+        Test t("camp -> area re-arms the target callbacks and melee damage lands");
+        Game g;
+        newGame(g, W_SWORD, MODE_HUNT);
+        loadRoom(g, zone::ROOM_CAMP, zone::SPAWN_CAMP_ENTRY);
+        t.assert(g.target.alive, 0, "camp clears the target");
+        t.assert(g.target.onHit == nullptr, 1, "camp clears onHit");
+
+        // Area load must re-wire the beast callbacks: a prior safe load nulled
+        // them and the per-tick syncMonsterTarget only refreshes alive/rect.
+        loadRoom(g, zone::ROOM_AREA, zone::SPAWN_AREA_FROM_CAMP);
+        t.assert(g.target.alive, 1, "area re-arms alive (monster persists)");
+        t.assert(g.target.onHit == monsterOnHit, 1, "area re-arms onHit");
+        t.assert(g.target.onShove == monsterOnShove, 1, "area re-arms onShove");
+        t.assert(g.target.onStun == monsterOnStun, 1, "area re-arms onStun");
+        t.assertGreaterThan(g.target.rect.w, 0, "target rect w non-degenerate");
+        t.assertGreaterThan(g.target.rect.h, 0, "target rect h non-degenerate");
+
+        // Drive the normal melee path: park the beast in the draw-swing arc
+        // (player at from_camp spawn 8,80 centre 16,88, facing E).
+        zparkBeast(g, 24, 80);
+        const int16_t hp0 = g.monster.hp;
+        zswing(g);
+        t.assertLessThan(g.monster.hp, hp0, "melee hit reduces beast hp after camp");
+
+        // Camp re-entry clears; the next area load re-arms again.
+        loadRoom(g, zone::ROOM_CAMP, zone::SPAWN_CAMP_ENTRY);
+        t.assert(g.target.alive, 0, "camp re-entry clears the target");
+        loadRoom(g, zone::ROOM_AREA, zone::SPAWN_AREA_FROM_CAMP);
+        t.assert(g.target.alive, 1, "second area load re-arms alive");
+        t.assert(g.target.onHit == monsterOnHit, 1, "second area load re-arms onHit");
+        suite.addTest(t);
+    }
+
+    {
+        Test t("train load re-arms the pole target");
+        Game g;
+        newGame(g, W_SWORD, MODE_TRAIN);
+        loadRoom(g, zone::ROOM_POLE_ROOM, zone::SPAWN_POLE_ROOM_START);
+        t.assert(g.target.onHit == poleOnHit, 1, "train load arms pole onHit");
+        t.assert(g.target.onShove == poleOnShove, 1, "train load arms pole onShove");
+        t.assert(g.target.onStun == poleOnStun, 1, "train load arms pole onStun");
+        t.assert(g.target.alive, 1, "train load arms a live pole target");
         suite.addTest(t);
     }
 

@@ -1,55 +1,50 @@
-# monhun-ardu-fie.9 — trim: props+fade flash reclaim
+# monhun-ardu-fie.10 — fix: beast takes no damage after camp
 
-Baseline HEAD b719a23. Worker was cancelled mid-run; orchestrator finished and
-verified inline. No commit/push at worker time (orchestrator commits).
+## Diagnosis (confirmed in code)
 
-## What changed
+`updateActiveTarget()` (src/core/world.hpp) is the only place that wires
+`Target::onHit/onShove/onStun` to the monster handlers. It ran from `newGame()`
+only. `loadRoom()` cleared `g.target = Target{}` for a safe room (camp) but a
+later beast-room load only refreshed `alive`/`rect` via the per-tick
+`syncMonsterTarget()` and never re-wired the callbacks. After camp -> area the
+attack path (`g.target.alive && overlap`, then `if (g.target.onHit)`) saw a live
+rect with a null handler, so melee/whirl did nothing. (Call sites in
+player.hpp ~341/~819 are guarded, so on AVR the symptom is no damage, not a
+null call.)
 
-- `src/core/zones.hpp` — `zonePropRead()` reads the packed 9 B prop record in
-  one FX transaction (`mhFxReadBytes`) and unpacks the little-endian ABI
-  locally, instead of seven per-field `mhFxRead*` seeks + offset math.
-- `src/render.hpp` — `propSheet()` flattened to `sheet ? fxpole : mh_map_tent`
-  (sheet ids are 0/1); `drawProps()` hoists the `-camX`/`HUD_H-camY` add once
-  per call; `drawFade()` collapsed to a constant full-arena shade-0 `blk`
-  (was: height scaled by `fade`, i.e. a growing wipe). HUD strip still spared.
-- `tst/fxdatatest/zones_test.hpp` — pins the collapsed fade: any armed tick
-  covers the whole arena band, HUD page untouched.
+## Fix — src/core/world.hpp
 
-## Verification
+- Removed the duplicated safe-room `g.target = Target{}` in `loadRoom`.
+- Added `updateActiveTarget(g)` at the end of `loadRoom`: safe room clears,
+  beast room re-wires the monster callbacks + syncs alive/rect, train re-arms
+  the pole. Monster state (hp/pos/FSM) is untouched — persistence by design.
+- `loadRoom` early-returns when `!ROOM_BOUNDS_ENABLED`, so the parity image is
+  unchanged.
 
-```
-make test                  Total Passed: 5375 / Failed: 0
-make fxtest-headless       17/17 PASS (test_zones 61 asserts, forced image path)
-test_perf                  B pUs=6372 pHz=156 lHz=52 lTk=568 rMx=4764 rAv=4573 ram=544
-make gen-check             PASS (82 generated artifacts unchanged)
-make size                  flash=29272/29696 (424 free)  ram=1780/2560
-```
+## Test — tst/zone_test.hpp (permanent, co-located)
 
-Flash delta vs fie.8: **-20 B** (29292 -> 29272). Perf unchanged (rMx 4764).
+New helper `zswing()` drives the real full-flow melee path (stepGame, tap A,
+run to idle).
 
-## Finding: the 1430 B props+fade attribution was wrong
+- "camp -> area re-arms the target callbacks and melee damage lands":
+  camp clears (alive 0, onHit null) -> area load re-arms alive 1,
+  onHit==monsterOnHit, onShove==monsterOnShove, onStun==monsterOnStun,
+  rect w/h > 0; beast parked in the swing arc at from_camp spawn -> melee drops
+  hp; camp re-entry clears, second area load re-arms.
+- "train load re-arms the pole target": pole_room load arms
+  poleOnHit/poleOnShove/poleOnStun and a live target.
 
-fie.8 derived "props+fade = 1430 B" as `measure8 (29042) - measure0 (27612)`,
-but `measure0` was compiled with `MH_ROOM_BOUNDS=0`, which also removes
-per-room bounds, the room runtime doors/heal/menu paths and the props/fade
-block (they all live inside that carve). So 1430 B = bounds + room runtime +
-props/fade + loadRoom folding, not props+fade alone. The micro-trims above can
-only reach the small surface: -20 B.
+Mutant check: with the world.hpp fix stashed, the new suite fails 9/12
+(`Passed: 3 Failed: 9`); with the fix, 12/12.
 
-Remaining map-wave overhead vs cff226d baseline is ~1.8 KB total (27470 ->
-29272) spread across per-room bounds integration, room runtime
-(doors/spawns/heal/menu/safe-room), the generated zone accessors and the
-demo-flow wiring. Locating it precisely needs carve-by-carve whole-image
-measurement (LTO clone churn defeats symbol math), i.e. another spike; the
-off-path hub/quests/smith/save symbols in the shipping ELF are small
-(saveStore 200 B, appNavApply 192 B, upgradeApplyToGame 118 B,
-questApplyToGame 78 B, screenFirstRow 42 B), so a shelf carve is not the lever.
+## Gate
 
-## Options (not applied)
+- `make test`: `Total Passed: 5391 Total Failed: 0`.
+- `make fxtest-headless`: 17 suites, all `FAILED=0` (test_zones `PASSED=69
+  FAILED=0`).
+- `make size`: flash=29258/29696 (438 free), .text=29218.
+  Baseline (fix stashed): flash=29272/29696 (424 free), .text=29232 — net
+  -14 bytes `.text` from folding the duplicate clear/call.
+- `make gen-check`: `fxdata_manifest: PASS (82 generated artifacts unchanged)`.
 
-- Accept 424 B free.
-- Accounting spike: carve variants (bounds / room runtime / zone accessors /
-  flow) with whole-image measures, then a targeted refactor of the biggest
-  block.
-- Revert this bead's fade change if the constant blackout is not wanted
-  (costs the 20 B).
+No float/double introduced; no /tmp; no commit/push.

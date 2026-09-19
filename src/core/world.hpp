@@ -116,8 +116,6 @@ static void loadRoom(Game &g, uint8_t roomId, uint8_t spawn) {
     g.roomFirstProp = room.firstProp;
     g.roomPropCount = room.propCount;
     g.roomMonsterKind = room.monsterKind;
-    if (room.monsterKind == zone::MONSTER_NONE)
-        g.target = Target{};   // safe room: no target until a beast room loads
 
     const ZoneSpawn sp = zoneSpawnRead(spawn);
     g.player.x = static_cast<int16_t>(sp.x);
@@ -134,6 +132,12 @@ static void loadRoom(Game &g, uint8_t roomId, uint8_t spawn) {
     updateCamera(g);       // clamp the follow to the new room's extents
     g.doorLatch = true;    // suppress doors until the spawn rect is left
     g.fade = FADE_TICKS;   // render black-wipe on arrival (no cart traffic)
+    // Re-arm the target for the arrival room: a safe room clears it, a beast
+    // room re-wires the monster callbacks (a prior safe load nulled them, and
+    // the per-tick syncMonsterTarget only refreshes alive/rect, so without this
+    // hits landed on a null callback after camp -> area). Train re-arms the
+    // pole. Monster state is untouched: hp/pos/FSM persist by design.
+    updateActiveTarget(g);
 }
 
 // Door check (stepGame): a player-rect overlap with any door rect transitions
