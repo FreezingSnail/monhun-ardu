@@ -308,10 +308,12 @@ static void test_parity(FxTest &test) {
         g.monster.fx = mhPgmReadI16(&parity_fx::overrides[o + 5]);
         g.monster.fy = mhPgmReadI16(&parity_fx::overrides[o + 6]);
         const int16_t kind = mhPgmReadI16(&parity_fx::overrides[o + 7]);
-        // Fixture records the mock's attack kind (MODO) only; every scene runs
-        // the legacy LUNGE creature, whose authored list is [lunge, sweep].
+        // Fixture records the mock's attack kind (MODO) only; the chicken's
+        // legacy lunge/sweep now live on the SWEEP creature, so the fixture's
+        // kind 0/1 loads that creature's [lunge, sweep] records (same legacy
+        // scalars the mock's MONSTER_ATTACKS entries still carry).
         if (kind >= 0)
-            monsterAttackSet(g, kind == MK_LUNGE ? combat::ATTACK_LUNGE_LUNGE : combat::ATTACK_LUNGE_SWEEP);
+            monsterAttackSet(g, kind == MK_LUNGE ? combat::ATTACK_SWEEP_LUNGE : combat::ATTACK_SWEEP_SWEEP);
         else
             g.monster.atkIdx = COMBAT_NO_ATTACK;
         g.pole.rect.x = mhPgmReadI16(&parity_fx::overrides[o + 8]);

@@ -304,8 +304,8 @@
     },
     {
       "path": "data/creatures/lunge.json",
-      "sha256": "e8afa55ee51bdfbb6a59675367fafc1e82217f3c6efb939f0340c460ad346baa",
-      "size": 2354
+      "sha256": "e22e0368a4b33b82561f9a1a63cb25b4e489a53fa54520d2a4f0f4d086ed202e",
+      "size": 2390
     },
     {
       "path": "data/creatures/pole.json",
@@ -599,7 +599,7 @@
     },
     {
       "path": "fxdata/tables/combat.bin",
-      "sha256": "d0e42b06aa35338e3992cb273e9b1d7b15972bf48244b31dbf57e6110f4d934d",
+      "sha256": "7be2064f247bb19c60dbd42b599a23f80f20afdc878c993f08a3f0d5351c7f3c",
       "size": 970,
       "symbol": "mhCombat"
     },
@@ -655,12 +655,12 @@
   "outputs": [
     {
       "path": "fxdata/fxdata-data.bin",
-      "sha256": "836bd1fdca9713cd63df0d3d1f16aeb1f8d6ae991fc5a0dd7aa673138494eaec",
+      "sha256": "1d28dd6f6896de766aa58ce1b3e1ea5081eb02ee5982e075a7bf5301618bed3b",
       "size": 174810
     },
     {
       "path": "fxdata/fxdata.bin",
-      "sha256": "64087806145f321eb3c375f2beb1f1896d51e33ed5568b3a3c558492a38056de",
+      "sha256": "af373e3d0f2ad6dbf4916fd2ee75beb10ddb2498042dafb73f2934612b1b74ba",
       "size": 174848
     },
     {
@@ -670,7 +670,7 @@
     },
     {
       "path": "fxdata/tables/combat.bin",
-      "sha256": "d0e42b06aa35338e3992cb273e9b1d7b15972bf48244b31dbf57e6110f4d934d",
+      "sha256": "7be2064f247bb19c60dbd42b599a23f80f20afdc878c993f08a3f0d5351c7f3c",
       "size": 970
     },
     {
@@ -705,18 +705,18 @@
     },
     {
       "path": "src/generated/combat_data.hpp",
-      "sha256": "3de8e46001f0d165be488593ecb833738d018b23452e06a63e72d20e569c1d05",
-      "size": 9238
+      "sha256": "6261dcdc7b5ed1941c5558325942a6b6b8675ba0a2763a1eb637f85fff006180",
+      "size": 9229
     },
     {
       "path": "src/generated/combat_expect.hpp",
-      "sha256": "930177fbbc2347271881454f9e79d9dad24b29e035b4fd096ed9d73df0b5d132",
-      "size": 9659
+      "sha256": "adb97fcc393436436095f8f50a92ed0c9f58e0592cc24510da4a89835101e81e",
+      "size": 9648
     },
     {
       "path": "src/generated/combat_meta.hpp",
-      "sha256": "36788b8b957027c1ecdc00f6e1eb540730d8cb8cebb2c269f88ee02c91a9b67c",
-      "size": 9770
+      "sha256": "f613f2e3891fe4c52f8ea9c487b55d3597c8dcd60e8b624d861244f75e384fff",
+      "size": 9750
     },
     {
       "path": "src/generated/equip_meta.hpp",

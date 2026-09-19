@@ -59,14 +59,14 @@ constexpr int8_t CREATURE_LUNGE_COLLIDE_OX = 9;
 constexpr int8_t CREATURE_LUNGE_COLLIDE_OY = 11;
 constexpr uint8_t CREATURE_LUNGE_COLLIDE_W = 12;
 constexpr uint8_t CREATURE_LUNGE_COLLIDE_H = 13;
-constexpr uint8_t PROFILE_LUNGE_FACE_HOLD = 0;
-constexpr uint16_t ATTACK_LUNGE_LUNGE_WINDUP = 40;
-constexpr uint16_t ATTACK_LUNGE_LUNGE_ACTIVE = 10;
-constexpr uint16_t ATTACK_LUNGE_LUNGE_RECOVER = 55;
-constexpr uint16_t ATTACK_LUNGE_LUNGE_DMG = 12;
-constexpr uint8_t PATTERN_LUNGE_P_LUNGE_MIN_DIST = 33;
-constexpr uint8_t PATTERN_LUNGE_P_LUNGE_MAX_DIST = 255;
-constexpr uint8_t PATTERN_LUNGE_P_LUNGE_CHANCE = 100;
+constexpr uint8_t PROFILE_LUNGE_FACE_HOLD = 6;
+constexpr uint16_t ATTACK_LUNGE_PECK_WINDUP = 22;
+constexpr uint16_t ATTACK_LUNGE_PECK_ACTIVE = 6;
+constexpr uint16_t ATTACK_LUNGE_PECK_RECOVER = 30;
+constexpr uint16_t ATTACK_LUNGE_PECK_DMG = 7;
+constexpr uint8_t PATTERN_LUNGE_P_PECK_MIN_DIST = 0;
+constexpr uint8_t PATTERN_LUNGE_P_PECK_MAX_DIST = 28;
+constexpr uint8_t PATTERN_LUNGE_P_PECK_CHANCE = 100;
 constexpr uint8_t ZONE_LUNGE_HEAD_HP = 40;
 constexpr uint8_t ZONE_LUNGE_HEAD_DMG_MUL = 130;
 constexpr uint8_t ZONE_LUNGE_HEAD_BODY_SHARE = 100;
@@ -196,12 +196,12 @@ constexpr uint8_t PATTERN_SWEEP_P_SWEEP_MIN_DIST = 0;
 constexpr uint8_t PATTERN_SWEEP_P_SWEEP_MAX_DIST = 255;
 constexpr uint8_t PATTERN_SWEEP_P_SWEEP_CHANCE = 100;
 
-// sha256 of fxdata/tables/combat.bin: d0e42b06aa35338e3992cb273e9b1d7b15972bf48244b31dbf57e6110f4d934d
+// sha256 of fxdata/tables/combat.bin: 7be2064f247bb19c60dbd42b599a23f80f20afdc878c993f08a3f0d5351c7f3c
 constexpr uint8_t BLOB_SHA256[32] = {
-    0xD0, 0xE4, 0x2B, 0x06, 0xAA, 0x35, 0x33, 0x8E,
-    0x39, 0x92, 0xCB, 0x27, 0x3E, 0x9B, 0x1D, 0x7B,
-    0x15, 0x97, 0x2B, 0xF4, 0x82, 0x44, 0xB3, 0x1D,
-    0xBF, 0x57, 0xE6, 0x11, 0x0F, 0x4D, 0x93, 0x4D,
+    0x7B, 0xE2, 0x06, 0x4F, 0x24, 0x7B, 0xB1, 0x9C,
+    0x60, 0xDB, 0xD4, 0x2B, 0x59, 0x9A, 0x23, 0xF8,
+    0x0F, 0x20, 0xAF, 0xDC, 0x87, 0x8C, 0x99, 0x3F,
+    0x08, 0xA3, 0xF0, 0xD5, 0x35, 0x1C, 0x7F, 0x3C,
 };
 
 }   // namespace combat_expect

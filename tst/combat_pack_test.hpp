@@ -262,8 +262,8 @@ void CombatPackSuite(TestRunner &runner) {
             {"ANCHOR_QUAD_32X24_HEAD", combat::ANCHOR_QUAD_32X24_HEAD_OFF, combat::ANCHORS_OFF, 9, combat::ANCHOR_SIZE, combat::ANCHORS_COUNT},
             {"ATTACK_HEAVY_BITE", combat::ATTACK_HEAVY_BITE_OFF, combat::ATTACKS_OFF, combat::ATTACK_HEAVY_BITE, combat::ATTACK_SIZE, combat::ATTACKS_COUNT},
             {"ATTACK_HEAVY_TAIL_SPIN", combat::ATTACK_HEAVY_TAIL_SPIN_OFF, combat::ATTACKS_OFF, combat::ATTACK_HEAVY_TAIL_SPIN, combat::ATTACK_SIZE, combat::ATTACKS_COUNT},
-            {"ATTACK_LUNGE_LUNGE", combat::ATTACK_LUNGE_LUNGE_OFF, combat::ATTACKS_OFF, combat::ATTACK_LUNGE_LUNGE, combat::ATTACK_SIZE, combat::ATTACKS_COUNT},
-            {"ATTACK_LUNGE_SWEEP", combat::ATTACK_LUNGE_SWEEP_OFF, combat::ATTACKS_OFF, combat::ATTACK_LUNGE_SWEEP, combat::ATTACK_SIZE, combat::ATTACKS_COUNT},
+            {"ATTACK_LUNGE_PECK", combat::ATTACK_LUNGE_PECK_OFF, combat::ATTACKS_OFF, combat::ATTACK_LUNGE_PECK, combat::ATTACK_SIZE, combat::ATTACKS_COUNT},
+            {"ATTACK_LUNGE_LEAP", combat::ATTACK_LUNGE_LEAP_OFF, combat::ATTACKS_OFF, combat::ATTACK_LUNGE_LEAP, combat::ATTACK_SIZE, combat::ATTACKS_COUNT},
             {"ATTACK_RAVAGER_BITE", combat::ATTACK_RAVAGER_BITE_OFF, combat::ATTACKS_OFF, combat::ATTACK_RAVAGER_BITE, combat::ATTACK_SIZE, combat::ATTACKS_COUNT},
             {"ATTACK_RAVAGER_TAIL_SWEEP", combat::ATTACK_RAVAGER_TAIL_SWEEP_OFF, combat::ATTACKS_OFF, combat::ATTACK_RAVAGER_TAIL_SWEEP, combat::ATTACK_SIZE, combat::ATTACKS_COUNT},
             {"ATTACK_SWEEP_LUNGE", combat::ATTACK_SWEEP_LUNGE_OFF, combat::ATTACKS_OFF, combat::ATTACK_SWEEP_LUNGE, combat::ATTACK_SIZE, combat::ATTACKS_COUNT},
@@ -273,8 +273,8 @@ void CombatPackSuite(TestRunner &runner) {
             {"WINDOW_HEAVY_TAIL_SPIN_1", combat::WINDOW_HEAVY_TAIL_SPIN_1_OFF, combat::WINDOWS_OFF, combat::WINDOW_HEAVY_TAIL_SPIN_1, combat::WINDOW_SIZE, combat::WINDOWS_COUNT},
             {"WINDOW_HEAVY_TAIL_SPIN_2", combat::WINDOW_HEAVY_TAIL_SPIN_2_OFF, combat::WINDOWS_OFF, combat::WINDOW_HEAVY_TAIL_SPIN_2, combat::WINDOW_SIZE, combat::WINDOWS_COUNT},
             {"WINDOW_HEAVY_TAIL_SPIN_3", combat::WINDOW_HEAVY_TAIL_SPIN_3_OFF, combat::WINDOWS_OFF, combat::WINDOW_HEAVY_TAIL_SPIN_3, combat::WINDOW_SIZE, combat::WINDOWS_COUNT},
-            {"WINDOW_LUNGE_LUNGE_0", combat::WINDOW_LUNGE_LUNGE_0_OFF, combat::WINDOWS_OFF, combat::WINDOW_LUNGE_LUNGE_0, combat::WINDOW_SIZE, combat::WINDOWS_COUNT},
-            {"WINDOW_LUNGE_SWEEP_0", combat::WINDOW_LUNGE_SWEEP_0_OFF, combat::WINDOWS_OFF, combat::WINDOW_LUNGE_SWEEP_0, combat::WINDOW_SIZE, combat::WINDOWS_COUNT},
+            {"WINDOW_LUNGE_PECK_0", combat::WINDOW_LUNGE_PECK_0_OFF, combat::WINDOWS_OFF, combat::WINDOW_LUNGE_PECK_0, combat::WINDOW_SIZE, combat::WINDOWS_COUNT},
+            {"WINDOW_LUNGE_LEAP_0", combat::WINDOW_LUNGE_LEAP_0_OFF, combat::WINDOWS_OFF, combat::WINDOW_LUNGE_LEAP_0, combat::WINDOW_SIZE, combat::WINDOWS_COUNT},
             {"WINDOW_RAVAGER_BITE_0", combat::WINDOW_RAVAGER_BITE_0_OFF, combat::WINDOWS_OFF, combat::WINDOW_RAVAGER_BITE_0, combat::WINDOW_SIZE, combat::WINDOWS_COUNT},
             {"WINDOW_RAVAGER_TAIL_SWEEP_0", combat::WINDOW_RAVAGER_TAIL_SWEEP_0_OFF, combat::WINDOWS_OFF, combat::WINDOW_RAVAGER_TAIL_SWEEP_0, combat::WINDOW_SIZE, combat::WINDOWS_COUNT},
             {"WINDOW_RAVAGER_TAIL_SWEEP_1", combat::WINDOW_RAVAGER_TAIL_SWEEP_1_OFF, combat::WINDOWS_OFF, combat::WINDOW_RAVAGER_TAIL_SWEEP_1, combat::WINDOW_SIZE, combat::WINDOWS_COUNT},
@@ -282,24 +282,24 @@ void CombatPackSuite(TestRunner &runner) {
             {"WINDOW_SWEEP_SWEEP_0", combat::WINDOW_SWEEP_SWEEP_0_OFF, combat::WINDOWS_OFF, combat::WINDOW_SWEEP_SWEEP_0, combat::WINDOW_SIZE, combat::WINDOWS_COUNT},
             {"PATTERN_HEAVY_P_SPIN", combat::PATTERN_HEAVY_P_SPIN_OFF, combat::PATTERNS_OFF, combat::PATTERN_HEAVY_P_SPIN, combat::PATTERN_SIZE, combat::PATTERNS_COUNT},
             {"PATTERN_HEAVY_P_BITE", combat::PATTERN_HEAVY_P_BITE_OFF, combat::PATTERNS_OFF, combat::PATTERN_HEAVY_P_BITE, combat::PATTERN_SIZE, combat::PATTERNS_COUNT},
-            {"PATTERN_LUNGE_P_LUNGE", combat::PATTERN_LUNGE_P_LUNGE_OFF, combat::PATTERNS_OFF, combat::PATTERN_LUNGE_P_LUNGE, combat::PATTERN_SIZE, combat::PATTERNS_COUNT},
-            {"PATTERN_LUNGE_P_SWEEP", combat::PATTERN_LUNGE_P_SWEEP_OFF, combat::PATTERNS_OFF, combat::PATTERN_LUNGE_P_SWEEP, combat::PATTERN_SIZE, combat::PATTERNS_COUNT},
+            {"PATTERN_LUNGE_P_PECK", combat::PATTERN_LUNGE_P_PECK_OFF, combat::PATTERNS_OFF, combat::PATTERN_LUNGE_P_PECK, combat::PATTERN_SIZE, combat::PATTERNS_COUNT},
+            {"PATTERN_LUNGE_P_LEAP", combat::PATTERN_LUNGE_P_LEAP_OFF, combat::PATTERNS_OFF, combat::PATTERN_LUNGE_P_LEAP, combat::PATTERN_SIZE, combat::PATTERNS_COUNT},
             {"PATTERN_RAVAGER_P_BITE", combat::PATTERN_RAVAGER_P_BITE_OFF, combat::PATTERNS_OFF, combat::PATTERN_RAVAGER_P_BITE, combat::PATTERN_SIZE, combat::PATTERNS_COUNT},
             {"PATTERN_RAVAGER_P_ENRAGED", combat::PATTERN_RAVAGER_P_ENRAGED_OFF, combat::PATTERNS_OFF, combat::PATTERN_RAVAGER_P_ENRAGED, combat::PATTERN_SIZE, combat::PATTERNS_COUNT},
             {"PATTERN_RAVAGER_P_SWEEP", combat::PATTERN_RAVAGER_P_SWEEP_OFF, combat::PATTERNS_OFF, combat::PATTERN_RAVAGER_P_SWEEP, combat::PATTERN_SIZE, combat::PATTERNS_COUNT},
             {"PATTERN_SWEEP_P_SWEEP", combat::PATTERN_SWEEP_P_SWEEP_OFF, combat::PATTERNS_OFF, combat::PATTERN_SWEEP_P_SWEEP, combat::PATTERN_SIZE, combat::PATTERNS_COUNT},
             {"GUARD_HEAVY_P_SPIN", combat::GUARD_HEAVY_P_SPIN_OFF, combat::GUARDS_OFF, combat::GUARD_HEAVY_P_SPIN, combat::GUARD_SIZE, combat::GUARDS_COUNT},
             {"GUARD_HEAVY_P_BITE", combat::GUARD_HEAVY_P_BITE_OFF, combat::GUARDS_OFF, combat::GUARD_HEAVY_P_BITE, combat::GUARD_SIZE, combat::GUARDS_COUNT},
-            {"GUARD_LUNGE_P_LUNGE", combat::GUARD_LUNGE_P_LUNGE_OFF, combat::GUARDS_OFF, combat::GUARD_LUNGE_P_LUNGE, combat::GUARD_SIZE, combat::GUARDS_COUNT},
-            {"GUARD_LUNGE_P_SWEEP", combat::GUARD_LUNGE_P_SWEEP_OFF, combat::GUARDS_OFF, combat::GUARD_LUNGE_P_SWEEP, combat::GUARD_SIZE, combat::GUARDS_COUNT},
+            {"GUARD_LUNGE_P_PECK", combat::GUARD_LUNGE_P_PECK_OFF, combat::GUARDS_OFF, combat::GUARD_LUNGE_P_PECK, combat::GUARD_SIZE, combat::GUARDS_COUNT},
+            {"GUARD_LUNGE_P_LEAP", combat::GUARD_LUNGE_P_LEAP_OFF, combat::GUARDS_OFF, combat::GUARD_LUNGE_P_LEAP, combat::GUARD_SIZE, combat::GUARDS_COUNT},
             {"GUARD_RAVAGER_P_BITE", combat::GUARD_RAVAGER_P_BITE_OFF, combat::GUARDS_OFF, combat::GUARD_RAVAGER_P_BITE, combat::GUARD_SIZE, combat::GUARDS_COUNT},
             {"GUARD_RAVAGER_P_ENRAGED", combat::GUARD_RAVAGER_P_ENRAGED_OFF, combat::GUARDS_OFF, combat::GUARD_RAVAGER_P_ENRAGED, combat::GUARD_SIZE, combat::GUARDS_COUNT},
             {"GUARD_RAVAGER_P_SWEEP", combat::GUARD_RAVAGER_P_SWEEP_OFF, combat::GUARDS_OFF, combat::GUARD_RAVAGER_P_SWEEP, combat::GUARD_SIZE, combat::GUARDS_COUNT},
             {"GUARD_SWEEP_P_SWEEP", combat::GUARD_SWEEP_P_SWEEP_OFF, combat::GUARDS_OFF, combat::GUARD_SWEEP_P_SWEEP, combat::GUARD_SIZE, combat::GUARDS_COUNT},
             {"STEP_HEAVY_P_SPIN_0", combat::STEP_HEAVY_P_SPIN_0_OFF, combat::STEPS_OFF, combat::STEP_HEAVY_P_SPIN_0, combat::STEP_SIZE, combat::STEPS_COUNT},
             {"STEP_HEAVY_P_BITE_0", combat::STEP_HEAVY_P_BITE_0_OFF, combat::STEPS_OFF, combat::STEP_HEAVY_P_BITE_0, combat::STEP_SIZE, combat::STEPS_COUNT},
-            {"STEP_LUNGE_P_LUNGE_0", combat::STEP_LUNGE_P_LUNGE_0_OFF, combat::STEPS_OFF, combat::STEP_LUNGE_P_LUNGE_0, combat::STEP_SIZE, combat::STEPS_COUNT},
-            {"STEP_LUNGE_P_SWEEP_0", combat::STEP_LUNGE_P_SWEEP_0_OFF, combat::STEPS_OFF, combat::STEP_LUNGE_P_SWEEP_0, combat::STEP_SIZE, combat::STEPS_COUNT},
+            {"STEP_LUNGE_P_PECK_0", combat::STEP_LUNGE_P_PECK_0_OFF, combat::STEPS_OFF, combat::STEP_LUNGE_P_PECK_0, combat::STEP_SIZE, combat::STEPS_COUNT},
+            {"STEP_LUNGE_P_LEAP_0", combat::STEP_LUNGE_P_LEAP_0_OFF, combat::STEPS_OFF, combat::STEP_LUNGE_P_LEAP_0, combat::STEP_SIZE, combat::STEPS_COUNT},
             {"STEP_RAVAGER_P_BITE_0", combat::STEP_RAVAGER_P_BITE_0_OFF, combat::STEPS_OFF, combat::STEP_RAVAGER_P_BITE_0, combat::STEP_SIZE, combat::STEPS_COUNT},
             {"STEP_RAVAGER_P_ENRAGED_0", combat::STEP_RAVAGER_P_ENRAGED_0_OFF, combat::STEPS_OFF, combat::STEP_RAVAGER_P_ENRAGED_0, combat::STEP_SIZE, combat::STEPS_COUNT},
             {"STEP_RAVAGER_P_SWEEP_0", combat::STEP_RAVAGER_P_SWEEP_0_OFF, combat::STEPS_OFF, combat::STEP_RAVAGER_P_SWEEP_0, combat::STEP_SIZE, combat::STEPS_COUNT},
@@ -471,17 +471,17 @@ void CombatPackSuite(TestRunner &runner) {
         t.assert(b16(blob, static_cast<size_t>(combat::ATTACK_HEAVY_BITE_OFF) + 16), combat_expect::ATTACK_HEAVY_BITE_ACTIVE, "expect heavy bite active");
         t.assert(b16(blob, static_cast<size_t>(combat::ATTACK_HEAVY_BITE_OFF) + 18), combat_expect::ATTACK_HEAVY_BITE_RECOVER, "expect heavy bite recover");
         t.assert(b16(blob, static_cast<size_t>(combat::ATTACK_HEAVY_BITE_OFF) + 20), combat_expect::ATTACK_HEAVY_BITE_DMG, "expect heavy bite dmg");
-        t.assert(b16(blob, static_cast<size_t>(combat::ATTACK_LUNGE_LUNGE_OFF) + 14), combat_expect::ATTACK_LUNGE_LUNGE_WINDUP, "expect lunge windup");
-        t.assert(b16(blob, static_cast<size_t>(combat::ATTACK_LUNGE_LUNGE_OFF) + 16), combat_expect::ATTACK_LUNGE_LUNGE_ACTIVE, "expect lunge active");
-        t.assert(b16(blob, static_cast<size_t>(combat::ATTACK_LUNGE_LUNGE_OFF) + 18), combat_expect::ATTACK_LUNGE_LUNGE_RECOVER, "expect lunge recover");
-        t.assert(b16(blob, static_cast<size_t>(combat::ATTACK_LUNGE_LUNGE_OFF) + 20), combat_expect::ATTACK_LUNGE_LUNGE_DMG, "expect lunge dmg");
+        t.assert(b16(blob, static_cast<size_t>(combat::ATTACK_LUNGE_PECK_OFF) + 14), combat_expect::ATTACK_LUNGE_PECK_WINDUP, "expect lunge windup");
+        t.assert(b16(blob, static_cast<size_t>(combat::ATTACK_LUNGE_PECK_OFF) + 16), combat_expect::ATTACK_LUNGE_PECK_ACTIVE, "expect lunge active");
+        t.assert(b16(blob, static_cast<size_t>(combat::ATTACK_LUNGE_PECK_OFF) + 18), combat_expect::ATTACK_LUNGE_PECK_RECOVER, "expect lunge recover");
+        t.assert(b16(blob, static_cast<size_t>(combat::ATTACK_LUNGE_PECK_OFF) + 20), combat_expect::ATTACK_LUNGE_PECK_DMG, "expect lunge dmg");
         t.assert(b8(blob, static_cast<size_t>(combat::GUARD_HEAVY_P_SPIN_OFF) + 0), combat_expect::PATTERN_HEAVY_P_SPIN_MIN_DIST, "expect heavy spin minDist");
         t.assert(b8(blob, static_cast<size_t>(combat::GUARD_HEAVY_P_SPIN_OFF) + 1), combat_expect::PATTERN_HEAVY_P_SPIN_MAX_DIST, "expect heavy spin maxDist");
         // p_bite is the second heavy pattern: minDist 30 .. maxDist 255 (nch.4).
         t.assert(b8(blob, static_cast<size_t>(combat::GUARD_HEAVY_P_BITE_OFF) + 0), 30, "expect heavy bite minDist");
         t.assert(b8(blob, static_cast<size_t>(combat::GUARD_HEAVY_P_BITE_OFF) + 1), 255, "expect heavy bite maxDist");
-        t.assert(b8(blob, static_cast<size_t>(combat::GUARD_LUNGE_P_LUNGE_OFF) + 0), combat_expect::PATTERN_LUNGE_P_LUNGE_MIN_DIST, "expect lunge minDist");
-        t.assert(b8(blob, static_cast<size_t>(combat::GUARD_LUNGE_P_LUNGE_OFF) + 1), combat_expect::PATTERN_LUNGE_P_LUNGE_MAX_DIST, "expect lunge maxDist");
+        t.assert(b8(blob, static_cast<size_t>(combat::GUARD_LUNGE_P_PECK_OFF) + 0), combat_expect::PATTERN_LUNGE_P_PECK_MIN_DIST, "expect lunge minDist");
+        t.assert(b8(blob, static_cast<size_t>(combat::GUARD_LUNGE_P_PECK_OFF) + 1), combat_expect::PATTERN_LUNGE_P_PECK_MAX_DIST, "expect lunge maxDist");
         t.assert(b8(blob, static_cast<size_t>(combat::GUARD_SWEEP_P_SWEEP_OFF) + 6), combat_expect::PATTERN_SWEEP_P_SWEEP_CHANCE, "expect sweep chance");
         suite.addTest(t);
     }

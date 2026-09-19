@@ -351,14 +351,64 @@ test('monster variants: SWEEP never lunges, HEAVY spins inside 24 else bites', (
   assert.deepEqual(spin.windows.map(w => [w.t0, w.t1]), [[0, 5], [6, 10], [11, 15], [16, 20]]);
   assert.ok(spin.windows[0].ox < 0 && spin.windows[2].ox > 0, 'whips back then front');
 
-  const lunge = G.newGame(0);
-  placeAtDistance(lunge, 33);
-  G.step(lunge, inp({}));
-  assert.equal(lunge.monster.atk.kind, 'lunge', 'legacy lunge at 33');
-  const inside = G.newGame(0);
-  placeAtDistance(inside, 32);
-  G.step(inside, inp({}));
-  assert.equal(inside.monster.atk.kind, 'sweep', 'legacy sweep at 32');
+  // CHICKEN (nch.7): peck inside 28 (source-order p_peck), leap 29..41.
+  const leapFar = G.newGame(0);
+  placeAtDistance(leapFar, 33);
+  G.step(leapFar, inp({}));
+  assert.equal(leapFar.monster.atk.kind, 'leap', 'chicken leaps at 33');
+  const peckClose = G.newGame(0);
+  placeAtDistance(peckClose, 28);
+  G.step(peckClose, inp({}));
+  assert.equal(peckClose.monster.atk.kind, 'peck', 'chicken pecks at 28');
+});
+
+test('monster variants: CHICKEN pecks <= 28 and leaps 29..41', () => {
+  for (const d of [0, 20, 27, 28]) {
+    const g = G.newGame(0, 'hunt', 0);
+    const m = placeAtDistance(g, d);
+    G.step(g, inp({}));
+    assert.equal(m.atk.kind, 'peck', 'peck at dist ' + d);
+  }
+  for (const d of [29, 35, 41]) {
+    const g = G.newGame(0, 'hunt', 0);
+    const m = placeAtDistance(g, d);
+    G.step(g, inp({}));
+    assert.equal(m.atk.kind, 'leap', 'leap at dist ' + d);
+  }
+});
+
+test('monster variants: CHICKEN leap locks facing at windup; hunter flanks behind', () => {
+  const g = G.newGame(0, 'hunt', 0);
+  const m = g.monster;
+  // Hunter due east at leap range: facing refreshes east, then p_leap commits it.
+  m.x = 80;
+  m.y = 40;
+  g.player.x = m.x + (m.w >> 1) + 32 - (g.player.w >> 1);
+  g.player.y = m.y + (m.h >> 1) - (g.player.h >> 1);
+  m.state = 'pursue';
+  m.t = 0;
+  m.cd = 0;
+  G.step(g, inp({}));
+  assert.equal(m.atk.kind, 'leap', 'leap chosen at range');
+  assert.equal(m.state, 'windup');
+  assert.equal(m.face.x, 16, 'leap commits the east facing at windup');
+  assert.equal(m.face.y, 0, 'level east');
+  // Cross behind during windup: lock-at-windup freezes the vector.
+  g.player.x = 20;
+  for (let i = 0; i < G.MONSTER_ATTACKS.leap.windup; i++) G.step(g, inp({}));
+  assert.equal(m.state, 'attack', 'windup completed into the leap');
+  assert.equal(m.face.x, 16, 'facing stays committed through the leap');
+  assert.equal(m.face.y, 0, 'facing stays level');
+});
+
+test('monster variants: CHICKEN broken legs force peck at leap range', () => {
+  const g = G.newGame(0, 'hunt', 0);
+  const m = park(g);
+  m.zones.appendage.broken = true;   // disableAttacks: ['leap']
+  placeAtDistance(g, 33);
+  G.step(g, inp({}));
+  assert.equal(m.atk.kind, 'peck', 'broken legs fall back to the close peck');
+  assert.notEqual(m.atk.kind, 'leap', 'the leap is disabled while legs are broken');
 });
 
 test('monster variants: heavy tail_spin turns away at windup, frozen through attack', () => {

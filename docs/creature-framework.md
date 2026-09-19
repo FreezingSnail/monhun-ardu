@@ -344,3 +344,30 @@ The long-tail's inherited generic `lunge`/`sweep` (initial-creature boxes, the
 - Mock parity: bite/tailSpin use a new `windows[]`/lock path in `MONSTER_ATTACKS`
   (`monsterActiveWindow`/`monsterTellWindow`); the legacy lunge/sweep path is
   value-identical, so all 20 parity scenes stay byte-identical.
+
+## Chicken attack kit (owner design, 2026-09-18 — bead nch.7)
+
+The chicken's inherited generic `lunge`/`sweep` (the 32x24 sweep telegraph) are
+replaced by a two-attack kit, same treatment as the long-tail nch.1:
+
+- `peck` — close jab (windup 22 / active 6 / recover 30, dmg 7, lunge speedF 18),
+  window 12x10 @ ox 14, oy -6, **`facing: track`**. The window box is the real
+  hit test and the telegraph (the device draws the cached window box for every
+  `windows[]` attack; the fixed 32x24 sheet is gone since nch.1).
+- `leap` — committed long lunge (windup 34 / active 10 / recover 48, dmg 12,
+  lunge speedF 42), window 18x16 @ ox 12, oy -2, **`facing: lock-at-windup`**:
+  the tracked vector is frozen through windup + attack, so the hunter can step
+  behind the committed jump.
+- Selection (source order): `p_peck` guard `maxDist 28` → peck; `p_leap` guard
+  `minDist 28` plus `hpBand [0,100]` → leap. So peck ≤ 28 px, leap 29..41 px
+  (pursue re-decides under `attackDist` 42).
+- `keepDist` 16 holds the peck/threat band; `faceHold` 6 commits the tracked
+  facing for six ticks (same mechanism as the long-tail nch.4) so a leap can be
+  flanked. Breaking the legs (`zones.appendage`) disables `leap` and forces the
+  close peck.
+- Mock parity: peck/leap use the `windows[]` path in `MONSTER_ATTACKS`; their
+  `reach/hw/hh` mirror window 0 so the fixture hash matches the C++ cached
+  `combat.attack.win.box`. `faceHold` 6 moves the per-tick face cadence, so two
+  scene hashes move (`beast_no_shove_idle` 40/40 ticks, `camera_world_clamp`
+  3/220) and `tst/fxdatatest/parity_fixtures.hpp` is regenerated in the same
+  change (`monster_sweep_hit` still loads the legacy sweep record).

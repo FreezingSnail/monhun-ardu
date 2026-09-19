@@ -44,8 +44,8 @@ void CombatSuite(TestRunner &runner) {
             t.assert(combatCreatureHeadZone(i), h.headZone, "creature headZone accessor");
             t.assert(combatCreatureAppendZone(i), h.appendZone, "creature appendZone accessor");
         }
-        // Migration A scaffold: slot 0 of every shipped creature is its lunge.
-        t.assert(combatCreatureFirstAttack(combat_data::CREATURE_LUNGE), combat_data::ATTACK_LUNGE_LUNGE, "lunge creature first attack");
+        // Migration A scaffold: slot 0 of every shipped creature is its opener.
+        t.assert(combatCreatureFirstAttack(combat_data::CREATURE_LUNGE), combat_data::ATTACK_LUNGE_PECK, "lunge creature first attack");
         t.assert(combatCreatureFirstAttack(combat_data::CREATURE_SWEEP), combat_data::ATTACK_SWEEP_LUNGE, "sweep creature first attack");
         t.assert(combatCreatureFirstAttack(combat_data::CREATURE_HEAVY), combat_data::ATTACK_HEAVY_BITE, "heavy creature first attack");
         suite.addTest(t);
@@ -75,12 +75,13 @@ void CombatSuite(TestRunner &runner) {
             t.assert(p.staggerRecoverT, h.staggerRecoverT, "profile staggerRecoverT");
         }
         // nch.4: heavy commits its turn (faceHold 10) and holds ground at 12;
-        // the shipped lunge/sweep keep the every-tick default 0.
+        // nch.7: the chicken commits for 6 (faceHold) and holds at keepDist 16.
         const CombatProfile heavy = combatProfileRead(combatCreatureProfileIdx(combat_data::CREATURE_HEAVY));
         t.assert(heavy.faceHold, 10, "heavy faceHold");
         t.assert(heavy.keepDist, 12, "heavy keepDist 12");
         const CombatProfile lunge = combatProfileRead(combatCreatureProfileIdx(combat_data::CREATURE_LUNGE));
-        t.assert(lunge.faceHold, 0, "shipped lunge faceHold 0");
+        t.assert(lunge.faceHold, 6, "chicken faceHold 6");
+        t.assert(lunge.keepDist, 16, "chicken keepDist 16");
         suite.addTest(t);
     }
 
@@ -457,33 +458,34 @@ void CombatSuite(TestRunner &runner) {
         Test t("attackLoad + attackWindowLoad cache lifecycle");
         Game g;
         creatureLoad(g, combat_data::CREATURE_LUNGE);
-        const uint8_t atk = attackLoad(g, combat_data::ATTACK_LUNGE_LUNGE);
-        t.assert(atk, combat_data::ATTACK_LUNGE_LUNGE, "load returns attack idx");
-        t.assert(g.combat.attack.windup, 40, "cache windup");
-        t.assert(g.combat.attack.active, 10, "cache active");
-        t.assert(g.combat.attack.recover, 55, "cache recover");
-        t.assert(g.combat.attack.dmg, 12, "cache dmg");
+        const uint8_t atk = attackLoad(g, combat_data::ATTACK_LUNGE_PECK);
+        t.assert(atk, combat_data::ATTACK_LUNGE_PECK, "load returns attack idx");
+        t.assert(g.combat.attack.windup, 22, "cache windup");
+        t.assert(g.combat.attack.active, 6, "cache active");
+        t.assert(g.combat.attack.recover, 30, "cache recover");
+        t.assert(g.combat.attack.dmg, 7, "cache dmg");
         t.assert(g.combat.attack.moveType, 1, "cache moveType lunge");
-        t.assert(g.combat.attack.moveSpeedF, 34, "cache moveSpeedF");
+        t.assert(g.combat.attack.moveSpeedF, 18, "cache moveSpeedF");
         t.assert(g.combat.attack.facing, 0, "cache facing track");
-        t.assert(g.combat.attack.winIdx, combat_data::WINDOW_LUNGE_LUNGE_0, "cache winIdx");
+        t.assert(g.combat.attack.winIdx, combat_data::WINDOW_LUNGE_PECK_0, "cache winIdx");
         t.assert(g.combat.attack.win.t0, 0, "cache window t0");
-        t.assert(g.combat.attack.win.t1, 10, "cache window t1");
-        t.assert(g.combat.attack.win.box.ox, 12, "cache window ox");
-        t.assert(g.combat.attack.win.box.oy, 0, "cache window oy");
-        t.assert(g.combat.attack.win.box.w, 24, "cache window w");
-        t.assert(g.combat.attack.win.box.h, 22, "cache window h");
+        t.assert(g.combat.attack.win.t1, 6, "cache window t1");
+        t.assert(g.combat.attack.win.box.ox, 14, "cache window ox");
+        t.assert(g.combat.attack.win.box.oy, -6, "cache window oy");
+        t.assert(g.combat.attack.win.box.w, 12, "cache window w");
+        t.assert(g.combat.attack.win.box.h, 10, "cache window h");
         t.assert(g.combat.attack.win.dmgMul, 100, "cache window dmgMul");
 
-        attackWindowLoad(g, combat_data::WINDOW_LUNGE_SWEEP_0);
-        t.assert(g.combat.attack.winIdx, combat_data::WINDOW_LUNGE_SWEEP_0, "window switch idx");
-        t.assert(g.combat.attack.win.t1, 12, "window switch t1");
-        t.assert(g.combat.attack.win.box.ox, 17, "window switch ox");
-        t.assert(g.combat.attack.win.box.w, 32, "window switch w");
-        t.assert(g.combat.attack.win.box.h, 24, "window switch h");
+        attackWindowLoad(g, combat_data::WINDOW_LUNGE_LEAP_0);
+        t.assert(g.combat.attack.winIdx, combat_data::WINDOW_LUNGE_LEAP_0, "window switch idx");
+        t.assert(g.combat.attack.win.t1, 10, "window switch t1");
+        t.assert(g.combat.attack.win.box.ox, 12, "window switch ox");
+        t.assert(g.combat.attack.win.box.oy, -2, "window switch oy");
+        t.assert(g.combat.attack.win.box.w, 18, "window switch w");
+        t.assert(g.combat.attack.win.box.h, 16, "window switch h");
 
         // Attack scalars stay cached across a window switch (active phase).
-        t.assert(g.combat.attack.dmg, 12, "scalars survive window switch");
+        t.assert(g.combat.attack.dmg, 7, "scalars survive window switch");
 
         const uint8_t bad = attackLoad(g, 200);
         t.assert(bad, 0, "bad attack id falls back to 0");
@@ -517,17 +519,20 @@ void CombatSuite(TestRunner &runner) {
         creatureLoad(g, combat_data::CREATURE_LUNGE);
         CombatGuardInput in = {0, 100, 0, 0, 0xFFFF, 0};
 
-        in.dist = 32;
-        t.assert(combatGuardPasses(g, combat_data::PATTERN_LUNGE_P_LUNGE, in), 0, "lunge dist 32 rejected");
-        t.assert(combatGuardPasses(g, combat_data::PATTERN_LUNGE_P_SWEEP, in), 1, "sweep dist 32 accepted");
-        in.dist = 33;
-        t.assert(combatGuardPasses(g, combat_data::PATTERN_LUNGE_P_LUNGE, in), 1, "lunge dist 33 accepted");
-        t.assert(combatGuardPasses(g, combat_data::PATTERN_LUNGE_P_SWEEP, in), 0, "sweep dist 33 rejected");
-        in.dist = 255;
-        t.assert(combatGuardPasses(g, combat_data::PATTERN_LUNGE_P_LUNGE, in), 1, "lunge dist 255 accepted");
+        // Chicken (nch.7): p_peck 0..28, p_leap 28..255; both match at the
+        // inclusive 28 boundary (source order picks peck).
+        in.dist = 28;
+        t.assert(combatGuardPasses(g, combat_data::PATTERN_LUNGE_P_PECK, in), 1, "peck dist 28 accepted");
+        t.assert(combatGuardPasses(g, combat_data::PATTERN_LUNGE_P_LEAP, in), 1, "leap dist 28 accepted (peck wins order)");
+        in.dist = 29;
+        t.assert(combatGuardPasses(g, combat_data::PATTERN_LUNGE_P_PECK, in), 0, "peck dist 29 rejected");
+        t.assert(combatGuardPasses(g, combat_data::PATTERN_LUNGE_P_LEAP, in), 1, "leap dist 29 accepted");
         in.dist = 0;
-        t.assert(combatGuardPasses(g, combat_data::PATTERN_LUNGE_P_LUNGE, in), 0, "lunge dist 0 rejected");
-        t.assert(combatGuardPasses(g, combat_data::PATTERN_LUNGE_P_SWEEP, in), 1, "sweep dist 0 accepted");
+        t.assert(combatGuardPasses(g, combat_data::PATTERN_LUNGE_P_PECK, in), 1, "peck dist 0 accepted");
+        t.assert(combatGuardPasses(g, combat_data::PATTERN_LUNGE_P_LEAP, in), 0, "leap dist 0 rejected");
+        in.dist = 255;
+        t.assert(combatGuardPasses(g, combat_data::PATTERN_LUNGE_P_PECK, in), 0, "peck dist 255 rejected");
+        t.assert(combatGuardPasses(g, combat_data::PATTERN_LUNGE_P_LEAP, in), 1, "leap dist 255 accepted");
 
         creatureLoad(g, combat_data::CREATURE_HEAVY);
         in.dist = 30;
@@ -738,9 +743,14 @@ void CombatSuite(TestRunner &runner) {
         // Head has no unlock mask: breaking it disables nothing.
         g.combat.zoneBroken = COMBAT_ZONE_HEAD_BIT;
         t.assert(combatAttackDisabled(g, combat_data::ATTACK_RAVAGER_TAIL_SWEEP), 0, "broken head disables nothing");
-        // Shipped 3 have no zones: the guard folds the whole path out.
+        // Chicken (nch.7): the legs' broken record disables the leap only.
         creatureLoad(g, combat_data::CREATURE_LUNGE);
-        t.assert(combatAttackDisabled(g, combat_data::ATTACK_LUNGE_LUNGE), 0, "no zones -> attack enabled");
+        g.combat.zoneBroken = 0;
+        t.assert(combatAttackDisabled(g, combat_data::ATTACK_LUNGE_LEAP), 0, "intact legs -> leap enabled");
+        t.assert(combatAttackDisabled(g, combat_data::ATTACK_LUNGE_PECK), 0, "intact legs -> peck enabled");
+        g.combat.zoneBroken = COMBAT_ZONE_APPENDAGE_BIT;
+        t.assert(combatAttackDisabled(g, combat_data::ATTACK_LUNGE_LEAP), 1, "broken legs disable leap");
+        t.assert(combatAttackDisabled(g, combat_data::ATTACK_LUNGE_PECK), 0, "broken legs keep peck");
         suite.addTest(t);
     }
 

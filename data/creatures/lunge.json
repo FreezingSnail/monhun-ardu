@@ -22,13 +22,14 @@
       "breakTypes": ["SLASH"],
       "hurtOn": true,
       "staggerOnHit": 30,
-      "broken": { "dmgMul": 200, "hurtOn": false, "cue": "part_break", "disableAttacks": ["sweep"] }
+      "broken": { "dmgMul": 200, "hurtOn": false, "cue": "part_break", "disableAttacks": ["leap"] }
     }
   },
   "profile": {
     "engageDist": 36,
-    "keepDist": 24,
+    "keepDist": 16,
     "attackDist": 42,
+    "faceHold": 6,
     "circleNum": 8,
     "circleDen": 10,
     "retreatNum": 6,
@@ -44,34 +45,34 @@
   },
   "attacks": [
     {
-      "id": "lunge",
-      "windup": 40,
-      "active": 10,
-      "recover": 55,
-      "dmg": 12,
+      "id": "peck",
+      "windup": 22,
+      "active": 6,
+      "recover": 30,
+      "dmg": 7,
       "phys": "BLUNT",
       "elem": "NONE",
-      "move": { "type": "lunge", "speedF": 34 },
+      "move": { "type": "lunge", "speedF": 18 },
       "facing": "track",
       "windows": [
-        { "t0": 0, "t1": 10, "box": { "ox": 12, "oy": 0, "w": 24, "h": 22 }, "dmgMul": 100 }
+        { "t0": 0, "t1": 6, "box": { "ox": 14, "oy": -6, "w": 12, "h": 10 }, "dmgMul": 100 }
       ],
       "onHit": { "effect": "none", "push": 0, "stun": 0 },
       "stagger": 0,
       "cue": "windup"
     },
     {
-      "id": "sweep",
-      "windup": 48,
-      "active": 12,
-      "recover": 60,
-      "dmg": 9,
+      "id": "leap",
+      "windup": 34,
+      "active": 10,
+      "recover": 48,
+      "dmg": 12,
       "phys": "BLUNT",
       "elem": "NONE",
-      "move": { "type": "none" },
-      "facing": "track",
+      "move": { "type": "lunge", "speedF": 42 },
+      "facing": "lock-at-windup",
       "windows": [
-        { "t0": 0, "t1": 12, "box": { "ox": 17, "oy": 0, "w": 32, "h": 24 }, "dmgMul": 100 }
+        { "t0": 0, "t1": 10, "box": { "ox": 12, "oy": -2, "w": 18, "h": 16 }, "dmgMul": 100 }
       ],
       "onHit": { "effect": "none", "push": 0, "stun": 0 },
       "stagger": 0,
@@ -80,14 +81,14 @@
   ],
   "patterns": [
     {
-      "id": "p_lunge",
-      "guard": { "minDist": 33, "maxDist": 255, "hpBand": [0, 100], "chance": 100 },
-      "steps": [ { "atk": "lunge", "after": 0 } ]
+      "id": "p_peck",
+      "guard": { "maxDist": 28, "chance": 100 },
+      "steps": [ { "atk": "peck", "after": 0 } ]
     },
     {
-      "id": "p_sweep",
-      "guard": { "maxDist": 32, "chance": 100 },
-      "steps": [ { "atk": "sweep", "after": 0 } ]
+      "id": "p_leap",
+      "guard": { "minDist": 28, "maxDist": 255, "hpBand": [0, 100], "chance": 100 },
+      "steps": [ { "atk": "leap", "after": 0 } ]
     }
   ]
 }

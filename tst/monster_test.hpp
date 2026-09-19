@@ -71,19 +71,19 @@ void MonsterSuite(TestRunner &runner) {
     }
 
     {
-        Test t("chooseAttack: lunge beyond 32px, sweep inside (cache identity)");
+        Test t("chooseAttack: chicken pecks inside 28, leaps 29..41 (cache identity)");
         Game g;
         newHunt(g);
         chooseAttack(g, 33);
-        t.assert(g.monster.atkIdx, combat::ATTACK_LUNGE_LUNGE, "dist 33 -> lunge");
-        t.assert(g.combat.attack.moveType, MOVE_LUNGE, "lunge cache moveType");
+        t.assert(g.monster.atkIdx, combat::ATTACK_LUNGE_LEAP, "dist 33 -> leap");
+        t.assert(g.combat.attack.moveType, MOVE_LUNGE, "leap cache moveType");
         t.assert(g.monster.state, MS_WINDUP, "windup state");
-        t.assert(g.monster.t, 40, "lunge tell 40");
-        t.assert(g.monster.windupMax, 40, "windupMax recorded");
-        chooseAttack(g, 32);
-        t.assert(g.monster.atkIdx, combat::ATTACK_LUNGE_SWEEP, "dist 32 -> sweep");
-        t.assert(g.combat.attack.moveType, MOVE_NONE, "sweep cache moveType");
-        t.assert(g.monster.t, 48, "sweep tell 48");
+        t.assert(g.monster.t, 34, "leap tell 34");
+        t.assert(g.monster.windupMax, 34, "windupMax recorded");
+        chooseAttack(g, 28);
+        t.assert(g.monster.atkIdx, combat::ATTACK_LUNGE_PECK, "dist 28 -> peck");
+        t.assert(g.combat.attack.moveType, MOVE_LUNGE, "peck cache moveType");
+        t.assert(g.monster.t, 22, "peck tell 22");
         suite.addTest(t);
     }
 
@@ -180,7 +180,7 @@ void MonsterSuite(TestRunner &runner) {
     }
 
     {
-        Test t("chooseAttack variants: SWEEP never lunges, HEAVY spins inside 30 else bites");
+        Test t("chooseAttack variants: SWEEP never lunges, HEAVY spins inside 30, CHICKEN pecks/leaps");
         Game g;
         newGame(g, W_SWORD, MODE_HUNT, MON_SWEEP);
         Monster &m = g.monster;
@@ -201,10 +201,14 @@ void MonsterSuite(TestRunner &runner) {
         t.assert(h.atkIdx, combat::ATTACK_HEAVY_TAIL_SPIN, "heavy spins at 24");
         Game g3;
         newGame(g3, W_SWORD, MODE_HUNT, MON_LUNGE);
-        chooseAttack(g3, 33);
-        t.assert(g3.monster.atkIdx, combat::ATTACK_LUNGE_LUNGE, "legacy lunges at 33");
-        chooseAttack(g3, 32);
-        t.assert(g3.monster.atkIdx, combat::ATTACK_LUNGE_SWEEP, "legacy sweeps at 32");
+        chooseAttack(g3, 41);
+        t.assert(g3.monster.atkIdx, combat::ATTACK_LUNGE_LEAP, "chicken leaps at 41");
+        chooseAttack(g3, 29);
+        t.assert(g3.monster.atkIdx, combat::ATTACK_LUNGE_LEAP, "chicken leaps at 29");
+        chooseAttack(g3, 28);
+        t.assert(g3.monster.atkIdx, combat::ATTACK_LUNGE_PECK, "chicken pecks at 28");
+        chooseAttack(g3, 0);
+        t.assert(g3.monster.atkIdx, combat::ATTACK_LUNGE_PECK, "chicken pecks at 0");
         suite.addTest(t);
     }
 
@@ -327,27 +331,28 @@ void MonsterSuite(TestRunner &runner) {
         newHunt(g);
         chooseAttack(g, 33);
         const CombatAttackCache &ac = g.combat.attack;
-        t.assert(g.monster.winRemain, 0, "lunge declares one window");
-        t.assert(ac.windup, 40, "cache windup");
+        t.assert(g.monster.winRemain, 0, "leap declares one window");
+        t.assert(ac.windup, 34, "cache windup");
         t.assert(ac.active, 10, "cache active");
-        t.assert(ac.recover, 55, "cache recover");
+        t.assert(ac.recover, 48, "cache recover");
         t.assert(ac.dmg, 12, "cache dmg");
-        t.assert(ac.moveSpeedF, 34, "cache speedF");
-        t.assert(ac.winIdx, combat::WINDOW_LUNGE_LUNGE_0, "cache first window");
+        t.assert(ac.moveSpeedF, 42, "cache speedF");
+        t.assert(ac.winIdx, combat::WINDOW_LUNGE_LEAP_0, "cache first window");
         t.assert(ac.win.t0, 0, "window t0");
         t.assert(ac.win.t1, 10, "window t1");
         t.assert(ac.win.box.ox, 12, "window ox");
-        t.assert(ac.win.box.oy, 0, "window oy");
-        t.assert(ac.win.box.w, 24, "window w");
-        t.assert(ac.win.box.h, 22, "window h");
+        t.assert(ac.win.box.oy, -2, "window oy");
+        t.assert(ac.win.box.w, 18, "window w");
+        t.assert(ac.win.box.h, 16, "window h");
         t.assert(ac.win.dmgMul, 100, "window dmgMul");
 
-        chooseAttack(g, 32);
-        t.assert(g.combat.attack.winIdx, combat::WINDOW_LUNGE_SWEEP_0, "sweep window cached");
-        t.assert(g.combat.attack.win.box.ox, 17, "sweep window ox");
-        t.assert(g.combat.attack.win.box.w, 32, "sweep window w");
-        t.assert(g.combat.attack.win.box.h, 24, "sweep window h");
-        t.assert(g.combat.attack.dmg, 9, "sweep dmg cached");
+        chooseAttack(g, 28);
+        t.assert(g.combat.attack.winIdx, combat::WINDOW_LUNGE_PECK_0, "peck window cached");
+        t.assert(g.combat.attack.win.box.ox, 14, "peck window ox");
+        t.assert(g.combat.attack.win.box.oy, -6, "peck window oy");
+        t.assert(g.combat.attack.win.box.w, 12, "peck window w");
+        t.assert(g.combat.attack.win.box.h, 10, "peck window h");
+        t.assert(g.combat.attack.dmg, 7, "peck dmg cached");
         suite.addTest(t);
     }
 
@@ -356,18 +361,18 @@ void MonsterSuite(TestRunner &runner) {
         Game g;
         newHunt(g);
         Monster &m = g.monster;
-        monsterAttackSet(g, combat::ATTACK_LUNGE_LUNGE);
+        monsterAttackSet(g, combat::ATTACK_LUNGE_PECK);
         m.x = 0;
         m.y = 0;
         m.fx = 16;
-        m.fy = 0;   // centre (16,12), lunge box x16..40
-        g.player.x = 41;
+        m.fy = 0;   // centre (16,12); peck box (14,-6) -> x24..36
+        g.player.x = 36;
         g.player.y = 4;
         g.player.w = 16;
         g.player.h = 16;
-        t.assert(monsterHitsPlayer(g), 0, "lunge window misses at x41");
-        attackWindowLoad(g, combat::WINDOW_LUNGE_SWEEP_0);   // sweep box x17..49
-        t.assert(monsterHitsPlayer(g), 1, "widened cached window hits at x41");
+        t.assert(monsterHitsPlayer(g), 0, "peck window misses at x36");
+        attackWindowLoad(g, combat::WINDOW_LUNGE_LEAP_0);   // leap box (12,-2) -> x19..37
+        t.assert(monsterHitsPlayer(g), 1, "wider cached window hits at x36");
         suite.addTest(t);
     }
 
@@ -376,52 +381,52 @@ void MonsterSuite(TestRunner &runner) {
         Game g;
         newHunt(g);
         Monster &m = g.monster;
-        monsterAttackSet(g, combat::ATTACK_LUNGE_LUNGE);
+        monsterAttackSet(g, combat::ATTACK_LUNGE_PECK);
         t.assert(m.winRemain, 0, "single-window attack has no pending window");
         m.winRemain = 1;   // synthetic multi-window state
-        m.t = 11;          // past the lunge window t1 == 10
+        m.t = 11;          // past the peck window t1 == 6
         monsterWindowNext(g);
-        t.assert(g.combat.attack.winIdx, combat::WINDOW_LUNGE_SWEEP_0, "next window loaded");
-        t.assert(g.combat.attack.win.box.ox, 17, "next window box swapped");
+        t.assert(g.combat.attack.winIdx, combat::WINDOW_LUNGE_LEAP_0, "next window loaded");
+        t.assert(g.combat.attack.win.box.ox, 12, "next window box swapped");
         t.assert(m.winRemain, 0, "pending window consumed");
         monsterWindowNext(g);
-        t.assert(g.combat.attack.winIdx, combat::WINDOW_LUNGE_SWEEP_0, "no further reload");
+        t.assert(g.combat.attack.winIdx, combat::WINDOW_LUNGE_LEAP_0, "no further reload");
         suite.addTest(t);
     }
 
     {
-        Test t("windup tell counts down 40 ticks, then attack starts");
+        Test t("windup tell counts down 34 ticks, then attack starts");
         Game g;
         newHunt(g);
         Monster &m = g.monster;
-        monsterAttackSet(g, combat::ATTACK_LUNGE_LUNGE);
+        monsterAttackSet(g, combat::ATTACK_LUNGE_LEAP);
         m.state = MS_WINDUP;
-        m.t = 40;
-        m.windupMax = 40;
-        beast(g, 39);
-        t.assert(m.state, MS_WINDUP, "still winding up at 39");
+        m.t = 34;
+        m.windupMax = 34;
+        beast(g, 33);
+        t.assert(m.state, MS_WINDUP, "still winding up at 33");
         t.assert(m.t, 1, "one tell tick left");
         beast(g, 1);
         t.assert(m.state, MS_ATTACK, "tell released into attack");
         t.assert(m.t, 0, "attack starts at t 0");
         t.assert(m.fx, -fp::FP, "faced west at release");
-        t.assert(m.lvx, -34, "lunge velocity int (-16*34)>>4");
-        t.assert(m.lvy, 0, "flat lunge");
+        t.assert(m.lvx, -42, "leap velocity int (-16*42)>>4");
+        t.assert(m.lvy, 0, "flat leap");
         suite.addTest(t);
     }
 
     {
-        Test t("sweep recovery window closes, cd = 55 + tick%40, circle flips");
+        Test t("peck recovery window closes, cd = 55 + tick%40, circle flips");
         Game g;
         newHunt(g);
         Monster &m = g.monster;
-        monsterAttackSet(g, combat::ATTACK_LUNGE_SWEEP);
+        monsterAttackSet(g, combat::ATTACK_LUNGE_PECK);
         m.state = MS_ATTACK;
         m.t = 0;
         m.x = 10;
-        m.y = 10;   // far from player: no contact
-        hunt(g, 72);
-        t.assert(m.state, MS_ATTACK, "still active+recovering at 72");
+        m.y = 10;      // far from player: no contact
+        hunt(g, 36);   // peck active 6 + recover 30
+        t.assert(m.state, MS_ATTACK, "still active+recovering at 36");
         hunt(g, 1);
         t.assert(m.state, MS_PURSUE, "attack releases to pursue");
         t.assert(m.cd, 55 + (g.tick % 40), "post-attack cooldown");
@@ -508,24 +513,24 @@ void MonsterSuite(TestRunner &runner) {
         Game g;
         newHunt(g);
         Monster &m = g.monster;
-        monsterAttackSet(g, combat::ATTACK_LUNGE_LUNGE);
+        monsterAttackSet(g, combat::ATTACK_LUNGE_LEAP);
         m.fx = 16;
         m.fy = 0;
         startMonsterAttack(g);
         t.assert(m.state, MS_ATTACK, "attack entered");
-        t.assert(m.lvx, 34, "E lunge 34");
-        t.assert(m.lvy, 0, "E lunge flat");
+        t.assert(m.lvx, 42, "E leap 42");
+        t.assert(m.lvy, 0, "E leap flat");
         m.fx = 11;
         m.fy = 11;
         startMonsterAttack(g);
-        t.assert(m.lvx, 23, "SE lunge integer trunc (11*34)>>4");
-        t.assert(m.lvy, 23, "SE lunge y");
-        monsterAttackSet(g, combat::ATTACK_LUNGE_SWEEP);
+        t.assert(m.lvx, 28, "SE leap integer trunc (11*42)>>4");
+        t.assert(m.lvy, 28, "SE leap y");
+        monsterAttackSet(g, combat::ATTACK_HEAVY_TAIL_SPIN);
         m.fx = 16;
         m.fy = 0;
         startMonsterAttack(g);
-        t.assert(m.lvx, 0, "sweep stationary");
-        t.assert(m.lvy, 0, "sweep stationary y");
+        t.assert(m.lvx, 0, "stationary attack (tail_spin)");
+        t.assert(m.lvy, 0, "stationary attack y");
         suite.addTest(t);
     }
 
@@ -534,7 +539,7 @@ void MonsterSuite(TestRunner &runner) {
         Game g;
         newHunt(g);
         Monster &m = g.monster;
-        monsterAttackSet(g, combat::ATTACK_LUNGE_LUNGE);
+        monsterAttackSet(g, combat::ATTACK_LUNGE_LEAP);
         m.state = MS_ATTACK;
         m.t = 0;
         m.lvx = 34;
@@ -578,7 +583,7 @@ void MonsterSuite(TestRunner &runner) {
         newHunt(g);
         Monster &m = g.monster;
         m.state = MS_WINDUP;
-        monsterAttackSet(g, combat::ATTACK_LUNGE_LUNGE);
+        monsterAttackSet(g, combat::ATTACK_LUNGE_PECK);
         m.t = 30000;
         m.x = g.player.x + 8;
         m.y = g.player.y + 4;
@@ -594,7 +599,7 @@ void MonsterSuite(TestRunner &runner) {
         newHunt(g2);
         Monster &m2 = g2.monster;
         m2.state = MS_WINDUP;
-        monsterAttackSet(g2, combat::ATTACK_LUNGE_LUNGE);
+        monsterAttackSet(g2, combat::ATTACK_LUNGE_PECK);
         m2.t = 30000;
         m2.x = g2.player.x + 4;
         m2.y = g2.player.y;
@@ -608,17 +613,17 @@ void MonsterSuite(TestRunner &runner) {
     }
 
     {
-        Test t("monster sweep attack damages player (mock parity)");
+        Test t("monster leap attack damages player (mock parity)");
         Game g;
         newHunt(g);
         Monster &m = g.monster;
         m.x = g.player.x + 20;
         m.y = g.player.y;
         m.state = MS_ATTACK;
-        monsterAttackSet(g, combat::ATTACK_LUNGE_SWEEP);
+        monsterAttackSet(g, combat::ATTACK_LUNGE_LEAP);
         m.t = 0;
         hunt(g, 10);
-        t.assert(g.player.hp, 91, "sweep 9 dmg lands once");
+        t.assert(g.player.hp, 88, "leap 12 dmg lands once");
         t.assertGreaterThan(g.player.iT, 0, "i-frames started");
         suite.addTest(t);
     }

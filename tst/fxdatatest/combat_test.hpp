@@ -159,38 +159,38 @@ inline void test_combat(FxTest &test) {
     test.expectEq(sk.anchorCount, 2, F("lunge skeleton anchors"));
 
     const CombatAttackValue lungeAtk = combatAttackRead(lunge.firstAttack);
-    test.expectEq(lunge.firstAttack, combat::ATTACK_LUNGE_LUNGE, F("lunge first attack"));
-    test.expectEq(lungeAtk.windup, combat_expect::ATTACK_LUNGE_LUNGE_WINDUP, F("lunge windup"));
-    test.expectEq(lungeAtk.active, combat_expect::ATTACK_LUNGE_LUNGE_ACTIVE, F("lunge active"));
-    test.expectEq(lungeAtk.recover, combat_expect::ATTACK_LUNGE_LUNGE_RECOVER, F("lunge recover"));
-    test.expectEq(lungeAtk.dmg, combat_expect::ATTACK_LUNGE_LUNGE_DMG, F("lunge dmg"));
+    test.expectEq(lunge.firstAttack, combat::ATTACK_LUNGE_PECK, F("lunge first attack"));
+    test.expectEq(lungeAtk.windup, combat_expect::ATTACK_LUNGE_PECK_WINDUP, F("lunge windup"));
+    test.expectEq(lungeAtk.active, combat_expect::ATTACK_LUNGE_PECK_ACTIVE, F("lunge active"));
+    test.expectEq(lungeAtk.recover, combat_expect::ATTACK_LUNGE_PECK_RECOVER, F("lunge recover"));
+    test.expectEq(lungeAtk.dmg, combat_expect::ATTACK_LUNGE_PECK_DMG, F("lunge dmg"));
     test.expectEq(lungeAtk.moveType, 1, F("lunge moveType"));
-    test.expectEq(lungeAtk.moveSpeedF, 34, F("lunge speedF"));
+    test.expectEq(lungeAtk.moveSpeedF, 18, F("lunge speedF"));
     test.expectEq(lungeAtk.phys, PHYS_BLUNT, F("lunge phys"));
     test.expectEq(lungeAtk.windowCount, 1, F("lunge windows"));
-    test.expectEq(lungeAtk.firstWindow, combat::WINDOW_LUNGE_LUNGE_0, F("lunge first window"));
+    test.expectEq(lungeAtk.firstWindow, combat::WINDOW_LUNGE_PECK_0, F("lunge first window"));
     const CombatWindow win = combatWindowRead(lungeAtk.firstWindow);
     test.expectEq(win.t0, 0, F("lunge window t0"));
-    test.expectEq(win.t1, 10, F("lunge window t1"));
-    test.expectEq(win.box.ox, 12, F("lunge window ox"));
-    test.expectEq(win.box.oy, 0, F("lunge window oy"));
-    test.expectEq(win.box.w, 24, F("lunge window w"));
-    test.expectEq(win.box.h, 22, F("lunge window h"));
+    test.expectEq(win.t1, 6, F("lunge window t1"));
+    test.expectEq(win.box.ox, 14, F("lunge window ox"));
+    test.expectEq(win.box.oy, -6, F("lunge window oy"));
+    test.expectEq(win.box.w, 12, F("lunge window w"));
+    test.expectEq(win.box.h, 10, F("lunge window h"));
     test.expectEq(win.dmgMul, 100, F("lunge window dmgMul"));
 
     const CombatPattern pat = combatPatternRead(lunge.firstPattern);
-    test.expectEq(lunge.firstPattern, combat::PATTERN_LUNGE_P_LUNGE, F("lunge first pattern"));
-    test.expectEq(pat.guardIdx, combat::GUARD_LUNGE_P_LUNGE, F("lunge guard idx"));
+    test.expectEq(lunge.firstPattern, combat::PATTERN_LUNGE_P_PECK, F("lunge first pattern"));
+    test.expectEq(pat.guardIdx, combat::GUARD_LUNGE_P_PECK, F("lunge guard idx"));
     const CombatGuard guard = combatGuardRead(pat.guardIdx);
-    test.expectEq(guard.minDist, combat_expect::PATTERN_LUNGE_P_LUNGE_MIN_DIST, F("lunge minDist"));
-    test.expectEq(guard.maxDist, combat_expect::PATTERN_LUNGE_P_LUNGE_MAX_DIST, F("lunge maxDist"));
+    test.expectEq(guard.minDist, combat_expect::PATTERN_LUNGE_P_PECK_MIN_DIST, F("lunge minDist"));
+    test.expectEq(guard.maxDist, combat_expect::PATTERN_LUNGE_P_PECK_MAX_DIST, F("lunge maxDist"));
     test.expectEq(guard.hpLo, 0, F("lunge hpLo"));
     test.expectEq(guard.hpHi, 100, F("lunge hpHi"));
-    test.expectEq(guard.chance, combat_expect::PATTERN_LUNGE_P_LUNGE_CHANCE, F("lunge chance"));
+    test.expectEq(guard.chance, combat_expect::PATTERN_LUNGE_P_PECK_CHANCE, F("lunge chance"));
     test.expectEq(guard.zonesBroken, 0, F("lunge no zone clause"));
     const CombatStep step = combatStepRead(pat.firstStep);
     test.expectEq(step.kind, STEP_ATK, F("lunge step kind"));
-    test.expectEq(step.ref, combat::ATTACK_LUNGE_LUNGE, F("lunge step attack ref"));
+    test.expectEq(step.ref, combat::ATTACK_LUNGE_PECK, F("lunge step attack ref"));
     test.expectEq(step.after, 0, F("lunge step after"));
 
     // SWEEP has no lunge pattern: one match-all sweep pattern.
@@ -213,7 +213,8 @@ inline void test_combat(FxTest &test) {
 
     // Cache values read for real (profile record through the loader).
     test.expectEq(g.combat.profile.engageDist, 36, F("cache engageDist"));
-    test.expectEq(g.combat.profile.keepDist, 24, F("cache keepDist"));
+    test.expectEq(g.combat.profile.keepDist, 16, F("cache keepDist"));
+    test.expectEq(g.combat.profile.faceHold, combat_expect::PROFILE_LUNGE_FACE_HOLD, F("cache faceHold"));
     test.expectEq(g.combat.profile.attackDist, 42, F("cache attackDist"));
     test.expectEq(g.combat.profile.cdBase, 55, F("cache cdBase"));
     test.expectEq(g.combat.profile.cdJitter, 40, F("cache cdJitter"));
@@ -224,44 +225,45 @@ inline void test_combat(FxTest &test) {
     test.expectEq(g.combat.stepT, 0, F("step timer reset"));
 
     before = mhFxReadCount;
-    const uint8_t atk = attackLoad(g, combat::ATTACK_LUNGE_LUNGE);
+    const uint8_t atk = attackLoad(g, combat::ATTACK_LUNGE_PECK);
     const uint16_t attackReads = static_cast<uint16_t>(mhFxReadCount - before);
-    test.expectEq(atk, combat::ATTACK_LUNGE_LUNGE, F("attackLoad returns idx"));
+    test.expectEq(atk, combat::ATTACK_LUNGE_PECK, F("attackLoad returns idx"));
     test.expectEq(attackReads <= 24, 1, F("attack load <= 24 reads"));
-    test.expectEq(g.combat.attack.windup, 40, F("cache windup"));
-    test.expectEq(g.combat.attack.active, 10, F("cache active"));
-    test.expectEq(g.combat.attack.recover, 55, F("cache recover"));
-    test.expectEq(g.combat.attack.dmg, 12, F("cache dmg"));
+    test.expectEq(g.combat.attack.windup, 22, F("cache windup"));
+    test.expectEq(g.combat.attack.active, 6, F("cache active"));
+    test.expectEq(g.combat.attack.recover, 30, F("cache recover"));
+    test.expectEq(g.combat.attack.dmg, 7, F("cache dmg"));
     test.expectEq(g.combat.attack.moveType, 1, F("cache moveType"));
-    test.expectEq(g.combat.attack.moveSpeedF, 34, F("cache moveSpeedF"));
+    test.expectEq(g.combat.attack.moveSpeedF, 18, F("cache moveSpeedF"));
     test.expectEq(g.combat.attack.facing, 0, F("cache facing"));
-    test.expectEq(g.combat.attack.winIdx, combat::WINDOW_LUNGE_LUNGE_0, F("cache winIdx"));
-    test.expectEq(g.combat.attack.win.t1, 10, F("cache win t1"));
-    test.expectEq(g.combat.attack.win.box.ox, 12, F("cache win ox"));
-    test.expectEq(g.combat.attack.win.box.w, 24, F("cache win w"));
+    test.expectEq(g.combat.attack.winIdx, combat::WINDOW_LUNGE_PECK_0, F("cache winIdx"));
+    test.expectEq(g.combat.attack.win.t1, 6, F("cache win t1"));
+    test.expectEq(g.combat.attack.win.box.ox, 14, F("cache win ox"));
+    test.expectEq(g.combat.attack.win.box.w, 12, F("cache win w"));
     test.expectEq(g.combat.attack.win.dmgMul, 100, F("cache win dmgMul"));
 
-    attackWindowLoad(g, combat::WINDOW_LUNGE_SWEEP_0);
-    test.expectEq(g.combat.attack.winIdx, combat::WINDOW_LUNGE_SWEEP_0, F("window switch idx"));
-    test.expectEq(g.combat.attack.win.t1, 12, F("window switch t1"));
-    test.expectEq(g.combat.attack.win.box.ox, 17, F("window switch ox"));
-    test.expectEq(g.combat.attack.win.box.w, 32, F("window switch w"));
+    attackWindowLoad(g, combat::WINDOW_LUNGE_LEAP_0);
+    test.expectEq(g.combat.attack.winIdx, combat::WINDOW_LUNGE_LEAP_0, F("window switch idx"));
+    test.expectEq(g.combat.attack.win.t1, 10, F("window switch t1"));
+    test.expectEq(g.combat.attack.win.box.ox, 12, F("window switch ox"));
+    test.expectEq(g.combat.attack.win.box.w, 18, F("window switch w"));
 
     // ---------------------------------------------------- guard evaluation
     before = mhFxReadCount;
     CombatGuardInput in = {33, 100, 0, 0, 0xFFFF, 0};
-    const bool lungeAt33 = combatGuardPasses(g, combat::PATTERN_LUNGE_P_LUNGE, in);
+    const bool lungeAt33 = combatGuardPasses(g, combat::PATTERN_LUNGE_P_LEAP, in);
     const uint16_t guardReads = static_cast<uint16_t>(mhFxReadCount - before);
-    test.expectEq(lungeAt33, 1, F("lunge guard dist 33 accepted"));
+    test.expectEq(lungeAt33, 1, F("leap guard dist 33 accepted"));
     test.expectEq(guardReads <= 12, 1, F("guard decision <= 12 reads"));
 
-    in.dist = 32;
-    test.expectEq(combatGuardPasses(g, combat::PATTERN_LUNGE_P_LUNGE, in), 0, F("lunge guard dist 32 rejected"));
-    test.expectEq(combatGuardPasses(g, combat::PATTERN_LUNGE_P_SWEEP, in), 1, F("sweep guard dist 32 accepted"));
-    in.dist = 255;
-    test.expectEq(combatGuardPasses(g, combat::PATTERN_LUNGE_P_LUNGE, in), 1, F("lunge guard dist 255 accepted"));
+    in.dist = 29;
+    test.expectEq(combatGuardPasses(g, combat::PATTERN_LUNGE_P_PECK, in), 0, F("peck guard dist 29 rejected"));
+    test.expectEq(combatGuardPasses(g, combat::PATTERN_LUNGE_P_LEAP, in), 1, F("leap guard dist 29 accepted"));
+    in.dist = 28;
+    test.expectEq(combatGuardPasses(g, combat::PATTERN_LUNGE_P_PECK, in), 1, F("peck guard dist 28 accepted"));
+    test.expectEq(combatGuardPasses(g, combat::PATTERN_LUNGE_P_LEAP, in), 1, F("leap guard dist 28 accepted"));
     in.dist = 0;
-    test.expectEq(combatGuardPasses(g, combat::PATTERN_LUNGE_P_SWEEP, in), 1, F("sweep guard dist 0 accepted"));
+    test.expectEq(combatGuardPasses(g, combat::PATTERN_LUNGE_P_LEAP, in), 0, F("leap guard dist 0 rejected"));
     test.expectEq(combatGuardPasses(g, 99, in), 0, F("unknown pattern rejected"));
 
     creatureLoad(g, combat::CREATURE_HEAVY);
@@ -407,11 +409,11 @@ inline void test_combat(FxTest &test) {
     initGame(g, W_SWORD);
     initMonster(g, MON_LUNGE);
     before = mhFxReadCount;
-    const uint8_t simAtk = monsterAttackSet(g, combat::ATTACK_LUNGE_LUNGE);
+    const uint8_t simAtk = monsterAttackSet(g, combat::ATTACK_LUNGE_PECK);
     const uint16_t simAtkReads = static_cast<uint16_t>(mhFxReadCount - before);
-    test.expectEq(simAtk, combat::ATTACK_LUNGE_LUNGE, F("sim attack set"));
+    test.expectEq(simAtk, combat::ATTACK_LUNGE_PECK, F("sim attack set"));
     test.expectEq(simAtkReads <= 24, 1, F("sim attack start <= 24 reads"));
-    test.expectEq(g.monster.atkIdx, combat::ATTACK_LUNGE_LUNGE, F("sim attack identity"));
+    test.expectEq(g.monster.atkIdx, combat::ATTACK_LUNGE_PECK, F("sim attack identity"));
     test.expectEq(g.monster.winRemain, 0, F("sim single window"));
 
     g.monster.state = MS_WINDUP;
@@ -433,7 +435,7 @@ inline void test_combat(FxTest &test) {
     test.expectEq(activeReads, 0, F("active ticks read-free"));
 
     before = mhFxReadCount;
-    attackWindowLoad(g, combat::WINDOW_LUNGE_SWEEP_0);
+    attackWindowLoad(g, combat::WINDOW_LUNGE_LEAP_0);
     const uint16_t windowReads = static_cast<uint16_t>(mhFxReadCount - before);
     test.expectEq(windowReads <= 8, 1, F("window switch <= 8 reads"));
 

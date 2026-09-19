@@ -1,96 +1,68 @@
-# monhun-ardu-u14 — device: reclaim flash budget (lunge/attack-start factoring)
+# monhun-ardu-nch.7 — chicken: peck + leap kit, turn commitment, window telegraphs
 
-Baseline HEAD 1e46537 (clean tree; only a pre-existing untracked
-`recording_20260918184558.gif`). Refactor-only, no commit/push.
+Baseline HEAD `1eabbc0`. Worker spawn was cancelled mid-run; the tree was
+inspected, verification finished inline, and the result below is what is
+committed. Pre-existing unrelated dirty files (`.gitignore`, `docs/dev-flow.md`,
+`.github/`, `recording_20260918184558.gif`, `tools/package-arduboy.py`,
+`tools/tests/test_package_arduboy.py`) were left untouched.
 
 ## What changed
 
-`src/core/player.hpp` only (33 insertions, 42 deletions):
+Data `data/creatures/lunge.json` (owner-approved kit, replaces inherited
+generic `lunge`+`sweep`):
 
-- Added `static void applyLunge(Player&, const Attack*)` — the repeated
-  `if (a.lunge) { p.vx = (p.fx*lunge)>>4; p.vy = (p.fy*lunge)>>4; }` block.
-  Used in `startAttack`, `startChargeAttack`, `startRollAttack`, and the
-  `tryBranch` attack entry.
-- Added `static void beginAttack(Game&, const Attack*)` — shared attack-entry
-  tail: stamina pay with the existing `(stam >= p.stam) ? 0 : p.stam-stam`
-  clamp, then `PS_ATTACK` / `atk` / `t=0` / `hitDone=false`. Used in the same
-  four sites. Each caller keeps its own guards and state clears explicit.
-  (`tryBranch` keeps `atkStam` for its `<` guard; `beginAttack` recomputes the
-  same `attackStam(atk)`, identical value after the guard.)
-- `startRollAttack` keeps its explicit `chain/chainWin/chainLock` clears and
-  deliberately does **not** clear `finWin` (mock's `startRollAttack` doesn't).
-- Removed the redundant `p.chargeArmed = false;` inside the `PS_CHARGE` case:
-  the top-of-tick `if (aR) p.chargeArmed = false;` already runs on the same
-  `aR` edge in every state, so the second write was idempotent. Comment left.
-- No changes to hashed fields' values; `finWin` retained as a field.
+- `peck`: W22 / A6 / R30, dmg 7, BLUNT, lunge speedF 18, `facing track`,
+  window 12x10 @ (ox 14, oy -6).
+- `leap`: W34 / A10 / R48, dmg 12, BLUNT, lunge speedF 42,
+  `facing lock-at-windup`, window 18x16 @ (ox 12, oy -2).
+- profile `keepDist` 24 -> 16, `faceHold` 0 -> 6.
+- patterns `p_peck` (maxDist 28) / `p_leap` (minDist 28..255, hpBand 0..100).
+- `zones.appendage.broken.disableAttacks` ["sweep"] -> ["leap"].
 
-## Size delta breakdown (whole-image, measured by reverting each piece)
+Mock `mock/game.js`:
 
-`make size` shipping (MH_SHEATHE/ROLL_ALT/STAGE3/CHARGE=0 carve = default):
+- `MONSTER_ATTACKS.peck`/`leap` windows-path entries (legacy `lunge`/`sweep`
+  kept: parity scene `monster_sweep_hit` loads `sweep` directly).
+- `MONSTER_DEFS[0]` keepDist/faceHold; chicken branch in `chooseAttack`; new
+  `monsterAttackDisabled()` mirroring C++ `combatAttackDisabled`; zone
+  `disableAttacks` list on the chicken legs.
+- `mock/game.test.js`: 3 new permanent tests (range split, leap
+  lock-at-windup + flank, broken legs fall back to peck).
 
-| refactor | flash delta | kept |
-|---|---|---|
-| `applyLunge` helper (4 sites) | **-200 B** | yes |
-| `beginAttack` helper (4 sites) | **-108 B** | yes |
-| duplicate `chargeArmed` clear removal | **-2 B** | yes |
-| **total** | **-310 B** | |
-| `clearChain` helper (5 sites) | 0 B | reverted |
-| charge `if (x<255) x++` saturation (chargeT/aHold) | **+14 B** (cost) | reverted |
-| `startup+active` cached as `activeEnd` | 0 B | reverted |
+Generated + tests: combat blob (`fxdata/tables/combat.bin`, `fxdata*.bin`,
+`manifest.json`), `src/generated/combat_*.hpp`, parity fixtures; host/device
+test expectations updated to the new symbolic records (`ATTACK_LUNGE_PECK` /
+`ATTACK_LUNGE_LEAP`, etc.), parity override mapping now loads the SWEEP
+creature's legacy records for fixture attack kind 0/1.
 
-The three rejected pieces were measured by building with only that piece
-reverted; none helped, so all were dropped. Only the three kept pieces remain.
+Docs: `docs/creature-framework.md` chicken kit section; README LUNGE row.
 
 ## Verification (exact)
 
-### make test
-Baseline 4981 / 0; after **4981 / 0** (`Total Passed: 4981`, `Total Failed: 0`).
+- `node --test mock/game.test.js` -> tests 72, pass 72, fail 0
+- `node tools/gen-parity-fixtures.js` twice -> md5
+  `fab30655c9fa53efedf14664195ef4ea` both runs (idempotent)
+- `make gen-check` -> `fxdata_manifest: PASS (68 generated artifacts unchanged)`
+- `make test` -> `Total Passed: 4990`, `Total Failed: 0` (baseline 4981)
+- `make fxtest-headless FXTEST_ONLY=test_parity` -> `PASSED=660 FAILED=0`
+- full `make fxtest-headless` -> 16/16 suites PASS, all FAILED=0:
+  assets 258, audio 17, boot 4, combat 237, data 368, hub 57, hud 17,
+  menu_art 81, menu 78, monster_art 38, parity 660, perf 5, player_art 111,
+  quests 50, screens 78, smith 66
+- `make size` -> `.text=26914 .data=40 .bss=1719`;
+  `flash=26954/29696 (2742 free)`, `ram=1759/2560 (801 free)`; HAS_* facts
+  unchanged. Data-only bead: zero MCU delta.
 
-### make size (shipping, before -> after)
-```
-BEFORE: size: .text=27224 .data=40 .bss=1719
-        size: flash=27264/29696 (2432 free)  ram=1759/2560
-AFTER : size: .text=26914 .data=40 .bss=1719
-        size: flash=26954/29696 (2742 free)  ram=1759/2560
-```
-Delta: flash **-310 B** (free 2432 -> 2742), ram **+/-0 B**. All `HAS_*` data
-facts unchanged.
+## Parity scene movement (def 0 default, per-scene hash ranges)
 
-### parity fixtures regen
-```
-node tools/gen-parity-fixtures.js
-wrote tst/fxdatatest/parity_fixtures.hpp
-scenes=20 ticks=1269 snapshots=32 cpFields=20
-git diff --stat tst/fxdatatest/parity_fixtures.hpp   -> EMPTY
-```
+- `beast_no_shove_idle` 40/40 ticks moved (faceHold cadence)
+- `camera_world_clamp` 3/220 moved
+- other 18 scenes byte-identical, `monster_sweep_hit` included.
 
-### make fxtest-headless FXTEST_ONLY=test_parity
-```
-Sketch uses 29618 bytes (99%) of program storage space. Maximum is 29696 bytes.
-Global variables use 1816 bytes (70%) of dynamic memory, leaving 744 bytes ...
-parity_test PASSED=660 FAILED=0
-test_parity: PASS
-```
-Baseline re-measured at 29598 (via `git stash` of player.hpp): test_parity grew
-**+20 B** (29598 -> 29618, 78 B free) even though shipping shrank; still passes
-660/0. The growth comes from LTO codegen in the test build config
-(CHARGE_ENABLED folds the charge micros out entirely there), not from behavior.
+## Deviations
 
-### node --test mock/game.test.js
-Baseline 69 / 0; after **tests 69 / pass 69 / fail 0**.
-
-### make gen-check
-```
-fxdata_manifest: PASS (68 generated artifacts unchanged)
-```
-No generated changes (only `src/core/player.hpp` modified).
-
-## Notes / deviations
-
-- `clearChain` was specified in the bead but measured 0 B, so it was not kept
-  (the repeated clears stay inline, exact per-site).
-- The requested charge saturation micros measured **+14 B** (bigger), so the
-  original ternary clamp is retained; only the duplicate clear removal (the
-  other charge micro) was kept.
-- Behavior untouched: parity fixtures byte-identical and test_parity 660/0
-  under the existing carves.
+- Worker cancelled mid-run; inline completion + full gate by orchestrator, no
+  partial work left.
+- `docs/creature-framework.md` note corrected to the measured 2/20 moved
+  scenes (draft wording implied all 20).
+- No engine code change (data-only, as designed).

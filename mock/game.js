@@ -302,10 +302,26 @@ const WEAPON_DEFS = [
 ];
 
 const MONSTER_ATTACKS = {
-  // Legacy kit (defs 0/1): single window via reach/hw/hh, byte-identical to the
-  // published lunge/sweep so parity fixtures do not move.
+  // Legacy kit (defs 1): single window via reach/hw/hh, byte-identical to the
+  // published lunge/sweep so parity fixtures do not move. The sweep creature
+  // still authors both, so `monster_sweep_hit` keeps loading MONSTER_ATTACKS.
+  // sweep directly; the chicken no longer uses these.
   lunge: { kind: 'lunge', windup: 40, active: 10, recover: 55, speedF: 34, dmg: 12, reach: 12, hw: 24, hh: 22 },
   sweep: { kind: 'sweep', windup: 48, active: 12, recover: 60, dmg: 9, reach: 17, hw: 32, hh: 24 },
+  // CHICKEN kit (nch.7): peck is the close jab (window ox 14, oy -6), leap is
+  // the committed long lunge (window ox 12, oy -2, facing lock-at-windup). Both
+  // are windows-path attacks; reach/hw/hh mirror window 0's ox/w/h so the parity
+  // hash (`atkField(m.atk, ...)`) matches the C++ cached `combat.attack.win.box`.
+  peck: {
+    kind: 'peck', windup: 22, active: 6, recover: 30, dmg: 7, speedF: 18,
+    phys: 'BLUNT', facing: 'track', reach: 14, hw: 12, hh: 10,
+    windows: [{ t0: 0, t1: 6, ox: 14, oy: -6, w: 12, h: 10, dmgMul: 100 }],
+  },
+  leap: {
+    kind: 'leap', windup: 34, active: 10, recover: 48, dmg: 12, speedF: 42,
+    phys: 'BLUNT', facing: 'lock-at-windup', reach: 12, hw: 18, hh: 16,
+    windows: [{ t0: 0, t1: 10, ox: 12, oy: -2, w: 18, h: 16, dmgMul: 100 }],
+  },
   // HEAVY kit (nch.1): bite lunges and tracks; tail_spin locks its facing at
   // windup and whips four contiguous windows (behind -> north -> front ->
   // south). `windows` entries are face-relative box centres (ox/oy, w/h),
@@ -357,10 +373,13 @@ function monsterTellWindow(m, a) {
 // the body box (ox/oy 0, w/h = def w/h), matching the C++ creature default.
 // nch.4: HEAVY holds ground at keepDist 12 and spins inside spinDist 30; its
 // faceHold commits the tracked facing for 10 ticks so the hunter can flank.
-// The shipped kinds leave faceHold/keepDist/spinDist unset (0/24/24), which
-// keeps every parity scene byte-identical.
+// SWEEP leaves faceHold/keepDist/spinDist unset (0/24/24); the chicken (nch.7)
+// and heavy set them. A species that leaves faceHold unset recomputes facing
+// every tick, matching the C++ profile default 0.
 const MONSTER_DEFS = [
-  { kind: 'lunge', w: 32, h: 24, hp: 200, spd: 5, atkDist: 32, collide: { ox: 9, oy: 11, w: 12, h: 13 } },
+  // nch.7: the chicken holds at keepDist 16 and its faceHold 6 commits the
+  // tracked facing for six ticks, so a leap can be flanked while it winds up.
+  { kind: 'lunge', w: 32, h: 24, hp: 200, spd: 5, atkDist: 32, keepDist: 16, faceHold: 6, collide: { ox: 9, oy: 11, w: 12, h: 13 } },
   { kind: 'sweep', w: 28, h: 22, hp: 150, spd: 7, atkDist: -1 },
   { kind: 'heavy', w: 40, h: 28, hp: 320, spd: 3, atkDist: 24, keepDist: 12, spinDist: 30, faceHold: 10 },
 ];
@@ -377,7 +396,7 @@ const MONSTER_ZONES = {
     // breakTypes is the C++ phys mask (PHYS_SLASH 0x01); both zones break on
     // slashing player hits, matching combat_data ZONES.
     head: { ox: 18, oy: 0, w: 11, h: 7, dmgMul: 130, hp: 40, bodyShare: 100, breakTypes: 1, staggerOnHit: 12 },
-    appendage: { ox: 9, oy: 0, w: 9, h: 24, dmgMul: 150, hp: 60, bodyShare: 40, breakTypes: 1, staggerOnHit: 30 },
+    appendage: { ox: 9, oy: 0, w: 9, h: 24, dmgMul: 150, hp: 60, bodyShare: 40, breakTypes: 1, staggerOnHit: 30, disableAttacks: ['leap'] },
   },
   heavy: {
     // ox -24 sits the tail behind the body so a flanking hit lands here.
@@ -1313,15 +1332,34 @@ function updateMonster(g) {
   pushApart(g);
 }
 
+// Broken-zone attack gate (nch.7), mirroring C++ combatAttackDisabled: a zone
+// whose broken.disableAttacks list names an attack blocks it once the zone's
+// live pool is broken. Only zones carrying a list are consulted.
+function monsterAttackDisabled(m, kind) {
+  const defs = m.zones ? MONSTER_ZONES[m.kind] : null;
+  if (!defs) return false;
+  for (const name of Object.keys(defs)) {
+    const z = defs[name];
+    if (z.disableAttacks && m.zones[name].broken && z.disableAttacks.includes(kind))
+      return true;
+  }
+  return false;
+}
+
 // Lunge/sweep split comes from the roster def: kind 0 (atkDist 32) is the
 // legacy "lunge beyond 32px" rule; negative atkDist (sweep) never lunges. HEAVY
 // (nch.1) runs the new kit: tail_spin inside spinDist (30, nch.4) else bite.
+// CHICKEN (nch.7) runs peck inside 28 else leap; a broken legs zone disables
+// the leap, so selection falls back to the close peck.
 function chooseAttack(g, dist) {
   const m = g.monster;
   const def = MONSTER_DEFS[g.monsterIndex];
   if (def.kind === 'heavy')
     m.atk = dist <= (def.spinDist === undefined ? 24 : def.spinDist) ? MONSTER_ATTACKS.tailSpin : MONSTER_ATTACKS.bite;
-  else
+  else if (def.kind === 'lunge') {
+    m.atk = dist <= 28 ? MONSTER_ATTACKS.peck : MONSTER_ATTACKS.leap;
+    if (monsterAttackDisabled(m, m.atk.kind)) m.atk = MONSTER_ATTACKS.peck;
+  } else
     m.atk = def.atkDist >= 0 && dist > def.atkDist ? MONSTER_ATTACKS.lunge : MONSTER_ATTACKS.sweep;
   // nch.2: lock-away turns the back to the hunter once, reusing the tracked
   // vector updateMonster just computed this tick (tail_spin window 0 then points
