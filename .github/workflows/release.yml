@@ -1,0 +1,105 @@
+name: release
+
+# Tag push (`git tag v0.1.0 && git push origin v0.1.0`) builds the shipping
+# Arduboy FX + Mini targets, packages the `.arduboy` release container and
+# publishes it as a GitHub release. workflow_dispatch is a dry run: it builds,
+# tests and uploads the workflow artifact without creating a release.
+
+on:
+  push:
+    tags: ["v*"]
+  workflow_dispatch:
+    inputs:
+      version:
+        description: "Version label for the dry-run package (e.g. v0.1.0)"
+        required: true
+        default: "v0.1.0"
+
+permissions:
+  contents: write
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    env:
+      VERSION: ${{ github.event.inputs.version || github.ref_name }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Python (FX/art tooling)
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Install Pillow (gen-art / manifest tooling)
+        run: python3 -m pip install --disable-pip-version-check pillow
+
+      - name: Install arduino-cli
+        uses: arduino/setup-arduino-cli@v2
+
+      - name: Install Arduboy homemade + AVR cores
+        run: |
+          arduino-cli config init --overwrite
+          arduino-cli config add board_manager.additional_urls \
+            https://raw.githubusercontent.com/MrBlinky/Arduboy-homemade-package/master/package_arduboy_homemade_index.json
+          arduino-cli core update-index
+          arduino-cli core install arduino:avr
+          arduino-cli core install arduboy-homemade:avr
+
+      # Freshness gate without regenerating: the read-only manifest check
+      # verifies the tracked generated artifacts against their pinned hashes,
+      # and the header copy must stay in sync. (A full `make gen-check` regen
+      # is a local gate: PNG/zlib output is not guaranteed byte-identical
+      # across platforms/Pillow versions.)
+      - name: Check generated artifacts
+        run: |
+          python3 tools/fxdata_manifest.py --check
+          cmp fxdata/fxdata.h src/fxdata.h
+
+      - name: Host tests
+        run: make test
+
+      - name: Tooling tests
+        run: make test-tools
+
+      - name: Build shipping (Arduboy FX) and Mini
+        run: |
+          make build
+          cp dist/monhun-ardu.ino.hex dist/monhun-ardu-fx.hex
+          make mini
+          cp dist/monhun-ardu.ino.hex dist/monhun-ardu-mini.hex
+
+      - name: Package .arduboy
+        run: |
+          python3 tools/package-arduboy.py \
+            --version "$VERSION" \
+            --hex dist/monhun-ardu-fx.hex \
+            --mini-hex dist/monhun-ardu-mini.hex \
+            --fxdata fxdata/fxdata.bin \
+            --license LICENSE \
+            --out "dist/monhun-ardu-${VERSION}.arduboy"
+
+      - name: Upload workflow artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: monhun-ardu-${{ env.VERSION }}
+          if-no-files-found: error
+          path: |
+            dist/*.arduboy
+            dist/monhun-ardu-fx.hex
+            dist/monhun-ardu-mini.hex
+            fxdata/fxdata.bin
+
+      - name: Publish GitHub release
+        if: startsWith(github.ref, 'refs/tags/')
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh release create "$GITHUB_REF_NAME" \
+            --title "monhun-ardu $GITHUB_REF_NAME" \
+            --generate-notes \
+            "dist/monhun-ardu-${GITHUB_REF_NAME}.arduboy" \
+            dist/monhun-ardu-fx.hex \
+            dist/monhun-ardu-mini.hex \
+            fxdata/fxdata.bin

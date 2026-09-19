@@ -6,6 +6,7 @@ build/*
 *.eep
 *.elf
 *.bin
+*.arduboy
 !fxdata/fxdata.bin
 !fxdata/fxdata-data.bin
 !fxdata/tables/*.bin

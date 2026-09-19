@@ -60,6 +60,23 @@ Diff review before commit (it caught five real drifts in one bead):
 - shade-0/erase frames still erase on all planes;
 - telegraph and hit test read the same cached window.
 
+## Releases
+
+- `.github/workflows/release.yml` builds and publishes on tag push
+  (`git tag v0.1.0 && git push origin v0.1.0`); `workflow_dispatch` is a dry
+  run that uploads the workflow artifact without creating a release.
+- `tools/package-arduboy.py` assembles the `.arduboy` container (flat zip:
+  `info.json` schemaVersion 3 + one hex per device + `fxdata.bin` as the
+  binary's `flashdata` + `LICENSE.txt`) deterministically; tests live in
+  `tools/tests/test_package_arduboy.py`. The FX hex is written before the Mini
+  hex because MrBlinky's `uploader.py` flashes the first `.hex` in the archive.
+- CI facts: the full `make gen-check` regen stays a local gate (PNG/zlib output
+  is not guaranteed byte-identical across platforms/Pillow versions). CI runs
+  the read-only `tools/fxdata_manifest.py --check`, `cmp fxdata/fxdata.h
+  src/fxdata.h`, `make test`, `make test-tools`, then `make build` + `make mini`.
+- Release assets: `monhun-ardu-<tag>.arduboy`, both plain hex files and the FX
+  data image for manual flashing (`fxdata-upload.py`/Ardens).
+
 ## Evidence ledger
 
 - `output.md` is the per-bead ledger: exact commands, tails, numbers, and any
