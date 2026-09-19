@@ -241,6 +241,13 @@ inline void test_assets(FxTest &test) {
     // tst/fxdatatest/monster_art_test.hpp checks the render frame pick.
     blobHeader(fxchickenatk, 32, 24, test, F("chicken attack w/h"));
 
+    // Bull attack sheet (bead monhun-ardu-nch.10): 4 frames 32x24 in
+    // [stomp E, stomp W, gore E, gore W] order, drawn during the stomp/gore
+    // windup+attack. Header identity only here; the host pixel suite
+    // (tst/art_dims_test.hpp) checks the poses/mirrors and
+    // tst/fxdatatest/monster_art_test.hpp checks the render frame pick.
+    blobHeader(fxbullatk, 32, 24, test, F("bull attack w/h"));
+
     // Demo beast sheets (epic monhun-ardu-nch): one 32x24x8 sheet per roster
     // beast -- LUNGE chicken, SWEEP bull, HEAVY longtail -- and RAVAGER keeps
     // the legacy fxmonster. Header identity only here; the host pixel suite

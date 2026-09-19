@@ -319,6 +319,13 @@ def icon_defs(dims):
         # 24 is a multiple of 8 so the SpritesU plus-mask page stride is exact.
         {"id": "chickenatk", "w": 32, "h": 24, "anchor": "body top-left",
          "frames": chickenatk_frames()},
+        # Bull attack sheet (bead monhun-ardu-nch.10): 4 frames 32x24 in the
+        # order [stomp E, stomp W, gore E, gore W]. Drawn instead of the generic
+        # BEAST_POSES frame during the bull's stomp/gore WINDUP+ATTACK. Frame
+        # origin is the body top-left like the normal 32x24 beast sheet; height
+        # 24 is a multiple of 8 so the SpritesU plus-mask page stride is exact.
+        {"id": "bullatk", "w": 32, "h": 24, "anchor": "body top-left",
+         "frames": bullatk_frames()},
     ] + hud_defs()
 
 
@@ -790,6 +797,104 @@ def chickenatk_frames():
         for east in (True, False):
             frames.append(_image_blocks(
                 _beast_frame(_chicken_attack_pose(leap), _chicken_dead, DARK, WHITE, east)))
+    return frames
+
+
+# ---- Bull attack sheet (bead monhun-ardu-nch.10). The whole bull is drawn from
+# this 4-frame 32x24 sheet during the stomp/gore windup+attack instead of the
+# generic BEAST_POSES coil/lunge frame, so both attacks read as bespoke poses.
+# Frame order is [stomp E, stomp W, gore E, gore W]. The stomp raises both front
+# hooves (tucked back under the chest), pitches the body forward onto the planted
+# rear legs and holds the head/horns high for the slam windup; the gore lowers
+# the head, drives the horns forward along the facing edge, leans the body 1 px,
+# and raises the tail. Frames are authored east and mirrored by the _beast_frame
+# put wrapper, exactly like the idle/windup/attack frames. Windup and attack
+# share the pose: the overlay has no windup-flash frame, so the telegraph window
+# + tell carry the timing (same trade as fxtailspin/fxchickenatk).
+def _bull_attack_east(put, body, head, gore):
+    hi, lo = _beast_tone(body)
+
+    if gore:
+        # Tail raised (base rows 7..15 -> 2..10); body leaned 1 px forward;
+        # head lowered and horns driven forward along the facing edge.
+        put(1, 2, 2, 9, body)         # tail raised
+        put(0, 0, 3, 2, lo)           # tail tuft raised
+
+        put(4, 8, 22, 12, body)       # barrel body leaned 1 px forward
+        put(7, 6, 12, 3, body)        # shoulder hump
+        put(5, 8, 15, 2, hi)          # back highlight
+        put(6, 11, 9, 3, hi)          # rib highlight
+        put(5, 18, 19, 2, lo)         # belly shadow
+
+        put(21, 13, 10, 7, head)      # lowered head
+        put(22, 12, 2, 2, head)       # ear
+        put(28, 17, 4, 3, lo)         # muzzle driven low
+        put(28, 16, 4, 1, hi)         # muzzle bridge
+        put(25, 15, 2, 2, BLACK)      # eye
+
+        put(23, 12, 2, 2, head)       # near horn base
+        put(26, 12, 3, 2, head)       # near horn mid, forward
+        put(29, 12, 3, 2, head)       # near horn tip, forward
+        put(27, 10, 2, 2, head)       # far horn base
+        put(30, 10, 2, 2, head)       # far horn tip, forward
+
+        for lx in (5, 10, 18, 23):
+            put(lx, 18, 3, 4, body)   # planted leg
+            put(lx, 20, 1, 2, hi)     # shank highlight
+            put(lx - 1, 22, 4, 1, BLACK)   # hoof
+        return
+
+    # Stomp: rear legs planted, front hooves raised and tucked back, body pitched
+    # forward (rear-low barrel + raised front shoulder), head/horns held high.
+    put(1, 7, 2, 9, body)             # hanging tail
+    put(0, 5, 3, 2, lo)               # tail tuft
+
+    put(3, 9, 22, 11, body)           # barrel body pitched, rear low
+    put(15, 6, 10, 4, body)           # raised front shoulder
+    put(6, 7, 12, 3, body)            # shoulder hump
+    put(4, 9, 15, 2, hi)              # back highlight
+    put(5, 12, 9, 3, hi)              # rib highlight
+    put(4, 19, 19, 2, lo)             # belly shadow
+
+    put(21, 3, 10, 8, head)           # high head
+    put(22, 2, 2, 2, head)            # ear
+    put(28, 7, 4, 3, lo)              # muzzle high
+    put(28, 6, 4, 1, hi)              # muzzle bridge
+    put(25, 5, 2, 2, BLACK)           # eye
+
+    put(22, 1, 2, 2, head)            # near horn base
+    put(23, 0, 2, 1, head)            # near horn tip
+    put(29, 1, 2, 2, head)            # far horn base
+    put(29, 0, 2, 1, head)            # far horn tip
+
+    for lx in (5, 10):
+        put(lx, 18, 3, 4, body)       # planted rear leg
+        put(lx, 20, 1, 2, hi)         # shank highlight
+        put(lx - 1, 22, 4, 1, BLACK)  # rear hoof
+
+    put(18, 16, 3, 4, body)           # near front thigh
+    put(15, 15, 4, 3, body)           # near shank folded back
+    put(14, 14, 4, 1, BLACK)          # near raised hoof
+    put(23, 16, 3, 4, body)           # far front thigh
+    put(20, 15, 4, 3, body)           # far shank folded back
+    put(19, 14, 4, 1, BLACK)          # far raised hoof
+
+
+def _bull_attack_pose(gore):
+    def draw(put, body, head):
+        _bull_attack_east(put, body, head, gore)
+    return draw
+
+
+def bullatk_frames():
+    """[stomp E, stomp W, gore E, gore W] as rect-block frame defs, so
+    check_sheets/render_icon re-composite each authored pose exactly (the
+    tailspin/chickenatk icon pattern)."""
+    frames = []
+    for gore in (False, True):
+        for east in (True, False):
+            frames.append(_image_blocks(
+                _beast_frame(_bull_attack_pose(gore), _bull_dead, DARK, WHITE, east)))
     return frames
 
 

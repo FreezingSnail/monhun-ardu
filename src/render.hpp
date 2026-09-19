@@ -383,6 +383,19 @@ static void drawMonster(const mh::Game &g, int16_t camX, int16_t camY) {
     // overlay has no windup-flash frame; the tell + telegraph carry the timing,
     // same trade as fxtailspin). Cosmetic only: no hit-test or window change.
     const bool chickenAtk = g.monsterKind == mh::MON_LUNGE && (m.state == mh::MS_WINDUP || m.state == mh::MS_ATTACK) && m.atkIdx != mh::COMBAT_NO_ATTACK;
+    // Bull attack overlay (bead monhun-ardu-nch.10): during the stomp/gore
+    // windup+attack the whole bull is drawn from the 4-frame 32x24 fxbullatk
+    // sheet instead of the generic BEAST_POSES coil/lunge frame. MON_SWEEP is
+    // the bull roster kind (monsterCreatureId maps it to data/creatures/
+    // sweep.json, whose authored attack order is stomp then gore). Frame order
+    // is [stomp E, stomp W, gore E, gore W]: ordinal 0 = stomp, 1 = gore, taken
+    // from the attack index relative to the creature's first authored attack so
+    // the mapping keeps following the JSON order without a literal index; frame
+    // = (ordinal << 1) | (west). Windup and attack share the pose (the overlay
+    // has no windup-flash frame; the tell + telegraph carry the timing, same
+    // trade as fxtailspin/fxchickenatk). Cosmetic only: no hit-test or window
+    // change.
+    const bool bullAtk = g.monsterKind == mh::MON_SWEEP && (m.state == mh::MS_WINDUP || m.state == mh::MS_ATTACK) && m.atkIdx != mh::COMBAT_NO_ATTACK;
     uint8_t f;
     if (g.monsterKind == mh::MON_RAVAGER) {
         // Legacy fxmonster sheet: idle/recover/flash/dead x facing.
@@ -430,6 +443,13 @@ static void drawMonster(const mh::Game &g, int16_t camX, int16_t camY) {
         const uint8_t ordinal = static_cast<uint8_t>(m.atkIdx - mh::combatCreatureFirstAttack(combat::CREATURE_LUNGE));
         const uint8_t cf = static_cast<uint8_t>((ordinal << 1) | (m.fx < 0 ? 1 : 0));
         sprDraw(fxchickenatk, x, y, FRAME(cf));
+    } else if (bullAtk) {
+        // Ordinal from the creature's first attack (stomp; gore is +1 in the
+        // authored attack order): no literal record index, and the sheet frame
+        // selects facing with the low bit.
+        const uint8_t ordinal = static_cast<uint8_t>(m.atkIdx - mh::combatCreatureFirstAttack(combat::CREATURE_SWEEP));
+        const uint8_t bf = static_cast<uint8_t>((ordinal << 1) | (m.fx < 0 ? 1 : 0));
+        sprDraw(fxbullatk, x, y, FRAME(bf));
     } else {
         sprDraw(monsterSheet(g.monsterKind), x, y, FRAME(f));
     }

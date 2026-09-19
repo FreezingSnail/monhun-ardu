@@ -142,6 +142,25 @@ static void setupChickenAttack(Game &g, uint8_t atk, uint8_t state, int8_t fx) {
     g.combat.attack.win.box.h = 1;
 }
 
+// nch.10: park the bull (MON_SWEEP) in a stomp/gore WINDUP or ATTACK so
+// drawMonster swaps the generic BEAST_POSES frame for the 4-frame fxbullatk
+// sheet. The cached window box is shrunk to 1x1 at the body centre (like
+// setupChickenAttack) so the telegraph core stays clear of the pose checks;
+// the frame pick depends only on atkIdx + m.fx.
+static void setupBullAttack(Game &g, uint8_t atk, uint8_t state, int8_t fx) {
+    setupBeast(g, MON_SWEEP, fx, 0);
+    Monster &m = g.monster;
+    m.state = state;
+    m.atkIdx = atk;
+    m.windupMax = 30;
+    m.t = 20;   // windup flash phase, ignored by the overlay
+    g.combat.attack.win = combatWindowRead(atk == combat::ATTACK_SWEEP_GORE ? combat::WINDOW_SWEEP_GORE_0 : combat::WINDOW_SWEEP_STOMP_0);
+    g.combat.attack.win.box.ox = 0;
+    g.combat.attack.win.box.oy = 0;
+    g.combat.attack.win.box.w = 1;
+    g.combat.attack.win.box.h = 1;
+}
+
 inline void test_monster_art(FxTest &test) {
     arduboy.startGray();
 
@@ -303,6 +322,46 @@ inline void test_monster_art(FxTest &test) {
     renderMonster(g, 0);
     test.expectEq(bitAt(BX + 18, BY + 18), 1, F("chicken leap west feet tucked"));
     test.expectEq(bitAt(BX + 18, BY + 21), 0, F("chicken leap west planted row clear"));
+
+    // ---- nch.10 bull attack overlay: during the stomp/gore windup+attack
+    // drawMonster swaps the generic BEAST_POSES coil/lunge frame for the
+    // 4-frame fxbullatk sheet, frame = (ordinal << 1) | (west) with ordinal 0 =
+    // stomp, 1 = gore. The stomp holds the WHITE head high (plane2 at y4) with
+    // the front hooves raised as BLACK erasers over the DARK chest (plane0
+    // clear at y14 but lit on the body behind); the gore lowers the head (plane2
+    // at y17, clear high), drives a white horn forward to (30,12) and raises the
+    // tail (plane0 at y3). Facing mirrors all of it.
+    setupBullAttack(g, combat::ATTACK_SWEEP_STOMP, MS_WINDUP, 16);   // stomp E
+    renderMonster(g, 2);
+    test.expectEq(bitAt(BX + 25, BY + 4), 1, F("bull stomp east head high"));
+    test.expectEq(bitAt(BX + 25, BY + 17), 0, F("bull stomp east head not low"));
+    renderMonster(g, 0);
+    test.expectEq(bitAt(BX + 16, BY + 14), 0, F("bull stomp east front hoof eraser"));
+    test.expectEq(bitAt(BX + 16, BY + 8), 1, F("bull stomp east body behind hoof"));
+    test.expectEq(bitAt(BX + 1, BY + 3), 0, F("bull stomp east tail not raised"));
+
+    setupBullAttack(g, combat::ATTACK_SWEEP_GORE, MS_ATTACK, 16);   // gore E
+    renderMonster(g, 2);
+    test.expectEq(bitAt(BX + 25, BY + 17), 1, F("bull gore east head low"));
+    test.expectEq(bitAt(BX + 25, BY + 4), 0, F("bull gore east head not high"));
+    test.expectEq(bitAt(BX + 30, BY + 12), 1, F("bull gore east horn forward"));
+    renderMonster(g, 0);
+    test.expectEq(bitAt(BX + 16, BY + 14), 1, F("bull gore east no hoof eraser"));
+    test.expectEq(bitAt(BX + 1, BY + 3), 1, F("bull gore east tail raised"));
+
+    setupBullAttack(g, combat::ATTACK_SWEEP_STOMP, MS_WINDUP, -16);   // stomp W
+    renderMonster(g, 2);
+    test.expectEq(bitAt(BX + 6, BY + 4), 1, F("bull stomp west head high left"));
+    test.expectEq(bitAt(BX + 25, BY + 4), 0, F("bull stomp west head right clear"));
+    renderMonster(g, 0);
+    test.expectEq(bitAt(BX + 16, BY + 14), 0, F("bull stomp west front hoof eraser"));
+
+    setupBullAttack(g, combat::ATTACK_SWEEP_GORE, MS_ATTACK, -16);   // gore W
+    renderMonster(g, 2);
+    test.expectEq(bitAt(BX + 6, BY + 17), 1, F("bull gore west head low left"));
+    test.expectEq(bitAt(BX + 1, BY + 12), 1, F("bull gore west horn forward"));
+    renderMonster(g, 0);
+    test.expectEq(bitAt(BX + 30, BY + 3), 1, F("bull gore west tail raised"));
 }
 
 }   // namespace monsterart

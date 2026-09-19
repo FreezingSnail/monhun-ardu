@@ -550,6 +550,75 @@ void testChickenAttackSheet(Test &t) {
             t.assert(h[i] != h[j] ? 1 : 0, 1, "chickenatk frames distinct");
 }
 
+// ------------------------------------------- bull attack overlay (nch.10)
+
+// fxbullatk is the bull's stomp/gore overlay: a 4-frame 32x24 sheet in
+// [stomp E, stomp W, gore E, gore W] order, drawn during both windup and
+// attack. The stomp raises both front hooves (tucked back under the chest),
+// pitches the body forward onto the planted rear legs and holds the head/horns
+// high; the gore lowers the head, drives the horns forward along the facing
+// edge, leans the body 1 px and raises the tail. West frames must be the exact
+// horizontal mirror of east.
+void testBullAttackSheet(Test &t) {
+    std::cout << "---------- bull attack sheet ----------" << std::endl;
+    Blob atk;
+    if (!parseBlob("fxbullatk", atk, t))
+        return;
+    t.assert(atk.w, art_dims::bullatk_frame_w, "bullatk blob frame w");
+    t.assert(atk.h, art_dims::bullatk_frame_h, "bullatk blob frame h");
+    t.assert(atk.frames, art_dims::bullatk_frames, "bullatk blob frames");
+    t.assert(art_dims::bullatk_frame_w, 32, "bullatk frame w");
+    t.assert(art_dims::bullatk_frame_h, 24, "bullatk frame h");
+    t.assert(art_dims::bullatk_frames, 4, "bullatk frames");
+
+    // Frame 0 stomp E: rear hooves planted (ink at y22), front hooves raised and
+    // tucked back over the chest (the BLACK hoof at y14 overwrites the DARK body
+    // there, so mask 1 + plane0 clear), front shoulder raised (body ink at y7)
+    // and the head held high (white at y4). The clear y3 tail pixel proves the
+    // tail is not the raised gore tail.
+    t.assert(maskAtF(atk, 0, 4, 22), 1, "stomp rear hoof planted");
+    t.assert(maskAtF(atk, 0, 16, 14), 1, "stomp front hoof ink");
+    t.assert(planeAtF(atk, 0, 0, 16, 14), 0, "stomp front hoof black eraser");
+    t.assert(planeAtF(atk, 0, 0, 16, 8), 1, "stomp body behind hoof plane0");
+    t.assert(planeAtF(atk, 0, 0, 20, 7), 1, "stomp raised front shoulder");
+    t.assert(planeAtF(atk, 0, 2, 25, 4), 1, "stomp head high white");
+    t.assert(planeAtF(atk, 0, 2, 25, 17), 0, "stomp head not low");
+    t.assert(maskAtF(atk, 0, 1, 3), 0, "stomp tail not raised");
+
+    // Frame 2 gore E: head lowered (white at y17, nothing high at y4), horns
+    // driven forward along the facing edge (white at (30,12)), body leaned 1 px
+    // forward and the tail raised (body ink at y3). The hoof row is normal body
+    // there (plane0 lit) -- no raised-hoof eraser.
+    t.assert(planeAtF(atk, 2, 0, 1, 3), 1, "gore tail raised plane0");
+    t.assert(planeAtF(atk, 2, 2, 25, 17), 1, "gore head low white");
+    t.assert(maskAtF(atk, 2, 25, 4), 0, "gore head not high");
+    t.assert(planeAtF(atk, 2, 2, 30, 12), 1, "gore horn forward white");
+    t.assert(planeAtF(atk, 2, 0, 16, 14), 1, "gore hoof row planted body");
+
+    // West frames are the exact horizontal mirrors (1<->0, 3<->2).
+    auto mirrored = [&](int a, int b) {
+        for (int shade = 0; shade < 3; shade++)
+            for (int page = 0; page < 3; page++)
+                for (int x = 0; x < atk.w; x++) {
+                    if (pixelData(atk, a, shade, x, page) != pixelData(atk, b, shade, atk.w - 1 - x, page))
+                        return false;
+                    if (pixelMask(atk, a, shade, x, page) != pixelMask(atk, b, shade, atk.w - 1 - x, page))
+                        return false;
+                }
+        return true;
+    };
+    t.assert(mirrored(0, 1) ? 1 : 0, 1, "bullatk west stomp mirrors east");
+    t.assert(mirrored(2, 3) ? 1 : 0, 1, "bullatk west gore mirrors east");
+
+    // All four frames differ, so both attacks and both facings are distinct.
+    uint32_t h[4];
+    for (int i = 0; i < 4; i++)
+        h[i] = blobFrameHash(atk, i);
+    for (int i = 0; i < 4; i++)
+        for (int j = i + 1; j < 4; j++)
+            t.assert(h[i] != h[j] ? 1 : 0, 1, "bullatk frames distinct");
+}
+
 // ------------------------------------------- heavy long-tail overlay (4t4)
 
 // fxtail_heavy is the HEAVY appendage overlay: 24x16x4 in combatPartArtFrame
@@ -875,6 +944,11 @@ void ArtDimsSuite(TestRunner &runner) {
     {
         Test t("chicken attack overlay is a 4-frame peck/leap mirror sheet");
         testChickenAttackSheet(t);
+        suite.addTest(t);
+    }
+    {
+        Test t("bull attack overlay is a 4-frame stomp/gore mirror sheet");
+        testBullAttackSheet(t);
         suite.addTest(t);
     }
     {
