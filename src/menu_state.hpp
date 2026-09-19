@@ -120,12 +120,20 @@ inline int8_t menuPoleKind(const MenuState &m) {
     return m.target >= MENU_POLE_TARGET ? static_cast<int8_t>(m.target - MENU_POLE_TARGET) : 0;
 }
 
-// Start the chosen scene from the menu picks. newGame() keeps its signature and
-// defaults the pole to plain; a training pick installs the variant afterwards.
+// Start the chosen scene from the menu picks into its demo room (fie.6):
+// a beast pick spawns in the camp (safe; its door leads to the area hunt), a
+// pole pick in the pole room (train; its door exits to the menu). newGame()
+// resets the world first; the variant pole is installed after the room load so
+// the safe room's target clear cannot drop it.
 inline void menuStart(Game &g, const MenuState &m) {
-    newGame(g, m.weapon, menuMode(m), menuMonsterKind(m));
-    if (menuMode(m) == MODE_TRAIN)
+    const int8_t mode = menuMode(m);
+    newGame(g, m.weapon, mode, menuMonsterKind(m));
+    if (mode == MODE_TRAIN) {
+        loadRoom(g, zone::ROOM_POLE_ROOM, zone::SPAWN_POLE_ROOM_START);
         initPoleKind(g, menuPoleKind(m));
+    } else {
+        loadRoom(g, zone::ROOM_CAMP, zone::SPAWN_CAMP_ENTRY);
+    }
 }
 
 // One input tick while the sim runs: keeps the menu-owned edge flags current and

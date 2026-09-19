@@ -117,6 +117,7 @@ inline void test_menu(FxTest &test) {
     test.expectEq(static_cast<uint32_t>(g.monsterKind), MON_LUNGE, F("start pole kind 0"));
     test.expectEq(static_cast<uint32_t>(g.pole.kind), POLE_PLAIN, F("start plain pole"));
     test.expectEq(static_cast<uint32_t>(g.combat.zone[COMBAT_ZONE_HEAD].hp), 0, F("plain pool 0"));
+    test.expectEq(static_cast<uint32_t>(g.roomId), zone::ROOM_POLE_ROOM, F("pole start room"));
 
     // ---- target 5 SEVER installs the cap-locked breakable variant (pool 60)
     MenuState sv;
@@ -161,6 +162,7 @@ inline void test_menu(FxTest &test) {
     test.expectEq(static_cast<uint32_t>(g.monster.hpMax), 320, F("heavy hp from cart"));
     test.expectEq(static_cast<uint32_t>(g.monster.w), 40, F("heavy w from cart"));
     test.expectEq(static_cast<uint32_t>(g.monster.h), 28, F("heavy h from cart"));
+    test.expectEq(static_cast<uint32_t>(g.roomId), zone::ROOM_CAMP, F("hunt start room"));
 
     // ---- SWEEP -> hunt, cart def 28x22 / 150 hp
     MenuState s;

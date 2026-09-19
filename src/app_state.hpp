@@ -9,8 +9,11 @@
 // menu/screen state changes, so the sketch and the device E2E suite run the
 // exact same routing code.
 //
-// Demo flow (monhun-ardu-5r1, what the shipping sketch wires):
-//   menu --A--> hunt --end+A--> menu          (a fresh hunt re-runs newGame)
+// Demo flow (monhun-ardu-fie.6, what the shipping sketch wires):
+//   menu --A--> camp --door--> area --door--> camp   (hunt pick; camp hold-B
+//   --B hold--> menu)                                -> menu; area door -> camp
+//   menu --A--> pole_room --door--> menu             (pole pick, train)
+//   hunt end + A --> menu                            (appHuntReturn)
 //
 // Shelf graph (kept compiled + unit-tested, NOT reachable from the sketch; the
 // hub/quests/smith work stays in the tree for later re-enable):
@@ -75,6 +78,16 @@ inline AppNav appScreenAccept(uint8_t screen, const ScreenRow &row) {
 // The menu's next A re-runs menuStart -> newGame, so the fresh hunt starts from
 // a fully reset world (projectiles/effects/quest counters).
 inline AppNav appHuntReturn() {
+    return APP_NAV_MENU;
+}
+
+// Camp hold-B (sheathed) / pole-room door: the core raises Game::menuRequest.
+// The app layer consumes it exactly once -> opening menu, so a held B cannot
+// re-fire once the menu is up. Returns the nav for the caller to apply.
+inline AppNav appMenuRequest(Game &g) {
+    if (!g.menuRequest)
+        return APP_NAV_NONE;
+    g.menuRequest = false;
     return APP_NAV_MENU;
 }
 

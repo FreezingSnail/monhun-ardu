@@ -23,6 +23,7 @@
 #include "harness/fxtest.hpp"
 #include "src/core/world.hpp"
 #include "src/render.hpp"
+#include "src/app_state.hpp"   // demo-flow app routing (fie.6)
 
 #include <stdint.h>
 
@@ -31,6 +32,7 @@ namespace zones {
 using namespace mh;
 
 static const Input Z_IDLE = {0, 0, false, false};
+static const Input Z_B = {0, 0, false, true};
 static Game s_g;
 // Static comparison buffers: two Games + local rows would overrun the 2.5 KB
 // AVR stack (measured), so keep them out of the frame.
@@ -201,6 +203,49 @@ inline void test_zones(FxTest &test) {
     test.expectEq(t.fade, FADE_TICKS, F("arrival arms the wipe"));
     stepGame(t, Z_IDLE);
     test.expectEq(t.fade, FADE_TICKS - 1, F("wipe decays per tick"));
+
+    // -------------------------------------------- 6. demo app flow (fie.6)
+    // menu A -> camp; camp hold-B -> Game::menuRequest -> menu; pole pick ->
+    // pole room, its door -> menu. Drives the shipping src/app_state.hpp router.
+    MenuState menu;
+    ScreenState screen;
+    SaveBlock save;
+    saveDefaults(save);
+    Game &d = g;
+    test.expectEq(static_cast<uint32_t>(appNavApply(appMenuAccept(), menu, screen, save, d, Z_IDLE)), 1, F("menu A starts the hunt"));
+    test.expectEq(static_cast<uint32_t>(d.roomId), zone::ROOM_CAMP, F("hunt starts in camp"));
+    test.expectEq(static_cast<uint32_t>(roomIsSafe(d)), 1, F("camp is safe"));
+
+    d.player.sheathed = true;
+    d.player.sheatheLatch = false;
+    d.menuRequest = false;
+    for (int16_t i = 0; i < HOLD_TICKS; i++)
+        stepGame(d, Z_B);
+    test.expectEq(static_cast<uint32_t>(d.menuRequest), 1, F("camp hold-B requests menu"));
+    test.expectEq(static_cast<uint32_t>(appMenuRequest(d)), APP_NAV_MENU, F("request routes to menu"));
+    test.expectEq(static_cast<uint32_t>(d.menuRequest), 0, F("request consumed once"));
+    appNavApply(APP_NAV_MENU, menu, screen, save, d, Z_B);
+    test.expectEq(static_cast<uint32_t>(menu.active), 1, F("camp exit opens menu"));
+
+    // pole pick -> pole room (train); its door (0,24,8,24) exits to the menu.
+    MenuState pole;
+    pole.weapon = W_GUN;
+    pole.target = MENU_POLE_TARGET + POLE_CRACK;
+    test.expectEq(static_cast<uint32_t>(appNavApply(appMenuAccept(), pole, screen, save, d, Z_IDLE)), 1, F("pole pick starts"));
+    test.expectEq(static_cast<uint32_t>(d.mode), MODE_TRAIN, F("pole train mode"));
+    test.expectEq(static_cast<uint32_t>(d.roomId), zone::ROOM_POLE_ROOM, F("pole starts in pole room"));
+    test.expectEq(static_cast<uint32_t>(d.pole.kind), POLE_CRACK, F("pole variant installed"));
+    d.player.x = 60;   // clear the arrival latch
+    d.player.y = 44;
+    stepGame(d, Z_IDLE);
+    d.player.x = 0;
+    d.player.y = 24;
+    stepGame(d, Z_IDLE);
+    test.expectEq(static_cast<uint32_t>(d.menuRequest), 1, F("pole door requests menu"));
+    const AppNav pnav = appMenuRequest(d);
+    test.expectEq(static_cast<uint32_t>(pnav), APP_NAV_MENU, F("pole door routes to menu"));
+    appNavApply(pnav, menu, screen, save, d, Z_B);
+    test.expectEq(static_cast<uint32_t>(menu.active), 1, F("pole door opens menu"));
 }
 
 }   // namespace zones

@@ -48,10 +48,43 @@ void AppSuite(TestRunner &runner) {
         t.assert(appNavApply(appMenuAccept(), menu, screen, save, g, AT_A), true, "hunt started");
         t.assert(g.weapon, W_FLAIL, "started flail");
         t.assert(g.monsterKind, MON_HEAVY, "started heavy beast");
+        t.assert(g.roomId, zone::ROOM_CAMP, "menu A starts in the camp");
+        t.assert(g.roomMonsterKind, zone::MONSTER_NONE, "camp room is safe");
+        t.assert(roomIsSafe(g), true, "camp reads safe");
         t.assert(menu.active, false, "menu closed while hunting");
         t.assert(screen.active, false, "no hub on the demo path");
         t.assert(menu.weapon, W_FLAIL, "weapon pick kept");
         t.assert(menu.target, MON_HEAVY, "target pick kept");
+        suite.addTest(t);
+    }
+
+    {
+        Test t("menu A with a pole pick starts the pole room in train mode");
+        MenuState menu;
+        menu.weapon = W_GUN;
+        menu.target = MENU_POLE_TARGET + POLE_CRACK;
+        ScreenState screen;
+        Game g;
+        SaveBlock save;
+        saveDefaults(save);
+        t.assert(appNavApply(appMenuAccept(), menu, screen, save, g, AT_A), true, "train started");
+        t.assert(g.mode, MODE_TRAIN, "train mode");
+        t.assert(g.roomId, zone::ROOM_POLE_ROOM, "starts in the pole room");
+        t.assert(g.roomMonsterKind, zone::MONSTER_NONE, "pole room is safe");
+        t.assert(g.pole.kind, POLE_CRACK, "variant installed after the room load");
+        t.assert(g.target.alive, true, "pole target armed");
+        suite.addTest(t);
+    }
+
+    {
+        Test t("menu request is consumed once and routes to the menu");
+        Game g;
+        g.menuRequest = false;
+        t.assert(appMenuRequest(g), APP_NAV_NONE, "no request -> none");
+        g.menuRequest = true;
+        t.assert(appMenuRequest(g), APP_NAV_MENU, "request -> menu");
+        t.assert(g.menuRequest, false, "request consumed");
+        t.assert(appMenuRequest(g), APP_NAV_NONE, "no re-fire while held");
         suite.addTest(t);
     }
 
@@ -220,6 +253,7 @@ void AppSuite(TestRunner &runner) {
         t.assert(g.over, OVER_NONE, "over cleared");
         t.assert(g.weapon, W_GUN, "fresh hunt keeps the weapon pick");
         t.assert(g.monsterKind, MON_SWEEP, "fresh hunt keeps the target pick");
+        t.assert(g.roomId, zone::ROOM_CAMP, "fresh hunt restarts in the camp");
         suite.addTest(t);
     }
 
