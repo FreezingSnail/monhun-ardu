@@ -15,6 +15,10 @@
 #include "generated/art_dims.hpp"     // frame layout + core dims for the FX sheets
 #include "generated/equip_meta.hpp"   // gen-art part tables (sheet/frame/anchor) for drawPlayer
 
+#if defined(__AVR__)
+#include <avr/io.h>   // SPDR / SPSR for the fused room-image reader
+#endif
+
 #ifndef DEBUG_HURTBOXES
 #define DEBUG_HURTBOXES 0
 #endif
@@ -277,6 +281,194 @@ static void drawArena(int16_t camX, int16_t camY, int16_t roomW, int16_t roomH) 
     blk(lx, ly, 1, roomH, 2);
     blk(lx + roomW - 1, ly, 1, roomH, 2);
 }
+
+/* --------------------------------------------------------- room image blit */
+// fie.5: replace the procedural dot field with the active room's stored image.
+// Ported from the fie.7 v2b spike (build/spike7/render-carve.patch). The stored
+// layer is Arduboy/SSD1306 page-major -- one byte == one pixel column of 8
+// vertical px -- so an integer camX is a pure column offset (no horizontal bit
+// shift) and only camY&7 needs a vertical split. The fused inline asm reads one
+// SPI byte per iteration (SPDR read + next-byte kick), splits it with
+// `mul byte, 1<<(8-v)` into r0 = byte<<(8-v) (high part -> dest page q-1) and
+// r1 = byte>>v (low part -> dest page q+1), ORs both into the framebuffer, and
+// is cycle-padded to 17 cycles/iteration vs the 16-cycle SPI byte time (SPI2X,
+// 8 MHz), so no SPIF wait is needed. Dest pages 1..7; page 0 stays HUD. Every
+// read happens in the render pass between plane blits, never during the
+// ArduboyG paint.
+#if MH_ROOM_BOUNDS
+
+// Per-room image base + extent from the generated meta constants. Only the
+// three shipped rooms exist; the default (pre-room) scene maps to area, the
+// legacy room-0 image (its baked stride 384 must come from the record, not the
+// legacy roomW 256 default).
+static inline void roomImageInfo(uint8_t roomId, uint24_t &img, int16_t &w, int16_t &h) {
+    if (roomId == zone::ROOM_CAMP) {
+        img = mh_map_camp;
+        w = static_cast<int16_t>(zone::ROOM_CAMP_W);
+        h = static_cast<int16_t>(zone::ROOM_CAMP_H);
+    } else if (roomId == zone::ROOM_POLE_ROOM) {
+        img = mh_map_pole_room;
+        w = static_cast<int16_t>(zone::ROOM_POLE_ROOM_W);
+        h = static_cast<int16_t>(zone::ROOM_POLE_ROOM_H);
+    } else {
+        img = mh_map_area;
+        w = static_cast<int16_t>(zone::ROOM_AREA_W);
+        h = static_cast<int16_t>(zone::ROOM_AREA_H);
+    }
+}
+
+// Fused streaming reader (fie.7 v2b). FX::seekData prefetches the page's first
+// column; a SPIF wait aligns to it, then the asm streams the rest of the row
+// with the `mul b, 1<<(8-v)` split (r0 = high part -> dest page q-1, r1 = low
+// part -> dest page q+1). X = high/only dest, Z = low dest.
+//
+// The spike's cycle padding was one byte-time short of the 16-cycle SPI byte
+// at SPI2X (8 MHz): every read lagged one column and the whole window shifted.
+// test_zones caught it; the loops below keep a safety margin over 16 cycles
+// between SPDR writes and the next read.
+#if defined(__AVR__)
+static void roomAsmDual(uint8_t *dstHi, uint8_t *dstLo, uint8_t coef, uint8_t n) {
+    uint8_t b, t;
+    asm volatile("1:                        \n\t"
+                 "in  %[b], %[spdr]         \n\t"
+                 "out %[spdr], __zero_reg__ \n\t"
+                 "mul %[b], %[coef]         \n\t"
+                 "ld  %[t], X               \n\t"
+                 "or  %[t], r0              \n\t"
+                 "st  X+, %[t]              \n\t"
+                 "ld  %[t], Z               \n\t"
+                 "or  %[t], r1              \n\t"
+                 "st  Z+, %[t]              \n\t"
+                 "nop                       \n\t"
+                 "nop                       \n\t"
+                 "nop                       \n\t"
+                 "nop                       \n\t"
+                 "dec %[n]                  \n\t"
+                 "brne 1b                   \n\t"
+                 "clr __zero_reg__          \n\t"
+                 : [b] "=&r"(b), [t] "=&r"(t), [n] "+r"(n), "+x"(dstHi), "+z"(dstLo)
+                 : [coef] "r"(coef), [spdr] "I"(_SFR_IO_ADDR(SPDR))
+                 : "memory");
+}
+
+// v == 0: byte-for-byte page copy (no mul). Same SPIF-margin padding.
+static void roomAsmCopy(uint8_t *dst, uint8_t n) {
+    uint8_t b, t;
+    asm volatile("1:                        \n\t"
+                 "in  %[b], %[spdr]         \n\t"
+                 "out %[spdr], __zero_reg__ \n\t"
+                 "ld  %[t], X               \n\t"
+                 "or  %[t], %[b]            \n\t"
+                 "st  X+, %[t]              \n\t"
+                 "nop                       \n\t"
+                 "nop                       \n\t"
+                 "nop                       \n\t"
+                 "nop                       \n\t"
+                 "nop                       \n\t"
+                 "nop                       \n\t"
+                 "nop                       \n\t"
+                 "nop                       \n\t"
+                 "dec %[n]                  \n\t"
+                 "brne 1b                   \n\t"
+                 : [b] "=&r"(b), [t] "=&r"(t), [n] "+r"(n), "+x"(dst)
+                 : [spdr] "I"(_SFR_IO_ADDR(SPDR))
+                 : "memory");
+}
+#endif
+
+// Stream one plane of the room image into framebuffer pages 1..7. `camX` is an
+// integer column offset; `camY&7` splits across the two source pages. The
+// source page index q0+j+b must stay inside the image (camY clamp guarantees
+// it: v != 0 implies camY <= h - ARENA_H - 1, so q0+7 < h/8).
+__attribute__((noinline)) static void drawRoom(const Game &g, int16_t camX, int16_t camY) {
+    uint24_t img;
+    int16_t rw, rh;
+    roomImageInfo(g.roomId, img, rw, rh);
+    int16_t rx = camX;
+    int16_t ry = camY;
+    if (rx < 0)
+        rx = 0;
+    else if (rx > rw - SCREEN_W)
+        rx = static_cast<int16_t>(rw - SCREEN_W);
+    if (ry < 0)
+        ry = 0;
+    else if (ry > rh - ARENA_H)
+        ry = static_cast<int16_t>(rh - ARENA_H);
+
+    const uint8_t v = static_cast<uint8_t>(ry & 7);
+    const uint8_t q0 = static_cast<uint8_t>(ry >> 3);
+    const uint16_t rw16 = static_cast<uint16_t>(rw);
+    const uint16_t layerBytes = static_cast<uint16_t>(rw16 * static_cast<uint16_t>(rh >> 3));
+    const uint24_t layer = img + static_cast<uint24_t>(arduboy.currentPlane()) * static_cast<uint24_t>(layerBytes);
+    const uint8_t pages = (v == 0) ? 7 : 8;
+    const uint8_t coef = (v == 0) ? 0 : static_cast<uint8_t>(1u << (8 - v));
+    uint8_t *fb = arduboy.getBuffer();
+    uint8_t dummy[128];   // unused half at the window's first/last page
+
+    for (uint8_t q = 0; q < pages; q++) {
+        const uint24_t src = layer + static_cast<uint24_t>(static_cast<uint16_t>(q0 + q) * rw16) + static_cast<uint24_t>(static_cast<uint16_t>(rx));
+#if defined(__AVR__)
+        FX::seekData(src);
+        // Wait for the prefetched first column; the asm's paced loop then
+        // covers the remaining 127. readEnd drains the last kick and releases
+        // the FX bus for the next seek.
+        while (!(SPSR & _BV(SPIF))) {
+        }
+        if (v == 0) {
+            uint8_t *d = (q < 7) ? fb + static_cast<uint16_t>(1 + q) * SCREEN_W : dummy;
+            roomAsmCopy(d, 128);
+        } else {
+            uint8_t *lo = (q < 7) ? fb + static_cast<uint16_t>(1 + q) * SCREEN_W : dummy;
+            uint8_t *hi = (q >= 1) ? fb + static_cast<uint16_t>(q) * SCREEN_W : dummy;
+            roomAsmDual(hi, lo, coef, 128);
+        }
+        FX::readEnd();
+#else
+        // Host fallback (render.hpp is device-only; kept compilable).
+        uint8_t row[128];
+        FX::readDataBytes(src, row, 128);
+        if (v == 0) {
+            uint8_t *d = (q < 7) ? fb + static_cast<uint16_t>(1 + q) * SCREEN_W : dummy;
+            for (uint8_t x = 0; x < 128; x++)
+                d[x] = static_cast<uint8_t>(d[x] | row[x]);
+        } else {
+            uint8_t *lo = (q < 7) ? fb + static_cast<uint16_t>(1 + q) * SCREEN_W : dummy;
+            uint8_t *hi = (q >= 1) ? fb + static_cast<uint16_t>(q) * SCREEN_W : dummy;
+            for (uint8_t x = 0; x < 128; x++) {
+                hi[x] = static_cast<uint8_t>(hi[x] | static_cast<uint8_t>(row[x] << (8 - v)));
+                lo[x] = static_cast<uint8_t>(lo[x] | static_cast<uint8_t>(row[x] >> v));
+            }
+        }
+#endif
+    }
+}
+
+// Room props: the active room's prop records blitted as FX sprites over the
+// room image and under the actors. `sheet` indexes the zone::SHEET_* list; the
+// two shipped sheets resolve (tent in images/blocks, the training pole in the
+// blocks section). Static decoration only -- props have no hit test.
+static inline uint24_t propSheet(uint8_t sheet) {
+    if (sheet == zone::SHEET_MH_MAP_TENT)
+        return mh_map_tent;
+    return fxpole;   // zone::SHEET_FXPOLE
+}
+
+static void drawProps(const Game &g, int16_t camX, int16_t camY) {
+    for (uint8_t i = 0; i < g.roomPropCount; i++) {
+        const ZoneProp p = zonePropRead(static_cast<uint8_t>(g.roomFirstProp + i));
+        sprDraw(propSheet(p.sheet), static_cast<int16_t>(p.x - camX), static_cast<int16_t>(p.y - camY + HUD_H), FRAME(p.frame));
+    }
+}
+
+// Door-cross black wipe: loadRoom arms Game::fade (FADE_TICKS) and stepGame
+// decays it. A cheap arena blk() on every plane -- no cart traffic while
+// fading. Covers the scene but not the HUD strip.
+static inline void drawFade(const Game &g) {
+    if (g.fade == 0)
+        return;
+    blk(0, HUD_H, SCREEN_W, static_cast<int16_t>(g.fade * (ARENA_H / FADE_TICKS)), 0);
+}
+#endif   // MH_ROOM_BOUNDS
 
 // Static-prop sheet dispatch is table-driven off the creature record's sheet id
 // (monhun-ardu-6zb.6): the 4 pole records carry ids 1..4, so reusing a sheet for
@@ -1075,7 +1267,14 @@ static void renderScene(const mh::Game &g, bool wire) {
     const int16_t ecX = static_cast<int16_t>(camX - shakeX);
     const int16_t ecY = static_cast<int16_t>(camY - shakeY);
 
+#if MH_ROOM_BOUNDS
+    // Room image window blit + its props (fie.5) replace the procedural dot
+    // field. Both stay inside the render pass between plane blits.
+    drawRoom(g, ecX, ecY);
+    drawProps(g, ecX, ecY);
+#else
     drawArena(ecX, ecY, mh::roomBoundW(g), mh::roomBoundH(g));
+#endif
     if (g.mode == mh::MODE_TRAIN)
         drawPole(g, ecX, ecY);
     else
@@ -1083,6 +1282,9 @@ static void renderScene(const mh::Game &g, bool wire) {
     drawPlayer(g, ecX, ecY);
     drawProjectiles(g, ecX, ecY);
     drawEffects(g, ecX, ecY);
+#if MH_ROOM_BOUNDS
+    drawFade(g);   // door-cross wipe covers the scene, drawn under the HUD
+#endif
 #if DEBUG_HURTBOXES
     if (wire)
         drawDebug(g, ecX, ecY);

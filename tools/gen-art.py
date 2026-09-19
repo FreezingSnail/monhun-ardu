@@ -1640,6 +1640,32 @@ def render_icon(defn):
     return strip(frames, defn["w"], defn["h"])
 
 
+def map_tent_frame():
+    """Mock-up 4-shade camp tent prop (bead monhun-ardu-fie.5), 32x24.
+
+    A dark ridge tent with a light left slope, a white centre pole, a black
+    door and a dark ground line. One frame: the room prop record selects frame 0.
+    The background stays transparent so convert-sprite emits the plus-mask plane
+    SpritesU::drawPlusMaskFX reads. Integer-only construction (no float) so the
+    PNG is byte-stable across platforms.
+    """
+    img = new(32, 24)
+    px = img.load()
+    for y in range(2, 21):
+        half = ((y - 2) * 13 + 9) // 18 + 1   # apex (16,2) -> half-width 14 at y=20
+        for x in range(16 - half, 16 + half + 1):
+            px[x, y] = DARK
+        px[16 - half, y] = LIGHT
+        px[16, y] = WHITE
+    for y in range(13, 21):
+        for x in range(13, 20):
+            px[x, y] = BLACK
+    for x in range(1, 31):
+        px[x, 21] = DARK
+    px[16, 1] = WHITE
+    return img
+
+
 def render_all(dims):
     icons = icon_defs(dims)
     sheets = {}
@@ -1658,6 +1684,7 @@ def render_all(dims):
     menu = menu_defs()
     for d in icons + menu:
         sheets[d["id"]] = render_icon(d)
+    sheets["map_tent"] = strip([map_tent_frame()], 32, 24)
     sheets["ball"] = strip([ball_frame()], 7, 8)
     sheets["scatter"] = strip([scatter_frame()], 4, 8)
     sheets["spark"] = strip([spark_frame(LIGHT), spark_frame(WHITE)], 4, 4)
@@ -1726,6 +1753,10 @@ def sheet_filename(body, img, icons):
         return "fxpole_20x40.png"
     if body in ("pole_sever", "pole_break", "pole_crack"):
         return "fx%s_24x40.png" % body
+    if body == "map_tent":
+        # Map prop sheet lives under images/blocks like the other block sheets
+        # (convert-sprite names it mh_map_tent, which gen-zones resolves).
+        return "mh_map_tent_32x24.png"
     if body == "ball":
         return "fxball_7x8.png"
     if body == "scatter":

@@ -801,6 +801,11 @@ struct Game {
     uint8_t roomDoorCount;
     uint16_t roomFirstHeal;
     uint8_t roomHealCount;
+    // Prop range (bead monhun-ardu-fie.5): the render draws the active room's
+    // prop records over the room-image blit, so the range is cached like the
+    // door/heal ranges (the 9 B records are read off the blob on demand).
+    uint16_t roomFirstProp;
+    uint8_t roomPropCount;
     bool doorLatch;     // suppress doors until the player leaves every door rect
     bool menuRequest;   // menu door / hold-B sheathed in camp: app layer consumes
     bool prevA, prevB;
@@ -836,6 +841,10 @@ struct Game {
     // 100/100 so a default Game keeps the sim byte-identical.
     uint8_t dmgMul;
     uint8_t spdMul;
+    // Room-transition wipe (bead monhun-ardu-fie.5): loadRoom arms it and
+    // stepGame decays it, so the render can black-wipe the arena for ~4 ticks
+    // after a door cross without any new cart traffic. 0 = no transition.
+    uint8_t fade;
 };
 
 // Active-room extents for the bound expressions. With ROOM_BOUNDS_ENABLED

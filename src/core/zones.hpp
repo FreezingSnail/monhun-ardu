@@ -60,6 +60,15 @@ struct ZoneHeal {
     uint8_t w, h;
 };
 
+// Prop record (bead monhun-ardu-fie.5): the render blits the sheet at (x,y).
+// `type` is a zone::PROP_* kind, `sheet` an index into the zone::SHEET_* list.
+struct ZoneProp {
+    uint8_t type;
+    uint16_t x, y;
+    uint8_t sheet;
+    uint8_t frame, w, h;
+};
+
 // ================================================================ read layer
 #if defined(__AVR__)
 
@@ -130,6 +139,20 @@ inline ZoneHeal zoneHealRead(uint8_t i) {
     return v;
 }
 
+inline ZoneProp zonePropRead(uint8_t i) {
+    using namespace zdetail;
+    const uint16_t b = static_cast<uint16_t>(zone::PROPS_OFF + i * zone::PROP_SIZE);
+    ZoneProp v;
+    v.type = zoneReadU8(b + zone::PROP_TYPE_OFF);
+    v.x = zoneReadU16(b + zone::PROP_X_OFF);
+    v.y = zoneReadU16(b + zone::PROP_Y_OFF);
+    v.sheet = zoneReadU8(b + zone::PROP_SHEET_OFF);
+    v.frame = zoneReadU8(b + zone::PROP_FRAME_OFF);
+    v.w = zoneReadU8(b + zone::PROP_W_OFF);
+    v.h = zoneReadU8(b + zone::PROP_H_OFF);
+    return v;
+}
+
 #else   // ------------------------------------------------------------ host
 
 inline ZoneRoom zoneRoomRead(uint8_t i) {
@@ -177,6 +200,19 @@ inline ZoneHeal zoneHealRead(uint8_t i) {
     v.y = h.y;
     v.w = h.w;
     v.h = h.h;
+    return v;
+}
+
+inline ZoneProp zonePropRead(uint8_t i) {
+    const zone_data::Prop &p = zone_data::PROPS[i];
+    ZoneProp v;
+    v.type = p.type;
+    v.x = p.x;
+    v.y = p.y;
+    v.sheet = p.sheet;
+    v.frame = p.frame;
+    v.w = p.w;
+    v.h = p.h;
     return v;
 }
 

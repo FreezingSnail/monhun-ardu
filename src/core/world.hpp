@@ -79,6 +79,9 @@ static const Rect *activeTargetRect(const Game &g) {
 // ------------------------------------------------------------- room runtime
 // Heal spark effect lifetime (ticks); same spark family the hit paths spawn.
 constexpr uint8_t HEAL_SPARK_LIFE = 8;
+// Door-cross transition wipe length (ticks): loadRoom arms Game::fade and
+// stepGame decays it; the render black-wipes the arena for these ticks.
+constexpr uint8_t FADE_TICKS = 4;
 
 static inline Rect bodyRect(const Player &p) {
     Rect r;
@@ -110,6 +113,8 @@ static void loadRoom(Game &g, uint8_t roomId, uint8_t spawn) {
     g.roomDoorCount = room.doorCount;
     g.roomFirstHeal = room.firstHeal;
     g.roomHealCount = room.healCount;
+    g.roomFirstProp = room.firstProp;
+    g.roomPropCount = room.propCount;
     g.roomMonsterKind = room.monsterKind;
     if (room.monsterKind == zone::MONSTER_NONE)
         g.target = Target{};   // safe room: no target until a beast room loads
@@ -126,8 +131,9 @@ static void loadRoom(Game &g, uint8_t roomId, uint8_t spawn) {
     g.fxN = 0;
     g.lastShot = 0;
 
-    updateCamera(g);      // clamp the follow to the new room's extents
-    g.doorLatch = true;   // suppress doors until the spawn rect is left
+    updateCamera(g);       // clamp the follow to the new room's extents
+    g.doorLatch = true;    // suppress doors until the spawn rect is left
+    g.fade = FADE_TICKS;   // render black-wipe on arrival (no cart traffic)
 }
 
 // Door check (stepGame): a player-rect overlap with any door rect transitions
@@ -229,6 +235,8 @@ static void resetHunt(Game &g) {
 // but skips all sim updates, so device play matches the prototype exactly.
 static void stepGame(Game &g, const Input &inp) {
     g.tick++;
+    if (ROOM_BOUNDS_ENABLED && g.fade)
+        g.fade--;   // door-cross wipe decays one tick per logic tick
     bool aP, bP, bR;
     inputEdges(inp, g.prevA, g.prevB, aP, bP, bR);   // edges run even while frozen
     updateCamera(g);

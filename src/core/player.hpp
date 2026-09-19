@@ -89,9 +89,12 @@ void initGame(Game &g, int8_t weapon) {
         g.roomDoorCount = 0;
         g.roomFirstHeal = 0;
         g.roomHealCount = 0;
+        g.roomFirstProp = 0;
+        g.roomPropCount = 0;
         g.doorLatch = false;
         g.menuRequest = false;
     }
+    g.fade = 0;   // no transition wipe outside a room load
     g.player.init(weapon);
     g.target = Target{};
     g.lastShot = 0;
