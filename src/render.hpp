@@ -23,6 +23,19 @@
 #define DEBUG_HURTBOXES 0
 #endif
 
+// fie.8 ground carve. 0 (shipping default) fills the playfield with the
+// procedural dot field + room border (drawArena), the old basic texture; 1 uses
+// the fie.5 stored-room-image blit (drawRoom + per-plane FX streaming). The
+// carve is look/budget only -- MH_ROOM_BOUNDS stays 1 either way, so the room
+// graph, doors, spawns, heal, per-room bounds, props (tent) and fade all stay
+// live. The image pipeline (PNGs, gen-zones blob/meta, mh_map_* layers) stays in
+// the tree; only the render path compiles out. test_zones forces 1 to keep the
+// blit pixel evidence.
+#ifndef MH_ROOM_IMAGE
+#define MH_ROOM_IMAGE 0
+#endif
+static_assert(MH_ROOM_IMAGE == 0 || MH_ROOM_IMAGE == 1, "MH_ROOM_IMAGE must be 0 (procedural dots) or 1 (stored room image)");
+
 namespace mh {
 
 /* ---------------------------------------------------------------- sprites */
@@ -253,7 +266,8 @@ static void drawNumber(int16_t x, int16_t y, int16_t value, uint8_t shade) {
 // coord advances by its fixed step with a single conditional wrap (step is
 // always < the modulus, so one subtract bounds it). Integer-only, no float.
 // `roomW`/`roomH` are the active-room extents (legacy WORLD_W/H by default);
-// fie.5 replaces this placeholder field with the room-image blit.
+// fie.8 keeps this as the shipping default ground (MH_ROOM_IMAGE 0); fie.5's
+// stored-image blit compiles in only when MH_ROOM_IMAGE is 1.
 static void drawArena(int16_t camX, int16_t camY, int16_t roomW, int16_t roomH) {
     uint8_t phase = 0;   // i % 3
     int16_t wx = 0;      // (i * 53) % roomW
@@ -297,6 +311,7 @@ static void drawArena(int16_t camX, int16_t camY, int16_t roomW, int16_t roomH) 
 // ArduboyG paint.
 #if MH_ROOM_BOUNDS
 
+#if MH_ROOM_IMAGE
 // Per-room image base + extent from the generated meta constants. Only the
 // three shipped rooms exist; the default (pre-room) scene maps to area, the
 // legacy room-0 image (its baked stride 384 must come from the record, not the
@@ -443,8 +458,11 @@ __attribute__((noinline)) static void drawRoom(const Game &g, int16_t camX, int1
     }
 }
 
+#endif   // MH_ROOM_IMAGE
+
 // Room props: the active room's prop records blitted as FX sprites over the
-// room image and under the actors. `sheet` indexes the zone::SHEET_* list; the
+// ground layer (stored room image or procedural dot field) and under the
+// actors. `sheet` indexes the zone::SHEET_* list; the
 // two shipped sheets resolve (tent in images/blocks, the training pole in the
 // blocks section). Static decoration only -- props have no hit test.
 static inline uint24_t propSheet(uint8_t sheet) {
@@ -1268,9 +1286,15 @@ static void renderScene(const mh::Game &g, bool wire) {
     const int16_t ecY = static_cast<int16_t>(camY - shakeY);
 
 #if MH_ROOM_BOUNDS
-    // Room image window blit + its props (fie.5) replace the procedural dot
-    // field. Both stay inside the render pass between plane blits.
+    // Ground layer (fie.8 carve): the stored room-image blit when MH_ROOM_IMAGE
+    // is 1, otherwise the procedural dot field + border (shipping default).
+    // Props and the door fade are shared. All stay inside the render pass
+    // between plane blits.
+#if MH_ROOM_IMAGE
     drawRoom(g, ecX, ecY);
+#else
+    drawArena(ecX, ecY, mh::roomBoundW(g), mh::roomBoundH(g));
+#endif
     drawProps(g, ecX, ecY);
 #else
     drawArena(ecX, ecY, mh::roomBoundW(g), mh::roomBoundH(g));
