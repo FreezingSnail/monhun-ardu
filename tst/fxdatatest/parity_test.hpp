@@ -172,6 +172,12 @@ static uint16_t hashState(const Game &g) {
         h = mix(h, e.text);
     }
 
+    // sheathe + combo debounce/buffer state (udb; appended after effects, mirror
+    // of tools/gen-parity-fixtures.js hashState in the same order)
+    h = mix(h, p.sheathed ? 1 : 0);
+    h = mix(h, p.chainLock);
+    h = mix(h, p.bBuffer);
+
     return static_cast<uint16_t>((h ^ (h >> 16)) & 0xffffu);
 }
 

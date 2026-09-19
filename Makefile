@@ -140,6 +140,13 @@ fxtest-headless-preflight:
 	@test -f "$(FXDATA_BIN)" || { echo "fxtest-headless: FX data image missing at $(FXDATA_BIN); run make gen or set FXDATA_BIN=/path/to/fxdata.bin" >&2; exit 1; }
 	@strings "$(ARDENS)" | grep -Fxq captureserial || { echo "fxtest-headless: BLOCKED (Ardens at $(ARDENS) lacks captureserial)" >&2; exit 2; }
 
+# Device test images compile with the shipping size flags (see SIZE_FLAGS) so
+# their flash budget matches the real build. MH_NO_USB is deliberately NOT set:
+# the Ardens harness captures USB serial output.
+FXTEST_SIZE_FLAGS = --build-property compiler.cpp.extra_flags="-mcall-prologues -mrelax" \
+    --build-property compiler.c.extra_flags="-mrelax" \
+    --build-property compiler.c.elf.extra_flags="-mrelax"
+
 fxtest-build:
 	@set -e; \
 	for ino in $(FXTEST_RUN); do \
@@ -153,6 +160,7 @@ fxtest-build:
 		echo $$ino; \
 		$(ARDUINO_CLI) compile --fqbn "$(FQBN)" \
 		    --optimize-for-debug --output-dir "$$stage/output" \
+		    $(FXTEST_SIZE_FLAGS) \
 		    "$$stage/$$ino.ino"; \
 	done
 

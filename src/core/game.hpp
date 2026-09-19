@@ -35,9 +35,27 @@ constexpr bool GUARD_ZONES_ENABLED = combat::HAS_GUARD_ZONES && MH_COMBAT_PARTS;
 // A carved image only has dist-only guards, so the fast path is correct there.
 constexpr bool SIMPLE_GUARDS = combat::HAS_SIMPLE_GUARDS || !MH_COMBAT_PARTS;
 
-constexpr int16_t HOLD_TICKS = 11;   // B held this long -> stance (~180ms)
-constexpr int16_t CHAIN_WIN = 14;    // chain follow-up window after a combo hit
-constexpr int16_t A_BUFFER = 10;     // attack input buffer in ticks
+constexpr int16_t HOLD_TICKS = 11;        // B held this long -> stance (~180ms)
+constexpr int16_t CHAIN_WIN = 14;         // chain follow-up window after a combo hit
+constexpr uint8_t CHAIN_GAP = 9;          // HEAVY debounce: lock after a non-finisher hit
+constexpr uint8_t COMBO_LOCK = 24;        // HEAVY debounce: lock after the finisher (chain >= 2)
+constexpr uint8_t A_BUFFER = 16;          // attack input buffer in ticks (covers the gap lock)
+constexpr uint8_t B_BRANCH_BUFFER = 36;   // B branch tap buffer: bridges recovery + lock
+// Sheathe combo (ddab only): double-tap Down then an A+B chord within a 3t grace.
+constexpr uint8_t SHEATHE_SEQ_WIN = 18;   // d-pad tap -> chord window (~300ms)
+constexpr uint8_t CHORD_WIN = 3;          // A/B chord grace (~50ms)
+constexpr uint8_t SHEATHE_SPD = 24;       // 1/16 px per tick while stowed (1.5 px/t run)
+// Parity carve facts (same pattern as MH_COMBAT_PARTS): the test_parity scenes
+// never sheathe and never queue a B branch through recovery/lock, so those input
+// paths fold out of that image; the host suite keeps covering them.
+#ifndef MH_SHEATHE
+#define MH_SHEATHE 1
+#endif
+#ifndef MH_B_BRANCH_BUFFER
+#define MH_B_BRANCH_BUFFER 1
+#endif
+constexpr bool SHEATHE_ENABLED = MH_SHEATHE;
+constexpr bool B_BRANCH_BUFFER_ENABLED = MH_B_BRANCH_BUFFER;
 constexpr int16_t WORLD_W = 256;
 constexpr int16_t WORLD_H = 112;
 
@@ -377,6 +395,16 @@ struct Player : fp::FpBody, fp::FpStam {
     const Attack *atk;
     bool hitDone;
     uint8_t chain, chainWin, aBuffer;   // chain 0..2, windows <= CHAIN_WIN/A_BUFFER
+    // Sheathe combo (ddab): stowed flag + latch (suppresses B until release),
+    // double-tap Down tracker (seqT alive, seq2 armed on the second press) and
+    // the A/B chord grace; combo debounce lock + B branch tap buffer.
+    bool sheathed, sheatheLatch;
+    uint8_t seqT;
+    bool seq2;
+    uint8_t chordT;
+    bool pMy;
+    uint8_t chainLock;
+    uint8_t bBuffer;
     Stance stance;
     uint8_t stanceT, stanceAuto, whirlTick;
     uint8_t throwCd, riposteT;

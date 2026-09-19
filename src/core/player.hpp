@@ -41,6 +41,14 @@ void Player::init(int8_t weapon) {
     chain = 0;
     chainWin = 0;
     aBuffer = 0;
+    sheathed = false;
+    sheatheLatch = false;
+    seqT = 0;
+    seq2 = false;
+    chordT = 0;
+    pMy = false;
+    chainLock = 0;
+    bBuffer = 0;
     stance = ST_NONE;
     stanceT = 0;
     stanceAuto = 0;
@@ -104,14 +112,16 @@ static void clampPlayer(Player &p) {
         p.y = WORLD_H - p.h;
 }
 
-static void movePlayer(Player &p, int8_t mx, int8_t my, uint8_t spd) {
+static void movePlayer(Player &p, int8_t mx, int8_t my, uint8_t spd, bool lockFacing) {
     const int8_t i = fp::dirIndexFromInput(mx, my);
     if (i < 0)
         return;
     const int8_t dx = static_cast<int8_t>(fp::dir8X(i));
     const int8_t dy = static_cast<int8_t>(fp::dir8Y(i));
-    p.fx = dx;
-    p.fy = dy;
+    if (!lockFacing) {
+        p.fx = dx;
+        p.fy = dy;
+    }
     fp::addMove(p, dx, dy, spd);
 }
 
@@ -137,6 +147,10 @@ static void applyDrift(Player &p, uint8_t mult = 13) {
 
 static void startAttack(Game &g, const WeaponDef *def) {
     Player &p = g.player;
+    if (p.sheathed)
+        return;   // draw path clears the flag first
+    if (p.chainLock > 0)
+        return;   // debounce lock gates every attack entry
     const Attack *a = weaponAttack(def, p.chain < 2 ? p.chain : 2);
     if (p.stam < 1)
         return;
@@ -158,6 +172,10 @@ static void enterStance(Game &g, const WeaponDef *def) {
     Player &p = g.player;
     if (p.stance != ST_NONE)
         return;
+    if (p.sheathed) {
+        p.bLocked = true;   // no stance while stowed
+        return;
+    }
     if (p.stam < 10) {
         p.bLocked = true;
         return;
@@ -226,10 +244,10 @@ static bool tryBranch(Game &g, const WeaponDef *def, const Input &inp) {
     int stage = 0;
     if (p.state == PS_ATTACK && p.atk) {
         if (p.t < attackStartup(p.atk) + attackActive(p.atk))
-            return false;   // only from recovery
-        stage = p.chain + 1 < 2 ? p.chain + 1 : 2;
+            return false;                        // only from recovery
+        stage = p.chain < 2 ? p.chain + 1 : 3;   // stage 3 has no branch (finisher out of scope)
     } else if (p.state == PS_IDLE && p.chainWin > 0) {
-        stage = p.chain;
+        stage = p.chain;   // finWin stage-3 branch is out of scope; chain only
     } else {
         return false;
     }
@@ -303,7 +321,19 @@ static void tapDefense(Game &g, const WeaponDef *def, const Input &inp) {
     }
 
     const int8_t defId = weaponId(def);
-    if (defId == W_SWORD) {
+    if (p.sheathed) {
+        // stowed: every weapon rolls with the sword dodge numbers (MH-style run +
+        // evade while sheathed)
+        if (p.stam < 14)
+            return;
+        p.stam -= 14;
+        p.state = PS_DODGE;
+        p.t = 16;
+        p.iT = 14;
+        p.vx = (dx * 54) >> 4;
+        p.vy = (dy * 54) >> 4;
+        exitStance(p);
+    } else if (defId == W_SWORD) {
         if (p.stam < 14)
             return;
         p.stam -= 14;
@@ -453,6 +483,36 @@ static void playerHurt(Game &g, int16_t dmg, int16_t faceX, int16_t faceY) {
     addEffect(g, static_cast<int16_t>(p.x + 8), static_cast<int16_t>(p.y + 8), 8, false, 0);
 }
 
+// ------------------------------------------------------------ sheathe combo
+// Ported from mock/game.js trySheathe()/sheatheCombo(), device variant ddab:
+// double-tap Down then an A+B chord (3t grace). Only from idle (stance idle
+// counts; the stance is dropped). Returns false when the state does not allow it,
+// so the press pair falls through to its normal attack/dodge/stance meaning.
+static bool trySheathe(Player &p) {
+    if (p.state != PS_IDLE)
+        return false;
+    if (p.stance != ST_NONE)
+        exitStance(p);
+    p.sheathed = true;
+    p.chain = 0;
+    p.chainWin = 0;
+    p.chainLock = 0;   // stowing drops the pending combo recovery
+    p.aBuffer = 0;
+    p.seqT = 0;
+    p.seq2 = false;
+    p.sheatheLatch = true;   // suppress roll/stance until B is released
+    return true;
+}
+
+// Evaluate the active variant (device ships ddab only). Returns true only when
+// the toggle actually fired; the caller then consumes the A/B press this tick.
+static bool sheatheCombo(Player &p, bool aP, const Input &inp) {
+    if (p.sheathed)
+        return false;   // stowed: A draws, combos do nothing
+    const bool chordA = aP && (inp.b || p.chordT > 0);
+    return chordA && p.seq2 && trySheathe(p);
+}
+
 static void updatePlayer(Game &g, const Input &inp, bool aP, bool bP, bool bR) {
     Player &p = g.player;
     const WeaponDef *def = &WEAPON_DEFS[g.weapon];
@@ -465,13 +525,49 @@ static void updatePlayer(Game &g, const Input &inp, bool aP, bool bP, bool bR) {
         p.reload--;
     if (p.riposteT > 0)
         p.riposteT--;
-    if (p.chainWin > 0) {
+    // Combo debounce (HEAVY): recovery lock first, then the combo window. The
+    // window only ticks in idle, so a chained attack cannot expire its own chain.
+    if (p.chainLock > 0) {
+        p.chainLock--;
+        if (p.chainLock == 0)
+            p.chainWin = CHAIN_WIN;   // window opens after the recovery
+    } else if (p.chainWin > 0 && p.state == PS_IDLE) {
         p.chainWin--;
         if (p.chainWin == 0)
             p.chain = 0;
     }
     if (p.aBuffer > 0)
         p.aBuffer--;
+
+    // Sheathe prototype (ddab): double-tap Down then an A+B chord within the
+    // grace, then the combo check (consumes the press pair so it cannot also
+    // attack/dodge/stance). SHEATHE_ENABLED folds this whole path out of the
+    // parity image, whose scenes never stow (host suite covers it).
+    bool sheatheConsumed = false;
+    if (SHEATHE_ENABLED) {
+        if (p.chordT > 0)
+            p.chordT--;
+        if (p.seqT > 0) {
+            p.seqT--;
+            if (p.seqT == 0)
+                p.seq2 = false;
+        }
+        const bool myNow = inp.my > 0;
+        if (myNow && !p.pMy) {   // down press edge
+            if (p.seqT > 0)
+                p.seq2 = true;   // second tap inside the window: combo armed
+            p.seqT = SHEATHE_SEQ_WIN;
+        }
+        p.pMy = myNow;
+
+        sheatheConsumed = sheatheCombo(p, aP, inp);
+        if (!sheatheConsumed) {
+            if (aP && !inp.b)
+                p.chordT = CHORD_WIN;
+            if (bP && !inp.a)
+                p.chordT = CHORD_WIN;
+        }
+    }
 
     const bool draining = p.stance == ST_WHIRL || p.stance == ST_GUARD;
     if (!draining && p.stam < p.stamMax) {
@@ -482,39 +578,70 @@ static void updatePlayer(Game &g, const Input &inp, bool aP, bool bP, bool bR) {
         }
     }
 
-    // B: release speed picks tap defense vs hold stance
+    // B: release speed picks tap defense vs hold stance. A tap inside attack
+    // recovery or the debounce lock queues the A-B branch (B_BRANCH_BUFFER) so a
+    // loose A A B still combos; it fires when the branch window opens.
+    if (B_BRANCH_BUFFER_ENABLED && bP && !sheatheConsumed) {
+        const Attack *a = p.atk;
+        const bool inRecovery = p.state == PS_ATTACK && a && p.t >= attackStartup(a) + attackActive(a);
+        const bool inLock = p.state == PS_IDLE && p.chain > 0 && p.chainLock > 0;
+        if (inRecovery || inLock)
+            p.bBuffer = B_BRANCH_BUFFER;
+    }
     if (bP) {
         p.bHeld = 0;
         p.bReady = true;
     }
     if (inp.b && p.bReady) {
         p.bHeld++;
-        if (p.bHeld == HOLD_TICKS && p.stance == ST_NONE && !p.bLocked)
+        if (p.bHeld == HOLD_TICKS && p.stance == ST_NONE && !p.bLocked && !p.sheatheLatch) {
             enterStance(g, def);
+            p.bBuffer = 0;   // hold wins: drop any queued branch tap
+        }
     }
     if (bR) {
-        if (p.bHeld < HOLD_TICKS) {
-            if (!tryBranch(g, def, inp))
-                tapDefense(g, def, inp);
-        } else if (p.stance != ST_NONE) {
-            exitStance(p);
+        if (!p.sheatheLatch) {
+            if (p.bHeld < HOLD_TICKS) {
+                if (!tryBranch(g, def, inp) && p.bBuffer == 0)
+                    tapDefense(g, def, inp);
+            } else if (p.stance != ST_NONE) {
+                exitStance(p);
+                p.bBuffer = 0;
+            }
         }
         p.bReady = false;
         p.bHeld = 0;
         p.bLocked = false;
+        p.sheatheLatch = false;
+    }
+    if (B_BRANCH_BUFFER_ENABLED && p.bBuffer > 0 && !inp.b && !p.sheathed) {
+        if (tryBranch(g, def, inp))
+            p.bBuffer = 0;   // queued branch fired as soon as the window allowed
+        else
+            p.bBuffer--;
     }
 
-    // A: attack / stance special
-    if (aP) {
-        if (p.stance != ST_NONE) {
+    // A: attack / stance special (while stowed: draw into combo hit 1).
+    // canAttackNow: the debounce profile attacks only from idle with no lock.
+    const bool canAttackNow = p.chainLock == 0 && p.state == PS_IDLE;
+    if (aP && !sheatheConsumed) {
+        if (p.sheathed) {
+            if (p.state == PS_IDLE) {
+                p.sheathed = false;
+                p.chain = 0;
+                p.chainWin = 0;
+                p.aBuffer = 0;
+                startAttack(g, def);
+            }
+        } else if (p.stance != ST_NONE) {
             stanceSpecial(g, def);
-        } else if (p.state == PS_IDLE || p.chainWin > 0) {
+        } else if (canAttackNow) {
             startAttack(g, def);
         } else {
-            p.aBuffer = A_BUFFER;
+            p.aBuffer = A_BUFFER;   // buffered: fires when the debounce lock expires
         }
     }
-    if (p.aBuffer > 0 && (p.state == PS_IDLE || p.chainWin > 0)) {
+    if (!p.sheathed && p.aBuffer > 0 && canAttackNow) {
         p.aBuffer = 0;
         startAttack(g, def);
     }
@@ -527,14 +654,15 @@ static void updatePlayer(Game &g, const Input &inp, bool aP, bool bP, bool bR) {
             mx = 0;
             my = 0;
         }
-        uint8_t sp = static_cast<uint8_t>(weaponSpd(def));
+        uint8_t sp = p.sheathed ? SHEATHE_SPD : static_cast<uint8_t>(weaponSpd(def));
         if (p.stance == ST_WHIRL)
             sp = (sp * 6) / 10;
         if (p.stance == ST_GUARD)
             sp = (sp * 4) / 10;
         // Smith tier speed (integer percent, truncating); 100 = unchanged.
         sp = static_cast<uint8_t>(upgradeMul(static_cast<int16_t>(sp), g.spdMul));
-        movePlayer(p, mx, my, sp);
+        // Guard: strafe with the shield up (facing locked); sheathed has no stance.
+        movePlayer(p, mx, my, sp, p.stance == ST_GUARD);
         applyDrift(p);
         break;
     }
@@ -564,12 +692,15 @@ static void updatePlayer(Game &g, const Input &inp, bool aP, bool bP, bool bR) {
         if (p.t >= total) {
             if (p.state == PS_ATTACK) {
                 p.state = PS_IDLE;
+                const bool finisher = p.chain >= 2;
                 p.chain = p.chain < 2 ? p.chain + 1 : 0;
-                p.chainWin = CHAIN_WIN;
+                p.chainLock = finisher ? COMBO_LOCK : CHAIN_GAP;
+                p.chainWin = 0;   // window opens when the lock ends
             } else {
                 p.state = PS_IDLE;
                 p.chain = 0;
                 p.chainWin = 0;
+                p.chainLock = 0;
             }
             p.t = 0;
             p.atk = nullptr;

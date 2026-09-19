@@ -118,6 +118,12 @@ function hashState(g) {
     h = mix(h, e.crit ? 1 : 0); h = mix(h, e.text ? Number(e.text) : 0);
   }
 
+  // sheathe + combo debounce/buffer state (udb; appended after effects, mirrored
+  // by tst/fxdatatest/parity_test.hpp hashState in the same order)
+  h = mix(h, p.sheathed ? 1 : 0);
+  h = mix(h, p.chainLock);
+  h = mix(h, p.bBuffer);
+
   return (h ^ (h >>> 16)) & 0xffff;
 }
 
@@ -247,6 +253,9 @@ function run() {
 
   for (let s = 0; s < SCENARIOS.length; s++) {
     const sc = SCENARIOS[s];
+    // Device ships the HEAVY debounce profile; arm it per scene. The mock module
+    // default stays OFF so mock/game.test.js keeps the OFF baseline.
+    G.setDebounceProfile('HEAVY');
     const g = G.newGame(sc.weapon, sc.mode);
     if (sc.setup) sc.setup(g);
     const script = sc.inputs(g);

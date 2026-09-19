@@ -556,7 +556,9 @@ void ShellSuite(TestRunner &runner) {
         for (int i = 0; i < 40 && g.player.state != PS_IDLE; i++)
             idleTicks(g, 1);
         t.assert(g.player.chain, 1, "chain advanced");
-        t.assertGreaterThan(g.player.chainWin, 0, "chain window open");
+        t.assert(g.player.chainLock, CHAIN_GAP, "HEAVY gap lock armed");
+        idleTicks(g, CHAIN_GAP);   // lock counts down; window opens after it
+        t.assertGreaterThan(g.player.chainWin, 0, "chain window open after the lock");
         const int16_t shells0 = g.player.shells[0];
         tapBranch(g);
         t.assert(g.player.state, PS_ATTACK, "pointblank started");

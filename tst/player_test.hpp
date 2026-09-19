@@ -53,20 +53,42 @@ void stepN(Game &g, int n, Input in = Input{0, 0, false, false}) {
         stepPlayer(g, in);
 }
 
-// press A, release, run until the attack completes back to idle
+// mock waitIdle(): run to idle
+void waitIdle(Game &g) {
+    for (int i = 0; i < 80 && g.player.state != PS_IDLE; i++)
+        stepN(g, 1);
+}
+
+// press A, release, run until the attack starts (buffering through the HEAVY
+// gap lock when needed), then until it completes back to idle
 void attackOnce(Game &g) {
+    waitIdle(g);
     stepN(g, 1, Input{0, 0, true, false});
     stepN(g, 1, Input{0, 0, false, false});
+    for (int i = 0; i < 40 && g.player.state != PS_ATTACK; i++)
+        stepN(g, 1);
     for (int i = 0; i < 40 && g.player.state != PS_IDLE; i++)
         stepN(g, 1);
 }
 
-// press A (second combo hit), then run into its recovery phase. bR must land
-// before the 14-tick chainWin expires (A2 tick 13 -> chain still 1 -> stage 2).
-void secondAttackToRecovery(Game &g) {
+// mock comboHit(): wait idle, tap A and run until an attack starts (buffering
+// through the debounce lock). Returns true when an attack started.
+bool comboHit(Game &g) {
+    waitIdle(g);
     stepN(g, 1, Input{0, 0, true, false});
-    stepN(g, 1, Input{0, 0, false, false});
-    stepN(g, 9);   // t=11; next tap lands bR at t=13, past every weapon's active window
+    for (int i = 0; i < 40 && g.player.state != PS_ATTACK; i++)
+        stepN(g, 1);
+    return g.player.state == PS_ATTACK;
+}
+
+// advance a running attack into its recovery (t >= startup + active)
+void toRecovery(Game &g) {
+    for (int i = 0; i < 40 && g.player.state == PS_ATTACK; i++) {
+        const Attack *a = g.player.atk;
+        if (a && g.player.t >= attackStartup(a) + attackActive(a))
+            return;
+        stepN(g, 1);
+    }
 }
 
 // tap (not hold) B
@@ -78,6 +100,15 @@ void tapB(Game &g) {
 // hold B until a stance is up
 void holdToStance(Game &g) {
     stepN(g, 13, Input{0, 0, false, true});
+}
+
+// stow via the device ddab combo: double-tap Down then an A+B chord
+void stowWeapon(Game &g) {
+    stepN(g, 1, Input{0, 1, false, false});
+    stepN(g, 1, Input{0, 0, false, false});
+    stepN(g, 1, Input{0, 1, false, false});
+    stepN(g, 1, Input{0, 0, false, false});
+    stepN(g, 1, Input{0, 0, true, true});
 }
 
 }   // namespace
@@ -126,29 +157,33 @@ void PlayerSuite(TestRunner &runner) {
     }
 
     {
-        Test t("chain advances on hit, window expires to reset");
+        Test t("chain advances on hit, gap lock gates the window");
         Game g;
         initGame(g, W_SWORD);
         attackOnce(g);
         t.assert(g.player.chain, 1, "chain after first attack");
-        t.assert(g.player.chainWin, 14, "chain window 14 on completion");
-        stepN(g, 15);   // window expires with no input
-        t.assert(g.player.chain, 0, "chain resets when window expires");
+        t.assert(g.player.chainLock, CHAIN_GAP, "HEAVY gap lock 9");
+        t.assert(g.player.chainWin, 0, "window closed during the lock");
+        stepN(g, CHAIN_GAP);   // lock counts down
+        t.assert(g.player.chainLock, 0, "lock expired");
+        t.assert(g.player.chainWin, CHAIN_WIN, "window opens after the lock");
+        stepN(g, CHAIN_WIN);   // window expires with no input
+        t.assert(g.player.chain, 0, "chain resets when the window expires");
         t.assert(g.player.chainWin, 0, "window closed");
-        // combo advance: next attack inside a fresh window runs combo hit 2
+        // fresh press after the window restarts the chain
         attackOnce(g);
         t.assert(g.player.chain, 1, "chain again after fresh attack");
-        attackOnce(g);
-        t.assert(g.player.chain, 1, "chain stays 1: 2nd combo outlives 14t window (mock semantics)");
         suite.addTest(t);
     }
 
     {
-        Test t("sword A then B = stepslash branch (lunge)");
+        Test t("sword A then B = stepslash branch (after the gap lock)");
         Game g;
         initGame(g, W_SWORD);
         armTarget(g, g.player.x + 200, g.player.y);   // far away, no combo hit
         attackOnce(g);
+        stepN(g, CHAIN_GAP);   // window opens; a tap in the open window branches
+        t.assert(g.player.chainWin, CHAIN_WIN, "chain window open");
         tapB(g);
         t.assert(g.player.state, PS_ATTACK, "branch attack state");
         t.assert(g.player.atk->id, ATK_STEPSLASH, "stepslash id");
@@ -164,7 +199,8 @@ void PlayerSuite(TestRunner &runner) {
         initGame(g, W_SWORD);
         armTarget(g, g.player.x + 200, g.player.y);
         attackOnce(g);
-        secondAttackToRecovery(g);
+        t.assert(comboHit(g) ? 1 : 0, 1, "second hit starts through the gap lock");
+        toRecovery(g);
         tapB(g);
         t.assert(g.player.atk->id, ATK_SPINCUT, "spincut id");
         t.assert(g.player.atk->hw, 28, "spincut wide hitbox");
@@ -177,6 +213,7 @@ void PlayerSuite(TestRunner &runner) {
         initGame(g, W_FLAIL);
         armTarget(g, g.player.x + 200, g.player.y);
         attackOnce(g);
+        stepN(g, CHAIN_GAP);
         tapB(g);
         t.assert(g.player.stance, ST_WHIRL, "whirl entered");
         t.assert(g.player.stanceAuto, 49, "auto-release timer (50 set, entry tick decrements)");
@@ -190,7 +227,8 @@ void PlayerSuite(TestRunner &runner) {
         initGame(g, W_FLAIL);
         armTarget(g, g.player.x + 200, g.player.y);
         attackOnce(g);
-        secondAttackToRecovery(g);
+        t.assert(comboHit(g) ? 1 : 0, 1, "second hit starts through the gap lock");
+        toRecovery(g);
         tapB(g);
         t.assert(g.player.atk->id, ATK_TRIP, "trip id");
         t.assert(g.player.atk->effect, 1, "trip effect flag");
@@ -204,6 +242,7 @@ void PlayerSuite(TestRunner &runner) {
         armTarget(g, g.player.x + 20, g.player.y);   // within reach 15
         attackOnce(g);
         rec.reset();
+        stepN(g, CHAIN_GAP);
         tapB(g);
         t.assert(g.player.atk->id, ATK_POINTBLANK, "pointblank id");
         t.assert(g.player.shells[0], 2, "demo: ammo unlimited (stays 2)");
@@ -220,7 +259,8 @@ void PlayerSuite(TestRunner &runner) {
         initGame(g, W_GUN);
         armTarget(g, g.player.x + 200, g.player.y);
         attackOnce(g);
-        secondAttackToRecovery(g);
+        t.assert(comboHit(g) ? 1 : 0, 1, "second hit starts through the gap lock");
+        toRecovery(g);
         tapB(g);
         t.assert(g.player.atk->id, ATK_GUARDBASH, "guardbash id");
         t.assert(g.player.atk->push, 12, "guardbash push");
@@ -233,6 +273,7 @@ void PlayerSuite(TestRunner &runner) {
         initGame(g, W_GUN);
         g.player.shells[0] = 0;
         attackOnce(g);
+        stepN(g, CHAIN_GAP);
         tapB(g);
         t.assert(g.player.state, PS_SHOVE, "shove when out of shells");
         suite.addTest(t);
@@ -263,6 +304,7 @@ void PlayerSuite(TestRunner &runner) {
         initGame(g, W_FLAIL);
         armTarget(g, g.player.x + 200, g.player.y);
         attackOnce(g);
+        stepN(g, CHAIN_GAP);
         tapB(g);
         stepN(g, 55);   // no input
         t.assert(g.player.stance, ST_NONE, "auto-release ran out");
@@ -448,6 +490,130 @@ void PlayerSuite(TestRunner &runner) {
             stepN(g, 60);
             t.assert(g.player.hp, 100, "no damage with no target");
         }
+        suite.addTest(t);
+    }
+
+    // ------------------------------------------------- sheathe + debounce (udb)
+    {
+        Test t("sheathe ddab: double-tap down + A+B stows, A draws hit 1");
+        Game g;
+        initGame(g, W_SWORD);
+        stowWeapon(g);
+        t.assert(g.player.sheathed, true, "double tap + chord stows");
+        t.assert(g.player.state, PS_IDLE, "chord consumed: no attack");
+        t.assert(g.player.atk == nullptr ? 1 : 0, 1, "no swing");
+        stepN(g, 1);                             // release B, clears the latch
+        stepN(g, 1, Input{0, 0, true, false});   // A draws
+        t.assert(g.player.sheathed, false, "A draws the weapon");
+        t.assert(g.player.state, PS_ATTACK, "draw swings immediately");
+        t.assert(g.player.atk != nullptr ? 1 : 0, 1, "draw attack runs");
+        suite.addTest(t);
+    }
+
+    {
+        Test t("sheathe ddab: stowed B rolls with sword numbers, run speed 24");
+        Game g;
+        initGame(g, W_FLAIL);
+        stowWeapon(g);
+        stepN(g, 1);   // release B
+        tapB(g);
+        t.assert(g.player.state, PS_DODGE, "stowed B tap rolls (any weapon)");
+        t.assert(g.player.iT, 14, "sword i-frames");
+        t.assert(g.player.t, 15, "sword dodge length (16 set, same-tick switch ticks once)");
+
+        Game w;
+        initGame(w, W_SWORD);
+        stowWeapon(w);
+        stepN(w, 1);
+        const int x0 = w.player.x;
+        stepN(w, 10, Input{1, 0, false, false});
+        t.assert(w.player.x - x0, 15, "stowed run 24/16 px per tick (15 px in 10t)");
+        suite.addTest(t);
+    }
+
+    {
+        Test t("guard strafe: d-pad moves with locked facing (gun)");
+        Game g;
+        initGame(g, W_GUN);
+        stepN(g, 4, Input{1, 0, false, false});   // face east
+        t.assert(g.player.fx, 16, "facing east");
+        holdToStance(g);   // hold B -> guard
+        t.assert(g.player.stance, ST_GUARD, "guard up");
+        const int x0 = g.player.x;
+        stepN(g, 16, Input{-1, 0, false, true});   // strafe west, shield still east
+        t.assert(g.player.fx, 16, "facing locked while strafing");
+        t.assertLessThan(g.player.x, x0, "strafed west");
+        suite.addTest(t);
+    }
+
+    {
+        Test t("A buffer: press during the gap lock fires when it expires");
+        Game g;
+        initGame(g, W_SWORD);
+        attackOnce(g);
+        t.assert(g.player.chainLock, CHAIN_GAP, "lock armed");
+        stepN(g, 1, Input{0, 0, true, false});   // press during the lock
+        t.assert(g.player.state, PS_IDLE, "press during the lock is buffered");
+        t.assertGreaterThan(g.player.aBuffer, 0, "aBuffer armed");
+        for (int i = 0; i < 40 && g.player.state != PS_ATTACK; i++)
+            stepN(g, 1);
+        t.assert(g.player.state, PS_ATTACK, "buffered press fires after the lock");
+        t.assert(g.player.aBuffer, 0, "buffer consumed");
+        suite.addTest(t);
+    }
+
+    {
+        Test t("debounce: finisher lock 24, an early press expires");
+        Game g;
+        initGame(g, W_SWORD);
+        t.assert(comboHit(g) ? 1 : 0, 1, "hit 1");
+        waitIdle(g);
+        t.assert(comboHit(g) ? 1 : 0, 1, "hit 2");
+        waitIdle(g);
+        t.assert(comboHit(g) ? 1 : 0, 1, "hit 3 (finisher)");
+        waitIdle(g);
+        t.assert(g.player.chain, 0, "finisher resets the chain");
+        t.assert(g.player.chainLock, COMBO_LOCK, "finisher lock 24");
+        t.assert(g.player.chainWin, 0, "window closed");
+        stepN(g, 1, Input{0, 0, true, false});   // early press (aBuffer 16 < 24)
+        stepN(g, 30);
+        t.assert(g.player.state, PS_IDLE, "early single press was dropped");
+        t.assert(comboHit(g) ? 1 : 0, 1, "fresh press after the lock restarts");
+        suite.addTest(t);
+    }
+
+    {
+        Test t("B buffer: recovery tap queues the stage-2 branch through the lock");
+        Game g;
+        initGame(g, W_SWORD);
+        armTarget(g, g.player.x + 200, g.player.y);
+        t.assert(comboHit(g) ? 1 : 0, 1, "hit 1");
+        waitIdle(g);
+        t.assert(comboHit(g) ? 1 : 0, 1, "hit 2 running");
+        toRecovery(g);
+        stepN(g, 1, Input{0, 0, false, true});   // tap B in recovery
+        for (int i = 0; i < 8; i++)
+            stepN(g, 1, Input{0, 0, false, true});   // hold through completion
+        stepN(g, 1);                                 // release during the lock
+        t.assert(g.player.state, PS_IDLE, "no roll while the branch is queued");
+        t.assertGreaterThan(g.player.bBuffer, 0, "B buffer still pending");
+        for (int i = 0; i < 40 && g.player.state != PS_ATTACK; i++)
+            stepN(g, 1);
+        t.assert(g.player.state, PS_ATTACK, "queued branch fires when the window opens");
+        t.assert(g.player.atk->id, ATK_SPINCUT, "stage-2 branch runs");
+        suite.addTest(t);
+    }
+
+    {
+        Test t("B branch buffer: early B in startup still dodge-cancels");
+        Game g;
+        initGame(g, W_SWORD);
+        armTarget(g, g.player.x + 200, g.player.y);
+        t.assert(comboHit(g) ? 1 : 0, 1, "hit 1 running");
+        stepN(g, 1, Input{0, 0, false, true});   // startup: no branch, no buffer
+        stepN(g, 1);
+        t.assert(g.player.state, PS_DODGE, "sword dodge-cancel preserved");
+        t.assert(g.player.bBuffer, 0, "nothing queued");
         suite.addTest(t);
     }
 
