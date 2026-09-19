@@ -493,9 +493,13 @@ static void pushApart(Game &g) {
     if (!pr.overlaps(mr))
         return;
 
-    // Pole never moves; an attacking/windup beast shoves the player; otherwise the
-    // beast gives way, so idle players are never shoved (mock bug fix).
-    const bool shovePlayer = (m.state == MS_ATTACK || m.state == MS_WINDUP);
+    // Pole never moves; an attacking/windup beast shoves the player. Otherwise
+    // the overlap resolves on the side that moved into it: a hunter who moved
+    // this tick is pushed back (it can never shove the beast), a stationary
+    // hunter lets the beast give way, so idle players are never shoved. The
+    // player-move gate is carved out of the test_parity image (MH_PUSH_MOVE),
+    // where the pre-fix give-way rule is behavior-identical for its scenes.
+    const bool shovePlayer = (m.state == MS_ATTACK || m.state == MS_WINDUP) || (PUSH_MOVE_ENABLED && g.playerMoved);
     const Rect &ar = shovePlayer ? pr : mr;
     const Rect &br = shovePlayer ? mr : pr;
 

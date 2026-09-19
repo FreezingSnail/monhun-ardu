@@ -522,6 +522,39 @@ test('monster variants: BULL hooves collide blocks while the head routes horn hi
   assert.equal(hoof.mul, 150, 'hooves multiplier 150');
 });
 
+test('push rule: walking hunter cannot shove the beast', () => {
+  const g = G.newGame(0, 'hunt', 0);   // LUNGE: legs collide box (9,11,12,13)
+  const m = park(g);
+  m.x = g.player.x + 1;
+  m.y = g.player.y + 4;
+  const c = m.collide;
+  const cx = m.x + c.ox;
+  const cy = m.y + c.oy;
+  const p = g.player;
+  assert.ok(p.x < cx + c.w && p.x + p.w > cx && p.y < cy + c.h && p.y + p.h > cy,
+            'hunter starts inside the legs collide box');
+  const mx0 = m.x;
+  const my0 = m.y;
+  G.step(g, inp({ mx: 1 }));   // hunt east into the beast
+  assert.equal(m.x, mx0, 'beast holds x');
+  assert.equal(m.y, my0, 'beast holds y');
+  assert.ok(!(p.x < cx + c.w && p.x + p.w > cx && p.y < cy + c.h && p.y + p.h > cy),
+            'hunter is resolved out of the collide box');
+  // A stationary hunter still lets the beast give way (never shoved).
+  const g2 = G.newGame(0, 'hunt', 0);
+  const m2 = park(g2);
+  m2.x = g2.player.x + 1;
+  m2.y = g2.player.y + 4;
+  const mx20 = m2.x;
+  const my20 = m2.y;
+  const px20 = g2.player.x;
+  const py20 = g2.player.y;
+  G.step(g2, inp({}));
+  assert.ok(m2.x !== mx20 || m2.y !== my20, 'idle overlap: beast gives way');
+  assert.equal(g2.player.x, px20, 'idle hunter x untouched');
+  assert.equal(g2.player.y, py20, 'idle hunter y untouched');
+});
+
 test('monster variants: heavy tail_spin turns away at windup, frozen through attack', () => {
   const g = G.newGame(0, 'hunt', 2);
   const m = park(g);

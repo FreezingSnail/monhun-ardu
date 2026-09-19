@@ -475,6 +475,10 @@ function newGame(weaponIndex, mode, monsterIndex = 0) {
     over: null,
     prevA: false,
     prevB: false,
+    // Set by updatePlayer(): the player's fixed-point state changed this tick
+    // (input move, drift, knockback). pushApart uses it to resolve a body
+    // overlap on the player side, so a walking hunter cannot shove the beast.
+    playerMoved: false,
     weapon: weaponIndex | 0,
     mode: mode === 'train' ? 'train' : 'hunt',
     monsterIndex: monsterIndex | 0,
@@ -604,6 +608,7 @@ function step(g, inp) {
 function updatePlayer(g, inp, aP, bP, bR) {
   const p = g.player;
   const def = WEAPON_DEFS[g.weapon];
+  const x0 = p.x, y0 = p.y, sx0 = p.subX, sy0 = p.subY;
 
   if (p.iT > 0) p.iT--;
   if (p.throwCd > 0) p.throwCd--;
@@ -838,6 +843,10 @@ function updatePlayer(g, inp, aP, bP, bR) {
 
   if (p.stance) updateStance(g, def);
   clampPlayer(p);
+  // Movement intent for pushApart: any fixed-point change counts, including a
+  // sub-pixel step with no pixel movement, so a hunter pressing into a body
+  // keeps resolving on the player side instead of shoving it.
+  g.playerMoved = p.x !== x0 || p.y !== y0 || p.subX !== sx0 || p.subY !== sy0;
 }
 
 function movePlayer(p, mx, my, spd, lockFacing) {
@@ -1589,8 +1598,9 @@ function pushApart(g) {
   if (!tr) return;
   if (!rectsOverlap(p, tr)) return;
 
-  // pole never moves; lunging beast shoves you; otherwise the beast gives way
-  const shovePlayer = g.mode === 'train' ||
+  // pole never moves; lunging beast shoves you; a hunter who moved this tick is
+  // pushed back (never shoves the beast); otherwise the beast gives way
+  const shovePlayer = g.mode === 'train' || g.playerMoved ||
     (g.mode === 'hunt' && (m.state === 'attack' || m.state === 'windup'));
   const a = shovePlayer ? p : tr;
   const b = shovePlayer ? tr : p;

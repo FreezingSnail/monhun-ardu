@@ -334,6 +334,14 @@ Implementation notes:
 - Parity: bull and long-tail collide changes move their scenes; mirror in
   mock/game.js and regenerate fixtures in the same change, and keep the
   changed-scene list explicit in the bead report.
+- Push rule (bug fix 2026-09-19): a body overlap resolves on the mover's side.
+  A hunter who moved this tick is pushed back and can never shove the beast;
+  a stationary hunter lets the beast give way (idle players are never shoved).
+  Attacking/windup beasts still shove the player. `Game::playerMoved` (set by
+  updatePlayer, including sub-pixel steps) carries the intent. No shipped
+  parity scene walks the hunter into the beast, so the fixture diff stays
+  empty; host + mock tests cover the new rule (the parity image has no
+  headroom for a new scene).
 
 ## Long-tail attack kit (owner ask, 2026-09-18 — bead nch.1)
 

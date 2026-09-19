@@ -80,6 +80,14 @@ constexpr bool STAGE3_ENABLED = MH_STAGE3;
 #define MH_CHARGE 1
 #endif
 constexpr bool CHARGE_ENABLED = MH_CHARGE;
+// Player-move carve (push-rule bug fix 2026-09-19): no test_parity scene walks
+// the hunter into the beast, so the per-tick player-move flag folds out of that
+// image (its budget is at the board limit); the host suite and the shipping
+// build keep it and pushApart defaults to the pre-fix give-way rule there.
+#ifndef MH_PUSH_MOVE
+#define MH_PUSH_MOVE 1
+#endif
+constexpr bool PUSH_MOVE_ENABLED = MH_PUSH_MOVE;
 constexpr int16_t CHARGE_MIN = 14;   // A held this long past the swing -> charge stance
 constexpr int16_t CHARGE_L2 = 20;    // extra charge ticks for level 2 (bar flashes white)
 constexpr int16_t WORLD_W = 256;
@@ -767,6 +775,10 @@ struct Game {
     int8_t monsterKind;   // MonsterKind: chosen demo beast variant (6zb)
     uint8_t camX, camY;   // camera top-left in world px: 0..CAM_MAX_X/Y
     bool prevA, prevB;
+    // Set by updatePlayer(): the player's fixed-point state changed this tick
+    // (input move, drift, knockback). pushApart uses it to resolve a body
+    // overlap on the player side, so a walking hunter cannot shove the beast.
+    bool playerMoved;
     Player player;
     Monster monster;
     Target target;

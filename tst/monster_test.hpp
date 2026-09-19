@@ -620,6 +620,34 @@ void MonsterSuite(TestRunner &runner) {
     }
 
     {
+        // Walking hunter cannot push the beast (bug fix): when the player moved
+        // this tick the overlap resolves on the player side; a stationary
+        // hunter still lets the beast give way (previous test).
+        Test t("push rule: walking hunter cannot push the beast");
+        Game g;
+        newHunt(g);
+        Monster &m = g.monster;
+        m.state = MS_RECOVER;
+        m.t = 30000;
+        m.cd = 30000;
+        m.x = g.player.x + 1;
+        m.y = g.player.y + 4;
+        Rect pr{g.player.x, g.player.y, g.player.w, g.player.h};
+        const Rect mr0 = monsterCollideRect(g);
+        t.assert(mr0.overlaps(pr), true, "hunter starts inside the legs collide box");
+        const int mx0 = m.x;
+        const int my0 = m.y;
+        stepHunt(g, Input{1, 0, false, false});   // hunt east into the beast
+        const Rect mr1 = monsterCollideRect(g);
+        pr.x = g.player.x;
+        pr.y = g.player.y;
+        t.assert(m.x, mx0, "beast holds x");
+        t.assert(m.y, my0, "beast holds y");
+        t.assert(!pr.overlaps(mr1), true, "hunter resolved out of the collide box");
+        suite.addTest(t);
+    }
+
+    {
         Test t("monster leap attack damages player (mock parity)");
         Game g;
         newHunt(g);

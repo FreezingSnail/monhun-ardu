@@ -27,6 +27,13 @@
 // host suite (tst/player_test.hpp) covers the flail/gun charge paths.
 #define MH_CHARGE 0
 
+// Push-rule carve (bug fix 2026-09-19): no fixture scene walks the hunter into
+// the beast (beast_no_shove_idle keeps the hunter still), so the per-tick
+// player-move flag folds out of this image, which is at the board size limit.
+// The carved path keeps the pre-fix give-way rule; host + mock tests cover the
+// walking-into-beast case.
+#define MH_PUSH_MOVE 0
+
 #include "harness/fx_globals.hpp"
 #include "parity_test.hpp"
 

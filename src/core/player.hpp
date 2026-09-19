@@ -76,6 +76,7 @@ void initGame(Game &g, int8_t weapon) {
     g.over = OVER_NONE;
     g.weapon = weapon;
     g.prevA = g.prevB = false;
+    g.playerMoved = false;
     g.player.init(weapon);
     g.target = Target{};
     g.lastShot = 0;
@@ -608,6 +609,10 @@ static bool sheatheCombo(Player &p, bool aP, const Input &inp) {
 static void updatePlayer(Game &g, const Input &inp, bool aP, bool bP, bool bR) {
     Player &p = g.player;
     const WeaponDef *def = &WEAPON_DEFS[g.weapon];
+    const int16_t x0 = p.x;
+    const int16_t y0 = p.y;
+    const int8_t sx0 = p.subX;
+    const int8_t sy0 = p.subY;
 
     if (p.iT > 0)
         p.iT--;
@@ -866,6 +871,13 @@ static void updatePlayer(Game &g, const Input &inp, bool aP, bool bP, bool bR) {
     if (p.stance != ST_NONE)
         updateStance(g, def);
     clampPlayer(p);
+    // Movement intent for pushApart (monster.hpp): any fixed-point change counts,
+    // including a sub-pixel step with no pixel movement, so a hunter pressing
+    // into a body keeps resolving on the player side instead of shoving it.
+    // Carved out of the test_parity image (MH_PUSH_MOVE), whose scenes never
+    // walk into the beast; that image keeps the pre-fix give-way rule.
+    if (PUSH_MOVE_ENABLED)
+        g.playerMoved = (p.x != x0 || p.y != y0 || p.subX != sx0 || p.subY != sy0);
 }
 
 // player half of mock step(): edge detect + updatePlayer. Monster / pole /
