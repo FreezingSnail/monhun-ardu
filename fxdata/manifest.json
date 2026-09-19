@@ -605,7 +605,7 @@
     },
     {
       "path": "fxdata/tables/equip.bin",
-      "sha256": "0d2f295ea48402fb164db494bbf8357c99933f2ab11ec80de6a82c3552b766c9",
+      "sha256": "66be06a451e27ae889afc3d1e69bf4f581026279afb601f1fa022d42a503f16e",
       "size": 876,
       "symbol": "mhEquip"
     },
@@ -647,25 +647,25 @@
     },
     {
       "path": "fxdata/tables/weapondefs.bin",
-      "sha256": "498d362c9cbbad5512d8d9e9238340b3fe8b8352b9acaf09c600ce525f87591b",
-      "size": 540,
+      "sha256": "d8e241850a7b7537c842bd52ad119ce604c3ca72bca80edfe962b75db6a68f9a",
+      "size": 678,
       "symbol": "mhWeaponDefs"
     }
   ],
   "outputs": [
     {
       "path": "fxdata/fxdata-data.bin",
-      "sha256": "89c7e522b485213a7ef7b55427c7afe57b3d3e4dea01f4aadfb39d56f039a331",
-      "size": 174363
+      "sha256": "05085fbe1ba28438fc1e02e036a98f33f9bada07a72b5099e69688134baf96da",
+      "size": 174501
     },
     {
       "path": "fxdata/fxdata.bin",
-      "sha256": "f73787495e4ed46a05fa80f7016157bcaf13e72a2273e5d9ed3359c0d483250c",
+      "sha256": "df7d666b97e3b3539388cd2706b61396ec363abed0bf766ce4e1553c8cd710e6",
       "size": 174592
     },
     {
       "path": "fxdata/fxdata.h",
-      "sha256": "ec8b522b1242efe2429fe263fd1d72f209d774c62d4e131deea9d92f1cd43abd",
+      "sha256": "d68bfd73f4a371db9bcfb2d60d242407078ca802557e26f0a63938730d23e9a8",
       "size": 2435
     },
     {
@@ -675,7 +675,7 @@
     },
     {
       "path": "fxdata/tables/equip.bin",
-      "sha256": "0d2f295ea48402fb164db494bbf8357c99933f2ab11ec80de6a82c3552b766c9",
+      "sha256": "66be06a451e27ae889afc3d1e69bf4f581026279afb601f1fa022d42a503f16e",
       "size": 876
     },
     {
@@ -695,7 +695,7 @@
     },
     {
       "path": "src/fxdata.h",
-      "sha256": "ec8b522b1242efe2429fe263fd1d72f209d774c62d4e131deea9d92f1cd43abd",
+      "sha256": "d68bfd73f4a371db9bcfb2d60d242407078ca802557e26f0a63938730d23e9a8",
       "size": 2435
     },
     {
@@ -720,7 +720,7 @@
     },
     {
       "path": "src/generated/equip_meta.hpp",
-      "sha256": "61d4864b834696948d6a158d927a4549ca3a9f36f97d1d060b8303698b1f9d93",
+      "sha256": "dc873ca08b4b920c880d0157431bade480a11c384c8d8062777f33a680f15993",
       "size": 22331
     },
     {

@@ -617,5 +617,108 @@ void PlayerSuite(TestRunner &runner) {
         suite.addTest(t);
     }
 
+    // -------------------------------- roll attack + direction+A alt (8xx)
+    {
+        Test t("roll attack: A out of the evade runs the weapon roll move");
+        // sword dodge -> rollslash
+        Game g;
+        initGame(g, W_SWORD);
+        tapB(g);
+        t.assert(g.player.state, PS_DODGE, "sword evade state");
+        stepN(g, 1, Input{0, 0, true, false});
+        t.assert(g.player.state, PS_ATTACK, "sword roll attack started");
+        t.assert(g.player.atk->id, ATK_NONE, "sword roll id");
+        t.assert(g.player.atk->reach, 15, "sword roll reach");
+        t.assert(g.player.atk->hw, 16, "sword roll hw");
+        t.assert(g.player.atk->hh, 14, "sword roll hh");
+        t.assert(g.player.atk->dmg, 12, "sword roll dmg");
+        t.assert(g.player.atk->stam, 10, "sword roll stam");
+        t.assert(meleeHitbox(g.player, g.player.atk).w, 16, "sword roll box w");
+        t.assert(meleeHitbox(g.player, g.player.atk).h, 14, "sword roll box h");
+        t.assertGreaterThan(g.player.iT, 0, "dodge i-frames keep ticking");
+
+        // flail deflect -> rollsweep
+        initGame(g, W_FLAIL);
+        tapB(g);
+        t.assert(g.player.state, PS_DEFLECT, "flail evade state");
+        stepN(g, 1, Input{0, 0, true, false});
+        t.assert(g.player.state, PS_ATTACK, "flail roll attack started");
+        t.assert(g.player.atk->reach, 20, "flail roll reach");
+        t.assert(g.player.atk->hw, 24, "flail roll hw");
+        t.assert(g.player.atk->hh, 16, "flail roll hh");
+        t.assert(g.player.atk->dmg, 15, "flail roll dmg");
+        t.assert(g.player.atk->stam, 10, "flail roll stam");
+
+        // gun shove -> shieldbash
+        initGame(g, W_GUN);
+        tapB(g);
+        t.assert(g.player.state, PS_SHOVE, "gun evade state");
+        stepN(g, 1, Input{0, 0, true, false});
+        t.assert(g.player.state, PS_ATTACK, "gun roll attack started");
+        t.assert(g.player.atk->reach, 14, "gun roll reach");
+        t.assert(g.player.atk->hw, 16, "gun roll hw");
+        t.assert(g.player.atk->hh, 14, "gun roll hh");
+        t.assert(g.player.atk->dmg, 8, "gun roll dmg");
+        t.assert(g.player.atk->push, 10, "gun roll push");
+        t.assert(g.player.atk->stam, 8, "gun roll stam");
+        suite.addTest(t);
+    }
+
+    {
+        Test t("roll attack: shield bash lunges the hunter forward (lunge 30)");
+        Game g;
+        initGame(g, W_GUN);
+        tapB(g);
+        t.assert(g.player.state, PS_SHOVE, "shove state");
+        const int x0 = g.player.x;
+        stepN(g, 1, Input{0, 0, true, false});
+        t.assertGreaterThan(g.player.vx, 0, "forward velocity applied");
+        stepN(g, 8);
+        t.assertGreaterThan(g.player.x, x0, "bash carried the hunter forward");
+        suite.addTest(t);
+    }
+
+    {
+        Test t("direction + A: thrust opener replaces combo hit 1");
+        Game g;
+        initGame(g, W_SWORD);
+        stepN(g, 4, Input{1, 0, false, false});   // face east, moving
+        stepN(g, 1, Input{1, 0, true, false});
+        t.assert(g.player.state, PS_ATTACK, "thrust runs");
+        t.assert(g.player.atk->reach, 22, "thrust reach (alt data)");
+        t.assert(g.player.atk->hw, 10, "thrust hw");
+        t.assert(g.player.atk->hh, 10, "thrust hh");
+        t.assert(g.player.atk->dmg, 14, "thrust dmg");
+        t.assertGreaterThan(g.player.vx, 0, "thrust lunges forward");
+        suite.addTest(t);
+    }
+
+    {
+        Test t("direction + A: mid-combo hits keep the normal combo data");
+        Game g;
+        initGame(g, W_SWORD);
+        stepN(g, 4, Input{1, 0, false, false});
+        stepN(g, 1, Input{1, 0, true, false});   // alt hit 1
+        t.assert(g.player.atk->reach, 22, "alt hit 1");
+        waitIdle(g);
+        stepN(g, CHAIN_GAP);                     // lock counts down, chain 1
+        stepN(g, 1, Input{1, 0, true, false});   // chain 1 -> normal combo hit 2
+        t.assert(g.player.state, PS_ATTACK, "hit 2 started");
+        t.assert(g.player.atk->reach, 13, "normal combo hit 2 data");
+        suite.addTest(t);
+    }
+
+    {
+        Test t("debounce lock still gates attack entry (alt cannot bypass it)");
+        Game g;
+        initGame(g, W_SWORD);
+        attackOnce(g);
+        t.assert(g.player.chainLock, CHAIN_GAP, "lock armed");
+        stepN(g, 1, Input{1, 0, true, false});   // direction+A during the lock
+        t.assert(g.player.state, PS_IDLE, "no attack mid-lock");
+        t.assertGreaterThan(g.player.aBuffer, 0, "press buffered, not lost");
+        suite.addTest(t);
+    }
+
     runner.addTestSuite(suite);
 }

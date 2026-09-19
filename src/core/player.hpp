@@ -145,13 +145,20 @@ static void applyDrift(Player &p, uint8_t mult = 13) {
         p.vy = 0;
 }
 
-static void startAttack(Game &g, const WeaponDef *def) {
+static void startAttack(Game &g, const WeaponDef *def, bool alt = false) {
     Player &p = g.player;
     if (p.sheathed)
         return;   // draw path clears the flag first
     if (p.chainLock > 0)
         return;   // debounce lock gates every attack entry
-    const Attack *a = weaponAttack(def, p.chain < 2 ? p.chain : 2);
+    // direction + A replaces combo hit 1 with the weapon's lunge opener; every
+    // shipped WeaponDef carries an alt, so the mock's `def.alt` truthiness is
+    // unconditional here (ROLL_ALT_ENABLED folds the selection out for parity).
+    const Attack *a;
+    if (ROLL_ALT_ENABLED && alt && p.chain == 0)
+        a = weaponAlt(def);
+    else
+        a = weaponAttack(def, p.chain < 2 ? p.chain : 2);
     if (p.stam < 1)
         return;
     const int16_t stam = attackStam(a);
@@ -160,6 +167,37 @@ static void startAttack(Game &g, const WeaponDef *def) {
     p.atk = a;
     p.t = 0;
     p.hitDone = false;
+    const int16_t lunge = attackLunge(a);
+    if (lunge) {
+        p.vx = (p.fx * lunge) >> 4;
+        p.vy = (p.fy * lunge) >> 4;
+    }
+}
+
+// Roll attack, ported from mock/game.js startRollAttack(): A out of a dodge
+// (or the flail deflect / gun evade-shove) cancels into the weapon's roll move;
+// dodge i-frames keep ticking. Gun shield bash carries lunge 30 so it moves the
+// hunter forward; sword/flail roll moves stop in place.
+static bool startRollAttack(Game &g, const WeaponDef *def) {
+    Player &p = g.player;
+    const Attack *a = weaponRoll(def);
+    const int16_t stam = attackStam(a);
+    if (p.stam < stam)
+        return false;
+    p.stam = (stam >= p.stam) ? 0 : static_cast<uint8_t>(p.stam - stam);
+    p.state = PS_ATTACK;
+    p.atk = a;
+    p.t = 0;
+    p.hitDone = false;
+    p.chain = 0;
+    p.chainWin = 0;
+    p.chainLock = 0;
+    const int16_t lunge = attackLunge(a);
+    if (lunge) {
+        p.vx = (p.fx * lunge) >> 4;
+        p.vy = (p.fy * lunge) >> 4;
+    }
+    return true;
 }
 
 static void exitStance(Player &p) {
@@ -624,6 +662,7 @@ static void updatePlayer(Game &g, const Input &inp, bool aP, bool bP, bool bR) {
     // A: attack / stance special (while stowed: draw into combo hit 1).
     // canAttackNow: the debounce profile attacks only from idle with no lock.
     const bool canAttackNow = p.chainLock == 0 && p.state == PS_IDLE;
+    const bool altInput = ROLL_ALT_ENABLED && (inp.mx != 0 || inp.my != 0);
     if (aP && !sheatheConsumed) {
         if (p.sheathed) {
             if (p.state == PS_IDLE) {
@@ -633,17 +672,19 @@ static void updatePlayer(Game &g, const Input &inp, bool aP, bool bP, bool bR) {
                 p.aBuffer = 0;
                 startAttack(g, def);
             }
+        } else if (ROLL_ALT_ENABLED && (p.state == PS_DODGE || p.state == PS_DEFLECT || p.state == PS_SHOVE)) {
+            startRollAttack(g, def);
         } else if (p.stance != ST_NONE) {
             stanceSpecial(g, def);
         } else if (canAttackNow) {
-            startAttack(g, def);
+            startAttack(g, def, altInput);
         } else {
             p.aBuffer = A_BUFFER;   // buffered: fires when the debounce lock expires
         }
     }
     if (!p.sheathed && p.aBuffer > 0 && canAttackNow) {
         p.aBuffer = 0;
-        startAttack(g, def);
+        startAttack(g, def, altInput);
     }
 
     switch (p.state) {

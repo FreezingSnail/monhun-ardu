@@ -56,6 +56,14 @@ constexpr uint8_t SHEATHE_SPD = 24;       // 1/16 px per tick while stowed (1.5 
 #endif
 constexpr bool SHEATHE_ENABLED = MH_SHEATHE;
 constexpr bool B_BRANCH_BUFFER_ENABLED = MH_B_BRANCH_BUFFER;
+// Roll-attack + direction+A opener carve (same pattern as MH_SHEATHE): no
+// parity scene rolls into an A press or presses direction+A, so the A-out-of-
+// evade branch and the alt table selection fold out of the test_parity image;
+// the host suite keeps covering both paths.
+#ifndef MH_ROLL_ALT
+#define MH_ROLL_ALT 1
+#endif
+constexpr bool ROLL_ALT_ENABLED = MH_ROLL_ALT;
 constexpr int16_t WORLD_W = 256;
 constexpr int16_t WORLD_H = 112;
 
@@ -148,9 +156,11 @@ struct WeaponDef {
     Branch branches[2];
     bool canCancel;   // may tap-B out of an attack into dodge
     ShellDef shells[2];
+    Attack roll;   // A out of dodge/deflect/shove (bead monhun-ardu-8xx)
+    Attack alt;    // direction+A opener, replaces combo hit 1 at chain 0
 };
 
-// On AVR the table lives on the FX cart as one packed 540 B blob (bead
+// On AVR the table lives on the FX cart as one packed 678 B blob (bead
 // monhun-ardu-42n.1): the shim below exposes the same `WEAPON_DEFS[i]` /
 // `&WEAPON_DEFS[i]` syntax, but every element is a fake 16-bit pointer into
 // the cart's address space (the fxdata.h blob offset). Nothing dereferences it
@@ -160,7 +170,7 @@ struct WeaponDef {
 static_assert(sizeof(Attack) == 23, "Attack must match packed FX blob size");
 static_assert(sizeof(Branch) == 27, "Branch must match packed FX blob size");
 static_assert(sizeof(ShellDef) == 15, "ShellDef must match packed FX blob size");
-static_assert(sizeof(WeaponDef) == 180, "WeaponDef must match packed FX blob size");
+static_assert(sizeof(WeaponDef) == 226, "WeaponDef must match packed FX blob size");
 
 struct FxWeaponDefsRom {
     const WeaponDef &operator[](int16_t i) const {
@@ -179,6 +189,8 @@ MH_PROGMEM const WeaponDef WEAPON_DEFS[3] = {
         {{1, ST_NONE, 0, {3, 5, 12, 12, 18, 14, 12, 10, 42, 0, 0, false, ATK_STEPSLASH}}, {2, ST_NONE, 0, {5, 7, 15, 20, 12, 28, 26, 16, 0, 0, 0, false, ATK_SPINCUT}}},
         true,
         {{0, 0, 0, 0, 0, 0, 0, 0}, {0, 0, 0, 0, 0, 0, 0, 0}},
+        {4, 5, 10, 12, 15, 16, 14, 10, 0, 0, 0, false, ATK_NONE},    // rollslash
+        {6, 4, 12, 14, 22, 10, 10, 12, 20, 0, 0, false, ATK_NONE},   // thrust (lunge 20)
     },
     // flail: slow momentum chain, deflect step, whirl stance + ball throw
     {
@@ -189,6 +201,8 @@ MH_PROGMEM const WeaponDef WEAPON_DEFS[3] = {
         {{1, ST_WHIRL, 50, {0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, false, ATK_NONE}}, {2, ST_NONE, 0, {5, 6, 16, 12, 22, 22, 14, 14, 0, 0, 1, false, ATK_TRIP}}},
         false,
         {{0, 0, 0, 0, 0, 0, 0, 0}, {0, 0, 0, 0, 0, 0, 0, 0}},
+        {4, 6, 13, 15, 20, 24, 16, 10, 0, 0, 0, false, ATK_NONE},   // rollsweep
+        {6, 6, 14, 18, 22, 30, 14, 14, 0, 0, 0, false, ATK_NONE},   // widesweep
     },
     // gunshield: slow walk, shove, guard stance + gun (ball / scatter)
     {
@@ -199,6 +213,8 @@ MH_PROGMEM const WeaponDef WEAPON_DEFS[3] = {
         {{1, ST_NONE, 0, {4, 5, 16, 22, 15, 18, 16, 6, 0, 0, 0, true, ATK_POINTBLANK}}, {2, ST_NONE, 0, {4, 4, 12, 9, 14, 16, 14, 8, 0, 12, 0, false, ATK_GUARDBASH}}},
         true,
         {{2, 28, 35, 7, 6, 70, 6, 1}, {5, 7, 42, 4, 4, 30, 5, 3}},
+        {3, 4, 12, 8, 14, 16, 14, 8, 30, 10, 0, false, ATK_NONE},    // shieldbash (lunge 30, push 10)
+        {4, 5, 14, 10, 15, 18, 16, 9, 18, 14, 0, false, ATK_NONE},   // shieldcharge (lunge 18, push 14)
     },
 };
 #endif   // __AVR__
@@ -223,6 +239,12 @@ inline const Attack *weaponAttack(const WeaponDef *d, int16_t i) {
 }
 inline const Attack *weaponSpecial(const WeaponDef *d) {
     return &d->special;
+}
+inline const Attack *weaponRoll(const WeaponDef *d) {
+    return &d->roll;
+}
+inline const Attack *weaponAlt(const WeaponDef *d) {
+    return &d->alt;
 }
 inline const Branch *weaponBranch(const WeaponDef *d, int16_t i) {
     return &d->branches[i];

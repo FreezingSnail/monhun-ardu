@@ -28,15 +28,15 @@ inline void test_data(FxTest &test) {
     test.expectEq(sizeof(Attack), 23, F("sizeof Attack"));
     test.expectEq(sizeof(Branch), 27, F("sizeof Branch"));
     test.expectEq(sizeof(ShellDef), 15, F("sizeof ShellDef"));
-    test.expectEq(sizeof(WeaponDef), 180, F("sizeof WeaponDef"));
+    test.expectEq(sizeof(WeaponDef), 226, F("sizeof WeaponDef"));
     test.expectEq(sizeof(MonsterAttack), 17, F("sizeof MonsterAttack"));
     test.expectEq(sizeof(MonsterDef), 11, F("sizeof MonsterDef"));
 
     const WeaponDef *w0 = &WEAPON_DEFS[0];
     const WeaponDef *w1 = &WEAPON_DEFS[1];
     const WeaponDef *w2 = &WEAPON_DEFS[2];
-    test.expectEq(off(w0, w1), 180, F("weapon stride 1"));
-    test.expectEq(off(w0, w2), 360, F("weapon stride 2"));
+    test.expectEq(off(w0, w1), 226, F("weapon stride 1"));
+    test.expectEq(off(w0, w2), 452, F("weapon stride 2"));
     test.expectEq(off(&MONSTER_ATTACKS[0], &MONSTER_ATTACKS[1]), 17, F("monster stride"));
     test.expectEq(off(&MONSTER_DEFS[0], &MONSTER_DEFS[1]), 11, F("monsterdef stride 1"));
     test.expectEq(off(&MONSTER_DEFS[0], &MONSTER_DEFS[2]), 22, F("monsterdef stride 2"));
@@ -52,6 +52,8 @@ inline void test_data(FxTest &test) {
     test.expectEq(off(w0, &w0->branches), 95, F("weapon.branches off"));
     test.expectEq(off(w0, &w0->canCancel), 149, F("weapon.canCancel off"));
     test.expectEq(off(w0, &w0->shells), 150, F("weapon.shells off"));
+    test.expectEq(off(w0, &w0->roll), 180, F("weapon.roll off"));
+    test.expectEq(off(w0, &w0->alt), 203, F("weapon.alt off"));
 
     const Attack *a = &w0->attacks[0];
     test.expectEq(off(a, &a->lunge), 16, F("attack.lunge off"));
@@ -265,6 +267,76 @@ inline void test_data(FxTest &test) {
     test.expectEq(shellReload(scat), 30, F("scatter reload"));
     test.expectEq(shellStam(scat), 5, F("scatter stam"));
     test.expectEq(shellPellets(scat), 3, F("scatter pellets"));
+
+    // --------------------------- roll attack + direction+A alt (monhun-ardu-8xx)
+    const Attack *sroll = weaponRoll(w0);
+    test.expectEq(attackStartup(sroll), 4, F("sword roll startup"));
+    test.expectEq(attackActive(sroll), 5, F("sword roll active"));
+    test.expectEq(attackRecover(sroll), 10, F("sword roll recover"));
+    test.expectEq(attackDmg(sroll), 12, F("sword roll dmg"));
+    test.expectEq(attackReach(sroll), 15, F("sword roll reach"));
+    test.expectEq(attackHw(sroll), 16, F("sword roll hw"));
+    test.expectEq(attackHh(sroll), 14, F("sword roll hh"));
+    test.expectEq(attackStam(sroll), 10, F("sword roll stam"));
+    test.expectEq(attackId(sroll), ATK_NONE, F("sword roll id"));
+
+    const Attack *salt = weaponAlt(w0);
+    test.expectEq(attackStartup(salt), 6, F("sword alt startup"));
+    test.expectEq(attackActive(salt), 4, F("sword alt active"));
+    test.expectEq(attackRecover(salt), 12, F("sword alt recover"));
+    test.expectEq(attackDmg(salt), 14, F("sword alt dmg"));
+    test.expectEq(attackReach(salt), 22, F("sword alt reach"));
+    test.expectEq(attackHw(salt), 10, F("sword alt hw"));
+    test.expectEq(attackHh(salt), 10, F("sword alt hh"));
+    test.expectEq(attackStam(salt), 12, F("sword alt stam"));
+    test.expectEq(attackLunge(salt), 20, F("sword alt lunge"));
+    test.expectEq(attackId(salt), ATK_NONE, F("sword alt id"));
+
+    const Attack *froll = weaponRoll(w1);
+    test.expectEq(attackStartup(froll), 4, F("flail roll startup"));
+    test.expectEq(attackActive(froll), 6, F("flail roll active"));
+    test.expectEq(attackRecover(froll), 13, F("flail roll recover"));
+    test.expectEq(attackDmg(froll), 15, F("flail roll dmg"));
+    test.expectEq(attackReach(froll), 20, F("flail roll reach"));
+    test.expectEq(attackHw(froll), 24, F("flail roll hw"));
+    test.expectEq(attackHh(froll), 16, F("flail roll hh"));
+    test.expectEq(attackStam(froll), 10, F("flail roll stam"));
+
+    const Attack *falt = weaponAlt(w1);
+    test.expectEq(attackStartup(falt), 6, F("flail alt startup"));
+    test.expectEq(attackActive(falt), 6, F("flail alt active"));
+    test.expectEq(attackRecover(falt), 14, F("flail alt recover"));
+    test.expectEq(attackDmg(falt), 18, F("flail alt dmg"));
+    test.expectEq(attackReach(falt), 22, F("flail alt reach"));
+    test.expectEq(attackHw(falt), 30, F("flail alt hw"));
+    test.expectEq(attackHh(falt), 14, F("flail alt hh"));
+    test.expectEq(attackStam(falt), 14, F("flail alt stam"));
+
+    const Attack *groll = weaponRoll(w2);
+    test.expectEq(attackStartup(groll), 3, F("gun roll startup"));
+    test.expectEq(attackActive(groll), 4, F("gun roll active"));
+    test.expectEq(attackRecover(groll), 12, F("gun roll recover"));
+    test.expectEq(attackDmg(groll), 8, F("gun roll dmg"));
+    test.expectEq(attackReach(groll), 14, F("gun roll reach"));
+    test.expectEq(attackHw(groll), 16, F("gun roll hw"));
+    test.expectEq(attackHh(groll), 14, F("gun roll hh"));
+    test.expectEq(attackStam(groll), 8, F("gun roll stam"));
+    test.expectEq(attackLunge(groll), 30, F("gun roll lunge"));
+    test.expectEq(attackPush(groll), 10, F("gun roll push"));
+    test.expectEq(attackId(groll), ATK_NONE, F("gun roll id"));
+
+    const Attack *galt = weaponAlt(w2);
+    test.expectEq(attackStartup(galt), 4, F("gun alt startup"));
+    test.expectEq(attackActive(galt), 5, F("gun alt active"));
+    test.expectEq(attackRecover(galt), 14, F("gun alt recover"));
+    test.expectEq(attackDmg(galt), 10, F("gun alt dmg"));
+    test.expectEq(attackReach(galt), 15, F("gun alt reach"));
+    test.expectEq(attackHw(galt), 18, F("gun alt hw"));
+    test.expectEq(attackHh(galt), 16, F("gun alt hh"));
+    test.expectEq(attackStam(galt), 9, F("gun alt stam"));
+    test.expectEq(attackLunge(galt), 18, F("gun alt lunge"));
+    test.expectEq(attackPush(galt), 14, F("gun alt push"));
+    test.expectEq(attackId(galt), ATK_NONE, F("gun alt id"));
 
     // ------------------------------------ monster values (mock/game.js)
     const MonsterAttack *m0 = &MONSTER_ATTACKS[0];

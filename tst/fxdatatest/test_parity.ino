@@ -11,6 +11,12 @@
 // still mirrored and read (sheathed is always false here).
 #define MH_SHEATHE 0
 
+// Roll-attack carve (8xx): no fixture scene rolls into an A press or presses
+// direction+A, so that evade->A branch and the alt table selection fold out of
+// this image too. Host tests (tst/player_test.hpp) cover both; the parity hash
+// fields are unaffected.
+#define MH_ROLL_ALT 0
+
 #include "harness/fx_globals.hpp"
 #include "parity_test.hpp"
 
