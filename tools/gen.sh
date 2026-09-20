@@ -4,6 +4,15 @@
 # fxdata/fxdata.bin + fxdata/fxdata-data.bin and copy the header to src/.
 set -e
 
+# Item table (bead monhun-ardu-prg.2): data/items.json compiled by
+# tools/gen-items.py into the packed fxdata/tables/items.bin blob +
+# src/generated/items_{data,meta,expect}.hpp (item ids/kinds/heal/stam/sell).
+# Schema-validated, deterministic. Runs FIRST: the fxdump host build below
+# includes src/core/game.hpp, which includes the generated items_meta.hpp, and
+# fxdata-build.py needs the raw_t mhItems payload. gen-zones.py reads the same
+# JSON to map zone gather ids onto the item indices.
+python3 tools/gen-items.py
+
 # Dump the core table dimensions (attack hw/hh/reach, monster hw/hh, whirl
 # radii) as JSON for gen-art.py. Host g++; the dumper includes the same
 # src/core/game.hpp the firmware uses, so art never duplicates a number.

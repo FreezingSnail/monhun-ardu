@@ -12,6 +12,7 @@
 #include "input.hpp"
 #include "fxmem.hpp"                      // FX cart offsets + mhFxRead* field readers (identity on host)
 #include "../generated/combat_meta.hpp"   // data facts (HAS_ZONES) gate the zone caches
+#include "../generated/items_meta.hpp"    // item ids/kinds + inventory cap (prg.2)
 
 // Per-image zones carve (mirrors MH_AUDIO in src/audio.hpp): the on-device
 // perf bench and parity scenes run only MON_LUNGE/SWEEP/HEAVY, which never run a
@@ -36,16 +37,26 @@ constexpr bool GUARD_ZONES_ENABLED = combat::HAS_GUARD_ZONES && MH_COMBAT_PARTS;
 constexpr bool SIMPLE_GUARDS = combat::HAS_SIMPLE_GUARDS || !MH_COMBAT_PARTS;
 
 constexpr int16_t HOLD_TICKS = 11;   // B held this long -> stance (~180ms)
-// Items + gathering (bead monhun-ardu-feel.22): sheathed A inside a gather
-// node runs PS_GATHER, sheathed B-hold runs PS_ITEM (herb use). Inventory is a
-// per-hunt u8 array (herb index 0); node depletion is a Game bitmask reset in
-// newGame, never by loadRoom (a node stays picked for the hunt).
-constexpr uint8_t ITEM_HERB = 0;           // inventory slot 0
-constexpr uint8_t ITEM_COUNT = 1;          // herb is the only item in the demo
+// Items + gathering (bead monhun-ardu-feel.22; item table prg.2): sheathed A
+// inside a gather node runs PS_GATHER, sheathed B-hold runs PS_ITEM (herb use).
+// The inventory is a per-hunt u8 array indexed by the generated item ids
+// (items_meta.hpp, data/items.json); node depletion is a Game bitmask reset in
+// newGame, never by loadRoom (a node stays picked for the hunt). The mh
+// aliases below keep the core/test surface stable; the canonical constants
+// live in namespace item.
+constexpr uint8_t ITEM_COUNT = item::ITEM_COUNT;   // generated inventory cap (<= ITEM_MAX)
+constexpr uint8_t ITEM_HERB = item::ITEM_HERB;
+constexpr uint8_t ITEM_BLUE_MUSHROOM = item::ITEM_BLUE_MUSHROOM;
+constexpr uint8_t ITEM_ORE = item::ITEM_ORE;
+constexpr uint8_t ITEM_BUG = item::ITEM_BUG;
+constexpr uint8_t ITEM_SCALE = item::ITEM_SCALE;
+constexpr uint8_t ITEM_SHELL = item::ITEM_SHELL;
+constexpr uint8_t ITEM_FANG = item::ITEM_FANG;
+constexpr uint8_t ITEM_TAIL = item::ITEM_TAIL;
+static_assert(ITEM_COUNT <= item::ITEM_MAX, "Game::items[] cap is item::ITEM_MAX (one u8 per id)");
 constexpr uint8_t ITEM_NODE_NONE = 0xFF;   // Player::itemNode: no node bound
 constexpr uint8_t GATHER_TICKS = 40;       // rooted gather window (ticks)
 constexpr uint8_t ITEM_USE_TICKS = 40;     // rooted herb-use window (ticks)
-constexpr uint8_t HERB_HEAL = 20;          // hp restored per herb (integer)
 constexpr int16_t CHAIN_WIN = 14;          // chain follow-up window after a combo hit
 constexpr uint8_t CHAIN_GAP = 9;           // HEAVY debounce: lock after a non-finisher hit
 constexpr uint8_t COMBO_LOCK = 24;         // HEAVY debounce: lock after the finisher (chain >= 2)
@@ -862,12 +873,12 @@ struct Game {
     // stepGame decays it, so the render can black-wipe the arena for ~4 ticks
     // after a door cross without any new cart traffic. 0 = no transition.
     uint8_t fade;
-    // Items + gather nodes (bead monhun-ardu-feel.22). items[] is the per-hunt
-    // inventory (herb at ITEM_HERB), reset in newGame. gatherMask is one bit per
-    // global prop record: set once that gather node has been picked this hunt
-    // (reset in newGame only -- loadRoom never touches it, so a node stays
-    // depleted across a room round-trip). Appended last so a default Game keeps
-    // every existing field offset.
+    // Items + gather nodes (beads monhun-ardu-feel.22 + prg.2). items[] is the
+    // per-hunt inventory indexed by the generated item ids (item::ITEM_*), reset
+    // in newGame. gatherMask is one bit per global prop record: set once that
+    // gather node has been picked this hunt (reset in newGame only -- loadRoom
+    // never touches it, so a node stays depleted across a room round-trip).
+    // Appended last so a default Game keeps every existing field offset.
     uint8_t items[ITEM_COUNT];
     uint16_t gatherMask;
 };

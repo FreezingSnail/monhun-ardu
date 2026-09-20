@@ -1175,6 +1175,17 @@ static void hudBar(int16_t x, int16_t y, int16_t w, int16_t h, int16_t num, int1
         hudBlk(x + 1, y + 1, fw, h - 2, shade);
 }
 
+// Generic held-item count readout (prg.2): a 1 px stalk glyph + the value in
+// the HUD band. The herb indicator below is the first caller; the drops/smith
+// beads reuse it for their own counts (no new screen yet). A zero count draws
+// nothing.
+static void drawItemCount(int16_t x, int16_t y, uint8_t count) {
+    if (count == 0)
+        return;
+    hudBlk(x, y, 1, 4, 3);   // 1 px plant/stack glyph
+    drawNumber(static_cast<int16_t>(x + 1), static_cast<int16_t>(y - 1), count, 3);
+}
+
 static void drawHud(const mh::Game &g) {
     const mh::Player &p = g.player;
 
@@ -1227,13 +1238,9 @@ static void drawHud(const mh::Game &g) {
     // Herb count (feel.22): a tiny 1 px plant glyph + one digit in the free
     // 5 px lane x=62..66 (after the 16-wide weapon marker at 46..61, before the
     // gun text at 67). Only drawn when a herb is held; total available in the
-    // demo is 9 (camp 1+2, area 1+2+3), so one digit always fits.
-    if (g.items[mh::ITEM_HERB] > 0) {
-        hudBlk(62, 2, 1, 4, 3);   // 1 px plant stalk glyph
-        // drawNumber (out-of-line) keeps hudNum inlined in the gun-shell path;
-        // a single digit renders identically.
-        drawNumber(63, 1, g.items[mh::ITEM_HERB], 3);
-    }
+    // demo is 9 (camp 1+2, area 1+2+3), so one digit always fits. prg.2 moved
+    // the shape into the generic drawItemCount helper.
+    drawItemCount(62, 2, g.items[mh::ITEM_HERB]);
 }
 
 /* ------------------------------------------------------------------ scene */

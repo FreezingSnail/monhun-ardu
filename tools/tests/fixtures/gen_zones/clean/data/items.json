@@ -1,0 +1,33 @@
+{
+  "version": 1,
+  "items": [
+    {
+      "id": "herb",
+      "kind": "consumable",
+      "heal": 20,
+      "stam": 0,
+      "sell": 10
+    },
+    {
+      "id": "blue_mushroom",
+      "kind": "consumable",
+      "heal": 10,
+      "stam": 0,
+      "sell": 15
+    },
+    {
+      "id": "ore",
+      "kind": "material",
+      "heal": 0,
+      "stam": 0,
+      "sell": 30
+    },
+    {
+      "id": "bug",
+      "kind": "material",
+      "heal": 0,
+      "stam": 0,
+      "sell": 5
+    }
+  ]
+}

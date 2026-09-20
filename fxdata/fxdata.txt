@@ -63,6 +63,14 @@ raw_t mhSmith = "tables/smith.bin"
 // zone_meta.hpp; read on device through fxmem.hpp during scene load (fie.4).
 raw_t mhZones = "tables/zones.bin"
 
+// Item table (bead monhun-ardu-prg.2): data/items.json compiled by
+// tools/gen-items.py into the 8 B header + 5 B item records from the
+// items_meta.hpp ABI (little-endian, no padding). Offsets land in
+// items_meta.hpp; read on device through fxmem.hpp by src/core/items.hpp
+// (itemHeal/itemKind/itemSell). Placed last among the tables so adding it
+// only shifts the sprite sections that follow.
+raw_t mhItems = "tables/items.bin"
+
 // Sprite sections: blocks/fonts/menu/equip sheets, addressed with 24-bit
 // SpritesU seeks so they may grow past the tables' 64 KiB window. Equipment
 // sheets stay after the base sheets; room layer arrays (maps/Sprites.txt, fie.5)

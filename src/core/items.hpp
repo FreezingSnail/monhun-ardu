@@ -1,17 +1,24 @@
 #pragma once
-// Inventory + gather nodes + herb use (bead monhun-ardu-feel.22).
+// Inventory + item table + gather nodes + herb use (bead monhun-ardu-feel.22;
+// item table prg.2).
 //
 // Design: docs/feel-design.md (data verbs + input line) and docs/map-zones.md
 // (the gather fields on a prop record). The room props carry the node geometry
 // (bead feel.21); this header owns the player-facing verbs:
 //
 //   sheathed + A inside an un-picked node -> PS_GATHER (rooted, depletes)
-//   sheathed + B hold                    -> PS_ITEM  (rooted, heals 20 hp)
+//   sheathed + B hold                    -> PS_ITEM  (rooted, heals hp)
 //
 // Both states apply their effect atomically on completion, so a move/damage
 // cancel never leaves the inventory or the node half-updated. Node depletion is
 // a Game bitmask reset only by newGame (a node stays picked across a room
 // round-trip). Header-only, no float, no Arduino.h.
+//
+// The item table (data/items.json -> mhItems, prg.2) is read through the same
+// host/AVR shim as core/zones.hpp: host structs (items_data.hpp) or the packed
+// blob via mhFxRead* (items_meta.hpp offsets). Game::items[] is indexed by the
+// generated item ids; the generic add/consume/count helpers are shared by the
+// gather path and the future drop/smith beads.
 //
 // The node/prop readers come from core/zones.hpp (host structs / cart blob);
 // addEffect is declared here (defined in projectiles.hpp) because player.hpp
@@ -20,6 +27,10 @@
 #include <stdint.h>
 #include "game.hpp"
 #include "zones.hpp"
+
+#if !defined(__AVR__)
+#include "../generated/items_data.hpp"   // host mirror (identity reads)
+#endif
 
 namespace mh {
 
@@ -33,6 +44,79 @@ static void addEffect(Game &g, int16_t x, int16_t y, uint8_t life, bool crit);
 static_assert(zone::PROPS_COUNT <= 16, "gatherMask is a u16: one bit per prop record");
 
 constexpr uint8_t GATHER_SPARK_LIFE = 8;   // same spark family as the heal/hit paths
+
+// ------------------------------------------------------------- item table
+// Plain mirror of the packed mhItems record (field order = packed ABI order).
+struct ItemInfo {
+    uint8_t kind;   // item::KIND_CONSUMABLE / KIND_MATERIAL
+    uint8_t heal;
+    uint8_t stam;
+    uint16_t sell;
+};
+
+#if defined(__AVR__)
+
+namespace idetail {
+// Fake cart pointer: the blob lives below 64 KB (generator hard-fails above).
+inline uint16_t itemCartAddr(uint16_t off) {
+    return static_cast<uint16_t>(static_cast<uint16_t>(mhItems) + off);
+}
+}   // namespace idetail
+
+inline ItemInfo itemRead(uint8_t id) {
+    using namespace idetail;
+    const uint16_t b = static_cast<uint16_t>(item::ITEMS_OFF + id * item::ITEM_SIZE);
+    ItemInfo v;
+    v.kind = mhFxReadU8(reinterpret_cast<const uint8_t *>(itemCartAddr(b + item::ITEM_KIND_OFF)));
+    v.heal = mhFxReadU8(reinterpret_cast<const uint8_t *>(itemCartAddr(b + item::ITEM_HEAL_OFF)));
+    v.stam = mhFxReadU8(reinterpret_cast<const uint8_t *>(itemCartAddr(b + item::ITEM_STAM_OFF)));
+    v.sell = mhFxReadU16(reinterpret_cast<const uint16_t *>(itemCartAddr(b + item::ITEM_SELL_OFF)));
+    return v;
+}
+
+#else   // ------------------------------------------------------------ host
+
+inline ItemInfo itemRead(uint8_t id) {
+    const item_data::Item &r = item_data::ITEMS[id];
+    ItemInfo v;
+    v.kind = r.kind;
+    v.heal = r.heal;
+    v.stam = r.stam;
+    v.sell = r.sell;
+    return v;
+}
+
+#endif   // __AVR__
+
+// Typed field readers; an out-of-range id reads inert (0), so a bad gather
+// code or a stale slot cannot walk off the table.
+inline uint8_t itemKind(uint8_t id) {
+    return id < ITEM_COUNT ? itemRead(id).kind : 0;
+}
+inline uint8_t itemHeal(uint8_t id) {
+    return id < ITEM_COUNT ? itemRead(id).heal : 0;
+}
+inline uint16_t itemSell(uint8_t id) {
+    return id < ITEM_COUNT ? itemRead(id).sell : 0;
+}
+
+// ---------------------------------------------------------- inventory verbs
+// Generic add/consume/count helpers (shared by gather + the drop/smith beads).
+inline uint8_t itemCount(const Game &g, uint8_t id) {
+    return id < ITEM_COUNT ? g.items[id] : 0;
+}
+inline void itemAdd(Game &g, uint8_t id, uint8_t n) {
+    if (id >= ITEM_COUNT)
+        return;
+    const uint16_t v = static_cast<uint16_t>(g.items[id]) + n;
+    g.items[id] = v > 255 ? 255 : static_cast<uint8_t>(v);
+}
+inline bool itemConsume(Game &g, uint8_t id) {
+    if (id >= ITEM_COUNT || g.items[id] == 0)
+        return false;
+    g.items[id]--;
+    return true;
+}
 
 // Was this prop record picked already this hunt?
 static inline bool gatherNodeDepleted(const Game &g, uint8_t idx) {
@@ -99,13 +183,10 @@ static void applyGather(Game &g, Player &p) {
     if (prop.gatherItem == zone::GATHER_NONE)
         return;
     g.gatherMask |= static_cast<uint16_t>(1u << idx);
-    // The record stores the item index + 1, so the inventory slot is one less
-    // (herb == 0). Unknown/absent items have no slot and add nothing.
+    // The record stores the item index + 1 (zone::GATHER_*), so the inventory
+    // slot is one less. itemAdd ignores an id past the table.
     const uint8_t slot = static_cast<uint8_t>(prop.gatherItem - 1);
-    if (slot < ITEM_COUNT) {
-        const uint16_t n = static_cast<uint16_t>(g.items[slot]) + prop.gatherYield;
-        g.items[slot] = n > 255 ? 255 : static_cast<uint8_t>(n);
-    }
+    itemAdd(g, slot, prop.gatherYield);
     addEffect(g, static_cast<int16_t>(p.x + (p.w >> 1)), static_cast<int16_t>(p.y + (p.h >> 1)), GATHER_SPARK_LIFE, false);
 }
 
@@ -121,12 +202,13 @@ static bool startItemUse(Game &g, Player &p) {
     return true;
 }
 
-// PS_ITEM completion: heal exactly HERB_HEAL (clamped at hpMax), one herb.
+// PS_ITEM completion: consume one herb and heal the item table's heal value
+// (clamped at hpMax). Herb heal is authored in data/items.json (20), so a data
+// edit retunes the eat without a code change.
 static void applyItemUse(Game &g, Player &p) {
-    if (g.items[ITEM_HERB] == 0)
+    if (!itemConsume(g, ITEM_HERB))
         return;
-    g.items[ITEM_HERB]--;
-    const uint16_t nh = static_cast<uint16_t>(p.hp) + HERB_HEAL;
+    const uint16_t nh = static_cast<uint16_t>(p.hp) + itemHeal(ITEM_HERB);
     p.hp = nh > p.hpMax ? p.hpMax : static_cast<uint8_t>(nh);
 }
 

@@ -80,6 +80,11 @@
       "size": 8
     },
     {
+      "path": "fxdata/tables/items.bin",
+      "sha256": "94bf565c8f82439cda406bd5b53323e336fd894e7942760f50a9e627fb9ee84e",
+      "size": 8
+    },
+    {
       "path": "fxdata/tables/quests.bin",
       "sha256": "dceb8287d98c55ead5877afc702e730a565af54b6532eed7e41516d755241267",
       "size": 8

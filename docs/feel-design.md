@@ -126,7 +126,11 @@ held, healing exactly 20 hp (clamped) and decrementing on completion; a B
 a shorter hold does nothing (the stowed B roll was removed in feel.23; the roll is the d-pad double-tap). A camp heal-rect B press wins on
 the same press (the heal latches `bLocked`, so the hold cannot also eat).
 Gather completion and eat fire `CUE_GATHER`/`CUE_EAT` through the existing audio
-edge detector (inventory edge, no new sim event field).
+edge detector (inventory edge, no new sim event field). prg.2 moved the item
+vocabulary into `data/items.json` (`mhItems`, `tools/gen-items.py`): the
+inventory is a fixed `Game::items[]` indexed by the generated item ids, the
+gather code is the item index + 1, and the herb's 20 hp heal is the table's
+`heal` value (a data edit, not a code edit).
 
 ---
 

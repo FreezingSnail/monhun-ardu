@@ -60,6 +60,7 @@ OUTPUT_PATHS = (
     "fxdata/tables/screens.bin",
     "fxdata/tables/quests.bin",
     "fxdata/tables/smith.bin",
+    "fxdata/tables/items.bin",
 )
 
 OUTPUT_GLOBS = ("src/generated/**/*",)

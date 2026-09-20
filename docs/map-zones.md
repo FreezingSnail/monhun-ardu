@@ -38,14 +38,16 @@ the render path (fie.5) blits the room layers with `seekData`.
   legacy type token only — prg.8 removed the pole room); `sheet` is a C
   symbol that must resolve in `fxdata/fxdata.h` once its art is authored
   (fie.5). `frame`, `w`, `h` are u8, `x`/`y` u16.
-- `props[].gather` (optional, bead monhun-ardu-feel.21): a gather node. `item`
-  names one of the fixed item vocabulary (currently only `herb`) and `yield` is
+- `props[].gather` (optional, bead monhun-ardu-feel.21; item table prg.2): a
+  gather node. `item` names one of the gatherable item ids (`herb`,
+  `blue_mushroom`, `ore`, `bug`) and must exist in `data/items.json`; `yield` is
   an integer 1..9. The prop's own `x`/`y`/`w`/`h` is the gather rect (it must
   stay inside the room like any prop rect). Unknown keys are errors. The packed
   record stores the item index+1 so a plain prop reads `GATHER_NONE` (0); the
-  symbolic `GATHER_*` values live in `src/generated/zone_meta.hpp`. Gather nodes
-  reuse an existing prop sheet for now — the render side draws a small
-  procedural plant keyed off `gatherItem`, so no new art sheet is required.
+  symbolic `GATHER_*` values live in `src/generated/zone_meta.hpp` and equal the
+  `item::ITEM_<NAME>` index + 1. Gather nodes reuse an existing prop sheet for
+  now — the render side draws a small procedural plant keyed off `gatherItem`,
+  so no new art sheet is required.
 - `doors[]`: `to` is another room id, or the reserved `"menu"` (exit to the
   opening menu). A door to a room **requires** `toSpawn` naming a spawn in the
   target room; a door to `"menu"` must **not** carry `toSpawn`.
@@ -87,8 +89,9 @@ inside a room.
   symbols in first-seen room order), not a raw fxdata address. The generated
   `SHEET_<SYMBOL>_OFF` constants carry the FX-image address.
 - `prop.gatherItem` is `GATHER_NONE` (0) for a plain prop or the item index+1
-  (currently only `GATHER_HERB` = 1); `prop.gatherYield` is the authored yield
-  (1..9) or 0 when `gatherItem` is `GATHER_NONE`.
+  (`GATHER_HERB` = 1, `GATHER_BLUE_MUSHROOM` = 2, `GATHER_ORE` = 3,
+  `GATHER_BUG` = 4, resolved against `data/items.json`); `prop.gatherYield` is
+  the authored yield (1..9) or 0 when `gatherItem` is `GATHER_NONE`.
 
 Size limits (validated): <= 254 rooms, <= 65535 records per section, <= 255
 records per room, <= 255 spawns total (spawn index is u8), blob < 65536 B.

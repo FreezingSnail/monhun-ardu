@@ -18,6 +18,7 @@
 #include "render_math_test.hpp"
 #include "zone_test.hpp"
 #include "gather_test.hpp"
+#include "items_test.hpp"
 
 int main() {
     TestRunner runner;
@@ -39,6 +40,7 @@ int main() {
     rendermathtest::RenderMathSuite(runner);
     ZoneSuite(runner);
     GatherSuite(runner);
+    ItemsSuite(runner);
     runner.printSummary();
     return runner.fail() ? 1 : 0;
 }

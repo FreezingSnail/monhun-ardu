@@ -25,6 +25,7 @@ FIXTURE = os.path.join(HERE, "fixtures", "gen_zones", "clean")
 SCRATCH = os.path.join(ROOT, "build", "tests", "gen_zones")
 
 MAP_REL = "data/map.json"
+ITEMS_REL = "data/items.json"
 BLOB_REL = "fxdata/tables/zones.bin"
 SPRITES_REL = "fxdata/maps/Sprites.txt"
 DATA_REL = "src/generated/zone_data.hpp"
@@ -98,6 +99,14 @@ class GenZonesTests(unittest.TestCase):
         fn(doc)
         self.write_map(doc)
 
+    def mutate_items(self, fn):
+        with open(self.path(ITEMS_REL), encoding="utf-8") as handle:
+            doc = json.load(handle)
+        fn(doc)
+        with open(self.path(ITEMS_REL), "w", encoding="utf-8", newline="\n") as handle:
+            json.dump(doc, handle, indent=2)
+            handle.write("\n")
+
     def assert_succeeds(self, result):
         self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
 
@@ -168,6 +177,9 @@ class GenZonesTests(unittest.TestCase):
             "constexpr uint8_t PROP_GATHER_YIELD_OFF = 10;",
             "constexpr uint8_t GATHER_NONE = 0;",
             "constexpr uint8_t GATHER_HERB = 1;",
+            "constexpr uint8_t GATHER_BLUE_MUSHROOM = 2;",
+            "constexpr uint8_t GATHER_ORE = 3;",
+            "constexpr uint8_t GATHER_BUG = 4;",
             "constexpr uint16_t ROOMS_COUNT = 2;",
             "constexpr uint8_t MONSTER_LUNGE = 0;",
             "constexpr uint8_t MONSTER_NONE = 0xFF;",
@@ -293,6 +305,32 @@ class GenZonesTests(unittest.TestCase):
             prop["x"] = 14   # x + w (4) = 18 > room w 16
         self.mutate(add_gather_and_shift)
         self.assert_fails(self.compile(), "leaves the 16x8 room")
+
+    # ------------------------------------------------- gather <-> item table
+
+    def test_gather_item_maps_to_item_table_index(self):
+        # blue_mushroom is item index 1 in the fixture items.json, so the packed
+        # gather code is index+1 == 2 (herb stays 1).
+        self.mutate(lambda doc: doc["rooms"][0]["props"][0].__setitem__(
+            "gather", {"item": "blue_mushroom", "yield": 2}))
+        self.assert_succeeds(self.compile())
+        blob = self.read_bytes(BLOB_REL)
+        parsed = parse_blob(blob)
+        prop = PROP.unpack_from(blob, parsed["off"]["props"])
+        self.assertEqual(prop[7], 2, "gather code is item index + 1")
+        text = self.read(META_REL)
+        self.assertIn("constexpr uint8_t GATHER_HERB = 1;", text)
+        self.assertIn("constexpr uint8_t GATHER_BLUE_MUSHROOM = 2;", text)
+
+    def test_missing_items_file_rejected(self):
+        os.remove(self.path(ITEMS_REL))
+        self.assert_fails(self.compile(), "missing item file")
+
+    def test_gather_item_missing_from_table_rejected(self):
+        # Drop bug from the item table: the gather vocabulary still names it, so
+        # the zone blob could point at a slot the inventory does not have.
+        self.mutate_items(lambda doc: doc["items"].pop(3))
+        self.assert_fails(self.compile(), "gather item 'bug' is not in the item table")
 
     # ---------------------------------------------------------- schema errors
 

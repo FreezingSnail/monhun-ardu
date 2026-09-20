@@ -79,9 +79,13 @@ constexpr uint8_t PROP_POLE = 2;
 constexpr uint8_t PROP_POST = 3;
 
 // Gather item kinds; 0 = not a gather node (GATHER_NONE). Prop records
-// store index+1, so a plain prop reads GATHER_NONE.
+// store the item index+1, so the runtime maps straight onto the item
+// table / Game::items[] slot (data/items.json, tools/gen-items.py).
 constexpr uint8_t GATHER_NONE = 0;
-constexpr uint8_t GATHER_HERB = 1;
+constexpr uint8_t GATHER_HERB = 1;   // item index 0 + 1
+constexpr uint8_t GATHER_BLUE_MUSHROOM = 2;   // item index 1 + 1
+constexpr uint8_t GATHER_ORE = 3;   // item index 2 + 1
+constexpr uint8_t GATHER_BUG = 4;   // item index 3 + 1
 
 // Monster kinds, values mirror MonsterKind in src/core/game.hpp.
 constexpr uint8_t MONSTER_NONE = 0xFF;   // room has no monster
@@ -151,16 +155,16 @@ constexpr uint16_t HEAL_CAMP_0_OFF = 154;
 // Prop sheet names + FX-image offsets (0 = not yet authored; fie.5 art).
 constexpr uint8_t SHEET_MH_MAP_TENT = 0;
 constexpr bool SHEET_MH_MAP_TENT_RESOLVED = true;
-constexpr uint32_t SHEET_MH_MAP_TENT_OFF = 22259;
+constexpr uint32_t SHEET_MH_MAP_TENT_OFF = 22307;
 
 // Room image symbols + baked FX offsets (the fie.5 blit base). A missing
 // symbol means a first gen pass before fxdata-build emitted it.
 constexpr const char *ROOM_AREA_IMAGE = "mh_map_area";
 constexpr bool ROOM_AREA_IMAGE_RESOLVED = true;
-constexpr uint32_t ROOM_AREA_IMAGE_OFF = 181155;
+constexpr uint32_t ROOM_AREA_IMAGE_OFF = 181203;
 constexpr const char *ROOM_CAMP_IMAGE = "mh_map_camp";
 constexpr bool ROOM_CAMP_IMAGE_RESOLVED = true;
-constexpr uint32_t ROOM_CAMP_IMAGE_OFF = 197283;
+constexpr uint32_t ROOM_CAMP_IMAGE_OFF = 197331;
 #if defined(__AVR__)
 static_assert(ROOM_AREA_IMAGE_OFF == static_cast<uint32_t>(mh_map_area), "zone blob stale: re-run make gen");
 static_assert(ROOM_CAMP_IMAGE_OFF == static_cast<uint32_t>(mh_map_camp), "zone blob stale: re-run make gen");

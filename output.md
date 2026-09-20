@@ -1,92 +1,90 @@
-# monhun-ardu-prg.8 — trim: adopt reclaim set
+# monhun-ardu-prg.2 — items: item table + inventory (herb migrates)
 
-HEAD at start: `8abac2e` (prg.1 spike). No commit/push (orchestrator commits).
-End state: clean gate — gen-check, host, tooling, 17 device suites, size all
-green.
+HEAD at start: `cd5ba11` (prg.8 trim). No commit/push (orchestrator commits).
+End state: clean gate — gen (x2), gen-check, host, tooling, 18 device suites,
+size all green.
 
-## Applied cuts
+## What landed
 
-| Cut | Disposition | Where |
-|---|---|---|
-| training mode + pole target | removed end to end | `MODE_TRAIN`, `struct Pole`, `Game::pole`, `initPole`/`syncPoleTarget`/`updatePole`/`damagePole`/`poleOnHit`/`poleOnShove`/`poleOnStun`/`armPoleTarget`, `projectiles.hpp`/`world.hpp` train branches |
-| pole_room | removed from data | `data/map.json` room, `images/maps/mh_map_pole_room_128x56.png`, `data/creatures/pole.json`, `SCREATURE_POLE` record + its head zone |
-| menu POLE row | target count 5→4 | `MENU_TARGET_COUNT 5→4`, `MENU_POLE_TARGET` deleted, `menuMode`/`menuMonsterKind`/`menuStart` simplified, `mh_menu_msel` rebuilt as 4 tiles (`tools/gen-art.py MENU_TARGETS`), `mh_menu_bg` POLE row gone |
-| damage-number text | removed (sparks kept) | `Effect::text`, `addEffect` text arg, `drawEffects` number branch, audio text edge |
-| screen shake | removed | `renderScene` tick-derived view offset + `ANG_SHAKE_*`/`sin256`/`cos256` use |
-| weapon trail | removed | 3 trail puffs in `drawProjectiles` + `TRAIL_LIGHT`/`TRAIL_DARK` |
-| procedural ground dots | **KEPT** | `MH_ROOM_IMAGE` default is 0, so `drawArena` IS the shipping ground; cutting it would blank the playfield. See "Deviation". |
-| rare audio cues | removed | `CUE_BREAK`/`CUE_GATHER`/`CUE_EAT`/`CUE_WINDUP` + edges, `mhCueTable` 14→9 rows, `AudioState.itemHerb`/`poleBroken`/monsterState windup use |
-| stage-3 finisher | `MH_STAGE3=0` shipping, carve kept | `src/core/game.hpp` |
-| dir+A opener / roll attack | `MH_ROLL_ALT=0` shipping, carve kept | `src/core/game.hpp` |
-
-Host suite now forces the carves on (`TEST_FLAGS += -DMH_STAGE3=1
--DMH_ROLL_ALT=1`) so `player_test.hpp` stays the coverage for both branches;
-`test_parity` still carves them off.
-
-Kept per scope: `MH_CHARGE`, telegraph tell shapes, `drawZonePart` overlays, room
-bounds, combat parts, gather/items, sheathe, turn-rate.
-
-## Deviation — score vs the spike
-
-The prg.1 recB set budgeted **-1812 B** (including the ground-dot cut). The
-shipping image reclaimed **-1448 B**, because (a) the procedural ground-dot
-field is kept — `MH_ROOM_IMAGE` defaults to 0 so `drawArena` is the live
-shipping ground and removing it would blank the arena; and (b) the spike's
-per-cut deltas were measured independently and do not sum linearly under LTO.
-Visual change from the adopted set: no pole/POLE row, no rising damage numbers,
-no hit shake, no shell trail, POLE-room gone. Ground dots unchanged.
+- `data/items.json` (new): 8 records `{id, kind, heal, stam, sell}` in source
+  order — herb (consumable, heal 20), blue_mushroom (consumable, heal 10), ore,
+  bug, scale, shell, fang, tail (materials). Item index == record index;
+  `ITEM_MAX` 16 caps the inventory.
+- `tools/gen-items.py` (new): validates id/kind/ranges/unknown keys, packs the
+  8 B header + 5 B `{kind,heal,stam,sell}` records into `fxdata/tables/items.bin`,
+  emits `src/generated/items_data.hpp` (host struct + array), `items_meta.hpp`
+  (ABI + `ITEM_COUNT`/`ITEM_SIZE`/`ITEM_<NAME>` indices), `items_expect.hpp`
+  (sizes + spot pins + sha256).
+- `src/core/items.hpp`: `ItemInfo` + `itemRead`/`itemKind`/`itemHeal`/`itemSell`
+  via the host/AVR shim (host `item_data::ITEMS`, AVR `mhItems` + `mhFxRead*`),
+  plus generic `itemCount`/`itemAdd`/`itemConsume`. `applyGather` uses `itemAdd`;
+  `applyItemUse` consumes one herb and heals `itemHeal(ITEM_HERB)` (20, from the
+  table). Herb path behavior byte-identical: gather -> count -> hold-B eat 20.
+- `src/core/game.hpp`: includes `items_meta.hpp`; `ITEM_COUNT`/`ITEM_HERB`/... are
+  aliases of the generated `item::ITEM_*` ids; `Game::items[ITEM_COUNT]`;
+  `HERB_HEAL` removed (table owns the value).
+- `src/render.hpp`: generic `drawItemCount(x,y,count)` helper; the herb HUD calls
+  it (same 1 px glyph + digit, pixel-identical).
+- `tools/gen-zones.py`: reads `data/items.json`; `GATHER_ITEMS` is now
+  `(herb, blue_mushroom, ore, bug)` and each `zone::GATHER_<NAME>` is that item's
+  index + 1. Zone blob unchanged for the shipped map (herb still code 1).
+- Wiring: `fxdata/fxdata.txt` `raw_t mhItems`, `tools/gen.sh` (runs first, before
+  the fxdump host build that includes `game.hpp`), `tools/fxdata_manifest.py`
+  OUTPUT_PATHS, and the manifest fixture.
+- Tests: host `tst/items_test.hpp` (table pins + inventory verbs + gather-code
+  mapping), device `tst/fxdatatest/items_test.hpp` + `test_items.ino` (blob bytes
+  + shipping readers + inventory verbs), `tools/tests/test_gen_items.py`,
+  gen-zones items dependency tests, manifest fixture/count updates.
 
 ## Gates (tails)
 
-`make gen-check`:
+`make gen` (x2, then stable) + `make gen-check`:
 ```
+fxdata_manifest: fxdata/manifest.json up to date (51 images, 60 inputs, 23 outputs)
 gen.sh: FX data + src/fxdata.h regenerated
-fxdata_manifest: PASS (81 generated artifacts unchanged)
+fxdata_manifest: PASS (85 generated artifacts unchanged)
 ```
 
 `make test`:
 ```
-Total Passed: 5744
+Total Passed: 5851
 Total Failed: 0
 ```
 
 `make test-tools`:
 ```
-Ran 209 tests in 11.2s
+Ran 231 tests in 13.927s
 OK
 ```
 
 `make fxtest-headless` (full; test_parity excluded by design):
 ```
-17/17 suites PASS: assets audio boot combat data hub hud menu_art menu
+18/18 suites PASS: assets audio boot combat data hub hud items menu_art menu
 monster_art perf player_art quests screens smith tell zones
+test_items PASSED=25 FAILED=0
 ```
-
 `test_perf` line:
 ```
-B pUs=6348 pHz=157 lHz=52 lTk=480 rMx=3348 rAv=3075 ram=724
+B pUs=6348 pHz=157 lHz=52 lTk=480 rMx=3348 rAv=3075 ram=719
 ```
-`rMx` 4768 → 3348 µs (budget 7407); strictly better (render subtraction).
+`rMx`/`rAv` unchanged from prg.8 (3348/3075, budget 7407).
 
 `make size`:
 ```
-size: .text=27108 .data=20 .bss=1564
-size: flash=27128/29696 (2568 free)  ram=1584/2560
+size: .text=27160 .data=20 .bss=1571
+size: flash=27180/29696 (2516 free)  ram=1591/2560
 ```
 
-**Reclaimed: 1448 B flash (28576 → 27128), 43 B RAM (1627 → 1584).** ≥1400 B
-target met; flash free 1120 → 2568.
+## Budget
 
-## Docs/tests updated
+Baseline prg.8 `flash=27128 (2568 free) ram=1584`; this bead **+52 B flash /
++7 B RAM** (the +7 is `Game::items[8]` vs `items[1]`; the item reader + generic
+helpers are the flash). Well under the 900 B target. `zones.bin` is byte-identical
+to prg.8; `equip_meta.hpp`/`equip.bin` shifted because `mhItems` sits before the
+sprite sections (baked offsets, two-pass `make gen` converges).
 
-- `README.md`: status line, shipping size, `projectiles.hpp`/`world.hpp` rows,
-  menu controls + target count + sheet description, roster table (POLE row →
-  RAVAGER hunt), "In game (hunt)".
-- `docs/feel-design.md`: new "prg.8 trim — reclaim adopted" ledger section with
-  the measured `make size` block and the 1448 B result.
-- `docs/map-zones.md`: `pole` prop type marked legacy.
-- `tst/fxdatatest/test_parity.ino`: roll-alt/stage3 carve comments note the
-  prg.8 shipping default.
+## Deviation
 
-Generated sets staged together by the orchestrator (`git add -A`): combat,
-zones, equip offsets, menu sheets and `fxdata.*` all regenerated.
+Item ids are 0-based (herb index 0, gather code 1) to keep the shipped zone blob
+and herb path byte-identical; `bd` design's "herb becomes item id 1" is read as
+the gather code (index+1), which is unchanged.

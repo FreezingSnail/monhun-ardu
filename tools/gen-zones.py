@@ -88,11 +88,14 @@ MAX_ID = 31
 PROP_TYPES = ("tent", "door", "pole", "post")
 MONSTER_KINDS = ("lunge", "sweep", "heavy", "ravager")
 MONSTER_NONE = 0xFF
-# Gather item vocabulary (bead monhun-ardu-feel.21). A prop's optional "gather"
-# block names one of these; the blob stores the index+1 so 0 means "not a gather
-# node". Keep "herb" first (room to add more items later).
-GATHER_ITEMS = ("herb",)
+# Gather item vocabulary (beads monhun-ardu-feel.21 + prg.2). A prop's optional
+# "gather" block names one of these; the blob stores the item index+1 so 0 means
+# "not a gather node" and the runtime maps straight onto the item table /
+# Game::items[] slot. Every name must exist in data/items.json (prg.2); the
+# generated GATHER_<NAME> value is that item's index + 1.
+GATHER_ITEMS = ("herb", "blue_mushroom", "ore", "bug")
 GATHER_NONE = 0
+ITEMS_REL = "data/items.json"
 GATHER_YIELD_MIN = 1
 GATHER_YIELD_MAX = 9
 DOOR_MENU = 0xFF        # door.toRoom sentinel: exit to the opening menu
@@ -214,6 +217,49 @@ def load_json(errors, path, rel):
     return None
 
 
+def load_item_ids(errors, root):
+    """Ordered item ids from data/items.json (source order == item index).
+
+    gen-zones only needs the id list: a prop's gather item resolves to that
+    item's index + 1 (the packed GATHER_* code). The full schema lives in
+    tools/gen-items.py, which authors the same file into the mhItems blob."""
+    path = os.path.join(root, ITEMS_REL)
+    if not os.path.isfile(path):
+        errors.add(ITEMS_REL, "missing item file (gather ids resolve against it)")
+        return None
+    doc = load_json(errors, path, ITEMS_REL)
+    if doc is None:
+        return None
+    check_keys(errors, ITEMS_REL, doc, {"version", "items"})
+    read_int(errors, ITEMS_REL, doc, "version", 1, 1)
+    raw_items = doc.get("items")
+    if not isinstance(raw_items, list) or not raw_items:
+        errors.add(ITEMS_REL, "items: expected a non-empty array")
+        return None
+    ids = []
+    seen = set()
+    for i, obj in enumerate(raw_items):
+        ids.append(read_id(errors, "%s: items[%d]" % (ITEMS_REL, i), obj, "id", seen))
+    if errors.items:
+        return None
+    return ids
+
+
+def gather_code_map(errors, item_ids):
+    """GATHER_ITEMS name -> packed code (item index + 1). Every gatherable name
+    must exist in the item table, so the zone blob can never point at a slot the
+    runtime inventory does not have."""
+    codes = {}
+    for name in GATHER_ITEMS:
+        if name not in item_ids:
+            errors.add(ITEMS_REL, "gather item '%s' is not in the item table" % name)
+            continue
+        codes[name] = item_ids.index(name) + 1
+    if errors.items:
+        return None
+    return codes
+
+
 def expect_image_path(room):
     """The image path a room must declare: images/maps/mh_map_<id>_<w>x<h>.png."""
     return "%s/%s%s_%dx%d.png" % (IMAGE_DIR_REL, IMAGE_SYMBOL_PREFIX, room["id"],
@@ -239,11 +285,11 @@ def normalize_gather(errors, ctx, obj):
 
 def prop_gather(prop):
     """Packed (gatherItem, gatherYield) for a normalized prop: 0/0 when the prop
-    is not a gather node, else item index+1 and the yield."""
+    is not a gather node, else the resolved item index+1 and the yield."""
     gather = prop.get("gather")
     if gather is None:
         return GATHER_NONE, 0
-    return GATHER_ITEMS.index(gather["item"]) + 1, gather["yield"]
+    return prop["gatherCode"], gather["yield"]
 
 
 def normalize_prop(errors, ctx, obj):
@@ -480,7 +526,19 @@ def compile_model(errors, root):
             errors.add(ctx + ".monster", "spawn: unknown spawn '%s'" % room["monster"]["spawn"])
     if errors.items:
         return None
-    return {"rooms": rooms}
+    item_ids = load_item_ids(errors, root)
+    if item_ids is None:
+        return None
+    gather_codes = gather_code_map(errors, item_ids)
+    if gather_codes is None:
+        return None
+    # Resolve each gather prop's packed code now so the packer/emitter agree.
+    for room in rooms:
+        for prop in room["props"]:
+            gather = prop["gather"]
+            if gather is not None:
+                prop["gatherCode"] = gather_codes[gather["item"]]
+    return {"rooms": rooms, "gatherCodes": gather_codes}
 
 
 def build_layout(errors, model):
@@ -774,7 +832,7 @@ def emit_data_header(layout, packed):
     return "\n".join(lines)
 
 
-def emit_meta_header(layout, packed, fx_symbols):
+def emit_meta_header(layout, packed, fx_symbols, gather_codes):
     rooms = layout["rooms"]
     off = packed["off"]
     lines = []
@@ -860,10 +918,12 @@ def emit_meta_header(layout, packed, fx_symbols):
         app("constexpr uint8_t PROP_%s = %d;" % (name.upper(), i))
     app("")
     app("// Gather item kinds; 0 = not a gather node (GATHER_NONE). Prop records")
-    app("// store index+1, so a plain prop reads GATHER_NONE.")
+    app("// store the item index+1, so the runtime maps straight onto the item")
+    app("// table / Game::items[] slot (data/items.json, tools/gen-items.py).")
     app("constexpr uint8_t GATHER_NONE = %d;" % GATHER_NONE)
-    for i, name in enumerate(GATHER_ITEMS):
-        app("constexpr uint8_t GATHER_%s = %d;" % (name.upper(), i + 1))
+    for name in GATHER_ITEMS:
+        app("constexpr uint8_t GATHER_%s = %d;   // item index %d + 1"
+            % (name.upper(), gather_codes[name], gather_codes[name] - 1))
     app("")
     app("// Monster kinds, values mirror MonsterKind in src/core/game.hpp.")
     app("constexpr uint8_t MONSTER_NONE = 0x%02X;   // room has no monster" % MONSTER_NONE)
@@ -1150,7 +1210,7 @@ def run(root, dump):
         wrote.add(MAPS_SPRITES_REL)
     if write_if_changed(os.path.join(root, DATA_HPP_REL), emit_data_header(layout, packed)):
         wrote.add(DATA_HPP_REL)
-    if write_if_changed(os.path.join(root, META_HPP_REL), emit_meta_header(layout, packed, fx_symbols)):
+    if write_if_changed(os.path.join(root, META_HPP_REL), emit_meta_header(layout, packed, fx_symbols, model["gatherCodes"])):
         wrote.add(META_HPP_REL)
 
     unresolved = [sheet for sheet in layout["sheets"] if (fx_symbols or {}).get(sheet) is None]
