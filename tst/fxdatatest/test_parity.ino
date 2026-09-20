@@ -7,8 +7,8 @@
 // Budget carve (udb): no fixture scene stows the weapon, so the sheathe input
 // path folds out of this image to keep it inside the 29696 B board budget
 // (MH_B_BRANCH_BUFFER stays on: the A-then-B scenes DO queue through the lock).
-// Host tests (tst/player_test.hpp) cover sheathing; the parity hash fields are
-// still mirrored and read (sheathed is always false here).
+// Host tests (tst/player_test.hpp) cover sheathing (hold B + double-tap Down);
+// the parity hash fields are still mirrored and read (sheathed is always false).
 #define MH_SHEATHE 0
 
 // Roll-attack carve (8xx): no fixture scene rolls into an A press or presses

@@ -109,6 +109,10 @@ Player input verb (feel.16): a d-pad double-tap fires the weapon tap-defense
 toward the tapped direction (sword dodge, flail deflect, gun shove), so the
 positional answer is available without reaching for B.
 
+Sheathe (feel.17): hold B and double-tap Down stows the weapon; A draws back
+into combo hit 1. B is the stance modifier for every weapon, so the stow rides
+the feel.16 double-tap detector instead of the old A+B chord.
+
 ---
 
 ## 4. Per-beast kit reference

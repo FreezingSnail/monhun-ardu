@@ -44,10 +44,6 @@ void Player::init(int8_t weapon) {
     aBuffer = 0;
     sheathed = false;
     sheatheLatch = false;
-    seqT = 0;
-    seq2 = false;
-    chordT = 0;
-    pMy = false;
     chainLock = 0;
     bBuffer = 0;
     stance = ST_NONE;
@@ -607,11 +603,10 @@ static void playerHurt(Game &g, int16_t dmg, int16_t faceX, int16_t faceY) {
     addEffect(g, static_cast<int16_t>(p.x + 8), static_cast<int16_t>(p.y + 8), 8, false, 0);
 }
 
-// ------------------------------------------------------------ sheathe combo
-// Ported from mock/game.js trySheathe()/sheatheCombo(), device variant ddab:
-// double-tap Down then an A+B chord (3t grace). Only from idle (stance idle
-// counts; the stance is dropped). Returns false when the state does not allow it,
-// so the press pair falls through to its normal attack/dodge/stance meaning.
+// ---------------------------------------------------------------- sheathe
+// Hold B and double-tap Down (feel.17). Only from idle (stance idle counts;
+// the stance is dropped). Returns false when the state does not allow it, so
+// the double-tap falls through to its normal roll.
 static bool trySheathe(Player &p) {
     if (p.state != PS_IDLE)
         return false;
@@ -622,19 +617,8 @@ static bool trySheathe(Player &p) {
     p.chainWin = 0;
     p.chainLock = 0;   // stowing drops the pending combo recovery
     p.aBuffer = 0;
-    p.seqT = 0;
-    p.seq2 = false;
     p.sheatheLatch = true;   // suppress roll/stance until B is released
     return true;
-}
-
-// Evaluate the active variant (device ships ddab only). Returns true only when
-// the toggle actually fired; the caller then consumes the A/B press this tick.
-static bool sheatheCombo(Player &p, bool aP, const Input &inp) {
-    if (p.sheathed)
-        return false;   // stowed: A draws, combos do nothing
-    const bool chordA = aP && (inp.b || p.chordT > 0);
-    return chordA && p.seq2 && trySheathe(p);
 }
 
 static void updatePlayer(Game &g, const Input &inp, bool aP, bool bP, bool bR) {
@@ -693,51 +677,25 @@ static void updatePlayer(Game &g, const Input &inp, bool aP, bool bP, bool bR) {
             p.chargeArmed = false;
     }
 
-    // Sheathe prototype (ddab): double-tap Down then an A+B chord within the
-    // grace, then the combo check (consumes the press pair so it cannot also
-    // attack/dodge/stance). SHEATHE_ENABLED folds this whole path out of the
-    // parity image, whose scenes never stow (host suite covers it).
-    bool sheatheConsumed = false;
-    if (SHEATHE_ENABLED) {
-        if (p.chordT > 0)
-            p.chordT--;
-        if (p.seqT > 0) {
-            p.seqT--;
-            if (p.seqT == 0)
-                p.seq2 = false;
-        }
-        const bool myNow = inp.my > 0;
-        if (myNow && !p.pMy) {   // down press edge
-            if (p.seqT > 0)
-                p.seq2 = true;   // second tap inside the window: combo armed
-            p.seqT = SHEATHE_SEQ_WIN;
-        }
-        p.pMy = myNow;
-
-        sheatheConsumed = sheatheCombo(p, aP, inp);
-        if (!sheatheConsumed) {
-            if (aP && !inp.b)
-                p.chordT = CHORD_WIN;
-            if (bP && !inp.a)
-                p.chordT = CHORD_WIN;
-        }
-    }
-
     // Double-tap d-pad -> weapon tap-defense toward the tapped direction
-    // (feel.16). From the sheathe block down, BEFORE the B handling: the same
-    // tapDefense() the B tap uses re-checks the stamina/state gates and picks
-    // the weapon action, so the three weapons keep their own numbers. A press
-    // edge is a dir8 the pad did not carry last tick: held directions never
-    // fire, and A/B are untouched. Interaction: the sheathe prototype watches
-    // its own Down edges, so double-tap Down arms the sheathe sequence AND
-    // rolls (the seq window outlives the 16t roll, so the chord still lands).
+    // (feel.16), except hold B + double-tap Down, which stows the weapon
+    // (feel.17): B is the stance modifier, so the sheathe rides this detector
+    // instead of an A+B chord. BEFORE the B handling: the same tapDefense() the
+    // B tap uses re-checks the stamina/state gates and picks the weapon action,
+    // so the three weapons keep their own numbers. A press edge is a dir8 the
+    // pad did not carry last tick: held directions never fire, and A/B are
+    // untouched. SHEATHE_ENABLED folds the stow call out of the parity image,
+    // whose scenes never stow (host suite covers it).
     if (p.dTapT > 0)
         p.dTapT--;
     const int8_t dNow = fp::dirIndexFromInput(inp.mx, inp.my);
     if (dNow >= 0 && dNow != p.pDir) {
         if (p.dTapT > 0 && dNow == p.dTapDir) {
-            p.dTapT = 0;   // second edge inside the window: fire and disarm
-            tapDefense(g, def, inp);
+            p.dTapT = 0;                    // second edge inside the window: fire and disarm
+            const bool dDown = dNow == 2;   // DIR8 index 2 = Down
+            const bool stowed = SHEATHE_ENABLED && inp.b && dDown && trySheathe(p);
+            if (!stowed)
+                tapDefense(g, def, inp);
         } else {
             p.dTapDir = dNow;
             p.dTapT = DTAP_WIN;
@@ -757,7 +715,7 @@ static void updatePlayer(Game &g, const Input &inp, bool aP, bool bP, bool bR) {
     // B: release speed picks tap defense vs hold stance. A tap inside attack
     // recovery or the debounce lock queues the A-B branch (B_BRANCH_BUFFER) so a
     // loose A A B still combos; it fires when the branch window opens.
-    if (B_BRANCH_BUFFER_ENABLED && bP && !sheatheConsumed) {
+    if (B_BRANCH_BUFFER_ENABLED && bP) {
         const Attack *a = p.atk;
         const bool inRecovery = p.state == PS_ATTACK && a && p.t >= attackStartup(a) + attackActive(a);
         const bool inLock = p.state == PS_IDLE && p.chainLock > 0 && (p.chain > 0 || (STAGE3_ENABLED && p.finWin));
@@ -801,7 +759,7 @@ static void updatePlayer(Game &g, const Input &inp, bool aP, bool bP, bool bR) {
     // canAttackNow: the debounce profile attacks only from idle with no lock.
     const bool canAttackNow = p.chainLock == 0 && p.state == PS_IDLE;
     const bool altInput = ROLL_ALT_ENABLED && (inp.mx != 0 || inp.my != 0);
-    if (aP && !sheatheConsumed) {
+    if (aP) {
         if (p.sheathed) {
             if (p.state == PS_IDLE) {
                 p.sheathed = false;

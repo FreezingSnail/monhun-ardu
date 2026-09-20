@@ -41,9 +41,9 @@ constexpr uint8_t CHAIN_GAP = 9;          // HEAVY debounce: lock after a non-fi
 constexpr uint8_t COMBO_LOCK = 24;        // HEAVY debounce: lock after the finisher (chain >= 2)
 constexpr uint8_t A_BUFFER = 16;          // attack input buffer in ticks (covers the gap lock)
 constexpr uint8_t B_BRANCH_BUFFER = 36;   // B branch tap buffer: bridges recovery + lock
-// Sheathe combo (ddab only): double-tap Down then an A+B chord within a 3t grace.
-constexpr uint8_t SHEATHE_SEQ_WIN = 18;   // d-pad tap -> chord window (~300ms)
-constexpr uint8_t CHORD_WIN = 3;          // A/B chord grace (~50ms)
+// Sheathe (feel.17): hold B and double-tap Down. The stow rides the feel.16
+// double-tap detector instead of the old A+B chord, since B is the stance
+// modifier for every weapon.
 // Double-tap d-pad dodge (feel.16): two same-direction press edges inside this
 // window fire the weapon tap-defense toward the tapped direction.
 constexpr uint8_t DTAP_WIN = 10;
@@ -505,14 +505,9 @@ struct Player : fp::FpBody, fp::FpStam {
     bool hitDone;
     uint8_t chain, chainWin, aBuffer;   // chain 0..2, windows <= CHAIN_WIN/A_BUFFER
     bool finWin;                        // combo finisher done: the next B is the stage-3 branch
-    // Sheathe combo (ddab): stowed flag + latch (suppresses B until release),
-    // double-tap Down tracker (seqT alive, seq2 armed on the second press) and
-    // the A/B chord grace; combo debounce lock + B branch tap buffer.
+    // Sheathe (feel.17): stowed flag + latch (suppresses roll/stance until B
+    // release); combo debounce lock + B branch tap buffer.
     bool sheathed, sheatheLatch;
-    uint8_t seqT;
-    bool seq2;
-    uint8_t chordT;
-    bool pMy;
     uint8_t chainLock;
     uint8_t bBuffer;
     Stance stance;

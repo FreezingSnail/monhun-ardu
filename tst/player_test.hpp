@@ -103,17 +103,15 @@ void holdToStance(Game &g) {
     stepN(g, 13, Input{0, 0, false, true});
 }
 
-// stow via the device ddab combo: double-tap Down then an A+B chord. The second
-// Down tap also fires the feel.16 double-tap roll, so wait the roll out before
-// the chord; the sheathe seq window (18t) outlives the 16t roll.
+// stow via the device input (feel.17): hold B, then double-tap Down. The
+// feel.16 double-tap detector sees the second Down edge with B down and stows
+// instead of rolling. Leaves B held so callers can assert the latch, then
+// release with a bare step.
 void stowWeapon(Game &g) {
-    stepN(g, 1, Input{0, 1, false, false});
-    stepN(g, 1, Input{0, 0, false, false});
-    stepN(g, 1, Input{0, 1, false, false});   // second tap: sheathe armed + roll
-    stepN(g, 1, Input{0, 0, false, false});
-    for (int i = 0; i < 20 && g.player.state != PS_IDLE; i++)
-        stepN(g, 1);
-    stepN(g, 1, Input{0, 0, true, true});
+    stepN(g, 1, Input{0, 0, false, true});   // B down (under HOLD_TICKS: no stance)
+    stepN(g, 1, Input{0, 1, false, true});   // tap 1 Down
+    stepN(g, 1, Input{0, 0, false, true});   // release
+    stepN(g, 1, Input{0, 1, false, true});   // tap 2: stow (no roll)
 }
 
 // double-tap a d-pad direction (press, release, press) -- feel.16 roll input
@@ -518,12 +516,12 @@ void PlayerSuite(TestRunner &runner) {
 
     // ------------------------------------------------- sheathe + debounce (udb)
     {
-        Test t("sheathe ddab: double-tap down + A+B stows, A draws hit 1");
+        Test t("sheathe feel.17: hold B + double-tap Down stows, A draws hit 1");
         Game g;
         initGame(g, W_SWORD);
         stowWeapon(g);
-        t.assert(g.player.sheathed, true, "double tap + chord stows");
-        t.assert(g.player.state, PS_IDLE, "chord consumed: no attack");
+        t.assert(g.player.sheathed, true, "hold B + double-tap Down stows");
+        t.assert(g.player.state, PS_IDLE, "stow consumed: no attack");
         t.assert(g.player.atk == nullptr ? 1 : 0, 1, "no swing");
         stepN(g, 1);                             // release B, clears the latch
         stepN(g, 1, Input{0, 0, true, false});   // A draws
@@ -534,7 +532,69 @@ void PlayerSuite(TestRunner &runner) {
     }
 
     {
-        Test t("sheathe ddab: stowed B rolls with sword numbers, run speed 24");
+        Test t("sheathe feel.17: B-held double-tap Down stows from a stance");
+        Game g;
+        initGame(g, W_SWORD);
+        holdToStance(g);   // B held -> parry
+        t.assert(g.player.stance, ST_PARRY, "stance up before the stow");
+        stepN(g, 1, Input{0, 1, false, true});   // tap 1 Down
+        stepN(g, 1, Input{0, 0, false, true});
+        stepN(g, 1, Input{0, 1, false, true});   // tap 2: stow drops the stance
+        t.assert(g.player.sheathed, true, "stowed from stance");
+        t.assert(g.player.stance, ST_NONE, "stance dropped");
+        t.assert(g.player.sheatheLatch, true, "latch set until B release");
+        t.assert(g.player.state, PS_IDLE, "idle, no roll");
+        suite.addTest(t);
+    }
+
+    {
+        Test t("sheathe feel.17: double-tap Down without B still rolls");
+        Game g;
+        initGame(g, W_SWORD);
+        doubleTap(g, 0, 1);
+        t.assert(g.player.sheathed, false, "not stowed");
+        t.assert(g.player.state, PS_DODGE, "rolls down");
+        t.assertGreaterThan(g.player.vy, 0, "rolls south");
+        suite.addTest(t);
+    }
+
+    {
+        Test t("sheathe feel.17: B-held double-tap of another direction does not stow");
+        Game g;
+        initGame(g, W_SWORD);
+        stepN(g, 1, Input{0, 0, false, true});   // B down
+        stepN(g, 1, Input{1, 0, false, true});   // tap 1 East
+        stepN(g, 1, Input{0, 0, false, true});
+        stepN(g, 1, Input{1, 0, false, true});   // tap 2: rolls east
+        t.assert(g.player.sheathed, false, "east double-tap does not stow");
+        t.assert(g.player.state, PS_DODGE, "rolls east instead");
+        suite.addTest(t);
+
+        initGame(g, W_SWORD);
+        stepN(g, 1, Input{0, 0, false, true});    // B down
+        stepN(g, 1, Input{0, -1, false, true});   // tap 1 Up
+        stepN(g, 1, Input{0, 0, false, true});
+        stepN(g, 1, Input{0, -1, false, true});   // tap 2
+        t.assert(g.player.sheathed, false, "north double-tap does not stow");
+        t.assert(g.player.state, PS_DODGE, "rolls north instead");
+        suite.addTest(t);
+    }
+
+    {
+        Test t("sheathe feel.17: B release after stow does not re-enter stance or roll");
+        Game g;
+        initGame(g, W_SWORD);
+        stowWeapon(g);   // B still held at the end
+        stepN(g, 1);     // release B: clears the latch
+        t.assert(g.player.sheatheLatch, false, "latch cleared on release");
+        t.assert(g.player.sheathed, true, "still stowed");
+        t.assert(g.player.stance, ST_NONE, "release does not enter a stance");
+        t.assert(g.player.state, PS_IDLE, "release does not roll");
+        suite.addTest(t);
+    }
+
+    {
+        Test t("sheathe feel.17: stowed B rolls with sword numbers, run speed 24");
         Game g;
         initGame(g, W_FLAIL);
         stowWeapon(g);
