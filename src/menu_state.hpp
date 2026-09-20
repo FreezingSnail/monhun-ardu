@@ -57,7 +57,7 @@ inline int8_t menuCycle(int8_t v, int8_t delta, int8_t count) {
 
 // Clear both axes' hold state (last direction + timer). Called when the menu
 // (re-)activates so a d-pad held across the transition cannot skip picks.
-inline void menuResetNav(MenuState &m) {
+MH_NOINLINE inline void menuResetNav(MenuState &m) {
     m.navX = m.navY = 0;
     m.navXTimer = m.navYTimer = 0;
 }

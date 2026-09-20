@@ -66,7 +66,7 @@ MH_FX_PURE inline uint8_t mhFxReadU8(const uint8_t *p) {
     FX::seekData(static_cast<uint24_t>(reinterpret_cast<uintptr_t>(p)));
     return FX::readEnd();
 }
-MH_FX_PURE inline int8_t mhFxReadI8(const int8_t *p) {
+MH_NOINLINE MH_FX_PURE inline int8_t mhFxReadI8(const int8_t *p) {
     return static_cast<int8_t>(mhFxReadU8(reinterpret_cast<const uint8_t *>(p)));
 }
 MH_FX_PURE inline uint16_t mhFxReadU16(const uint16_t *p) {
@@ -88,7 +88,7 @@ MH_FX_PURE inline bool mhFxReadBool(const bool *p) {
 // transaction, n byte reads. The typed readers above stay the default for
 // hot-path scalars; this exists for small fixed-size records whose RAM cache
 // mirror is byte-identical to the packed blob record (one cart access, not n).
-inline void mhFxReadBytes(const void *p, uint8_t *dst, uint16_t n) {
+MH_NOINLINE inline void mhFxReadBytes(const void *p, uint8_t *dst, uint16_t n) {
     MH_FX_COUNT_READ();
     FX::readDataBytes(static_cast<uint24_t>(reinterpret_cast<uintptr_t>(p)), dst, n);
 }

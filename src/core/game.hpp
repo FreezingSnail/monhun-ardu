@@ -149,19 +149,29 @@ enum AtkId : int8_t {
 struct Rect {
     int16_t x, y, w, h;
     bool overlaps(const Rect &o) const {
-        const int32_t ax = x, aw = w, ox = o.x, ow = o.w;
-        const int32_t ay = y, ah = h, oy = o.y, oh = o.h;
-        return ax < ox + ow && ax + aw > ox && ay < oy + oh && ay + ah > oy;
+        // 16-bit math on purpose: every Rect is screen/world pixel space
+        // (|x|,|y| <= WORLD_W/H + a camera margin, w/h <= 128), so the sums stay
+        // far inside int16 and AVR keeps them in register pairs. Promoting to
+        // int32 here cost ~4x the code for the same answer.
+        return x < static_cast<int16_t>(o.x + o.w) && static_cast<int16_t>(x + w) > o.x && y < static_cast<int16_t>(o.y + o.h) && static_cast<int16_t>(y + h) > o.y;
     }
 };
 
 // prototype circleRectOverlap: clamp circle center into rect, compare radius²
+// 16-bit: the |d| > r early-out bounds both deltas by r (<= 24 at the only call
+// site), so d*d and r*r stay tiny and no 32-bit multiply is emitted.
 inline bool circleRectOverlap(int16_t cx, int16_t cy, int16_t r, const Rect &rect) {
-    const int32_t nx = cx < rect.x ? rect.x : (cx > rect.x + rect.w ? rect.x + rect.w : cx);
-    const int32_t ny = cy < rect.y ? rect.y : (cy > rect.y + rect.h ? rect.y + rect.h : cy);
-    const int32_t dx = cx - nx;
-    const int32_t dy = cy - ny;
-    return dx * dx + dy * dy <= static_cast<int32_t>(r) * r;
+    const int16_t nx = cx < rect.x ? rect.x : (cx > static_cast<int16_t>(rect.x + rect.w) ? static_cast<int16_t>(rect.x + rect.w) : cx);
+    const int16_t ny = cy < rect.y ? rect.y : (cy > static_cast<int16_t>(rect.y + rect.h) ? static_cast<int16_t>(rect.y + rect.h) : cy);
+    int16_t dx = static_cast<int16_t>(cx - nx);
+    int16_t dy = static_cast<int16_t>(cy - ny);
+    if (dx < 0)
+        dx = static_cast<int16_t>(-dx);
+    if (dy < 0)
+        dy = static_cast<int16_t>(-dy);
+    if (dx > r || dy > r)
+        return false;
+    return static_cast<int16_t>(dx * dx + dy * dy) <= static_cast<int16_t>(r * r);
 }
 
 struct Attack {
@@ -345,7 +355,7 @@ inline int16_t attackHw(const Attack *a) {
 inline int16_t attackHh(const Attack *a) {
     return mhFxReadI16(&a->hh);
 }
-inline int16_t attackStam(const Attack *a) {
+MH_NOINLINE inline int16_t attackStam(const Attack *a) {
     return mhFxReadI16(&a->stam);
 }
 inline int16_t attackLunge(const Attack *a) {
@@ -461,7 +471,10 @@ struct Pole {
 };
 
 struct TrainEvent {
-    int32_t tick;
+    // 16-bit tick on purpose: Game::tick is int16_t, so a stored 32-bit stamp
+    // could never hold a value the sim can produce. 2 B x MAX_TRAIN_EVENTS of
+    // RAM and the 32-bit compare in trainDps() came for free.
+    int16_t tick;
     int16_t dmg;
 };
 
@@ -563,12 +576,15 @@ struct CombatWindow {
 // (((fx * reach) >> 4) / ((fy * reach) >> 4)), so shipped windows stay
 // identical. combatFacePoint is the same rotation for arbitrary (not int8)
 // offsets: part boxes rotate their centre, which can exceed the int8 range.
-inline void combatFacePoint(int16_t fx, int16_t fy, int32_t ox, int32_t oy, int32_t &dx, int32_t &dy) {
-    dx = ((static_cast<int32_t>(fx) * ox) - (static_cast<int32_t>(fy) * oy)) >> 4;
-    dy = ((static_cast<int32_t>(fy) * ox) + (static_cast<int32_t>(fx) * oy)) >> 4;
+// int16 throughout: |ox|,|oy| <= 128 (the pole head zone datum) and |fx|,|fy|
+// <= 16, so each product is <= 2048 and the signed sum <= 4096 -- a 32-bit
+// rotation only bought __mulhisi3 calls on every hit test and telegraph draw.
+inline void combatFacePoint(int16_t fx, int16_t fy, int16_t ox, int16_t oy, int16_t &dx, int16_t &dy) {
+    dx = static_cast<int16_t>(((fx * ox) - (fy * oy)) >> 4);
+    dy = static_cast<int16_t>(((fy * ox) + (fx * oy)) >> 4);
 }
 
-inline void combatFaceOffset(int16_t fx, int16_t fy, const CombatBox &b, int32_t &dx, int32_t &dy) {
+inline void combatFaceOffset(int16_t fx, int16_t fy, const CombatBox &b, int16_t &dx, int16_t &dy) {
     combatFacePoint(fx, fy, b.ox, b.oy, dx, dy);
 }
 

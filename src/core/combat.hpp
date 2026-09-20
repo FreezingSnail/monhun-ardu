@@ -277,7 +277,7 @@ inline uint8_t combatReadU8(uint16_t off) {
 inline int8_t combatReadI8(uint16_t off) {
     return static_cast<int8_t>(combatReadU8(off));
 }
-inline uint16_t combatReadU16(uint16_t off) {
+MH_NOINLINE inline uint16_t combatReadU16(uint16_t off) {
     return mhFxReadU16(reinterpret_cast<const uint16_t *>(combatCartAddr(off)));
 }
 // Bulk per-record fetch: one transaction into a byte-identical cache mirror.
@@ -1077,7 +1077,7 @@ inline CombatBodyHit combatResolveBodyHit(const Game &g, int32_t base) {
 // a static prop resolves with an east/world vector and never touches
 // g.monster.fx/fy (train mode keeps a frozen beast whose fields are hashed).
 inline bool combatZoneContains(int16_t bx, int16_t by, int16_t fx, int16_t fy, const CombatBox &b, int16_t hx, int16_t hy) {
-    int32_t dx, dy;
+    int16_t dx, dy;
     combatFacePoint(fx, fy, b.ox, b.oy, dx, dy);
     // Battlefield coords: anchor <= WORLD_W/H (256) and the int8 box rotation
     // with |fx|,|fy| <= 16 gives |dx|,|dy| <= 254, so x+w <= 511.

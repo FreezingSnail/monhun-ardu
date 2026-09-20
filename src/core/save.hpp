@@ -24,6 +24,7 @@
 // EEPROM-backed functions (EEPROM.update == write-if-different).
 
 #include <stdint.h>
+#include "progmem.hpp"   // MH_NOINLINE
 
 namespace mh {
 
@@ -109,7 +110,7 @@ inline bool saveQuestGet(const SaveBlock &s, uint8_t quest, uint8_t which) {
     const uint8_t bit = saveQuestBit(quest, which);
     return (s.quest[(bit >> 3) & 3] & static_cast<uint8_t>(1u << (bit & 7))) != 0;
 }
-inline void saveQuestSet(SaveBlock &s, uint8_t quest, uint8_t which) {
+MH_NOINLINE inline void saveQuestSet(SaveBlock &s, uint8_t quest, uint8_t which) {
     const uint8_t bit = saveQuestBit(quest, which);
     s.quest[(bit >> 3) & 3] |= static_cast<uint8_t>(1u << (bit & 7));
 }

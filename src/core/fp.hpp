@@ -31,17 +31,17 @@ MH_PROGMEM const Dir8 DIR8[8] = {
 };
 
 // Per-field flash accessors: read only x or y, never copy the struct.
-inline int16_t dir8X(int8_t i) {
+MH_NOINLINE inline int16_t dir8X(int8_t i) {
     return mhPgmReadI16(&DIR8[i].x);
 }
-inline int16_t dir8Y(int8_t i) {
+MH_NOINLINE inline int16_t dir8Y(int8_t i) {
     return mhPgmReadI16(&DIR8[i].y);
 }
 
 // truncating fixed divide, rounds toward zero (hardware friendly).
 // C++ integer division already truncates toward zero; kept as a named
 // function to mirror the prototype and forbid >> on negative values.
-inline int16_t tdiv(int16_t a, int16_t b) {
+MH_NOINLINE inline int16_t tdiv(int16_t a, int16_t b) {
     return static_cast<int16_t>(a / b);
 }
 
@@ -99,13 +99,25 @@ struct FpBody {
     int8_t subX, subY;   // 1/16 px remainder, always in -15..15
 };
 
-inline void addVel(FpBody &o, int8_t vx, int8_t vy) {
+// Truncating /FP and %FP for the sub-pixel accumulator without the signed
+// __divmodhi4 helper. `sub` reaches +-70 at the extreme (projectile speedF 55
+// plus the -15..15 remainder; walk/knockback inputs stay within +-35), and for
+// every int8 `v` truncation toward zero is exactly a shift of the magnitude
+// with the sign folded back, so this is bit-identical to
+// `px += tdiv(sub, FP); sub %= FP;` -- including the up/left stutter fix that
+// forbids a plain `& 15` on negatives.
+inline void fpCarry(int8_t &sub, int16_t &px) {
+    const int8_t v = sub;
+    const int8_t q = v < 0 ? static_cast<int8_t>(-static_cast<int8_t>((-v) >> 4)) : static_cast<int8_t>(v >> 4);
+    px = static_cast<int16_t>(px + q);
+    sub = static_cast<int8_t>(v - static_cast<int8_t>(q * FP));
+}
+
+MH_NOINLINE inline void addVel(FpBody &o, int8_t vx, int8_t vy) {
     o.subX += vx;
     o.subY += vy;
-    o.x += tdiv(o.subX, FP);
-    o.y += tdiv(o.subY, FP);
-    o.subX %= FP;
-    o.subY %= FP;
+    fpCarry(o.subX, o.x);
+    fpCarry(o.subY, o.y);
 }
 
 // accumulate fixed sub-pixel movement, keep x/y int pixels.
@@ -113,10 +125,8 @@ inline void addVel(FpBody &o, int8_t vx, int8_t vy) {
 inline void addMove(FpBody &o, int8_t dx, int8_t dy, uint8_t spd) {
     o.subX += tdiv(dx * spd, FP);
     o.subY += tdiv(dy * spd, FP);
-    o.x += tdiv(o.subX, FP);
-    o.y += tdiv(o.subY, FP);
-    o.subX %= FP;
-    o.subY %= FP;
+    fpCarry(o.subX, o.x);
+    fpCarry(o.subY, o.y);
 }
 
 // rotate a 1/16 unit vector by an integer cos/sin table (16 = 1.0).

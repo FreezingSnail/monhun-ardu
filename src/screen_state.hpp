@@ -72,7 +72,7 @@ enum ScreenEvent : int8_t {
 };
 
 // COND_UPGRADE param decoders: (unlockFlag << 4) | (weaponIdx << 2) | tier.
-inline uint8_t screenUpgradeWeapon(uint8_t param) {
+MH_NOINLINE inline uint8_t screenUpgradeWeapon(uint8_t param) {
     return static_cast<uint8_t>((param >> 2) & 3);
 }
 inline uint8_t screenUpgradeTier(uint8_t param) {
@@ -137,7 +137,7 @@ inline uint8_t screenPageStart(uint8_t cursor) {
 // in src/app_state.hpp uses the generated SCREEN_*_ROWS constants). Clears the
 // cursor, scroll, nav hold state and the A/B edges so the press that opened the
 // screen cannot immediately re-fire inside it.
-inline void screenReset(ScreenState &s, uint8_t screen, uint8_t rowCount) {
+MH_NOINLINE inline void screenReset(ScreenState &s, uint8_t screen, uint8_t rowCount) {
     s.screen = screen;
     s.cursor = 0;
     s.scroll = 0;

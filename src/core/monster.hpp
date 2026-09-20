@@ -156,10 +156,12 @@ static void damageMonster(Game &g, int16_t dmg, int16_t hx, int16_t hy) {
     // the products inside int16 (max |proj| = 512*16*2 >> 4 = 1024).
     const int16_t proj = static_cast<int16_t>(((hx - cx) * m.fx + (hy - cy) * m.fy) >> 4);
     const bool crit = proj > 3;
-    int32_t total = (dmg * (crit ? 14 : 10)) / 10;
+    // int16: dmg is a weapon/upgrade value well under 2340, so dmg*14 cannot
+    // overflow and the 32-bit divide helper stays out of the image.
+    int16_t total = static_cast<int16_t>((dmg * (crit ? 14 : 10)) / 10);
     if (total < 1)
         total = 1;
-    m.hp -= static_cast<int16_t>(total);
+    m.hp -= total;
     m.hitFlash = 4;
     const int16_t fr = crit ? 6 : 4;
     if (g.freeze < fr)
@@ -460,10 +462,10 @@ static void startMonsterAttack(Game &g) {
 static bool monsterHitsPlayer(const Game &g) {
     const Monster &m = g.monster;
     const CombatWindow &w = g.combat.attack.win;
-    int32_t dx, dy;
+    int16_t dx, dy;
     combatFaceOffset(m.fx, m.fy, w.box, dx, dy);
-    const int32_t cx = m.x + (m.w >> 1) + dx;   // body box centre (migration B)
-    const int32_t cy = m.y + (m.h >> 1) + dy;
+    const int16_t cx = static_cast<int16_t>(m.x + (m.w >> 1) + dx);   // body box centre (migration B)
+    const int16_t cy = static_cast<int16_t>(m.y + (m.h >> 1) + dy);
     Rect r;
     r.x = static_cast<int16_t>(cx - (w.box.w >> 1));
     r.y = static_cast<int16_t>(cy - (w.box.h >> 1));
@@ -523,9 +525,14 @@ static void pushApart(Game &g) {
 }
 
 static void updateMonster(Game &g) {
-    Monster &m = g.monster;
-    Player &p = g.player;
-    const CombatProfile &pr = g.combat.profile;
+    // See updatePlayer: a hidden register base turns absolute 4-byte lds/sts on
+    // the 650 B global Game into 2-byte ldd/std. Measured -34 B here (most of
+    // the win is respent on base maintenance -- see the spike numbers).
+    Game *gp = &g;
+    __asm__("" : "+r"(gp));
+    Monster &m = gp->monster;
+    Player &p = gp->player;
+    const CombatProfile &pr = gp->combat.profile;
 
     if (m.hitFlash > 0)
         m.hitFlash--;
@@ -548,7 +555,7 @@ static void updateMonster(Game &g) {
     // only every faceHold ticks (faceT counts down from faceHold to 0, then the
     // vector refreshes and faceT re-arms). faceHold 0 recomputes every tick, so
     // the shipped lunge/sweep stay byte-identical. Lock modes still freeze.
-    const bool facingLocked = m.atkIdx != COMBAT_NO_ATTACK && combatFacingLockV(g.combat.attack.facing) && (m.state == MS_WINDUP || m.state == MS_ATTACK);
+    const bool facingLocked = m.atkIdx != COMBAT_NO_ATTACK && combatFacingLockV(gp->combat.attack.facing) && (m.state == MS_WINDUP || m.state == MS_ATTACK);
     if (!facingLocked) {
         if (pr.faceHold == 0) {
             m.fx = fp::dir8X(di);
@@ -564,9 +571,9 @@ static void updateMonster(Game &g) {
     }
 
     // Stagger meter decay (docs section 7). Shipped 3: fact false, folded out.
-    if (STAGGER_ENABLED && g.combat.stagger > 0) {
+    if (STAGGER_ENABLED && gp->combat.stagger > 0) {
         const uint8_t decay = pr.staggerDecay;
-        g.combat.stagger = (g.combat.stagger > decay) ? static_cast<uint8_t>(g.combat.stagger - decay) : 0;
+        gp->combat.stagger = (gp->combat.stagger > decay) ? static_cast<uint8_t>(gp->combat.stagger - decay) : 0;
     }
 
     if (m.stun > 0) {
@@ -594,7 +601,7 @@ static void updateMonster(Game &g) {
             const int8_t si = static_cast<int8_t>((di + 2) & 7);   // perpendicular circle
             fp::addMove(m, static_cast<int16_t>(fp::dir8X(si) * m.circleDir), static_cast<int16_t>(fp::dir8Y(si) * m.circleDir), static_cast<int16_t>((m.spd * pr.circleNum) / pr.circleDen));
         }
-        if (g.combat.patternIdx != COMBAT_NO_PATTERN)
+        if (gp->combat.patternIdx != COMBAT_NO_PATTERN)
             patternSteps(g);
         else if (m.cd <= 0 && dist < pr.attackDist)
             chooseAttack(g, dist);
@@ -608,35 +615,35 @@ static void updateMonster(Game &g) {
         // Every per-tick read comes from the RAM cache. The only mid-attack
         // cart access is the multi-window refresh (shipped attacks declare one
         // window, so it never fires today).
-        const int16_t active = static_cast<int16_t>(g.combat.attack.active);
-        const int16_t recover = static_cast<int16_t>(g.combat.attack.recover);
+        const int16_t active = static_cast<int16_t>(gp->combat.attack.active);
+        const int16_t recover = static_cast<int16_t>(gp->combat.attack.recover);
         m.t++;
-        if (g.combat.attack.moveType == MOVE_LUNGE && m.t <= active)
+        if (gp->combat.attack.moveType == MOVE_LUNGE && m.t <= active)
             fp::addVel(m, m.lvx, m.lvy);
         if (MULTI_WINDOW_ENABLED)
             monsterWindowNext(g);
         const uint16_t t16 = static_cast<uint16_t>(m.t);
-        if (t16 >= g.combat.attack.win.t0 && t16 <= g.combat.attack.win.t1 && monsterHitsPlayer(g)) {
+        if (t16 >= gp->combat.attack.win.t0 && t16 <= gp->combat.attack.win.t1 && monsterHitsPlayer(g)) {
             // Knockback direction: legacy/track attacks push along the facing
             // vector; a lock-away tail hit pushes the hunter radially away from
             // the beast (the turned-away facing would pull them inward).
             int16_t kx = m.fx;
             int16_t ky = m.fy;
-            if (g.combat.attack.facing == COMBAT_FACING_LOCK_AWAY) {
+            if (gp->combat.attack.facing == COMBAT_FACING_LOCK_AWAY) {
                 kx = fp::dir8X(di);
                 ky = fp::dir8Y(di);
             }
-            playerHurt(g, g.combat.attack.dmg, kx, ky);
+            playerHurt(g, gp->combat.attack.dmg, kx, ky);
             if (p.hp == 0) {
-                if (g.over == OVER_NONE)
-                    g.over = OVER_LOSE;
+                if (gp->over == OVER_NONE)
+                    gp->over = OVER_LOSE;
             }
         }
         if (m.t > active + recover) {
             m.state = MS_PURSUE;
             const uint16_t jitter = pr.cdJitter;
-            m.cd = static_cast<int16_t>(pr.cdBase + (jitter ? static_cast<uint16_t>(g.tick) % jitter : 0));
-            m.circleDir = (g.tick % 2) ? 1 : -1;
+            m.cd = static_cast<int16_t>(pr.cdBase + (jitter ? static_cast<uint16_t>(gp->tick) % jitter : 0));
+            m.circleDir = (gp->tick % 2) ? 1 : -1;
         }
         break;
     }

@@ -26,11 +26,11 @@ constexpr int16_t CAM_MAX_Y = WORLD_H - ARENA_H;    // 56  (legacy/default room)
 
 // Active-room camera maximums. A room narrower/shorter than the screen pins the
 // camera at 0 so the follow never goes negative.
-static inline int16_t camMaxX(const Game &g) {
+MH_NOINLINE static int16_t camMaxX(const Game &g) {
     const int16_t m = static_cast<int16_t>(roomBoundW(g) - SCREEN_W);
     return m < 0 ? 0 : m;
 }
-static inline int16_t camMaxY(const Game &g) {
+MH_NOINLINE static int16_t camMaxY(const Game &g) {
     const int16_t m = static_cast<int16_t>(roomBoundH(g) - ARENA_H);
     return m < 0 ? 0 : m;
 }
@@ -203,7 +203,7 @@ static void tryHeal(Game &g, bool bP) {
 
 // Mock newGame(weapon, mode, monsterIndex): a fresh world in the requested
 // area with the chosen beast variant (0 = legacy LUNGE, the parity default).
-static void newGame(Game &g, int8_t weapon, int8_t mode, int8_t monsterKind = 0) {
+MH_NOINLINE static void newGame(Game &g, int8_t weapon, int8_t mode, int8_t monsterKind = 0) {
     initGame(g, weapon);
     g.camX = 0;
     g.camY = 0;

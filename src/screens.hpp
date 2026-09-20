@@ -30,7 +30,7 @@ inline const uint8_t *screenCart(uint16_t off) {
 }
 
 // u16 ScreenDef offset for a screen index from the header's defOff table.
-inline uint16_t screenDefOff(uint8_t screen) {
+MH_NOINLINE inline uint16_t screenDefOff(uint8_t screen) {
     return mhFxReadU16(reinterpret_cast<const uint16_t *>(screenCart(static_cast<uint16_t>(screens::DEF_OFF_OFF + screen * 2))));
 }
 

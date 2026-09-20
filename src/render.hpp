@@ -93,7 +93,7 @@ constexpr uint8_t SPIN_SOUTH = 3;
 // current plane. Max sheet size is 40x40 (fxtailspin 40x40 spin body, pole
 // variants 20x40, fxmonster 32x24), so these bounds stay conservative: a
 // 40 px sprite at x == -39 still has a pixel column on screen.
-static inline void sprDraw(uint24_t img, int16_t x, int16_t y, uint8_t frame) {
+MH_NOINLINE static inline void sprDraw(uint24_t img, int16_t x, int16_t y, uint8_t frame) {
     if (x <= -40 || x >= mh::SCREEN_W || y <= -40 || y >= mh::SCREEN_H)
         return;
     SpritesU::drawPlusMaskFX(x, y, img, frame);
@@ -126,7 +126,7 @@ static __attribute__((noinline)) int16_t rndPx(int16_t v, int16_t sub) {
 // round((a*b)/16) for Q4 vectors: matches Math.round() of the mock's float
 // product for every sign (arithmetic shift floors (a*b+8)/16). Inputs are
 // table values |a| <= 16 and small radii |b| <= 20, so the product fits int16.
-static inline int16_t mulQ4(int16_t a, int16_t b) {
+MH_NOINLINE static int16_t mulQ4(int16_t a, int16_t b) {
     return static_cast<int16_t>((a * b + 8) >> 4);
 }
 
@@ -218,7 +218,7 @@ __attribute__((noinline)) static void blkClamp(int16_t x, int16_t y, int16_t w, 
 }
 
 // World/arena rect: clipped below the 8 px HUD strip (y >= HUD_H).
-static inline void blk(int16_t x, int16_t y, int16_t w, int16_t h, uint8_t shade) {
+MH_NOINLINE static void blk(int16_t x, int16_t y, int16_t w, int16_t h, uint8_t shade) {
     blkClamp(x, y, w, h, shade, mh::HUD_H);
 }
 
@@ -733,10 +733,10 @@ static void drawMonster(const mh::Game &g, int16_t camX, int16_t camY) {
     // rotating fxtailspin body sheet above carries the read. Frame origin is
     // the body centre.
     if (spinning && m.state == mh::MS_WINDUP) {
-        int32_t sdx, sdy;
+        int16_t sdx, sdy;
         mh::combatFaceOffset(m.fx, m.fy, g.combat.attack.win.box, sdx, sdy);
-        const int32_t adx = (sdx < 0) ? -sdx : sdx;
-        const int32_t ady = (sdy < 0) ? -sdy : sdy;
+        const int16_t adx = static_cast<int16_t>((sdx < 0) ? -sdx : sdx);
+        const int16_t ady = static_cast<int16_t>((sdy < 0) ? -sdy : sdy);
         uint8_t sf;
         if (adx > ady)
             sf = (sdx < 0) ? spr::SPIN_WEST : spr::SPIN_EAST;
@@ -751,7 +751,7 @@ static void drawMonster(const mh::Game &g, int16_t camX, int16_t camY) {
     // the full-window box fill read as a debug hurt zone on playtest (nch.2).
     if (m.state == mh::MS_WINDUP || m.state == mh::MS_ATTACK) {
         if (m.atkIdx != mh::COMBAT_NO_ATTACK) {
-            int32_t dx, dy;
+            int16_t dx, dy;
             mh::combatFaceOffset(m.fx, m.fy, g.combat.attack.win.box, dx, dy);
             const int16_t ax = static_cast<int16_t>(x + w / 2 + dx);
             const int16_t ay = static_cast<int16_t>(y + h / 2 + dy);
@@ -786,7 +786,7 @@ static inline uint24_t partSheet(const PartRec &rec) {
     return static_cast<uint24_t>(rec.sheet[0]) | static_cast<uint24_t>(rec.sheet[1]) << 8 | static_cast<uint24_t>(rec.sheet[2]) << 16;
 }
 
-static inline void partRead(uint8_t part, PartRec &rec) {
+MH_NOINLINE static inline void partRead(uint8_t part, PartRec &rec) {
     mhFxReadBytes(partCart(static_cast<uint16_t>(equip::PARTS_OFF + static_cast<uint16_t>(part) * equip::PART_SIZE)), reinterpret_cast<uint8_t *>(&rec), equip::PART_SIZE);
 }
 
@@ -1091,7 +1091,7 @@ static void drawDebug(const mh::Game &g, int16_t camX, int16_t camY) {
     if (g.mode == mh::MODE_HUNT && g.monster.atkIdx != mh::COMBAT_NO_ATTACK && (g.monster.state == mh::MS_WINDUP || g.monster.state == mh::MS_ATTACK)) {
         const mh::Monster &m = g.monster;
         const mh::CombatBox &b = g.combat.body;
-        int32_t dx, dy;
+        int16_t dx, dy;
         mh::combatFaceOffset(m.fx, m.fy, g.combat.attack.win.box, dx, dy);
         const int32_t hx = m.x + b.ox + (b.w >> 1) + dx;
         const int32_t hy = m.y + b.oy + (b.h >> 1) + dy;
@@ -1141,7 +1141,7 @@ static inline int16_t hudPut(int16_t x, char c) {
     return textPut(fxfontw, x, 1, c);
 }
 
-static uint8_t hudDigits(int16_t v) {
+MH_NOINLINE static uint8_t hudDigits(int16_t v) {
     uint8_t n = 1;
     while (v >= 10) {
         v = static_cast<int16_t>(v / 10);

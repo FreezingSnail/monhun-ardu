@@ -97,7 +97,7 @@ inline AppNav appMenuRequest(Game &g) {
 // Screen row counts come from the generated screen_meta.hpp constants, so this
 // stays cart-free and host-testable; the device build's screenEnter() reads the
 // same counts off the cart.
-inline bool appNavApply(AppNav nav, MenuState &menu, ScreenState &screen, const SaveBlock &save, Game &game, const Input &in) {
+MH_NOINLINE inline bool appNavApply(AppNav nav, MenuState &menu, ScreenState &screen, const SaveBlock &save, Game &game, const Input &in) {
     (void)save;
     switch (nav) {
     case APP_NAV_MENU:

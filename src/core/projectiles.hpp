@@ -114,7 +114,7 @@ static void updateEffects(Game &g) {
 
 // ---------------------------------------------------------------- train pole
 
-static void syncPoleTarget(Game &g) {
+MH_NOINLINE static void syncPoleTarget(Game &g) {
     g.target.alive = true;
     g.target.rect = g.pole.rect;
 }
@@ -141,9 +141,11 @@ inline uint8_t poleStageFrame(uint8_t broken, uint8_t hp, uint8_t hpMax, uint8_t
     return static_cast<uint8_t>(poleDamageStage(broken, hp, hpMax) * 2 + (flash ? 1 : 0));
 }
 
-static void trainAdd(TrainStats &t, int32_t tick, int16_t dmg) {
+static void trainAdd(TrainStats &t, int16_t tick, int16_t dmg) {
     t.ev[t.head] = TrainEvent{tick, dmg};
-    t.head = static_cast<int16_t>((t.head + 1) % MAX_TRAIN_EVENTS);
+    // Compare-and-wrap instead of `% MAX_TRAIN_EVENTS`: 24 is not a power of
+    // two, so the modulo lowered to a __divmodhi4 call for the same answer.
+    t.head = static_cast<uint8_t>(t.head + 1 >= MAX_TRAIN_EVENTS ? 0 : t.head + 1);
     if (t.count < MAX_TRAIN_EVENTS)
         t.count++;
 }
@@ -151,12 +153,19 @@ static void trainAdd(TrainStats &t, int32_t tick, int16_t dmg) {
 // Mock trainDps(): sum events inside the trailing 600-tick window, /10,
 // Math.round (round half up for the non-negative sums this produces).
 static int16_t trainDps(const Game &g) {
-    const int32_t cutoff = g.tick - 600;
-    int32_t sum = 0;
+    // int16 window math: tick is int16 and the ring holds MAX_TRAIN_EVENTS (24)
+    // hits, so the summed damage stays far inside int16 for any shipped weapon
+    // or upgrade tier. The index walks backwards with a wrap test, which drops
+    // the second __divmodhi4.
+    const int16_t cutoff = static_cast<int16_t>(g.tick - 600);
+    int16_t sum = 0;
+    int16_t idx = static_cast<int16_t>(g.train.head - 1);
     for (int16_t i = 0; i < g.train.count; i++) {
-        const int16_t idx = static_cast<int16_t>((g.train.head - 1 - i + MAX_TRAIN_EVENTS * 2) % MAX_TRAIN_EVENTS);
+        if (idx < 0)
+            idx = static_cast<int16_t>(MAX_TRAIN_EVENTS - 1);
         if (g.train.ev[idx].tick > cutoff)
-            sum += g.train.ev[idx].dmg;
+            sum = static_cast<int16_t>(sum + g.train.ev[idx].dmg);
+        idx--;
     }
     return static_cast<int16_t>((sum + 5) / 10);
 }
@@ -230,7 +239,7 @@ static void poleOnShove(Game &, int8_t, int8_t, uint8_t, uint8_t) {
 static void poleOnStun(Game &, uint8_t) {
 }
 
-static void armPoleTarget(Game &g) {
+MH_NOINLINE static void armPoleTarget(Game &g) {
     syncPoleTarget(g);
     g.target.onHit = poleOnHit;
     g.target.onShove = poleOnShove;
@@ -298,7 +307,7 @@ static void spawnShot(Game &g) {
     }
 }
 
-static void removeProjectile(Game &g, int16_t i) {
+MH_NOINLINE static void removeProjectile(Game &g, int16_t i) {
     for (int16_t j = i + 1; j < g.projN; j++)
         g.proj[j - 1] = g.proj[j];
     g.projN--;
@@ -330,9 +339,12 @@ static void updateProjectiles(Game &g) {
         }
         // Mock culls on the 1/16 px field, so a shot still inside the last
         // sub-pixel of the margin survives one extra tick. Compare the same way.
-        const int32_t fpx = pr.x * 16 + pr.subX;
-        const int32_t fpy = pr.y * 16 + pr.subY;
-        if (pr.life <= 0 || fpx < -(8 << 4) || fpx > (static_cast<int32_t>(roomBoundW(g)) + 8) << 4 || fpy < -(8 << 4) || fpy > (static_cast<int32_t>(roomBoundH(g)) + 8) << 4) {
+        // int16 is enough: a shell is removed the tick it passes the room bound,
+        // so |pr.x| stays under the bound + one tick of travel and (256+8)<<4 ==
+        // 4224 is the largest value the comparison ever sees.
+        const int16_t fpx = static_cast<int16_t>(pr.x * 16 + pr.subX);
+        const int16_t fpy = static_cast<int16_t>(pr.y * 16 + pr.subY);
+        if (pr.life <= 0 || fpx < -(8 << 4) || fpx > static_cast<int16_t>((roomBoundW(g) + 8) << 4) || fpy < -(8 << 4) || fpy > static_cast<int16_t>((roomBoundH(g) + 8) << 4)) {
             removeProjectile(g, i);
         }
     }

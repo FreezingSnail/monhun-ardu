@@ -14,6 +14,7 @@
 // tier-0 / no-upgrade default, so a fresh save keeps the sim byte-identical.
 
 #include <stdint.h>
+#include "core/progmem.hpp"   // MH_NOINLINE
 
 namespace mh {
 
@@ -31,7 +32,7 @@ struct UpgradeDef {
 constexpr uint8_t UPGRADE_MUL_BASE = 100;
 
 // Integer percent with truncation at each step (no float anywhere).
-inline int16_t upgradeMul(int16_t value, uint8_t mul) {
+MH_NOINLINE inline int16_t upgradeMul(int16_t value, uint8_t mul) {
     if (mul == 0)
         return value;   // 0 = unset -> identity, same as 100
     return static_cast<int16_t>((static_cast<int32_t>(value) * mul) / 100);

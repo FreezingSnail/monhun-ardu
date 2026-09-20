@@ -70,7 +70,7 @@ void Player::init(int8_t weapon) {
     chargeArmed = false;
 }
 
-void initGame(Game &g, int8_t weapon) {
+MH_NOINLINE void initGame(Game &g, int8_t weapon) {
     g.tick = 0;
     g.freeze = 0;
     g.over = OVER_NONE;
@@ -277,7 +277,7 @@ static bool startRollAttack(Game &g, const WeaponDef *def) {
     return true;
 }
 
-static void exitStance(Player &p) {
+MH_NOINLINE static void exitStance(Player &p) {
     p.stance = ST_NONE;
     p.stanceT = 0;
     p.stanceAuto = 0;
@@ -628,7 +628,18 @@ static bool sheatheCombo(Player &p, bool aP, const Input &inp) {
 }
 
 static void updatePlayer(Game &g, const Input &inp, bool aP, bool bP, bool bR) {
-    Player &p = g.player;
+    // Force Player access through a register base pointer. `g` is the single
+    // global Game (650 B), so avr-gcc addresses every field absolutely: `lds`/
+    // `sts` are 4 bytes each and this function touches p.* ~166 times. Hiding
+    // the address in a register behind an empty asm barrier makes the compiler
+    // emit 2-byte `ldd`/`std Y+q` displaced loads instead; Player is 53 B, so
+    // every field is inside the q <= 63 displacement range. Measured -208 B.
+    // Only worth it here and in updateMonster (measured -34 B there): the same
+    // trick on drawPlayer grew the image (register pressure), so do not copy it
+    // without measuring.
+    Player *pp = &g.player;
+    __asm__("" : "+r"(pp));
+    Player &p = *pp;
     const WeaponDef *def = &WEAPON_DEFS[g.weapon];
     const int16_t x0 = p.x;
     const int16_t y0 = p.y;
