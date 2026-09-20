@@ -4,5 +4,9 @@
   "cost": 90,
   "dmgMul": 108,
   "spdMul": 100,
-  "unlockFlag": 0
+  "unlockFlag": 0,
+  "materials": [
+    { "item": "bug", "count": 2 },
+    { "item": "scale", "count": 1 }
+  ]
 }

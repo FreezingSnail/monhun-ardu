@@ -138,6 +138,10 @@ inline void test_smith(FxTest &test) {
     SaveBlock save;
     saveDefaults(save);
     save.zenny = 1000;
+    // prg.7 recipes: SWORD T1 = 2 ore + 1 scale, T2 = 3 ore + 1 fang.
+    save.items[ITEM_ORE] = 5;
+    save.items[ITEM_SCALE] = 1;
+    save.items[ITEM_FANG] = 1;
     saveStore(save, REAL_BACKEND);   // clear any previous device run
 
     test.expectEq(screenCondOk(save, t1), 1, F("t1 available"));
@@ -145,6 +149,8 @@ inline void test_smith(FxTest &test) {
     test.expectEq(screenApplyAction(save, t1), 1, F("t1 buy applies"));
     test.expectEq(save.zenny, 900, F("zenny debited"));
     test.expectEq(save.tier[W_SWORD], 1, F("tier 1 stored"));
+    test.expectEq(static_cast<uint32_t>(save.items[ITEM_ORE]), 3, F("t1 ore debited"));
+    test.expectEq(static_cast<uint32_t>(save.items[ITEM_SCALE]), 0, F("t1 scale debited"));
     saveStore(save, REAL_BACKEND);
 
     SaveBlock loaded;
@@ -156,6 +162,8 @@ inline void test_smith(FxTest &test) {
     test.expectEq(screenCondOk(loaded, t2), 1, F("t2 available"));
     test.expectEq(screenApplyAction(loaded, t2), 1, F("t2 buy applies"));
     test.expectEq(loaded.tier[W_SWORD], 2, F("tier 2 stored"));
+    test.expectEq(static_cast<uint32_t>(loaded.items[ITEM_ORE]), 0, F("t2 ore debited"));
+    test.expectEq(static_cast<uint32_t>(loaded.items[ITEM_FANG]), 0, F("t2 fang debited"));
     saveStore(loaded, REAL_BACKEND);
     test.expectEq(saveLoad(loaded, REAL_BACKEND), 1, F("tier 2 persisted"));
     test.expectEq(loaded.tier[W_SWORD], 2, F("tier 2 reloaded"));
@@ -174,6 +182,8 @@ inline void test_smith(FxTest &test) {
     SaveBlock lockedSave;
     saveDefaults(lockedSave);
     lockedSave.zenny = 500;
+    lockedSave.items[ITEM_ORE] = 2;
+    lockedSave.items[ITEM_SCALE] = 1;
     ScreenRow locked = t1;
     locked.param = static_cast<uint8_t>((1 << 4) | (0 << 2) | 1);
     test.expectEq(screenCondOk(lockedSave, locked), 0, F("locked until quest done"));

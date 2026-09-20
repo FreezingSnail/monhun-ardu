@@ -16,8 +16,9 @@ inline const uint8_t *smithCart(uint16_t off) {
     return reinterpret_cast<const uint8_t *>(static_cast<uint16_t>(static_cast<uint16_t>(mhSmith) + off));
 }
 
-// Fixed 7 B records: weaponIdx u8, tier u8, cost u16, dmgMul u8, spdMul u8,
-// unlockFlag u8.
+// Fixed 11 B records (prg.7 appended the two recipe material pairs):
+// weaponIdx u8, tier u8, cost u16, dmgMul u8, spdMul u8, unlockFlag u8,
+// mat[2] x (itemIdx+1 u8, count u8).
 inline void smithReadDef(uint8_t index, UpgradeDef &def) {
     const uint16_t off = static_cast<uint16_t>(smith::HEADER_SIZE + smith::RECORD_SIZE * index);
     def.weaponIdx = mhFxReadU8(smithCart(static_cast<uint16_t>(off + smith::UPG_WEAPON_OFF)));
@@ -26,6 +27,11 @@ inline void smithReadDef(uint8_t index, UpgradeDef &def) {
     def.dmgMul = mhFxReadU8(smithCart(static_cast<uint16_t>(off + smith::UPG_DMG_OFF)));
     def.spdMul = mhFxReadU8(smithCart(static_cast<uint16_t>(off + smith::UPG_SPD_OFF)));
     def.unlockFlag = mhFxReadU8(smithCart(static_cast<uint16_t>(off + smith::UPG_UNLOCK_OFF)));
+    for (uint8_t i = 0; i < smith::MAT_SLOTS; i++) {
+        const uint16_t m = static_cast<uint16_t>(off + smith::UPG_MAT_OFF + i * smith::UPG_MAT_STRIDE);
+        def.mat[i].item = mhFxReadU8(smithCart(m));
+        def.mat[i].count = mhFxReadU8(smithCart(static_cast<uint16_t>(m + 1)));
+    }
 }
 
 // Resolve a weapon/tier pair straight off the cart (tier 0 -> 100/100).

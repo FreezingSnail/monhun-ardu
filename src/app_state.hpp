@@ -37,7 +37,8 @@ enum AppNav : int8_t {
     APP_NAV_HUB,
     APP_NAV_QUESTS,
     APP_NAV_SMITH,
-    APP_NAV_HUNT   // start the picked loadout in the sim
+    APP_NAV_CAMP,   // close a screen opened from the camp smithy (resume the hunt)
+    APP_NAV_HUNT    // start the picked loadout in the sim
 };
 
 // Opening-menu A: launch the picked loadout straight into the hunt (demo flow,
@@ -99,6 +100,16 @@ inline AppNav appMenuRequest(Game &g) {
     return APP_NAV_MENU;
 }
 
+// Camp smithy (prg.7): a sheathed B press inside a smithy rect raises
+// Game::smithyRequest. Consumed exactly once -> the smith screen; the caller
+// remembers the camp origin so its B steps back into the hunt, not the hub.
+inline AppNav appSmithyRequest(Game &g) {
+    if (!g.smithyRequest)
+        return APP_NAV_NONE;
+    g.smithyRequest = false;
+    return APP_NAV_SMITH;
+}
+
 // Apply a nav destination to the live states. Returns true when a hunt just
 // started (the caller then arms the quest/upgrade state and clears its
 // hunt-end latch). `menu` keeps the weapon/target picks across the hunt.
@@ -140,6 +151,12 @@ MH_NOINLINE inline bool appNavApply(AppNav nav, MenuState &menu, ScreenState &sc
         menu.prevA = in.a;
         menu.prevB = in.b;
         return true;
+    case APP_NAV_CAMP:
+        // Close a screen opened from the camp smithy: the camp sim resumes
+        // where it was (no hunt reset, no menu).
+        screen.active = false;
+        menu.active = false;
+        return false;
     default:
         return false;
     }

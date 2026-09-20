@@ -92,6 +92,10 @@ inline void test_hub(FxTest &test) {
     saveDefaults(save);
     save.zenny = 500;
     save.items[ITEM_HERB] = 4;
+    // prg.7: the SWORD T1 recipe needs 2 ore + 1 scale; the buy below debits
+    // both alongside the zenny.
+    save.items[ITEM_ORE] = 2;
+    save.items[ITEM_SCALE] = 1;
     saveStore(save, REAL_BACKEND);
 
     MenuState menu;   // boot picks SWD / LUNGE
@@ -137,6 +141,8 @@ inline void test_hub(FxTest &test) {
     appNavApply(pressA(screen, save), menu, screen, save, g, H_A);   // buy SWORD T1
     test.expectEq(save.zenny, 400, F("zenny after buy"));
     test.expectEq(static_cast<uint32_t>(save.tier[W_SWORD]), 1, F("sword tier 1 stored"));
+    test.expectEq(static_cast<uint32_t>(save.items[ITEM_ORE]), 0, F("recipe ore debited"));
+    test.expectEq(static_cast<uint32_t>(save.items[ITEM_SCALE]), 0, F("recipe scale debited"));
 
     // back to the hub, cursor reset to HUNT, then the hub pixel check.
     appNavApply(pressB(screen, save), menu, screen, save, g, H_B);

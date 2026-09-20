@@ -13,6 +13,11 @@ set -e
 # JSON to map zone gather ids onto the item indices.
 python3 tools/gen-items.py
 
+# Item-id vocabulary only (bead monhun-ardu-prg.7): src/generated/items_ids.hpp
+# carries item::ID_<NAME> + ID_COUNT derived from the same source order, so tools
+# and compile-time name tables can use the ids without the packed blob offsets.
+python3 tools/gen-items-ids.py
+
 # Dump the core table dimensions (attack hw/hh/reach, monster hw/hh, whirl
 # radii) as JSON for gen-art.py. Host g++; the dumper includes the same
 # src/core/game.hpp the firmware uses, so art never duplicates a number.

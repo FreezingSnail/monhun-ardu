@@ -25,13 +25,15 @@ BLOB_REL = "fxdata/tables/smith.bin"
 META_REL = "src/generated/smith_meta.hpp"
 
 HEADER = struct.Struct("<HBBBBH")
-RECORD = struct.Struct("<BBHBBB")
+RECORD = struct.Struct("<BBHBBBBBBB")
+MAT_SLOTS = 2
 
 
 def parse_record(blob, off):
-    weapon, tier, cost, dmg, spd, unlock = RECORD.unpack_from(blob, off)
+    weapon, tier, cost, dmg, spd, unlock, m0item, m0count, m1item, m1count = RECORD.unpack_from(blob, off)
     return {"weapon": weapon, "tier": tier, "cost": cost,
-            "dmg": dmg, "spd": spd, "unlock": unlock}
+            "dmg": dmg, "spd": spd, "unlock": unlock,
+            "mat": [(m0item, m0count), (m1item, m1count)]}
 
 
 def run_tool(*args):
@@ -97,9 +99,10 @@ class GenSmithTests(unittest.TestCase):
         text = self.read(META_REL)
         for needle in (
             "constexpr uint16_t MAGIC = 0x534D;",
-            "constexpr uint8_t VERSION = 1;",
+            "constexpr uint8_t VERSION = 2;",
             "constexpr uint8_t HEADER_SIZE = 8;",
-            "constexpr uint8_t RECORD_SIZE = 7;",
+            "constexpr uint8_t RECORD_SIZE = 11;",
+            "constexpr uint8_t MAT_SLOTS = 2;",
             "constexpr uint8_t UPGRADE_COUNT = 2;",
             "constexpr uint8_t TIER_COUNT = 2;",
             "constexpr uint8_t WEAPON_COUNT = 3;",
@@ -109,13 +112,17 @@ class GenSmithTests(unittest.TestCase):
             "constexpr uint8_t UPG_DMG_OFF = 4;",
             "constexpr uint8_t UPG_SPD_OFF = 5;",
             "constexpr uint8_t UPG_UNLOCK_OFF = 6;",
+            "constexpr uint8_t UPG_MAT_OFF = 7;",
+            "constexpr uint8_t UPG_MAT_STRIDE = 2;",
             "constexpr uint8_t WEAPON_SWORD = 0;",
             "constexpr uint8_t WEAPON_FLAIL = 1;",
             "constexpr uint8_t WEAPON_GUN = 2;",
             "constexpr uint8_t UPG_SWORD_T1 = 0;",
             "constexpr uint16_t UPG_SWORD_T1_OFF = 8;",
             "constexpr uint8_t UPG_SWORD_T2 = 1;",
-            "constexpr uint16_t UPG_SWORD_T2_OFF = 15;",
+            "constexpr uint16_t UPG_SWORD_T2_OFF = 19;",
+            "constexpr uint8_t ORE = 1;",
+            "constexpr uint8_t SCALE = 2;",
         ):
             self.assertIn(needle, text)
 
@@ -124,21 +131,23 @@ class GenSmithTests(unittest.TestCase):
         blob = self.read_bytes(BLOB_REL)
         magic, version, flags, count, reserved, reserved2 = HEADER.unpack_from(blob, 0)
         self.assertEqual((magic, version, flags, count, reserved, reserved2),
-                         (0x534D, 1, 0, 2, 0, 0))
-        self.assertEqual(len(blob), 22)
+                         (0x534D, 2, 0, 2, 0, 0))
+        self.assertEqual(len(blob), 30)
         self.assertEqual(parse_record(blob, 8),
-                         {"weapon": 0, "tier": 1, "cost": 100, "dmg": 110, "spd": 105, "unlock": 0})
-        self.assertEqual(parse_record(blob, 15),
-                         {"weapon": 0, "tier": 2, "cost": 250, "dmg": 125, "spd": 115, "unlock": 0})
+                         {"weapon": 0, "tier": 1, "cost": 100, "dmg": 110, "spd": 105, "unlock": 0,
+                          "mat": [(2, 2), (0, 0)]})
+        self.assertEqual(parse_record(blob, 19),
+                         {"weapon": 0, "tier": 2, "cost": 250, "dmg": 125, "spd": 115, "unlock": 0,
+                          "mat": [(0, 0), (0, 0)]})
 
     def test_dump_mode_lists_upgrades_and_writes_nothing(self):
         result = self.compile("--dump")
         self.assert_succeeds(result)
-        self.assertIn("upgrade sword_t1: weapon sword tier 1 cost 100 dmg 110 spd 105 unlock 0",
+        self.assertIn("upgrade sword_t1: weapon sword tier 1 cost 100 dmg 110 spd 105 unlock 0 materials ore x2",
                       result.stdout)
-        self.assertIn("upgrade sword_t2: weapon sword tier 2 cost 250 dmg 125 spd 115 unlock 0",
+        self.assertIn("upgrade sword_t2: weapon sword tier 2 cost 250 dmg 125 spd 115 unlock 0 materials -",
                       result.stdout)
-        self.assertIn("gen-smith: 2 upgrades, 22 B blob", result.stdout)
+        self.assertIn("gen-smith: 2 upgrades, 30 B blob", result.stdout)
         self.assertFalse(os.path.exists(self.path(BLOB_REL)))
         self.assertFalse(os.path.exists(self.path(META_REL)))
 
@@ -148,7 +157,7 @@ class GenSmithTests(unittest.TestCase):
         self.assert_succeeds(self.compile())
         blob = self.read_bytes(BLOB_REL)
         self.assertEqual(parse_record(blob, 8)["tier"], 1, "tier 1 sorts first")
-        self.assertEqual(parse_record(blob, 15)["tier"], 2, "tier 2 second")
+        self.assertEqual(parse_record(blob, 19)["tier"], 2, "tier 2 second")
         text = self.read(META_REL)
         self.assertIn("constexpr uint8_t UPG_ZZZ_T1 = 0;", text)
 
@@ -190,6 +199,41 @@ class GenSmithTests(unittest.TestCase):
     def test_missing_smith_dir_rejected(self):
         shutil.rmtree(self.path("data", "smith"))
         self.assert_fails(self.compile(), "missing smith directory")
+
+    # ------------------------------------------------- recipe materials
+    def test_unknown_material_item_rejected(self):
+        self.mutate("data/smith/sword_t1.json",
+                    lambda doc: doc["materials"].__setitem__(0, {"item": "dragonite", "count": 1}))
+        self.assert_fails(self.compile(), "item: unknown item 'dragonite'")
+
+    def test_too_many_materials_rejected(self):
+        self.mutate("data/smith/sword_t1.json",
+                    lambda doc: doc.__setitem__("materials", [
+                        {"item": "ore", "count": 1}, {"item": "scale", "count": 1},
+                        {"item": "herb", "count": 1}]))
+        self.assert_fails(self.compile(), "materials: 3 pairs exceed the 2 packed slots")
+
+    def test_duplicate_material_rejected(self):
+        self.mutate("data/smith/sword_t1.json",
+                    lambda doc: doc.__setitem__("materials", [
+                        {"item": "ore", "count": 1}, {"item": "ore", "count": 2}]))
+        self.assert_fails(self.compile(), "duplicate material 'ore'")
+
+    def test_material_count_out_of_range_rejected(self):
+        self.mutate("data/smith/sword_t1.json",
+                    lambda doc: doc["materials"].__setitem__(0, {"item": "ore", "count": 0}))
+        self.assert_fails(self.compile(), "count: out of range 1..255")
+
+    def test_missing_items_file_rejected(self):
+        os.remove(self.path("data", "items.json"))
+        self.assert_fails(self.compile(), "missing item file")
+
+    def test_zenny_only_recipe_is_allowed(self):
+        # sword_t2 already has no materials: the compile succeeds and slot 0
+        # packs empty (a legacy zenny-only tier stays valid).
+        self.assert_succeeds(self.compile())
+        blob = self.read_bytes(BLOB_REL)
+        self.assertEqual(parse_record(blob, 19)["mat"], [(0, 0), (0, 0)])
 
 
 if __name__ == "__main__":

@@ -54,6 +54,15 @@
             "item": "blue_mushroom",
             "yield": 1
           }
+        },
+        {
+          "type": "smithy",
+          "x": 88,
+          "y": 40,
+          "sheet": "mh_map_tent",
+          "frame": 0,
+          "w": 16,
+          "h": 16
         }
       ],
       "spawns": {
@@ -82,6 +91,14 @@
           "y": 8,
           "w": 32,
           "h": 24
+        }
+      ],
+      "smithy": [
+        {
+          "x": 88,
+          "y": 40,
+          "w": 16,
+          "h": 16
         }
       ],
       "monster": null

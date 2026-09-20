@@ -23,7 +23,10 @@
 // tier is the weapon's next unbought tier, its unlockFlag (0 = always, else the
 // 1-based quest whose done bit gates it) holds, and zenny >= cost. "bought"
 // (tier already >= the row tier) and "locked" rows read as dead, so A does
-// nothing.
+// nothing. prg.7 adds the recipe bill: a row whose tier needs materials the
+// inventory lacks is dead too, and the cart-side row scan (src/screens.hpp
+// screenCursorRecipeOk) reads the packed UpgradeDef. The host parity of that
+// scan is screenRecipeOk() below, so both paths share the same rule.
 
 #include <stdint.h>
 #include "core/input.hpp"
@@ -43,6 +46,15 @@ constexpr uint8_t SCREEN_MAX_TIER = 3;   // smith cap; data holds the costs
 constexpr uint8_t SCREEN_NAV_DELAY = 16;
 constexpr uint8_t SCREEN_NAV_REPEAT = 6;
 
+// The recipe bill of the upgrade def a COND_UPGRADE row names, decoded from a
+// caller-supplied upgrade array (the host suite / boot routing) or from the
+// cart by src/screens.hpp. `item` is the item index + 1 (0 = empty slot), so
+// the row scan can gate and debit without this header depending on smith.hpp.
+struct ScreenRecipe {
+    uint8_t item;
+    uint8_t count;
+};
+
 // One decoded row (label lives on the cart, not needed for logic). `flags` is
 // the packed ScreenRow flags byte (reserved for qs.2/qs.3 content).
 struct ScreenRow {
@@ -51,7 +63,39 @@ struct ScreenRow {
     uint8_t flags;
     uint8_t cond;
     uint8_t param;
+    // prg.7 recipe bill, resolved from the cart upgrade def for COND_UPGRADE
+    // rows by the caller (screens.hpp screenReadRow) or supplied by a test.
+    // Zeroed for every other row / a zenny-only recipe.
+    ScreenRecipe recipe[UPGRADE_MAT_SLOTS];
 };
+
+// Is the row's recipe bill satisfied by the save inventory? Empty slots
+// (item 0) are skipped. Pure: the caller fills row.recipe (cart or test).
+inline bool screenRecipeOk(const SaveBlock &save, const ScreenRecipe *recipe) {
+    for (uint8_t i = 0; i < UPGRADE_MAT_SLOTS; i++) {
+        const uint8_t code = recipe[i].item;
+        if (code == 0)
+            continue;
+        const uint8_t slot = static_cast<uint8_t>(code - 1);
+        if (slot >= item::ITEM_COUNT || save.items[slot] < recipe[i].count)
+            return false;
+    }
+    return true;
+}
+
+// Debit the row's recipe bill from the save inventory. Caller must have
+// checked screenRecipeOk first; a missing slot (should not happen) is a no-op.
+inline void screenRecipeDebit(SaveBlock &save, const ScreenRecipe *recipe) {
+    for (uint8_t i = 0; i < UPGRADE_MAT_SLOTS; i++) {
+        const uint8_t code = recipe[i].item;
+        if (code == 0)
+            continue;
+        const uint8_t slot = static_cast<uint8_t>(code - 1);
+        if (slot >= item::ITEM_COUNT)
+            continue;
+        save.items[slot] = static_cast<uint8_t>(save.items[slot] - recipe[i].count);
+    }
+}
 
 struct ScreenState {
     uint8_t screen = 0;   // screens::SCREEN_* index
@@ -107,7 +151,15 @@ inline bool screenCondOk(const SaveBlock &save, const ScreenRow &row) {
             return false;
         if (save.tier[weapon] + 1 != tier)
             return false;
-        return save.zenny >= row.cost;
+        if (save.zenny < row.cost)
+            return false;
+        // prg.7: the recipe bill. The host/device caller passes the cart def
+        // (screens.hpp) so this pure condition stays cart-free; when omitted
+        // (a hand-built row with no def) the bill is treated as empty, which is
+        // the pre-prg.7 zenny-only content.
+        if (!screenRecipeOk(save, row.recipe))
+            return false;
+        return true;
     }
     default:
         return true;
@@ -180,10 +232,12 @@ inline ScreenEvent screenStep(ScreenState &s, const Input &in) {
 
 // Apply the fixed action switch. Returns true when the save changed and must be
 // committed (the caller then calls saveStore once). Buying a tier is gated by
-// the tier cap and the zenny cost; COND_UPGRADE rows decode the (weapon, tier)
-// pair from `param` (see the header note) and land exactly on that tier, while
-// legacy/other rows keep the incremental behaviour for the hub stub. Quest rows
-// take/turn in through src/quest_state.hpp (turn-in pays the row cost).
+// the tier cap, the zenny cost and the recipe bill (prg.7); COND_UPGRADE rows
+// decode the (weapon, tier) pair from `param` (see the header note) and land
+// exactly on that tier, while legacy/other rows keep the incremental behaviour
+// for the hub stub. Quest rows take/turn in through src/quest_state.hpp
+// (turn-in pays the row cost). The recipe bill is re-checked here (not just in
+// the condition) so a stale row cannot debit more than the hunter owns.
 inline bool screenApplyAction(SaveBlock &save, const ScreenRow &row) {
     switch (row.action) {
     case screens::ACTION_BUY_UPGRADE: {
@@ -200,6 +254,9 @@ inline bool screenApplyAction(SaveBlock &save, const ScreenRow &row) {
         }
         if (target == 0 || target > SCREEN_MAX_TIER || save.zenny < row.cost)
             return false;
+        if (!screenRecipeOk(save, row.recipe))
+            return false;
+        screenRecipeDebit(save, row.recipe);
         save.zenny = static_cast<uint16_t>(save.zenny - row.cost);
         save.tier[weapon] = target;
         return true;

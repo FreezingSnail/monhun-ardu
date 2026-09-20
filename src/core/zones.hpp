@@ -41,6 +41,8 @@ struct ZoneRoom {
     uint8_t propCount;
     uint16_t firstHeal;
     uint8_t healCount;
+    uint16_t firstSmithy;   // prg.7 forge interaction range
+    uint8_t smithyCount;
     uint8_t monsterKind;    // zone::MONSTER_NONE or MONSTER_KINDS index
     uint8_t monsterSpawn;   // global spawn index (0xFF when none)
 };
@@ -56,6 +58,14 @@ struct ZoneSpawn {
 };
 
 struct ZoneHeal {
+    uint16_t x, y;
+    uint8_t w, h;
+};
+
+// Smithy interaction rect (bead monhun-ardu-prg.7): the camp forge a sheathed
+// B press opens the smith screen from. One per camp/room record; the runtime
+// caches the range and reads rects off the blob on demand (like heal/door).
+struct ZoneSmithy {
     uint16_t x, y;
     uint8_t w, h;
 };
@@ -105,6 +115,8 @@ inline ZoneRoom zoneRoomRead(uint8_t i) {
     v.propCount = zoneReadU8(b + zone::ROOM_PROP_COUNT_OFF);
     v.firstHeal = zoneReadU16(b + zone::ROOM_FIRST_HEAL_OFF);
     v.healCount = zoneReadU8(b + zone::ROOM_HEAL_COUNT_OFF);
+    v.firstSmithy = zoneReadU16(b + zone::ROOM_FIRST_SMITHY_OFF);
+    v.smithyCount = zoneReadU8(b + zone::ROOM_SMITHY_COUNT_OFF);
     v.monsterKind = zoneReadU8(b + zone::ROOM_MONSTER_KIND_OFF);
     v.monsterSpawn = zoneReadU8(b + zone::ROOM_MONSTER_SPAWN_OFF);
     return v;
@@ -140,6 +152,17 @@ inline ZoneHeal zoneHealRead(uint8_t i) {
     v.y = zoneReadU16(b + zone::HEAL_Y_OFF);
     v.w = zoneReadU8(b + zone::HEAL_W_OFF);
     v.h = zoneReadU8(b + zone::HEAL_H_OFF);
+    return v;
+}
+
+inline ZoneSmithy zoneSmithyRead(uint8_t i) {
+    using namespace zdetail;
+    const uint16_t b = static_cast<uint16_t>(zone::SMITHIES_OFF + i * zone::SMITHY_SIZE);
+    ZoneSmithy v;
+    v.x = zoneReadU16(b + zone::SMITHY_X_OFF);
+    v.y = zoneReadU16(b + zone::SMITHY_Y_OFF);
+    v.w = zoneReadU8(b + zone::SMITHY_W_OFF);
+    v.h = zoneReadU8(b + zone::SMITHY_H_OFF);
     return v;
 }
 
@@ -181,6 +204,8 @@ inline ZoneRoom zoneRoomRead(uint8_t i) {
     v.propCount = r.propCount;
     v.firstHeal = r.firstHeal;
     v.healCount = r.healCount;
+    v.firstSmithy = r.firstSmithy;
+    v.smithyCount = r.smithyCount;
     v.monsterKind = r.monsterKind;
     v.monsterSpawn = r.monsterSpawn;
     return v;
@@ -213,6 +238,16 @@ inline ZoneHeal zoneHealRead(uint8_t i) {
     v.y = h.y;
     v.w = h.w;
     v.h = h.h;
+    return v;
+}
+
+inline ZoneSmithy zoneSmithyRead(uint8_t i) {
+    const zone_data::Smithy &s = zone_data::SMITHIES[i];
+    ZoneSmithy v;
+    v.x = s.x;
+    v.y = s.y;
+    v.w = s.w;
+    v.h = s.h;
     return v;
 }
 

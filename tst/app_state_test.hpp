@@ -88,6 +88,27 @@ void AppSuite(TestRunner &runner) {
     }
 
     {
+        Test t("camp smithy request opens the smith and closes back into the camp (prg.7)");
+        Game g;
+        g.smithyRequest = false;
+        t.assert(appSmithyRequest(g), APP_NAV_NONE, "no request -> none");
+        g.smithyRequest = true;
+        t.assert(appSmithyRequest(g), APP_NAV_SMITH, "request -> smith");
+        t.assert(g.smithyRequest, false, "request consumed");
+        t.assert(appSmithyRequest(g), APP_NAV_NONE, "no re-fire while held");
+
+        MenuState menu;
+        ScreenState screen;
+        SaveBlock save{};
+        screenReset(screen, screens::SCREEN_SMITH, screens::SCREEN_SMITH_ROWS);
+        const bool hunted = appNavApply(APP_NAV_CAMP, menu, screen, save, g, AT_IDLE);
+        t.assert(hunted, false, "camp nav is not a hunt start");
+        t.assert(screen.active, false, "smith screen closed");
+        t.assert(menu.active, false, "camp sim resumes, not the menu");
+        suite.addTest(t);
+    }
+
+    {
         Test t("held A at a screen transition cannot re-fire inside it (shelf)");
         MenuState menu;
         menu.active = false;   // as after the demo menu A

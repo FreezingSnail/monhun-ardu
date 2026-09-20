@@ -57,6 +57,10 @@ static const mh::SaveBackend SAVE_BACKEND = {mh::saveEepromRead, mh::saveEepromW
 // latch so the save is not rewritten on every post-over tick.
 static bool s_huntOver = false;
 
+// Camp smithy origin (prg.7): true while the smith screen was opened from the
+// camp smithy prop, so its B steps back into the camp sim instead of the hub.
+static bool s_smithyFromCamp = false;
+
 #if DEBUG_HURTBOXES
 // Runtime toggle inside the debug build: hold A+B for 30 ticks to flip. The
 // buttons still reach the sim unchanged (run() never consumes them); A+B is
@@ -139,7 +143,14 @@ void run() {
         // hub -> menu); A routes through the hub map or runs the row action.
         const mh::ScreenEvent ev = mh::screenStep(s_screen, in);
         if (ev == mh::SCREEN_BACK) {
-            mh::appNavApply(mh::appScreenBack(s_screen.screen), s_menu, s_screen, s_save, g, in);
+            // A camp-opened smith closes back into the camp sim; every other
+            // screen keeps the shelf back-step (quests/smith -> hub).
+            if (s_smithyFromCamp && s_screen.screen == screens::SCREEN_SMITH) {
+                s_smithyFromCamp = false;
+                mh::appNavApply(mh::APP_NAV_CAMP, s_menu, s_screen, s_save, g, in);
+            } else {
+                mh::appNavApply(mh::appScreenBack(s_screen.screen), s_menu, s_screen, s_save, g, in);
+            }
             return;
         }
         if (ev != mh::SCREEN_ACCEPT)
@@ -150,7 +161,10 @@ void run() {
         const mh::AppNav nav = mh::appScreenAccept(s_screen.screen, row);
         if (nav != mh::APP_NAV_NONE) {
             // Boot-flow destination (hub row, leave, hunt): a hunt start arms
-            // the quest/upgrade state and clears the hunt-end latch.
+            // the quest/upgrade state and clears the hunt-end latch. A smith
+            // opened from the hub is not a camp smith (back goes to the hub).
+            if (nav == mh::APP_NAV_SMITH)
+                s_smithyFromCamp = false;
             if (mh::appNavApply(nav, s_menu, s_screen, s_save, g, in)) {
                 mh::questApplyToGame(g, s_save);
                 mh::upgradeApplyToGame(g, s_save);
@@ -170,6 +184,14 @@ void run() {
     // weapon/target picks preserved.
     if (mh::appMenuRequest(g) != mh::APP_NAV_NONE) {
         mh::appNavApply(mh::APP_NAV_MENU, s_menu, s_screen, s_save, g, in);
+        s_smithyFromCamp = false;
+        return;
+    }
+    // Camp smithy (prg.7): a sheathed B press inside the forge rect opens the
+    // smith screen; its B returns to the camp sim (s_smithyFromCamp).
+    if (mh::appSmithyRequest(g) != mh::APP_NAV_NONE) {
+        mh::appNavApply(mh::APP_NAV_SMITH, s_menu, s_screen, s_save, g, in);
+        s_smithyFromCamp = true;
         return;
     }
     // Hunt-end quest commit (qs.2/qs.4): persist the kill progress exactly once

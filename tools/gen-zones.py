@@ -29,12 +29,18 @@ Blob layout (little-endian, explicit u8/u16, no padding, fixed order):
     prop     11 B  type u8, x u16, y u16, sheet u8, frame u8, w u8, h u8,
                    gatherItem u8, gatherYield u8
     heal      6 B  x u16, y u16, w u8, h u8
+    smithy    6 B  x u16, y u16, w u8, h u8
 
 Rooms sort by id; spawns sort by name inside a room; doors/props/heals keep
 source order inside a room. Room image height must be a multiple of 8 (the
 SSD1306 page-major layer format stores one byte per 8-px column) and the image
 symbol is `mh_map_<id>` (the converter derives the same symbol from the PNG
 basename).
+
+Prop kind note (bead monhun-ardu-prg.8): every prop renders and every prop
+whose `type` is a gather kind contributes to the node hit test; a prop whose
+type is `smithy` additionally contributes its rect to the room smithy section
+(prg.7, camp prop interaction). Sheets are visual only.
 
 Placeholder art note: for a room whose PNG is missing this tool authors a
 deterministic flat-shade placeholder (fie.5 refines the art). An existing PNG
@@ -66,11 +72,12 @@ MAGIC = 0x5A52   # 'R','Z' little-endian (room zones)
 VERSION = 1
 FLAGS = 0
 HEADER_SIZE = 16
-ROOM_SIZE = 18
+ROOM_SIZE = 21
 DOOR_SIZE = 10
 SPAWN_SIZE = 4
 PROP_SIZE = 11
 HEAL_SIZE = 6
+SMITHY_SIZE = 6
 
 ROOM_MAX = 254          # room index is u8; 0xFF is reserved
 SECTION_MAX = 65535     # section first-indices are u16
@@ -83,9 +90,11 @@ IMAGE_RE = re.compile(r"^([A-Za-z_][A-Za-z0-9_]*)_(\d+)x(\d+)\.png$")
 MAX_ID = 31
 
 # Prop kinds. The runtime may switch on these; the sheet symbol names the FX
-# sprite (fie.5 authors the prop art). MONSTER kinds mirror MonsterKind in
-# src/core/game.hpp (data/creatures/<id>.json ids).
-PROP_TYPES = ("tent", "door", "pole", "post")
+# sprite (fie.5 authors the prop art). A `smithy` prop is the camp forge
+# interaction (prg.7): it renders like any other prop and contributes its rect
+# to the room smithy section, not to the gather node hit test. MONSTER kinds
+# mirror MonsterKind in src/core/game.hpp (data/creatures/<id>.json ids).
+PROP_TYPES = ("tent", "door", "pole", "post", "smithy")
 MONSTER_KINDS = ("lunge", "sweep", "heavy", "ravager")
 MONSTER_NONE = 0xFF
 # Gather item vocabulary (beads monhun-ardu-feel.21 + prg.2). A prop's optional
@@ -355,6 +364,19 @@ def normalize_heal(errors, ctx, obj):
     return {"x": x, "y": y, "w": w, "h": h}
 
 
+def normalize_smithy(errors, ctx, obj):
+    check_keys(errors, ctx, obj, {"x", "y", "w", "h"})
+    if not isinstance(obj, dict):
+        return None
+    x = read_int(errors, ctx, obj, "x", 0, 65535)
+    y = read_int(errors, ctx, obj, "y", 0, 65535)
+    w = read_int(errors, ctx, obj, "w", 1, 255)
+    h = read_int(errors, ctx, obj, "h", 1, 255)
+    if None in (x, y, w, h):
+        return None
+    return {"x": x, "y": y, "w": w, "h": h}
+
+
 def normalize_spawn(errors, ctx, obj):
     check_keys(errors, ctx, obj, {"x", "y"})
     if not isinstance(obj, dict):
@@ -382,7 +404,7 @@ def normalize_monster(errors, ctx, obj):
 
 def normalize_room(errors, ctx, obj, seen_ids):
     check_keys(errors, ctx, obj, {"id", "w", "h", "image", "spawns"},
-               {"props", "doors", "heal", "monster"})
+               {"props", "doors", "heal", "smithy", "monster"})
     if not isinstance(obj, dict):
         return None
     rid = read_id(errors, ctx, obj, "id", seen_ids)
@@ -453,6 +475,26 @@ def normalize_room(errors, ctx, obj, seen_ids):
             if normalized is not None:
                 heals.append(normalized)
 
+    raw_smithy = obj.get("smithy", [])
+    smithies = []
+    if not isinstance(raw_smithy, list):
+        errors.add(ctx, "smithy: expected an array")
+    else:
+        for i, smithy in enumerate(raw_smithy):
+            normalized = normalize_smithy(errors, "%s.smithy[%d]" % (ctx, i), smithy)
+            if normalized is not None:
+                smithies.append(normalized)
+    # Every smithy rect must belong to a type=smithy prop: the click rect and
+    # the drawn prop are one interaction, so a drift is a schema error, not a
+    # silent dead zone.
+    for i, smithy in enumerate(smithies):
+        if not any(prop["type"] == PROP_TYPES.index("smithy") and prop["x"] == smithy["x"]
+                   and prop["y"] == smithy["y"] and prop["w"] == smithy["w"] and prop["h"] == smithy["h"]
+                   for prop in props):
+            errors.add("%s.smithy[%d]" % (ctx, i),
+                       "rect (%d,%d,%d,%d) has no matching type=smithy prop"
+                       % (smithy["x"], smithy["y"], smithy["w"], smithy["h"]))
+
     monster = None
     if obj.get("monster") is not None:
         monster = normalize_monster(errors, ctx + ".monster", obj.get("monster"))
@@ -473,13 +515,18 @@ def normalize_room(errors, ctx, obj, seen_ids):
         if heal["x"] + heal["w"] > w or heal["y"] + heal["h"] > h:
             errors.add("%s.heal[%d]" % (ctx, i), "rect (%d,%d,%d,%d) leaves the %dx%d room"
                        % (heal["x"], heal["y"], heal["w"], heal["h"], w, h))
+    for i, smithy in enumerate(smithies):
+        if smithy["x"] + smithy["w"] > w or smithy["y"] + smithy["h"] > h:
+            errors.add("%s.smithy[%d]" % (ctx, i), "rect (%d,%d,%d,%d) leaves the %dx%d room"
+                       % (smithy["x"], smithy["y"], smithy["w"], smithy["h"], w, h))
     for spawn in spawns:
         if spawn["x"] > w or spawn["y"] > h:
             errors.add("%s.spawns.%s" % (ctx, spawn["name"]), "(%d,%d) leaves the %dx%d room"
                        % (spawn["x"], spawn["y"], w, h))
 
     return {"id": rid, "w": w, "h": h, "image": image, "spawns": spawns,
-            "props": props, "doors": doors, "heals": heals, "monster": monster}
+            "props": props, "doors": doors, "heals": heals, "smithies": smithies,
+            "monster": monster}
 
 
 def compile_model(errors, root):
@@ -548,6 +595,7 @@ def build_layout(errors, model):
     spawns = []
     props = []
     heals = []
+    smithies = []
     sheets = []
     for room in rooms:
         room["firstDoor"] = len(doors)
@@ -564,18 +612,23 @@ def build_layout(errors, model):
         room["firstHeal"] = len(heals)
         for local, heal in enumerate(room["heals"]):
             heals.append({"room": room, "heal": heal, "index": len(heals), "local": local})
+        room["firstSmithy"] = len(smithies)
+        for local, smithy in enumerate(room["smithies"]):
+            smithies.append({"room": room, "smithy": smithy, "index": len(smithies), "local": local})
 
     if len(spawns) > SPAWN_MAX:
         errors.add("data", "size limit: %d spawns exceed the %d spawn index limit" % (len(spawns), SPAWN_MAX))
     if len(sheets) > SHEET_MAX:
         errors.add("data", "size limit: %d prop sheets exceed the %d sheet index limit" % (len(sheets), SHEET_MAX))
     for name, section, limit in (("doors", len(doors), SECTION_MAX), ("spawns", len(spawns), SECTION_MAX),
-                                 ("props", len(props), SECTION_MAX), ("heals", len(heals), SECTION_MAX)):
+                                 ("props", len(props), SECTION_MAX), ("heals", len(heals), SECTION_MAX),
+                                 ("smithies", len(smithies), SECTION_MAX)):
         if section > limit:
             errors.add("data", "size limit: %d %s exceed the %d record limit" % (section, name, limit))
     for room in rooms:
         for key, count in (("doors", len(room["doors"])), ("spawns", len(room["spawns"])),
-                           ("props", len(room["props"])), ("heals", len(room["heals"]))):
+                           ("props", len(room["props"])), ("heals", len(room["heals"])),
+                           ("smithies", len(room["smithies"]))):
             if count > PER_ROOM_MAX:
                 errors.add("data", "size limit: room '%s' has %d %s (per-room max %d)"
                            % (room["id"], count, key, PER_ROOM_MAX))
@@ -587,7 +640,7 @@ def build_layout(errors, model):
     room_index = {room["id"]: i for i, room in enumerate(rooms)}
     sheet_index = {name: i for i, name in enumerate(sheets)}
     return {"rooms": rooms, "doors": doors, "spawns": spawns, "props": props, "heals": heals,
-            "sheets": sheets, "spawn_index": spawn_index, "room_index": room_index,
+            "smithies": smithies, "sheets": sheets, "spawn_index": spawn_index, "room_index": room_index,
             "sheet_index": sheet_index}
 
 
@@ -598,14 +651,16 @@ def section_offsets(counts):
     off["SPAWNS"] = off["DOORS"] + DOOR_SIZE * counts["DOORS"]
     off["PROPS"] = off["SPAWNS"] + SPAWN_SIZE * counts["SPAWNS"]
     off["HEALS"] = off["PROPS"] + PROP_SIZE * counts["PROPS"]
-    off["SIZE"] = off["HEALS"] + HEAL_SIZE * counts["HEALS"]
+    off["SMITHIES"] = off["HEALS"] + HEAL_SIZE * counts["HEALS"]
+    off["SIZE"] = off["SMITHIES"] + SMITHY_SIZE * counts["SMITHIES"]
     return off
 
 
 def pack_model(errors, layout):
     rooms = layout["rooms"]
     counts = {"ROOMS": len(rooms), "DOORS": len(layout["doors"]), "SPAWNS": len(layout["spawns"]),
-              "PROPS": len(layout["props"]), "HEALS": len(layout["heals"])}
+              "PROPS": len(layout["props"]), "HEALS": len(layout["heals"]),
+              "SMITHIES": len(layout["smithies"])}
     off = section_offsets(counts)
     if off["SIZE"] >= 65536:
         errors.add("data", "size limit: blob is %d B, offsets are u16" % off["SIZE"])
@@ -622,11 +677,12 @@ def pack_model(errors, layout):
         else:
             monster_kind = MONSTER_KINDS.index(monster["kind"])
             monster_spawn = layout["spawn_index"][(room["id"], monster["spawn"])]
-        body += struct.pack("<HHHBHBHBHB", room["w"], room["h"],
+        body += struct.pack("<HHHBHBHBHBBH", room["w"], room["h"],
                             room["firstDoor"], len(room["doors"]),
                             room["firstSpawn"], len(room["spawns"]),
                             room["firstProp"], len(room["props"]),
-                            room["firstHeal"], len(room["heals"]))
+                            room["firstHeal"], len(room["heals"]),
+                            room["firstSmithy"], len(room["smithies"]))
         body += struct.pack("<BB", monster_kind, monster_spawn)
         if len(body) % ROOM_SIZE != 0:
             errors.add("data", "internal: room record is %d B, want %d" % (len(body) % ROOM_SIZE, ROOM_SIZE))
@@ -665,10 +721,15 @@ def pack_model(errors, layout):
         heal_offsets[(entry["room"]["id"], entry["index"])] = off["HEALS"] + entry["index"] * HEAL_SIZE
         body += struct.pack("<HHBB", heal["x"], heal["y"], heal["w"], heal["h"])
 
+    smithy_offsets = {}
+    for entry in layout["smithies"]:
+        smithy = entry["smithy"]
+        smithy_offsets[(entry["room"]["id"], entry["index"])] = off["SMITHIES"] + entry["index"] * SMITHY_SIZE
+        body += struct.pack("<HHBB", smithy["x"], smithy["y"], smithy["w"], smithy["h"])
+
     header = struct.pack("<HBB", MAGIC, VERSION, FLAGS)
-    header += struct.pack("<HHHHH", counts["ROOMS"], counts["DOORS"], counts["SPAWNS"],
-                          counts["PROPS"], counts["HEALS"])
-    header += struct.pack("<H", 0)
+    header += struct.pack("<HHHHHH", counts["ROOMS"], counts["DOORS"], counts["SPAWNS"],
+                          counts["PROPS"], counts["HEALS"], counts["SMITHIES"])
     assert len(header) == HEADER_SIZE, len(header)
     blob = header + bytes(body)
     if len(blob) != off["SIZE"]:
@@ -676,7 +737,8 @@ def pack_model(errors, layout):
         return None
     return {"blob": blob, "counts": counts, "off": off, "room_offsets": room_offsets,
             "door_offsets": door_offsets, "spawn_offsets": spawn_offsets,
-            "prop_offsets": prop_offsets, "heal_offsets": heal_offsets}
+            "prop_offsets": prop_offsets, "heal_offsets": heal_offsets,
+            "smithy_offsets": smithy_offsets}
 
 
 def load_fxdata_symbols(root):
@@ -721,6 +783,8 @@ def emit_data_header(layout, packed):
     app("    uint8_t propCount;")
     app("    uint16_t firstHeal;")
     app("    uint8_t healCount;")
+    app("    uint16_t firstSmithy;   // prg.7 forge interaction range")
+    app("    uint8_t smithyCount;")
     app("    uint8_t monsterKind;   // MONSTER_NONE or MONSTER_KINDS index")
     app("    uint8_t monsterSpawn;  // global spawn index, 0xFF when none")
     app("};")
@@ -749,6 +813,13 @@ def emit_data_header(layout, packed):
     app("    uint8_t w, h;")
     app("};")
     app("")
+    app("// Camp/room smithy interaction rects (prg.7): overlapping one while")
+    app("// sheathed + B press opens the smith screen (world.hpp trySmithy).")
+    app("struct Smithy {")
+    app("    uint16_t x, y;")
+    app("    uint8_t w, h;")
+    app("};")
+    app("")
     app("// Room indices, sorted by id.")
     for i, room in enumerate(rooms):
         app("constexpr uint8_t ROOM_%s = %d;" % (room["id"].upper(), i))
@@ -770,6 +841,9 @@ def emit_data_header(layout, packed):
     for entry in layout["heals"]:
         app("constexpr uint8_t HEAL_%s_%d = %d;"
             % (entry["room"]["id"].upper(), entry["local"], entry["index"]))
+    for entry in layout["smithies"]:
+        app("constexpr uint8_t SMITHY_%s_%d = %d;"
+            % (entry["room"]["id"].upper(), entry["local"], entry["index"]))
     app("")
     app("// Name tables: host-side lookup for loadRoom(roomId, spawnName).")
     app("struct RoomName { const char *id; uint8_t index; };")
@@ -790,10 +864,11 @@ def emit_data_header(layout, packed):
         monster = room["monster"]
         kind = MONSTER_NONE if monster is None else MONSTER_KINDS.index(monster["kind"])
         spawn = 0xFF if monster is None else layout["spawn_index"][(room["id"], monster["spawn"])]
-        app("    {%d, %d, %d, %d, %d, %d, %d, %d, %d, %d, %d, %d}," % (
+        app("    {%d, %d, %d, %d, %d, %d, %d, %d, %d, %d, %d, %d, %d, %d}," % (
             room["w"], room["h"], room["firstDoor"], len(room["doors"]),
             room["firstSpawn"], len(room["spawns"]), room["firstProp"], len(room["props"]),
-            room["firstHeal"], len(room["heals"]), kind, spawn))
+            room["firstHeal"], len(room["heals"]), room["firstSmithy"], len(room["smithies"]),
+            kind, spawn))
     app("}};")
     app("")
     app("inline constexpr std::array<Door, %d> DOORS = {{" % len(layout["doors"]))
@@ -825,6 +900,12 @@ def emit_data_header(layout, packed):
     for entry in layout["heals"]:
         heal = entry["heal"]
         app("    {%d, %d, %d, %d}," % (heal["x"], heal["y"], heal["w"], heal["h"]))
+    app("}};")
+    app("")
+    app("inline constexpr std::array<Smithy, %d> SMITHIES = {{" % len(layout["smithies"]))
+    for entry in layout["smithies"]:
+        smithy = entry["smithy"]
+        app("    {%d, %d, %d, %d}," % (smithy["x"], smithy["y"], smithy["w"], smithy["h"]))
     app("}};")
     app("")
     app("}   // namespace zone_data")
@@ -866,17 +947,20 @@ def emit_meta_header(layout, packed, fx_symbols, gather_codes):
     app("constexpr uint8_t SPAWN_SIZE = %d;" % SPAWN_SIZE)
     app("constexpr uint8_t PROP_SIZE = %d;" % PROP_SIZE)
     app("constexpr uint8_t HEAL_SIZE = %d;" % HEAL_SIZE)
+    app("constexpr uint8_t SMITHY_SIZE = %d;" % SMITHY_SIZE)
     app("")
     app("constexpr uint16_t ROOMS_OFF = %d;" % off["ROOMS"])
     app("constexpr uint16_t DOORS_OFF = %d;" % off["DOORS"])
     app("constexpr uint16_t SPAWNS_OFF = %d;" % off["SPAWNS"])
     app("constexpr uint16_t PROPS_OFF = %d;" % off["PROPS"])
     app("constexpr uint16_t HEALS_OFF = %d;" % off["HEALS"])
+    app("constexpr uint16_t SMITHIES_OFF = %d;" % off["SMITHIES"])
     app("constexpr uint16_t ROOMS_COUNT = %d;" % packed["counts"]["ROOMS"])
     app("constexpr uint16_t DOORS_COUNT = %d;" % packed["counts"]["DOORS"])
     app("constexpr uint16_t SPAWNS_COUNT = %d;" % packed["counts"]["SPAWNS"])
     app("constexpr uint16_t PROPS_COUNT = %d;" % packed["counts"]["PROPS"])
     app("constexpr uint16_t HEALS_COUNT = %d;" % packed["counts"]["HEALS"])
+    app("constexpr uint16_t SMITHIES_COUNT = %d;" % packed["counts"]["SMITHIES"])
     app("")
     app("// Record field offsets.")
     app("constexpr uint8_t ROOM_W_OFF = 0;          // u16")
@@ -889,8 +973,10 @@ def emit_meta_header(layout, packed, fx_symbols, gather_codes):
     app("constexpr uint8_t ROOM_PROP_COUNT_OFF = 12;   // u8")
     app("constexpr uint8_t ROOM_FIRST_HEAL_OFF = 13;   // u16")
     app("constexpr uint8_t ROOM_HEAL_COUNT_OFF = 15;   // u8")
-    app("constexpr uint8_t ROOM_MONSTER_KIND_OFF = 16; // u8")
-    app("constexpr uint8_t ROOM_MONSTER_SPAWN_OFF = 17;// u8")
+    app("constexpr uint8_t ROOM_FIRST_SMITHY_OFF = 16; // u16 (prg.7 forge range)")
+    app("constexpr uint8_t ROOM_SMITHY_COUNT_OFF = 18; // u8")
+    app("constexpr uint8_t ROOM_MONSTER_KIND_OFF = 19; // u8")
+    app("constexpr uint8_t ROOM_MONSTER_SPAWN_OFF = 20;// u8")
     app("constexpr uint8_t DOOR_X_OFF = 0;   // u16")
     app("constexpr uint8_t DOOR_Y_OFF = 2;   // u16")
     app("constexpr uint8_t DOOR_W_OFF = 4;   // u16")
@@ -912,6 +998,10 @@ def emit_meta_header(layout, packed, fx_symbols, gather_codes):
     app("constexpr uint8_t HEAL_Y_OFF = 2;  // u16")
     app("constexpr uint8_t HEAL_W_OFF = 4;  // u8")
     app("constexpr uint8_t HEAL_H_OFF = 5;  // u8")
+    app("constexpr uint8_t SMITHY_X_OFF = 0;  // u16")
+    app("constexpr uint8_t SMITHY_Y_OFF = 2;  // u16")
+    app("constexpr uint8_t SMITHY_W_OFF = 4;  // u8")
+    app("constexpr uint8_t SMITHY_H_OFF = 5;  // u8")
     app("")
     app("// Prop kinds; src render switches on these for special behaviour.")
     for i, name in enumerate(PROP_TYPES):
@@ -972,6 +1062,12 @@ def emit_meta_header(layout, packed, fx_symbols, gather_codes):
         app("constexpr uint8_t %s = %d;" % (name, entry["index"]))
         app("constexpr uint16_t %s_OFF = %d;" % (name, packed["heal_offsets"][(entry["room"]["id"], entry["index"])]))
     app("")
+    app("// Smithy interaction rects (prg.7; names use the room-local index).")
+    for entry in layout["smithies"]:
+        name = "SMITHY_%s_%d" % (entry["room"]["id"].upper(), entry["local"])
+        app("constexpr uint8_t %s = %d;" % (name, entry["index"]))
+        app("constexpr uint16_t %s_OFF = %d;" % (name, packed["smithy_offsets"][(entry["room"]["id"], entry["index"])]))
+    app("")
     app("// Prop sheet names + FX-image offsets (0 = not yet authored; fie.5 art).")
     for i, sheet in enumerate(layout["sheets"]):
         symbol = sheet
@@ -1020,9 +1116,10 @@ def dump_model(layout, packed):
         monster = "-"
         if room["monster"] is not None:
             monster = "%s@%s" % (room["monster"]["kind"], room["monster"]["spawn"])
-        print("room %s: %dx%d image %s doors %d spawns %d props %d heals %d monster %s"
+        print("room %s: %dx%d image %s doors %d spawns %d props %d heals %d smithies %d monster %s"
               % (room["id"], room["w"], room["h"], room_image_symbol(room), len(room["doors"]),
-                 len(room["spawns"]), len(room["props"]), len(room["heals"]), monster))
+                 len(room["spawns"]), len(room["props"]), len(room["heals"]),
+                 len(room["smithies"]), monster))
         for spawn in room["spawns"]:
             print("  spawn %s: (%d,%d)" % (spawn["name"], spawn["x"], spawn["y"]))
         for i, door in enumerate(room["doors"]):
@@ -1036,9 +1133,12 @@ def dump_model(layout, packed):
                      prop["sheet"], prop["frame"], gather_text))
         for i, heal in enumerate(room["heals"]):
             print("  heal %d: rect(%d,%d,%d,%d)" % (i, heal["x"], heal["y"], heal["w"], heal["h"]))
-    print("gen-zones: %d rooms, %d doors, %d spawns, %d props, %d heals, %d B blob"
+        for i, smithy in enumerate(room["smithies"]):
+            print("  smithy %d: rect(%d,%d,%d,%d)" % (i, smithy["x"], smithy["y"], smithy["w"], smithy["h"]))
+    print("gen-zones: %d rooms, %d doors, %d spawns, %d props, %d heals, %d smithies, %d B blob"
           % (packed["counts"]["ROOMS"], packed["counts"]["DOORS"], packed["counts"]["SPAWNS"],
-             packed["counts"]["PROPS"], packed["counts"]["HEALS"], len(packed["blob"])))
+             packed["counts"]["PROPS"], packed["counts"]["HEALS"], packed["counts"]["SMITHIES"],
+             len(packed["blob"])))
 
 
 # ----------------------------------------------------------------- placeholder art
@@ -1214,9 +1314,10 @@ def run(root, dump):
         wrote.add(META_HPP_REL)
 
     unresolved = [sheet for sheet in layout["sheets"] if (fx_symbols or {}).get(sheet) is None]
-    print("gen-zones: %d rooms, %d doors, %d spawns, %d props, %d heals, %d B blob (magic 0x%04X version %d)"
+    print("gen-zones: %d rooms, %d doors, %d spawns, %d props, %d heals, %d smithies, %d B blob (magic 0x%04X version %d)"
           % (packed["counts"]["ROOMS"], packed["counts"]["DOORS"], packed["counts"]["SPAWNS"],
-             packed["counts"]["PROPS"], packed["counts"]["HEALS"], len(packed["blob"]), MAGIC, VERSION))
+             packed["counts"]["PROPS"], packed["counts"]["HEALS"], packed["counts"]["SMITHIES"],
+             len(packed["blob"]), MAGIC, VERSION))
     for room in layout["rooms"]:
         rel = room["image"]
         data, layer_bytes = layers[room["id"]]

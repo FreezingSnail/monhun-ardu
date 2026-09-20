@@ -32,12 +32,13 @@ DATA_REL = "src/generated/zone_data.hpp"
 META_REL = "src/generated/zone_meta.hpp"
 
 MAGIC = 0x5A52
-HEADER = struct.Struct("<HBBHHHHHH")   # 16 B
-ROOM = struct.Struct("<HHHBHBHBHBBB")  # 18 B
+HEADER = struct.Struct("<HBBHHHHHH")   # 16 B: magic/version/flags + 6 u16 counts
+ROOM = struct.Struct("<HHHBHBHBHBHBBB")  # 21 B (prg.7 smithy range)
 DOOR = struct.Struct("<HHHHBB")        # 10 B
 SPAWN = struct.Struct("<HH")           # 4 B
 PROP = struct.Struct("<BHHBBBBBB")     # 11 B
 HEAL = struct.Struct("<HHBB")          # 6 B
+SMITHY = struct.Struct("<HHBB")        # 6 B
 ARRAY_RE = re.compile(r"uint8_t\s+(\w+)\[\]\s*=\s*\n\{\n(.*?)\n\};", re.S)
 
 
@@ -46,15 +47,16 @@ def run_tool(*args):
 
 
 def parse_blob(blob):
-    magic, version, flags, rooms, doors, spawns, props, heals, _ = HEADER.unpack_from(blob, 0)
+    magic, version, flags, rooms, doors, spawns, props, heals, smithies = HEADER.unpack_from(blob, 0)
     off = {}
     off["rooms"] = HEADER.size
     off["doors"] = off["rooms"] + ROOM.size * rooms
     off["spawns"] = off["doors"] + DOOR.size * doors
     off["props"] = off["spawns"] + SPAWN.size * spawns
     off["heals"] = off["props"] + PROP.size * props
+    off["smithies"] = off["heals"] + HEAL.size * heals
     return {"magic": magic, "version": version, "flags": flags,
-            "counts": (rooms, doors, spawns, props, heals), "off": off}
+            "counts": (rooms, doors, spawns, props, heals, smithies), "off": off}
 
 
 def parse_arrays(text):
@@ -137,17 +139,17 @@ class GenZonesTests(unittest.TestCase):
         parsed = parse_blob(blob)
         self.assertEqual(parsed["magic"], MAGIC)
         self.assertEqual(parsed["version"], 1)
-        self.assertEqual(parsed["counts"], (2, 3, 4, 1, 1))
+        self.assertEqual(parsed["counts"], (2, 3, 4, 1, 1, 0))
         self.assertEqual(len(blob), HEADER.size + ROOM.size * 2 + DOOR.size * 3
-                         + SPAWN.size * 4 + PROP.size + HEAL.size)
+                         + SPAWN.size * 4 + PROP.size + HEAL.size + SMITHY.size * parsed["counts"][5])
 
         off = parsed["off"]
         area = ROOM.unpack_from(blob, off["rooms"])
         camp = ROOM.unpack_from(blob, off["rooms"] + ROOM.size)
         # w, h, firstDoor, doorCount, firstSpawn, spawnCount, firstProp, propCount,
         # firstHeal, healCount, monsterKind, monsterSpawn
-        self.assertEqual(area, (16, 8, 0, 1, 0, 2, 0, 0, 0, 0, 0, 1))       # lunge@start
-        self.assertEqual(camp, (16, 8, 1, 2, 2, 2, 0, 1, 0, 1, 0xFF, 0xFF))  # no monster
+        self.assertEqual(area, (16, 8, 0, 1, 0, 2, 0, 0, 0, 0, 0, 0, 0, 1))       # lunge@start
+        self.assertEqual(camp, (16, 8, 1, 2, 2, 2, 0, 1, 0, 1, 0, 0, 0xFF, 0xFF))  # no monster, no smithy in the clean fixture
 
         doors = [DOOR.unpack_from(blob, off["doors"] + i * DOOR.size) for i in range(3)]
         self.assertEqual(doors[0], (0, 0, 4, 8, 1, 3))    # area -> camp.from_area
@@ -170,8 +172,12 @@ class GenZonesTests(unittest.TestCase):
             "constexpr uint16_t MAGIC = 0x5A52;",
             "constexpr uint8_t VERSION = 1;",
             "constexpr uint8_t HEADER_SIZE = 16;",
-            "constexpr uint8_t ROOM_SIZE = 18;",
+            "constexpr uint8_t ROOM_SIZE = 21;",
             "constexpr uint8_t DOOR_SIZE = 10;",
+            "constexpr uint8_t HEAL_SIZE = 6;",
+            "constexpr uint8_t SMITHY_SIZE = 6;",
+            "constexpr uint16_t SMITHIES_OFF = ",
+            "constexpr uint16_t SMITHIES_COUNT = 0;",
             "constexpr uint8_t PROP_SIZE = 11;",
             "constexpr uint8_t PROP_GATHER_ITEM_OFF = 9;",
             "constexpr uint8_t PROP_GATHER_YIELD_OFF = 10;",
@@ -213,10 +219,10 @@ class GenZonesTests(unittest.TestCase):
     def test_dump_lists_graph_and_writes_nothing(self):
         result = self.compile("--dump")
         self.assert_succeeds(result)
-        self.assertIn("room area: 16x8 image mh_map_area doors 1 spawns 2 props 0 heals 0 monster lunge@start",
+        self.assertIn("room area: 16x8 image mh_map_area doors 1 spawns 2 props 0 heals 0 smithies 0 monster lunge@start",
                       result.stdout)
         self.assertIn("door 1: rect(0,0,4,8) -> menu", result.stdout)
-        self.assertIn("gen-zones: 2 rooms, 3 doors, 4 spawns, 1 props, 1 heals, 115 B blob", result.stdout)
+        self.assertIn("gen-zones: 2 rooms, 3 doors, 4 spawns, 1 props, 1 heals, 0 smithies, 121 B blob", result.stdout)
         for rel in (BLOB_REL, SPRITES_REL, DATA_REL, META_REL):
             self.assertFalse(os.path.exists(self.path(rel)), rel)
         self.assertFalse(os.path.exists(self.path("images", "maps", "mh_map_camp_16x8.png")))
@@ -305,6 +311,57 @@ class GenZonesTests(unittest.TestCase):
             prop["x"] = 14   # x + w (4) = 18 > room w 16
         self.mutate(add_gather_and_shift)
         self.assert_fails(self.compile(), "leaves the 16x8 room")
+
+    # ------------------------------------------------------------- smithy rects
+
+    def test_smithy_prop_packs_rect_and_emits_meta(self):
+        def add_smithy(doc):
+            doc["rooms"][0]["props"].append({
+                "type": "smithy", "x": 6, "y": 4, "sheet": "mh_map_tent",
+                "frame": 0, "w": 4, "h": 4})
+            doc["rooms"][0]["smithy"] = [{"x": 6, "y": 4, "w": 4, "h": 4}]
+        self.mutate(add_smithy)
+        self.assert_succeeds(self.compile())
+        blob = self.read_bytes(BLOB_REL)
+        parsed = parse_blob(blob)
+        self.assertEqual(parsed["counts"], (2, 3, 4, 2, 1, 1))
+        # Smithy section sits after props + heals; the second prop is the forge.
+        self.assertEqual(PROP.unpack_from(blob, parsed["off"]["props"] + PROP.size), (4, 6, 4, 0, 0, 4, 4, 0, 0))
+        self.assertEqual(SMITHY.unpack_from(blob, parsed["off"]["smithies"]), (6, 4, 4, 4))
+        text = self.read(META_REL)
+        self.assertIn("constexpr uint8_t PROP_SMITHY = 4;", text)
+        self.assertIn("constexpr uint16_t SMITHIES_COUNT = 1;", text)
+        self.assertIn("constexpr uint8_t SMITHY_CAMP_0 = 0;", text)
+        self.assertIn("constexpr uint16_t SMITHY_CAMP_0_OFF = ", text)
+        self.assertIn("constexpr uint8_t SMITHY_X_OFF = 0;", text)
+        self.assertIn("constexpr uint8_t SMITHY_W_OFF = 4;", text)
+        data = self.read(DATA_REL)
+        self.assertIn("struct Smithy {", data)
+        self.assertIn("inline constexpr std::array<Smithy, 1> SMITHIES", data)
+
+    def test_smithy_without_matching_prop_rejected(self):
+        def add_smithy(doc):
+            doc["rooms"][0]["smithy"] = [{"x": 6, "y": 4, "w": 4, "h": 4}]
+        self.mutate(add_smithy)
+        self.assert_fails(self.compile(), "has no matching type=smithy prop")
+
+    def test_smithy_rect_leaving_room_rejected(self):
+        def add_smithy(doc):
+            doc["rooms"][0]["props"].append({
+                "type": "smithy", "x": 14, "y": 4, "sheet": "mh_map_tent",
+                "frame": 0, "w": 4, "h": 4})
+            doc["rooms"][0]["smithy"] = [{"x": 14, "y": 4, "w": 4, "h": 4}]
+        self.mutate(add_smithy)
+        self.assert_fails(self.compile(), "leaves the 16x8 room")
+
+    def test_unknown_smithy_key_rejected(self):
+        def add_smithy(doc):
+            doc["rooms"][0]["props"].append({
+                "type": "smithy", "x": 6, "y": 4, "sheet": "mh_map_tent",
+                "frame": 0, "w": 4, "h": 4})
+            doc["rooms"][0]["smithy"] = [{"x": 6, "y": 4, "w": 4, "h": 4, "note": "x"}]
+        self.mutate(add_smithy)
+        self.assert_fails(self.compile(), "unknown key 'note'")
 
     # ------------------------------------------------- gather <-> item table
 

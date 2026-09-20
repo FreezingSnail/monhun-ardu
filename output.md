@@ -1,101 +1,48 @@
-# monhun-ardu-prg.5 — save v2: EEPROM block for inventory + equipment + zenny
+# monhun-ardu-prg.7 — smith v2: material recipes + camp smithy
 
-HEAD at start: `1499a96` (prg.4 gather). No commit/push (orchestrator commits).
-End state: full gate green — gen-check, host, tooling, full `fxtest-headless`,
-size. Flash delta **+422 B** (27914 -> 28336), RAM **+12 B** (1593 -> 1605).
-Both inside the bead budget (<=900 B flash, small RAM).
-
-## Layout (SaveBlock v3, 27 B)
-
-Extends the bead-me6 v2 record with a progression tail; the 14-byte v2 payload
-is unchanged and the old checksum byte (14) becomes the first equip slot:
-
-```
- 0..1  magic   u16 0x484D
- 2     version u8 3
- 3..4  zenny   u16
- 5..8  quest   u8[4]   (16 x 2 bits: taken, done)
- 9     activeQuest u8  (0xFF = none)
- 10    progress    u8
- 11..13 tier  u8[3]    (N_WEAPONS)
- 14..16 equip u8[3]    (head/body/charm; 0 = none; arm.2 slots)
- 17    flags  u8       (SAVE_FLAG_SMITHY_SEEN reserved for prg.7)
- 18..25 items u8[8]    (inventory counts, cap 255; item::ITEM_COUNT)
- 26    checksum u8     (sum of bytes 0..25)
-```
-
-`SAVE_ITEMS_OFF`/`SAVE_ITEMS` size come from the generated `item::ITEM_COUNT`,
-so an item-table regen re-sizes the record automatically (C++ constexpr, not a
-baked literal). `SAVE_VERSION` 2 -> 3.
+Status: DONE (worker ran into an output loop mid-bead; the orchestrator finished
+the remaining integration, updated the stale pins, and ran the full gate).
 
 ## What landed
 
-- `src/core/save.hpp`: v3 struct (equip/flags/items), `saveEncode`/`saveDecode`
-  over the full record, `saveDecodePrefix` (shared 14-byte v1/v2 payload),
-  `saveDefaults` clears the tail, `saveItemCount/Add/Consume` (id-checked,
-  saturating at 255), `saveFoldItems` (per-slot max of live vs saved).
-  - Migration in `saveLoad`: v3 decodes; a **v2** record keeps its prefix and
-    defaults the prg.5 tail; a **v1** record keeps its zenny/quests/tiers and
-    clears the active quest/progress it never had; anything else ->
-    `saveDefaults`. Never crashes, never returns garbage. Returns true for a
-    well-formed (possibly migrated) record, false only for blank/junk.
-  - `saveStore` unchanged (write-if-different + verify read) and now covers the
-    tail.
-- `src/app_state.hpp`: `appHuntCommit` now takes `Game &g` and folds *both* the
-  quest progress (when a quest is active) and the hunt inventory gains
-  (`max(live, saved)` per slot) in one latency-once-per-hunt call; returns true
-  only when something changed. One `saveStore` at the sketch's single hunt-end
-  commit persists both.
-- `src/app_setup.hpp`: new `itemsApplyToGame()` re-seeds `Game::items[]` from
-  the save (newGame clears RAM items each hunt).
-- `monhun-ardu.ino`: apply items on boot and at every hunt start (menu + shelf
-  branches); hunt-end commit call passes `g`.
-- Gather/carve already update `Game::items[]` in RAM only (no per-item EEPROM
-  write); the hunt-end commit is the single coalescing point.
+- **Recipes**: `data/smith/*.json` gained `materials: [{item, count}]` (sword T1
+  = 2 ore + 1 scale, T2 = 3 ore + 1 fang; flail/gun analog). `tools/gen-smith.py`
+  validates ids against `data/items.json` (via `tools/gen-items-ids.py`) and
+  packs the bill into the upgrade record.
+- **Screen logic**: `ScreenRecipe` + `screenRecipeOk`/`screenRecipeDebit`
+  (`src/screen_state.hpp`); `screenCondOk` now gates a COND_UPGRADE row on zenny
+  AND materials, `screenApplyAction` debits both and commits the save once.
+  Device path reads the packed bill (`src/screens.hpp`).
+- **Camp smithy**: `data/map.json` camp smithy prop + rect; gen-zones packs the
+  room smithy range (`ZoneSmithy`, ROOM_SIZE 18→21); `trySmithy` raises
+  `Game::smithyRequest` on a sheathed B press inside the rect (tent heal wins on
+  the same press). `appSmithyRequest` + `APP_NAV_CAMP` (orchestrator) open the
+  smith screen from the camp and close it back into the camp sim; the hub route
+  keeps its own back-step.
+- **Docs**: `docs/quests-shops.md`, README flow text.
 
-## Tests
+## Orchestrator completion (after the worker looped)
 
-- `tst/screens_test.hpp` (host, +5): v2 layout offsets + encode/decode of
-  equip/flags/items with exact bytes and checksum coverage; `saveItemAdd/
-  Consume` saturation + out-of-range inert + `saveFoldItems` max semantics;
-  v2-record migration (prefix preserved, tail defaults); v1-record migration
-  (zenny/tier/done preserved, activeQuest cleared). Existing pins updated
-  intentionally (checksum offset, version, byte count).
-- `tst/quests_test.hpp` (host): save-layout pins now assert the checksum
-  terminates the record (offset == `SAVE_ITEMS_OFF + ITEM_COUNT`) and version 3.
-- `tst/app_state_test.hpp` (host, +1): hunt-end commit folds quest progress and
-  item gains (`max`) once per hunt, latch semantics unchanged.
-- `tst/fxdatatest/hub_test.hpp` (device): a 4-herb pantry is stored, restored
-  into the hunt by `itemsApplyToGame`, a carved scale + gathered ore are folded
-  by the hunt-end commit, and all reload from real EEPROM.
-- `tst/fxdatatest/screens_test.hpp` (device): EEPROM round-trip now covers the
-  prg.5 tail (equip/flags/inventory) plus a write-on-change pin that one changed
-  inventory byte rewrites exactly that byte + the checksum.
+- `APP_NAV_CAMP` + `appSmithyRequest` in `src/app_state.hpp`; sketch wiring
+  (`s_smithyFromCamp`, namespace typo fix) in `monhun-ardu.ino`.
+- Host test for the camp route (`tst/app_state_test.hpp`).
+- Stale pins fixed: `tools/tests/test_gen_zones.py` (ROOM struct 21 B, offsets,
+  dump lines, blob 121 B, prop gather index), device `test_hub` (recipe
+  materials seeded + debit pins; `MH_CHARGE 0` + `MH_CARVE 0` test-only carve to
+  fit), `test_screens`/`test_smith` (recipe seeding + debit pins), `test_zones`
+  (camp prop count 5).
 
-## Verify (exact tails)
+## Gates
 
-- `make gen-check`: `fxdata_manifest: PASS (85 generated artifacts unchanged)`.
-- `make test`: `Total Passed: 6053` / `Total Failed: 0`.
-- `make test-tools`: `Ran 240 tests in 12.400s` / `OK`.
-- `make fxtest-headless` (full): all maintained suites PASS — assets 270, audio
-  10, boot 4, combat 237, data 368, hub 61, hud 25, items 35, menu_art 53, menu
-  60, monster_art 111, player_art 111, quests 50, screens 83, smith 66, tell 17,
-  zones 80. `test_perf`:
-  `B pUs=6348 pHz=157 lHz=52 lTk=480 rMx=3344 rAv=3074 ram=713`
-  `perf_test PASSED=5 FAILED=0` -> PASS.
-- `make size`: `size: flash=28336/29696 (1360 free)  ram=1605/2560`
-  (baseline 27914/1782 free -> **+422 B** flash, RAM +12). Data facts unchanged
-  from baseline.
+- `make gen` x2 + `make gen-check` PASS (86 artifacts unchanged)
+- `make test` 6060/0
+- `make test-tools` OK (250 tests)
+- `make fxtest-headless` 18/18 suites PASS; `test_perf` `rMx=3344 rAv=3074`
+- `make size` flash 29136/29696 (**560 free**), RAM 1610/2560
 
-## Deviations / notes
+## Budget note
 
-- `SaveBlock` grew from the v2 field set; the struct in RAM mirrors the new
-  payload. The `sizeof(SaveBlock) >= SAVE_BYTES - 3` policy pin is unchanged and
-  still holds (struct is fields only).
-- `saveLoad` now reports `true` for a migrated older record (fields were
-  loaded); only blank/junk is `false` with defaults. This is the documented
-  contract in the header.
-- Equipment ids are reserved placeholders (0 = none); `arm.2` fills the slots.
-  `SAVE_FLAG_SMITHY_SEEN` is reserved for prg.7's camp smithy route.
-- Parity image / `mock/` untouched (`make fxtest-headless` still excludes
-  `test_parity`).
+prg.7 cost ~800 B (recipe cart scan + smithy range + camp route). The armor
+wave (arm.1-3, ~1.3-2 KB) does not fit in 560 B; a shipping trim decision is
+needed (candidates: MH_CHARGE −432, zone part overlays −630, tell shapes −416,
+menu art fold, audio cues).

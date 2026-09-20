@@ -854,8 +854,15 @@ struct Game {
     // door/heal ranges (the 9 B records are read off the blob on demand).
     uint16_t roomFirstProp;
     uint8_t roomPropCount;
-    bool doorLatch;     // suppress doors until the player leaves every door rect
-    bool menuRequest;   // menu door / hold-B sheathed in camp: app layer consumes
+    // Smithy interaction range (bead monhun-ardu-prg.7): a sheathed B press
+    // inside one of the active room's smithy rects raises smithyRequest so the
+    // app layer opens the smith screen. Cached like the door/heal ranges; the
+    // 6 B rects are read off the blob on demand.
+    uint16_t roomFirstSmithy;
+    uint8_t roomSmithyCount;
+    bool doorLatch;       // suppress doors until the player leaves every door rect
+    bool menuRequest;     // menu door / hold-B sheathed in camp: app layer consumes
+    bool smithyRequest;   // sheathed B press in a smithy rect: app layer opens smith
     bool prevA, prevB;
     // Set by updatePlayer(): the player's fixed-point state changed this tick
     // (input move, drift, knockback). pushApart uses it to resolve a body

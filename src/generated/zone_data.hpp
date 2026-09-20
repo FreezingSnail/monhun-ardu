@@ -12,7 +12,7 @@
 namespace zone_data {
 
 constexpr uint8_t VERSION = 1;
-constexpr uint16_t BLOB_SIZE = 226;
+constexpr uint16_t BLOB_SIZE = 249;
 constexpr uint8_t MONSTER_NONE = 0xFF;
 
 struct Room {
@@ -25,6 +25,8 @@ struct Room {
     uint8_t propCount;
     uint16_t firstHeal;
     uint8_t healCount;
+    uint16_t firstSmithy;   // prg.7 forge interaction range
+    uint8_t smithyCount;
     uint8_t monsterKind;   // MONSTER_NONE or MONSTER_KINDS index
     uint8_t monsterSpawn;  // global spawn index, 0xFF when none
 };
@@ -49,6 +51,13 @@ struct Prop {
 };
 
 struct Heal {
+    uint16_t x, y;
+    uint8_t w, h;
+};
+
+// Camp/room smithy interaction rects (prg.7): overlapping one while
+// sheathed + B press opens the smith screen (world.hpp trySmithy).
+struct Smithy {
     uint16_t x, y;
     uint8_t w, h;
 };
@@ -80,7 +89,9 @@ constexpr uint8_t PROP_CAMP_0 = 8;
 constexpr uint8_t PROP_CAMP_1 = 9;
 constexpr uint8_t PROP_CAMP_2 = 10;
 constexpr uint8_t PROP_CAMP_3 = 11;
+constexpr uint8_t PROP_CAMP_4 = 12;
 constexpr uint8_t HEAL_CAMP_0 = 0;
+constexpr uint8_t SMITHY_CAMP_0 = 0;
 
 // Name tables: host-side lookup for loadRoom(roomId, spawnName).
 struct RoomName { const char *id; uint8_t index; };
@@ -99,8 +110,8 @@ inline constexpr std::array<SpawnName, 4> SPAWN_NAMES = {{
 
 // Section arrays, in packed order.
 inline constexpr std::array<Room, 2> ROOMS = {{
-    {384, 112, 0, 1, 0, 2, 0, 8, 0, 0, 0, 1},
-    {128, 56, 1, 1, 2, 2, 8, 4, 0, 1, 255, 255},
+    {384, 112, 0, 1, 0, 2, 0, 8, 0, 0, 0, 0, 0, 1},
+    {128, 56, 1, 1, 2, 2, 8, 5, 0, 1, 0, 1, 255, 255},
 }};
 
 inline constexpr std::array<Door, 2> DOORS = {{
@@ -115,7 +126,7 @@ inline constexpr std::array<Spawn, 4> SPAWNS = {{
     {104, 40},
 }};
 
-inline constexpr std::array<Prop, 12> PROPS = {{
+inline constexpr std::array<Prop, 13> PROPS = {{
     {3, 40, 16, 0, 0, 8, 8, 1, 1},
     {3, 160, 40, 0, 0, 8, 8, 1, 2},
     {3, 280, 88, 0, 0, 8, 8, 1, 3},
@@ -128,10 +139,15 @@ inline constexpr std::array<Prop, 12> PROPS = {{
     {3, 8, 8, 0, 0, 8, 8, 1, 1},
     {3, 72, 40, 0, 0, 8, 8, 1, 2},
     {3, 24, 8, 0, 0, 8, 8, 2, 1},
+    {4, 88, 40, 0, 0, 16, 16, 0, 0},
 }};
 
 inline constexpr std::array<Heal, 1> HEALS = {{
     {40, 8, 32, 24},
+}};
+
+inline constexpr std::array<Smithy, 1> SMITHIES = {{
+    {88, 40, 16, 16},
 }};
 
 }   // namespace zone_data

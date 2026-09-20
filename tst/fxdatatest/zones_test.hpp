@@ -125,7 +125,7 @@ inline void test_zones(FxTest &test) {
     const uint8_t campProps = FX::readEnd();
     test.expectEq(campW, zone::ROOM_CAMP_W, F("camp record w"));
     test.expectEq(campH, zone::ROOM_CAMP_H, F("camp record h"));
-    test.expectEq(campProps, 4, F("camp prop count"));
+    test.expectEq(campProps, 5, F("camp prop count"));
 
     // Gather nodes (beads monhun-ardu-feel.21 + prg.4): camp's tent (local 0) is
     // a plain prop, the herbs (1, 2) and the mushroom (3) carry the item + yield.
@@ -158,7 +158,7 @@ inline void test_zones(FxTest &test) {
     loadRoom(g, zone::ROOM_CAMP, zone::SPAWN_CAMP_ENTRY);
     test.expectEq(g.camX, 0, F("camp camX pinned"));
     test.expectEq(g.camY, 0, F("camp camY pinned"));
-    test.expectEq(g.roomPropCount, 4, F("camp prop range cached"));
+    test.expectEq(g.roomPropCount, 5, F("camp prop range cached"));
 
     syncPlane(0);
     test.expectEq(arduboy.currentPlane(), 0, F("camp on plane 0"));

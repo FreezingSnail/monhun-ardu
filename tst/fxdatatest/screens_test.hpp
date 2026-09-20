@@ -132,10 +132,14 @@ inline void test_screens(FxTest &test) {
     SaveBlock act;
     saveDefaults(act);
     act.zenny = 250;
+    act.items[ITEM_ORE] = 2;   // SWORD T1 recipe (prg.7)
+    act.items[ITEM_SCALE] = 1;
     test.expectEq(screenCondOk(act, s0), 1, F("buy affordable"));
     test.expectEq(screenApplyAction(act, s0), 1, F("buy applies"));
     test.expectEq(act.zenny, 150, F("buy debits zenny"));
     test.expectEq(act.tier[0], 1, F("buy bumps tier"));
+    test.expectEq(static_cast<uint32_t>(act.items[ITEM_ORE]), 0, F("buy debits ore"));
+    test.expectEq(static_cast<uint32_t>(act.items[ITEM_SCALE]), 0, F("buy debits scale"));
     test.expectEq(screenCondOk(act, q0), 1, F("take always allowed"));
     test.expectEq(screenApplyAction(act, q0), 1, F("take applies"));
     test.expectEq(saveQuestGet(act, 0, 0), 1, F("quest0 taken"));

@@ -4,5 +4,9 @@
   "cost": 250,
   "dmgMul": 125,
   "spdMul": 115,
-  "unlockFlag": 0
+  "unlockFlag": 0,
+  "materials": [
+    { "item": "ore", "count": 3 },
+    { "item": "fang", "count": 1 }
+  ]
 }

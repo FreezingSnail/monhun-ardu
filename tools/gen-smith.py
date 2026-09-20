@@ -11,12 +11,24 @@ core/fxmem.hpp during the screen scan/render window (src/smith.hpp); the host
 suite and the screen logic use the plain UpgradeDef struct
 (src/upgrade_state.hpp). Two tiers per weapon, three weapons.
 
+Recipe (bead monhun-ardu-prg.7): a tier also carries a material bill -- up to
+two {item, count} pairs alongside the zenny `cost` -- so crafting debits both.
+The item names resolve against data/items.json (tools/gen-items-ids.py's id
+list, source order == item index), and the packed material slots hold
+(itemIdx + 1, count) so 0 means "empty slot". The names are emitted as
+`item_ids::ID_<NAME>` constants and the host `UpgradeDef` struct carries a
+`mat[SMITH_MAT_SLOTS]` binder (`{item, count}`), so `screenApplyAction` debits
+the save inventory, not raw ids. Armor recipes stay reserved: an armor list
+would live in a second JSON root (`data/smith/armor_*.json`) with a *kind*
+field; none is authored yet, so the weapon path stays the only smith path.
+
 Blob layout (little-endian, explicit u8/u16, no padding, fixed order):
 
     header     8 B  magic u16 0x534D, version u8, flags u8, defCount u8,
                     reserved u8, reserved u16
-    records    7 B each, ordered by (weaponIdx, tier): weaponIdx u8, tier u8,
-                    cost u16, dmgMul u8, spdMul u8, unlockFlag u8
+    records   11 B each, ordered by (weaponIdx, tier): weaponIdx u8, tier u8,
+                    cost u16, dmgMul u8, spdMul u8, unlockFlag u8,
+                    mat[2] x (itemIdx+1 u8, count u8)
 
 Usage:
     python3 tools/gen-smith.py [--root DIR] [--dump]
@@ -33,16 +45,18 @@ import sys
 
 REPO_ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 DATA_DIR = "data/smith"
+ITEMS_REL = "data/items.json"
 BLOB_REL = "fxdata/tables/smith.bin"
 META_REL = "src/generated/smith_meta.hpp"
 
 MAGIC = 0x534D   # 'M','S' little-endian
-VERSION = 1
+VERSION = 2
 FLAGS = 0
 HEADER_SIZE = 8
-RECORD_SIZE = 7
+RECORD_SIZE = 11
 UPGRADE_MAX = 32
 TIER_MAX = 2   # two tiers per weapon (docs/quests-shops.md)
+MAT_SLOTS = 2  # packed recipe material pairs per tier
 
 # Weapon indices, index == WeaponId in src/core/game.hpp. Keep in sync.
 WEAPON_NAMES = ("sword", "flail", "gun")
@@ -64,12 +78,12 @@ def is_int(value):
     return isinstance(value, int) and not isinstance(value, bool)
 
 
-def check_keys(errors, ctx, obj, required):
+def check_keys(errors, ctx, obj, required, optional=()):
     if not isinstance(obj, dict):
         errors.add(ctx, "expected an object")
         return False
     for key in sorted(obj):
-        if key not in required:
+        if key not in required and key not in optional:
             errors.add(ctx, "unknown key '%s'" % key)
     for key in required:
         if key not in obj:
@@ -108,9 +122,70 @@ def load_json(errors, path, rel):
     return None
 
 
-def normalize_upgrade(errors, rel, name, obj, seen_keys):
+def load_item_ids(errors, root):
+    """Ordered item ids from data/items.json (source order == item index)."""
+    path = os.path.join(root, ITEMS_REL)
+    if not os.path.isfile(path):
+        errors.add(ITEMS_REL, "missing item file (recipe material ids resolve against it)")
+        return None
+    doc = load_json(errors, path, ITEMS_REL)
+    if doc is None:
+        return None
+    raw = doc.get("items")
+    if not isinstance(raw, list) or not raw:
+        errors.add(ITEMS_REL, "items: expected a non-empty array")
+        return None
+    ids = []
+    for i, obj in enumerate(raw):
+        name = obj.get("id") if isinstance(obj, dict) else None
+        if not isinstance(name, str) or not NAME_RE.match(name):
+            errors.add("%s: items[%d].id must match [a-z][a-z0-9_]*" % (ITEMS_REL, i))
+            continue
+        ids.append(name)
+    if errors.items:
+        return None
+    return ids
+
+
+def normalize_materials(errors, ctx, obj, item_ids):
+    """Optional recipe bill: up to MAT_SLOTS {item, count} pairs. Absent or an
+    empty list is a zenny-only recipe (the legacy content). Two identical items
+    in one recipe are rejected: the packed slots are a set, and the device
+    debit walks them in order."""
+    raw = obj.get("materials", []) if isinstance(obj, dict) else []
+    if not isinstance(raw, list):
+        errors.add(ctx, "materials: expected an array")
+        return None
+    if len(raw) > MAT_SLOTS:
+        errors.add(ctx, "materials: %d pairs exceed the %d packed slots" % (len(raw), MAT_SLOTS))
+        return None
+    mats = []
+    seen = set()
+    for i, entry in enumerate(raw):
+        ec = "%s.materials[%d]" % (ctx, i)
+        if not isinstance(entry, dict):
+            errors.add(ec, "expected an object")
+            return None
+        check_keys(errors, ec, entry, {"item", "count"})
+        item = entry.get("item")
+        if not isinstance(item, str) or item not in item_ids:
+            errors.add(ec, "item: unknown item %r (not in %s)" % (item, ITEMS_REL))
+            return None
+        if item in seen:
+            errors.add(ec, "duplicate material '%s'" % item)
+            return None
+        seen.add(item)
+        count = read_int(errors, ec, entry, "count", 1, 255)
+        if count is None:
+            return None
+        mats.append({"item": item, "count": count})
+    return mats
+
+
+def normalize_upgrade(errors, rel, name, obj, seen_keys, item_ids):
     ctx = rel
-    check_keys(errors, ctx, obj, {"weapon", "tier", "cost", "dmgMul", "spdMul", "unlockFlag"})
+    check_keys(errors, ctx, obj, {"weapon", "tier", "cost", "dmgMul", "spdMul", "unlockFlag"},
+               ("materials",))
     if not isinstance(obj, dict):
         return None
     stem = os.path.splitext(name)[0]
@@ -122,18 +197,23 @@ def normalize_upgrade(errors, rel, name, obj, seen_keys):
     dmg = read_int(errors, ctx, obj, "dmgMul", 1, 255)
     spd = read_int(errors, ctx, obj, "spdMul", 1, 255)
     unlock = read_int(errors, ctx, obj, "unlockFlag", 0, 255)
+    mats = normalize_materials(errors, ctx, obj, item_ids)
     if weapon is not None and tier is not None:
         key = (weapon, tier)
         if key in seen_keys:
             errors.add(ctx, "duplicate upgrade for %s tier %d" % (WEAPON_NAMES[weapon], tier))
         seen_keys.add(key)
-    if None in (weapon, tier, cost, dmg, spd, unlock):
+    if None in (weapon, tier, cost, dmg, spd, unlock, mats):
         return None
     return {"name": stem, "weapon": weapon, "tier": tier, "cost": cost,
-            "dmgMul": dmg, "spdMul": spd, "unlockFlag": unlock}
+            "dmgMul": dmg, "spdMul": spd, "unlockFlag": unlock, "materials": mats,
+            "itemIds": item_ids}
 
 
 def compile_model(errors, root):
+    item_ids = load_item_ids(errors, root)
+    if item_ids is None:
+        return None
     data_dir = os.path.join(root, DATA_DIR)
     if not os.path.isdir(data_dir):
         errors.add(DATA_DIR, "missing smith directory")
@@ -149,7 +229,7 @@ def compile_model(errors, root):
         obj = load_json(errors, os.path.join(data_dir, name), rel)
         if obj is None:
             continue
-        up = normalize_upgrade(errors, rel, name, obj, seen_keys)
+        up = normalize_upgrade(errors, rel, name, obj, seen_keys, item_ids)
         if up is not None:
             upgrades.append(up)
     if errors.items:
@@ -165,7 +245,7 @@ def compile_model(errors, root):
     if errors.items:
         return None
     upgrades.sort(key=lambda up: (up["weapon"], up["tier"], up["name"]))
-    return {"upgrades": upgrades}
+    return {"upgrades": upgrades, "itemIds": item_ids}
 
 
 def pack_blob(errors, upgrades):
@@ -175,8 +255,16 @@ def pack_blob(errors, upgrades):
         return None
     blob = bytearray(struct.pack("<HBBBBH", MAGIC, VERSION, FLAGS, count, 0, 0))
     for up in upgrades:
-        blob += struct.pack("<BBHBBB", up["weapon"], up["tier"], up["cost"],
-                            up["dmgMul"], up["spdMul"], up["unlockFlag"])
+        mats = up["materials"]
+        slots = []
+        for i in range(MAT_SLOTS):
+            if i < len(mats):
+                slots += [mats[i]["itemIdx"] + 1, mats[i]["count"]]
+            else:
+                slots += [0, 0]
+        blob += struct.pack("<BBHBBBBBBB", up["weapon"], up["tier"], up["cost"],
+                            up["dmgMul"], up["spdMul"], up["unlockFlag"],
+                            slots[0], slots[1], slots[2], slots[3])
     expected = HEADER_SIZE + RECORD_SIZE * count
     if len(blob) != expected:
         errors.add("data", "internal: blob is %d B, want %d" % (len(blob), expected))
@@ -191,10 +279,11 @@ def emit_meta_header(upgrades, blob):
     app("// Generated by tools/gen-smith.py -- do not edit.")
     app("//")
     app("// Smith upgrade data ABI (docs/quests-shops.md): header then one fixed")
-    app("// 7 B UpgradeDef record per tier, ordered by (weaponIdx, tier).")
+    app("// 11 B UpgradeDef record per tier, ordered by (weaponIdx, tier).")
     app("// src/smith.hpp reads this blob through core/fxmem.hpp during the")
     app("// screen scan/render window; src/upgrade_state.hpp holds the")
-    app("// host-testable struct + integer-percent multiplier math.")
+    app("// host-testable struct + integer-percent multiplier math + the recipe")
+    app("// debits (prg.7 materials).")
     app("")
     app("#include <stdint.h>")
     app("")
@@ -209,14 +298,18 @@ def emit_meta_header(upgrades, blob):
     app("constexpr uint8_t UPGRADE_COUNT = %d;" % len(upgrades))
     app("constexpr uint8_t TIER_COUNT = %d;" % TIER_MAX)
     app("constexpr uint8_t WEAPON_COUNT = %d;" % len(WEAPON_NAMES))
+    app("constexpr uint8_t MAT_SLOTS = %d;   // packed {item,count} pairs per record" % MAT_SLOTS)
     app("")
-    app("// Record field offsets (UpgradeDef: weaponIdx, tier, cost, dmgMul, spdMul, unlockFlag).")
+    app("// Record field offsets (UpgradeDef: weaponIdx, tier, cost, dmgMul, spdMul,")
+    app("// unlockFlag, mat[MAT_SLOTS]).")
     app("constexpr uint8_t UPG_WEAPON_OFF = 0;")
     app("constexpr uint8_t UPG_TIER_OFF = 1;")
     app("constexpr uint8_t UPG_COST_OFF = 2;   // u16")
     app("constexpr uint8_t UPG_DMG_OFF = 4;")
     app("constexpr uint8_t UPG_SPD_OFF = 5;")
     app("constexpr uint8_t UPG_UNLOCK_OFF = 6;")
+    app("constexpr uint8_t UPG_MAT_OFF = 7;    // MAT_SLOTS x (itemIdx+1 u8, count u8)")
+    app("constexpr uint8_t UPG_MAT_STRIDE = 2;")
     app("")
     app("// Weapon indices; values mirror WeaponId in src/core/game.hpp.")
     for i, name in enumerate(WEAPON_NAMES):
@@ -228,6 +321,14 @@ def emit_meta_header(upgrades, blob):
         app("constexpr uint8_t UPG_%s = %d;" % (name, i))
         app("constexpr uint16_t UPG_%s_OFF = %d;" % (name, HEADER_SIZE + i * RECORD_SIZE))
     app("")
+    if upgrades and upgrades[0].get("itemIds"):
+        item_ids = upgrades[0]["itemIds"]
+        app("// Recipe material item ids (index into Game::items[] / the mhItems table).")
+        app("namespace mat {")
+        for i, name in enumerate(item_ids):
+            app("constexpr uint8_t %s = %d;" % (name.upper(), i))
+        app("}   // namespace mat")
+        app("")
     app("}   // namespace smith")
     app("")
     return "\n".join(lines)
@@ -256,6 +357,12 @@ def run(root, dump):
               % (len(errors.items), "" if len(errors.items) == 1 else "s"), file=sys.stderr)
         return 1
     upgrades = model["upgrades"]
+    item_ids = model["itemIds"]
+    # Resolve each recipe item name to its table index once, so the packer and
+    # the emitted symbolic names cannot drift from data/items.json.
+    for up in upgrades:
+        for mat in up["materials"]:
+            mat["itemIdx"] = item_ids.index(mat["item"])
     blob = pack_blob(errors, upgrades)
     if blob is None or errors.items:
         for item in errors.items:
@@ -265,9 +372,10 @@ def run(root, dump):
 
     if dump:
         for up in upgrades:
-            print("upgrade %s: weapon %s tier %d cost %d dmg %d spd %d unlock %d"
+            mats = " ".join("%s x%d" % (m["item"], m["count"]) for m in up["materials"])
+            print("upgrade %s: weapon %s tier %d cost %d dmg %d spd %d unlock %d materials %s"
                   % (up["name"], WEAPON_NAMES[up["weapon"]], up["tier"], up["cost"],
-                     up["dmgMul"], up["spdMul"], up["unlockFlag"]))
+                     up["dmgMul"], up["spdMul"], up["unlockFlag"], mats if mats else "-"))
         print("gen-smith: %d upgrades, %d B blob" % (len(upgrades), len(blob)))
         return 0
 

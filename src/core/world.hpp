@@ -123,6 +123,8 @@ static void loadRoom(Game &g, uint8_t roomId, uint8_t spawn) {
     gp->roomHealCount = room.healCount;
     gp->roomFirstProp = room.firstProp;
     gp->roomPropCount = room.propCount;
+    gp->roomFirstSmithy = room.firstSmithy;
+    gp->roomSmithyCount = room.smithyCount;
     gp->roomMonsterKind = room.monsterKind;
 
     const ZoneSpawn sp = zoneSpawnRead(spawn);
@@ -212,6 +214,33 @@ static void tryHeal(Game &g, bool bP) {
     }
 }
 
+// Smithy (stepGame, prg.7): a sheathed B press inside a smithy rect raises
+// Game::smithyRequest; the app layer consumes it once and opens the smith
+// screen. The tent heal runs first on the same press and sets bLocked when it
+// fired, so a heal rect that overlaps a smithy rect keeps the heal. A press
+// that opens the smith also latches bLocked so the sheathed herb-use verb
+// cannot also run on the same hold.
+static void trySmithy(Game &g, bool bP) {
+    if (!ROOM_BOUNDS_ENABLED || !bP || !g.player.sheathed || g.roomSmithyCount == 0)
+        return;
+    if (g.player.bLocked)
+        return;   // a heal press already consumed this B
+    const Rect pr = bodyRect(g.player);
+    for (uint8_t i = 0; i < g.roomSmithyCount; i++) {
+        const ZoneSmithy s = zoneSmithyRead(static_cast<uint8_t>(g.roomFirstSmithy + i));
+        Rect sr;
+        sr.x = static_cast<int16_t>(s.x);
+        sr.y = static_cast<int16_t>(s.y);
+        sr.w = s.w;
+        sr.h = s.h;
+        if (!pr.overlaps(sr))
+            continue;
+        g.player.bLocked = true;   // this press opened the smith, not the herb
+        g.smithyRequest = true;
+        return;
+    }
+}
+
 // Mock newGame(weapon, mode, monsterIndex): a fresh world in the requested
 // area with the chosen beast variant (0 = legacy LUNGE, the parity default).
 MH_NOINLINE static void newGame(Game &g, int8_t weapon, int8_t mode, int8_t monsterKind = 0) {
@@ -259,6 +288,7 @@ static void stepGame(Game &g, const Input &inp) {
     }
     stepWorldBody(g, inp, aP, bP, bR);
     tryHeal(g, bP);
+    trySmithy(g, bP);
     // Hold-B while sheathed in the camp requests the menu (the app layer routes
     // it, fie.6). Exact HOLD_TICKS edge: one request per press. Uses the shared
     // hold constant, no new magic number.

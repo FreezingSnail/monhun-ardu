@@ -14,6 +14,7 @@
 
 #include "render.hpp"
 #include "screen_state.hpp"
+#include "smith.hpp"   // smithReadDef: cart recipe bill for COND_UPGRADE rows (prg.7)
 
 namespace mh {
 
@@ -53,6 +54,30 @@ inline uint16_t screenRowNext(uint16_t off) {
     return static_cast<uint16_t>(off + 7 + mhFxReadU8(screenCart(off)));
 }
 
+// Recipe bill for a COND_UPGRADE row: walk the mhSmith cart records looking for
+// the (weapon, tier) the row's packed param names, then copy its material
+// slots. `param` is (unlockFlag << 4) | (weaponIdx << 2) | tier. A missing def
+// leaves the recipe empty (zenny-only), which matches the pre-prg.7 content.
+MH_NOINLINE inline void screenRowRecipe(uint8_t param, ScreenRecipe *recipe) {
+    recipe[0].item = 0;
+    recipe[0].count = 0;
+    recipe[1].item = 0;
+    recipe[1].count = 0;
+    const uint8_t weapon = static_cast<uint8_t>((param >> 2) & 3);
+    const uint8_t tier = static_cast<uint8_t>(param & 3);
+    for (uint8_t i = 0; i < smith::UPGRADE_COUNT; i++) {
+        UpgradeDef def;
+        smithReadDef(i, def);
+        if (def.weaponIdx != weapon || def.tier != tier)
+            continue;
+        for (uint8_t j = 0; j < smith::MAT_SLOTS; j++) {
+            recipe[j].item = def.mat[j].item;
+            recipe[j].count = def.mat[j].count;
+        }
+        return;
+    }
+}
+
 inline void screenReadRow(uint16_t off, ScreenRow &row) {
     const uint8_t labelLen = mhFxReadU8(screenCart(off));
     const uint16_t fields = static_cast<uint16_t>(off + 1 + labelLen);
@@ -61,6 +86,12 @@ inline void screenReadRow(uint16_t off, ScreenRow &row) {
     row.flags = mhFxReadU8(screenCart(static_cast<uint16_t>(fields + 3)));
     row.cond = mhFxReadU8(screenCart(static_cast<uint16_t>(fields + 4)));
     row.param = mhFxReadU8(screenCart(static_cast<uint16_t>(fields + 5)));
+    row.recipe[0].item = 0;
+    row.recipe[0].count = 0;
+    row.recipe[1].item = 0;
+    row.recipe[1].count = 0;
+    if (row.cond == screens::COND_UPGRADE)
+        screenRowRecipe(row.param, row.recipe);
 }
 
 // Blob offset of row `index` (walk the variable-length records).
