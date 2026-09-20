@@ -115,6 +115,19 @@ Sheathe (feel.17): hold B and double-tap Down stows the weapon; A draws back
 into combo hit 1. B is the stance modifier for every weapon, so the stow rides
 the feel.16 double-tap detector instead of the old A+B chord.
 
+Items + gathering (feel.22): a map prop with a `gather` record
+(`gatherItem`/`gatherYield`, see `docs/map-zones.md`) is a node. While stowed, a
+tap A inside an un-picked node runs `PS_GATHER` (~40 rooted ticks; move/damage
+cancels) and on completion adds the yield to the inventory (`items[herb]`) and
+picks the node for the rest of the hunt (`newGame` resets nodes + inventory;
+`loadRoom` does not). A tap away from a node still draws the weapon. While
+stowed, holding B `HOLD_TICKS` runs `PS_ITEM` (~40 rooted ticks) when a herb is
+held, healing exactly 20 hp (clamped) and decrementing on completion; a B
+release before the hold stays the stowed roll. A camp heal-rect B press wins on
+the same press (the heal latches `bLocked`, so the hold cannot also eat).
+Gather completion and eat fire `CUE_GATHER`/`CUE_EAT` through the existing audio
+edge detector (inventory edge, no new sim event field).
+
 ---
 
 ## 4. Per-beast kit reference

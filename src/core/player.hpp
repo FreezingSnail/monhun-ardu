@@ -9,6 +9,7 @@
 
 #include <stdint.h>
 #include "game.hpp"
+#include "items.hpp"   // gather nodes + herb use (feel.22)
 #include "../upgrade_state.hpp"
 
 namespace mh {
@@ -67,6 +68,7 @@ void Player::init(int8_t weapon) {
     dTapDir = -1;
     dTapT = 0;
     pDir = -1;
+    itemNode = ITEM_NODE_NONE;
 }
 
 MH_NOINLINE void initGame(Game &g, int8_t weapon) {
@@ -108,6 +110,11 @@ MH_NOINLINE void initGame(Game &g, int8_t weapon) {
     // mhSmith cart at hunt start (bead monhun-ardu-4ug).
     g.dmgMul = UPGRADE_MUL_BASE;
     g.spdMul = UPGRADE_MUL_BASE;
+    // Inventory + gather nodes are per-hunt (feel.22); loadRoom deliberately
+    // leaves the node mask alone so a picked node stays picked across rooms.
+    for (uint8_t i = 0; i < ITEM_COUNT; i++)
+        g.items[i] = 0;
+    g.gatherMask = 0;
 }
 
 static Rect meleeHitbox(const Player &p, const Attack *a) {
@@ -740,7 +747,13 @@ static void updatePlayer(Game &g, const Input &inp, bool aP, bool bP, bool bR) {
     if (inp.b && p.bReady) {
         p.bHeld++;
         if (p.bHeld == HOLD_TICKS && p.stance == ST_NONE && !p.bLocked && !p.sheatheLatch) {
-            enterStance(g, def);
+            // Stowed: the hold is the herb-use verb (feel.22), no stance. A
+            // heal press on the same press sets bLocked (world.hpp tryHeal), so
+            // the tent wins and this never double-acts.
+            if (p.sheathed)
+                startItemUse(g, p);
+            else
+                enterStance(g, def);
             p.bBuffer = 0;   // hold wins: drop any queued branch tap
         }
     }
@@ -773,11 +786,15 @@ static void updatePlayer(Game &g, const Input &inp, bool aP, bool bP, bool bR) {
     if (aP) {
         if (p.sheathed) {
             if (p.state == PS_IDLE) {
-                p.sheathed = false;
-                p.chain = 0;
-                p.chainWin = 0;
-                p.aBuffer = 0;
-                startAttack(g, def);
+                // Sheathed A: a gather node under the hunter wins (feel.22);
+                // otherwise draw into combo hit 1.
+                if (!tryStartGather(g, p)) {
+                    p.sheathed = false;
+                    p.chain = 0;
+                    p.chainWin = 0;
+                    p.aBuffer = 0;
+                    startAttack(g, def);
+                }
             }
         } else if (ROLL_ALT_ENABLED && (p.state == PS_DODGE || p.state == PS_DEFLECT || p.state == PS_SHOVE)) {
             startRollAttack(g, def);
@@ -888,6 +905,28 @@ static void updatePlayer(Game &g, const Input &inp, bool aP, bool bP, bool bR) {
                 // chargeArmed was already cleared by the top-of-tick release.
             }
             applyDrift(p);
+        }
+        break;
+    }
+    case PS_GATHER:
+    case PS_ITEM: {
+        // Rooted action window (feel.22). Any movement input or a landed hit
+        // (playerHurt resets the state) cancels before the completion applies,
+        // so a cancel never half-applies inventory or node state.
+        if (inp.mx || inp.my) {
+            p.state = PS_IDLE;
+            p.t = 0;
+            break;
+        }
+        p.t++;
+        const bool gather = p.state == PS_GATHER;
+        if (p.t >= (gather ? GATHER_TICKS : ITEM_USE_TICKS)) {
+            if (gather)
+                applyGather(g, p);
+            else
+                applyItemUse(g, p);
+            p.state = PS_IDLE;
+            p.t = 0;
         }
         break;
     }

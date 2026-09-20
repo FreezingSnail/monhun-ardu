@@ -59,6 +59,14 @@ static uint16_t countRowBit(uint8_t y, uint8_t xa, uint8_t xb) {
     return n;
 }
 
+// Count lit pixels in the [y0,y1] x [x0,x1] box.
+static uint16_t countBoxBits(uint8_t y0, uint8_t y1, uint8_t x0, uint8_t x1) {
+    uint16_t n = 0;
+    for (uint8_t y = y0; y <= y1; y++)
+        n += countRowBit(y, x0, x1);
+    return n;
+}
+
 inline void test_hud(FxTest &test) {
     arduboy.startGray();   // plane ISR drives waitForNextPlane (as in test_perf)
 
@@ -128,6 +136,42 @@ inline void test_hud(FxTest &test) {
     hudBlk(10, 0, 20, 2, 3);
     test.expectEq(countPage(0, 10, 29, 0x03), 20, F("hudBlk paints hud rows"));
     test.expectEq(countPage(1, 10, 29, 0x00), 20, F("hudBlk no arena paint"));
+
+    // ---- feel.22: herb count + rooted-action progress (still on plane 1) ----
+    // Herb indicator lives in the free 5 px lane x=62..66 (after the 16-wide
+    // weapon marker at 46..61, before the gun text at 67). 0 herbs draws
+    // nothing there; a held herb draws the 1 px plant glyph + one digit.
+    g.items[ITEM_HERB] = 0;
+    g.player.state = PS_IDLE;
+    clearFb();
+    renderScene(g, false);
+    test.expectEq(countBoxBits(1, 6, 62, 66), 0, F("herb region clear at 0 herbs"));
+
+    g.items[ITEM_HERB] = 8;
+    clearFb();
+    renderScene(g, false);
+    test.expectEq(countBoxBits(1, 6, 62, 66) > 0 ? 1 : 0, 1, F("herb region ink at 8 herbs"));
+    test.expectEq(bitAt(62, 2), 1, F("herb icon bud plane1"));
+    test.expectEq(bitAt(62, 3), 1, F("herb icon stem plane1"));
+
+    // Rooted-action bar: 32x4 at (48,12), fill x49..78 rows 13..14. On plane 1
+    // the shade-1 back clears and only the shade-3/shade-2 fill lights, so the
+    // 30-wide fill is an exact pin (procedural arena dots are shade 1).
+    g.player.state = PS_GATHER;
+    g.player.t = GATHER_TICKS;
+    clearFb();
+    renderScene(g, false);
+    test.expectEq(countRowBit(13, 49, 78), 30, F("gather bar fill plane1"));
+    test.expectEq(bitAt(48, 13), 0, F("gather bar left back edge plane1"));
+    test.expectEq(bitAt(79, 13), 0, F("gather bar right back edge plane1"));
+
+    g.player.state = PS_ITEM;
+    g.player.t = ITEM_USE_TICKS;
+    clearFb();
+    renderScene(g, false);
+    test.expectEq(countRowBit(13, 49, 78), 30, F("item bar fill plane1"));
+    g.player.state = PS_IDLE;
+    g.items[ITEM_HERB] = 0;
 }
 
 }   // namespace hud

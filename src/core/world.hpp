@@ -205,6 +205,9 @@ static void tryHeal(Game &g, bool bP) {
         g.player.hp = g.player.hpMax;
         g.player.stam = g.player.stamMax;
         g.player.stamSub = 0;
+        // This press healed: latch bLocked so the same B hold cannot also run
+        // the sheathed herb-use verb (feel.22). bLocked clears on B release.
+        g.player.bLocked = true;
         addEffect(g, static_cast<int16_t>(g.player.x + (g.player.w >> 1)), static_cast<int16_t>(g.player.y + (g.player.h >> 1)), HEAL_SPARK_LIFE, false, 0);
         return;
     }

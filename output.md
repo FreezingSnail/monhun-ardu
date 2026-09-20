@@ -1,117 +1,107 @@
-# monhun-ardu-feel.21 — data: gather nodes (map props gain item/yield fields)
+# monhun-ardu-feel.22 — engine: items + gathering (sheathed gather/use, herb heal)
 
-HEAD at start: `3de714b` (feel.20), clean tree. No commit/push (orchestrator commits).
+HEAD at start: `e0dc697` (feel.21), clean tree. No commit/push (orchestrator commits).
 
-## Schema / packing
+## Core
 
-- `data/map.json` props gain optional `"gather": {"item": "herb", "yield": N}`.
-  `tools/gen-zones.py` validates `item` against `GATHER_ITEMS = ("herb",)`,
-  `yield` 1..9, unknown keys rejected (prop `gather` block and the prop itself).
-  The prop's own rect is the gather rect and keeps the existing inside-room check.
-- Prop record 9 B -> 11 B: `gatherItem u8` (0 = `GATHER_NONE`, else item index+1)
-  + `gatherYield u8`. `PROP_SIZE = 11`.
-- Generated: `GATHER_NONE = 0`, `GATHER_HERB = 1`,
-  `PROP_GATHER_ITEM_OFF = 9`, `PROP_GATHER_YIELD_OFF = 10`; host `zone_data::Prop`
-  gains `gatherItem`/`gatherYield`; `mh::ZoneProp` gains both fields and both
-  readers (`zonePropRead`) surface them.
+- `src/core/game.hpp`
+  - `PState` appends `PS_GATHER`, `PS_ITEM` (existing 0..7 values unchanged).
+  - `Game` appends `uint8_t items[ITEM_COUNT]` + `uint16_t gatherMask`;
+    `Player` appends `uint8_t itemNode` (all appended last: existing field
+    offsets/sizes unchanged, parity hash fields unaffected).
+  - constants: `ITEM_HERB 0`, `ITEM_COUNT 1`, `ITEM_NODE_NONE 0xFF`,
+    `GATHER_TICKS 40`, `ITEM_USE_TICKS 40`, `HERB_HEAL 20`.
+- `src/core/items.hpp` (new): node query/depletion + inventory verbs.
+  - `gatherNodeAt` scans the active room's prop range for an un-picked
+    `gatherItem` node overlapping the hunter body (folds to -1 when the room
+    runtime is carved out); `gatherNodeDepleted`; `tryStartGather`;
+    `applyGather` (mark node, add `gatherYield` to `items[gatherItem-1]`, spark);
+    `startItemUse`; `applyItemUse` (heal exactly 20 clamped at hpMax, decrement).
+  - `static_assert(zone::PROPS_COUNT <= 16)` (u16 mask = one bit per prop record).
+- `src/core/player.hpp`
+  - `init` clears `itemNode`; `initGame` resets `items[]` + `gatherMask`
+    (newGame reset; `loadRoom` deliberately untouched).
+  - sheathed A (idle): `tryStartGather` wins over draw; else the existing draw.
+  - sheathed B hold at `HOLD_TICKS`: `startItemUse` instead of `enterStance`.
+  - `PS_GATHER`/`PS_ITEM` shared rooted case: move input cancels; completes
+    atomically at the window end (cancel never half-applies node/inventory);
+    `playerHurt`'s existing `state = PS_IDLE` is the damage cancel.
+- `src/core/world.hpp`: successful `tryHeal` latches `player.bLocked = true`, so
+  the tent press cannot also start a herb use on the same hold (clears on B
+  release). Heal-rect press therefore wins.
 
-## Authored nodes
+## Render (`src/render.hpp`)
 
-- camp 2: `(8,8,8,8)` yield 1, `(72,40,8,8)` yield 2 (clear of tent/heal/door/spawns).
-- area 3: `(40,16,8,8)` yield 1, `(160,40,8,8)` yield 2, `(280,88,8,8)` yield 3
-  (clear of the door, both spawns and the monster start at 320,72).
-- pole_room 0 (unchanged). Nodes reuse the resolved `mh_map_tent` sheet so the
-  prop-sheet index order (`SHEET_MH_MAP_TENT` 0, `SHEET_FXPOLE` 1) is unchanged
-  and `drawProps`/`propSheet` are untouched — no new art sheet this bead.
+- `drawProps`: a `gatherItem` prop draws a procedural 3-shade plant (dark stem /
+  light leaves / white flower) instead of its sheet; the flower grows taller as
+  the prompt marker while the hunter body overlaps the node; a picked node draws
+  nothing. No new art sheet.
+- `drawHud`: herb count in the free `x=62..66` HUD lane (1 px stalk glyph +
+  one digit; demo total is 9, so one digit always fits). Uses `drawNumber`
+  rather than `hudNum`: both render the white font at y=1 identically for one
+  digit, and `drawNumber` is already out-of-line (measured -52 B vs forcing
+  `hudNum` out-of-line).
+- `drawUseBar` (called in `renderScene` under `MH_ROOM_BOUNDS`, before the
+  fade): a fixed 32x4 `hudBar` near the top of the arena, fill = `p.t` /
+  window (`GATHER_TICKS` white, `ITEM_USE_TICKS` light).
 
-`gen-zones --dump` tail:
+## Audio (`src/audio.hpp`)
 
-```
-room area: 384x112 ... props 3 ...
-  prop 0: post rect(40,16,8,8) sheet mh_map_tent frame 0 gather herb x1
-  prop 1: post rect(160,40,8,8) sheet mh_map_tent frame 0 gather herb x2
-  prop 2: post rect(280,88,8,8) sheet mh_map_tent frame 0 gather herb x3
-room camp: 128x56 ... props 3 ...
-  prop 1: post rect(8,8,8,8) sheet mh_map_tent frame 0 gather herb x1
-  prop 2: post rect(72,40,8,8) sheet mh_map_tent frame 0 gather herb x2
-gen-zones: 3 rooms, 3 doors, 5 spawns, 7 props, 1 heals, 203 B blob
-```
+- `CUE_GATHER` / `CUE_EAT` appended (cue table 12 -> 14 rows, 16 B).
+- `AudioState.itemHerb` snapshots `items[ITEM_HERB]`; `audioUpdate` fires
+  gather on inventory up / eat on inventory down through the existing edge
+  detector. No new Game event field, no blocking tones.
 
-## Tests
+## Tests (permanent, native)
 
-- `tools/tests/test_gen_zones.py`: item/yield round-trip + determinism, unknown
-  item, zero/above-max yield, unknown gather key, missing item, out-of-room rect.
-  Fixture blob 113 -> 115 B.
-- `tst/zone_test.hpp`: host reader pins (tent `GATHER_NONE`; camp herbs herb x1/x2;
-  area herb x1; pole prop none).
-- `tst/fxdatatest/zones_test.hpp`: camp prop count 1 -> 3 + cart reader spot checks.
+- Host `tst/gather_test.hpp` (co-located, added to `tst/main.cpp`): gather
+  completes + depletes + adds yield (1 and 2); movement cancels; damage cancels;
+  depleted node inert (A draws instead); `newGame` resets mask+inventory while
+  `loadRoom` keeps nodes; item use heals exactly 20 and clamps at hpMax; zero
+  herbs = no use; movement cancels item use; unsheathed B hold stays stance;
+  heal-rect B press does not also eat.
+- Device `tst/fxdatatest/hud_test.hpp`: 0 herbs = clear x62..66, 8 herbs = glyph
+  ink + stalk, gather/item bars pin the 30-px fill (plane 1).
+- Device `tst/fxdatatest/audio_test.hpp`: inventory-up -> `CUE_GATHER`,
+  inventory-down -> `CUE_EAT`.
+- `zones_test.hpp` already pins the node records (feel.21) and the prop draws
+  still pass; unchanged.
 
-## Verification (exact tails)
-
-`make gen` (x3 until stable) + `make gen-check`:
-
-```
-gen-zones: 3 rooms, 3 doors, 5 spawns, 7 props, 1 heals, 203 B blob
-fxdata_manifest: PASS (82 generated artifacts unchanged)
-```
-
-`make test`:
-
-```
-Total Passed: 5982
-Total Failed: 0
-```
-
-`make test-tools`:
-
-```
-Ran 209 tests in 11.916s
-
-OK
-```
-
-`make fxtest-headless` (full; test_parity excluded per AGENTS.md):
+## Verification (tails)
 
 ```
-asset_test PASSED=270 FAILED=0
-test_audio PASSED=17 FAILED=0
-test_boot PASSED=4 FAILED=0
-combat_test PASSED=237 FAILED=0
-data_test PASSED=368 FAILED=0
-test_hub PASSED=57 FAILED=0
-test_hud PASSED=17 FAILED=0
-test_menu_art PASSED=60 FAILED=0
-menu_test PASSED=66 FAILED=0
-test_monster_art PASSED=111 FAILED=0
-perf_test PASSED=5 FAILED=0
-test_player_art PASSED=111 FAILED=0
-test_quests PASSED=50 FAILED=0
-test_screens PASSED=78 FAILED=0
-test_smith PASSED=66 FAILED=0
-test_tell PASSED=17 FAILED=0
-zones_test PASSED=76 FAILED=0
-test_perf: B pUs=6367 pHz=157 lHz=52 lTk=452 rMx=4744 rAv=4514 ram=703
+make gen-check   -> fxdata_manifest: PASS (82 generated artifacts unchanged)
+make test        -> Total Passed: 6032 / Total Failed: 0
+make test-tools  -> Ran 209 tests ... OK
+make fxtest-headless (full, all 16 suites PASS)
+  test_perf: B pUs=6366 pHz=157 lHz=52 lTk=452 rMx=4768 rAv=4540 ram=686
+  (gates: pHz 157>=135, lHz 52>=45, rMx 4768<7407, ram 686>=300)
+make size
+  size: .text=28548 .data=28 .bss=1599
+  size: flash=28576/29696 (1120 free)  ram=1627/2560
 ```
 
-`make size`:
+## Size delta (baseline `e0dc697`: flash 27572, ram 1622)
 
-```
-size: .text=27544 .data=28 .bss=1594
-size: flash=27572/29696 (2124 free)  ram=1622/2560
-```
-
-Flash delta vs feel.20 baseline: **0 B** (cart data only; zones.bin 144 -> 203 B,
-+59 B, which shifts the baked equip sheet offsets +59 in `equip_meta.hpp`/`equip.bin`
-— both regenerated, not hand-edited).
-
-## Docs
-
-`docs/map-zones.md`: prop blob row 9 -> 11 B, `gather` schema bullet, `gatherItem`/
-`gatherYield` semantics, test-coverage note.
+- **flash +1004 B** (target <=900 B; over by 104 B), **RAM +5 B**
+  (`items[1]` + `gatherMask` 2 + `itemNode` 1 + `AudioState.itemHerb` 1).
+- Measured breakdown (avr-nm whole-image, LTO): `updatePlayer` +448 (gather/item
+  input + rooted case), render inlined into `main` +384 (plant + herb indicator
+  + bar), `zonePropRead` now out-of-line +94, `hudBar` clone -> shared +42,
+  `mhCueTable` +16, `initGame` +16.
+- Trims already applied: merged the two rooted switch cases; merged the prompt
+  into the flower (dropped 2 `blk` sites); single `hudBar` call in `drawUseBar`;
+  `drawNumber` instead of forcing `hudNum` out-of-line (-52 B). Tried and
+  rejected (all grew the image): noinline `zonePropRead`/`drawProps`/
+  `gatherNodeAt`/`applyGather`/`applyItemUse`/`tryStartGather`, direct-int rect
+  overlap, splitting `drawGatherProp`.
+- Remaining headroom is 1120 B free; the build fits. If the 900 B target is a
+  hard gate, the only clean lever left is carving the whole item/gather verb out
+  of an image that does not need it (parity/hub already carve `MH_ROOM_BOUNDS`),
+  which does not help the shipping image.
 
 ## Notes
 
-- `gatherItem` is the render signal for the feel.22 procedural plant; the sheet
-  field is a placeholder (`mh_map_tent`) until then, so no new art sheet was added.
-- Generated sets staged together (`fxdata.bin`, `fxdata-data.bin`, `fxdata.h` /
-  `src/fxdata.h`, `manifest.json`, `zones.bin`, `zone_*.hpp`, `equip.*`).
+- `test_parity` stays frozen and out of the default gate; not touched.
+- `make gen-check` regenerated the FX image with no artifact drift (no data
+  changes this bead).

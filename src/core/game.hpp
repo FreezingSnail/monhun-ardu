@@ -35,12 +35,22 @@ constexpr bool GUARD_ZONES_ENABLED = combat::HAS_GUARD_ZONES && MH_COMBAT_PARTS;
 // A carved image only has dist-only guards, so the fast path is correct there.
 constexpr bool SIMPLE_GUARDS = combat::HAS_SIMPLE_GUARDS || !MH_COMBAT_PARTS;
 
-constexpr int16_t HOLD_TICKS = 11;        // B held this long -> stance (~180ms)
-constexpr int16_t CHAIN_WIN = 14;         // chain follow-up window after a combo hit
-constexpr uint8_t CHAIN_GAP = 9;          // HEAVY debounce: lock after a non-finisher hit
-constexpr uint8_t COMBO_LOCK = 24;        // HEAVY debounce: lock after the finisher (chain >= 2)
-constexpr uint8_t A_BUFFER = 16;          // attack input buffer in ticks (covers the gap lock)
-constexpr uint8_t B_BRANCH_BUFFER = 36;   // B branch tap buffer: bridges recovery + lock
+constexpr int16_t HOLD_TICKS = 11;   // B held this long -> stance (~180ms)
+// Items + gathering (bead monhun-ardu-feel.22): sheathed A inside a gather
+// node runs PS_GATHER, sheathed B-hold runs PS_ITEM (herb use). Inventory is a
+// per-hunt u8 array (herb index 0); node depletion is a Game bitmask reset in
+// newGame, never by loadRoom (a node stays picked for the hunt).
+constexpr uint8_t ITEM_HERB = 0;           // inventory slot 0
+constexpr uint8_t ITEM_COUNT = 1;          // herb is the only item in the demo
+constexpr uint8_t ITEM_NODE_NONE = 0xFF;   // Player::itemNode: no node bound
+constexpr uint8_t GATHER_TICKS = 40;       // rooted gather window (ticks)
+constexpr uint8_t ITEM_USE_TICKS = 40;     // rooted herb-use window (ticks)
+constexpr uint8_t HERB_HEAL = 20;          // hp restored per herb (integer)
+constexpr int16_t CHAIN_WIN = 14;          // chain follow-up window after a combo hit
+constexpr uint8_t CHAIN_GAP = 9;           // HEAVY debounce: lock after a non-finisher hit
+constexpr uint8_t COMBO_LOCK = 24;         // HEAVY debounce: lock after the finisher (chain >= 2)
+constexpr uint8_t A_BUFFER = 16;           // attack input buffer in ticks (covers the gap lock)
+constexpr uint8_t B_BRANCH_BUFFER = 36;    // B branch tap buffer: bridges recovery + lock
 // Sheathe (feel.17): hold B and double-tap Down. The stow rides the feel.16
 // double-tap detector instead of the old A+B chord, since B is the stance
 // modifier for every weapon.
@@ -131,7 +141,9 @@ enum PState : int8_t {
     PS_DEFLECT,
     PS_SHOVE,
     PS_STUN,
-    PS_CHARGE   // appended (ynb): existing 0..6 values must not move
+    PS_CHARGE,   // appended (ynb): existing 0..6 values must not move
+    PS_GATHER,   // appended (feel.22): sheathed node gather, stationary
+    PS_ITEM      // appended (feel.22): sheathed herb use, stationary
 };
 enum Stance : int8_t {
     ST_NONE = 0,
@@ -502,6 +514,10 @@ struct Player : fp::FpBody, fp::FpStam {
     int8_t dTapDir;
     uint8_t dTapT;
     int8_t pDir;
+    // Gather bind (feel.22): global ZoneProp index of the node the running
+    // PS_GATHER will deplete, ITEM_NODE_NONE when no gather is bound. Appended
+    // last so existing fields/sizes do not move.
+    uint8_t itemNode;
 
     void init(int8_t weapon);
 };
@@ -853,6 +869,14 @@ struct Game {
     // stepGame decays it, so the render can black-wipe the arena for ~4 ticks
     // after a door cross without any new cart traffic. 0 = no transition.
     uint8_t fade;
+    // Items + gather nodes (bead monhun-ardu-feel.22). items[] is the per-hunt
+    // inventory (herb at ITEM_HERB), reset in newGame. gatherMask is one bit per
+    // global prop record: set once that gather node has been picked this hunt
+    // (reset in newGame only -- loadRoom never touches it, so a node stays
+    // depleted across a room round-trip). Appended last so a default Game keeps
+    // every existing field offset.
+    uint8_t items[ITEM_COUNT];
+    uint16_t gatherMask;
 };
 
 // Active-room extents for the bound expressions. With ROOM_BOUNDS_ENABLED

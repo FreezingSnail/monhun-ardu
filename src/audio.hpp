@@ -53,6 +53,8 @@ enum AudioCue : uint8_t {
     CUE_SHOT,      // gun fired a shell
     CUE_RELOAD,    // gun reload finished
     CUE_BREAK,     // hunt: a breakable beast part's zone drained (part broke)
+    CUE_GATHER,    // hunt: a gather node was picked (feel.22)
+    CUE_EAT,       // hunt: a herb was used (feel.22)
 };
 
 // Previous-tick snapshot + one-slot retrigger guard.
@@ -60,6 +62,7 @@ struct AudioState {
     int16_t tick;
     int16_t monsterHp;
     uint8_t playerHp;
+    uint8_t itemHerb;   // inventory herb count (feel.22): gather up / eat down
     uint8_t reload;
     uint8_t monsterStun;
     uint8_t projN;
@@ -86,7 +89,7 @@ static volatile uint16_t mhToggles2;   // queued segment-2 toggles (0 = none)
 // Cue table: {OCR3A, toggles, OCR3A2, toggles2}, precomputed for the exact
 // ArduboyTones math (OCR = F_CPU/8/freq/2 - 1, toggles = (ms*freq)>>9).
 // Index 0 is CUE_NONE (all zero); every queue has toggle counts >= 1.
-static const uint16_t mhCueTable[12][4] PROGMEM = {
+static const uint16_t mhCueTable[14][4] PROGMEM = {
     {0, 0, 0, 0},           // CUE_NONE
     {2023, 21, 0, 0},       // CUE_HIT     494,22
     {1516, 20, 954, 81},    // CUE_CRIT    659,16 1047,40
@@ -99,6 +102,8 @@ static const uint16_t mhCueTable[12][4] PROGMEM = {
     {636, 42, 954, 49},     // CUE_SHOT    1568,14 1047,24
     {954, 24, 636, 85},     // CUE_RELOAD  1047,12 1568,28
     {1431, 20, 750, 100},   // CUE_BREAK   698,28 1060,80
+    {757, 46, 567, 137},    // CUE_GATHER  1319,18 1760,40 (light two-tone pluck)
+    {1516, 25, 2023, 53},   // CUE_EAT     659,20 494,55 (low two-tone gulp)
 };
 
 // Arm one cue. Pins are only set to output/low here (the old constructor did it
@@ -144,6 +149,7 @@ static void audioSnapshot(AudioState &s, const Game &g) {
     s.tick = g.tick;
     s.monsterHp = g.monster.hp;
     s.playerHp = g.player.hp;
+    s.itemHerb = g.items[ITEM_HERB];
     s.reload = g.player.reload;
     s.monsterStun = g.monster.stun;
     s.projN = g.projN;
@@ -211,6 +217,13 @@ static void audioUpdate(AudioState &s, const Game &g) {
         audioCue(s, CUE_RELOAD);
     if (m.state == MS_WINDUP && s.monsterState != MS_WINDUP)
         audioCue(s, CUE_WINDUP);
+
+    // Items (feel.22): the inventory edge is the event (the core only changes
+    // it on a gather completion / a herb use), so no new Game event field.
+    if (g.items[ITEM_HERB] > s.itemHerb)
+        audioCue(s, CUE_GATHER);
+    else if (g.items[ITEM_HERB] < s.itemHerb)
+        audioCue(s, CUE_EAT);
 
     // Combat reactions (break > defense > crit > hit > hurt). Break wins the
     // same tick as the train damage blip.

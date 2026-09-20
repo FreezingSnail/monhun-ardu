@@ -459,6 +459,11 @@ __attribute__((noinline)) static void drawRoom(const Game &g, int16_t camX, int1
 // actors. `sheet` indexes the zone::SHEET_* list; the
 // two shipped sheets resolve (tent in images/blocks, the training pole in the
 // blocks section). Static decoration only -- props have no hit test.
+//
+// Gather nodes (bead monhun-ardu-feel.22) draw a procedural 3-shade plant keyed
+// off `gatherItem` instead of the sheet (no new art); a picked node draws
+// nothing, and the flower grows into the prompt marker while the hunter stands
+// in the node.
 static inline uint24_t propSheet(uint8_t sheet) {
     return sheet ? fxpole : mh_map_tent;   // SHEET_MH_MAP_TENT 0, else SHEET_FXPOLE
 }
@@ -468,8 +473,28 @@ static void drawProps(const Game &g, int16_t camX, int16_t camY) {
     // the same -camX / +HUD_H-camY per record.
     const int16_t px = static_cast<int16_t>(-camX);
     const int16_t oy = static_cast<int16_t>(HUD_H - camY);
+    const Rect pr = bodyRect(g.player);
     for (uint8_t i = 0; i < g.roomPropCount; i++) {
-        const ZoneProp p = zonePropRead(static_cast<uint8_t>(g.roomFirstProp + i));
+        const uint8_t idx = static_cast<uint8_t>(g.roomFirstProp + i);
+        const ZoneProp p = zonePropRead(idx);
+        if (p.gatherItem != zone::GATHER_NONE) {
+            const int16_t gx = static_cast<int16_t>(p.x + px);
+            const int16_t gy = static_cast<int16_t>(p.y + oy);
+            if (gatherNodeDepleted(g, idx))
+                continue;   // picked: node is inert and draws nothing
+            // 3-shade plant: dark stem, light leaves, white flower. The flower
+            // grows into the prompt marker while the hunter stands in the node.
+            Rect nr;
+            nr.x = static_cast<int16_t>(p.x);
+            nr.y = static_cast<int16_t>(p.y);
+            nr.w = p.w;
+            nr.h = p.h;
+            const bool inside = pr.overlaps(nr);
+            blk(static_cast<int16_t>(gx + 3), static_cast<int16_t>(gy + 3), 2, 4, 1);                // stem
+            blk(static_cast<int16_t>(gx + 2), static_cast<int16_t>(gy + 3), 4, 2, 2);                // leaves
+            blk(static_cast<int16_t>(gx + 3), static_cast<int16_t>(gy + 1), 2, inside ? 4 : 2, 3);   // flower + prompt
+            continue;
+        }
         sprDraw(propSheet(p.sheet), static_cast<int16_t>(p.x + px), static_cast<int16_t>(p.y + oy), FRAME(p.frame));
     }
 }
@@ -1247,9 +1272,38 @@ static void drawHud(const mh::Game &g) {
 
     if (g.mode != mh::MODE_TRAIN)   // monster HP (hunt); the plain pole has no bar
         hudBar(82, 2, 44, 3, g.monster.hp, g.monster.hpMax, 3);
+
+    // Herb count (feel.22): a tiny 1 px plant glyph + one digit in the free
+    // 5 px lane x=62..66 (after the 16-wide weapon marker at 46..61, before the
+    // gun text at 67). Only drawn when a herb is held; total available in the
+    // demo is 9 (camp 1+2, area 1+2+3), so one digit always fits.
+    if (g.items[mh::ITEM_HERB] > 0) {
+        hudBlk(62, 2, 1, 4, 3);   // 1 px plant stalk glyph
+        // drawNumber (already out-of-line for effects) keeps hudNum inlined in
+        // the gun-shell path; a single digit renders identically.
+        drawNumber(63, 1, g.items[mh::ITEM_HERB], 3);
+    }
 }
 
 /* ------------------------------------------------------------------ scene */
+
+// Rooted-action progress bar (feel.22). A fixed 32x4 bar near the top of the
+// arena, drawn from the player state timer so both the gather and herb-use
+// windows read the same way; reuses hudBar's back/fill geometry. p.t == 0 at
+// entry and GATHER_TICKS/ITEM_USE_TICKS at completion, so the bar fills over
+// the window. Drawn only while the action runs.
+constexpr int16_t ITEM_BAR_X = 48;
+constexpr int16_t ITEM_BAR_Y = HUD_H + 4;
+constexpr int16_t ITEM_BAR_W = 32;
+constexpr int16_t ITEM_BAR_H = 4;
+
+static void drawUseBar(const mh::Game &g) {
+    const mh::Player &p = g.player;
+    if (p.state != mh::PS_GATHER && p.state != mh::PS_ITEM)
+        return;
+    const bool gather = p.state == mh::PS_GATHER;
+    hudBar(ITEM_BAR_X, ITEM_BAR_Y, ITEM_BAR_W, ITEM_BAR_H, p.t, gather ? mh::GATHER_TICKS : mh::ITEM_USE_TICKS, gather ? 3 : 2);
+}
 
 // Full block-art scene, mock draw order: arena, target (pole|beast), player,
 // shells, effects, then the (untracked) debug wire overlay and HUD. Read-only:
@@ -1313,7 +1367,8 @@ static void renderScene(const mh::Game &g, bool wire) {
     drawProjectiles(g, ecX, ecY);
     drawEffects(g, ecX, ecY);
 #if MH_ROOM_BOUNDS
-    drawFade(g);   // door-cross wipe covers the scene, drawn under the HUD
+    drawUseBar(g);   // rooted gather/item progress (feel.22), under the wipe
+    drawFade(g);     // door-cross wipe covers the scene, drawn under the HUD
 #endif
 #if DEBUG_HURTBOXES
     if (wire)
