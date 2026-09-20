@@ -284,7 +284,7 @@ hunt exit.
 | Input | Action |
 |---|---|
 | D-pad | move |
-| D-pad double-tap | dodge (sword) / deflect (flail) / shove (gunshield) toward the tapped direction (stamina + state gates as the B tap; when stowed, the stowed roll) |
+| D-pad double-tap | dodge roll toward the tapped direction (all weapons, sheathed too — same sword roll; stamina + state gates as the B tap) |
 | B held + double-tap Down | sheathe (stow the weapon); A draws into combo hit 1 |
 | A | attack (in a stance: stance special) |
 | B tap | dodge (sword) / deflect (flail) / shove (gunshield) |

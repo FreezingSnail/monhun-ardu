@@ -1,55 +1,55 @@
-# monhun-ardu-feel.17 — input: sheathe = hold B + double-tap Down
+# monhun-ardu-feel.18 — input: double-tap roll is universal
 
-HEAD at start: `23d30bc` (feel.16), clean tree. No commit/push (orchestrator
-commits). Base flash `28796/29696 (900 free)`, RAM `1747/2560`.
+HEAD at start: `87afd41` (feel.17), clean tree. No commit/push (orchestrator
+commits). Base flash `28614/29696 (1082 free)`, RAM `1743/2560`.
 
 ## What changed
 
 - `src/core/player.hpp`
-  - Deleted the A+B chord machinery: `sheatheCombo()` and the whole chord/seq
-    block in `updatePlayer` (`sheatheConsumed` plumbing removed from the
-    B-branch and A handlers).
-  - `trySheathe()` kept as-is minus the dead `seqT`/`seq2` resets; still requires
-    `PS_IDLE`, drops an active stance, sets `sheathed` + `sheatheLatch`.
-  - In the feel.16 double-tap detector: on the second same-dir edge, if
-    `SHEATHE_ENABLED && inp.b && dNow == 2` (Down) it calls `trySheathe(p)`;
-    otherwise (or if the stow is refused, e.g. non-idle) it calls
-    `tapDefense(g, def, inp)` as before. No B-hold threshold — `inp.b` at the
-    second tap is enough.
-  - `Player::init` no longer zeroes the four removed fields.
-- `src/core/game.hpp`
-  - Removed `SHEATHE_SEQ_WIN` and `CHORD_WIN`; `SHEATHE_ENABLED` comment updated
-    to the new input (carve unchanged, test_parity still defines `MH_SHEATHE 0`).
-  - Removed `seqT`/`seq2`/`chordT`/`pMy` from `Player`; field comment updated.
-    `sheathed`/`sheatheLatch` semantics unchanged.
-- `tst/player_test.hpp`: `stowWeapon()` now holds B and double-taps Down (ends
-  B held). Renamed/updated the two old chord tests and added feel.17 tests:
-  stow from idle; stow from an active stance (stance dropped, latch set);
-  double-tap Down without B still rolls south; B-held double-tap E/Up does not
-  stow (rolls instead); B release after stow does not re-enter stance or roll.
-- `README.md` in-game table: new `B held + double-tap Down` sheathe row.
-- `docs/feel-design.md`: added the feel.17 sheathe input paragraph.
-- `tst/fxdatatest/test_parity.ino`: carve comment updated to the new input.
+  - New `startDodgeRoll(Game&, int16_t dx, int16_t dy)`: facing set to `(dx,dy)`,
+    `PS_DODGE`, `t 16`, `iT 14`, `vx/vy = dir*54>>4`, `stam 14`, `exitStance`;
+    returns false (no state touched) when stamina is short.
+  - New `tapDefenseReady(const Player&, const WeaponDef*)`: the early gate
+    (no new move while `PS_DODGE/DEFLECT/SHOVE/STUN/SPECIAL`; out of an attack
+    only when `weaponCanCancel`). Shared by the B tap and the double-tap detector.
+  - `tapDefense`: gate now via `tapDefenseReady`; sheathed and sword branches
+    both call `startDodgeRoll` (byte-identical B-tap behavior). Flail/gun
+    branches unchanged.
+  - Double-tap detector: `trySheathe` first (B held + Down, feel.17); otherwise
+    `tapDefenseReady(p, def) && startDodgeRoll(g, dir8X(dNow), dir8Y(dNow))` for
+    every weapon and while sheathed.
+- `tst/player_test.hpp`
+  - Rewrote the feel.16 suite: double-tap E -> `PS_DODGE`, `iT 14`, `t 15`,
+    cost 14 for sword/flail/gun; added tapped-direction + facing assertions for
+    flail (south) and gun (west); added a B-tap-specific test (sword dodge /
+    flail deflect / gun shove).
+  - feel.17 sheathe suites unchanged and green.
+- `README.md` — controls row: d-pad double-tap = dodge roll (all weapons,
+  sheathed too).
+- `docs/feel-design.md` — feel.16 input line updated to universal roll; B tap
+  stays weapon-specific.
 
 ## Verification (tails)
 
 - `make gen-check` → `fxdata_manifest: PASS (82 generated artifacts unchanged)`
-- `make test` → `Total Passed: 6550 / Total Failed: 0`; sheathe feel.17 cases
-  all green, feel.16 double-tap suite unchanged and green.
+- `make test` → `Total Passed: 6568 / Total Failed: 0`
 - `make test-tools` → `Ran 202 tests ... OK`
-- `make fxtest-headless` → every suite PASS; `test_perf: PASS` line
+- `make fxtest-headless` (full, all 17 suites) → every suite `FAILED=0`;
+  `perf_test PASSED=5 FAILED=0`,
   `B pUs=6370 pHz=156 lHz=52 lTk=456 rMx=4772 rAv=4593 ram=582`.
-- `make size` → `flash=28614/29696 (1082 free)  ram=1743/2560`.
+- `make size` → `flash=28720/29696 (976 free)  ram=1743/2560`,
+  `.text=28680 .data=40 .bss=1703`.
 
 ## Size delta
 
-- Flash **−182 B** (`28796 → 28614`), free **900 → 1082**.
-- RAM **−4 B** (`1747 → 1743`) from the four removed `Player` fields.
-- Expected ≤0 after dead-code removal; measured −182 B.
+- Flash `28614 → 28720` = **+106 B**, free `1082 → 976`. Within budget.
+- RAM `1743 → 1743` = **+0 B**.
+- The helper split (`tapDefenseReady` + `startDodgeRoll` as real out-of-line
+  functions) adds call/return scaffolding and splits the old fused branch; net
+  +106 B. No data fact flips.
 
 ## Notes
 
-- `SHEATHE_ENABLED` still folds the stow call out of the parity image (its
-  scenes never stow); parity hash only reads `sheathed`, always false there, so
-  fixtures are unaffected and no regen was needed.
-- Down is DIR8 index 2, compared inline with a comment (no new constant).
+- Down is DIR8 index 2; comparison stays inline as before.
+- `SHEATHE_ENABLED` still folds the stow call out of the parity image; host
+  suite covers the stow path.

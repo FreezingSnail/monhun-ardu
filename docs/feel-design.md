@@ -105,9 +105,11 @@ the unchanged 4x4 shade-3 marker at the window centre.
 | `ring` (3) | 1 px outline expanding from half-extent 2, ~1 px per 2 elapsed windup ticks, clamped to the window half-extent. For slams/AoE. |
 | `zone` (4) | Static 1 px outline of the full window rect. Schema-reserved; no demo kit uses it yet. |
 
-Player input verb (feel.16): a d-pad double-tap fires the weapon tap-defense
-toward the tapped direction (sword dodge, flail deflect, gun shove), so the
-positional answer is available without reaching for B.
+Player input verb (feel.16, universal feel.18): a d-pad double-tap fires the
+dodge roll toward the tapped direction for every weapon (and sheathed) — the
+same sword numbers, so the positional answer is available without reaching for
+B. The B tap keeps its weapon-specific tap-defense (sword dodge, flail deflect,
+gun shove).
 
 Sheathe (feel.17): hold B and double-tap Down stows the weapon; A draws back
 into combo hit 1. B is the stance modifier for every weapon, so the stow rides

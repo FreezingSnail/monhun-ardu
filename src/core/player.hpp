@@ -418,11 +418,40 @@ static bool tryBranch(Game &g, const WeaponDef *def, const Input &inp) {
     return true;
 }
 
+// Shared entry gate for every tap-defense / roll action: no new move while an
+// evade, stun or special is running, and out of an attack only when the weapon
+// can cancel (feel.16/17/18). Mirrors the gate the B tap always had.
+static bool tapDefenseReady(const Player &p, const WeaponDef *def) {
+    if (p.state == PS_DODGE || p.state == PS_DEFLECT || p.state == PS_SHOVE || p.state == PS_STUN || p.state == PS_SPECIAL)
+        return false;
+    if (p.state == PS_ATTACK && !weaponCanCancel(def))
+        return false;
+    return true;
+}
+
+// Sword-style dodge roll, shared by the sword/stowed B tap (feel.16) and the
+// universal double-tap roll (feel.18): facing set to (dx,dy), PS_DODGE for 16
+// ticks with 14 i-frames, 3.4 px/t velocity, 14 stamina. Returns false without
+// touching state when stamina is short.
+static bool startDodgeRoll(Game &g, int16_t dx, int16_t dy) {
+    Player &p = g.player;
+    if (p.stam < 14)
+        return false;
+    p.fx = static_cast<int8_t>(dx);
+    p.fy = static_cast<int8_t>(dy);
+    p.stam -= 14;
+    p.state = PS_DODGE;
+    p.t = 16;
+    p.iT = 14;
+    p.vx = (dx * 54) >> 4;   // 3.4 px/t
+    p.vy = (dy * 54) >> 4;
+    exitStance(p);
+    return true;
+}
+
 static void tapDefense(Game &g, const WeaponDef *def, const Input &inp) {
     Player &p = g.player;
-    if (p.state == PS_DODGE || p.state == PS_DEFLECT || p.state == PS_SHOVE || p.state == PS_STUN || p.state == PS_SPECIAL)
-        return;
-    if (p.state == PS_ATTACK && !weaponCanCancel(def))
+    if (!tapDefenseReady(p, def))
         return;
 
     // roll toward move input if any, else current facing
@@ -432,33 +461,15 @@ static void tapDefense(Game &g, const WeaponDef *def, const Input &inp) {
         const int8_t di = fp::dirIndexFromInput(inp.mx, inp.my);
         dx = fp::dir8X(di);
         dy = fp::dir8Y(di);
-        p.fx = dx;
-        p.fy = dy;
+        p.fx = static_cast<int8_t>(dx);
+        p.fy = static_cast<int8_t>(dy);
     }
 
     const int8_t defId = weaponId(def);
-    if (p.sheathed) {
+    if (p.sheathed || defId == W_SWORD) {
         // stowed: every weapon rolls with the sword dodge numbers (MH-style run +
-        // evade while sheathed)
-        if (p.stam < 14)
-            return;
-        p.stam -= 14;
-        p.state = PS_DODGE;
-        p.t = 16;
-        p.iT = 14;
-        p.vx = (dx * 54) >> 4;
-        p.vy = (dy * 54) >> 4;
-        exitStance(p);
-    } else if (defId == W_SWORD) {
-        if (p.stam < 14)
-            return;
-        p.stam -= 14;
-        p.state = PS_DODGE;
-        p.t = 16;
-        p.iT = 14;
-        p.vx = (dx * 54) >> 4;   // 3.4 px/t
-        p.vy = (dy * 54) >> 4;
-        exitStance(p);
+        // evade while sheathed). Sword: the same roll.
+        startDodgeRoll(g, dx, dy);
     } else if (defId == W_FLAIL) {
         if (p.stam < 10)
             return;
@@ -677,15 +688,15 @@ static void updatePlayer(Game &g, const Input &inp, bool aP, bool bP, bool bR) {
             p.chargeArmed = false;
     }
 
-    // Double-tap d-pad -> weapon tap-defense toward the tapped direction
-    // (feel.16), except hold B + double-tap Down, which stows the weapon
+    // Double-tap d-pad -> universal dodge roll toward the tapped direction
+    // (feel.16, universal from feel.18): every weapon, and sheathed, uses the
+    // sword dodge numbers. Hold B + double-tap Down still stows instead
     // (feel.17): B is the stance modifier, so the sheathe rides this detector
-    // instead of an A+B chord. BEFORE the B handling: the same tapDefense() the
-    // B tap uses re-checks the stamina/state gates and picks the weapon action,
-    // so the three weapons keep their own numbers. A press edge is a dir8 the
-    // pad did not carry last tick: held directions never fire, and A/B are
-    // untouched. SHEATHE_ENABLED folds the stow call out of the parity image,
-    // whose scenes never stow (host suite covers it).
+    // instead of an A+B chord. startDodgeRoll re-checks the stamina gate;
+    // tapDefenseReady keeps the same state gates the B tap has. A press edge is
+    // a dir8 the pad did not carry last tick: held directions never fire, and
+    // A/B are untouched. SHEATHE_ENABLED folds the stow call out of the parity
+    // image, whose scenes never stow (host suite covers it).
     if (p.dTapT > 0)
         p.dTapT--;
     const int8_t dNow = fp::dirIndexFromInput(inp.mx, inp.my);
@@ -694,8 +705,8 @@ static void updatePlayer(Game &g, const Input &inp, bool aP, bool bP, bool bR) {
             p.dTapT = 0;                    // second edge inside the window: fire and disarm
             const bool dDown = dNow == 2;   // DIR8 index 2 = Down
             const bool stowed = SHEATHE_ENABLED && inp.b && dDown && trySheathe(p);
-            if (!stowed)
-                tapDefense(g, def, inp);
+            if (!stowed && tapDefenseReady(p, def))
+                startDodgeRoll(g, fp::dir8X(dNow), fp::dir8Y(dNow));
         } else {
             p.dTapDir = dNow;
             p.dTapT = DTAP_WIN;

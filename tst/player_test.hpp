@@ -969,23 +969,61 @@ void PlayerSuite(TestRunner &runner) {
     }
 
     // ------------------------------- double-tap d-pad roll (feel.16)
+    // feel.18: the double-tap roll is universal — sword, flail and gun all use
+    // the sword dodge numbers. Only the B tap stays weapon-specific.
     {
-        Test t("double-tap E rolls toward E (sword dodge, flail deflect, gun shove)");
-        Game g;
-        initGame(g, W_SWORD);
-        doubleTap(g, 1, 0);
-        t.assert(g.player.state, PS_DODGE, "sword: dodge state");
-        t.assertGreaterThan(g.player.vx, 0, "sword: rolls east");
-        t.assertGreaterThan(g.player.iT, 0, "sword: i-frames armed");
+        Test t("double-tap E rolls PS_DODGE (iT 14, stam 14) for every weapon");
+        const int8_t ws[3] = {W_SWORD, W_FLAIL, W_GUN};
+        for (int k = 0; k < 3; k++) {
+            Game g;
+            initGame(g, ws[k]);
+            g.player.stam = 100;
+            g.player.stamSub = 0;
+            doubleTap(g, 1, 0);
+            t.assert(g.player.state, PS_DODGE, "double-tap dodge state");
+            t.assert(g.player.iT, 14, "i-frames 14");
+            t.assert(g.player.t, 15, "dodge length (16 set, same-tick ticks once)");
+            t.assert(g.player.stam, 86, "roll cost 14");
+            t.assertGreaterThan(g.player.vx, 0, "rolls east");
+        }
+        suite.addTest(t);
+    }
 
+    {
+        Test t("double-tap rolls the tapped direction (non-sword) + facing");
+        Game g;
         initGame(g, W_FLAIL);
-        doubleTap(g, 1, 0);
-        t.assert(g.player.state, PS_DEFLECT, "flail: deflect state");
-        t.assertLessThan(g.player.vx, 0, "flail: backstep west");
+        g.player.stam = 100;
+        g.player.stamSub = 0;
+        doubleTap(g, 0, 1);   // south
+        t.assert(g.player.state, PS_DODGE, "flail rolls, not deflects");
+        t.assertGreaterThan(g.player.vy, 0, "south velocity");
+        t.assert(g.player.fy, 16, "facing south");
 
         initGame(g, W_GUN);
-        doubleTap(g, 1, 0);
-        t.assert(g.player.state, PS_SHOVE, "gun: shove state");
+        g.player.stam = 100;
+        g.player.stamSub = 0;
+        doubleTap(g, -1, 0);   // west
+        t.assert(g.player.state, PS_DODGE, "gun rolls, not shoves");
+        t.assertLessThan(g.player.vx, 0, "west velocity");
+        t.assert(g.player.fx, -16, "facing west");
+        suite.addTest(t);
+    }
+
+    {
+        Test t("B tap stays weapon-specific (sword dodge, flail deflect, gun shove)");
+        Game g;
+        initGame(g, W_SWORD);
+        tapB(g);
+        t.assert(g.player.state, PS_DODGE, "sword B tap dodge");
+
+        initGame(g, W_FLAIL);
+        tapB(g);
+        t.assert(g.player.state, PS_DEFLECT, "flail B tap deflect");
+
+        initGame(g, W_GUN);
+        tapB(g);
+        t.assert(g.player.state, PS_SHOVE, "gun B tap shove");
         suite.addTest(t);
     }
 
