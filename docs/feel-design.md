@@ -85,7 +85,7 @@ All are JSON fields compiled by `tools/gen-combat.py`; the `HAS_*` facts in
 |---|---|
 | `stats.enrage {hpPct, spdMul, faceHold, cue}` | One-shot at `hp*100 <= hpMax*hpPct`: multiply `spd` by `spdMul/100` (floor 1) and replace `profile.faceHold` with `faceHold`. `hpPct 0` disables. `cue` is stored but has no audio wiring yet. |
 | `profile.faceHold` | If > 0, tracked facing refreshes only every N ticks, so the heading is committed between refreshes. `0` = every tick. Enrage can overwrite it. |
-| `profile.turnRate` | `1..8` = max DIR8 steps the refreshed facing may rotate toward the player from its current heading (shortest arc, mod 8), so the beast commits to a direction and can be out-circled. `0` = snap straight to the player delta (legacy; the shipped default). |
+| `profile.turnRate` | `1..8` = max DIR8 steps the refreshed facing may rotate toward the player from its current heading (shortest arc, mod 8), so the beast commits to a direction and can be out-circled. `0` = snap straight to the player delta (legacy). feel.15 authors rates on the demo kits: chicken/bull/heavy 1, ravager 2. |
 | `profile.staggerMax / staggerDecay / staggerRecoverT` | Stagger meter opt-in. `staggerMax 0` folds the whole meter out. Hits add `zone.staggerOnHit`; decay subtracts each tick; at threshold the active pattern is cancelled and the beast enters `MS_STAGGER` for `staggerRecoverT`. |
 | `zones.head / appendage` | Face-relative box + `dmgMul` + pool. Highest multiplier wins (tie → body, head, appendage). A drained pool flips one broken bit per zone. |
 | `zones.*.broken.disableAttacks[]` | Attacks disabled while the zone is broken (compiled to the zone's `unlockMask` bit per global attack index). |
@@ -125,7 +125,7 @@ windup/active/recover. Window `t` ranges are inclusive, 1-based.
 | head | (18, 0, 11, 7) | 130 | 40 | 100 | 12 | SLASH; broken dmgMul 130, hurtOn false |
 | appendage | (9, 0, 9, 24) | 150 | 60 | 40 | 30 | SLASH; broken dmgMul 200, hurtOn false, disables `leap` |
 
-**Profile:** engage 36 / keep 16 / attack 42; faceHold 5; circle 8/10;
+**Profile:** engage 36 / keep 16 / attack 42; faceHold 6; turnRate 1; circle 8/10;
 retreat 6/10; cdBase 48 + jitter 60; spawnT 90 / spawnCd 140; stunRecover 24;
 staggerMax 30, decay 2, recover 30.
 
@@ -141,7 +141,7 @@ staggerMax 30, decay 2, recover 30.
 
 | id | guard | steps |
 |---|---|---|
-| `p_flank` | facing **behind**, maxDist 26 | `wing_beat` |
+| `p_flank` | facing **behind**, maxDist 32 | `wing_beat` |
 | `p_peck` | maxDist 28 | `peck` |
 | `p_leap` | minDist 28..255, hp 51..100 | `leap` |
 | `p_leap2` | minDist 28..255, hp 0..50 | `leap` after 10 → `leap` chance 70 |
@@ -158,7 +158,7 @@ staggerMax 30, decay 2, recover 30.
 | head | (17, -4, 12, 10) | 130 | 40 | 100 | 12 | SLASH; broken dmgMul 130, hurtOn false |
 | appendage | (4, 12, 20, 10) | 150 | 60 | 40 | 30 | SLASH; broken dmgMul 200, hurtOn false, disables `stomp` |
 
-**Profile:** engage 36 / keep 18 / attack 42; faceHold 10; circle 8/10;
+**Profile:** engage 36 / keep 18 / attack 42; faceHold 10; turnRate 1; circle 8/10;
 retreat 6/10; cdBase 55 + jitter 40; spawnT 90 / spawnCd 140; stunRecover 24;
 staggerMax 40, decay 1, recover 24.
 
@@ -174,7 +174,7 @@ staggerMax 40, decay 1, recover 24.
 
 | id | guard | steps |
 |---|---|---|
-| `p_rear_kick` | facing **behind**, maxDist 24 | `rear_kick` |
+| `p_rear_kick` | facing **behind**, maxDist 30 | `rear_kick` |
 | `p_gore2` | hp 0..40 | `gore` after 18 → `gore` chance 70 |
 | `p_stomp` | maxDist 24 | `stomp` |
 | `p_gore` | minDist 24..255, hp 41..100 | `gore` |
@@ -189,7 +189,7 @@ staggerMax 40, decay 1, recover 24.
 |---|---|---:|---:|---:|---:|---|
 | appendage | (-24, 0, 24, 16) | 150 | 60 | 40 | 30 | SLASH; broken dmgMul 200, hurtOn false, disables `tail_spin` |
 
-**Profile:** engage 36 / keep 12 / attack 42; faceHold 8; circle 8/10;
+**Profile:** engage 36 / keep 12 / attack 42; faceHold 10; turnRate 1; circle 8/10;
 retreat 6/10; cdBase 55 + jitter 40; spawnT 90 / spawnCd 140; stunRecover 24;
 staggerMax 0 (no meter), decay 0, recover 0.
 
@@ -209,7 +209,7 @@ active ticks = **28 px toward the hunter**.
 
 | id | guard | steps |
 |---|---|---|
-| `p_tail_slam` | facing **behind**, minDist 20..60 | `tail_slam` |
+| `p_tail_slam` | facing **behind**, minDist 16..64 | `tail_slam` |
 | `p_bite_spin` | maxDist 20 | `bite` after 12 → `wait 16` → `tail_spin` |
 | `p_spin` | minDist 21..30 | `tail_spin` |
 | `p_bite` | minDist 31..255, hp 0..100 | `bite` |
@@ -307,6 +307,25 @@ The wave spent ~1630 B over the 26980 baseline (2716 free → 1086 free):
 the tell draw, against the +32 B measured in the final heavy-kit bead. Any
 further kit growth should re-run `make size` and treat a `HAS_*` flip as the
 same kind of event.
+
+### feel.14/feel.15 turn data (HEAD `23097b1` + feel.15 values)
+
+```
+make size
+size: flash=28720/29696 (976 free)  ram=1744/2560
+size: .text=28680 .data=40 .bss=1704
+```
+
+feel.14 added the `profile.turnRate` byte (+8 B flash, +1 B RAM) and folded out
+nothing: the stepping path stays compiled so host tests can drive synthetic
+rates. feel.15 authors the rates as pure values (chicken 6/1, bull 10/1, heavy
+10/1, ravager 8/2) and widens the three behind-guard bands; the packed records
+keep their size, so this bead is **+0 B flash / +0 B RAM** over `23097b1`. The
+only fact flip is `HAS_TURN_RATE false -> true` (generated for the ledger only,
+not folded into the shipping path). No pattern is shadowed: the behind guards
+sit ahead of the same-frontage bands in source order, and the non-behind bands
+(`p_peck`/`p_leap`, `p_stomp`/`p_gore`, `p_bite_spin`/`p_spin`/`p_bite`) are
+unchanged and still tile their ranges.
 
 ### Test scope
 

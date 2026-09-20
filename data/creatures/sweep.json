@@ -38,6 +38,7 @@
     "keepDist": 18,
     "attackDist": 42,
     "faceHold": 10,
+    "turnRate": 1,
     "circleNum": 8,
     "circleDen": 10,
     "retreatNum": 6,
@@ -112,7 +113,7 @@
   "patterns": [
     {
       "id": "p_rear_kick",
-      "guard": { "facing": "behind", "maxDist": 24, "chance": 100 },
+      "guard": { "facing": "behind", "maxDist": 30, "chance": 100 },
       "steps": [ { "atk": "rear_kick", "after": 0 } ]
     },
     {

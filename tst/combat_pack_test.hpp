@@ -514,12 +514,14 @@ void CombatPackSuite(TestRunner &runner) {
         t.assert(b8(blob, static_cast<size_t>(combat::CREATURE_LUNGE_OFF) + 26), 0, "shipped lunge enrage spdMul 0");
         t.assert(b8(blob, static_cast<size_t>(combat::CREATURE_LUNGE_OFF) + 27), 0, "shipped lunge enrage faceHold 0");
         t.assert(b8(blob, static_cast<size_t>(combat::CREATURE_LUNGE_OFF) + 28), 0, "shipped lunge enrage cue 0");
-        // feel.14: the profile record grew to 24 B so the turnRate byte sits
-        // between faceHold and the six u16 timers; shipped data leaves it 0.
+        // feel.14/feel.15: the profile record is 24 B so the turnRate byte sits
+        // between faceHold and the six u16 timers; feel.15 authors real rates
+        // (lunge/bull/heavy 1, ravager 2) after feel.14 left them all 0.
         t.assert(combat::PROFILE_SIZE, 24, "profile record grew for turnRate");
         t.assert(b8(blob, static_cast<size_t>(combat::PROFILE_HEAVY_OFF) + 11), combat_expect::PROFILE_HEAVY_TURN_RATE, "expect heavy turnRate");
         t.assert(b8(blob, static_cast<size_t>(combat::PROFILE_LUNGE_OFF) + 11), combat_expect::PROFILE_LUNGE_TURN_RATE, "expect lunge turnRate");
-        t.assert(b8(blob, static_cast<size_t>(combat::PROFILE_LUNGE_OFF) + 11), 0, "shipped lunge turnRate 0");
+        t.assert(b8(blob, static_cast<size_t>(combat::PROFILE_LUNGE_OFF) + 11), 1, "shipped lunge turnRate 1");
+        t.assert(b8(blob, static_cast<size_t>(combat::PROFILE_RAVAGER_OFF) + 11), combat_expect::PROFILE_RAVAGER_TURN_RATE, "expect ravager turnRate");
         t.assert(b8(blob, static_cast<size_t>(combat::ZONE_RAVAGER_HEAD_OFF) + 4), combat_expect::ZONE_RAVAGER_HEAD_HP, "expect head hp");
         t.assert(b8(blob, static_cast<size_t>(combat::ZONE_RAVAGER_HEAD_OFF) + 5), combat_expect::ZONE_RAVAGER_HEAD_DMG_MUL, "expect head dmgMul");
         t.assert(b8(blob, static_cast<size_t>(combat::ZONE_RAVAGER_APPENDAGE_OFF) + 4), combat_expect::ZONE_RAVAGER_APPENDAGE_HP, "expect tail hp");
@@ -551,9 +553,9 @@ void CombatPackSuite(TestRunner &runner) {
         t.assert(b16(blob, static_cast<size_t>(combat::ATTACK_LUNGE_PECK_OFF) + 19), combat_expect::ATTACK_LUNGE_PECK_RECOVER, "expect lunge recover");
         t.assert(b16(blob, static_cast<size_t>(combat::ATTACK_LUNGE_PECK_OFF) + 21), combat_expect::ATTACK_LUNGE_PECK_DMG, "expect lunge dmg");
         t.assert(b8(blob, static_cast<size_t>(combat::ATTACK_LUNGE_PECK_OFF) + 12), combat_expect::ATTACK_LUNGE_PECK_WALLSTUN, "expect lunge wallStun");
-        // feel.10: p_tail_slam is now the heavy's first pattern (behind, 20..60);
-        // p_bite_spin (<=20), p_spin (21..30) and p_bite (31..255) are no longer
-        // first, so their reaches are pinned literally.
+        // feel.10/feel.15: p_tail_slam is now the heavy's first pattern
+        // (behind, 16..64); p_bite_spin (<=20), p_spin (21..30) and p_bite
+        // (31..255) are no longer first, so their reaches are pinned literally.
         t.assert(b8(blob, static_cast<size_t>(combat::GUARD_HEAVY_P_TAIL_SLAM_OFF) + 0), combat_expect::PATTERN_HEAVY_P_TAIL_SLAM_MIN_DIST, "expect heavy tail_slam minDist");
         t.assert(b8(blob, static_cast<size_t>(combat::GUARD_HEAVY_P_TAIL_SLAM_OFF) + 1), combat_expect::PATTERN_HEAVY_P_TAIL_SLAM_MAX_DIST, "expect heavy tail_slam maxDist");
         t.assert(b8(blob, static_cast<size_t>(combat::GUARD_HEAVY_P_TAIL_SLAM_OFF) + 8), GUARD_FACING_BEHIND, "expect heavy tail_slam behind facing");

@@ -550,7 +550,7 @@ inline void test_combat(FxTest &test) {
     test.expectEq(combatGuardPasses(g, combat::PATTERN_LUNGE_P_LEAP, in), 0, F("leap guard dist 0 rejected"));
     test.expectEq(combatGuardPasses(g, 99, in), 0, F("unknown pattern rejected"));
 
-    // feel.8 p_flank: behind clause (facingDot < 0) plus maxDist 26.
+    // feel.8 p_flank: behind clause (facingDot < 0) plus maxDist (feel.15: 32).
     in.dist = 10;
     in.facingDot = -5;
     test.expectEq(combatGuardPasses(g, combat::PATTERN_LUNGE_P_FLANK, in), 1, F("flank behind accepted"));
@@ -573,7 +573,7 @@ inline void test_combat(FxTest &test) {
     in.dist = 31;
     test.expectEq(combatGuardPasses(g, combat::PATTERN_HEAVY_P_SPIN, in), 0, F("heavy spin dist 31 rejected"));
     test.expectEq(combatGuardPasses(g, combat::PATTERN_HEAVY_P_BITE, in), 1, F("heavy bite dist 31 accepted"));
-    // tail_slam behind clause (dot < 0) at 20..60.
+    // tail_slam behind clause (dot < 0) at 16..64 (feel.15).
     in.dist = 40;
     in.facingDot = -5;
     test.expectEq(combatGuardPasses(g, combat::PATTERN_HEAVY_P_TAIL_SLAM, in), 1, F("heavy tail_slam behind accepted"));

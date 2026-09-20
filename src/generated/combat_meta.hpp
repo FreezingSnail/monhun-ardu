@@ -33,7 +33,7 @@ constexpr bool HAS_SIMPLE_GUARDS = false;
 constexpr bool HAS_STAGGER = true;
 constexpr bool HAS_STEP_AFTER = true;
 constexpr bool HAS_STEP_CHANCE = true;
-constexpr bool HAS_TURN_RATE = false;
+constexpr bool HAS_TURN_RATE = true;
 constexpr bool HAS_WAIT_STEPS = true;
 constexpr bool HAS_ZONES = true;
 

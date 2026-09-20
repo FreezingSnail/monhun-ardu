@@ -29,7 +29,8 @@
     "engageDist": 36,
     "keepDist": 16,
     "attackDist": 42,
-    "faceHold": 5,
+    "faceHold": 6,
+    "turnRate": 1,
     "circleNum": 8,
     "circleDen": 10,
     "retreatNum": 6,
@@ -102,7 +103,7 @@
   "patterns": [
     {
       "id": "p_flank",
-      "guard": { "facing": "behind", "maxDist": 26, "chance": 100 },
+      "guard": { "facing": "behind", "maxDist": 32, "chance": 100 },
       "steps": [ { "atk": "wing_beat", "after": 0 } ]
     },
     {

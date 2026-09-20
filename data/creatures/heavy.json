@@ -7,7 +7,8 @@
     "engageDist": 36,
     "keepDist": 12,
     "attackDist": 42,
-    "faceHold": 8,
+    "faceHold": 10,
+    "turnRate": 1,
     "circleNum": 8,
     "circleDen": 10,
     "retreatNum": 6,
@@ -95,7 +96,7 @@
   "patterns": [
     {
       "id": "p_tail_slam",
-      "guard": { "facing": "behind", "minDist": 20, "maxDist": 60, "chance": 100 },
+      "guard": { "facing": "behind", "minDist": 16, "maxDist": 64, "chance": 100 },
       "steps": [ { "atk": "tail_slam", "after": 0 } ]
     },
     {

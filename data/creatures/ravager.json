@@ -6,6 +6,8 @@
     "engageDist": 36,
     "keepDist": 24,
     "attackDist": 42,
+    "faceHold": 8,
+    "turnRate": 2,
     "circleNum": 8,
     "circleDen": 10,
     "retreatNum": 6,

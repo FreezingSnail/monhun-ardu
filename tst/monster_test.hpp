@@ -226,20 +226,23 @@ void MonsterSuite(TestRunner &runner) {
         h.fx = -fp::FP;
         chooseAttack(g2, 0);
         t.assert(h.atkIdx, combat::ATTACK_HEAVY_BITE, "heavy opens bite_spin at 0 (front)");
-        // Behind (east of the beast): the slam pounces at 20..60, else the base
-        // bands still apply.
+        // Behind (east of the beast): the slam pounces at 16..64 (feel.15), else
+        // the base bands still apply.
         p2.x = static_cast<int16_t>(h.x + 60);
         h.fx = -fp::FP;
         chooseAttack(g2, 40);
         t.assert(h.atkIdx, combat::ATTACK_HEAVY_TAIL_SLAM, "heavy slams a flank at 40");
         h.fx = -fp::FP;
-        chooseAttack(g2, 60);
-        t.assert(h.atkIdx, combat::ATTACK_HEAVY_TAIL_SLAM, "heavy slams a flank at 60");
+        chooseAttack(g2, 64);
+        t.assert(h.atkIdx, combat::ATTACK_HEAVY_TAIL_SLAM, "heavy slams a flank at 64");
         h.fx = -fp::FP;
-        chooseAttack(g2, 61);
+        chooseAttack(g2, 65);
         t.assert(h.atkIdx, combat::ATTACK_HEAVY_BITE, "heavy bites past the slam band");
         h.fx = -fp::FP;
-        chooseAttack(g2, 19);
+        chooseAttack(g2, 16);
+        t.assert(h.atkIdx, combat::ATTACK_HEAVY_TAIL_SLAM, "heavy slams at the new floor 16");
+        h.fx = -fp::FP;
+        chooseAttack(g2, 15);
         t.assert(h.atkIdx, combat::ATTACK_HEAVY_BITE, "heavy bites inside the slam floor");
         Game g3;
         newGame(g3, W_SWORD, MODE_HUNT, MON_LUNGE);
@@ -296,15 +299,19 @@ void MonsterSuite(TestRunner &runner) {
     }
 
     {
-        // nch.4/feel.10: heavy profile.faceHold 8 commits the tracked facing; the
-        // hunter can cross behind and a from-behind hit lands the appendage/tail.
+        // nch.4/feel.10/feel.15: heavy profile.faceHold 10 commits the tracked
+        // facing; the hunter can cross behind and a from-behind hit lands the
+        // appendage/tail. turnRate is pinned to 0 here so this test isolates the
+        // faceHold cadence; the shipped turnRate 1 is exercised by the
+        // "turnRate: real-data chicken" reachability test below.
         Test t("heavy faceHold: facing stale for faceHold ticks, flank hit lands the tail");
         Game g;
         newGame(g, W_SWORD, MODE_HUNT, MON_HEAVY);
         Monster &m = g.monster;
         Player &p = g.player;
-        t.assert(g.combat.profile.faceHold, 8, "heavy faceHold 8 (feel.10)");
+        t.assert(g.combat.profile.faceHold, 10, "heavy faceHold 10 (feel.15)");
         t.assert(g.combat.appendZone != COMBAT_NO_ZONE, true, "heavy appendage zone loaded");
+        g.combat.profile.turnRate = 0;   // isolate the faceHold cadence
         // Beast parked in PURSUE (never chooses), hunter due east -> facing E.
         m.state = MS_PURSUE;
         m.cd = 30000;
@@ -315,11 +322,11 @@ void MonsterSuite(TestRunner &runner) {
         updateMonster(g);
         t.assert(m.fx, fp::FP, "facing E after the first refresh");
         t.assert(m.fy, 0, "level E");
-        t.assert(m.faceT, 7, "faceHold countdown armed (8 set, decremented)");
+        t.assert(m.faceT, 9, "faceHold countdown armed (10 set, decremented)");
         // Hunter crosses behind (west); facing stays E for the rest of the hold.
         p.x = 40;
         p.y = static_cast<int16_t>(m.y + (m.h >> 1) - (p.h >> 1));
-        for (int i = 0; i < 7; i++)
+        for (int i = 0; i < 9; i++)
             updateMonster(g);
         t.assert(m.fx, fp::FP, "facing stale through the full hold");
         t.assert(m.faceT, 0, "countdown reached zero");
@@ -339,14 +346,15 @@ void MonsterSuite(TestRunner &runner) {
 
     {
         // feel.14: profile.turnRate bounds how far the refreshed tracked facing
-        // may rotate each faceHold window. 0 snapes (legacy), N steps at most N
-        // DIR8 steps along the shortest arc (mod 8). Shipped data authors 0.
+        // may rotate each faceHold window. 0 snaps (legacy), N steps at most N
+        // DIR8 steps along the shortest arc (mod 8). feel.15 authors real rates,
+        // so this test pins the shipped heavy value then drives 0/1 synthetically.
         Test t("turnRate: 0 snaps, 1 rotates 45 deg per refresh and wraps");
         Game g;
         newGame(g, W_SWORD, MODE_HUNT, MON_HEAVY);
         Monster &m = g.monster;
         Player &p = g.player;
-        t.assert(g.combat.profile.turnRate, 0, "shipped heavy turnRate 0");
+        t.assert(g.combat.profile.turnRate, 1, "shipped heavy turnRate 1 (feel.15)");
         m.state = MS_PURSUE;
         m.cd = 30000;
         m.spd = 0;   // frozen position: only facing under test
@@ -355,6 +363,7 @@ void MonsterSuite(TestRunner &runner) {
         const int16_t cx = static_cast<int16_t>(m.x + (m.w >> 1));
         const int16_t cy = static_cast<int16_t>(m.y + (m.h >> 1));
         // (a) turnRate 0 snaps the full way to the desired index.
+        g.combat.profile.turnRate = 0;
         m.fx = 11;
         m.fy = -11;   // NE
         p.x = static_cast<int16_t>(cx + 60 - (p.w >> 1));
@@ -408,6 +417,48 @@ void MonsterSuite(TestRunner &runner) {
         updateMonster(g);
         t.assert(m.fx, fp::FP, "no-op keeps E x");
         t.assert(m.fy, 0, "no-op keeps E y");
+        suite.addTest(t);
+    }
+
+    {
+        // feel.15 real-data reachability: chicken faceHold 6 / turnRate 1 means
+        // the tracked heading only rotates one 45-deg notch per 6-tick window, so
+        // a hunter who circles the beast at ~16-20 px can out-run the turn and
+        // reach behind (facingDot < 0) well inside a 24-tick approach.
+        Test t("turnRate: chicken faceHold 6 / turnRate 1 lets a circling hunter reach behind");
+        Game g;
+        newGame(g, W_SWORD, MODE_HUNT, MON_LUNGE);
+        Monster &m = g.monster;
+        Player &p = g.player;
+        t.assert(g.combat.profile.faceHold, 6, "chicken faceHold 6 (feel.15)");
+        t.assert(g.combat.profile.turnRate, 1, "chicken turnRate 1 (feel.15)");
+        m.state = MS_PURSUE;
+        m.cd = 30000;
+        m.spd = 0;   // frozen beast: only the facing track is under test
+        m.x = 100;
+        m.y = 40;
+        const int16_t cx = static_cast<int16_t>(m.x + (m.w >> 1));
+        const int16_t cy = static_cast<int16_t>(m.y + (m.h >> 1));
+        const int16_t R = 18;   // circling radius: inside the 16-20 px target
+        m.fx = fp::FP;
+        m.fy = 0;   // start facing E, hunter due east (in front)
+        m.faceT = 0;
+        int8_t idx = 0;
+        int behindTick = -1;
+        for (int tick = 0; tick < 24; tick++) {
+            const int16_t ox = static_cast<int16_t>((fp::dir8X(idx) * R) >> 4);
+            const int16_t oy = static_cast<int16_t>((fp::dir8Y(idx) * R) >> 4);
+            p.x = static_cast<int16_t>(cx + ox - (p.w >> 1));
+            p.y = static_cast<int16_t>(cy + oy - (p.h >> 1));
+            updateMonster(g);
+            const int16_t dot = combatFacingDot(static_cast<int16_t>(cx + ox), static_cast<int16_t>(cy + oy), cx, cy, m.fx, m.fy);
+            if (behindTick < 0 && dot < 0)
+                behindTick = tick;
+            idx = static_cast<int8_t>((idx + 1) & 7);
+        }
+        t.assert(behindTick >= 0, true, "circling hunter reaches behind (dot < 0)");
+        t.assert(behindTick, 3, "behind reached at tick 3 of the circle");
+        t.assertLessThan(behindTick, 24, "behind reached inside 24 ticks");
         suite.addTest(t);
     }
 
@@ -475,9 +526,13 @@ void MonsterSuite(TestRunner &runner) {
         // Hunter due east of the beast centre: the tracked vector is +E, then
         // lock-away negates it once at windup entry so the tail (window 0 behind
         // the turned-away back) points at the hunter. feel.10: the pure spin now
-        // owns 21..30 px (the <=20 band opens the bite/spin combo).
+        // owns 21..30 px (the <=20 band opens the bite/spin combo). feel.15:
+        // heavy turnRate 1 would take four windows to swing W->E, so start the
+        // facing already on the hunter (front) and let the lock do the work.
         m.x = 80;
         m.y = 40;
+        m.fx = fp::FP;
+        m.fy = 0;
         p.x = 120;
         p.y = static_cast<int16_t>(m.y + (m.h >> 1) - (p.h >> 1));
         p.iT = 0;
