@@ -96,13 +96,11 @@ MH_NI static void addPressure(Game &g) {
     }
     for (uint8_t i = 0; i < 12; i++) {
         Effect &e = g.fx[g.fxN++];
-        const bool txt = i >= 6;
         e.x = 40 + i * 6;
         e.y = 20 + i * 3;
-        e.t = txt ? 2 : 1;
-        e.life = txt ? 40 : 20;
+        e.t = 1;
+        e.life = 20;
         e.crit = (i & 1) != 0;
-        e.text = txt ? 100 + i * 7 : 0;
     }
 }
 
@@ -137,7 +135,6 @@ MH_NI static void primeHunt(Game &g) {
     m.fx = 16;
     m.t = 6;
     m.windupMax = 40;
-    g.pole.hitFlash = 4;
     addPressure(g);
 }
 
@@ -213,10 +210,8 @@ inline void test_perf(FxTest &test) {
     primeHunt(s_g);
     s_s.inited = false;
     runBench(s_g, s_s, wait, logic, render);
-    primeHunt(s_g);          // reset the pressure after the hunt run
-    s_g.mode = MODE_TRAIN;   // pole plane: 20x40 sprite + train HUD
+    primeHunt(s_g);   // reset the pressure, gun loadout
     s_g.weapon = W_GUN;
-    s_g.pole.hitFlash = 4;
     s_s.inited = false;
     runBench(s_g, s_s, wait, logic, render);
 

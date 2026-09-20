@@ -1110,11 +1110,6 @@ void ArtDimsSuite(TestRunner &runner) {
         testTailSpinSheet(t);
         suite.addTest(t);
     }
-    {
-        Test t("training-pole variant sheets carry distinct broken/flash art");
-        testPoleSheets(t);
-        suite.addTest(t);
-    }
     runner.addTestSuite(suite);
 }
 

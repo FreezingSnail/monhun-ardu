@@ -60,13 +60,11 @@ static void updateCamera(Game &g) {
     gp->camY = ty;
 }
 
-// Mock activeTarget(): the pole in train, the live beast in hunt, null once the
-// beast is dead. The port keeps one Game::target (hurt rect + callbacks), so
-// this points it at the right object and re-arms that mode's callbacks.
+// Mock activeTarget(): the live beast in hunt, null once the beast is dead.
+// The port keeps one Game::target (hurt rect + callbacks), so this points it at
+// the beast and re-arms the callbacks (prg.8 removed the training pole arm).
 static void updateActiveTarget(Game &g) {
-    if (g.mode == MODE_TRAIN) {
-        armPoleTarget(g);
-    } else if (roomIsSafe(g)) {
+    if (roomIsSafe(g)) {
         g.target = Target{};   // no beast in a safe room: reads as null
     } else {
         g.target.onHit = monsterOnHit;
@@ -208,7 +206,7 @@ static void tryHeal(Game &g, bool bP) {
         // This press healed: latch bLocked so the same B hold cannot also run
         // the sheathed herb-use verb (feel.22). bLocked clears on B release.
         g.player.bLocked = true;
-        addEffect(g, static_cast<int16_t>(g.player.x + (g.player.w >> 1)), static_cast<int16_t>(g.player.y + (g.player.h >> 1)), HEAL_SPARK_LIFE, false, 0);
+        addEffect(g, static_cast<int16_t>(g.player.x + (g.player.w >> 1)), static_cast<int16_t>(g.player.y + (g.player.h >> 1)), HEAL_SPARK_LIFE, false);
         return;
     }
 }
@@ -224,10 +222,8 @@ MH_NOINLINE static void newGame(Game &g, int8_t weapon, int8_t mode, int8_t mons
     updateActiveTarget(g);
 }
 
-// Mock withWeapon(): swap the weapon but stay in the current area and keep the
-// chosen beast. Prototype bug fix: the mock's newGame defaults to hunt, so a
-// naive swap dropped train. A train swap reinstalls the plain pole via
-// newGame's initWorld.
+// Mock withWeapon(): swap the weapon but keep the chosen beast (mode is always
+// hunt now, prg.8).
 static void withWeapon(Game &g, int8_t weapon) {
     newGame(g, weapon, g.mode, g.monsterKind);
 }

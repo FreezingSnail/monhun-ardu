@@ -1192,9 +1192,8 @@ inline CombatBodyHit combatResolveBodyHit(const Game &g, int32_t base) {
 // anchor plus the DIR8 rotation of (ox, oy); the box itself stays axis-aligned
 // (same projection the attack windows use). int32 intermediates keep the
 // rotation exact for any int8 box offset. `bx/by` is the resolver's world
-// anchor (beast body or static prop rect) and `fx/fy` the explicit facing, so
-// a static prop resolves with an east/world vector and never touches
-// g.monster.fx/fy (train mode keeps a frozen beast whose fields are hashed).
+// anchor (the beast body) and `fx/fy` the explicit facing; the resolver never
+// needs g.monster.fx/fy when the caller passes its own vector.
 inline bool combatZoneContains(int16_t bx, int16_t by, int16_t fx, int16_t fy, const CombatBox &b, int16_t hx, int16_t hy) {
     int16_t dx, dy;
     combatFacePoint(fx, fy, b.ox, b.oy, dx, dy);

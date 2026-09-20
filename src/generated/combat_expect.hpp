@@ -8,7 +8,7 @@
 
 namespace combat_expect {
 
-constexpr uint16_t BLOB_SIZE = 1111;
+constexpr uint16_t BLOB_SIZE = 1045;
 constexpr uint8_t ANCHOR_SIZE = 2;
 constexpr uint8_t ATTACK_SIZE = 24;
 constexpr uint8_t CREATURE_SIZE = 29;
@@ -79,25 +79,6 @@ constexpr uint8_t ZONE_LUNGE_HEAD_BODY_SHARE = 100;
 constexpr uint8_t ZONE_LUNGE_APPENDAGE_HP = 240;
 constexpr uint8_t ZONE_LUNGE_APPENDAGE_DMG_MUL = 150;
 constexpr uint8_t ZONE_LUNGE_APPENDAGE_BODY_SHARE = 40;
-constexpr uint16_t CREATURE_POLE_HP = 0;
-constexpr uint8_t CREATURE_POLE_SPD = 0;
-constexpr uint8_t CREATURE_POLE_W = 20;
-constexpr uint8_t CREATURE_POLE_H = 36;
-constexpr uint8_t CREATURE_POLE_ATTACKS = 0;
-constexpr uint8_t CREATURE_POLE_PATTERNS = 0;
-constexpr uint8_t CREATURE_POLE_STATIC = 1;
-constexpr uint8_t CREATURE_POLE_SHEET = 1;
-constexpr uint8_t CREATURE_POLE_BROKEN_W = 0;
-constexpr uint8_t CREATURE_POLE_BROKEN_H = 0;
-constexpr int8_t CREATURE_POLE_COLLIDE_OX = 0;
-constexpr int8_t CREATURE_POLE_COLLIDE_OY = 0;
-constexpr uint8_t CREATURE_POLE_COLLIDE_W = 20;
-constexpr uint8_t CREATURE_POLE_COLLIDE_H = 36;
-constexpr uint8_t PROFILE_POLE_FACE_HOLD = 0;
-constexpr uint8_t PROFILE_POLE_TURN_RATE = 0;
-constexpr uint8_t ZONE_POLE_HEAD_HP = 0;
-constexpr uint8_t ZONE_POLE_HEAD_DMG_MUL = 140;
-constexpr uint8_t ZONE_POLE_HEAD_BODY_SHARE = 100;
 constexpr uint16_t CREATURE_RAVAGER_HP = 2400;
 constexpr uint8_t CREATURE_RAVAGER_SPD = 6;
 constexpr uint8_t CREATURE_RAVAGER_W = 32;
@@ -165,12 +146,12 @@ constexpr uint8_t ZONE_SWEEP_APPENDAGE_HP = 240;
 constexpr uint8_t ZONE_SWEEP_APPENDAGE_DMG_MUL = 150;
 constexpr uint8_t ZONE_SWEEP_APPENDAGE_BODY_SHARE = 40;
 
-// sha256 of fxdata/tables/combat.bin: f7fe6a0770d85b8c8f939b6501b4af12d6d62fe7a2da871759acacb89a909462
+// sha256 of fxdata/tables/combat.bin: 7342fa0299d7642ef979a20f8ac9049e7c8aebdca244eb4b9676a0441fcb9897
 constexpr uint8_t BLOB_SHA256[32] = {
-    0xF7, 0xFE, 0x6A, 0x07, 0x70, 0xD8, 0x5B, 0x8C,
-    0x8F, 0x93, 0x9B, 0x65, 0x01, 0xB4, 0xAF, 0x12,
-    0xD6, 0xD6, 0x2F, 0xE7, 0xA2, 0xDA, 0x87, 0x17,
-    0x59, 0xAC, 0xAC, 0xB8, 0x9A, 0x90, 0x94, 0x62,
+    0x73, 0x42, 0xFA, 0x02, 0x99, 0xD7, 0x64, 0x2E,
+    0xF9, 0x79, 0xA2, 0x0F, 0x8A, 0xC9, 0x04, 0x9E,
+    0x7C, 0x8A, 0xEB, 0xDC, 0xA2, 0x44, 0xEB, 0x4B,
+    0x96, 0x76, 0xA0, 0x44, 0x1F, 0xCB, 0x98, 0x97,
 };
 
 }   // namespace combat_expect

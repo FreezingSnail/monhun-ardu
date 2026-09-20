@@ -166,11 +166,9 @@ inline void test_zones(FxTest &test) {
     test.expectEq(bitAt(48, 32), 1, F("camp tent body ink"));
     test.expectEq(bitAt(0, 40), 0, F("camp prop clear off-box"));
 
-    // The pole-room prop reuses the existing fxpole sheet.
-    loadRoom(g, zone::ROOM_POLE_ROOM, zone::SPAWN_POLE_ROOM_START);
-    clearFb();
-    drawProps(g, g.camX, g.camY);
-    test.expectEq(bitAt(64, 40), 1, F("pole room prop ink"));
+    // Area props: the herb gather nodes draw math from the zone records, not a
+    // sheet, so the tent above is the only shipped sprite prop (prg.8 removed
+    // the pole room + its fxpole prop record).
 
     // ------------------------------------- 3. area view: v == 4 shifted window
     loadRoom(g, zone::ROOM_AREA, zone::SPAWN_AREA_START);
@@ -256,25 +254,15 @@ inline void test_zones(FxTest &test) {
     appNavApply(APP_NAV_MENU, menu, screen, save, d, Z_B);
     test.expectEq(static_cast<uint32_t>(menu.active), 1, F("camp exit opens menu"));
 
-    // pole pick -> pole room (train); its door (0,24,8,24) exits to the menu.
-    MenuState pole;
-    pole.weapon = W_GUN;
-    pole.target = MENU_POLE_TARGET;
-    test.expectEq(static_cast<uint32_t>(appNavApply(appMenuAccept(), pole, screen, save, d, Z_IDLE)), 1, F("pole pick starts"));
-    test.expectEq(static_cast<uint32_t>(d.mode), MODE_TRAIN, F("pole train mode"));
-    test.expectEq(static_cast<uint32_t>(d.roomId), zone::ROOM_POLE_ROOM, F("pole starts in pole room"));
-    test.expectEq(static_cast<uint32_t>(d.combat.creature), combat::CREATURE_POLE, F("plain pole installed"));
-    d.player.x = 60;   // clear the arrival latch
-    d.player.y = 44;
-    stepGame(d, Z_IDLE);
-    d.player.x = 0;
-    d.player.y = 24;
-    stepGame(d, Z_IDLE);
-    test.expectEq(static_cast<uint32_t>(d.menuRequest), 1, F("pole door requests menu"));
-    const AppNav pnav = appMenuRequest(d);
-    test.expectEq(static_cast<uint32_t>(pnav), APP_NAV_MENU, F("pole door routes to menu"));
-    appNavApply(pnav, menu, screen, save, d, Z_B);
-    test.expectEq(static_cast<uint32_t>(menu.active), 1, F("pole door opens menu"));
+    // beast pick -> camp -> area door round trip; the camp hold-B exit above is
+    // the only demo-path route back to the menu (prg.8 removed the pole room).
+    MenuState beast;
+    beast.weapon = W_GUN;
+    beast.target = MON_HEAVY;
+    test.expectEq(static_cast<uint32_t>(appNavApply(appMenuAccept(), beast, screen, save, d, Z_IDLE)), 1, F("beast pick starts"));
+    test.expectEq(static_cast<uint32_t>(d.mode), MODE_HUNT, F("beast hunt mode"));
+    test.expectEq(static_cast<uint32_t>(d.monsterKind), MON_HEAVY, F("picked heavy beast"));
+    test.expectEq(static_cast<uint32_t>(d.roomId), zone::ROOM_CAMP, F("beast starts in camp"));
 }
 
 }   // namespace zones

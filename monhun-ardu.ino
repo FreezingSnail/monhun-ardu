@@ -108,8 +108,8 @@ static mh::Input sampleInput() {
 
 // One logic tick. Called only from needsUpdate() (never mid-plane), so the
 // whole core advances atomically between planes. pollButtons() already ran.
-// Demo flow (monhun-ardu-fie.6): menu --A--> camp (or pole_room for a pole
-// pick) --door--> area --door--> camp --hold-B--> menu; win/loss + A -> menu.
+// Demo flow (monhun-ardu-fie.6): menu --A--> camp --door--> area --door--> camp
+// --hold-B--> menu; win/loss + A -> menu.
 // The screen branch below still handles the hub graph if a screen ever becomes
 // active (shelf code kept in tree), but nothing on the demo path sets it.
 void run() {
@@ -162,7 +162,7 @@ void run() {
     }
     mh::stepGame(g, in);
     mh::audioUpdate(s_audio, g);
-    // Camp hold-B sheathed / pole-room door: the core raises Game::menuRequest.
+    // Camp hold-B sheathed: the core raises Game::menuRequest.
     // Consume it once (a held B cannot re-fire) and open the menu with the
     // weapon/target picks preserved.
     if (mh::appMenuRequest(g) != mh::APP_NAV_NONE) {

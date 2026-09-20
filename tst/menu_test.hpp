@@ -61,7 +61,7 @@ void MenuSuite(TestRunner &runner) {
     }
 
     {
-        Test t("taps cycle target 0..4 (beasts + plain pole) and wrap both ways");
+        Test t("taps cycle target 0..3 (beast roster) and wrap both ways");
         MenuState m;
         menuTap(m, MT_DOWN);
         t.assert(m.target, 1, "down: LUNGE -> SWEEP");
@@ -70,13 +70,11 @@ void MenuSuite(TestRunner &runner) {
         menuTap(m, MT_DOWN);
         t.assert(m.target, 3, "down: HEAVY -> RAVAGER");
         menuTap(m, MT_DOWN);
-        t.assert(m.target, 4, "down: RAVAGER -> POLE");
-        menuTap(m, MT_DOWN);
-        t.assert(m.target, 0, "down wraps POLE -> LUNGE");
+        t.assert(m.target, 0, "down wraps RAVAGER -> LUNGE");
         menuTap(m, MT_UP);
-        t.assert(m.target, 4, "up wraps LUNGE -> POLE");
+        t.assert(m.target, 3, "up wraps LUNGE -> RAVAGER");
         menuTap(m, MT_UP);
-        t.assert(m.target, 3, "up: POLE -> RAVAGER");
+        t.assert(m.target, 2, "up: RAVAGER -> HEAVY");
         t.assert(m.weapon, 0, "target nav leaves weapon alone");
         suite.addTest(t);
     }
@@ -170,18 +168,18 @@ void MenuSuite(TestRunner &runner) {
     }
 
     {
-        Test t("pick -> mode/kind mapping (targets 0..3 hunt, 4 train)");
+        Test t("pick -> mode/kind mapping (targets 0..3 hunt; prg.8 removed train)");
         MenuState m;
         for (int8_t target = 0; target < MENU_TARGET_COUNT; target++) {
             m.target = target;
-            t.assert(menuMode(m), target >= MENU_POLE_TARGET ? MODE_TRAIN : MODE_HUNT, "mode by target");
-            t.assert(menuMonsterKind(m), target < MENU_POLE_TARGET ? target : 0, "kind by target");
+            t.assert(menuMode(m), MODE_HUNT, "every target hunts");
+            t.assert(menuMonsterKind(m), target, "kind by target");
         }
         suite.addTest(t);
     }
 
     {
-        Test t("menuStart applies weapon + mode + kind + plain pole to Game");
+        Test t("menuStart applies weapon + kind into the camp hunt");
         for (int8_t weapon = 0; weapon < 3; weapon++) {
             for (int8_t target = 0; target < MENU_TARGET_COUNT; target++) {
                 MenuState m;
@@ -190,13 +188,9 @@ void MenuSuite(TestRunner &runner) {
                 Game g;
                 menuStart(g, m);
                 t.assert(g.weapon, weapon, "start weapon");
-                t.assert(g.mode, target >= MENU_POLE_TARGET ? MODE_TRAIN : MODE_HUNT, "start mode");
-                t.assert(g.monsterKind, target < MENU_POLE_TARGET ? target : 0, "start kind");
-                if (target >= MENU_POLE_TARGET) {
-                    t.assert(g.combat.creature, combat::CREATURE_POLE, "start pole creature");
-                    t.assert(g.combat.zone[COMBAT_ZONE_HEAD].hp, 0, "start plain pool");
-                    t.assert(g.target.alive, 1, "start pole target armed");
-                } else {
+                t.assert(g.mode, MODE_HUNT, "start mode");
+                t.assert(g.monsterKind, target, "start kind");
+                {
                     t.assert(g.roomId, zone::ROOM_CAMP, "hunt starts in camp");
                 }
             }

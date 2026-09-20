@@ -25,7 +25,7 @@ namespace mh {
 
 // Defined in projectiles.hpp (included after player.hpp). Declared here so the
 // gather completion can spawn the shared spark effect.
-static void addEffect(Game &g, int16_t x, int16_t y, uint8_t life, bool crit, int16_t text);
+static void addEffect(Game &g, int16_t x, int16_t y, uint8_t life, bool crit);
 
 // Node-depletion mask is a u16 (one bit per global prop record). The demo map
 // has 7 props; a future map that overflows this fires the assert instead of
@@ -106,7 +106,7 @@ static void applyGather(Game &g, Player &p) {
         const uint16_t n = static_cast<uint16_t>(g.items[slot]) + prop.gatherYield;
         g.items[slot] = n > 255 ? 255 : static_cast<uint8_t>(n);
     }
-    addEffect(g, static_cast<int16_t>(p.x + (p.w >> 1)), static_cast<int16_t>(p.y + (p.h >> 1)), GATHER_SPARK_LIFE, false, 0);
+    addEffect(g, static_cast<int16_t>(p.x + (p.w >> 1)), static_cast<int16_t>(p.y + (p.h >> 1)), GATHER_SPARK_LIFE, false);
 }
 
 // Sheathed B hold: enter PS_ITEM when a herb is held. False = nothing (the

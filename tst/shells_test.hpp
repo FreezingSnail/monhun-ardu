@@ -115,7 +115,6 @@ void ShellSuite(TestRunner &runner) {
         t.assert(g.fx[0].y, 68, "muzzle y");
         t.assert(g.fx[0].life, 5, "muzzle life");
         t.assert(g.fx[0].crit, 1, "muzzle crit flag");
-        t.assert(g.fx[0].text, 0, "muzzle is not a damage number");
         suite.addTest(t);
     }
 
@@ -217,78 +216,21 @@ void ShellSuite(TestRunner &runner) {
     }
 
     {
-        Test t("pole head zone x1.4, body x1.0, hitFlash 4");
+        Test t("effect spark spawns with its life and expires");
         Game g;
         initGame(g, W_SWORD);
-        initWorld(g, MODE_TRAIN);
-        g.pole.rect = Rect{140, 40, 20, 36};
+        initWorld(g, MODE_HUNT);
         g.tick = 0;
-        t.assert(damagePole(g, 10, 100, 100), 10, "body damage x1.0");   // hy >= pole.y + 16
-        t.assert(g.pole.hitFlash, 4, "hitFlash set");
-        t.assert(g.fx[0].crit, 0, "body effect not crit");
-        t.assert(g.fx[0].text, 10, "body damage number");
-        t.assert(damagePole(g, 10, 100, 50), 14, "head damage x1.4 (integer 14/10)");   // hy < pole.y + 16
-        t.assert(g.fx[1].crit, 1, "head effect is crit");
-        t.assert(g.fx[1].text, 14, "head damage number");
-        suite.addTest(t);
-    }
-
-    {
-        Test t("damage number spawns at hy-6 with life 26 and expires");
-        Game g;
-        initGame(g, W_SWORD);
-        initWorld(g, MODE_TRAIN);
-        g.tick = 0;
-        damagePole(g, 10, 77, 50);
-        t.assert(g.fxN, 1, "one damage number");
-        t.assert(g.fx[0].text, 14, "text is the total (head x1.4)");
-        t.assert(g.fx[0].life, 26, "damage number life");
-        t.assert(g.fx[0].y, 44, "spawns hy-6 (rises in render)");
+        addEffect(g, 77, 50, 26, true);
+        t.assert(g.fxN, 1, "one effect");
+        t.assert(g.fx[0].crit, 1, "crit flag stored");
+        t.assert(g.fx[0].life, 26, "effect life");
+        t.assert(g.fx[0].y, 50, "spawn y");
         updateEffects(g);
         t.assert(g.fx[0].t, 1, "effect ages");
         for (int i = 0; i < 25; i++)
             updateEffects(g);
         t.assert(g.fxN, 0, "expires after life ticks");
-        suite.addTest(t);
-    }
-
-    {
-        Test t("plain pole install: initPole loads the static prop record");
-        Game g;
-        initGame(g, W_SWORD);
-        initWorld(g, MODE_TRAIN);
-        initPole(g);
-        t.assert(g.combat.isStatic, 1, "pole static flag cached");
-        t.assert(g.combat.creature, combat::CREATURE_POLE, "pole creature loaded");
-        t.assert(g.combat.headZone, combat::ZONE_POLE_HEAD, "crit head zone seeded");
-        t.assert(g.combat.zone[COMBAT_ZONE_HEAD].hp, 0, "head has no pool");
-        t.assert(g.combat.zone[COMBAT_ZONE_HEAD].hpMax, 0, "head hpMax 0");
-        t.assert(g.combat.zone[COMBAT_ZONE_HEAD].dmgMul, 140, "head crit mul 140");
-        t.assert(g.pole.rect.w, 20, "pole rect w");
-        t.assert(g.pole.rect.h, 36, "pole rect h");
-        t.assert(g.target.rect.w, 20, "pole target rect armed");
-        suite.addTest(t);
-    }
-
-    {
-        Test t("train mode: pole is targetable, monster stays frozen");
-        Game g;
-        initGame(g, W_SWORD);
-        initMonster(g);
-        initWorld(g, MODE_TRAIN);
-        g.pole.rect = Rect{static_cast<int16_t>(g.player.x + 20), g.player.y, 20, 36};
-        const int16_t mx = g.monster.x, my = g.monster.y;
-        stepWorld(g, Input{0, 0, true, false});
-        bool landed = false;
-        for (int i = 0; i < 20 && g.player.state != PS_IDLE; i++) {
-            idleTicks(g, 1);
-            landed = landed || g.pole.hitFlash > 0 || g.fxN > 0;
-        }
-        t.assert(landed, 1, "pole takes player damage (hit flash / damage number)");
-        idleTicks(g, 100);
-        t.assert(g.monster.x, mx, "monster must not move in train");
-        t.assert(g.monster.y, my, "monster must not move in train");
-        t.assert(g.player.hp, 100, "nothing hurts the player in train");
         suite.addTest(t);
     }
 

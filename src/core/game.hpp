@@ -69,20 +69,22 @@ constexpr uint8_t SHEATHE_SPD = 24;   // 1/16 px per tick while stowed (1.5 px/t
 #endif
 constexpr bool SHEATHE_ENABLED = MH_SHEATHE;
 constexpr bool B_BRANCH_BUFFER_ENABLED = MH_B_BRANCH_BUFFER;
-// Roll-attack + direction+A opener carve (same pattern as MH_SHEATHE): no
-// parity scene rolls into an A press or presses direction+A, so the A-out-of-
-// evade branch and the alt table selection fold out of the test_parity image;
-// the host suite keeps covering both paths.
+// Roll-attack + direction+A opener carve (same pattern as MH_SHEATHE): prg.8
+// turned the shipping default off (the direction+A opener and the A-out-of-
+// evade roll attack are trimmed for the progression-wave budget). The carve
+// stays: a build that passes -DMH_ROLL_ALT=1 re-enables both, and the host
+// suite (tst/player_test.hpp) covers them with the flag forced on.
 #ifndef MH_ROLL_ALT
-#define MH_ROLL_ALT 1
+#define MH_ROLL_ALT 0
 #endif
 constexpr bool ROLL_ALT_ENABLED = MH_ROLL_ALT;
-// Stage-3 finisher carve (same pattern as MH_SHEATHE): no test_parity scene
-// taps B after a finisher (A A A then B), so the finWin writes, the idle
-// stage-3 mapping and the bBuffer inLock extension fold out of that image;
-// the host suite keeps covering the finisher path.
+// Stage-3 finisher carve (same pattern as MH_SHEATHE): prg.8 turned the
+// shipping default off (the B-after-finisher stage-3 branch is trimmed for the
+// progression-wave budget). The carve stays: -DMH_STAGE3=1 re-enables the
+// finWin writes / idle stage-3 mapping / inLock extension, and the host suite
+// covers the finisher path with the flag forced on.
 #ifndef MH_STAGE3
-#define MH_STAGE3 1
+#define MH_STAGE3 0
 #endif
 constexpr bool STAGE3_ENABLED = MH_STAGE3;
 // Charge carve (monhun-ardu-ynb, same pattern as MH_SHEATHE): no test_parity
@@ -123,9 +125,11 @@ constexpr int16_t MAX_PROJECTILES = 12;
 constexpr int16_t MAX_EFFECTS = 12;
 constexpr int16_t PROJ_LIFE = 90;   // ticks, mock fireShell()
 
+// Hunt is the only shipped mode (prg.8 removed the training pole/mode). The
+// enum + Game::mode stay so the menu/sim routing and the mode marker art index
+// keep their shape; every value is MODE_HUNT.
 enum Mode : int8_t {
-    MODE_HUNT = 0,
-    MODE_TRAIN = 1
+    MODE_HUNT = 0
 };
 
 enum WeaponId : int8_t {
@@ -455,22 +459,12 @@ struct Projectile : fp::FpBody {
     bool heavy;      // ball (render: big core) vs scatter pellet
 };
 
-// text == 0: spark / muzzle effect. text != 0: rising damage number.
+// One transient spark/muzzle effect (prg.8 removed the rising damage-number
+// text variant; every effect is a spark, `crit` selects the bright plane).
 struct Effect {
     int16_t x, y;
-    uint8_t t, life;   // life <= 26 (spark/damage-number), t ages to life
+    uint8_t t, life;   // life <= 26, t ages to life
     bool crit;
-    int16_t text;
-};
-
-// Training pole (bead monhun-ardu-feel.20: one plain static prop). The shared
-// combat loader installs its record (body box + the crit head zone); the Pole
-// itself only owns its world rect and hit flash timer -- damage resolves through
-// the same combatZoneHitResolveAt path a beast uses, so there is no
-// pole-specific pool/break code.
-struct Pole {
-    Rect rect;          // hurt box: 20x36 at (140,40)
-    uint8_t hitFlash;   // 4 on hit, decays in updatePole()
 };
 
 // Player inherits the fp bodies so addMove/addVel/drainStam work directly on
@@ -848,7 +842,6 @@ struct Game {
     Projectile proj[MAX_PROJECTILES];
     uint8_t fxN;   // 0..MAX_EFFECTS
     Effect fx[MAX_EFFECTS];
-    Pole pole;
     CombatState combat;   // combat loader caches (ljj.2, 50 B AVR)
     // Quest kill accounting (bead monhun-ardu-me6): the sketch sets questTarget
     // from the active quest's def at hunt start (-1 = none), restores progress

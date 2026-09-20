@@ -166,7 +166,7 @@ static void damageMonster(Game &g, int16_t dmg, int16_t hx, int16_t hy) {
     const int16_t fr = crit ? 6 : 4;
     if (g.freeze < fr)
         g.freeze = fr;
-    addEffect(g, hx, hy, 7, crit, 0);
+    addEffect(g, hx, hy, 7, crit);
     if (m.hp <= 0) {
         m.hp = 0;
         m.state = MS_DEAD;

@@ -148,44 +148,6 @@ void WorldSuite(TestRunner &runner) {
     }
 
     {
-        Test t("train mode: monster frozen, pole is the active target");
-        Game g;
-        newGame(g, W_SWORD, MODE_TRAIN);
-        t.assert(g.mode, MODE_TRAIN, "train mode set");
-        t.assert(g.target.alive, 1, "train target armed");
-        t.assert(g.target.rect.w, 20, "active target is the pole (w 20)");
-        const int16_t mx = g.monster.x;
-        const int16_t my = g.monster.y;
-        wticks(g, 200, WTEST_IDLE);
-        t.assert(g.monster.x, mx, "monster x frozen in train");
-        t.assert(g.monster.y, my, "monster y frozen in train");
-        suite.addTest(t);
-    }
-
-    {
-        Test t("train install: plain pole is the active target and survives swaps");
-        Game g;
-        newGame(g, W_SWORD, MODE_TRAIN);
-        t.assert(g.pole.rect.w, 20, "pole rect w 20");
-        t.assert(g.pole.rect.h, 36, "pole rect h 36");
-        t.assert(g.target.rect.w, 20, "active target refreshed to 20");
-        // A head hit resolves through the shared zone path and refreshes flash.
-        const int16_t hx = static_cast<int16_t>(g.pole.rect.x + 10);
-        const int16_t hy = static_cast<int16_t>(g.pole.rect.y + 5);
-        t.assert(damagePole(g, 10, hx, hy), 14, "head crit x1.4");
-        t.assert(g.pole.hitFlash, 4, "hit flash armed");
-        // The plain pole is reinstalled by withWeapon/resetHunt in train.
-        withWeapon(g, W_GUN);
-        t.assert(g.mode, MODE_TRAIN, "weapon swap keeps train");
-        t.assert(g.pole.rect.w, 20, "pole rect kept after swap");
-        t.assert(g.target.alive, 1, "target re-armed after swap");
-        resetHunt(g);
-        t.assert(g.mode, MODE_TRAIN, "reset keeps train");
-        t.assert(g.pole.rect.w, 20, "pole rect kept after reset");
-        suite.addTest(t);
-    }
-
-    {
         Test t("activeTarget indirection: hunt beast, then null once dead");
         Game g;
         newGame(g, W_SWORD, MODE_HUNT);
@@ -205,12 +167,12 @@ void WorldSuite(TestRunner &runner) {
     {
         Test t("withWeapon + resetHunt keep the current area (mock bug fix)");
         Game g;
-        newGame(g, W_SWORD, MODE_TRAIN);
+        newGame(g, W_SWORD, MODE_HUNT);
         withWeapon(g, W_GUN);
-        t.assert(g.mode, MODE_TRAIN, "swap keeps train");
+        t.assert(g.mode, MODE_HUNT, "swap keeps hunt");
         t.assert(g.weapon, W_GUN, "weapon swapped");
         resetHunt(g);
-        t.assert(g.mode, MODE_TRAIN, "reset keeps train");
+        t.assert(g.mode, MODE_HUNT, "reset keeps hunt");
         t.assert(g.weapon, W_GUN, "reset keeps weapon");
         t.assert(g.tick, 0, "reset zeroes the clock");
         t.assert(g.player.hp, 100, "reset restores the hunter");

@@ -149,7 +149,7 @@ static uint32_t fbHash() {
 }
 
 static void setupCase(Game &g, const Case &c) {
-    newGame(g, c.weapon, MODE_TRAIN);
+    newGame(g, c.weapon, MODE_HUNT);
     Player &p = g.player;
     p.x = 48;
     p.y = 24;

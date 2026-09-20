@@ -1,17 +1,16 @@
 #pragma once
-// Projectiles, effects, training pole, ported from
-// mock/game.js (source of truth): fireShell / updateProjectiles /
-// updateEffects / updatePole / damagePole / activeTarget.
+// Projectiles + effects, ported from mock/game.js (source of truth):
+// fireShell / updateProjectiles / updateEffects / activeTarget.
 //
 // The player FSM (player.hpp) still owns ammo + reload and only records the
 // shot in Game::lastShot* (fireShell stub). This header turns that record into
 // the muzzle effect + pellets and advances them, so host tests and the device
 // run the exact same spawn offsets, spread and collision as the mock.
 //
-// Tick order matches mock step(): player, target update (pole|monster),
+// Tick order matches mock step(): player, target update (monster),
 // projectiles, effects. Camera / world slow-scroll (bead 0ny) and rendering
-// (later beads) consume Game::mode / Game::pole / Game::proj / Game::fx and do
-// not need changes here. No float, no Arduino.h. Header-only.
+// (later beads) consume Game::mode / Game::proj / Game::fx and do not need
+// changes here. No float, no Arduino.h. Header-only.
 
 #include <stdint.h>
 #include "monster.hpp"   // updateMonster / syncMonsterTarget / damageMonster
@@ -20,25 +19,11 @@
 
 namespace mh {
 
-static void syncPoleTarget(Game &g);
-
 // ---------------------------------------------------------------- lifecycle
 
-// Install the training pole: load the single static prop creature
-// (data/creatures/pole.json) through the shared loader, so its body box, crit
-// head zone and profile caches ride the shared creature pipeline (no pole flash
-// tables), then derive the hurt rect from its body stats + spawn.
-static void initPole(Game &g) {
-    const uint8_t cid = creatureLoad(g, combat::CREATURE_POLE);
-    const CombatSpawn spawn = combatCreatureSpawnRead(cid);
-    g.pole.rect = Rect{static_cast<int16_t>(spawn.x), static_cast<int16_t>(spawn.y), static_cast<int16_t>(g.combat.body.w), static_cast<int16_t>(g.combat.body.h)};
-    g.pole.hitFlash = 0;
-    if (g.mode == MODE_TRAIN)
-        syncPoleTarget(g);
-}
-
-// Clear hrd state and pick the active target: hunt (beast) or train (pole).
-// Call after initGame() + initMonster(); mock newGame(weapon, mode).
+// Clear hrd state. Call after initGame() + initMonster(); mock newGame(weapon,
+// mode). `mode` is kept for the caller's shape but hunt is the only value
+// (prg.8); the pole/train target install is gone.
 static void initWorld(Game &g, int8_t mode) {
     g.mode = mode;
     g.lastShot = 0;
@@ -50,15 +35,11 @@ static void initWorld(Game &g, int8_t mode) {
     g.fxN = 0;
     for (int16_t i = 0; i < MAX_EFFECTS; i++)
         g.fx[i] = Effect{};
-    g.pole.rect = Rect{140, 40, 20, 36};
-    g.pole.hitFlash = 0;
-    if (mode == MODE_TRAIN)
-        initPole(g);
 }
 
 // ---------------------------------------------------------------- effects
 
-static void addEffect(Game &g, int16_t x, int16_t y, uint8_t life, bool crit, int16_t text) {
+static void addEffect(Game &g, int16_t x, int16_t y, uint8_t life, bool crit) {
     if (g.fxN >= MAX_EFFECTS) {   // device cap: drop oldest, keep newest
         for (int16_t i = 1; i < MAX_EFFECTS; i++)
             g.fx[i - 1] = g.fx[i];
@@ -70,7 +51,6 @@ static void addEffect(Game &g, int16_t x, int16_t y, uint8_t life, bool crit, in
     e.t = 0;
     e.life = life;
     e.crit = crit;
-    e.text = text;
 }
 
 static void updateEffects(Game &g) {
@@ -82,61 +62,6 @@ static void updateEffects(Game &g) {
             g.fxN--;
         }
     }
-}
-
-// ---------------------------------------------------------------- train pole
-
-MH_NOINLINE static void syncPoleTarget(Game &g) {
-    g.target.alive = true;
-    g.target.rect = g.pole.rect;
-}
-
-static void updatePole(Game &g) {
-    if (g.pole.hitFlash > 0)
-        g.pole.hitFlash--;
-}
-
-// Mock damagePole(), resolved by the shared 3-hitzone code: the plain pole's
-// head zone carries dmgMul 140 so a head hit multiplies x1.4 through the same
-// path a beast uses, and a lower hit resolves as body damage. hitFlash 4, freeze
-// crit 5 / body 4, rising damage number (life 26). The prop is static, so the
-// resolver runs with an explicit east facing at the pole rect anchor and never
-// reads g.monster.fx/fy. Returns the exact total applied.
-static int16_t damagePole(Game &g, uint8_t dmg, int16_t hx, int16_t hy) {
-    Pole &pole = g.pole;
-    CombatBodyHit hit;
-    if (ZONES_ENABLED)
-        hit = combatZoneHitResolveAt(g, dmg, playerPhys(g), hx, hy, pole.rect.x, pole.rect.y, fp::FP, 0);
-    else
-        hit = combatResolveBodyHit(g, dmg);
-    const int16_t total = static_cast<int16_t>(hit.dmg);
-    pole.hitFlash = 4;
-    const bool crit = hit.zone == COMBAT_ZONE_HEAD;
-    const uint8_t fr = crit ? 5 : 4;
-    if (g.freeze < fr)
-        g.freeze = fr;
-    addEffect(g, hx, static_cast<int16_t>(hy - 6), 26, crit, total);
-    return total;
-}
-
-// Target::onHit — pole is static and takes no knockback/trip. The shared zone
-// resolve (damagePole) does the crit work; the pole callback only forwards the
-// landed point.
-static void poleOnHit(Game &g, uint8_t dmg, int16_t hx, int16_t hy, uint8_t push, uint8_t effect) {
-    (void)push;
-    (void)effect;
-    damagePole(g, dmg, hx, hy);
-}
-static void poleOnShove(Game &, int8_t, int8_t, uint8_t, uint8_t) {
-}   // pole never moves
-static void poleOnStun(Game &, uint8_t) {
-}
-
-MH_NOINLINE static void armPoleTarget(Game &g) {
-    syncPoleTarget(g);
-    g.target.onHit = poleOnHit;
-    g.target.onShove = poleOnShove;
-    g.target.onStun = poleOnStun;
 }
 
 // ---------------------------------------------------------------- projectiles
@@ -157,7 +82,7 @@ static void spawnShot(Game &g) {
     const int8_t fx = g.lastShotFx;
     const int8_t fy = g.lastShotFy;
 
-    addEffect(g, static_cast<int16_t>(cx + ((fx * 10) >> 4)), static_cast<int16_t>(cy + ((fy * 10) >> 4)), 5, true, 0);
+    addEffect(g, static_cast<int16_t>(cx + ((fx * 10) >> 4)), static_cast<int16_t>(cy + ((fy * 10) >> 4)), 5, true);
 
     int8_t dirX[3], dirY[3];
     int8_t n = 1;
@@ -222,10 +147,7 @@ static void updateProjectiles(Game &g) {
             if (r.overlaps(g.target.rect)) {
                 const int16_t hx = static_cast<int16_t>(r.x + (r.w >> 1));
                 const int16_t hy = static_cast<int16_t>(r.y + (r.h >> 1));
-                if (g.mode == MODE_TRAIN)
-                    poleOnHit(g, pr.dmg, hx, hy, 0, 0);
-                else
-                    monsterOnHit(g, pr.dmg, hx, hy, 0, 0);   // migration B: parts resolve
+                monsterOnHit(g, pr.dmg, hx, hy, 0, 0);   // migration B: parts resolve
                 removeProjectile(g, i);
                 continue;
             }
@@ -249,27 +171,21 @@ static void updateProjectiles(Game &g) {
 // Edges are supplied by the caller so stepGame() can run them before the
 // over/freeze gate (mock computes edges every tick, frozen or not).
 static void stepWorldBody(Game &g, const Input &inp, bool aP, bool bP, bool bR) {
-    // Safe room (hunt only): the room record carries no monster, so the beast
-    // and target are left untouched while the player controls / HUD / doors
-    // stay live. Room bounds are carved out of the parity image, so this folds
-    // to the pre-room two-branch dispatch there.
-    const bool safe = g.mode != MODE_TRAIN && roomIsSafe(g);
-    if (g.mode == MODE_TRAIN)
-        armPoleTarget(g);
-    else if (!safe)
+    // Safe room: the room record carries no monster, so the beast and target
+    // are left untouched while the player controls / HUD / doors stay live.
+    // Room bounds are carved out of the parity image, so this folds to the
+    // pre-room single-branch dispatch there.
+    const bool safe = roomIsSafe(g);
+    if (!safe)
         syncMonsterTarget(g);
     else
         g.target.alive = false;
     updatePlayer(g, inp, aP, bP, bR);
     if (g.lastShot)
         spawnShot(g);
-    if (g.mode == MODE_TRAIN)
-        updatePole(g);
-    else if (!safe)
+    if (!safe)
         updateMonster(g);
-    if (g.mode == MODE_TRAIN)
-        armPoleTarget(g);
-    else if (!safe)
+    if (!safe)
         syncMonsterTarget(g);
     updateProjectiles(g);
     updateEffects(g);

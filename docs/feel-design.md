@@ -350,6 +350,37 @@ sit ahead of the same-frontage bands in source order, and the non-behind bands
 (`p_peck`/`p_leap`, `p_stomp`/`p_gore`, `p_bite_spin`/`p_spin`/`p_bite`) are
 unchanged and still tile their ranges.
 
+### prg.8 trim — reclaim adopted (HEAD `8abac2e` + prg.8)
+
+The progression wave needed flash headroom, so the prg.1 spike's reclaim set was
+adopted (keeping charged attacks, telegraph shapes and the zone part overlays):
+
+| Cut | How |
+|---|---|
+| training mode (pole target, pole room, menu POLE row) | removed end to end: `MODE_TRAIN`, `Pole`, `initPole`/`updatePole`/`damagePole`/`armPoleTarget`, `data/creatures/pole.json`, the `pole_room` map record, `menu_state` target count 5→4, `mh_menu_msel` rebuilt as 4 tiles |
+| damage-number text | removed (sparks kept): `Effect::text`, `drawEffects` number branch, `addEffect` text arg |
+| screen shake | removed: the render's tick-derived view offset |
+| weapon trail | removed: the 3 trail puffs in `drawProjectiles` |
+| procedural ground dots | **kept** (see note below); not cut |
+| rare audio cues | `CUE_BREAK`/`CUE_GATHER`/`CUE_EAT`/`CUE_WINDUP` + their edges removed from the detector and `mhCueTable` (14→9 rows); gather/eat verbs stay |
+| stage-3 finisher | `MH_STAGE3=0` shipping (carve kept; host build forces 1) |
+| dir+A opener / roll attack | `MH_ROLL_ALT=0` shipping (carve kept; host build forces 1) |
+
+```
+make size
+size: flash=27128/29696 (2568 free)  ram=1584/2560
+size: .text=27108 .data=20 .bss=1564
+```
+
+**Measured whole-image reclaim: 1448 B flash (28576 → 27128), 43 B RAM
+(1627 → 1584).** The prg.1 spike budgeted -1812 for the recB set (which also
+included the ground-dot cut); the shipping image lands at -1448 because (a) the
+procedural ground-dot field was kept — the fie.8 `MH_ROOM_IMAGE` default is 0,
+so `drawArena` is still the shipping ground and removing it would blank the
+playfield — and (b) the per-cut deltas were measured independently and do not
+sum linearly under LTO. Device perf improved as a strict render subtraction:
+`test_perf` `rMx` 4768 → 3348 µs, `rAv` 4540 → 3075 (budget 7407), ram 724.
+
 ### Test scope
 
 `test_parity` is **excluded from the default `fxtest-headless` gate**

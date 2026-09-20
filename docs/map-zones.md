@@ -34,7 +34,8 @@ the render path (fie.5) blits the room layers with `seekData`.
 }
 ```
 
-- `props[]`: `type` is one of `tent`, `door`, `pole`, `post`; `sheet` is a C
+- `props[]`: `type` is one of `tent`, `door`, `pole`, `post` (`pole` is a
+  legacy type token only — prg.8 removed the pole room); `sheet` is a C
   symbol that must resolve in `fxdata/fxdata.h` once its art is authored
   (fie.5). `frame`, `w`, `h` are u8, `x`/`y` u16.
 - `props[].gather` (optional, bead monhun-ardu-feel.21): a gather node. `item`

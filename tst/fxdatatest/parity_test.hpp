@@ -139,11 +139,8 @@ static uint16_t hashState(const Game &g) {
     h = mix(h, mHw);
     h = mix(h, mHh);
 
-    // pole / train
-    h = mix(h, g.pole.hitFlash);
-    h = mix(h, g.train.total);
-    h = mix(h, g.train.last);
-    h = mix(h, trainDps(g));
+    // prg.8 removed the training pole/train meter; this legacy image keeps its
+    // hash shape by folding nothing here (see tst/fxdatatest/test_parity.ino).
 
     // projectiles (x*16 + subX reconstructs the mock's 1/16 px position)
     h = mix(h, g.projN);
@@ -169,7 +166,6 @@ static uint16_t hashState(const Game &g) {
         h = mix(h, e.t);
         h = mix(h, e.life);
         h = mix(h, e.crit ? 1 : 0);
-        h = mix(h, e.text);
     }
 
     // sheathe + combo debounce/buffer state (udb; appended after effects, mirror
@@ -210,9 +206,9 @@ static int32_t snapField(const Game &g, uint8_t f) {
     case 10:
         return g.projN;
     case 11:
-        return g.train.total;
+        return 0;   // prg.8 removed the train meter
     case 12:
-        return g.train.last;
+        return 0;   // prg.8 removed the train meter
     case 13:
         return m.x;
     case 14:
@@ -315,8 +311,9 @@ static void test_parity(FxTest &test) {
             monsterAttackSet(g, kind == MK_LUNGE ? combat::ATTACK_SWEEP_GORE : combat::ATTACK_SWEEP_STOMP);
         else
             g.monster.atkIdx = COMBAT_NO_ATTACK;
-        g.pole.rect.x = mhPgmReadI16(&parity_fx::overrides[o + 8]);
-        g.pole.rect.y = mhPgmReadI16(&parity_fx::overrides[o + 9]);
+        // prg.8 removed the pole; overrides o+8/o+9 no longer feed a game field.
+        (void)mhPgmReadI16(&parity_fx::overrides[o + 8]);
+        (void)mhPgmReadI16(&parity_fx::overrides[o + 9]);
         updateActiveTarget(g);
 
         uint16_t hashFails = 0;

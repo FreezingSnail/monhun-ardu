@@ -9,10 +9,10 @@
 // menu/screen state changes, so the sketch and the device E2E suite run the
 // exact same routing code.
 //
-// Demo flow (monhun-ardu-fie.6, what the shipping sketch wires):
+// Demo flow (monhun-ardu-fie.6, what the shipping sketch wires; prg.8 removed
+// the training-pole room):
 //   menu --A--> camp --door--> area --door--> camp   (hunt pick; camp hold-B
 //   --B hold--> menu)                                -> menu; area door -> camp
-//   menu --A--> pole_room --door--> menu             (pole pick, train)
 //   hunt end + A --> menu                            (appHuntReturn)
 //
 // Shelf graph (kept compiled + unit-tested, NOT reachable from the sketch; the
@@ -81,7 +81,7 @@ inline AppNav appHuntReturn() {
     return APP_NAV_MENU;
 }
 
-// Camp hold-B (sheathed) / pole-room door: the core raises Game::menuRequest.
+// Camp hold-B (sheathed): the core raises Game::menuRequest.
 // The app layer consumes it exactly once -> opening menu, so a held B cannot
 // re-fire once the menu is up. Returns the nav for the caller to apply.
 inline AppNav appMenuRequest(Game &g) {

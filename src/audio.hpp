@@ -22,8 +22,8 @@
 // Edge detection is freeze-safe: stepGame() skips updateEffects()/sim while
 // Game::freeze > 0, so an effect can sit at t==1 for several ticks and a
 // transient state (deflect, riposteT) holds its value. Every cue below is gated
-// on an edge that only advances on a non-frozen tick (hp/total drop, stun set,
-// projectile spawn, reload reach 0, windup entry), so nothing refires.
+// on an edge that only advances on a non-frozen tick (hp drop, stun set,
+// projectile spawn, reload reach 0, riposte armed), so nothing refires.
 
 #include <stdint.h>
 #include "core/world.hpp"
@@ -43,18 +43,13 @@ namespace mh {
 enum AudioCue : uint8_t {
     CUE_NONE = 0,
     CUE_HIT,       // hunt: melee/shot landed on the beast
-    CUE_CRIT,      // hunt head hit / pole head hit
-    CUE_TRAIN,     // train: body hit on the pole
+    CUE_CRIT,      // hunt head hit
     CUE_HURT,      // player took a clean hit
     CUE_PARRY,     // sword riposte landed
     CUE_DEFLECT,   // flail deflect absorbed a hit
     CUE_GUARD,     // gunshield guard block (chip damage)
-    CUE_WINDUP,    // beast started a windup (telegraph)
     CUE_SHOT,      // gun fired a shell
     CUE_RELOAD,    // gun reload finished
-    CUE_BREAK,     // hunt: a breakable beast part's zone drained (part broke)
-    CUE_GATHER,    // hunt: a gather node was picked (feel.22)
-    CUE_EAT,       // hunt: a herb was used (feel.22)
 };
 
 // Previous-tick snapshot + one-slot retrigger guard.
@@ -62,12 +57,10 @@ struct AudioState {
     int16_t tick;
     int16_t monsterHp;
     uint8_t playerHp;
-    uint8_t itemHerb;   // inventory herb count (feel.22): gather up / eat down
     uint8_t reload;
     uint8_t monsterStun;
     uint8_t projN;
     uint8_t riposteT;
-    uint8_t poleBroken;
     int8_t monsterState;
     int8_t playerStance;
     int8_t playerState;
@@ -89,26 +82,23 @@ static volatile uint16_t mhToggles2;   // queued segment-2 toggles (0 = none)
 // Cue table: {OCR3A, toggles, OCR3A2, toggles2}, precomputed for the exact
 // ArduboyTones math (OCR = F_CPU/8/freq/2 - 1, toggles = (ms*freq)>>9).
 // Index 0 is CUE_NONE (all zero); every queue has toggle counts >= 1.
-static const uint16_t mhCueTable[14][4] PROGMEM = {
+static const uint16_t mhCueTable[9][4] PROGMEM = {
     {0, 0, 0, 0},           // CUE_NONE
     {2023, 21, 0, 0},       // CUE_HIT     494,22
     {1516, 20, 954, 81},    // CUE_CRIT    659,16 1047,40
-    {1274, 36, 0, 0},       // CUE_TRAIN   784,24
     {6450, 13, 0, 0},       // CUE_HURT    155,45
     {1135, 30, 850, 126},   // CUE_PARRY   880,18 1175,55
     {1431, 24, 1135, 58},   // CUE_DEFLECT 698,18 880,34
     {5101, 11, 3815, 23},   // CUE_GUARD   196,30 262,45
-    {5713, 6, 4290, 13},    // CUE_WINDUP  175,20 233,30
     {636, 42, 954, 49},     // CUE_SHOT    1568,14 1047,24
     {954, 24, 636, 85},     // CUE_RELOAD  1047,12 1568,28
-    {1431, 20, 750, 100},   // CUE_BREAK   698,28 1060,80
-    {757, 46, 567, 137},    // CUE_GATHER  1319,18 1760,40 (light two-tone pluck)
-    {1516, 25, 2023, 53},   // CUE_EAT     659,20 494,55 (low two-tone gulp)
 };
 
 // Arm one cue. Pins are only set to output/low here (the old constructor did it
 // once); PC6 toggles to make the square wave, PC7 stays low for normal volume.
 static void mhPlay(uint8_t cue) {
+    // Index this row by byte stride (4 words): `mhCueTable[cue]` decays to
+    // cursor[0] = &mhCueTable[0][0] + cue*4 exactly like a row pointer.
     const uint16_t *rec = mhCueTable[cue];
     TIMSK3 = 0;   // stop the ISR while re-arming
     DDRC |= _BV(PORTC6) | _BV(PORTC7);
@@ -149,12 +139,10 @@ static void audioSnapshot(AudioState &s, const Game &g) {
     s.tick = g.tick;
     s.monsterHp = g.monster.hp;
     s.playerHp = g.player.hp;
-    s.itemHerb = g.items[ITEM_HERB];
     s.reload = g.player.reload;
     s.monsterStun = g.monster.stun;
     s.projN = g.projN;
     s.riposteT = g.player.riposteT;
-    s.poleBroken = g.combat.zoneBroken;
     s.monsterState = g.monster.state;
     s.playerStance = g.player.stance;
     s.playerState = g.player.state;
@@ -174,7 +162,9 @@ static void audioCue(AudioState &s, uint8_t cue) {
     audioPlay(cue);
 }
 
-// One tick. Call once per run(), after stepGame().
+// One tick. Call once per run(), after stepGame(). prg.8 trimmed the rare cues
+// (part break / gather / eat / windup): the edge detector now only carries the
+// combat + gun cues.
 static void audioUpdate(AudioState &s, const Game &g) {
     s.firedMask = 0;
     // First frame or a reset (newGame zeroes tick): latch state, fire nothing.
@@ -187,26 +177,16 @@ static void audioUpdate(AudioState &s, const Game &g) {
     const Monster &m = g.monster;
 
     // Effects spawned this tick have t==1 (addEffect t=0, updateEffects++). A
-    // crit spark (text==0) marks a hunt crit; a text effect marks a landed pole
-    // hit (damagePole spawns the rising number) and its crit flag the head hit.
-    // Only consulted when a same-tick hp/zone gate proves the event.
+    // crit spark marks a hunt crit; only consulted when a same-tick hp gate
+    // proves the event.
     bool critSpark = false;
-    bool critText = false;
-    bool trainText = false;
     for (int16_t i = 0; i < g.fxN; i++) {
         const Effect &e = g.fx[i];
-        if (e.t != 1)
-            continue;
-        if (e.text) {
-            trainText = true;
-            if (e.crit)
-                critText = true;
-        } else if (e.crit)
+        if (e.t == 1 && e.crit)
             critSpark = true;
     }
 
     const bool monsterDrop = m.hp < s.monsterHp;
-    const bool poleBroke = g.combat.zoneBroken > s.poleBroken;
     const bool playerDrop = p.hp < s.playerHp;
     const bool guarding = playerDrop && (p.stance == ST_GUARD || s.playerStance == ST_GUARD);
 
@@ -215,21 +195,9 @@ static void audioUpdate(AudioState &s, const Game &g) {
         audioCue(s, CUE_SHOT);
     if (s.reload > 0 && p.reload == 0)
         audioCue(s, CUE_RELOAD);
-    if (m.state == MS_WINDUP && s.monsterState != MS_WINDUP)
-        audioCue(s, CUE_WINDUP);
 
-    // Items (feel.22): the inventory edge is the event (the core only changes
-    // it on a gather completion / a herb use), so no new Game event field.
-    if (g.items[ITEM_HERB] > s.itemHerb)
-        audioCue(s, CUE_GATHER);
-    else if (g.items[ITEM_HERB] < s.itemHerb)
-        audioCue(s, CUE_EAT);
-
-    // Combat reactions (break > defense > crit > hit > hurt). Break wins the
-    // same tick as the train damage blip.
-    if (poleBroke) {
-        audioCue(s, CUE_BREAK);
-    } else if (p.riposteT > s.riposteT) {
+    // Combat reactions (defense > crit > hit > hurt).
+    if (p.riposteT > s.riposteT) {
         audioCue(s, CUE_PARRY);
     } else if (m.stun > s.monsterStun && p.state == PS_DEFLECT) {
         audioCue(s, CUE_DEFLECT);
@@ -239,8 +207,6 @@ static void audioUpdate(AudioState &s, const Game &g) {
         audioCue(s, CUE_CRIT);
     } else if (monsterDrop) {
         audioCue(s, CUE_HIT);
-    } else if (trainText) {
-        audioCue(s, critText ? CUE_CRIT : CUE_TRAIN);
     } else if (playerDrop) {
         audioCue(s, CUE_HURT);
     }

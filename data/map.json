@@ -144,40 +144,6 @@
         "kind": "lunge",
         "spawn": "start"
       }
-    },
-    {
-      "id": "pole_room",
-      "w": 128,
-      "h": 56,
-      "image": "images/maps/mh_map_pole_room_128x56.png",
-      "props": [
-        {
-          "type": "pole",
-          "x": 54,
-          "y": 8,
-          "sheet": "fxpole",
-          "frame": 0,
-          "w": 20,
-          "h": 40
-        }
-      ],
-      "spawns": {
-        "start": {
-          "x": 16,
-          "y": 44
-        }
-      },
-      "doors": [
-        {
-          "x": 0,
-          "y": 24,
-          "w": 8,
-          "h": 24,
-          "to": "menu"
-        }
-      ],
-      "heal": [],
-      "monster": null
     }
   ]
 }

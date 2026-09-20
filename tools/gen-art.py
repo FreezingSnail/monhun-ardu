@@ -1395,10 +1395,10 @@ def font_sheet(color):
 #   y=2          MONHUN DEMO           (title, white)
 #   y=13 WEAPON  [SWD] [FLS] [GUN]     (weapon row)
 #   y=20 MONSTER
-#   y=26 [CHICKEN] [BULL]              (2 cols at x=0/64, rows 26/34/42)
+#   y=26 [CHICKEN] [BULL]              (2 cols at x=0/64, rows 26/34)
 #   y=34 [LONGTAIL] [RAVAGER]
-#   y=42 [POLE]
 #   y=58 A HUNT                        (footer)
+# prg.8 removed the training-pole target: 4 beast targets, 2x2 grid.
 
 def text_blocks(x, y, text, color):
     """blk() rects for `text` on the 4 px glyph lane: 4x8 tile per char, glyph
@@ -1421,8 +1421,8 @@ MENU_ELEMENTS = (
     (52, 58, "A HUNT", WHITE),       # footer: A starts the picked hunt
 )
 
-MENU_WEAPONS = ("SWD", "FLS", "GUN")                              # weapons 0..2
-MENU_TARGETS = ("CHICKEN", "BULL", "LONGTAIL", "RAVAGER", "POLE")  # targets 0..4
+MENU_WEAPONS = ("SWD", "FLS", "GUN")                             # weapons 0..2
+MENU_TARGETS = ("CHICKEN", "BULL", "LONGTAIL", "RAVAGER")        # targets 0..3
 
 # Option tile geometry (uniform frame per sheet). local x: cursor 0..2, then
 # the frame from x=4; the 4 px/char name lane at x=15 / x=19 (the v2 icon slot

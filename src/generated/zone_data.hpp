@@ -12,7 +12,7 @@
 namespace zone_data {
 
 constexpr uint8_t VERSION = 1;
-constexpr uint16_t BLOB_SIZE = 203;
+constexpr uint16_t BLOB_SIZE = 160;
 constexpr uint8_t MONSTER_NONE = 0xFF;
 
 struct Room {
@@ -56,19 +56,16 @@ struct Heal {
 // Room indices, sorted by id.
 constexpr uint8_t ROOM_AREA = 0;
 constexpr uint8_t ROOM_CAMP = 1;
-constexpr uint8_t ROOM_POLE_ROOM = 2;
 
 // Spawn indices (global section order).
 constexpr uint8_t SPAWN_AREA_FROM_CAMP = 0;
 constexpr uint8_t SPAWN_AREA_START = 1;
 constexpr uint8_t SPAWN_CAMP_ENTRY = 2;
 constexpr uint8_t SPAWN_CAMP_FROM_AREA = 3;
-constexpr uint8_t SPAWN_POLE_ROOM_START = 4;
 
 // Door indices (global section order).
 constexpr uint8_t DOOR_AREA_0 = 0;
 constexpr uint8_t DOOR_CAMP_0 = 1;
-constexpr uint8_t DOOR_POLE_ROOM_0 = 2;
 
 // Prop/heal indices.
 constexpr uint8_t PROP_AREA_0 = 0;
@@ -77,55 +74,48 @@ constexpr uint8_t PROP_AREA_2 = 2;
 constexpr uint8_t PROP_CAMP_0 = 3;
 constexpr uint8_t PROP_CAMP_1 = 4;
 constexpr uint8_t PROP_CAMP_2 = 5;
-constexpr uint8_t PROP_POLE_ROOM_0 = 6;
 constexpr uint8_t HEAL_CAMP_0 = 0;
 
 // Name tables: host-side lookup for loadRoom(roomId, spawnName).
 struct RoomName { const char *id; uint8_t index; };
-inline constexpr std::array<RoomName, 3> ROOM_NAMES = {{
+inline constexpr std::array<RoomName, 2> ROOM_NAMES = {{
     {"area", 0},
     {"camp", 1},
-    {"pole_room", 2},
 }};
 
 struct SpawnName { const char *name; uint8_t room; uint8_t index; };
-inline constexpr std::array<SpawnName, 5> SPAWN_NAMES = {{
+inline constexpr std::array<SpawnName, 4> SPAWN_NAMES = {{
     {"from_camp", 0, 0},
     {"start", 0, 1},
     {"entry", 1, 2},
     {"from_area", 1, 3},
-    {"start", 2, 4},
 }};
 
 // Section arrays, in packed order.
-inline constexpr std::array<Room, 3> ROOMS = {{
+inline constexpr std::array<Room, 2> ROOMS = {{
     {384, 112, 0, 1, 0, 2, 0, 3, 0, 0, 0, 1},
     {128, 56, 1, 1, 2, 2, 3, 3, 0, 1, 255, 255},
-    {128, 56, 2, 1, 4, 1, 6, 1, 1, 0, 255, 255},
 }};
 
-inline constexpr std::array<Door, 3> DOORS = {{
+inline constexpr std::array<Door, 2> DOORS = {{
     {0, 72, 8, 24, 1, 3},
     {120, 24, 8, 24, 0, 0},
-    {0, 24, 8, 24, 255, 255},
 }};
 
-inline constexpr std::array<Spawn, 5> SPAWNS = {{
+inline constexpr std::array<Spawn, 4> SPAWNS = {{
     {8, 80},
     {320, 72},
     {20, 44},
     {104, 40},
-    {16, 44},
 }};
 
-inline constexpr std::array<Prop, 7> PROPS = {{
+inline constexpr std::array<Prop, 6> PROPS = {{
     {3, 40, 16, 0, 0, 8, 8, 1, 1},
     {3, 160, 40, 0, 0, 8, 8, 1, 2},
     {3, 280, 88, 0, 0, 8, 8, 1, 3},
     {0, 40, 8, 0, 0, 32, 24, 0, 0},
     {3, 8, 8, 0, 0, 8, 8, 1, 1},
     {3, 72, 40, 0, 0, 8, 8, 1, 2},
-    {2, 54, 8, 1, 0, 20, 40, 0, 0},
 }};
 
 inline constexpr std::array<Heal, 1> HEALS = {{

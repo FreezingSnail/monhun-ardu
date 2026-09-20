@@ -13,13 +13,14 @@
 
 // Roll-attack carve (8xx): no fixture scene rolls into an A press or presses
 // direction+A, so that evade->A branch and the alt table selection fold out of
-// this image too. Host tests (tst/player_test.hpp) cover both; the parity hash
-// fields are unaffected.
+// this image too. prg.8 made 0 the shipping default; host tests
+// (tst/player_test.hpp, built with -DMH_ROLL_ALT=1) cover both paths.
 #define MH_ROLL_ALT 0
 
 // Stage-3 finisher carve (7pw): no fixture scene B-taps after a finisher, so
-// the finWin writes / idle stage-3 mapping / inLock extension fold out; the
-// host suite covers the finisher path.
+// the finWin writes / idle stage-3 mapping / inLock extension fold out. prg.8
+// made 0 the shipping default; the host suite (built with -DMH_STAGE3=1)
+// covers the finisher path.
 #define MH_STAGE3 0
 
 // Charge carve (ynb): no fixture scene holds A past a swing, so the A-hold

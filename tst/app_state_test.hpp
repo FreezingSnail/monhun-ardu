@@ -59,20 +59,19 @@ void AppSuite(TestRunner &runner) {
     }
 
     {
-        Test t("menu A with a pole pick starts the pole room in train mode");
+        Test t("menu A with the last target pick starts the camp hunt");
         MenuState menu;
         menu.weapon = W_GUN;
-        menu.target = MENU_POLE_TARGET;
+        menu.target = MENU_TARGET_COUNT - 1;   // RAVAGER (prg.8: no pole target)
         ScreenState screen;
         Game g;
         SaveBlock save;
         saveDefaults(save);
-        t.assert(appNavApply(appMenuAccept(), menu, screen, save, g, AT_A), true, "train started");
-        t.assert(g.mode, MODE_TRAIN, "train mode");
-        t.assert(g.roomId, zone::ROOM_POLE_ROOM, "starts in the pole room");
-        t.assert(g.roomMonsterKind, zone::MONSTER_NONE, "pole room is safe");
-        t.assert(g.combat.creature, combat::CREATURE_POLE, "plain pole installed");
-        t.assert(g.target.alive, true, "pole target armed");
+        t.assert(appNavApply(appMenuAccept(), menu, screen, save, g, AT_A), true, "hunt started");
+        t.assert(g.mode, MODE_HUNT, "hunt mode");
+        t.assert(g.roomId, zone::ROOM_CAMP, "starts in the camp");
+        t.assert(g.roomMonsterKind, zone::MONSTER_NONE, "camp room is safe");
+        t.assert(menu.target, MON_RAVAGER, "beast pick kept");
         suite.addTest(t);
     }
 

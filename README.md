@@ -32,11 +32,16 @@ flashing. Controls are below; no USB serial device comes up while the game runs
 | Device tests (Ardens) | 16 suites / 2266 asserts — boot 4, assets 270, audio 17, menu 78, menu_art 81, hud 17, parity 660, data 368, combat 293, hub 57, monster_art 111, player_art 111, quests 50, screens 78, smith 66, perf 5 — all PASS |
 | Perf gate (`monhun-ardu-8v7`, re-verified through `kt7.7`) | **PASS.** plane 156 Hz (≥135), logic 52 Hz (≥45), render max 4868 µs (≤7407), tick 540 µs, RAM free 572 B (bench) |
 | Perf tooling | Headless Ardens profiler dump (`profiledump=<path>`, local patch) + on-device cycle bench (`test_perf`) |
-| Shipping build | flash **27572 / 29696 B** (92%), RAM **1622 / 2560 B** (938 free); USB-free, see below |
-| FX data image | **203264 B** of 16 MB used |
+| Shipping build | flash **27128 / 29696 B** (91%), RAM **1584 / 2560 B** (976 free); USB-free, see below |
+| FX data image | **199971 B** of 16 MB used |
 
 Speculative gameplay status: combat (sword / flail / gunshield), monster FSM,
-training pole, camera/world clamps, HUD, audio cues all in place.
+camera/world clamps, HUD, audio cues all in place. The prg.8 trim removed
+training mode (the pole and its room), damage-number text, screen shake, the
+projectile trail, the rare cues (part break / gather / eat / windup), and the
+stage-3 finisher + direction+A opener / roll attack (`MH_STAGE3=0`,
+`MH_ROLL_ALT=0` shipping; the carves stay for tests). The procedural ground-dot
+field is kept (the shipping ground; only the room-image blit would cover it).
 Perf-verified on device. Remaining: real art pass (`vx2`, human), feel tuning
 (`1to`, human), EEPROM save (`qyb`, deferred).
 
@@ -63,8 +68,8 @@ mock/game.js ──port──► src/core/*.hpp ──shared verbatim──► h
 | `game.hpp` | `Game` state, `Player`, weapon defs + monster attack tables (PROGMEM), `Rect`, hit callbacks, `HOLD_TICKS=11`, `WORLD_W=256`, `WORLD_H=112` |
 | `player.hpp` | Player FSM: chains/branches/stances, stamina, guard/parry/deflect, gunfire flags |
 | `monster.hpp` | Monster FSM, attack cycle, windup, hit resolution, `pushApart` |
-| `projectiles.hpp` | Shells (`ball`/`scatter`), effects, training pole, damage numbers, `stepWorld` |
-| `world.hpp` | Screen geometry constants, camera (int px, clamped), mode handling (hunt/train), `newGame`, `withWeapon`, `resetHunt`, `stepGame` |
+| `projectiles.hpp` | Shells (`ball`/`scatter`), effects (sparks), `stepWorld` |
+| `world.hpp` | Screen geometry constants, camera (int px, clamped), hunt mode, `newGame`, `withWeapon`, `resetHunt`, `stepGame` |
 | `combat.hpp` | Combat blob loader (`ljj.2`, reworked by `cgk`): one production reader over the generated `combat_data.hpp` (host) / `mhCombat` blob (AVR), `creatureLoad`/`attackLoad` caches in `Game::combat`, guard eval with deterministic tick-derived chance, and the fixed 3-hitzone resolve (implicit body + optional head/appendage records). No per-tick cart reads |
 | `input.hpp` | Edge flags + B-hold detection (`aP`, `bP`, `bR`, `bHeld`), no Arduino headers |
 | `progmem.hpp` | Portable flash-read shim: `MH_PROGMEM` + typed `mhPgmRead*`; identity on host |
@@ -225,7 +230,7 @@ data/skeletons.json + data/creatures/*.json ──tools/gen-combat.py──►�
 | Input | Action |
 |---|---|
 | LEFT / RIGHT | cycle weapon: SWD (sword) / FLS (flail) / GUN (gunshield) |
-| UP / DOWN | cycle target: LUNGE / SWEEP / HEAVY / RAVAGER beast, or POLE |
+| UP / DOWN | cycle target: LUNGE / SWEEP / HEAVY / RAVAGER beast |
 | A | launch the picked loadout directly into the hunt |
 
 D-pad nav is debounced: a tap moves exactly one pick (immediate on the direction
@@ -233,17 +238,17 @@ change), while holding waits ~300 ms (16 logic ticks) and then repeats every
 ~115 ms (6 ticks). Reversing steps at once; releasing resets the hold timer; a
 re-entry after win/loss resets it too, so a held d-pad cannot skip picks. A stays
 edge-based: one launch per press. Picks wrap in both directions. A starts the
-selected scene (demo flow, monhun-ardu-5r1), so targets LUNGE/SWEEP/HEAVY start
-the matching beast variant in hunt mode and POLE starts train mode (the static
-pole, no beast). After a win or loss, A returns to the menu with the picks kept
+selected scene (demo flow, monhun-ardu-5r1), so every target starts the matching
+beast variant in hunt mode (the training pole and its mode were removed in
+prg.8). After a win or loss, A returns to the menu with the picks kept
 until reboot; the next A runs `newGame` again, so projectiles/effects/quest
 counters start clean. While the menu is up the sim and audio are not stepped.
 
 Menu v2 (monhun-ardu-2u8, name-only by 4t4) bakes the options into FX sheets:
 `mh_menu_bg` (the title/labels/footer plus the dim light-gray options),
-`mh_menu_wsel` (three 32x8 weapon tiles) and `mh_menu_msel` (five 64x8 target
+`mh_menu_wsel` (three 32x8 weapon tiles) and `mh_menu_msel` (four 64x8 target
 tiles). Every option is a name only — SWD/FLS/GUN on the weapon row, CHICKEN/
-BULL/LONGTAIL/RAVAGER/POLE in a 2-column beast grid — with the v2 icon slot left
+BULL/LONGTAIL/RAVAGER in a 2-column beast grid — with the v2 icon slot left
 clear and the text glyph-identical to `fxfontw`/`fxfontg` (gen-art
 `check_menu_identity`). The picked weapon and target each draw a bright 1 px
 frame plus cursor arrow; unpicked options stay dim. Footer: `A HUNT`.
@@ -277,9 +282,9 @@ hunt exit.
 | LUNGE | hunt | 32x24 | 1800 | 5 | pecks inside 28 px, leaps 29..41 px (leap locks facing at windup) |
 | SWEEP | hunt | 28x22 | 1500 | 7 | stomps inside 24 px, gores 25..41 px (gore locks facing at windup) |
 | HEAVY | hunt | 40x28 | 2800 | 3 | lunges inside 24 px |
-| POLE | train | 20x36 | — | — | static target (20x40 sheet), head zone = top 16 px |
+| RAVAGER | hunt | 32x24 | 2600 | 6 | breakable head/appendage zones (ljj.6), pattern-driven |
 
-### In game (hunt / train)
+### In game (hunt)
 
 | Input | Action |
 |---|---|

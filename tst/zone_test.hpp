@@ -79,10 +79,10 @@ void ZoneSuite(TestRunner &runner) {
         t.assert(g.roomHealCount, 1, "camp heal rect count");
         t.assert(roomIsSafe(g), 1, "roomIsSafe camp");
 
-        loadRoom(g, zone::ROOM_POLE_ROOM, zone::SPAWN_POLE_ROOM_START);
-        t.assert(g.roomId, zone::ROOM_POLE_ROOM, "pole_room id");
-        t.assert(g.player.x, 16, "pole_room start spawn x");
-        t.assert(g.player.y, 44, "pole_room start spawn y");
+        loadRoom(g, zone::ROOM_AREA, zone::SPAWN_AREA_START);
+        t.assert(g.roomId, zone::ROOM_AREA, "area id after camp");
+        t.assert(g.player.x, 320, "area start spawn x");
+        t.assert(g.player.y, 72, "area start spawn y");
         suite.addTest(t);
     }
 
@@ -156,20 +156,17 @@ void ZoneSuite(TestRunner &runner) {
     }
 
     {
-        Test t("menu door: reserved target sets menuRequest, no room switch");
+        Test t("camp hold-B sheathed sets menuRequest, no room switch");
         Game g;
         newGame(g, W_SWORD, MODE_HUNT);
-        loadRoom(g, zone::ROOM_POLE_ROOM, zone::SPAWN_POLE_ROOM_START);
+        loadRoom(g, zone::ROOM_CAMP, zone::SPAWN_CAMP_ENTRY);
         g.menuRequest = false;
-        // Clear the latch, then step into the pole_room door (0,24,8,24).
-        g.player.x = 60;
-        g.player.y = 44;
-        zticks(g, 1, Z_IDLE);
-        g.player.x = 0;
-        g.player.y = 24;
-        zticks(g, 1, Z_IDLE);
+        // Hold B while sheathed for the full HOLD_TICKS window in the camp.
+        g.player.sheathed = true;
+        for (int i = 0; i < HOLD_TICKS + 1 && !g.menuRequest; i++)
+            zticks(g, 1, Z_B);
         t.assert(g.menuRequest, 1, "menu request flagged");
-        t.assert(g.roomId, zone::ROOM_POLE_ROOM, "core did not switch screens");
+        t.assert(g.roomId, zone::ROOM_CAMP, "core did not switch screens");
         suite.addTest(t);
     }
 
@@ -381,18 +378,6 @@ void ZoneSuite(TestRunner &runner) {
     }
 
     {
-        Test t("train load re-arms the pole target");
-        Game g;
-        newGame(g, W_SWORD, MODE_TRAIN);
-        loadRoom(g, zone::ROOM_POLE_ROOM, zone::SPAWN_POLE_ROOM_START);
-        t.assert(g.target.onHit == poleOnHit, 1, "train load arms pole onHit");
-        t.assert(g.target.onShove == poleOnShove, 1, "train load arms pole onShove");
-        t.assert(g.target.onStun == poleOnStun, 1, "train load arms pole onStun");
-        t.assert(g.target.alive, 1, "train load arms a live pole target");
-        suite.addTest(t);
-    }
-
-    {
         Test t("gather props: reader surfaces item/yield, plain props read none");
         // Camp props: 0 = tent (plain), 1 = herb x1, 2 = herb x2.
         const ZoneProp tent = zonePropRead(zone::PROP_CAMP_0);
@@ -411,8 +396,9 @@ void ZoneSuite(TestRunner &runner) {
         t.assert(areaHerb0.gatherItem, zone::GATHER_HERB, "area herb 0 item");
         t.assert(areaHerb0.gatherYield, 1, "area herb 0 yield");
 
-        const ZoneProp pole = zonePropRead(zone::PROP_POLE_ROOM_0);
-        t.assert(pole.gatherItem, zone::GATHER_NONE, "pole prop has no gather item");
+        const ZoneProp areaHerb1 = zonePropRead(zone::PROP_AREA_1);
+        t.assert(areaHerb1.gatherItem, zone::GATHER_HERB, "area herb 1 item");
+        t.assert(areaHerb1.gatherYield, 2, "area herb 1 yield");
         suite.addTest(t);
     }
 

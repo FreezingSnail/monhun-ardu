@@ -22,7 +22,7 @@ enum MenuAction : int8_t {
 
 struct MenuState {
     int8_t weapon = 0;    // WeaponId 0..2 (SWD/FLS/GUN)
-    int8_t target = 0;    // 0..3 beast kind (lunge/sweep/heavy/ravager), 4 = training pole
+    int8_t target = 0;    // 0..3 beast kind (lunge/sweep/heavy/ravager)
     bool active = true;   // boot into the menu
     bool prevA = false;   // menu-owned edges (see menuReturnStep)
     bool prevB = false;
@@ -33,9 +33,8 @@ struct MenuState {
 };
 
 constexpr int8_t MENU_WEAPON_COUNT = 3;
-// Targets: 0..3 the beast roster, 4 the single plain training pole.
-constexpr int8_t MENU_TARGET_COUNT = 5;
-constexpr int8_t MENU_POLE_TARGET = 4;
+// Targets: 0..3 the beast roster (prg.8 removed the training-pole target).
+constexpr int8_t MENU_TARGET_COUNT = 4;
 
 // D-pad repeat: a fresh direction steps immediately, a held one waits
 // MENU_NAV_DELAY ticks (~300 ms at the measured 52 Hz logic rate) before the
@@ -103,29 +102,24 @@ inline MenuAction menuStep(MenuState &m, const Input &in) {
     return MENU_NONE;
 }
 
-// Pick -> sim mapping: targets 0..3 select the beast kind in hunt mode, target
-// 4 the training pole in train mode. Single source of truth for the sketch and
-// both suites.
-inline int8_t menuMode(const MenuState &m) {
-    return m.target >= MENU_POLE_TARGET ? MODE_TRAIN : MODE_HUNT;
+// Pick -> sim mapping: every target 0..3 selects the beast kind (prg.8 removed
+// the training-pole target, so mode is always hunt). Single source of truth for
+// the sketch and both suites.
+inline int8_t menuMode(const MenuState &) {
+    return MODE_HUNT;
 }
 
 inline int8_t menuMonsterKind(const MenuState &m) {
-    return m.target < MENU_POLE_TARGET ? m.target : 0;   // the pole has no beast
+    return m.target;
 }
 
-// Start the chosen scene from the menu picks into its demo room (fie.6):
-// a beast pick spawns in the camp (safe; its door leads to the area hunt), a
-// pole pick in the pole room (train; its door exits to the menu). newGame()
-// resets the world first and installs the plain pole for train; the room load
-// re-arms the pole target for the arrival room.
+// Start the chosen scene from the menu picks into its demo room (fie.6): a
+// beast pick spawns in the camp (safe; its door leads to the area hunt).
+// newGame() resets the world first; the room load re-arms the target for the
+// arrival room.
 inline void menuStart(Game &g, const MenuState &m) {
-    const int8_t mode = menuMode(m);
-    newGame(g, m.weapon, mode, menuMonsterKind(m));
-    if (mode == MODE_TRAIN)
-        loadRoom(g, zone::ROOM_POLE_ROOM, zone::SPAWN_POLE_ROOM_START);
-    else
-        loadRoom(g, zone::ROOM_CAMP, zone::SPAWN_CAMP_ENTRY);
+    newGame(g, m.weapon, MODE_HUNT, menuMonsterKind(m));
+    loadRoom(g, zone::ROOM_CAMP, zone::SPAWN_CAMP_ENTRY);
 }
 
 // One input tick while the sim runs: keeps the menu-owned edge flags current and

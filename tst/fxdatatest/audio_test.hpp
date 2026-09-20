@@ -44,21 +44,7 @@ static void evMonsterHit(Game &g) {
 static void evMonsterCrit(Game &g) {
     g.monster.hp -= 14;
     Effect &e = g.fx[g.fxN++];
-    e = Effect{0, 0, 1, 7, true, 0};   // fresh crit spark
-}
-
-static void evTrainHit(Game &g) {
-    Effect &e = g.fx[g.fxN++];
-    e = Effect{0, 0, 1, 26, false, 5};   // fresh (non-crit) pole damage number
-}
-
-static void evTrainCrit(Game &g) {
-    Effect &e = g.fx[g.fxN++];
-    e = Effect{0, 0, 1, 26, true, 7};   // fresh crit damage number
-}
-
-static void evPoleBreak(Game &g) {
-    g.combat.zoneBroken |= COMBAT_ZONE_APPENDAGE_BIT;
+    e = Effect{0, 0, 1, 7, true};   // fresh crit spark
 }
 
 static void evParry(Game &g) {
@@ -74,24 +60,12 @@ static void evGuard(Game &g) {
     g.player.hp -= 1;
 }
 
-static void evWindup(Game &g) {
-    g.monster.state = MS_WINDUP;
-}
-
 static void evShot(Game &g) {
     g.projN++;
 }
 
 static void evReload(Game &g) {
     g.player.reload = 0;
-}
-
-static void evGather(Game &g) {
-    g.items[ITEM_HERB]++;
-}
-
-static void evEat(Game &g) {
-    g.items[ITEM_HERB]--;
 }
 
 inline void test_audio(FxTest &test) {
@@ -110,30 +84,6 @@ inline void test_audio(FxTest &test) {
         const uint16_t m = cueFor(s, g, evMonsterCrit);
         test.expectEq(cueBit(m, CUE_CRIT), 1, F("hunt crit"));
         test.expectEq(cueBit(m, CUE_HIT), 0, F("crit not plain hit"));
-    }
-    {   // train: pole body -> CUE_TRAIN
-        Game g;
-        newGame(g, W_SWORD, MODE_TRAIN);
-        AudioState s{};
-        const uint16_t m = cueFor(s, g, evTrainHit);
-        test.expectEq(cueBit(m, CUE_TRAIN), 1, F("train pole hit"));
-        test.expectEq(cueBit(m, CUE_CRIT), 0, F("train body no crit"));
-    }
-    {   // train: pole head crit -> CUE_CRIT
-        Game g;
-        newGame(g, W_SWORD, MODE_TRAIN);
-        AudioState s{};
-        const uint16_t m = cueFor(s, g, evTrainCrit);
-        test.expectEq(cueBit(m, CUE_CRIT), 1, F("train pole crit"));
-    }
-    {   // train: a pole variant broke -> CUE_BREAK (wins the same-tick train blip)
-        Game g;
-        newGame(g, W_SWORD, MODE_TRAIN);
-        AudioState s{};
-        const uint16_t m = cueFor(s, g, evPoleBreak);
-        test.expectEq(cueBit(m, CUE_BREAK), 1, F("pole break"));
-        test.expectEq(cueBit(m, CUE_TRAIN), 0, F("break over plain train"));
-        test.expectEq(cueBit(m, CUE_CRIT), 0, F("break not crit"));
     }
     {   // parry riposte armed -> CUE_PARRY
         Game g;
@@ -156,13 +106,6 @@ inline void test_audio(FxTest &test) {
         AudioState s{};
         const uint16_t m = cueFor(s, g, evGuard);
         test.expectEq(cueBit(m, CUE_GUARD), 1, F("guard block"));
-    }
-    {   // beast windup start -> CUE_WINDUP
-        Game g;
-        newGame(g, W_SWORD, MODE_HUNT);
-        AudioState s{};
-        const uint16_t m = cueFor(s, g, evWindup);
-        test.expectEq(cueBit(m, CUE_WINDUP), 1, F("monster windup"));
     }
     {   // gun fired a shell -> CUE_SHOT
         Game g;
@@ -187,23 +130,6 @@ inline void test_audio(FxTest &test) {
         g.tick++;
         audioUpdate(s, g);
         test.expectEq(s.firedMask, 0, F("idle no cue"));
-    }
-    {   // herb gathered (inventory up) -> CUE_GATHER
-        Game g;
-        newGame(g, W_SWORD, MODE_HUNT);
-        AudioState s{};
-        const uint16_t m = cueFor(s, g, evGather);
-        test.expectEq(cueBit(m, CUE_GATHER), 1, F("gather complete"));
-        test.expectEq(cueBit(m, CUE_EAT), 0, F("gather not eat"));
-    }
-    {   // herb used (inventory down) -> CUE_EAT
-        Game g;
-        newGame(g, W_SWORD, MODE_HUNT);
-        g.items[ITEM_HERB] = 1;   // held across the latch
-        AudioState s{};
-        const uint16_t m = cueFor(s, g, evEat);
-        test.expectEq(cueBit(m, CUE_EAT), 1, F("herb eaten"));
-        test.expectEq(cueBit(m, CUE_GATHER), 0, F("eat not gather"));
     }
 }
 

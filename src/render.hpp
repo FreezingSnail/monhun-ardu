@@ -54,12 +54,6 @@ constexpr uint8_t MON_FLASH = 2;
 constexpr uint8_t MON_DEAD = 3;
 constexpr uint8_t MON_WEST = 4;
 
-// Pole sheet: the plain 20x40 two-frame fxpole sheet (normal / hit flash). The
-// unused variant sheets stay on the FX cart but are no longer drawn
-// (monhun-ardu-feel.20).
-constexpr uint8_t POLE_NORMAL = 0;
-constexpr uint8_t POLE_FLASH = 1;
-
 // 4x4 spark, light gray / white.
 constexpr uint8_t SPARK_LIGHT = 0;
 constexpr uint8_t SPARK_BRIGHT = 1;
@@ -71,9 +65,6 @@ constexpr uint8_t SPARK_BRIGHT = 1;
 // fxwhirl 8x4: 2x2 light orbit dot, 4x4 white ball, 1x1 light chain dot,
 // 2x2 white stun sparkle.
 constexpr uint8_t WHIRL_DOT = art_dims::whirl_dot_frame;
-// fxtrail 4x4: 2x2 light puff (frame 0) / dark puff (frame 1).
-constexpr uint8_t TRAIL_LIGHT = 0;
-constexpr uint8_t TRAIL_DARK = 1;
 // fxtail_spin 24x24 (heavy's tail_spin overlay): the tail rooted at the body
 // centre, pointing world W / N / E / S. The frame is picked from the world
 // direction of the active window's face-relative offset (drawMonster).
@@ -128,13 +119,11 @@ MH_NOINLINE static int16_t mulQ4(int16_t a, int16_t b) {
 // 65-entry quarter-wave table + quadrant folding (42n.7); cos(a) = sin(a+64).
 
 // Mock radian rates folded into 256-units-per-turn steps (x40.7437/rad):
-// 0.35 rad -> 14, 0.55 -> 22, 0.30 -> 12, 1.7 -> 69, 2.3 -> 94 units/tick.
+// 0.35 rad -> 14, 0.55 -> 22, 0.30 -> 12, 2.3 -> 94 units/tick.
 constexpr uint8_t ANG_WHIRL_RING = 14;
 constexpr uint8_t ANG_WHIRL_BALL = 22;
 constexpr uint8_t ANG_PLAYER_STUN = 12;
 constexpr uint8_t ANG_MONSTER_STUN = 14;
-constexpr uint8_t ANG_SHAKE_X = 69;
-constexpr uint8_t ANG_SHAKE_Y = 94;
 // The 6-ring offsets (i*60deg in 256/turn units) and the whirl phase bake live
 // in tools/gen-art.py: the ring is one pre-composited sprite (monhun-ardu-836),
 // so the render no longer walks the ring dots.
@@ -315,10 +304,6 @@ static inline void roomImageInfo(uint8_t roomId, uint24_t &img, int16_t &w, int1
         img = mh_map_camp;
         w = static_cast<int16_t>(zone::ROOM_CAMP_W);
         h = static_cast<int16_t>(zone::ROOM_CAMP_H);
-    } else if (roomId == zone::ROOM_POLE_ROOM) {
-        img = mh_map_pole_room;
-        w = static_cast<int16_t>(zone::ROOM_POLE_ROOM_W);
-        h = static_cast<int16_t>(zone::ROOM_POLE_ROOM_H);
     } else {
         img = mh_map_area;
         w = static_cast<int16_t>(zone::ROOM_AREA_W);
@@ -510,18 +495,6 @@ static inline void drawFade(const Game &g) {
     blk(0, HUD_H, SCREEN_W, ARENA_H, 0);
 }
 #endif   // MH_ROOM_BOUNDS
-
-// Mock drawPole(): base post, ring bands, ground plate, all baked into the
-// fxpole sheet; hit flash selects the flash frame. The training pole ships one
-// plain 20x40 sheet (monhun-ardu-feel.20), so the sheet is fixed and only the
-// hit flash picks a frame.
-static void drawPole(const mh::Game &g, int16_t camX, int16_t camY) {
-    const mh::Pole &pole = g.pole;
-    const int16_t x = static_cast<int16_t>(pole.rect.x - camX);
-    const int16_t y = static_cast<int16_t>(pole.rect.y - camY + mh::HUD_H);
-    const uint8_t f = pole.hitFlash > 0 ? spr::POLE_FLASH : spr::POLE_NORMAL;
-    sprDraw(fxpole, x, y, FRAME(f));
-}
 
 // Per-creature monster sheet (epic monhun-ardu-nch): the demo roster's beast
 // kind selects the fxdata sheet authored by tools/gen-art.py; RAVAGER keeps the
@@ -1010,19 +983,13 @@ static void drawPlayer(const mh::Game &g, int16_t camX, int16_t camY) {
     }
 }
 
-// Mock drawProjectiles(): 3-puff trail then ball (rim/core/base) or pellet.
+// Mock drawProjectiles(): ball (rim/core/base) or pellet. prg.8 removed the
+// 3-puff trail (cosmetic; the shot sprite alone reads at 4x8).
 static void drawProjectiles(const mh::Game &g, int16_t camX, int16_t camY) {
     for (int16_t i = 0; i < g.projN; i++) {
         const mh::Projectile &pr = g.proj[i];
         const int16_t x = static_cast<int16_t>(pr.x - camX);
         const int16_t y = static_cast<int16_t>(pr.y - camY + mh::HUD_H);
-        const int16_t bx = static_cast<int16_t>((pr.vx * 2) >> 4);
-        const int16_t by = static_cast<int16_t>((pr.vy * 2) >> 4);
-
-        // 2x2 trail puffs at the mock offsets, drawn far dark -> near light.
-        sprDraw(fxtrail, static_cast<int16_t>(x - bx * 2 - 1), static_cast<int16_t>(y - by * 2 - 1), FRAME(spr::TRAIL_DARK));
-        sprDraw(fxtrail, static_cast<int16_t>(x - bx * 3 - 1), static_cast<int16_t>(y - by * 3 - 1), FRAME(spr::TRAIL_DARK));
-        sprDraw(fxtrail, static_cast<int16_t>(x - bx - 1), static_cast<int16_t>(y - by - 1), FRAME(spr::TRAIL_LIGHT));
 
         const int16_t hw = static_cast<int16_t>(pr.w >> 1);
         const int16_t hh = static_cast<int16_t>(pr.h >> 1);
@@ -1034,32 +1001,23 @@ static void drawProjectiles(const mh::Game &g, int16_t camX, int16_t camY) {
     }
 }
 
-// Mock drawEffects(): 4-point spark, or a rising damage number.
-// Render-side cap: the mock has no cap (unbounded array) and the device core
-// caps at MAX_EFFECTS, but the transient worst case (several simultaneous
-// damage-number glyphs + sparks) is the render bottleneck — each damage number
-// is 2-3 FX glyph reads. Only the newest MAX_FX_DRAW effects are painted.
-// Core sim is untouched: every effect still ticks and expires as before.
+// Mock drawEffects(): 4-point spark. prg.8 removed the rising damage-number
+// text path (it was the render bottleneck: 2-3 FX glyph reads per effect); only
+// the newest MAX_FX_DRAW sparks are painted. Core sim is untouched: every
+// effect still ticks and expires as before.
 constexpr int16_t MAX_FX_DRAW = 6;
 
 static void drawEffects(const mh::Game &g, int16_t camX, int16_t camY) {
     const int16_t first = g.fxN > MAX_FX_DRAW ? g.fxN - MAX_FX_DRAW : 0;
     for (int16_t i = first; i < g.fxN; i++) {
         const mh::Effect &e = g.fx[i];
-        const int16_t r = e.life - e.t;
-        if (e.text) {
-            const int16_t x = static_cast<int16_t>(e.x - camX);
-            const int16_t y = static_cast<int16_t>(e.y - (r + 1) / 3 - camY + mh::HUD_H);
-            drawNumber(static_cast<int16_t>(x - 2), y, e.text, e.crit ? 3 : 2);
-        } else {
-            // 4x4 spark sprite centred on the effect; crit selects the white
-            // plane. TODO: the mock expands the 4 dots with radius r — the FX
-            // sprite is fixed size, so the spread animation is dropped.
-            const uint8_t f = e.crit ? spr::SPARK_BRIGHT : spr::SPARK_LIGHT;
-            const int16_t x = static_cast<int16_t>(e.x - camX);
-            const int16_t y = static_cast<int16_t>(e.y - camY + mh::HUD_H);
-            sprDraw(fxspark, static_cast<int16_t>(x - 2), static_cast<int16_t>(y - 2), FRAME(f));
-        }
+        // 4x4 spark sprite centred on the effect; crit selects the white
+        // plane. TODO: the mock expands the 4 dots with radius r — the FX
+        // sprite is fixed size, so the spread animation is dropped.
+        const uint8_t f = e.crit ? spr::SPARK_BRIGHT : spr::SPARK_LIGHT;
+        const int16_t x = static_cast<int16_t>(e.x - camX);
+        const int16_t y = static_cast<int16_t>(e.y - camY + mh::HUD_H);
+        sprDraw(fxspark, static_cast<int16_t>(x - 2), static_cast<int16_t>(y - 2), FRAME(f));
     }
 }
 
@@ -1106,16 +1064,11 @@ static void drawDebug(const mh::Game &g, int16_t camX, int16_t camY) {
     const mh::Player &p = g.player;
 
     // Hurt boxes (solid): player body, then the creature's cached skeleton body
-    // part in hunt (migration B: part boxes from g.combat.body, not w/h
-    // literals) or the training-pole hurt rect in train.
+    // part (migration B: part boxes from g.combat.body, not w/h literals).
     wireSolid(p.x + ox, p.y + oy, p.w, p.h);
-    if (g.mode == mh::MODE_HUNT) {
-        if (g.target.alive) {
-            const mh::CombatBox &b = g.combat.body;
-            wireSolid(g.monster.x + b.ox + ox, g.monster.y + b.oy + oy, b.w, b.h);
-        }
-    } else if (g.target.alive) {
-        wireSolid(g.target.rect.x + ox, g.target.rect.y + oy, g.target.rect.w, g.target.rect.h);
+    if (g.target.alive) {
+        const mh::CombatBox &b = g.combat.body;
+        wireSolid(g.monster.x + b.ox + ox, g.monster.y + b.oy + oy, b.w, b.h);
     }
 
     // Active player melee hit box (dotted): the sim's meleeHitbox() rect, so
@@ -1127,7 +1080,7 @@ static void drawDebug(const mh::Game &g, int16_t camX, int16_t camY) {
 
     // Monster windup/attack hit box (dotted), same face-relative window centre
     // and size the monster hit test uses; the windup outline is the telegraph.
-    if (g.mode == mh::MODE_HUNT && g.monster.atkIdx != mh::COMBAT_NO_ATTACK && (g.monster.state == mh::MS_WINDUP || g.monster.state == mh::MS_ATTACK)) {
+    if (g.monster.atkIdx != mh::COMBAT_NO_ATTACK && (g.monster.state == mh::MS_WINDUP || g.monster.state == mh::MS_ATTACK)) {
         const mh::Monster &m = g.monster;
         const mh::CombatBox &b = g.combat.body;
         int16_t dx, dy;
@@ -1152,10 +1105,10 @@ static void drawDebug(const mh::Game &g, int16_t camX, int16_t camY) {
         wireDot(cx - 24 + ox, cy - 24 + oy, 48, 48);
     }
 
-    // Hit-spark markers (small white plus) at live non-text effects.
+    // Hit-spark markers (small white plus) at live effects.
     for (int16_t i = 0; i < g.fxN; i++) {
         const mh::Effect &e = g.fx[i];
-        if (e.text || e.t >= e.life)
+        if (e.t >= e.life)
             continue;
         const int32_t sx = e.x + ox;
         const int32_t sy = e.y + oy;
@@ -1234,17 +1187,16 @@ static void drawHud(const mh::Game &g) {
     hudBar(1, 2, 28, 4, p.hp, p.hpMax, 3);        // player HP (white)
     hudBar(29, 2, 16, 4, p.stam, p.stamMax, 2);   // stamina (light gray)
 
-    // Weapon marker (mock's full name shortened to fit the 128 px strip), then
-    // the mode marker (device-only, the mock implied it via pole vs beast): the
+    // Weapon marker (mock's full name shortened to fit the 128 px strip): the
     // 4 glyphs (3-char weapon + 1-char mode) on the 4 px lane at x=46 are baked
     // into one 16x8 FX strip (bead monhun-ardu-e4a), drawn with a single blit
     // per plane instead of 4 textPut() cart seeks. Frame order is
-    // weapon*2 + mode (SWD/FLA/GUN x hunt/train); the pixels come from the same
-    // GLYPHS table as fxfontw (gen-art check_hud_identity). The else branch
-    // keeps the old "anything but sword/flail reads GUN" mapping.
+    // weapon*2 + mode (SWD/FLA/GUN x hunt/train); hunt is the only mode now
+    // (prg.8), so frame = weapon*2. The pixels come from the same GLYPHS table
+    // as fxfontw (gen-art check_hud_identity). The else branch keeps the old
+    // "anything but sword/flail reads GUN" mapping.
     const uint8_t wf = static_cast<uint8_t>(g.weapon == mh::W_SWORD ? 0 : (g.weapon == mh::W_FLAIL ? 1 : 2));
-    const uint8_t mf = static_cast<uint8_t>(g.mode == mh::MODE_TRAIN ? 1 : 0);
-    sprDraw(fxhud, 46, 1, FRAME(static_cast<uint8_t>(wf * 2 + mf)));
+    sprDraw(fxhud, 46, 1, FRAME(static_cast<uint8_t>(wf * 2)));
 
     if (g.weapon == mh::W_GUN) {   // shell count + reload
         int16_t x = 67;
@@ -1270,8 +1222,7 @@ static void drawHud(const mh::Game &g) {
         }
     }
 
-    if (g.mode != mh::MODE_TRAIN)   // monster HP (hunt); the plain pole has no bar
-        hudBar(82, 2, 44, 3, g.monster.hp, g.monster.hpMax, 3);
+    hudBar(82, 2, 44, 3, g.monster.hp, g.monster.hpMax, 3);   // monster HP (hunt only)
 
     // Herb count (feel.22): a tiny 1 px plant glyph + one digit in the free
     // 5 px lane x=62..66 (after the 16-wide weapon marker at 46..61, before the
@@ -1279,8 +1230,8 @@ static void drawHud(const mh::Game &g) {
     // demo is 9 (camp 1+2, area 1+2+3), so one digit always fits.
     if (g.items[mh::ITEM_HERB] > 0) {
         hudBlk(62, 2, 1, 4, 3);   // 1 px plant stalk glyph
-        // drawNumber (already out-of-line for effects) keeps hudNum inlined in
-        // the gun-shell path; a single digit renders identically.
+        // drawNumber (out-of-line) keeps hudNum inlined in the gun-shell path;
+        // a single digit renders identically.
         drawNumber(63, 1, g.items[mh::ITEM_HERB], 3);
     }
 }
@@ -1305,8 +1256,8 @@ static void drawUseBar(const mh::Game &g) {
     hudBar(ITEM_BAR_X, ITEM_BAR_Y, ITEM_BAR_W, ITEM_BAR_H, p.t, gather ? mh::GATHER_TICKS : mh::ITEM_USE_TICKS, gather ? 3 : 2);
 }
 
-// Full block-art scene, mock draw order: arena, target (pole|beast), player,
-// shells, effects, then the (untracked) debug wire overlay and HUD. Read-only:
+// Full block-art scene, mock draw order: arena, beast, player, shells, effects,
+// then the (untracked) debug wire overlay and HUD. Read-only:
 // render never mutates Game. Shapes are identical on every plane (the L4 shade
 // resolves in ArduboyG::planeColor), so the three passes composite to the same
 // 4-level image.
@@ -1329,21 +1280,10 @@ static void renderScene(const mh::Game &g, bool wire) {
     else if (camY > camMy)
         camY = camMy;
 
-    // Mock g.shake has no Game field yet (freeze is not gated/decayed), so the
-    // render derives an equivalent tick-based int offset from the decaying hit
-    // indicators: the view kicks for the ~4 ticks a monster/pole hit flashes.
-    // TODO(hitstop bead): replace with a real Game::shake value.
-    int16_t shakeX = 0;
-    int16_t shakeY = 0;
-    const int16_t amp = g.monster.hitFlash > g.pole.hitFlash ? g.monster.hitFlash : g.pole.hitFlash;
-    if (amp > 0) {
-        const uint8_t a1 = static_cast<uint8_t>(static_cast<uint32_t>(g.tick) * ANG_SHAKE_X);
-        const uint8_t a2 = static_cast<uint8_t>(static_cast<uint32_t>(g.tick) * ANG_SHAKE_Y);
-        shakeX = static_cast<int16_t>(mulQ4(sin256(a1), amp));                  // mock sin(tick*1.7)*shake
-        shakeY = static_cast<int16_t>(mulQ4(cos256(a2), (amp * 7 + 5) / 10));   // *0.7, round
-    }
-    const int16_t ecX = static_cast<int16_t>(camX - shakeX);
-    const int16_t ecY = static_cast<int16_t>(camY - shakeY);
+    // Screen shake (prg.8) is removed: the camera is the clamped follow only,
+    // so no tick-derived view offset is applied.
+    const int16_t ecX = camX;
+    const int16_t ecY = camY;
 
 #if MH_ROOM_BOUNDS
     // Ground layer (fie.8 carve): the stored room-image blit when MH_ROOM_IMAGE
@@ -1359,10 +1299,7 @@ static void renderScene(const mh::Game &g, bool wire) {
 #else
     drawArena(ecX, ecY, mh::roomBoundW(g), mh::roomBoundH(g));
 #endif
-    if (g.mode == mh::MODE_TRAIN)
-        drawPole(g, ecX, ecY);
-    else
-        drawMonster(g, ecX, ecY);
+    drawMonster(g, ecX, ecY);
     drawPlayer(g, ecX, ecY);
     drawProjectiles(g, ecX, ecY);
     drawEffects(g, ecX, ecY);

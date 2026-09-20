@@ -12,7 +12,7 @@
 namespace combat_data {
 
 constexpr uint8_t VERSION = 1;
-constexpr uint16_t BLOB_SIZE = 1111;
+constexpr uint16_t BLOB_SIZE = 1045;
 
 struct Box {
     int8_t ox;
@@ -109,9 +109,8 @@ constexpr uint8_t ATTACK_SWEEP_REAR_KICK = 10;
 constexpr uint8_t ATTACK_SWEEP_STOMP = 8;
 constexpr uint8_t CREATURE_HEAVY = 0;
 constexpr uint8_t CREATURE_LUNGE = 1;
-constexpr uint8_t CREATURE_POLE = 2;
-constexpr uint8_t CREATURE_RAVAGER = 3;
-constexpr uint8_t CREATURE_SWEEP = 4;
+constexpr uint8_t CREATURE_RAVAGER = 2;
+constexpr uint8_t CREATURE_SWEEP = 3;
 constexpr uint8_t GUARD_HEAVY_P_BITE = 3;
 constexpr uint8_t GUARD_HEAVY_P_BITE_SPIN = 1;
 constexpr uint8_t GUARD_HEAVY_P_SPIN = 2;
@@ -185,24 +184,21 @@ constexpr uint8_t WINDOW_SWEEP_STOMP_0 = 12;
 constexpr uint8_t ZONE_HEAVY_APPENDAGE = 0;
 constexpr uint8_t ZONE_LUNGE_APPENDAGE = 2;
 constexpr uint8_t ZONE_LUNGE_HEAD = 1;
-constexpr uint8_t ZONE_POLE_HEAD = 3;
-constexpr uint8_t ZONE_RAVAGER_APPENDAGE = 5;
-constexpr uint8_t ZONE_RAVAGER_HEAD = 4;
-constexpr uint8_t ZONE_SWEEP_APPENDAGE = 7;
-constexpr uint8_t ZONE_SWEEP_HEAD = 6;
+constexpr uint8_t ZONE_RAVAGER_APPENDAGE = 4;
+constexpr uint8_t ZONE_RAVAGER_HEAD = 3;
+constexpr uint8_t ZONE_SWEEP_APPENDAGE = 6;
+constexpr uint8_t ZONE_SWEEP_HEAD = 5;
 
-inline constexpr std::array<Creature, 5> CREATURES = {{
+inline constexpr std::array<Creature, 4> CREATURES = {{
     {2, 0, 255, 0, 0, 3, 0, 4, 40, 28, 5, {-8, 3, 48, 22}, 2800, 200, 40, 0, 0, 0, 0, 0, 0, 0, 0},
     {1, 1, 1, 2, 3, 3, 4, 4, 32, 24, 6, {9, 11, 12, 13}, 1800, 200, 40, 0, 0, 0, 0, 0, 0, 0, 0},
-    {3, 2, 3, 255, 0, 0, 0, 0, 20, 36, 0, {0, 0, 20, 36}, 0, 140, 40, 1, 1, 0, 0, 0, 0, 0, 0},
-    {4, 3, 4, 5, 6, 2, 8, 3, 32, 24, 6, {0, 0, 32, 24}, 2400, 200, 40, 0, 0, 0, 0, 0, 0, 0, 0},
-    {0, 4, 6, 7, 8, 3, 11, 4, 28, 22, 7, {1, 14, 26, 8}, 1500, 200, 40, 0, 0, 0, 0, 40, 130, 6, 0},
+    {4, 2, 3, 4, 6, 2, 8, 3, 32, 24, 6, {0, 0, 32, 24}, 2400, 200, 40, 0, 0, 0, 0, 0, 0, 0, 0},
+    {0, 3, 5, 6, 8, 3, 11, 4, 28, 22, 7, {1, 14, 26, 8}, 1500, 200, 40, 0, 0, 0, 0, 40, 130, 6, 0},
 }};
 
-inline constexpr std::array<Profile, 5> PROFILES = {{
+inline constexpr std::array<Profile, 4> PROFILES = {{
     {36, 12, 42, 8, 10, 6, 10, 0, 0, 2, 10, 1, 55, 40, 90, 140, 24, 0},
     {36, 16, 42, 8, 10, 6, 10, 60, 2, 3, 6, 1, 48, 60, 90, 140, 24, 30},
-    {0, 0, 0, 0, 1, 0, 1, 0, 0, 1, 0, 0, 0, 0, 0, 0, 0, 0},
     {36, 24, 42, 8, 10, 6, 10, 60, 1, 3, 8, 2, 50, 30, 90, 120, 24, 24},
     {36, 18, 42, 8, 10, 6, 10, 80, 1, 3, 10, 1, 55, 40, 90, 140, 24, 24},
 }};
@@ -215,11 +211,10 @@ inline constexpr std::array<Skeleton, 5> SKELETONS = {{
     {8, 2},
 }};
 
-inline constexpr std::array<Zone, 8> ZONES = {{
+inline constexpr std::array<Zone, 7> ZONES = {{
     {{-24, 0, 24, 16}, 240, 150, 40, 1, 30, 200, 3, 2, 0},
     {{18, 0, 11, 7}, 160, 130, 100, 1, 12, 130, 1, 0, 0},
     {{9, 0, 9, 24}, 240, 150, 40, 1, 30, 200, 3, 16, 0},
-    {{-128, 0, 255, 16}, 0, 140, 100, 0, 0, 140, 0, 0, 0},
     {{20, 4, 12, 12}, 160, 130, 100, 1, 12, 130, 1, 0, 0},
     {{-14, 8, 18, 10}, 240, 150, 40, 1, 30, 200, 3, 128, 0},
     {{17, -4, 12, 10}, 160, 130, 100, 1, 12, 130, 1, 0, 0},

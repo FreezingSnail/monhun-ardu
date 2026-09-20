@@ -144,11 +144,12 @@ void CombatSuite(TestRunner &runner) {
         // appendage (long tail). 76y added the chicken's lunge head + legs
         // (appendage) zones. nch.9 added the bull's head (horns) + appendage
         // (hooves) zones.
-        // feel.20: the pole is one plain static prop with its crit head zone
-        // (the 3 breakable variant records + part zones are gone).
-        t.assert(combat::ZONES_COUNT, 8, "heavy tail + ravager + lunge + sweep + plain pole head zone");
-        t.assert(combat::CREATURES_COUNT, 5, "3 demo beasts + ravager + 1 static pole");
-        t.assert(combat::SKELETONS_COUNT, 5, "bull/chicken/longtail/quad + pole");
+        // prg.8 removed the static pole record and its head zone: the four demo
+        // beasts carry the 7 shipped zones (heavy tail, ravager head/appendage,
+        // lunge head/appendage, sweep head/appendage).
+        t.assert(combat::ZONES_COUNT, 7, "heavy tail + ravager + lunge + sweep zones");
+        t.assert(combat::CREATURES_COUNT, 4, "4 demo beasts (static pole removed)");
+        t.assert(combat::SKELETONS_COUNT, 5, "bull/chicken/longtail/quad + pole skeleton");
         t.assert(combat::ATTACKS_COUNT, 11, "3x2 shipped + ravager bite/tail_sweep + chicken wing_beat + sweep rear_kick + heavy tail_slam (feel.10)");
         t.assert(combat::WINDOWS_COUNT, 16, "single-window attacks + ravager 2 + tail_spin 4 + sweep stomp 1/gore 2 + wing_beat + rear_kick + tail_slam");
         t.assert(combat::PATTERNS_COUNT, 15, "feel.10: heavy p_tail_slam + p_bite_spin; feel.9 sweep p_rear_kick/p_gore2; feel.8 chicken p_flank/p_leap2; ravager p_enraged; heavy spin/bite");
@@ -215,72 +216,20 @@ void CombatSuite(TestRunner &runner) {
     }
 
     {
-        Test t("static prop record: pole skeleton, static/sheet/brokenBody decode");
-        // The single pole record is a static creature (flags bit0) with an art
-        // sheet id and no brokenBody; it carries no attacks/patterns.
-        t.assert(combatCreatureStatic(combat_data::CREATURE_POLE), 1, "pole static");
-        t.assert(combatCreatureStatic(combat_data::CREATURE_LUNGE), 0, "lunge not static");
-        t.assert(combatCreatureSheet(combat_data::CREATURE_POLE), 1, "pole sheet 1");
-        t.assert(combatCreatureSheet(combat_data::CREATURE_LUNGE), 0, "beast default sheet 0");
-        // The plain pole never resizes its hurt rect, so no brokenBody ships.
-        t.assert(combatCreatureBrokenW(combat_data::CREATURE_POLE), 0, "plain no brokenBody w");
-        t.assert(combatCreatureBrokenH(combat_data::CREATURE_POLE), 0, "plain no brokenBody h");
+        Test t("creature record decode: static/sheet/brokenBody accessors");
+        // prg.8 removed the static pole record; the four demo beasts are all
+        // dynamic (flags bit0 clear) with the default sheet and no brokenBody.
         for (uint8_t i = 0; i < combat::CREATURES_COUNT; i++) {
             const CombatCreature c = combatCreatureRead(i);
+            t.assert(combatCreatureStatic(i), 0, "beast not static");
             t.assert(c.flags, combatCreatureFlags(i), "creature flags accessor");
             t.assert(c.sheet, combatCreatureSheet(i), "creature sheet accessor");
             t.assert(c.brokenW, combatCreatureBrokenW(i), "creature brokenW accessor");
             t.assert(c.brokenH, combatCreatureBrokenH(i), "creature brokenH accessor");
         }
-        // Static pole carries no attacks/patterns; its profile is inert.
-        const combat_data::Creature &h = combat_data::CREATURES[combat_data::CREATURE_POLE];
-        t.assert(h.attackCount, 0, "pole no attacks");
-        t.assert(h.patternCount, 0, "pole no patterns");
-        const CombatProfile pp = combatProfileRead(h.profileIdx);
-        t.assert(pp.cdBase, 0, "pole profile zeroed");
-        t.assert(pp.circleDen, 1, "pole profile den 1");
-        // Pole skeleton + anchors.
-        const CombatSkeleton ps = combatSkeletonRead(combat_data::SKELETON_POLE);
-        t.assert(ps.anchorCount, 2, "pole skeleton anchors");
-        const CombatAnchor a0 = combatAnchorRead(ps.firstAnchor);
-        const CombatAnchor a1 = combatAnchorRead(static_cast<uint8_t>(ps.firstAnchor + 1));
-        t.assert(a0.ox, 0, "pole origin anchor ox");
-        t.assert(a0.oy, 0, "pole origin anchor oy");
-        t.assert(a1.ox, 10, "pole head anchor ox");
-        t.assert(a1.oy, 8, "pole head anchor oy");
-        suite.addTest(t);
-    }
-
-    {
-        Test t("pole zone record: crit head, x-independent band, no pool");
-        const CombatZone ph = combatZoneRead(combat_data::ZONE_POLE_HEAD);
-        t.assert(ph.box.ox, -128, "plain head ox (x-independent band)");
-        t.assert(ph.box.oy, 0, "plain head oy");
-        t.assert(ph.box.w, 255, "plain head w");
-        t.assert(ph.box.h, 16, "plain head h");
-        t.assert(ph.dmgMul, 140, "plain head dmgMul");
-        t.assert(ph.hp, 0, "plain head no pool");
-        t.assert(ph.breakTypes, 0, "plain head unbreakable");
-        suite.addTest(t);
-    }
-
-    {
-        Test t("static prop resolve: east facing, x-independent head band, shared pool rule");
-        Game g;
-        creatureLoad(g, combat_data::CREATURE_POLE);
-        t.assert(g.combat.isStatic, 1, "static flag cached");
-        t.assert(g.combat.headZone, combat_data::ZONE_POLE_HEAD, "pole head zone seeded");
-        // Anchor at the prop rect; the head band is hy < rect.y + 16 regardless
-        // of hx (the legacy containment), so an hx far outside the 20 px body
-        // still selects the head zone (mul 140 -> 14).
-        CombatBodyHit r = combatZoneHitResolveAt(g, 10, PHYS_SLASH, 100, 50, 140, 40, 16, 0);
-        t.assert(r.zone, COMBAT_ZONE_HEAD, "head selected with hx outside the body");
-        t.assert(r.mul, 140, "head multiplier 140");
-        t.assert(r.dmg, 14, "head damage x1.4");
-        // Below the 16 px band -> body.
-        r = combatZoneHitResolveAt(g, 10, PHYS_SLASH, 100, 70, 140, 40, 16, 0);
-        t.assert(r.zone, COMBAT_NO_ZONE, "below band routes body");
-        t.assert(r.dmg, 10, "body damage");
+        t.assert(combatCreatureSheet(combat_data::CREATURE_LUNGE), 0, "beast default sheet 0");
+        t.assert(combatCreatureBrokenW(combat_data::CREATURE_LUNGE), 0, "beast no brokenBody w");
+        t.assert(combatCreatureBrokenH(combat_data::CREATURE_LUNGE), 0, "beast no brokenBody h");
         suite.addTest(t);
     }
 

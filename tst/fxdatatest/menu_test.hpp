@@ -44,7 +44,7 @@ inline void test_menu(FxTest &test) {
     menuStep(m, idle);
     test.expectEq(static_cast<uint32_t>(m.weapon), 2, F("nav weapon wrap back"));
 
-    // ---- taps: target down through all 5, wrap to LUNGE, up wraps back
+    // ---- taps: target down through all 4 (prg.8), wrap to LUNGE, up wraps back
     menuStep(m, down);
     menuStep(m, idle);
     test.expectEq(static_cast<uint32_t>(m.target), 1, F("nav down 1"));
@@ -56,13 +56,10 @@ inline void test_menu(FxTest &test) {
     test.expectEq(static_cast<uint32_t>(m.target), 3, F("nav down 3 ravager"));
     menuStep(m, down);
     menuStep(m, idle);
-    test.expectEq(static_cast<uint32_t>(m.target), 4, F("nav down 4 pole"));
-    menuStep(m, down);
-    menuStep(m, idle);
     test.expectEq(static_cast<uint32_t>(m.target), 0, F("nav target wrap fwd"));
     menuStep(m, up);
     menuStep(m, idle);
-    test.expectEq(static_cast<uint32_t>(m.target), 4, F("nav target wrap back"));
+    test.expectEq(static_cast<uint32_t>(m.target), 3, F("nav target wrap back"));
 
     // ---- debounce: press steps once, hold waits DELAY, then repeats REPEAT
     menuStep(m, right);   // weapon 2 -> 0 (immediate)
@@ -92,26 +89,21 @@ inline void test_menu(FxTest &test) {
     test.expectEq(static_cast<uint32_t>(m.weapon), 1, F("reversal after delay"));
     menuStep(m, idle);   // release the axis so later picks start fresh
 
-    // ---- A edge fires START once per press (picks now FLS + POLE)
-    m.target = MENU_POLE_TARGET;   // nav above wrapped to POLE
+    // ---- A edge fires START once per press (picks now FLS + RAVAGER)
+    m.target = MENU_TARGET_COUNT - 1;
     test.expectEq(static_cast<uint32_t>(menuStep(m, a)), MENU_ACCEPT, F("A edge start"));
     for (uint8_t i = 0; i < 4; i++)
         test.expectEq(static_cast<uint32_t>(menuStep(m, a)), MENU_NONE, F("A held no repeat"));
 
-    // ---- start mapping through the real core: POLE (target 4) -> MODE_TRAIN,
-    // no beast, plain pole with no pool. One static Game reused for every
-    // mapping check: Game is ~700 B and three stack copies overflow the AVR stack.
+    // ---- start mapping through the real core: RAVAGER -> hunt. One static Game
+    // reused for every mapping check: Game is ~700 B and three stack copies
+    // overflow the AVR stack.
     static Game g;
     menuStart(g, m);
-    test.expectEq(static_cast<uint32_t>(g.weapon), W_FLAIL, F("start pole weapon"));
-    test.expectEq(static_cast<uint32_t>(g.mode), MODE_TRAIN, F("start pole mode"));
-    test.expectEq(static_cast<uint32_t>(g.monsterKind), MON_LUNGE, F("start pole no beast"));
-    test.expectEq(static_cast<uint32_t>(g.combat.creature), combat::CREATURE_POLE, F("start plain pole record"));
-    test.expectEq(static_cast<uint32_t>(g.combat.zone[COMBAT_ZONE_HEAD].hp), 0, F("plain pool 0"));
-    test.expectEq(static_cast<uint32_t>(g.pole.rect.w), 20, F("plain pole rect w"));
-    test.expectEq(static_cast<uint32_t>(g.pole.rect.h), 36, F("plain pole rect h"));
-    test.expectEq(static_cast<uint32_t>(g.target.rect.w), 20, F("plain target rect"));
-    test.expectEq(static_cast<uint32_t>(g.roomId), zone::ROOM_POLE_ROOM, F("pole start room"));
+    test.expectEq(static_cast<uint32_t>(g.weapon), W_FLAIL, F("start ravager weapon"));
+    test.expectEq(static_cast<uint32_t>(g.mode), MODE_HUNT, F("start ravager mode"));
+    test.expectEq(static_cast<uint32_t>(g.monsterKind), MON_RAVAGER, F("start ravager kind"));
+    test.expectEq(static_cast<uint32_t>(g.roomId), zone::ROOM_CAMP, F("ravager start room"));
 
     // ---- HEAVY -> hunt, cart def drives size/hp (40x28, 2800 hp)
     MenuState h;
