@@ -379,7 +379,7 @@ void ZoneSuite(TestRunner &runner) {
 
     {
         Test t("gather props: reader surfaces item/yield, plain props read none");
-        // Camp props: 0 = tent (plain), 1 = herb x1, 2 = herb x2.
+        // Camp props: 0 = tent (plain), 1 = herb x1, 2 = herb x2, 3 = mushroom.
         const ZoneProp tent = zonePropRead(zone::PROP_CAMP_0);
         t.assert(tent.gatherItem, zone::GATHER_NONE, "camp tent has no gather item");
         t.assert(tent.gatherYield, 0, "camp tent gather yield 0");
@@ -392,6 +392,11 @@ void ZoneSuite(TestRunner &runner) {
         t.assert(campHerb1.gatherItem, zone::GATHER_HERB, "camp herb 1 item");
         t.assert(campHerb1.gatherYield, 2, "camp herb 1 yield");
 
+        const ZoneProp campShroom = zonePropRead(zone::PROP_CAMP_3);
+        t.assert(campShroom.gatherItem, zone::GATHER_BLUE_MUSHROOM, "camp mushroom item");
+        t.assert(campShroom.gatherYield, 1, "camp mushroom yield");
+
+        // Area props: herbs (0..2), mushrooms (3, 4), ore (5, 6), bug (7).
         const ZoneProp areaHerb0 = zonePropRead(zone::PROP_AREA_0);
         t.assert(areaHerb0.gatherItem, zone::GATHER_HERB, "area herb 0 item");
         t.assert(areaHerb0.gatherYield, 1, "area herb 0 yield");
@@ -399,6 +404,18 @@ void ZoneSuite(TestRunner &runner) {
         const ZoneProp areaHerb1 = zonePropRead(zone::PROP_AREA_1);
         t.assert(areaHerb1.gatherItem, zone::GATHER_HERB, "area herb 1 item");
         t.assert(areaHerb1.gatherYield, 2, "area herb 1 yield");
+
+        const ZoneProp areaShroom = zonePropRead(zone::PROP_AREA_3);
+        t.assert(areaShroom.gatherItem, zone::GATHER_BLUE_MUSHROOM, "area mushroom item");
+        t.assert(areaShroom.gatherYield, 1, "area mushroom yield");
+
+        const ZoneProp areaOre = zonePropRead(zone::PROP_AREA_5);
+        t.assert(areaOre.gatherItem, zone::GATHER_ORE, "area ore item");
+        t.assert(areaOre.gatherYield, 1, "area ore yield");
+
+        const ZoneProp areaBug = zonePropRead(zone::PROP_AREA_7);
+        t.assert(areaBug.gatherItem, zone::GATHER_BUG, "area bug item");
+        t.assert(areaBug.gatherYield, 1, "area bug yield");
         suite.addTest(t);
     }
 

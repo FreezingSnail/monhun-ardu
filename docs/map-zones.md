@@ -46,8 +46,9 @@ the render path (fie.5) blits the room layers with `seekData`.
   record stores the item index+1 so a plain prop reads `GATHER_NONE` (0); the
   symbolic `GATHER_*` values live in `src/generated/zone_meta.hpp` and equal the
   `item::ITEM_<NAME>` index + 1. Gather nodes reuse an existing prop sheet for
-  now — the render side draws a small procedural plant keyed off `gatherItem`,
-  so no new art sheet is required.
+  now — the render side draws a small procedural shape keyed off `gatherItem`
+  (herb plant / mushroom / ore / bug silhouettes, prg.4), so no new art sheet
+  is required.
 - `doors[]`: `to` is another room id, or the reserved `"menu"` (exit to the
   opening menu). A door to a room **requires** `toSpawn` naming a spawn in the
   target room; a door to `"menu"` must **not** carry `toSpawn`.
@@ -57,6 +58,25 @@ the render path (fie.5) blits the room layers with `seekData`.
   `spawn` must name a spawn in the same room.
 - All coordinates/rects must stay inside the room's own `w`/`h`. Every field
   is integer-only (floats/bools are rejected); unknown keys are errors.
+
+### Authored gather nodes (bead prg.4)
+
+| room | prop | item | yield | rect |
+|---|---|---|---|---|
+| camp | `PROP_CAMP_1` | herb | 1 | 8,8,8,8 |
+| camp | `PROP_CAMP_2` | herb | 2 | 72,40,8,8 |
+| camp | `PROP_CAMP_3` | blue_mushroom | 1 | 24,8,8,8 |
+| area | `PROP_AREA_0` | herb | 1 | 40,16,8,8 |
+| area | `PROP_AREA_1` | herb | 2 | 160,40,8,8 |
+| area | `PROP_AREA_2` | herb | 3 | 280,88,8,8 |
+| area | `PROP_AREA_3` | blue_mushroom | 1 | 96,80,8,8 |
+| area | `PROP_AREA_4` | blue_mushroom | 2 | 216,16,8,8 |
+| area | `PROP_AREA_5` | ore | 1 | 120,88,8,8 |
+| area | `PROP_AREA_6` | ore | 2 | 352,16,8,8 |
+| area | `PROP_AREA_7` | bug | 1 | 200,96,8,8 |
+
+Nodes stay clear of spawns, doors, heal rects and the monster start; every
+node is picked once per hunt (`Game::gatherMask`, reset only by `newGame`).
 
 `image` must be `images/maps/<room symbol>_<W>x<H>.png` with `<room symbol>` =
 `mh_map_<id>` and exactly the room's `W`x`H`. The generator authors a

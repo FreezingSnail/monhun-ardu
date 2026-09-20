@@ -322,6 +322,19 @@ class GenZonesTests(unittest.TestCase):
         self.assertIn("constexpr uint8_t GATHER_HERB = 1;", text)
         self.assertIn("constexpr uint8_t GATHER_BLUE_MUSHROOM = 2;", text)
 
+    def test_gather_every_item_packs_index_plus_one(self):
+        # herb=1, blue_mushroom=2, ore=3, bug=4 (item index + 1) in the fixture.
+        for name, code in (("herb", 1), ("blue_mushroom", 2), ("ore", 3), ("bug", 4)):
+            self.mutate(lambda doc, name=name: doc["rooms"][0]["props"][0].__setitem__(
+                "gather", {"item": name, "yield": 1}))
+            self.assert_succeeds(self.compile())
+            blob = self.read_bytes(BLOB_REL)
+            parsed = parse_blob(blob)
+            prop = PROP.unpack_from(blob, parsed["off"]["props"])
+            self.assertEqual(prop[7], code, "gather code for %s" % name)
+            self.assertIn("constexpr uint8_t GATHER_%s = %d;" % (name.upper(), code),
+                          self.read(META_REL))
+
     def test_missing_items_file_rejected(self):
         os.remove(self.path(ITEMS_REL))
         self.assert_fails(self.compile(), "missing item file")

@@ -39,8 +39,8 @@ namespace mh {
 static void addEffect(Game &g, int16_t x, int16_t y, uint8_t life, bool crit);
 
 // Node-depletion mask is a u16 (one bit per global prop record). The demo map
-// has 7 props; a future map that overflows this fires the assert instead of
-// silently sharing bits.
+// has 12 props (prg.4 added mushroom/ore/bug nodes); a future map that
+// overflows this fires the assert instead of silently sharing bits.
 static_assert(zone::PROPS_COUNT <= 16, "gatherMask is a u16: one bit per prop record");
 
 constexpr uint8_t GATHER_SPARK_LIFE = 8;   // same spark family as the heal/hit paths

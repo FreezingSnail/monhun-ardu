@@ -17,7 +17,7 @@ namespace zone {
 constexpr uint16_t MAGIC = 0x5A52;
 constexpr uint8_t VERSION = 1;
 constexpr uint8_t FLAGS = 0x00;
-constexpr uint16_t SIZE = 160;
+constexpr uint16_t SIZE = 226;
 constexpr uint8_t HEADER_SIZE = 16;
 
 constexpr uint8_t ROOM_SIZE = 18;
@@ -30,11 +30,11 @@ constexpr uint16_t ROOMS_OFF = 16;
 constexpr uint16_t DOORS_OFF = 52;
 constexpr uint16_t SPAWNS_OFF = 72;
 constexpr uint16_t PROPS_OFF = 88;
-constexpr uint16_t HEALS_OFF = 154;
+constexpr uint16_t HEALS_OFF = 220;
 constexpr uint16_t ROOMS_COUNT = 2;
 constexpr uint16_t DOORS_COUNT = 2;
 constexpr uint16_t SPAWNS_COUNT = 4;
-constexpr uint16_t PROPS_COUNT = 6;
+constexpr uint16_t PROPS_COUNT = 12;
 constexpr uint16_t HEALS_COUNT = 1;
 
 // Record field offsets.
@@ -143,28 +143,40 @@ constexpr uint8_t PROP_AREA_1 = 1;
 constexpr uint16_t PROP_AREA_1_OFF = 99;
 constexpr uint8_t PROP_AREA_2 = 2;
 constexpr uint16_t PROP_AREA_2_OFF = 110;
-constexpr uint8_t PROP_CAMP_0 = 3;
-constexpr uint16_t PROP_CAMP_0_OFF = 121;
-constexpr uint8_t PROP_CAMP_1 = 4;
-constexpr uint16_t PROP_CAMP_1_OFF = 132;
-constexpr uint8_t PROP_CAMP_2 = 5;
-constexpr uint16_t PROP_CAMP_2_OFF = 143;
+constexpr uint8_t PROP_AREA_3 = 3;
+constexpr uint16_t PROP_AREA_3_OFF = 121;
+constexpr uint8_t PROP_AREA_4 = 4;
+constexpr uint16_t PROP_AREA_4_OFF = 132;
+constexpr uint8_t PROP_AREA_5 = 5;
+constexpr uint16_t PROP_AREA_5_OFF = 143;
+constexpr uint8_t PROP_AREA_6 = 6;
+constexpr uint16_t PROP_AREA_6_OFF = 154;
+constexpr uint8_t PROP_AREA_7 = 7;
+constexpr uint16_t PROP_AREA_7_OFF = 165;
+constexpr uint8_t PROP_CAMP_0 = 8;
+constexpr uint16_t PROP_CAMP_0_OFF = 176;
+constexpr uint8_t PROP_CAMP_1 = 9;
+constexpr uint16_t PROP_CAMP_1_OFF = 187;
+constexpr uint8_t PROP_CAMP_2 = 10;
+constexpr uint16_t PROP_CAMP_2_OFF = 198;
+constexpr uint8_t PROP_CAMP_3 = 11;
+constexpr uint16_t PROP_CAMP_3_OFF = 209;
 constexpr uint8_t HEAL_CAMP_0 = 0;
-constexpr uint16_t HEAL_CAMP_0_OFF = 154;
+constexpr uint16_t HEAL_CAMP_0_OFF = 220;
 
 // Prop sheet names + FX-image offsets (0 = not yet authored; fie.5 art).
 constexpr uint8_t SHEET_MH_MAP_TENT = 0;
 constexpr bool SHEET_MH_MAP_TENT_RESOLVED = true;
-constexpr uint32_t SHEET_MH_MAP_TENT_OFF = 22355;
+constexpr uint32_t SHEET_MH_MAP_TENT_OFF = 22421;
 
 // Room image symbols + baked FX offsets (the fie.5 blit base). A missing
 // symbol means a first gen pass before fxdata-build emitted it.
 constexpr const char *ROOM_AREA_IMAGE = "mh_map_area";
 constexpr bool ROOM_AREA_IMAGE_RESOLVED = true;
-constexpr uint32_t ROOM_AREA_IMAGE_OFF = 181251;
+constexpr uint32_t ROOM_AREA_IMAGE_OFF = 181317;
 constexpr const char *ROOM_CAMP_IMAGE = "mh_map_camp";
 constexpr bool ROOM_CAMP_IMAGE_RESOLVED = true;
-constexpr uint32_t ROOM_CAMP_IMAGE_OFF = 197379;
+constexpr uint32_t ROOM_CAMP_IMAGE_OFF = 197445;
 #if defined(__AVR__)
 static_assert(ROOM_AREA_IMAGE_OFF == static_cast<uint32_t>(mh_map_area), "zone blob stale: re-run make gen");
 static_assert(ROOM_CAMP_IMAGE_OFF == static_cast<uint32_t>(mh_map_camp), "zone blob stale: re-run make gen");

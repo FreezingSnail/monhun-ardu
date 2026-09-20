@@ -100,6 +100,66 @@ void GatherSuite(TestRunner &runner) {
     }
 
     {
+        Test t("gathering a blue mushroom node adds the mushroom slot");
+        Game g;
+        newGame(g, W_SWORD, MODE_HUNT);
+        loadRoom(g, zone::ROOM_CAMP, zone::SPAWN_CAMP_ENTRY);
+        // PROP_CAMP_3 is the camp mushroom node (24,8,8,8) yield 1.
+        t.assert(beginGather(g, 24, 8), 1, "enters PS_GATHER at the mushroom");
+        t.assert(g.player.itemNode, zone::PROP_CAMP_3, "bound the camp mushroom node");
+        runToIdle(g, GATHER_TICKS);
+        t.assert(g.items[ITEM_BLUE_MUSHROOM], 1, "mushroom added to its own slot");
+        t.assert(g.items[ITEM_HERB], 0, "herb slot untouched");
+        t.assert(gatherNodeDepleted(g, zone::PROP_CAMP_3), 1, "mushroom node depleted");
+        suite.addTest(t);
+    }
+
+    {
+        Test t("gathering an ore node adds the ore slot (area)");
+        Game g;
+        newGame(g, W_SWORD, MODE_HUNT);
+        loadRoom(g, zone::ROOM_AREA, zone::SPAWN_AREA_START);
+        gparkBeast(g, 0, 0);
+        // PROP_AREA_5 is the first ore node (120,88,8,8) yield 1.
+        t.assert(beginGather(g, 120, 88), 1, "enters PS_GATHER at the ore");
+        t.assert(g.player.itemNode, zone::PROP_AREA_5, "bound the area ore node");
+        runToIdle(g, GATHER_TICKS);
+        t.assert(g.items[ITEM_ORE], 1, "ore added to the ore slot");
+        t.assert(g.items[ITEM_HERB], 0, "herb slot untouched");
+        t.assert(gatherNodeDepleted(g, zone::PROP_AREA_5), 1, "ore node depleted");
+        suite.addTest(t);
+    }
+
+    {
+        Test t("gathering a bug node adds the bug slot (area)");
+        Game g;
+        newGame(g, W_SWORD, MODE_HUNT);
+        loadRoom(g, zone::ROOM_AREA, zone::SPAWN_AREA_START);
+        gparkBeast(g, 0, 0);
+        // PROP_AREA_7 is the bug node (200,96,8,8) yield 1.
+        t.assert(beginGather(g, 200, 96), 1, "enters PS_GATHER at the bug");
+        t.assert(g.player.itemNode, zone::PROP_AREA_7, "bound the area bug node");
+        runToIdle(g, GATHER_TICKS);
+        t.assert(g.items[ITEM_BUG], 1, "bug added to the bug slot");
+        t.assert(g.items[ITEM_HERB], 0, "herb slot untouched");
+        t.assert(gatherNodeDepleted(g, zone::PROP_AREA_7), 1, "bug node depleted");
+        suite.addTest(t);
+    }
+
+    {
+        Test t("gathering a second mushroom node stacks its yield");
+        Game g;
+        newGame(g, W_SWORD, MODE_HUNT);
+        loadRoom(g, zone::ROOM_AREA, zone::SPAWN_AREA_START);
+        gparkBeast(g, 0, 0);
+        // PROP_AREA_4 is the second mushroom node (216,16,8,8) yield 2.
+        t.assert(beginGather(g, 216, 16), 1, "enters PS_GATHER at mushroom 2");
+        runToIdle(g, GATHER_TICKS);
+        t.assert(g.items[ITEM_BLUE_MUSHROOM], 2, "yield 2 added to the mushroom slot");
+        suite.addTest(t);
+    }
+
+    {
         Test t("movement input cancels a gather before it applies");
         Game g;
         newGame(g, W_SWORD, MODE_HUNT);

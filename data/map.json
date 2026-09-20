@@ -41,6 +41,19 @@
             "item": "herb",
             "yield": 2
           }
+        },
+        {
+          "type": "post",
+          "x": 24,
+          "y": 8,
+          "sheet": "mh_map_tent",
+          "frame": 0,
+          "w": 8,
+          "h": 8,
+          "gather": {
+            "item": "blue_mushroom",
+            "yield": 1
+          }
         }
       ],
       "spawns": {
@@ -116,6 +129,71 @@
           "gather": {
             "item": "herb",
             "yield": 3
+          }
+        },
+        {
+          "type": "post",
+          "x": 96,
+          "y": 80,
+          "sheet": "mh_map_tent",
+          "frame": 0,
+          "w": 8,
+          "h": 8,
+          "gather": {
+            "item": "blue_mushroom",
+            "yield": 1
+          }
+        },
+        {
+          "type": "post",
+          "x": 216,
+          "y": 16,
+          "sheet": "mh_map_tent",
+          "frame": 0,
+          "w": 8,
+          "h": 8,
+          "gather": {
+            "item": "blue_mushroom",
+            "yield": 2
+          }
+        },
+        {
+          "type": "post",
+          "x": 120,
+          "y": 88,
+          "sheet": "mh_map_tent",
+          "frame": 0,
+          "w": 8,
+          "h": 8,
+          "gather": {
+            "item": "ore",
+            "yield": 1
+          }
+        },
+        {
+          "type": "post",
+          "x": 352,
+          "y": 16,
+          "sheet": "mh_map_tent",
+          "frame": 0,
+          "w": 8,
+          "h": 8,
+          "gather": {
+            "item": "ore",
+            "yield": 2
+          }
+        },
+        {
+          "type": "post",
+          "x": 200,
+          "y": 96,
+          "sheet": "mh_map_tent",
+          "frame": 0,
+          "w": 8,
+          "h": 8,
+          "gather": {
+            "item": "bug",
+            "yield": 1
           }
         }
       ],

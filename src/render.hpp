@@ -445,10 +445,37 @@ __attribute__((noinline)) static void drawRoom(const Game &g, int16_t camX, int1
 // two shipped sheets resolve (tent in images/blocks, the training pole in the
 // blocks section). Static decoration only -- props have no hit test.
 //
-// Gather nodes (bead monhun-ardu-feel.22) draw a procedural 3-shade plant keyed
+// Gather nodes (bead monhun-ardu-feel.22) draw a procedural 3-shade shape keyed
 // off `gatherItem` instead of the sheet (no new art); a picked node draws
-// nothing, and the flower grows into the prompt marker while the hunter stands
-// in the node.
+// nothing. prg.4 gives each item kind its own silhouette so ore/mushroom/bug
+// read apart at 1x: herb keeps the stem/leaf/flower, mushroom is a light stalk
+// + white cap, ore a squat dark rock with a light facet, bug a low body +
+// wing highlight. While the hunter stands in the node a 2x2 white prompt marks
+// the top (all kinds).
+static void drawGatherNode(int16_t gx, int16_t gy, uint8_t item, bool inside) {
+    switch (item) {
+    case zone::GATHER_BLUE_MUSHROOM:
+        blk(static_cast<int16_t>(gx + 3), static_cast<int16_t>(gy + 4), 2, 3, 2);   // stalk
+        blk(static_cast<int16_t>(gx + 2), static_cast<int16_t>(gy + 2), 4, 3, 3);   // cap
+        break;
+    case zone::GATHER_ORE:
+        blk(static_cast<int16_t>(gx + 1), static_cast<int16_t>(gy + 4), 6, 3, 1);   // rock body
+        blk(static_cast<int16_t>(gx + 2), static_cast<int16_t>(gy + 3), 3, 2, 2);   // facet
+        break;
+    case zone::GATHER_BUG:
+        blk(static_cast<int16_t>(gx + 2), static_cast<int16_t>(gy + 4), 4, 1, 2);   // wings
+        blk(static_cast<int16_t>(gx + 3), static_cast<int16_t>(gy + 5), 2, 2, 1);   // body
+        break;
+    default:                                                                        // herb
+        blk(static_cast<int16_t>(gx + 3), static_cast<int16_t>(gy + 3), 2, 4, 1);   // stem
+        blk(static_cast<int16_t>(gx + 2), static_cast<int16_t>(gy + 3), 4, 2, 2);   // leaves
+        blk(static_cast<int16_t>(gx + 3), static_cast<int16_t>(gy + 1), 2, 2, 3);   // flower
+        break;
+    }
+    if (inside)
+        blk(static_cast<int16_t>(gx + 3), static_cast<int16_t>(gy), 2, 2, 3);   // prompt
+}
+
 static inline uint24_t propSheet(uint8_t sheet) {
     return sheet ? fxpole : mh_map_tent;   // SHEET_MH_MAP_TENT 0, else SHEET_FXPOLE
 }
@@ -467,17 +494,12 @@ static void drawProps(const Game &g, int16_t camX, int16_t camY) {
             const int16_t gy = static_cast<int16_t>(p.y + oy);
             if (gatherNodeDepleted(g, idx))
                 continue;   // picked: node is inert and draws nothing
-            // 3-shade plant: dark stem, light leaves, white flower. The flower
-            // grows into the prompt marker while the hunter stands in the node.
             Rect nr;
             nr.x = static_cast<int16_t>(p.x);
             nr.y = static_cast<int16_t>(p.y);
             nr.w = p.w;
             nr.h = p.h;
-            const bool inside = pr.overlaps(nr);
-            blk(static_cast<int16_t>(gx + 3), static_cast<int16_t>(gy + 3), 2, 4, 1);                // stem
-            blk(static_cast<int16_t>(gx + 2), static_cast<int16_t>(gy + 3), 4, 2, 2);                // leaves
-            blk(static_cast<int16_t>(gx + 3), static_cast<int16_t>(gy + 1), 2, inside ? 4 : 2, 3);   // flower + prompt
+            drawGatherNode(gx, gy, p.gatherItem, pr.overlaps(nr));
             continue;
         }
         sprDraw(propSheet(p.sheet), static_cast<int16_t>(p.x + px), static_cast<int16_t>(p.y + oy), FRAME(p.frame));
