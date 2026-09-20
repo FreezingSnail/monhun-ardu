@@ -148,7 +148,8 @@ struct CombatSkeleton {
 struct CombatZone {
     CombatBox box;
     uint8_t hp, dmgMul, bodyShare, breakTypes, staggerOnHit;
-    uint8_t brokenDmgMul, brokenFlags, unlockMask;
+    uint8_t brokenDmgMul, brokenFlags;
+    uint8_t unlockMaskLo, unlockMaskHi;   // u16 bit per global attack idx (feel.10)
 };
 
 struct CombatAnchor {
@@ -225,7 +226,8 @@ struct PkZone {
     int8_t boxOx, boxOy;
     uint8_t boxW, boxH;
     uint8_t hp, dmgMul, bodyShare, breakTypes, staggerOnHit;
-    uint8_t brokenDmgMul, brokenFlags, unlockMask;
+    uint8_t brokenDmgMul, brokenFlags;
+    uint8_t unlockMaskLo, unlockMaskHi;
 };
 struct PkAnchor {
     int8_t ox, oy;
@@ -285,7 +287,7 @@ static_assert(offsetof(PkAttack, dmg) == offsetof(PkAttack, windup) + 6, "attack
 static_assert(offsetof(PkAttack, tell) == offsetof(PkAttack, dmg) + 2, "attack tell must follow the timing quad");
 // Bulk-read cache mirrors: these caches are byte-identical to their packed
 // records, so the reads fetch the whole record in one transaction.
-static_assert(sizeof(CombatZone) == combat::ZONE_SIZE, "zone cache must stay 12 B");
+static_assert(sizeof(CombatZone) == combat::ZONE_SIZE, "zone cache must stay 13 B");
 static_assert(sizeof(CombatGuard) == combat::GUARD_SIZE, "guard cache must stay 9 B");
 static_assert(sizeof(CombatStep) == combat::STEP_SIZE, "step cache must stay 4 B");
 static_assert(sizeof(CombatPattern) == combat::PATTERN_SIZE, "pattern cache must stay 3 B");
@@ -297,8 +299,8 @@ static_assert(offsetof(CombatStep, chance) == offsetof(PkStep, chance), "step mi
 static_assert(offsetof(CombatPattern, guardIdx) == offsetof(PkPattern, guardIdx), "pattern mirror drift");
 static_assert(sizeof(CombatWindow) == 9, "window cache must stay 9 B");
 static_assert(sizeof(CombatAttackCache) == 25, "attack cache must stay 25 B (windup quad + move prefix incl hop dx/dy + facing + wallStun + tell + idx + window)");
-static_assert(sizeof(CombatZoneCache) == 11, "zone cache must stay 11 B");
-static_assert(sizeof(CombatState) == 92, "CombatState must stay 92 B (zones design + collide + static flag + faceHold + wallStun + tell + enrage + hop dx/dy)");
+static_assert(sizeof(CombatZoneCache) == 12, "zone cache must stay 12 B");
+static_assert(sizeof(CombatState) == 94, "CombatState must stay 94 B (zones design + collide + static flag + faceHold + wallStun + tell + enrage + hop dx/dy)");
 
 // Fake cart pointer: the blob lives below 64 KB (generator hard-fails above).
 inline uint16_t combatCartAddr(uint16_t off) {
@@ -750,7 +752,8 @@ inline CombatZone combatZoneRead(uint8_t i) {
     v.staggerOnHit = z.staggerOnHit;
     v.brokenDmgMul = z.brokenDmgMul;
     v.brokenFlags = z.brokenFlags;
-    v.unlockMask = z.unlockMask;
+    v.unlockMaskLo = z.unlockMaskLo;
+    v.unlockMaskHi = z.unlockMaskHi;
     return v;
 }
 
@@ -964,7 +967,7 @@ inline void combatZoneSeed(Game &g, uint8_t slot, uint8_t zoneIdx) {
     c.bodyShare = z.bodyShare;
     c.breakTypes = z.breakTypes;
     c.staggerOnHit = z.staggerOnHit;
-    c.unlockMask = z.unlockMask;
+    c.unlockMask = static_cast<uint16_t>(z.unlockMaskLo) | (static_cast<uint16_t>(z.unlockMaskHi) << 8);
 }
 
 // creatureLoad: read the creature profile index + full profile record + body
@@ -1157,14 +1160,14 @@ inline uint32_t combatMulPercent(uint32_t value, uint8_t mul) {
 }
 
 // combatAttackDisabled: a broken zone can disable the attacks listed in its
-// unlockMask (bit per global attack index). Only present, broken zones are
-// consulted; data with no zones/unlock lists folds this out.
+// unlockMask (u16 bit per global attack index, feel.10). Only present, broken
+// zones are consulted; data with no zones/unlock lists folds this out.
 inline bool combatAttackDisabled(const Game &g, uint8_t attackIdx) {
     if (!ZONES_ENABLED)
         return false;
-    if (attackIdx >= 8)
+    if (attackIdx >= 16)
         return false;
-    const uint8_t bit = static_cast<uint8_t>(1u << attackIdx);
+    const uint16_t bit = static_cast<uint16_t>(1u << attackIdx);
     if ((g.combat.zoneBroken & COMBAT_ZONE_HEAD_BIT) && g.combat.headZone != COMBAT_NO_ZONE && (g.combat.zone[COMBAT_ZONE_HEAD].unlockMask & bit))
         return true;
     if ((g.combat.zoneBroken & COMBAT_ZONE_APPENDAGE_BIT) && g.combat.appendZone != COMBAT_NO_ZONE && (g.combat.zone[COMBAT_ZONE_APPENDAGE].unlockMask & bit))

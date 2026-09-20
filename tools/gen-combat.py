@@ -103,7 +103,7 @@ SIZES = {
     "CREATURE": 29,
     "PROFILE": 23,
     "SKELETON": 2,
-    "ZONE": 12,
+    "ZONE": 13,
     "ANCHOR": 2,
     "ATTACK": 24,
     "WINDOW": 10,
@@ -836,11 +836,11 @@ def pack_model(errors, model):
     for section, count in counts.items():
         if count > 255:
             errors.add("data", "size limit: %d %ss exceed the 255 record limit" % (count, section.lower().rstrip("s")))
-    # unlockMask is a u8 bit per global attack index, so the ABI limit is on the
-    # *index of a disabled attack*, not the total attack count: a zone can only
-    # disable global indices 0..7. The runtime mirrors this (combatAttackDisabled
-    # returns false for attackIdx >= 8), so kits may add a 9th/10th attack; the
-    # per-zone `unlock > 255` check below rejects the only unrepresentable case.
+    # unlockMask is a u16 bit per global attack index (lo/hi bytes in the packed
+    # record), so the ABI limit is on the *index of a disabled attack*, not the
+    # total attack count: a zone can disable global indices 0..15. The runtime
+    # mirrors this (combatAttackDisabled returns false for attackIdx >= 16); the
+    # per-zone `unlock > 0xFFFF` check below rejects the unrepresentable case.
     if errors.items:
         return None
 
@@ -924,13 +924,13 @@ def pack_model(errors, model):
         box = zone["box"]
         broken_flags = (0x01 if zone["brokenHurtOff"] else 0) | (0x02 if zone["brokenCue"] else 0)
         unlock = zone_unlock_mask(entry["creature"], zone, attack_index)
-        if unlock > 255:
-            errors.add("data", "unlockMask overflows u8 for %s %s" % (key[0], key[1]))
+        if unlock > 0xFFFF:
+            errors.add("data", "unlockMask overflows u16 for %s %s (disable index >= 16)" % (key[0], key[1]))
             return None
         record("ZONE", b"".join([
             i8(box["ox"]), i8(box["oy"]), u8(box["w"]), u8(box["h"]),
             u8(zone["hp"]), u8(zone["dmgMul"]), u8(zone["bodyShare"]), u8(zone["breakTypes"] or 0),
-            u8(zone["staggerOnHit"]), u8(zone["brokenDmgMul"]), u8(broken_flags), u8(unlock),
+            u8(zone["staggerOnHit"]), u8(zone["brokenDmgMul"]), u8(broken_flags), u16(unlock),
         ]))
 
     # anchors
@@ -1106,7 +1106,7 @@ def emit_data_header(model, compiled):
     app("struct Zone {")
     app("    Box box;")
     app("    uint8_t hp, dmgMul, bodyShare, breakTypes, staggerOnHit;")
-    app("    uint8_t brokenDmgMul, brokenFlags, unlockMask;")
+    app("    uint8_t brokenDmgMul, brokenFlags, unlockMaskLo, unlockMaskHi;")
     app("};")
     app("")
     app("struct Anchor {")
@@ -1203,10 +1203,10 @@ def emit_data_header(model, compiled):
                 box = zone["box"]
                 broken_flags = (0x01 if zone["brokenHurtOff"] else 0) | (0x02 if zone["brokenCue"] else 0)
                 unlock = entry["unlock"]
-                app("    {{%d, %d, %d, %d}, %d, %d, %d, %d, %d, %d, %d, %d}," % (
+                app("    {{%d, %d, %d, %d}, %d, %d, %d, %d, %d, %d, %d, %d, %d}," % (
                     box["ox"], box["oy"], box["w"], box["h"], zone["hp"], zone["dmgMul"],
                     zone["bodyShare"], zone["breakTypes"] or 0, zone["staggerOnHit"],
-                    zone["brokenDmgMul"], broken_flags, unlock))
+                    zone["brokenDmgMul"], broken_flags, unlock & 0xFF, (unlock >> 8) & 0xFF))
         elif section == "ANCHORS":
             for entry in layout["anchors"]:
                 app("    {%d, %d}," % (entry["anchor"]["ox"], entry["anchor"]["oy"]))

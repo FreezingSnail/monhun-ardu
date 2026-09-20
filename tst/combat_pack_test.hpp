@@ -410,7 +410,8 @@ void CombatPackSuite(TestRunner &runner) {
             t.assert(b8(blob, o + 8), h.staggerOnHit, "blob zone staggerOnHit");
             t.assert(b8(blob, o + 9), h.brokenDmgMul, "blob zone brokenDmgMul");
             t.assert(b8(blob, o + 10), h.brokenFlags, "blob zone brokenFlags");
-            t.assert(b8(blob, o + 11), h.unlockMask, "blob zone unlockMask");
+            t.assert(b8(blob, o + 11), h.unlockMaskLo, "blob zone unlockMaskLo");
+            t.assert(b8(blob, o + 12), h.unlockMaskHi, "blob zone unlockMaskHi");
         }
         for (uint8_t i = 0; i < combat::ATTACKS_COUNT; i++) {
             const size_t o = static_cast<size_t>(combat::ATTACKS_OFF) + i * combat::ATTACK_SIZE;

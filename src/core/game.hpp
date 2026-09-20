@@ -626,7 +626,7 @@ struct CombatZoneCache {
     uint8_t bodyShare;
     uint8_t breakTypes;
     uint8_t staggerOnHit;
-    uint8_t unlockMask;   // attacks disabled while this zone is broken
+    uint16_t unlockMask;   // attacks disabled while this zone is broken (bit per global idx)
 };
 
 // Combat runtime state: which creature was loaded, the implicit body box (the

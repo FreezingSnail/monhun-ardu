@@ -125,7 +125,8 @@ void CombatSuite(TestRunner &runner) {
             t.assert(p.staggerOnHit, h.staggerOnHit, "zone staggerOnHit");
             t.assert(p.brokenDmgMul, h.brokenDmgMul, "zone brokenDmgMul");
             t.assert(p.brokenFlags, h.brokenFlags, "zone brokenFlags");
-            t.assert(p.unlockMask, h.unlockMask, "zone unlockMask");
+            t.assert(p.unlockMaskLo, h.unlockMaskLo, "zone unlockMaskLo");
+            t.assert(p.unlockMaskHi, h.unlockMaskHi, "zone unlockMaskHi");
         }
         suite.addTest(t);
     }
@@ -608,7 +609,7 @@ void CombatSuite(TestRunner &runner) {
         t.assert(g.combat.zone[1].bodyShare, tail.bodyShare, "tail bodyShare seeded");
         t.assert(g.combat.zone[1].breakTypes, PHYS_SLASH, "tail breakTypes seeded");
         t.assert(g.combat.zone[1].staggerOnHit, tail.staggerOnHit, "tail stagger seeded");
-        t.assert(g.combat.zone[1].unlockMask, tail.unlockMask, "tail unlockMask seeded");
+        t.assert(g.combat.zone[1].unlockMask, static_cast<uint16_t>(tail.unlockMaskLo) | (static_cast<uint16_t>(tail.unlockMaskHi) << 8), "tail unlockMask seeded");
         suite.addTest(t);
     }
 
@@ -910,7 +911,8 @@ void CombatSuite(TestRunner &runner) {
         t.assert(tail.staggerOnHit, 30, "tail staggerOnHit");
         t.assert(tail.brokenDmgMul, 200, "tail broken override 200");
         t.assert(tail.brokenFlags, COMBAT_BROKEN_HURT_OFF | COMBAT_BROKEN_CUE, "tail broken hurtOff + cue");
-        t.assert(tail.unlockMask, static_cast<uint8_t>(1u << combat_data::ATTACK_RAVAGER_TAIL_SWEEP), "tail unlock disables tail_sweep");
+        t.assert(static_cast<uint16_t>(tail.unlockMaskLo) | (static_cast<uint16_t>(tail.unlockMaskHi) << 8), static_cast<uint16_t>(1u << combat_data::ATTACK_RAVAGER_TAIL_SWEEP),
+                 "tail unlock disables tail_sweep");
         suite.addTest(t);
     }
 
@@ -927,7 +929,7 @@ void CombatSuite(TestRunner &runner) {
         t.assert(head.breakTypes, PHYS_SLASH, "bull head breakTypes slash only");
         t.assert(head.staggerOnHit, 12, "bull head staggerOnHit");
         t.assert(head.brokenFlags, COMBAT_BROKEN_HURT_OFF, "bull head broken hurtOff");
-        t.assert(head.unlockMask, 0, "bull head disables nothing");
+        t.assert(static_cast<uint16_t>(head.unlockMaskLo) | (static_cast<uint16_t>(head.unlockMaskHi) << 8), 0, "bull head disables nothing");
 
         const CombatZone hooves = combatZoneRead(combat_data::ZONE_SWEEP_APPENDAGE);
         t.assert(hooves.box.ox, 4, "bull hooves ox");
@@ -941,7 +943,8 @@ void CombatSuite(TestRunner &runner) {
         t.assert(hooves.staggerOnHit, 30, "bull hooves staggerOnHit");
         t.assert(hooves.brokenDmgMul, 200, "bull hooves broken override 200");
         t.assert(hooves.brokenFlags, COMBAT_BROKEN_HURT_OFF | COMBAT_BROKEN_CUE, "bull hooves broken hurtOff + cue");
-        t.assert(hooves.unlockMask, static_cast<uint8_t>(1u << combat_data::ATTACK_SWEEP_STOMP), "bull hooves disable stomp");
+        t.assert(static_cast<uint16_t>(hooves.unlockMaskLo) | (static_cast<uint16_t>(hooves.unlockMaskHi) << 8), static_cast<uint16_t>(1u << combat_data::ATTACK_SWEEP_STOMP),
+                 "bull hooves disable stomp");
         suite.addTest(t);
     }
 
@@ -1165,7 +1168,8 @@ void CombatSuite(TestRunner &runner) {
         t.assert(z.staggerOnHit, 30, "heavy tail staggerOnHit");
         t.assert(z.brokenDmgMul, 200, "heavy tail broken dmgMul");
         t.assert(z.brokenFlags, 0x03, "heavy tail broken hurtOff + cue");
-        t.assert(z.unlockMask, static_cast<uint8_t>(1u << combat_data::ATTACK_HEAVY_TAIL_SPIN), "heavy tail disables tail_spin");
+        t.assert(static_cast<uint16_t>(z.unlockMaskLo) | (static_cast<uint16_t>(z.unlockMaskHi) << 8), static_cast<uint16_t>(1u << combat_data::ATTACK_HEAVY_TAIL_SPIN),
+                 "heavy tail disables tail_spin");
         t.assert(art_dims::tail_heavy_frame_w, z.box.w, "tail_heavy frame w == zone box w");
         t.assert(art_dims::tail_heavy_frame_h, z.box.h, "tail_heavy frame h == zone box h");
         t.assert(art_dims::tail_heavy_frames, 4, "tail_heavy frames");

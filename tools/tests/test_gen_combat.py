@@ -446,13 +446,13 @@ class GenCombatTests(unittest.TestCase):
         self.assert_fails(self.compile(), "size limit: 256 windows exceed the 255 record limit")
 
     def test_attack_count_may_exceed_eight_when_mask_fits(self):
-        # unlockMask is a u8 over the *disabled attack's global index*, not the
+        # unlockMask is a u16 over the *disabled attack's global index*, not the
         # total attack count: the kits add attacks without widening the mask and
-        # the runtime ignores indices >= 8 (combatAttackDisabled). Nine attacks
-        # whose disable list stays on index 0 must therefore compile.
+        # the runtime ignores indices >= 16 (combatAttackDisabled). Sixteen
+        # attacks whose disable list stays on index 0 must therefore compile.
         def widen(doc):
             base = doc["attacks"][0]
-            for i in range(2, 10):
+            for i in range(2, 17):
                 clone = json.loads(json.dumps(base))
                 clone["id"] = "jab%d" % i
                 doc["attacks"].append(clone)
@@ -462,17 +462,17 @@ class GenCombatTests(unittest.TestCase):
 
     def test_disabled_attack_index_must_fit_unlockmask(self):
         # The only unrepresentable case: a zone disables an attack whose global
-        # index is >= 8 (bit 8 does not fit the u8 mask). Still rejected.
+        # index is >= 16 (bit 16 does not fit the u16 mask). Still rejected.
         def widen(doc):
             base = doc["attacks"][0]
-            for i in range(2, 10):
+            for i in range(2, 18):
                 clone = json.loads(json.dumps(base))
                 clone["id"] = "jab%d" % i
                 doc["attacks"].append(clone)
-            doc["zones"]["appendage"]["broken"]["disableAttacks"] = ["jab9"]
+            doc["zones"]["appendage"]["broken"]["disableAttacks"] = ["jab17"]
 
         self.mutate("data/creatures/beast.json", widen)
-        self.assert_fails(self.compile(), "unlockMask overflows u8 for beast appendage")
+        self.assert_fails(self.compile(), "unlockMask overflows u16 for beast appendage")
 
     # ----------------------------------------------------------- blob ABI
 
@@ -565,10 +565,10 @@ class GenCombatTests(unittest.TestCase):
         self.assertEqual(skeleton, bytes([0, 1]))
 
         head = blob[meta["ZONE_BEAST_HEAD_OFF"]:meta["ZONE_BEAST_HEAD_OFF"] + meta["ZONE_SIZE"]]
-        self.assertEqual(head, bytes([10, 2, 6, 6, 10, 120, 100, 2, 5, 120, 1, 0]))
+        self.assertEqual(head, bytes([10, 2, 6, 6, 10, 120, 100, 2, 5, 120, 1, 0, 0]))
 
         tail = blob[meta["ZONE_BEAST_APPENDAGE_OFF"]:meta["ZONE_BEAST_APPENDAGE_OFF"] + meta["ZONE_SIZE"]]
-        self.assertEqual(tail, bytes([0xFA, 4, 8, 4, 30, 150, 40, 1, 20, 200, 3, 1]))
+        self.assertEqual(tail, bytes([0xFA, 4, 8, 4, 30, 150, 40, 1, 20, 200, 3, 1, 0]))
 
         attack = blob[meta["ATTACK_BEAST_JAB_OFF"]:meta["ATTACK_BEAST_JAB_OFF"] + meta["ATTACK_SIZE"]]
         # 24 B attack: 12 scalars (cue then the feel.4 wallStun byte), then
@@ -639,9 +639,9 @@ class GenCombatTests(unittest.TestCase):
         head = blob[meta["ZONE_POLE_HEAD_OFF"]:meta["ZONE_POLE_HEAD_OFF"] + meta["ZONE_SIZE"]]
         # box -128,0,255,16; hp 0 (omitted), dmgMul 140, bodyShare 100 (default),
         # no breakTypes/broken/stagger.
-        self.assertEqual(head, bytes([0x80, 0, 255, 16, 0, 140, 100, 0, 0, 140, 0, 0]))
+        self.assertEqual(head, bytes([0x80, 0, 255, 16, 0, 140, 100, 0, 0, 140, 0, 0, 0]))
         append = blob[meta["ZONE_POLE_APPENDAGE_OFF"]:meta["ZONE_POLE_APPENDAGE_OFF"] + meta["ZONE_SIZE"]]
-        self.assertEqual(append, bytes([20, 8, 8, 12, 40, 101, 100, 2, 0, 101, 1, 0]))
+        self.assertEqual(append, bytes([20, 8, 8, 12, 40, 101, 100, 2, 0, 101, 1, 0, 0]))
 
         expect = self.read(EXPECT_REL)
         self.assertIn("constexpr uint8_t CREATURE_POLE_STATIC = 1;", expect)

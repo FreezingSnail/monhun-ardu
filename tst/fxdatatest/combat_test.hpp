@@ -143,7 +143,7 @@ static const CombatCreature kCreatures[] PROGMEM = {
 static const uint8_t kZoneIds[] PROGMEM = {combat::ZONE_HEAVY_APPENDAGE, combat::ZONE_LUNGE_HEAD,   combat::ZONE_LUNGE_APPENDAGE,  combat::ZONE_SWEEP_HEAD,
                                            combat::ZONE_SWEEP_APPENDAGE, combat::ZONE_RAVAGER_HEAD, combat::ZONE_RAVAGER_APPENDAGE};
 static const CombatZone kZones[] PROGMEM = {
-    // box, hp, dmgMul, bodyShare, breakTypes, staggerOnHit, brokenDmgMul, brokenFlags, unlockMask
+    // box, hp, dmgMul, bodyShare, breakTypes, staggerOnHit, brokenDmgMul, brokenFlags, unlockMaskLo, unlockMaskHi
     {{-24, 0, 24, 16},
      combat_expect::ZONE_HEAVY_APPENDAGE_HP,
      combat_expect::ZONE_HEAVY_APPENDAGE_DMG_MUL,
@@ -152,7 +152,8 @@ static const CombatZone kZones[] PROGMEM = {
      30,
      200,
      COMBAT_BROKEN_HURT_OFF | COMBAT_BROKEN_CUE,
-     static_cast<uint8_t>(1u << combat::ATTACK_HEAVY_TAIL_SPIN)},
+     static_cast<uint8_t>((1u << combat::ATTACK_HEAVY_TAIL_SPIN) & 0xFFu),
+     static_cast<uint8_t>(((1u << combat::ATTACK_HEAVY_TAIL_SPIN) >> 8) & 0xFFu)},
     {{18, 0, 11, 7}, combat_expect::ZONE_LUNGE_HEAD_HP, combat_expect::ZONE_LUNGE_HEAD_DMG_MUL, combat_expect::ZONE_LUNGE_HEAD_BODY_SHARE, PHYS_SLASH, 12, 130, COMBAT_BROKEN_HURT_OFF, 0},
     {{9, 0, 9, 24},
      combat_expect::ZONE_LUNGE_APPENDAGE_HP,
@@ -162,7 +163,8 @@ static const CombatZone kZones[] PROGMEM = {
      30,
      200,
      COMBAT_BROKEN_HURT_OFF | COMBAT_BROKEN_CUE,
-     static_cast<uint8_t>(1u << combat::ATTACK_LUNGE_LEAP)},
+     static_cast<uint8_t>((1u << combat::ATTACK_LUNGE_LEAP) & 0xFFu),
+     static_cast<uint8_t>(((1u << combat::ATTACK_LUNGE_LEAP) >> 8) & 0xFFu)},
     {{17, -4, 12, 10}, combat_expect::ZONE_SWEEP_HEAD_HP, combat_expect::ZONE_SWEEP_HEAD_DMG_MUL, combat_expect::ZONE_SWEEP_HEAD_BODY_SHARE, PHYS_SLASH, 12, 130, COMBAT_BROKEN_HURT_OFF, 0},
     {{4, 12, 20, 10},
      combat_expect::ZONE_SWEEP_APPENDAGE_HP,
@@ -172,7 +174,8 @@ static const CombatZone kZones[] PROGMEM = {
      30,
      200,
      COMBAT_BROKEN_HURT_OFF | COMBAT_BROKEN_CUE,
-     static_cast<uint8_t>(1u << combat::ATTACK_SWEEP_STOMP)},
+     static_cast<uint8_t>((1u << combat::ATTACK_SWEEP_STOMP) & 0xFFu),
+     static_cast<uint8_t>(((1u << combat::ATTACK_SWEEP_STOMP) >> 8) & 0xFFu)},
     {{20, 4, 12, 12}, combat_expect::ZONE_RAVAGER_HEAD_HP, combat_expect::ZONE_RAVAGER_HEAD_DMG_MUL, combat_expect::ZONE_RAVAGER_HEAD_BODY_SHARE, PHYS_SLASH, 12, 130, COMBAT_BROKEN_HURT_OFF, 0},
     {{-14, 8, 18, 10},
      combat_expect::ZONE_RAVAGER_APPENDAGE_HP,
@@ -182,7 +185,8 @@ static const CombatZone kZones[] PROGMEM = {
      30,
      200,
      COMBAT_BROKEN_HURT_OFF | COMBAT_BROKEN_CUE,
-     static_cast<uint8_t>(1u << combat::ATTACK_RAVAGER_TAIL_SWEEP)},
+     static_cast<uint8_t>((1u << combat::ATTACK_RAVAGER_TAIL_SWEEP) & 0xFFu),
+     static_cast<uint8_t>(((1u << combat::ATTACK_RAVAGER_TAIL_SWEEP) >> 8) & 0xFFu)},
 };
 
 static const uint8_t kAttackIds[] PROGMEM = {combat::ATTACK_HEAVY_BITE,  combat::ATTACK_HEAVY_TAIL_SPIN, combat::ATTACK_LUNGE_PECK,
@@ -617,7 +621,8 @@ inline void test_combat(FxTest &test) {
         test.expectEq(tail.dmgMul, combat_expect::ZONE_RAVAGER_APPENDAGE_DMG_MUL, F("tail dmgMul"));
         test.expectEq(tail.bodyShare, combat_expect::ZONE_RAVAGER_APPENDAGE_BODY_SHARE, F("tail bodyShare"));
         test.expectEq(tail.breakTypes, PHYS_SLASH, F("tail break slash"));
-        test.expectEq(tail.unlockMask, static_cast<uint8_t>(1u << combat::ATTACK_RAVAGER_TAIL_SWEEP), F("tail unlock sweep"));
+        test.expectEq(static_cast<uint16_t>(tail.unlockMaskLo) | (static_cast<uint16_t>(tail.unlockMaskHi) << 8), static_cast<uint16_t>(1u << combat::ATTACK_RAVAGER_TAIL_SWEEP),
+                      F("tail unlock sweep"));
 
         before = mhFxReadCount;
         creatureLoad(g, combat::CREATURE_RAVAGER);
