@@ -8,7 +8,7 @@
 
 namespace combat_expect {
 
-constexpr uint16_t BLOB_SIZE = 1309;
+constexpr uint16_t BLOB_SIZE = 1111;
 constexpr uint8_t ANCHOR_SIZE = 2;
 constexpr uint8_t ATTACK_SIZE = 24;
 constexpr uint8_t CREATURE_SIZE = 29;
@@ -98,63 +98,6 @@ constexpr uint8_t PROFILE_POLE_TURN_RATE = 0;
 constexpr uint8_t ZONE_POLE_HEAD_HP = 0;
 constexpr uint8_t ZONE_POLE_HEAD_DMG_MUL = 140;
 constexpr uint8_t ZONE_POLE_HEAD_BODY_SHARE = 100;
-constexpr uint16_t CREATURE_POLE_BREAK_HP = 0;
-constexpr uint8_t CREATURE_POLE_BREAK_SPD = 0;
-constexpr uint8_t CREATURE_POLE_BREAK_W = 20;
-constexpr uint8_t CREATURE_POLE_BREAK_H = 36;
-constexpr uint8_t CREATURE_POLE_BREAK_ATTACKS = 0;
-constexpr uint8_t CREATURE_POLE_BREAK_PATTERNS = 0;
-constexpr uint8_t CREATURE_POLE_BREAK_STATIC = 1;
-constexpr uint8_t CREATURE_POLE_BREAK_SHEET = 3;
-constexpr uint8_t CREATURE_POLE_BREAK_BROKEN_W = 0;
-constexpr uint8_t CREATURE_POLE_BREAK_BROKEN_H = 0;
-constexpr int8_t CREATURE_POLE_BREAK_COLLIDE_OX = 0;
-constexpr int8_t CREATURE_POLE_BREAK_COLLIDE_OY = 0;
-constexpr uint8_t CREATURE_POLE_BREAK_COLLIDE_W = 20;
-constexpr uint8_t CREATURE_POLE_BREAK_COLLIDE_H = 36;
-constexpr uint8_t PROFILE_POLE_BREAK_FACE_HOLD = 0;
-constexpr uint8_t PROFILE_POLE_BREAK_TURN_RATE = 0;
-constexpr uint8_t ZONE_POLE_BREAK_APPENDAGE_HP = 40;
-constexpr uint8_t ZONE_POLE_BREAK_APPENDAGE_DMG_MUL = 101;
-constexpr uint8_t ZONE_POLE_BREAK_APPENDAGE_BODY_SHARE = 100;
-constexpr uint16_t CREATURE_POLE_CRACK_HP = 0;
-constexpr uint8_t CREATURE_POLE_CRACK_SPD = 0;
-constexpr uint8_t CREATURE_POLE_CRACK_W = 20;
-constexpr uint8_t CREATURE_POLE_CRACK_H = 36;
-constexpr uint8_t CREATURE_POLE_CRACK_ATTACKS = 0;
-constexpr uint8_t CREATURE_POLE_CRACK_PATTERNS = 0;
-constexpr uint8_t CREATURE_POLE_CRACK_STATIC = 1;
-constexpr uint8_t CREATURE_POLE_CRACK_SHEET = 4;
-constexpr uint8_t CREATURE_POLE_CRACK_BROKEN_W = 0;
-constexpr uint8_t CREATURE_POLE_CRACK_BROKEN_H = 0;
-constexpr int8_t CREATURE_POLE_CRACK_COLLIDE_OX = 0;
-constexpr int8_t CREATURE_POLE_CRACK_COLLIDE_OY = 0;
-constexpr uint8_t CREATURE_POLE_CRACK_COLLIDE_W = 20;
-constexpr uint8_t CREATURE_POLE_CRACK_COLLIDE_H = 36;
-constexpr uint8_t PROFILE_POLE_CRACK_FACE_HOLD = 0;
-constexpr uint8_t PROFILE_POLE_CRACK_TURN_RATE = 0;
-constexpr uint8_t ZONE_POLE_CRACK_APPENDAGE_HP = 30;
-constexpr uint8_t ZONE_POLE_CRACK_APPENDAGE_DMG_MUL = 101;
-constexpr uint8_t ZONE_POLE_CRACK_APPENDAGE_BODY_SHARE = 100;
-constexpr uint16_t CREATURE_POLE_SEVER_HP = 0;
-constexpr uint8_t CREATURE_POLE_SEVER_SPD = 0;
-constexpr uint8_t CREATURE_POLE_SEVER_W = 20;
-constexpr uint8_t CREATURE_POLE_SEVER_H = 36;
-constexpr uint8_t CREATURE_POLE_SEVER_ATTACKS = 0;
-constexpr uint8_t CREATURE_POLE_SEVER_PATTERNS = 0;
-constexpr uint8_t CREATURE_POLE_SEVER_STATIC = 1;
-constexpr uint8_t CREATURE_POLE_SEVER_SHEET = 2;
-constexpr uint8_t CREATURE_POLE_SEVER_BROKEN_W = 0;
-constexpr uint8_t CREATURE_POLE_SEVER_BROKEN_H = 0;
-constexpr int8_t CREATURE_POLE_SEVER_COLLIDE_OX = 0;
-constexpr int8_t CREATURE_POLE_SEVER_COLLIDE_OY = 0;
-constexpr uint8_t CREATURE_POLE_SEVER_COLLIDE_W = 20;
-constexpr uint8_t CREATURE_POLE_SEVER_COLLIDE_H = 36;
-constexpr uint8_t PROFILE_POLE_SEVER_FACE_HOLD = 0;
-constexpr uint8_t PROFILE_POLE_SEVER_TURN_RATE = 0;
-constexpr uint8_t ZONE_POLE_SEVER_APPENDAGE_HP = 60;
-constexpr uint8_t ZONE_POLE_SEVER_APPENDAGE_DMG_MUL = 101;
-constexpr uint8_t ZONE_POLE_SEVER_APPENDAGE_BODY_SHARE = 100;
 constexpr uint16_t CREATURE_RAVAGER_HP = 2400;
 constexpr uint8_t CREATURE_RAVAGER_SPD = 6;
 constexpr uint8_t CREATURE_RAVAGER_W = 32;
@@ -222,12 +165,12 @@ constexpr uint8_t ZONE_SWEEP_APPENDAGE_HP = 240;
 constexpr uint8_t ZONE_SWEEP_APPENDAGE_DMG_MUL = 150;
 constexpr uint8_t ZONE_SWEEP_APPENDAGE_BODY_SHARE = 40;
 
-// sha256 of fxdata/tables/combat.bin: f9832abd09f11e99ef6942ff969b6e956e9918466e33bb22f18d71fae3256edd
+// sha256 of fxdata/tables/combat.bin: f7fe6a0770d85b8c8f939b6501b4af12d6d62fe7a2da871759acacb89a909462
 constexpr uint8_t BLOB_SHA256[32] = {
-    0xF9, 0x83, 0x2A, 0xBD, 0x09, 0xF1, 0x1E, 0x99,
-    0xEF, 0x69, 0x42, 0xFF, 0x96, 0x9B, 0x6E, 0x95,
-    0x6E, 0x99, 0x18, 0x46, 0x6E, 0x33, 0xBB, 0x22,
-    0xF1, 0x8D, 0x71, 0xFA, 0xE3, 0x25, 0x6E, 0xDD,
+    0xF7, 0xFE, 0x6A, 0x07, 0x70, 0xD8, 0x5B, 0x8C,
+    0x8F, 0x93, 0x9B, 0x65, 0x01, 0xB4, 0xAF, 0x12,
+    0xD6, 0xD6, 0x2F, 0xE7, 0xA2, 0xDA, 0x87, 0x17,
+    0x59, 0xAC, 0xAC, 0xB8, 0x9A, 0x90, 0x94, 0x62,
 };
 
 }   // namespace combat_expect

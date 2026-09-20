@@ -22,7 +22,7 @@ enum MenuAction : int8_t {
 
 struct MenuState {
     int8_t weapon = 0;    // WeaponId 0..2 (SWD/FLS/GUN)
-    int8_t target = 0;    // 0..3 beast kind (lunge/sweep/heavy/ravager), 4..7 pole variants
+    int8_t target = 0;    // 0..3 beast kind (lunge/sweep/heavy/ravager), 4 = training pole
     bool active = true;   // boot into the menu
     bool prevA = false;   // menu-owned edges (see menuReturnStep)
     bool prevB = false;
@@ -33,9 +33,8 @@ struct MenuState {
 };
 
 constexpr int8_t MENU_WEAPON_COUNT = 3;
-// Targets: 0..3 the beast roster, 4..7 the four training poles (plain + the
-// three breakable variants). Pole kind = target - MENU_POLE_TARGET.
-constexpr int8_t MENU_TARGET_COUNT = 8;
+// Targets: 0..3 the beast roster, 4 the single plain training pole.
+constexpr int8_t MENU_TARGET_COUNT = 5;
 constexpr int8_t MENU_POLE_TARGET = 4;
 
 // D-pad repeat: a fresh direction steps immediately, a held one waits
@@ -104,9 +103,9 @@ inline MenuAction menuStep(MenuState &m, const Input &in) {
     return MENU_NONE;
 }
 
-// Pick -> sim mapping: targets 0..3 select the beast kind in hunt mode, targets
-// 4..7 the training pole (plain/sever/break/crack) in train mode. Single source
-// of truth for the sketch and both suites.
+// Pick -> sim mapping: targets 0..3 select the beast kind in hunt mode, target
+// 4 the training pole in train mode. Single source of truth for the sketch and
+// both suites.
 inline int8_t menuMode(const MenuState &m) {
     return m.target >= MENU_POLE_TARGET ? MODE_TRAIN : MODE_HUNT;
 }
@@ -115,25 +114,18 @@ inline int8_t menuMonsterKind(const MenuState &m) {
     return m.target < MENU_POLE_TARGET ? m.target : 0;   // the pole has no beast
 }
 
-// Pole kind for a training target (target - MENU_POLE_TARGET), 0 otherwise.
-inline int8_t menuPoleKind(const MenuState &m) {
-    return m.target >= MENU_POLE_TARGET ? static_cast<int8_t>(m.target - MENU_POLE_TARGET) : 0;
-}
-
 // Start the chosen scene from the menu picks into its demo room (fie.6):
 // a beast pick spawns in the camp (safe; its door leads to the area hunt), a
 // pole pick in the pole room (train; its door exits to the menu). newGame()
-// resets the world first; the variant pole is installed after the room load so
-// the safe room's target clear cannot drop it.
+// resets the world first and installs the plain pole for train; the room load
+// re-arms the pole target for the arrival room.
 inline void menuStart(Game &g, const MenuState &m) {
     const int8_t mode = menuMode(m);
     newGame(g, m.weapon, mode, menuMonsterKind(m));
-    if (mode == MODE_TRAIN) {
+    if (mode == MODE_TRAIN)
         loadRoom(g, zone::ROOM_POLE_ROOM, zone::SPAWN_POLE_ROOM_START);
-        initPoleKind(g, menuPoleKind(m));
-    } else {
+    else
         loadRoom(g, zone::ROOM_CAMP, zone::SPAWN_CAMP_ENTRY);
-    }
 }
 
 // One input tick while the sim runs: keeps the menu-owned edge flags current and

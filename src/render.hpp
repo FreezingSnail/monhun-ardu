@@ -54,17 +54,11 @@ constexpr uint8_t MON_FLASH = 2;
 constexpr uint8_t MON_DEAD = 3;
 constexpr uint8_t MON_WEST = 4;
 
-// Pole sheets. The PLAIN pole keeps the original 20x40 two-frame sheet
-// (normal/flash) for byte-identical parity; each breakable variant gets its own
-// 20x40 sheet with SIX frames: stage*2 + flash, where stage 0 is intact, 1 is
-// damaged (pool at or below half) and 2 is broken (bead monhun-ardu-6zb.7).
-// Frame selected by poleSheetFrame().
+// Pole sheet: the plain 20x40 two-frame fxpole sheet (normal / hit flash). The
+// unused variant sheets stay on the FX cart but are no longer drawn
+// (monhun-ardu-feel.20).
 constexpr uint8_t POLE_NORMAL = 0;
 constexpr uint8_t POLE_FLASH = 1;
-constexpr uint8_t POLE_DAMAGED = 2;
-constexpr uint8_t POLE_DAMAGED_FLASH = 3;
-constexpr uint8_t POLE_BROKEN = 4;
-constexpr uint8_t POLE_BROKEN_FLASH = 5;
 
 // 4x4 spark, light gray / white.
 constexpr uint8_t SPARK_LIGHT = 0;
@@ -492,58 +486,16 @@ static inline void drawFade(const Game &g) {
 }
 #endif   // MH_ROOM_BOUNDS
 
-// Static-prop sheet dispatch is table-driven off the creature record's sheet id
-// (monhun-ardu-6zb.6): the 4 pole records carry ids 1..4, so reusing a sheet for
-// a new pole record costs 0 flash and a brand-new sheet costs only its 3 B
-// uint24_t entry. Frame family is selected by the id: the plain pole keeps the
-// two-frame sheet, the breakable variants the six-frame staged one.
-constexpr uint8_t SHEET_POLE = 1;
-constexpr uint8_t SHEET_POLE_SEVER = 2;
-constexpr uint8_t SHEET_POLE_BREAK = 3;
-constexpr uint8_t SHEET_POLE_CRACK = 4;
-
-static inline uint24_t poleSheetById(uint8_t sheet) {
-    switch (sheet) {
-    case SHEET_POLE_SEVER:
-        return fxpole_sever;
-    case SHEET_POLE_BREAK:
-        return fxpole_break;
-    case SHEET_POLE_CRACK:
-        return fxpole_crack;
-    default:
-        return fxpole;
-    }
-}
-
-// Mock drawPole(): base post, ring bands, additive LIGHT part (cap/horn/collar),
-// ground plate, all baked into the sheet; hit flash selects the flash frame. The
-// plain pole sheet is 2 frames (normal/flash) 20 px wide; each breakable variant
-// is a 24 px wide six-frame sheet (stage*2 + flash) driven by its breakable zone
-// pool + broken bit + hitFlash. The variant sheets bake a 2 px transparent
-// margin on each side so their 24 px part stays centered on the 20 px pole rect.
-static inline uint8_t poleSheetFrame(uint8_t sheet, uint8_t broken, uint8_t hp, uint8_t hpMax, uint8_t flash) {
-    if (sheet == SHEET_POLE)
-        return flash ? spr::POLE_FLASH : spr::POLE_NORMAL;
-    return mh::poleStageFrame(broken, hp, hpMax, flash);
-}
-
+// Mock drawPole(): base post, ring bands, ground plate, all baked into the
+// fxpole sheet; hit flash selects the flash frame. The training pole ships one
+// plain 20x40 sheet (monhun-ardu-feel.20), so the sheet is fixed and only the
+// hit flash picks a frame.
 static void drawPole(const mh::Game &g, int16_t camX, int16_t camY) {
     const mh::Pole &pole = g.pole;
-    const uint8_t sheet = mh::combatCreatureSheet(g.combat.creature);
-    const int16_t x = static_cast<int16_t>(pole.rect.x - camX + ((sheet == SHEET_POLE) ? 0 : -2));
+    const int16_t x = static_cast<int16_t>(pole.rect.x - camX);
     const int16_t y = static_cast<int16_t>(pole.rect.y - camY + mh::HUD_H);
-    // The breakable zone drives the stage: every variant ships one part-locked
-    // appendage zone (cap/horn/collar), so its pool + broken bit select the
-    // cap/horn/collar stage; the head fallback is kept for a hypothetical
-    // head-pool prop. hpMax == 0 means no breakable zone, so PLAIN stays on its
-    // 2-frame sheet above. Everything here is cache state -- no cart reads.
-    const mh::CombatZoneCache &za = g.combat.zone[mh::COMBAT_ZONE_APPENDAGE];
-    const mh::CombatZoneCache &zh = g.combat.zone[mh::COMBAT_ZONE_HEAD];
-    const bool append = za.hpMax != 0;
-    const mh::CombatZoneCache &z = append ? za : zh;
-    const uint8_t brokenBit = append ? mh::COMBAT_ZONE_APPENDAGE_BIT : mh::COMBAT_ZONE_HEAD_BIT;
-    const uint8_t f = poleSheetFrame(sheet, (g.combat.zoneBroken & brokenBit) ? 1 : 0, z.hp, z.hpMax, pole.hitFlash > 0 ? 1 : 0);
-    sprDraw(poleSheetById(sheet), x, y, FRAME(f));
+    const uint8_t f = pole.hitFlash > 0 ? spr::POLE_FLASH : spr::POLE_NORMAL;
+    sprDraw(fxpole, x, y, FRAME(f));
 }
 
 // Per-creature monster sheet (epic monhun-ardu-nch): the demo roster's beast
@@ -1191,8 +1143,8 @@ static void drawDebug(const mh::Game &g, int16_t camX, int16_t camY) {
 /* ------------------------------------------------------------------- hud */
 
 // Mock drawHud(): HP + stamina bars, weapon name, gun shell/reload, then the
-// monster HP bar (hunt) or LAST/DPS (train). The mock drew this as the bottom
-// 8 px strip; the device reserves the top 8 px, so the strip is mirrored: the
+// monster HP bar (hunt; train has no bar since the plain pole has no pool). The
+// mock drew this as the bottom 8 px strip; the device reserves the top 8 px, so the strip is mirrored: the
 // divider sits at the arena edge (y = HUD_H-1) and the bars/text fill rows
 // 0..6. Drawn untranslated (mock restores the camera transform first) and
 // read-only.
@@ -1293,21 +1245,8 @@ static void drawHud(const mh::Game &g) {
         }
     }
 
-    if (g.mode == mh::MODE_TRAIN) {   // train total + DPS
-        const int16_t total = g.train.total > 9999 ? 9999 : static_cast<int16_t>(g.train.total);
-        int16_t dps = mh::trainDps(g);
-        if (dps > 999)
-            dps = 999;
-        const uint8_t nt = hudDigits(total);
-        const uint8_t nd = hudDigits(dps);
-        int16_t x = static_cast<int16_t>(127 - 4 * (nt + nd + 2));
-        x = hudPut(x, 'T');
-        x = hudNum(x, total, nt);
-        x = hudPut(x, 'D');
-        hudNum(x, dps, nd);
-    } else {   // monster HP (hunt)
+    if (g.mode != mh::MODE_TRAIN)   // monster HP (hunt); the plain pole has no bar
         hudBar(82, 2, 44, 3, g.monster.hp, g.monster.hpMax, 3);
-    }
 }
 
 /* ------------------------------------------------------------------ scene */

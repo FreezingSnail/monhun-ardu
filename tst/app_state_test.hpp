@@ -62,7 +62,7 @@ void AppSuite(TestRunner &runner) {
         Test t("menu A with a pole pick starts the pole room in train mode");
         MenuState menu;
         menu.weapon = W_GUN;
-        menu.target = MENU_POLE_TARGET + POLE_CRACK;
+        menu.target = MENU_POLE_TARGET;
         ScreenState screen;
         Game g;
         SaveBlock save;
@@ -71,7 +71,7 @@ void AppSuite(TestRunner &runner) {
         t.assert(g.mode, MODE_TRAIN, "train mode");
         t.assert(g.roomId, zone::ROOM_POLE_ROOM, "starts in the pole room");
         t.assert(g.roomMonsterKind, zone::MONSTER_NONE, "pole room is safe");
-        t.assert(g.pole.kind, POLE_CRACK, "variant installed after the room load");
+        t.assert(g.combat.creature, combat::CREATURE_POLE, "plain pole installed");
         t.assert(g.target.alive, true, "pole target armed");
         suite.addTest(t);
     }

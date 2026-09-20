@@ -52,7 +52,7 @@ enum AudioCue : uint8_t {
     CUE_WINDUP,    // beast started a windup (telegraph)
     CUE_SHOT,      // gun fired a shell
     CUE_RELOAD,    // gun reload finished
-    CUE_BREAK,     // train: a pole variant's zone drained (part broke)
+    CUE_BREAK,     // hunt: a breakable beast part's zone drained (part broke)
 };
 
 // Previous-tick snapshot + one-slot retrigger guard.
@@ -60,7 +60,6 @@ struct AudioState {
     int16_t tick;
     int16_t monsterHp;
     uint8_t playerHp;
-    int32_t trainTotal;
     uint8_t reload;
     uint8_t monsterStun;
     uint8_t projN;
@@ -145,7 +144,6 @@ static void audioSnapshot(AudioState &s, const Game &g) {
     s.tick = g.tick;
     s.monsterHp = g.monster.hp;
     s.playerHp = g.player.hp;
-    s.trainTotal = g.train.total;
     s.reload = g.player.reload;
     s.monsterStun = g.monster.stun;
     s.projN = g.projN;
@@ -183,15 +181,18 @@ static void audioUpdate(AudioState &s, const Game &g) {
     const Monster &m = g.monster;
 
     // Effects spawned this tick have t==1 (addEffect t=0, updateEffects++). A
-    // crit spark (text==0) marks a hunt crit; a crit text effect marks a pole
-    // head hit. Only consulted when a same-tick hp/total drop gates the event.
+    // crit spark (text==0) marks a hunt crit; a text effect marks a landed pole
+    // hit (damagePole spawns the rising number) and its crit flag the head hit.
+    // Only consulted when a same-tick hp/zone gate proves the event.
     bool critSpark = false;
     bool critText = false;
+    bool trainText = false;
     for (int16_t i = 0; i < g.fxN; i++) {
         const Effect &e = g.fx[i];
         if (e.t != 1)
             continue;
         if (e.text) {
+            trainText = true;
             if (e.crit)
                 critText = true;
         } else if (e.crit)
@@ -199,7 +200,6 @@ static void audioUpdate(AudioState &s, const Game &g) {
     }
 
     const bool monsterDrop = m.hp < s.monsterHp;
-    const bool trainGain = g.train.total > s.trainTotal;
     const bool poleBroke = g.combat.zoneBroken > s.poleBroken;
     const bool playerDrop = p.hp < s.playerHp;
     const bool guarding = playerDrop && (p.stance == ST_GUARD || s.playerStance == ST_GUARD);
@@ -226,7 +226,7 @@ static void audioUpdate(AudioState &s, const Game &g) {
         audioCue(s, CUE_CRIT);
     } else if (monsterDrop) {
         audioCue(s, CUE_HIT);
-    } else if (trainGain) {
+    } else if (trainText) {
         audioCue(s, critText ? CUE_CRIT : CUE_TRAIN);
     } else if (playerDrop) {
         audioCue(s, CUE_HURT);

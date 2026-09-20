@@ -245,11 +245,11 @@ inline void test_zones(FxTest &test) {
     // pole pick -> pole room (train); its door (0,24,8,24) exits to the menu.
     MenuState pole;
     pole.weapon = W_GUN;
-    pole.target = MENU_POLE_TARGET + POLE_CRACK;
+    pole.target = MENU_POLE_TARGET;
     test.expectEq(static_cast<uint32_t>(appNavApply(appMenuAccept(), pole, screen, save, d, Z_IDLE)), 1, F("pole pick starts"));
     test.expectEq(static_cast<uint32_t>(d.mode), MODE_TRAIN, F("pole train mode"));
     test.expectEq(static_cast<uint32_t>(d.roomId), zone::ROOM_POLE_ROOM, F("pole starts in pole room"));
-    test.expectEq(static_cast<uint32_t>(d.pole.kind), POLE_CRACK, F("pole variant installed"));
+    test.expectEq(static_cast<uint32_t>(d.combat.creature), combat::CREATURE_POLE, F("plain pole installed"));
     d.player.x = 60;   // clear the arrival latch
     d.player.y = 44;
     stepGame(d, Z_IDLE);

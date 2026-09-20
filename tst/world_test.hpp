@@ -163,24 +163,25 @@ void WorldSuite(TestRunner &runner) {
     }
 
     {
-        Test t("pole variants: target rect follows the kind; part-locked break at 20");
+        Test t("train install: plain pole is the active target and survives swaps");
         Game g;
         newGame(g, W_SWORD, MODE_TRAIN);
-        initPoleKind(g, POLE_BREAK);
-        t.assert(g.pole.rect.w, 20, "break rect w 20");
+        t.assert(g.pole.rect.w, 20, "pole rect w 20");
+        t.assert(g.pole.rect.h, 36, "pole rect h 36");
         t.assert(g.target.rect.w, 20, "active target refreshed to 20");
-        // Drain the part-locked horn zone (flail blunt) at the horn centre.
-        g.weapon = W_FLAIL;
-        poleOnHit(g, 40, static_cast<int16_t>(g.pole.rect.x + 13), static_cast<int16_t>(g.pole.rect.y + 10), 0, 0);
-        t.assert(g.combat.zoneBroken & COMBAT_ZONE_APPENDAGE_BIT, COMBAT_ZONE_APPENDAGE_BIT, "horn broken");
-        t.assert(g.target.rect.w, 20, "target rect stays 20");
-        // Variant survives withWeapon/resetHunt in train.
-        initPoleKind(g, POLE_SEVER);
+        // A head hit resolves through the shared zone path and refreshes flash.
+        const int16_t hx = static_cast<int16_t>(g.pole.rect.x + 10);
+        const int16_t hy = static_cast<int16_t>(g.pole.rect.y + 5);
+        t.assert(damagePole(g, 10, hx, hy), 14, "head crit x1.4");
+        t.assert(g.pole.hitFlash, 4, "hit flash armed");
+        // The plain pole is reinstalled by withWeapon/resetHunt in train.
         withWeapon(g, W_GUN);
-        t.assert(g.pole.kind, POLE_SEVER, "weapon swap keeps the pole variant");
-        t.assert(g.pole.rect.w, 20, "sever rect kept");
+        t.assert(g.mode, MODE_TRAIN, "weapon swap keeps train");
+        t.assert(g.pole.rect.w, 20, "pole rect kept after swap");
+        t.assert(g.target.alive, 1, "target re-armed after swap");
         resetHunt(g);
-        t.assert(g.pole.kind, POLE_SEVER, "reset keeps the pole variant");
+        t.assert(g.mode, MODE_TRAIN, "reset keeps train");
+        t.assert(g.pole.rect.w, 20, "pole rect kept after reset");
         suite.addTest(t);
     }
 

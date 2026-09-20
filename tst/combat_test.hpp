@@ -144,10 +144,10 @@ void CombatSuite(TestRunner &runner) {
         // appendage (long tail). 76y added the chicken's lunge head + legs
         // (appendage) zones. nch.9 added the bull's head (horns) + appendage
         // (hooves) zones.
-        // 6zb.9: each variant carries ONE whole-pole zone (the old per-variant
-        // head zones are gone): plain head + 3 variant appendages = 4 pole zones.
-        t.assert(combat::ZONES_COUNT, 11, "heavy tail + ravager + lunge + sweep + 4 pole zone records");
-        t.assert(combat::CREATURES_COUNT, 8, "3 demo beasts + ravager + 4 static poles");
+        // feel.20: the pole is one plain static prop with its crit head zone
+        // (the 3 breakable variant records + part zones are gone).
+        t.assert(combat::ZONES_COUNT, 8, "heavy tail + ravager + lunge + sweep + plain pole head zone");
+        t.assert(combat::CREATURES_COUNT, 5, "3 demo beasts + ravager + 1 static pole");
         t.assert(combat::SKELETONS_COUNT, 5, "bull/chicken/longtail/quad + pole");
         t.assert(combat::ATTACKS_COUNT, 11, "3x2 shipped + ravager bite/tail_sweep + chicken wing_beat + sweep rear_kick + heavy tail_slam (feel.10)");
         t.assert(combat::WINDOWS_COUNT, 16, "single-window attacks + ravager 2 + tail_spin 4 + sweep stomp 1/gore 2 + wing_beat + rear_kick + tail_slam");
@@ -215,24 +215,16 @@ void CombatSuite(TestRunner &runner) {
     }
 
     {
-        Test t("static prop records: pole skeleton, static/sheet/brokenBody decode");
-        // The 4 pole records are static creatures (flags bit0) with an art sheet
-        // id and an optional brokenBody; they carry no attacks/patterns.
+        Test t("static prop record: pole skeleton, static/sheet/brokenBody decode");
+        // The single pole record is a static creature (flags bit0) with an art
+        // sheet id and no brokenBody; it carries no attacks/patterns.
         t.assert(combatCreatureStatic(combat_data::CREATURE_POLE), 1, "pole static");
-        t.assert(combatCreatureStatic(combat_data::CREATURE_POLE_SEVER), 1, "sever static");
-        t.assert(combatCreatureStatic(combat_data::CREATURE_POLE_BREAK), 1, "break static");
-        t.assert(combatCreatureStatic(combat_data::CREATURE_POLE_CRACK), 1, "crack static");
         t.assert(combatCreatureStatic(combat_data::CREATURE_LUNGE), 0, "lunge not static");
         t.assert(combatCreatureSheet(combat_data::CREATURE_POLE), 1, "pole sheet 1");
-        t.assert(combatCreatureSheet(combat_data::CREATURE_POLE_SEVER), 2, "sever sheet 2");
-        t.assert(combatCreatureSheet(combat_data::CREATURE_POLE_BREAK), 3, "break sheet 3");
-        t.assert(combatCreatureSheet(combat_data::CREATURE_POLE_CRACK), 4, "crack sheet 4");
         t.assert(combatCreatureSheet(combat_data::CREATURE_LUNGE), 0, "beast default sheet 0");
-        // Whole-pole zones + stage art (bead monhun-ardu-6zb.9): no variant
-        // resizes its hurt rect, so no brokenBody override ships.
-        t.assert(combatCreatureBrokenW(combat_data::CREATURE_POLE_BREAK), 0, "break no brokenBody w");
-        t.assert(combatCreatureBrokenH(combat_data::CREATURE_POLE_BREAK), 0, "break no brokenBody h");
-        t.assert(combatCreatureBrokenW(combat_data::CREATURE_POLE), 0, "plain no brokenBody");
+        // The plain pole never resizes its hurt rect, so no brokenBody ships.
+        t.assert(combatCreatureBrokenW(combat_data::CREATURE_POLE), 0, "plain no brokenBody w");
+        t.assert(combatCreatureBrokenH(combat_data::CREATURE_POLE), 0, "plain no brokenBody h");
         for (uint8_t i = 0; i < combat::CREATURES_COUNT; i++) {
             const CombatCreature c = combatCreatureRead(i);
             t.assert(c.flags, combatCreatureFlags(i), "creature flags accessor");
@@ -260,7 +252,7 @@ void CombatSuite(TestRunner &runner) {
     }
 
     {
-        Test t("pole zone records: crit head, one part-locked breakable per variant");
+        Test t("pole zone record: crit head, x-independent band, no pool");
         const CombatZone ph = combatZoneRead(combat_data::ZONE_POLE_HEAD);
         t.assert(ph.box.ox, -128, "plain head ox (x-independent band)");
         t.assert(ph.box.oy, 0, "plain head oy");
@@ -269,36 +261,6 @@ void CombatSuite(TestRunner &runner) {
         t.assert(ph.dmgMul, 140, "plain head dmgMul");
         t.assert(ph.hp, 0, "plain head no pool");
         t.assert(ph.breakTypes, 0, "plain head unbreakable");
-        const uint8_t anyPhys = PHYS_SLASH | PHYS_BLUNT | PHYS_SHOT;
-        // Each variant ships exactly one appendage zone locked to its additive
-        // part (cap/horn/collar), dmgMul 101 so a part hit beats the body tie.
-        const CombatZone sa = combatZoneRead(combat_data::ZONE_POLE_SEVER_APPENDAGE);
-        t.assert(sa.box.ox, -2, "sever cap ox");
-        t.assert(sa.box.oy, 0, "sever cap oy");
-        t.assert(sa.box.w, 24, "sever cap w");
-        t.assert(sa.box.h, 20, "sever cap h");
-        t.assert(sa.hp, 60, "sever cap pool");
-        t.assert(sa.dmgMul, 101, "sever cap dmgMul (beats body tie, damage stays base)");
-        t.assert(sa.bodyShare, 100, "sever cap body share");
-        t.assert(sa.breakTypes, anyPhys, "sever any weapon breaks");
-        t.assert(sa.brokenFlags, COMBAT_BROKEN_HURT_OFF, "sever broken hurtOff");
-        const CombatZone ba = combatZoneRead(combat_data::ZONE_POLE_BREAK_APPENDAGE);
-        t.assert(ba.box.ox, 4, "break horn ox");
-        t.assert(ba.box.oy, 0, "break horn oy");
-        t.assert(ba.box.w, 18, "break horn w");
-        t.assert(ba.box.h, 20, "break horn h");
-        t.assert(ba.hp, 40, "break horn pool");
-        t.assert(ba.dmgMul, 101, "break horn dmgMul (beats body tie, damage stays base)");
-        t.assert(ba.breakTypes, anyPhys, "break any weapon breaks");
-        t.assert(ba.brokenFlags, COMBAT_BROKEN_HURT_OFF, "break broken hurtOff");
-        const CombatZone ca = combatZoneRead(combat_data::ZONE_POLE_CRACK_APPENDAGE);
-        t.assert(ca.box.ox, -2, "crack collar ox");
-        t.assert(ca.box.oy, 12, "crack collar oy");
-        t.assert(ca.box.w, 24, "crack collar w");
-        t.assert(ca.box.h, 16, "crack collar h");
-        t.assert(ca.hp, 30, "crack collar pool");
-        t.assert(ca.dmgMul, 101, "crack collar dmgMul (beats body tie, damage stays base)");
-        t.assert(ca.breakTypes, anyPhys, "crack any weapon breaks");
         suite.addTest(t);
     }
 

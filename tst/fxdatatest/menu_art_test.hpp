@@ -136,28 +136,25 @@ inline void test_menu_art(FxTest &test) {
     test.expectEq(countRegionBit(monX(2) + 19, monY(2) + 2, 32, 5), 0, F("plane2 dim LONGTAIL name cleared"));
     test.expectEq(countRegionBit(monX(3) + 19, monY(3) + 2, 28, 5), 0, F("plane2 dim RAVAGER name cleared"));
     test.expectEq(countRegionBit(monX(4) + 19, monY(4) + 2, 16, 5), 0, F("plane2 dim POLE name cleared"));
-    test.expectEq(countRegionBit(monX(5) + 19, monY(5) + 2, 20, 5), 0, F("plane2 dim SEVER name cleared"));
-    test.expectEq(countRegionBit(monX(6) + 19, monY(6) + 2, 20, 5), 0, F("plane2 dim BREAK name cleared"));
-    test.expectEq(countRegionBit(monX(7) + 19, monY(7) + 2, 20, 5), 0, F("plane2 dim CRACK name cleared"));
     // The selected frame stays bright on plane 2 (white sets there).
     test.expectEq(countRowBit(W_Y, W_X + FRAME_X, W_X + TILE_W - 1), TILE_W - FRAME_X, F("plane2 sel weapon frame"));
     test.expectEq(countRowBit(monY(0), monX(0) + FRAME_X, monX(0) + MTILE_W - 1), MTILE_W - FRAME_X, F("plane2 sel target frame"));
 
-    // ---- selection B: GUN + CRACK (target 7, bottom-right). Both frames and
-    // cursors must move to the last grid cell.
+    // ---- selection B: GUN + POLE (target 4, last grid cell). Both frames and
+    // cursors must move to the last option tile.
     MenuState b;
     b.weapon = MENU_WEAPON_COUNT - 1;
-    b.target = MENU_POLE_TARGET + POLE_CRACK;
+    b.target = MENU_POLE_TARGET;
     gotoPlane(0);
     clearFb();
     drawMenu(b);
     test.expectEq(countRowBit(W_Y, W_X + FRAME_X, W_X + TILE_W - 1), 0, F("wsel B frame0 clear"));
     test.expectEq(countRowBit(W_Y, W_X + 2 * W_STEP + FRAME_X, W_X + 2 * W_STEP + TILE_W - 1), TILE_W - FRAME_X, F("wsel B frame2 top"));
     test.expectEq(countColBit(W_X + 2 * W_STEP, W_Y + 2, W_Y + 6), 5, F("wsel B cursor2"));
-    test.expectEq(countRowBit(monY(7), monX(7) + FRAME_X, monX(7) + MTILE_W - 1), MTILE_W - FRAME_X, F("msel B crack frame"));
+    test.expectEq(countRowBit(monY(4), monX(4) + FRAME_X, monX(4) + MTILE_W - 1), MTILE_W - FRAME_X, F("msel B pole frame"));
     test.expectEq(countRowBit(monY(0), monX(0) + FRAME_X, monX(0) + MTILE_W - 1), 0, F("msel B row0 clear"));
     test.expectEq(countRowBit(monY(1), monX(0) + FRAME_X, monX(0) + MTILE_W - 1), 0, F("msel B row1 clear"));
-    test.expectEq(countColBit(monX(7), monY(7) + 2, monY(7) + 6), 5, F("msel B crack cursor"));
+    test.expectEq(countColBit(monX(4), monY(4) + 2, monY(4) + 6), 5, F("msel B pole cursor"));
 
     // ---- name-only (bead 4t4): select every target in turn, prove its white
     // name lane is drawn, its bright frame is present and the old v2 icon slot

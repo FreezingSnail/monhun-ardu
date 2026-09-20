@@ -111,7 +111,6 @@ constexpr int16_t WORLD_H = 112;
 // entry when full (documented in src/core/projectiles.hpp).
 constexpr int16_t MAX_PROJECTILES = 12;
 constexpr int16_t MAX_EFFECTS = 12;
-constexpr int16_t MAX_TRAIN_EVENTS = 24;
 constexpr int16_t PROJ_LIFE = 90;   // ticks, mock fireShell()
 
 enum Mode : int8_t {
@@ -452,43 +451,14 @@ struct Effect {
     int16_t text;
 };
 
-// Training-pole variants (bead monhun-ardu-6zb.6; part-locked zones 6zb.10).
-// Kind selects the static creature record loaded through the shared combat
-// loader; PLAIN carries a crit head zone, each breakable variant ONE part-locked
-// appendage zone (cap/horn/collar, body-mul 101 so a part hit beats the body
-// tie). The Pole itself only owns its world rect, hit flash timer and the
-// selected variant kind: pool/broken live in the shared Game::combat zone
-// caches (zoneBroken, zone[..].hp) exactly like a beast's, so there is no
-// pole-specific drain/break code.
-enum PoleKind : int8_t {
-    POLE_PLAIN = 0,
-    POLE_SEVER = 1,   // sword: cap pool -> cap shears off
-    POLE_BREAK = 2,   // flail: horn pool -> horn snaps off
-    POLE_CRACK = 3    // gun: collar pool -> collar splits
-};
-
+// Training pole (bead monhun-ardu-feel.20: one plain static prop). The shared
+// combat loader installs its record (body box + the crit head zone); the Pole
+// itself only owns its world rect and hit flash timer -- damage resolves through
+// the same combatZoneHitResolveAt path a beast uses, so there is no
+// pole-specific pool/break code.
 struct Pole {
-    Rect rect;          // hurt box: every pole 20x36 at (140,40) (no resize)
+    Rect rect;          // hurt box: 20x36 at (140,40)
     uint8_t hitFlash;   // 4 on hit, decays in updatePole()
-    int8_t kind;        // PoleKind (selects the prop creature record)
-};
-
-struct TrainEvent {
-    // 16-bit tick on purpose: Game::tick is int16_t, so a stored 32-bit stamp
-    // could never hold a value the sim can produce. 2 B x MAX_TRAIN_EVENTS of
-    // RAM and the 32-bit compare in trainDps() came for free.
-    int16_t tick;
-    int16_t dmg;
-};
-
-// Rolling window of landed pole hits. total / last are unbounded/latest,
-// events backs trainDps() over the trailing 600 ticks.
-struct TrainStats {
-    int32_t total;
-    int16_t last;
-    TrainEvent ev[MAX_TRAIN_EVENTS];
-    uint8_t head;    // next write slot, 0..MAX_TRAIN_EVENTS-1
-    uint8_t count;   // 0..MAX_TRAIN_EVENTS
 };
 
 // Player inherits the fp bodies so addMove/addVel/drainStam work directly on
@@ -863,7 +833,6 @@ struct Game {
     uint8_t fxN;   // 0..MAX_EFFECTS
     Effect fx[MAX_EFFECTS];
     Pole pole;
-    TrainStats train;
     CombatState combat;   // combat loader caches (ljj.2, 50 B AVR)
     // Quest kill accounting (bead monhun-ardu-me6): the sketch sets questTarget
     // from the active quest's def at hunt start (-1 = none), restores progress

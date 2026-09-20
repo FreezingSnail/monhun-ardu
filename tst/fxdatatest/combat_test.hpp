@@ -117,7 +117,7 @@ static const CombatCreature kCreatures[] PROGMEM = {
      0,
      0},
     {combat::SKELETON_BULL,
-     7,
+     combat::CREATURE_SWEEP,
      combat::ZONE_SWEEP_HEAD,
      combat::ZONE_SWEEP_APPENDAGE,
      combat::ATTACK_SWEEP_STOMP,

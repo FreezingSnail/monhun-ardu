@@ -61,7 +61,7 @@ void MenuSuite(TestRunner &runner) {
     }
 
     {
-        Test t("taps cycle target 0..7 (beasts + 4 pole variants) and wrap both ways");
+        Test t("taps cycle target 0..4 (beasts + plain pole) and wrap both ways");
         MenuState m;
         menuTap(m, MT_DOWN);
         t.assert(m.target, 1, "down: LUNGE -> SWEEP");
@@ -72,17 +72,11 @@ void MenuSuite(TestRunner &runner) {
         menuTap(m, MT_DOWN);
         t.assert(m.target, 4, "down: RAVAGER -> POLE");
         menuTap(m, MT_DOWN);
-        t.assert(m.target, 5, "down: POLE -> SEVER");
-        menuTap(m, MT_DOWN);
-        t.assert(m.target, 6, "down: SEVER -> BREAK");
-        menuTap(m, MT_DOWN);
-        t.assert(m.target, 7, "down: BREAK -> CRACK");
-        menuTap(m, MT_DOWN);
-        t.assert(m.target, 0, "down wraps CRACK -> LUNGE");
+        t.assert(m.target, 0, "down wraps POLE -> LUNGE");
         menuTap(m, MT_UP);
-        t.assert(m.target, 7, "up wraps LUNGE -> CRACK");
+        t.assert(m.target, 4, "up wraps LUNGE -> POLE");
         menuTap(m, MT_UP);
-        t.assert(m.target, 6, "up: CRACK -> BREAK");
+        t.assert(m.target, 3, "up: POLE -> RAVAGER");
         t.assert(m.weapon, 0, "target nav leaves weapon alone");
         suite.addTest(t);
     }
@@ -176,19 +170,18 @@ void MenuSuite(TestRunner &runner) {
     }
 
     {
-        Test t("pick -> mode/kind/pole mapping (targets 0..3 hunt, 4..7 train)");
+        Test t("pick -> mode/kind mapping (targets 0..3 hunt, 4 train)");
         MenuState m;
         for (int8_t target = 0; target < MENU_TARGET_COUNT; target++) {
             m.target = target;
             t.assert(menuMode(m), target >= MENU_POLE_TARGET ? MODE_TRAIN : MODE_HUNT, "mode by target");
             t.assert(menuMonsterKind(m), target < MENU_POLE_TARGET ? target : 0, "kind by target");
-            t.assert(menuPoleKind(m), target >= MENU_POLE_TARGET ? target - MENU_POLE_TARGET : 0, "pole kind by target");
         }
         suite.addTest(t);
     }
 
     {
-        Test t("menuStart applies weapon + mode + kind + pole variant to Game");
+        Test t("menuStart applies weapon + mode + kind + plain pole to Game");
         for (int8_t weapon = 0; weapon < 3; weapon++) {
             for (int8_t target = 0; target < MENU_TARGET_COUNT; target++) {
                 MenuState m;
@@ -200,20 +193,11 @@ void MenuSuite(TestRunner &runner) {
                 t.assert(g.mode, target >= MENU_POLE_TARGET ? MODE_TRAIN : MODE_HUNT, "start mode");
                 t.assert(g.monsterKind, target < MENU_POLE_TARGET ? target : 0, "start kind");
                 if (target >= MENU_POLE_TARGET) {
-                    const int8_t kind = static_cast<int8_t>(target - MENU_POLE_TARGET);
-                    t.assert(g.pole.kind, kind, "start pole kind");
-                    // Pools live in the shared zone cache (loaded by initPoleKind);
-                    // every variant carries its part-locked pool on the appendage.
-                    if (kind == POLE_SEVER)
-                        t.assert(g.combat.zone[COMBAT_ZONE_APPENDAGE].hp, 60, "start sever pool");
-                    else if (kind == POLE_BREAK)
-                        t.assert(g.combat.zone[COMBAT_ZONE_APPENDAGE].hp, 40, "start break pool");
-                    else if (kind == POLE_CRACK)
-                        t.assert(g.combat.zone[COMBAT_ZONE_APPENDAGE].hp, 30, "start crack pool");
-                    else
-                        t.assert(g.combat.zone[COMBAT_ZONE_HEAD].hp, 0, "start plain pool");
+                    t.assert(g.combat.creature, combat::CREATURE_POLE, "start pole creature");
+                    t.assert(g.combat.zone[COMBAT_ZONE_HEAD].hp, 0, "start plain pool");
+                    t.assert(g.target.alive, 1, "start pole target armed");
                 } else {
-                    t.assert(g.pole.kind, POLE_PLAIN, "hunt pole stays plain");
+                    t.assert(g.roomId, zone::ROOM_CAMP, "hunt starts in camp");
                 }
             }
         }

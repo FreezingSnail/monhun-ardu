@@ -48,11 +48,11 @@ static void evMonsterCrit(Game &g) {
 }
 
 static void evTrainHit(Game &g) {
-    g.train.total += 5;
+    Effect &e = g.fx[g.fxN++];
+    e = Effect{0, 0, 1, 26, false, 5};   // fresh (non-crit) pole damage number
 }
 
 static void evTrainCrit(Game &g) {
-    g.train.total += 7;
     Effect &e = g.fx[g.fxN++];
     e = Effect{0, 0, 1, 26, true, 7};   // fresh crit damage number
 }

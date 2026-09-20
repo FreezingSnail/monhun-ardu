@@ -1386,19 +1386,18 @@ def font_sheet(color):
 # little icons. The bg carries the dim (light-gray) option names; the selected
 # option is covered by its white sel tile (name + bright 1 px frame + a 3x5
 # cursor arrow at the left). Weapon options live on menu_wsel (three 32x8 tiles),
-# target options on menu_msel (eight 64x8 tiles) so both rows fit 128 px. Tiles
-# are 8 px tall, which lets the weapon row, eight target slots in a 2-column grid
-# (4 rows) and the footer all fit 64. Geometry (tile sizes, name lanes, frame and
+# target options on menu_msel (five 64x8 tiles) so both rows fit 128 px. Tiles
+# are 8 px tall, which lets the weapon row, five target slots in a 2-column grid
+# and the footer all fit 64. Geometry (tile sizes, name lanes, frame and
 # cursor) is unchanged from v2; only the icon ink is gone.
 #
 # Layout (screen px):
 #   y=2          MONHUN DEMO           (title, white)
 #   y=13 WEAPON  [SWD] [FLS] [GUN]     (weapon row)
 #   y=20 MONSTER
-#   y=26 [CHICKEN] [BULL]              (2 cols at x=0/64, rows 26/34/42/50)
+#   y=26 [CHICKEN] [BULL]              (2 cols at x=0/64, rows 26/34/42)
 #   y=34 [LONGTAIL] [RAVAGER]
-#   y=42 [POLE] [SEVER]
-#   y=50 [BREAK] [CRACK]
+#   y=42 [POLE]
 #   y=58 A HUNT                        (footer)
 
 def text_blocks(x, y, text, color):
@@ -1423,7 +1422,7 @@ MENU_ELEMENTS = (
 )
 
 MENU_WEAPONS = ("SWD", "FLS", "GUN")                              # weapons 0..2
-MENU_TARGETS = ("CHICKEN", "BULL", "LONGTAIL", "RAVAGER", "POLE", "SEVER", "BREAK", "CRACK")  # targets 0..7
+MENU_TARGETS = ("CHICKEN", "BULL", "LONGTAIL", "RAVAGER", "POLE")  # targets 0..4
 
 # Option tile geometry (uniform frame per sheet). local x: cursor 0..2, then
 # the frame from x=4; the 4 px/char name lane at x=15 / x=19 (the v2 icon slot

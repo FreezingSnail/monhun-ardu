@@ -1,7 +1,7 @@
 #pragma once
-// Projectiles, effects, training pole + train DPS, ported from
+// Projectiles, effects, training pole, ported from
 // mock/game.js (source of truth): fireShell / updateProjectiles /
-// updateEffects / updatePole / damagePole / trainDps / activeTarget.
+// updateEffects / updatePole / damagePole / activeTarget.
 //
 // The player FSM (player.hpp) still owns ammo + reload and only records the
 // shot in Game::lastShot* (fireShell stub). This header turns that record into
@@ -21,36 +21,15 @@
 namespace mh {
 
 static void syncPoleTarget(Game &g);
-static void poleBreakBurst(Game &g, int16_t cx, int16_t cy);
 
 // ---------------------------------------------------------------- lifecycle
 
-// Select the prop creature record for a PoleKind. The four poles are static
-// creatures in the combat blob (data/creatures/pole*.json), so their body box,
-// zones and art sheet all ride the shared creature pipeline: no flash tables.
-static uint8_t poleCreatureId(int8_t kind) {
-    switch (kind) {
-    case POLE_SEVER:
-        return combat::CREATURE_POLE_SEVER;
-    case POLE_BREAK:
-        return combat::CREATURE_POLE_BREAK;
-    case POLE_CRACK:
-        return combat::CREATURE_POLE_CRACK;
-    default:
-        return combat::CREATURE_POLE;
-    }
-}
-
-// Install a pole variant: load the static creature through the shared loader
-// (body box + zones + profile caches) and derive the hurt rect from its body
-// stats + spawn. Broken state is the shared zone cache, so it resets with the
-// creature load. Called for the train default (initWorld) and by the menu /
-// weapon / reset tools.
-static void initPoleKind(Game &g, int8_t kind) {
-    if (kind < 0 || kind > POLE_CRACK)
-        kind = POLE_PLAIN;
-    g.pole.kind = kind;
-    const uint8_t cid = creatureLoad(g, poleCreatureId(kind));
+// Install the training pole: load the single static prop creature
+// (data/creatures/pole.json) through the shared loader, so its body box, crit
+// head zone and profile caches ride the shared creature pipeline (no pole flash
+// tables), then derive the hurt rect from its body stats + spawn.
+static void initPole(Game &g) {
+    const uint8_t cid = creatureLoad(g, combat::CREATURE_POLE);
     const CombatSpawn spawn = combatCreatureSpawnRead(cid);
     g.pole.rect = Rect{static_cast<int16_t>(spawn.x), static_cast<int16_t>(spawn.y), static_cast<int16_t>(g.combat.body.w), static_cast<int16_t>(g.combat.body.h)};
     g.pole.hitFlash = 0;
@@ -73,15 +52,8 @@ static void initWorld(Game &g, int8_t mode) {
         g.fx[i] = Effect{};
     g.pole.rect = Rect{140, 40, 20, 36};
     g.pole.hitFlash = 0;
-    g.pole.kind = POLE_PLAIN;
-    g.train.total = 0;
-    g.train.last = 0;
-    g.train.head = 0;
-    g.train.count = 0;
-    for (int16_t i = 0; i < MAX_TRAIN_EVENTS; i++)
-        g.train.ev[i] = TrainEvent{};
     if (mode == MODE_TRAIN)
-        initPoleKind(g, POLE_PLAIN);
+        initPole(g);
 }
 
 // ---------------------------------------------------------------- effects
@@ -119,70 +91,19 @@ MH_NOINLINE static void syncPoleTarget(Game &g) {
     g.target.rect = g.pole.rect;
 }
 
-// Install a pole variant is defined above with the lifecycle (it loads the
-// static prop creature through the shared loader).
-
 static void updatePole(Game &g) {
     if (g.pole.hitFlash > 0)
         g.pole.hitFlash--;
 }
 
-// Damage-stage selection for the breakable pole art (bead monhun-ardu-6zb.7).
-// Stage 0 intact, 1 damaged (pool at or below half), 2 broken; the authored
-// variant sheet is stage*2 + flash. hpMax == 0 marks a pole with no breakable
-// zone (PLAIN), which keeps its own 2-frame normal/flash sheet. Pure integer
-// math so the render path and the host frame-selection test share one source.
-inline uint8_t poleDamageStage(uint8_t broken, uint8_t hp, uint8_t hpMax) {
-    if (broken)
-        return 2;
-    return (hpMax != 0 && static_cast<uint16_t>(hp) * 2 <= hpMax) ? 1 : 0;
-}
-inline uint8_t poleStageFrame(uint8_t broken, uint8_t hp, uint8_t hpMax, uint8_t flash) {
-    return static_cast<uint8_t>(poleDamageStage(broken, hp, hpMax) * 2 + (flash ? 1 : 0));
-}
-
-static void trainAdd(TrainStats &t, int16_t tick, int16_t dmg) {
-    t.ev[t.head] = TrainEvent{tick, dmg};
-    // Compare-and-wrap instead of `% MAX_TRAIN_EVENTS`: 24 is not a power of
-    // two, so the modulo lowered to a __divmodhi4 call for the same answer.
-    t.head = static_cast<uint8_t>(t.head + 1 >= MAX_TRAIN_EVENTS ? 0 : t.head + 1);
-    if (t.count < MAX_TRAIN_EVENTS)
-        t.count++;
-}
-
-// Mock trainDps(): sum events inside the trailing 600-tick window, /10,
-// Math.round (round half up for the non-negative sums this produces).
-static int16_t trainDps(const Game &g) {
-    // int16 window math: tick is int16 and the ring holds MAX_TRAIN_EVENTS (24)
-    // hits, so the summed damage stays far inside int16 for any shipped weapon
-    // or upgrade tier. The index walks backwards with a wrap test, which drops
-    // the second __divmodhi4.
-    const int16_t cutoff = static_cast<int16_t>(g.tick - 600);
-    int16_t sum = 0;
-    int16_t idx = static_cast<int16_t>(g.train.head - 1);
-    for (int16_t i = 0; i < g.train.count; i++) {
-        if (idx < 0)
-            idx = static_cast<int16_t>(MAX_TRAIN_EVENTS - 1);
-        if (g.train.ev[idx].tick > cutoff)
-            sum = static_cast<int16_t>(sum + g.train.ev[idx].dmg);
-        idx--;
-    }
-    return static_cast<int16_t>((sum + 5) / 10);
-}
-
-// Mock damagePole(), resolved by the shared 3-hitzone code: PLAIN's head zone
-// carries dmgMul 140 so a head hit multiplies x1.4 through the same path a
-// beast uses; each breakable variant instead ships one part-locked appendage
-// zone (cap/horn/collar, dmgMul 101) that drains only when the landed hit falls
-// on the part and flips the shared zoneBroken bit. A lower-post hit resolves as
-// body damage and never drains the part pool (part-locked). hitFlash 4, freeze
+// Mock damagePole(), resolved by the shared 3-hitzone code: the plain pole's
+// head zone carries dmgMul 140 so a head hit multiplies x1.4 through the same
+// path a beast uses, and a lower hit resolves as body damage. hitFlash 4, freeze
 // crit 5 / body 4, rising damage number (life 26). The prop is static, so the
 // resolver runs with an explicit east facing at the pole rect anchor and never
-// reads g.monster.fx/fy. Returns the exact total applied so train stats and the
-// pool drain agree.
+// reads g.monster.fx/fy. Returns the exact total applied.
 static int16_t damagePole(Game &g, uint8_t dmg, int16_t hx, int16_t hy) {
     Pole &pole = g.pole;
-    const uint8_t brokenBefore = g.combat.zoneBroken;
     CombatBodyHit hit;
     if (ZONES_ENABLED)
         hit = combatZoneHitResolveAt(g, dmg, playerPhys(g), hx, hy, pole.rect.x, pole.rect.y, fp::FP, 0);
@@ -194,41 +115,13 @@ static int16_t damagePole(Game &g, uint8_t dmg, int16_t hx, int16_t hy) {
     const uint8_t fr = crit ? 5 : 4;
     if (g.freeze < fr)
         g.freeze = fr;
-    g.train.total += total;
-    g.train.last = total;
-    trainAdd(g.train, g.tick, total);
     addEffect(g, hx, static_cast<int16_t>(hy - 6), 26, crit, total);
-
-    // Fresh break: burst at the zone that flipped, refresh the target rect.
-    if (g.combat.zoneBroken != brokenBefore) {
-        const uint8_t slot = (g.combat.zoneBroken & COMBAT_ZONE_HEAD_BIT) ? COMBAT_ZONE_HEAD : COMBAT_ZONE_APPENDAGE;
-        const CombatBox &zb = g.combat.zone[slot].box;
-        poleBreakBurst(g, static_cast<int16_t>(pole.rect.x + zb.ox + (zb.w >> 1)), static_cast<int16_t>(pole.rect.y + zb.oy + (zb.h >> 1)));
-        const uint8_t bw = combatCreatureBrokenW(g.combat.creature);
-        const uint8_t bh = combatCreatureBrokenH(g.combat.creature);
-        if (bw != 0 && bh != 0 && (pole.rect.w != bw || pole.rect.h != bh)) {
-            pole.rect.w = bw;
-            pole.rect.h = bh;
-        }
-        syncPoleTarget(g);   // BREAK: target rect refresh on the break tick
-    }
     return total;
 }
 
-// ZQ5-style break juice: a small spread of the existing fxspark frames at the
-// zone centre + a 6-tick freeze. Uses crit=false so the audio detector's
-// critSpark scan (text==0 && crit) is not tripped by the break burst.
-static void poleBreakBurst(Game &g, int16_t cx, int16_t cy) {
-    addEffect(g, cx, cy, 6, false, 0);
-    addEffect(g, static_cast<int16_t>(cx - 5), static_cast<int16_t>(cy + 3), 7, false, 0);
-    addEffect(g, static_cast<int16_t>(cx + 5), static_cast<int16_t>(cy - 3), 7, false, 0);
-    if (g.freeze < 6)
-        g.freeze = 6;
-}
-
 // Target::onHit — pole is static and takes no knockback/trip. The shared zone
-// resolve (damagePole) does the crit/gate/pool/break work; the pole callback
-// only forwards the landed point.
+// resolve (damagePole) does the crit work; the pole callback only forwards the
+// landed point.
 static void poleOnHit(Game &g, uint8_t dmg, int16_t hx, int16_t hy, uint8_t push, uint8_t effect) {
     (void)push;
     (void)effect;

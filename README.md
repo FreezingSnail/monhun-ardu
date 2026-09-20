@@ -32,11 +32,11 @@ flashing. Controls are below; no USB serial device comes up while the game runs
 | Device tests (Ardens) | 16 suites / 2266 asserts — boot 4, assets 270, audio 17, menu 78, menu_art 81, hud 17, parity 660, data 368, combat 293, hub 57, monster_art 111, player_art 111, quests 50, screens 78, smith 66, perf 5 — all PASS |
 | Perf gate (`monhun-ardu-8v7`, re-verified through `kt7.7`) | **PASS.** plane 156 Hz (≥135), logic 52 Hz (≥45), render max 4868 µs (≤7407), tick 540 µs, RAM free 572 B (bench) |
 | Perf tooling | Headless Ardens profiler dump (`profiledump=<path>`, local patch) + on-device cycle bench (`test_perf`) |
-| Shipping build | flash **27470 / 29696 B** (92%), RAM **1760 / 2560 B** (800 free); USB-free, see below |
-| FX data image | **182016 B** of 16 MB used |
+| Shipping build | flash **27572 / 29696 B** (92%), RAM **1622 / 2560 B** (938 free); USB-free, see below |
+| FX data image | **203264 B** of 16 MB used |
 
 Speculative gameplay status: combat (sword / flail / gunshield), monster FSM,
-training pole + DPS mode, camera/world clamps, HUD, audio cues all in place.
+training pole, camera/world clamps, HUD, audio cues all in place.
 Perf-verified on device. Remaining: real art pass (`vx2`, human), feel tuning
 (`1to`, human), EEPROM save (`qyb`, deferred).
 
@@ -63,7 +63,7 @@ mock/game.js ──port──► src/core/*.hpp ──shared verbatim──► h
 | `game.hpp` | `Game` state, `Player`, weapon defs + monster attack tables (PROGMEM), `Rect`, hit callbacks, `HOLD_TICKS=11`, `WORLD_W=256`, `WORLD_H=112` |
 | `player.hpp` | Player FSM: chains/branches/stances, stamina, guard/parry/deflect, gunfire flags |
 | `monster.hpp` | Monster FSM, attack cycle, windup, hit resolution, `pushApart` |
-| `projectiles.hpp` | Shells (`ball`/`scatter`), effects, training pole, damage numbers, `trainDps`, `stepWorld` |
+| `projectiles.hpp` | Shells (`ball`/`scatter`), effects, training pole, damage numbers, `stepWorld` |
 | `world.hpp` | Screen geometry constants, camera (int px, clamped), mode handling (hunt/train), `newGame`, `withWeapon`, `resetHunt`, `stepGame` |
 | `combat.hpp` | Combat blob loader (`ljj.2`, reworked by `cgk`): one production reader over the generated `combat_data.hpp` (host) / `mhCombat` blob (AVR), `creatureLoad`/`attackLoad` caches in `Game::combat`, guard eval with deterministic tick-derived chance, and the fixed 3-hitzone resolve (implicit body + optional head/appendage records). No per-tick cart reads |
 | `input.hpp` | Edge flags + B-hold detection (`aP`, `bP`, `bR`, `bHeld`), no Arduino headers |
@@ -277,7 +277,7 @@ hunt exit.
 | LUNGE | hunt | 32x24 | 1800 | 5 | pecks inside 28 px, leaps 29..41 px (leap locks facing at windup) |
 | SWEEP | hunt | 28x22 | 1500 | 7 | stomps inside 24 px, gores 25..41 px (gore locks facing at windup) |
 | HEAVY | hunt | 40x28 | 2800 | 3 | lunges inside 24 px |
-| POLE | train | 20x40 | — | — | static target, head zone = top 16 px |
+| POLE | train | 20x36 | — | — | static target (20x40 sheet), head zone = top 16 px |
 
 ### In game (hunt / train)
 
