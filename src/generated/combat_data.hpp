@@ -12,7 +12,7 @@
 namespace combat_data {
 
 constexpr uint8_t VERSION = 1;
-constexpr uint16_t BLOB_SIZE = 1028;
+constexpr uint16_t BLOB_SIZE = 1036;
 
 struct Box {
     int8_t ox;
@@ -59,6 +59,7 @@ struct Attack {
     uint8_t facing, phys, elem, onHitEffect;
     int8_t onHitPush;
     uint8_t onHitStun, stagger, cue;
+    uint8_t wallStun;   // ticks self-stunned on a room-bound hit (0 = inert)
     uint8_t firstWindow, windowCount;
     uint16_t windup, active, recover, dmg;
 };
@@ -223,14 +224,14 @@ inline constexpr std::array<Anchor, 10> ANCHORS = {{
 }};
 
 inline constexpr std::array<Attack, 8> ATTACKS = {{
-    {1, 26, 0, 0, 0, 2, 0, 0, 0, 0, 0, 1, 0, 1, 30, 8, 40, 10},
-    {0, 0, 0, 0, 2, 2, 0, 0, 0, 0, 0, 1, 1, 4, 42, 20, 55, 8},
-    {1, 18, 0, 0, 0, 2, 0, 0, 0, 0, 0, 1, 5, 1, 22, 6, 30, 7},
-    {1, 42, 0, 0, 1, 2, 0, 0, 0, 0, 0, 1, 6, 1, 34, 10, 48, 12},
-    {1, 30, 0, 0, 0, 2, 0, 0, 0, 0, 0, 1, 7, 1, 36, 8, 45, 10},
-    {0, 0, 0, 0, 0, 2, 0, 0, 0, 0, 0, 1, 8, 2, 48, 12, 60, 9},
-    {0, 0, 0, 0, 0, 2, 0, 0, 0, 0, 0, 1, 10, 1, 36, 10, 44, 9},
-    {1, 34, 0, 0, 1, 2, 0, 0, 0, 0, 0, 1, 11, 2, 46, 12, 55, 14},
+    {1, 26, 0, 0, 0, 2, 0, 0, 0, 0, 0, 1, 0, 0, 1, 30, 8, 40, 10},
+    {0, 0, 0, 0, 2, 2, 0, 0, 0, 0, 0, 1, 0, 1, 4, 42, 20, 55, 8},
+    {1, 18, 0, 0, 0, 2, 0, 0, 0, 0, 0, 1, 0, 5, 1, 22, 6, 30, 7},
+    {1, 42, 0, 0, 1, 2, 0, 0, 0, 0, 0, 1, 0, 6, 1, 34, 10, 48, 12},
+    {1, 30, 0, 0, 0, 2, 0, 0, 0, 0, 0, 1, 0, 7, 1, 36, 8, 45, 10},
+    {0, 0, 0, 0, 0, 2, 0, 0, 0, 0, 0, 1, 0, 8, 2, 48, 12, 60, 9},
+    {0, 0, 0, 0, 0, 2, 0, 0, 0, 0, 0, 1, 0, 10, 1, 36, 10, 44, 9},
+    {1, 34, 0, 0, 1, 2, 0, 0, 0, 0, 0, 1, 0, 11, 2, 46, 12, 55, 14},
 }};
 
 inline constexpr std::array<Window, 13> WINDOWS = {{

@@ -334,6 +334,7 @@ void CombatSuite(TestRunner &runner) {
             t.assert(a.onHitStun, h.onHitStun, "attack onHitStun");
             t.assert(a.stagger, h.stagger, "attack stagger");
             t.assert(a.cue, h.cue, "attack cue");
+            t.assert(a.wallStun, h.wallStun, "attack wallStun");
             t.assert(a.firstWindow, h.firstWindow, "attack firstWindow");
             t.assert(a.windowCount, h.windowCount, "attack windowCount");
             t.assert(a.windup, h.windup, "attack windup");
@@ -341,6 +342,7 @@ void CombatSuite(TestRunner &runner) {
             t.assert(a.recover, h.recover, "attack recover");
             t.assert(a.dmg, h.dmg, "attack dmg");
             t.assert(combatAttackWindup(i), h.windup, "attack windup accessor");
+            t.assert(combatAttackWallStun(i), h.wallStun, "attack wallStun accessor");
             t.assert(combatAttackFirstWindow(i), h.firstWindow, "attack firstWindow accessor");
             t.assert(combatAttackWindowCount(i), h.windowCount, "attack windowCount accessor");
         }
@@ -479,6 +481,7 @@ void CombatSuite(TestRunner &runner) {
         t.assert(g.combat.attack.moveType, 1, "cache moveType lunge");
         t.assert(g.combat.attack.moveSpeedF, 18, "cache moveSpeedF");
         t.assert(g.combat.attack.facing, 0, "cache facing track");
+        t.assert(g.combat.attack.wallStun, combat_expect::ATTACK_LUNGE_PECK_WALLSTUN, "cache wallStun");
         t.assert(g.combat.attack.winIdx, combat_data::WINDOW_LUNGE_PECK_0, "cache winIdx");
         t.assert(g.combat.attack.win.t0, 0, "cache window t0");
         t.assert(g.combat.attack.win.t1, 6, "cache window t1");

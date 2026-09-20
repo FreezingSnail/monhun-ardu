@@ -595,7 +595,8 @@ struct CombatAttackCache {
     uint16_t windup, active, recover, dmg;
     uint8_t moveType, moveSpeedF;
     uint8_t facing;
-    uint8_t winIdx;   // index of the cached window in the WINDOWS section
+    uint8_t wallStun;   // ticks self-stunned on a room-bound clamp (feel.4)
+    uint8_t winIdx;     // index of the cached window in the WINDOWS section
     CombatWindow win;
 };
 

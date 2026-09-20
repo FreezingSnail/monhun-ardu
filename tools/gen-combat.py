@@ -33,9 +33,9 @@ Blob layout (little-endian, explicit u8/u16, no padding, fixed section order):
                      staggerOnHit, brokenDmgMul, brokenFlags (bit0 hurtOff,
                      bit1 cue), unlockMask (bit per global attack idx)
     anchor      2 B  ox i8, oy i8
-    attack     22 B  moveType, moveSpeedF, moveDx i8, moveDy i8, facing, phys,
+    attack     23 B  moveType, moveSpeedF, moveDx i8, moveDy i8, facing, phys,
                      elem, onHitEffect, onHitPush i8, onHitStun, stagger, cue,
-                     firstWindow, windowCount, windup u16, active u16,
+                     wallStun, firstWindow, windowCount, windup u16, active u16,
                      recover u16, dmg u16
     window     10 B  t0 u16, t1 u16, box(ox i8, oy i8, w, h), dmgMul, flags
     pattern     3 B  firstStep, stepCount, guardIdx
@@ -99,7 +99,7 @@ SIZES = {
     "SKELETON": 2,
     "ZONE": 12,
     "ANCHOR": 2,
-    "ATTACK": 22,
+    "ATTACK": 23,
     "WINDOW": 10,
     "PATTERN": 3,
     "GUARD": 9,
@@ -313,7 +313,7 @@ def normalize_zone(errors, ctx, obj, attack_ids):
 
 
 def normalize_attack(errors, ctx, obj):
-    check_keys(errors, ctx, obj, {"id", "windup", "active", "recover", "dmg", "phys", "elem", "move", "facing", "windows"}, {"onHit", "stagger", "cue"})
+    check_keys(errors, ctx, obj, {"id", "windup", "active", "recover", "dmg", "phys", "elem", "move", "facing", "windows"}, {"onHit", "stagger", "cue", "wallStun"})
     active = read_int(errors, ctx, obj, "active", 0, 65535)
     raw_windows = obj.get("windows")
     if not isinstance(raw_windows, list):
@@ -385,6 +385,9 @@ def normalize_attack(errors, ctx, obj):
         "onHitStun": read_int(errors, ctx + ".onHit", on_hit, "stun", 0, 255, default=0),
         "stagger": read_int(errors, ctx, obj, "stagger", 0, 255, default=0),
         "cue": read_enum(errors, ctx, obj, "cue", CUES, default=0),
+        # wallStun: ticks the beast self-stuns when a moving attack's clamp
+        # reaches a room bound (feel.4). 0 (default) ships the branch inert.
+        "wallStun": read_int(errors, ctx, obj, "wallStun", 0, 255, default=0),
         "windows": windows,
     }
 
@@ -923,7 +926,7 @@ def pack_model(errors, model):
             u8(attack["moveType"]), u8(attack["moveSpeedF"]), i8(attack["moveDx"]), i8(attack["moveDy"]),
             u8(attack["facing"]), u8(attack["phys"] or 0), u8(attack["elem"] or 0),
             u8(attack["onHitEffect"] or 0), i8(attack["onHitPush"] or 0), u8(attack["onHitStun"] or 0),
-            u8(attack["stagger"]), u8(attack["cue"] or 0),
+            u8(attack["stagger"]), u8(attack["cue"] or 0), u8(attack["wallStun"] or 0),
             u8(first_window), u8(len(attack["windows"])),
             u16(attack["windup"]), u16(attack["active"]), u16(attack["recover"]), u16(attack["dmg"]),
         ]))
@@ -1087,6 +1090,7 @@ def emit_data_header(model, compiled):
     app("    uint8_t facing, phys, elem, onHitEffect;")
     app("    int8_t onHitPush;")
     app("    uint8_t onHitStun, stagger, cue;")
+    app("    uint8_t wallStun;   // ticks self-stunned on a room-bound hit (0 = inert)")
     app("    uint8_t firstWindow, windowCount;")
     app("    uint16_t windup, active, recover, dmg;")
     app("};")
@@ -1175,11 +1179,12 @@ def emit_data_header(model, compiled):
         elif section == "ATTACKS":
             for entry in layout["attacks"]:
                 attack = entry["attack"]
-                app("    {%d, %d, %d, %d, %d, %d, %d, %d, %d, %d, %d, %d, %d, %d, %d, %d, %d, %d}," % (
+                app("    {%d, %d, %d, %d, %d, %d, %d, %d, %d, %d, %d, %d, %d, %d, %d, %d, %d, %d, %d}," % (
                     attack["moveType"], attack["moveSpeedF"], attack["moveDx"], attack["moveDy"],
                     attack["facing"], attack["phys"] or 0, attack["elem"] or 0,
                     attack["onHitEffect"] or 0, attack["onHitPush"] or 0, attack["onHitStun"] or 0,
-                    attack["stagger"], attack["cue"] or 0, entry["first_window"], len(attack["windows"]),
+                    attack["stagger"], attack["cue"] or 0, attack["wallStun"] or 0,
+                    entry["first_window"], len(attack["windows"]),
                     attack["windup"], attack["active"], attack["recover"], attack["dmg"]))
         elif section == "WINDOWS":
             for entry in layout["windows"]:
@@ -1383,6 +1388,7 @@ def emit_expect_header(model, compiled):
             app("constexpr uint16_t ATTACK_%s_%s_ACTIVE = %d;" % (cid, first_attack["id"].upper(), first_attack["active"]))
             app("constexpr uint16_t ATTACK_%s_%s_RECOVER = %d;" % (cid, first_attack["id"].upper(), first_attack["recover"]))
             app("constexpr uint16_t ATTACK_%s_%s_DMG = %d;" % (cid, first_attack["id"].upper(), first_attack["dmg"]))
+            app("constexpr uint8_t ATTACK_%s_%s_WALLSTUN = %d;" % (cid, first_attack["id"].upper(), first_attack["wallStun"] or 0))
         if creature["patterns"]:
             first_pattern = creature["patterns"][0]
             guard = first_pattern["guard"]
@@ -1433,8 +1439,8 @@ def dump_model(model, compiled):
                 detail = "(%d)" % attack["moveSpeedF"]
             elif attack["moveType"] == 3:
                 detail = "(%d,%d)" % (attack["moveDx"], attack["moveDy"])
-            print("  attack %s: windup%d active%d recover%d dmg%d move %s%s windows %d" % (
-                attack["id"], attack["windup"], attack["active"], attack["recover"], attack["dmg"], move, detail, len(attack["windows"])))
+            print("  attack %s: windup%d active%d recover%d dmg%d move %s%s windows %d wallStun %d" % (
+                attack["id"], attack["windup"], attack["active"], attack["recover"], attack["dmg"], move, detail, len(attack["windows"]), attack["wallStun"] or 0))
             for i, window in enumerate(attack["windows"]):
                 box = window["box"]
                 print("    window %d: t[%d,%d] box(%d,%d,%d,%d) dmgMul %d" % (

@@ -104,7 +104,7 @@ class GenCombatTests(unittest.TestCase):
         self.assertIn("creature beast (skeleton beast_16x12, stats w16 h12 hp80 spd4, spawn 100,32, collide body) zones appendage D150 HP30 S40 ST20 head D120 HP10 S100 ST5", result.stdout)
         self.assertIn("zone head: box(10,2,6,6) dmgMul 120 hp 10 share 100 break 0x02 stagger 5 brokenOverride 120 hurtOff 1 disable -", result.stdout)
         self.assertIn("zone appendage: box(-6,4,8,4) dmgMul 150 hp 30 share 40 break 0x01 stagger 20 brokenOverride 200 hurtOff 1 disable jab", result.stdout)
-        self.assertIn("attack jab: windup20 active6 recover30 dmg7 move lunge(20) windows 1", result.stdout)
+        self.assertIn("attack jab: windup20 active6 recover30 dmg7 move lunge(20) windows 1 wallStun 0", result.stdout)
         self.assertIn("window 0: t[0,6] box(8,0,12,10) dmgMul 100", result.stdout)
         self.assertIn("pattern p_jab: guard minDist0 maxDist36 hp[0,100] player0x01 cd0 chance100 zonesBroken appendage facing any", result.stdout)
         self.assertIn("step 0: ATK beast.jab after2 chance100", result.stdout)
@@ -180,6 +180,31 @@ class GenCombatTests(unittest.TestCase):
         meta = self.meta_constants()
         attack = blob[meta["ATTACK_BEAST_JAB_OFF"]:meta["ATTACK_BEAST_JAB_OFF"] + meta["ATTACK_SIZE"]]
         self.assertEqual(attack[4], 2)
+
+    def test_attack_wallstun_default_and_emit(self):
+        # feel.4: wallStun is optional (default 0) and packs as the 13th u8 scalar
+        # (byte 12, right after cue), shifting firstWindow/windowCount/quad by one.
+        self.assert_succeeds(self.compile())
+        meta = self.meta_constants()
+        o = meta["ATTACK_BEAST_JAB_OFF"]
+        self.assertEqual(self.blob()[o + 12], 0, "wallStun defaults to 0")
+        self.assertIn("constexpr uint8_t ATTACK_BEAST_JAB_WALLSTUN = 0;", self.read(EXPECT_REL))
+        self.mutate("data/creatures/beast.json",
+                    lambda doc: doc["attacks"][0].__setitem__("wallStun", 14))
+        self.assert_succeeds(self.compile())
+        self.assertEqual(self.blob()[o + 12], 14, "wallStun emitted at byte 12")
+        self.assertIn("constexpr uint8_t ATTACK_BEAST_JAB_WALLSTUN = 14;", self.read(EXPECT_REL))
+        self.assertIn("wallStun 14", self.compile("--dump").stdout)
+
+    def test_attack_wallstun_range_rejected(self):
+        self.mutate("data/creatures/beast.json",
+                    lambda doc: doc["attacks"][0].__setitem__("wallStun", 256))
+        self.assert_fails(self.compile(), "attacks[0]: wallStun: out of range 0..255: 256")
+
+    def test_attack_wallstun_integer_only(self):
+        self.mutate("data/creatures/beast.json",
+                    lambda doc: doc["attacks"][0].__setitem__("wallStun", 1.5))
+        self.assert_fails(self.compile(), "attacks[0]: wallStun: expected an integer, got 1.5")
 
     def test_guard_facing_unknown_value_rejected(self):
         self.mutate("data/creatures/beast.json",
@@ -389,7 +414,9 @@ class GenCombatTests(unittest.TestCase):
         self.assertEqual(tail, bytes([0xFA, 4, 8, 4, 30, 150, 40, 1, 20, 200, 3, 1]))
 
         attack = blob[meta["ATTACK_BEAST_JAB_OFF"]:meta["ATTACK_BEAST_JAB_OFF"] + meta["ATTACK_SIZE"]]
-        self.assertEqual(attack, bytes([1, 20, 0, 0, 0, 1, 1, 1, 2, 4, 10, 1, 0, 1,
+        # 23 B attack: 12 scalars (cue then the feel.4 wallStun byte), then
+        # firstWindow/windowCount, then the contiguous u16 timing quad.
+        self.assertEqual(attack, bytes([1, 20, 0, 0, 0, 1, 1, 1, 2, 4, 10, 1, 0, 0, 1,
                                         20, 0, 6, 0, 30, 0, 7, 0]))
 
         window = blob[meta["WINDOW_BEAST_JAB_0_OFF"]:meta["WINDOW_BEAST_JAB_0_OFF"] + meta["WINDOW_SIZE"]]
@@ -488,6 +515,7 @@ class GenCombatTests(unittest.TestCase):
         self.assertEqual(expect["CREATURE_BEAST_PATTERNS"], 1)
         self.assertEqual(expect["ATTACK_BEAST_JAB_WINDUP"], 20)
         self.assertEqual(expect["ATTACK_BEAST_JAB_DMG"], 7)
+        self.assertEqual(expect["ATTACK_BEAST_JAB_WALLSTUN"], 0)
         self.assertEqual(expect["PATTERN_BEAST_P_JAB_MAX_DIST"], 36)
         self.assertEqual(expect["ZONE_BEAST_HEAD_DMG_MUL"], 120)
         self.assertEqual(expect["ZONE_BEAST_APPENDAGE_HP"], 30)

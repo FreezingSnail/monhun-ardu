@@ -405,12 +405,13 @@ void CombatPackSuite(TestRunner &runner) {
             t.assert(b8(blob, o + 9), h.onHitStun, "blob attack onHitStun");
             t.assert(b8(blob, o + 10), h.stagger, "blob attack stagger");
             t.assert(b8(blob, o + 11), h.cue, "blob attack cue");
-            t.assert(b8(blob, o + 12), h.firstWindow, "blob attack firstWindow");
-            t.assert(b8(blob, o + 13), h.windowCount, "blob attack windowCount");
-            t.assert(b16(blob, o + 14), h.windup, "blob attack windup");
-            t.assert(b16(blob, o + 16), h.active, "blob attack active");
-            t.assert(b16(blob, o + 18), h.recover, "blob attack recover");
-            t.assert(b16(blob, o + 20), h.dmg, "blob attack dmg");
+            t.assert(b8(blob, o + 12), h.wallStun, "blob attack wallStun");
+            t.assert(b8(blob, o + 13), h.firstWindow, "blob attack firstWindow");
+            t.assert(b8(blob, o + 14), h.windowCount, "blob attack windowCount");
+            t.assert(b16(blob, o + 15), h.windup, "blob attack windup");
+            t.assert(b16(blob, o + 17), h.active, "blob attack active");
+            t.assert(b16(blob, o + 19), h.recover, "blob attack recover");
+            t.assert(b16(blob, o + 21), h.dmg, "blob attack dmg");
         }
         for (uint8_t i = 0; i < combat::WINDOWS_COUNT; i++) {
             const size_t o = static_cast<size_t>(combat::WINDOWS_OFF) + i * combat::WINDOW_SIZE;
@@ -474,14 +475,16 @@ void CombatPackSuite(TestRunner &runner) {
         t.assert(b8(blob, static_cast<size_t>(combat::ZONE_RAVAGER_HEAD_OFF) + 5), combat_expect::ZONE_RAVAGER_HEAD_DMG_MUL, "expect head dmgMul");
         t.assert(b8(blob, static_cast<size_t>(combat::ZONE_RAVAGER_APPENDAGE_OFF) + 4), combat_expect::ZONE_RAVAGER_APPENDAGE_HP, "expect tail hp");
         t.assert(b8(blob, static_cast<size_t>(combat::ZONE_RAVAGER_APPENDAGE_OFF) + 5), combat_expect::ZONE_RAVAGER_APPENDAGE_DMG_MUL, "expect tail dmgMul");
-        t.assert(b16(blob, static_cast<size_t>(combat::ATTACK_HEAVY_BITE_OFF) + 14), combat_expect::ATTACK_HEAVY_BITE_WINDUP, "expect heavy bite windup");
-        t.assert(b16(blob, static_cast<size_t>(combat::ATTACK_HEAVY_BITE_OFF) + 16), combat_expect::ATTACK_HEAVY_BITE_ACTIVE, "expect heavy bite active");
-        t.assert(b16(blob, static_cast<size_t>(combat::ATTACK_HEAVY_BITE_OFF) + 18), combat_expect::ATTACK_HEAVY_BITE_RECOVER, "expect heavy bite recover");
-        t.assert(b16(blob, static_cast<size_t>(combat::ATTACK_HEAVY_BITE_OFF) + 20), combat_expect::ATTACK_HEAVY_BITE_DMG, "expect heavy bite dmg");
-        t.assert(b16(blob, static_cast<size_t>(combat::ATTACK_LUNGE_PECK_OFF) + 14), combat_expect::ATTACK_LUNGE_PECK_WINDUP, "expect lunge windup");
-        t.assert(b16(blob, static_cast<size_t>(combat::ATTACK_LUNGE_PECK_OFF) + 16), combat_expect::ATTACK_LUNGE_PECK_ACTIVE, "expect lunge active");
-        t.assert(b16(blob, static_cast<size_t>(combat::ATTACK_LUNGE_PECK_OFF) + 18), combat_expect::ATTACK_LUNGE_PECK_RECOVER, "expect lunge recover");
-        t.assert(b16(blob, static_cast<size_t>(combat::ATTACK_LUNGE_PECK_OFF) + 20), combat_expect::ATTACK_LUNGE_PECK_DMG, "expect lunge dmg");
+        t.assert(b16(blob, static_cast<size_t>(combat::ATTACK_HEAVY_BITE_OFF) + 15), combat_expect::ATTACK_HEAVY_BITE_WINDUP, "expect heavy bite windup");
+        t.assert(b16(blob, static_cast<size_t>(combat::ATTACK_HEAVY_BITE_OFF) + 17), combat_expect::ATTACK_HEAVY_BITE_ACTIVE, "expect heavy bite active");
+        t.assert(b16(blob, static_cast<size_t>(combat::ATTACK_HEAVY_BITE_OFF) + 19), combat_expect::ATTACK_HEAVY_BITE_RECOVER, "expect heavy bite recover");
+        t.assert(b16(blob, static_cast<size_t>(combat::ATTACK_HEAVY_BITE_OFF) + 21), combat_expect::ATTACK_HEAVY_BITE_DMG, "expect heavy bite dmg");
+        t.assert(b8(blob, static_cast<size_t>(combat::ATTACK_HEAVY_BITE_OFF) + 12), combat_expect::ATTACK_HEAVY_BITE_WALLSTUN, "expect heavy bite wallStun");
+        t.assert(b16(blob, static_cast<size_t>(combat::ATTACK_LUNGE_PECK_OFF) + 15), combat_expect::ATTACK_LUNGE_PECK_WINDUP, "expect lunge windup");
+        t.assert(b16(blob, static_cast<size_t>(combat::ATTACK_LUNGE_PECK_OFF) + 17), combat_expect::ATTACK_LUNGE_PECK_ACTIVE, "expect lunge active");
+        t.assert(b16(blob, static_cast<size_t>(combat::ATTACK_LUNGE_PECK_OFF) + 19), combat_expect::ATTACK_LUNGE_PECK_RECOVER, "expect lunge recover");
+        t.assert(b16(blob, static_cast<size_t>(combat::ATTACK_LUNGE_PECK_OFF) + 21), combat_expect::ATTACK_LUNGE_PECK_DMG, "expect lunge dmg");
+        t.assert(b8(blob, static_cast<size_t>(combat::ATTACK_LUNGE_PECK_OFF) + 12), combat_expect::ATTACK_LUNGE_PECK_WALLSTUN, "expect lunge wallStun");
         t.assert(b8(blob, static_cast<size_t>(combat::GUARD_HEAVY_P_SPIN_OFF) + 0), combat_expect::PATTERN_HEAVY_P_SPIN_MIN_DIST, "expect heavy spin minDist");
         t.assert(b8(blob, static_cast<size_t>(combat::GUARD_HEAVY_P_SPIN_OFF) + 1), combat_expect::PATTERN_HEAVY_P_SPIN_MAX_DIST, "expect heavy spin maxDist");
         // p_bite is the second heavy pattern: minDist 30 .. maxDist 255 (nch.4).

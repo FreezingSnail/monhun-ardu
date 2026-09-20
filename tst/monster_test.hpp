@@ -562,6 +562,113 @@ void MonsterSuite(TestRunner &runner) {
     }
 
     {
+        // feel.4: a committed moving attack that reaches a room bound self-stuns
+        // for the attack's wallStun ticks, then the shared MS_STAGGER release
+        // returns the beast to PURSUE (cdBase). Shipped data leaves wallStun 0,
+        // so the branch is inert until a test sets the RAM cache directly.
+        Test t("attack wallStun: lunge into a bound staggers for wallStun ticks");
+        Game g;
+        newHunt(g);
+        Monster &m = g.monster;
+        monsterAttackSet(g, combat::ATTACK_LUNGE_PECK);
+        g.combat.attack.wallStun = 7;
+        patternStateSet(g, combat::PATTERN_LUNGE_P_PECK, 1, 3);   // active cursor to cancel
+        m.state = MS_ATTACK;
+        m.t = 0;
+        m.x = 0;   // flush against the west bound (clamp pins x at 0)
+        m.y = 40;
+        m.subX = 0;
+        m.subY = 0;
+        m.lvx = -16;   // committed west lunge: clamp displaces -1 -> 0
+        m.lvy = 0;
+        updateMonster(g);
+        t.assert(m.state, MS_STAGGER, "bound contact self-stuns");
+        t.assert(m.t, 7, "stagger length equals wallStun");
+        t.assert(g.combat.patternIdx, COMBAT_NO_PATTERN, "pattern cursor cancelled");
+        t.assert(g.combat.stepIdx, 0, "step idx reset");
+        t.assert(g.combat.stepT, 0, "step timer reset");
+        beast(g, 6);
+        t.assert(m.state, MS_STAGGER, "still staggered after wallStun-1 ticks");
+        t.assert(m.t, 1, "one stun tick left");
+        beast(g, 1);
+        t.assert(m.state, MS_PURSUE, "released to pursue after wallStun ticks");
+        t.assert(m.cd, 55, "stagger release uses cdBase 55");
+        suite.addTest(t);
+    }
+
+    {
+        Test t("attack wallStun: lunge in the open does not stagger");
+        Game g;
+        newHunt(g);
+        Monster &m = g.monster;
+        monsterAttackSet(g, combat::ATTACK_LUNGE_PECK);
+        g.combat.attack.wallStun = 7;
+        m.state = MS_ATTACK;
+        m.t = 0;
+        m.x = 128;   // mid-arena: clamp never fires
+        m.y = 40;
+        m.subX = 0;
+        m.subY = 0;
+        m.lvx = -16;
+        m.lvy = 0;
+        updateMonster(g);
+        t.assert(m.state, MS_ATTACK, "open-field movement stays in attack");
+        t.assert(m.x, 127, "lunge moved one pixel west");
+        suite.addTest(t);
+    }
+
+    {
+        Test t("attack wallStun: a second bound contact does not re-trigger or stack");
+        Game g;
+        newHunt(g);
+        Monster &m = g.monster;
+        monsterAttackSet(g, combat::ATTACK_LUNGE_PECK);
+        g.combat.attack.wallStun = 7;
+        m.state = MS_ATTACK;
+        m.t = 0;
+        m.x = 0;
+        m.y = 40;
+        m.lvx = -16;
+        m.lvy = 0;
+        updateMonster(g);
+        t.assert(m.state, MS_STAGGER, "first contact self-stuns");
+        t.assert(m.t, 7, "stun armed");
+        // Jam the beast into the bound through the stun: the state change is the
+        // one-trigger latch, so ticks drain the timer instead of re-arming it.
+        m.x = 0;
+        m.lvx = -16;
+        beast(g, 1);
+        t.assert(m.t, 6, "timer drains, not re-armed");
+        m.x = 0;
+        m.lvx = -16;
+        beast(g, 1);
+        t.assert(m.t, 5, "second bound contact does not stack");
+        t.assert(m.state, MS_STAGGER, "still the first stun");
+        suite.addTest(t);
+    }
+
+    {
+        Test t("attack wallStun: 0 at a bound is inert (shipped behavior)");
+        Game g;
+        newHunt(g);
+        Monster &m = g.monster;
+        monsterAttackSet(g, combat::ATTACK_LUNGE_PECK);
+        t.assert(g.combat.attack.wallStun, 0, "shipped wallStun is 0");
+        m.state = MS_ATTACK;
+        m.t = 0;
+        m.x = 0;
+        m.y = 40;
+        m.subX = 0;
+        m.subY = 0;
+        m.lvx = -16;
+        m.lvy = 0;
+        updateMonster(g);
+        t.assert(m.state, MS_ATTACK, "no stun with wallStun 0");
+        t.assert(m.x, 0, "clamp still pins to the bound");
+        suite.addTest(t);
+    }
+
+    {
         Test t("push rule: beast gives way, idle player never shoved");
         Game g;
         newHunt(g);

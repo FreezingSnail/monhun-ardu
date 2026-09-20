@@ -685,7 +685,24 @@ static void updateMonster(Game &g) {
         m.state = MS_PURSUE;
     }
 
+    // Pre-clamp body anchor (feel.4): the state switch has applied this tick's
+    // movement, so a post-clamp delta means the attack's move hit a room bound.
+    const int16_t preClampX = m.x;
+    const int16_t preClampY = m.y;
     clampMonster(g);
+    // Attack wall stun (feel.4): a committed moving attack whose clamp reaches
+    // a room bound self-stuns for the attack's wallStun ticks, opening the
+    // punish window. The branch is inert while wallStun is 0 in all shipped
+    // data. The state change to MS_STAGGER is the one-trigger latch: the beast
+    // leaves MS_ATTACK, so a sustained wall contact cannot re-trigger or stack,
+    // and the shared MS_STAGGER release (PURSUE + cdBase) already exists.
+    if (m.state == MS_ATTACK && gp->combat.attack.wallStun > 0 && gp->combat.attack.moveType != MOVE_NONE && (m.x != preClampX || m.y != preClampY)) {
+        gp->combat.patternIdx = COMBAT_NO_PATTERN;
+        gp->combat.stepIdx = 0;
+        gp->combat.stepT = 0;
+        m.state = MS_STAGGER;
+        m.t = static_cast<int16_t>(gp->combat.attack.wallStun);
+    }
     pushApart(g);
 }
 

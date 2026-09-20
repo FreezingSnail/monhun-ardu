@@ -231,6 +231,7 @@ inline void test_combat(FxTest &test) {
     test.expectEq(lungeAtk.moveType, 1, F("lunge moveType"));
     test.expectEq(lungeAtk.moveSpeedF, 18, F("lunge speedF"));
     test.expectEq(lungeAtk.phys, PHYS_BLUNT, F("lunge phys"));
+    test.expectEq(lungeAtk.wallStun, combat_expect::ATTACK_LUNGE_PECK_WALLSTUN, F("lunge wallStun"));
     test.expectEq(lungeAtk.windowCount, 1, F("lunge windows"));
     test.expectEq(lungeAtk.firstWindow, combat::WINDOW_LUNGE_PECK_0, F("lunge first window"));
     const CombatWindow win = combatWindowRead(lungeAtk.firstWindow);
@@ -305,6 +306,7 @@ inline void test_combat(FxTest &test) {
     test.expectEq(g.combat.attack.moveType, 1, F("cache moveType"));
     test.expectEq(g.combat.attack.moveSpeedF, 18, F("cache moveSpeedF"));
     test.expectEq(g.combat.attack.facing, 0, F("cache facing"));
+    test.expectEq(g.combat.attack.wallStun, combat_expect::ATTACK_LUNGE_PECK_WALLSTUN, F("cache wallStun"));
     test.expectEq(g.combat.attack.winIdx, combat::WINDOW_LUNGE_PECK_0, F("cache winIdx"));
     test.expectEq(g.combat.attack.win.t1, 6, F("cache win t1"));
     test.expectEq(g.combat.attack.win.box.ox, 14, F("cache win ox"));
