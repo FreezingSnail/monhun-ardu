@@ -1,7 +1,7 @@
 {
   "id": "lunge",
   "skeleton": "chicken",
-  "stats": { "w": 32, "h": 24, "hp": 200, "spd": 5, "spawnX": 200, "spawnY": 40 },
+  "stats": { "w": 32, "h": 24, "hp": 200, "spd": 6, "spawnX": 200, "spawnY": 40 },
   "collide": { "ox": 9, "oy": 11, "w": 12, "h": 13 },
   "zones": {
     "head": {
@@ -29,31 +29,32 @@
     "engageDist": 36,
     "keepDist": 16,
     "attackDist": 42,
-    "faceHold": 6,
+    "faceHold": 5,
     "circleNum": 8,
     "circleDen": 10,
     "retreatNum": 6,
     "retreatDen": 10,
-    "cdBase": 55,
-    "cdJitter": 40,
+    "cdBase": 48,
+    "cdJitter": 60,
     "spawnT": 90,
     "spawnCd": 140,
     "stunRecoverT": 24,
-    "staggerMax": 0,
-    "staggerDecay": 0,
-    "staggerRecoverT": 0
+    "staggerMax": 30,
+    "staggerDecay": 2,
+    "staggerRecoverT": 30
   },
   "attacks": [
     {
       "id": "peck",
-      "windup": 22,
+      "windup": 18,
       "active": 6,
-      "recover": 30,
+      "recover": 26,
       "dmg": 7,
       "phys": "BLUNT",
       "elem": "NONE",
-      "move": { "type": "lunge", "speedF": 18 },
+      "move": { "type": "lunge", "speedF": 20 },
       "facing": "track",
+      "tell": "dot",
       "windows": [
         { "t0": 0, "t1": 6, "box": { "ox": 14, "oy": -6, "w": 12, "h": 10 }, "dmgMul": 100 }
       ],
@@ -63,16 +64,35 @@
     },
     {
       "id": "leap",
-      "windup": 34,
-      "active": 10,
-      "recover": 48,
-      "dmg": 12,
+      "windup": 30,
+      "active": 12,
+      "recover": 52,
+      "dmg": 13,
       "phys": "BLUNT",
       "elem": "NONE",
-      "move": { "type": "lunge", "speedF": 42 },
+      "move": { "type": "lunge", "speedF": 48 },
       "facing": "lock-at-windup",
+      "tell": "line",
       "windows": [
         { "t0": 0, "t1": 10, "box": { "ox": 12, "oy": -2, "w": 18, "h": 16 }, "dmgMul": 100 }
+      ],
+      "onHit": { "effect": "none", "push": 0, "stun": 0 },
+      "stagger": 0,
+      "cue": "windup"
+    },
+    {
+      "id": "wing_beat",
+      "windup": 16,
+      "active": 5,
+      "recover": 34,
+      "dmg": 9,
+      "phys": "BLUNT",
+      "elem": "NONE",
+      "move": { "type": "none" },
+      "facing": "track",
+      "tell": "arc",
+      "windows": [
+        { "t0": 0, "t1": 5, "box": { "ox": -8, "oy": 0, "w": 26, "h": 18 }, "dmgMul": 100 }
       ],
       "onHit": { "effect": "none", "push": 0, "stun": 0 },
       "stagger": 0,
@@ -81,14 +101,27 @@
   ],
   "patterns": [
     {
+      "id": "p_flank",
+      "guard": { "facing": "behind", "maxDist": 26, "chance": 100 },
+      "steps": [ { "atk": "wing_beat", "after": 0 } ]
+    },
+    {
       "id": "p_peck",
       "guard": { "maxDist": 28, "chance": 100 },
       "steps": [ { "atk": "peck", "after": 0 } ]
     },
     {
       "id": "p_leap",
-      "guard": { "minDist": 28, "maxDist": 255, "hpBand": [0, 100], "chance": 100 },
+      "guard": { "minDist": 28, "maxDist": 255, "hpBand": [51, 100], "chance": 100 },
       "steps": [ { "atk": "leap", "after": 0 } ]
+    },
+    {
+      "id": "p_leap2",
+      "guard": { "minDist": 28, "maxDist": 255, "hpBand": [0, 50], "chance": 100 },
+      "steps": [
+        { "atk": "leap", "after": 10 },
+        { "atk": "leap", "chance": 70 }
+      ]
     }
   ]
 }

@@ -123,8 +123,11 @@ FXTEST_INOS   = $(wildcard tst/fxdatatest/test_*.ino)
 FXTEST_NAMES  = $(basename $(notdir $(FXTEST_INOS)))
 # Iterate one suite: `make fxtest-headless FXTEST_ONLY=test_combat` (full gate
 # stays the default; the filter is for the inner dev loop).
+# test_parity is the legacy mock-derived diagnostics image (AGENTS.md: not a
+# gate, fixtures are frozen and not maintained). It is excluded from the default
+# run; `FXTEST_ONLY=test_parity` still builds/runs it on demand.
 FXTEST_ONLY   ?=
-FXTEST_RUN    = $(if $(strip $(FXTEST_ONLY)),$(filter $(FXTEST_ONLY),$(FXTEST_NAMES)),$(FXTEST_NAMES))
+FXTEST_RUN    = $(if $(strip $(FXTEST_ONLY)),$(filter $(FXTEST_ONLY),$(FXTEST_NAMES)),$(filter-out test_parity,$(FXTEST_NAMES)))
 
 fxtest: fxtest-headless
 

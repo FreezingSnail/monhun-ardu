@@ -687,7 +687,12 @@ static void drawMonster(const mh::Game &g, int16_t camX, int16_t camY) {
     // frame = (ordinal << 1) | (west). Windup and attack share the pose (the
     // overlay has no windup-flash frame; the tell + telegraph carry the timing,
     // same trade as fxtailspin). Cosmetic only: no hit-test or window change.
-    const bool chickenAtk = g.monsterKind == mh::MON_LUNGE && (m.state == mh::MS_WINDUP || m.state == mh::MS_ATTACK) && m.atkIdx != mh::COMBAT_NO_ATTACK;
+    // feel.8 added the third chicken attack (wing_beat), which has no pose in
+    // the 4-frame sheet: only attacks whose ordinal fits the sheet (frames/2)
+    // take the overlay, the rest fall through to the generic chicken sheet, so
+    // the frame index can never leave the sheet.
+    const bool chickenAtk = g.monsterKind == mh::MON_LUNGE && (m.state == mh::MS_WINDUP || m.state == mh::MS_ATTACK) && m.atkIdx != mh::COMBAT_NO_ATTACK &&
+                            static_cast<uint8_t>(m.atkIdx - mh::combatCreatureFirstAttack(combat::CREATURE_LUNGE)) < static_cast<uint8_t>(art_dims::chickenatk_frames >> 1);
     // Bull attack overlay (bead monhun-ardu-nch.10): during the stomp/gore
     // windup+attack the whole bull is drawn from the 4-frame 32x24 fxbullatk
     // sheet instead of the generic BEAST_POSES coil/lunge frame. MON_SWEEP is

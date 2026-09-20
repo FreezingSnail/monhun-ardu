@@ -67,7 +67,7 @@ void MonsterSuite(TestRunner &runner) {
         t.assert(g.monster.fx, -fp::FP, "starts facing W");
         t.assert(g.monster.fy, 0, "starts facing flat");
         t.assert(g.monster.circleDir, 1, "circle dir right");
-        t.assert(g.monster.spd, 5, "pursue speed 5/16");
+        t.assert(g.monster.spd, 6, "pursue speed 6/16");
         suite.addTest(t);
     }
 
@@ -79,12 +79,12 @@ void MonsterSuite(TestRunner &runner) {
         t.assert(g.monster.atkIdx, combat::ATTACK_LUNGE_LEAP, "dist 33 -> leap");
         t.assert(g.combat.attack.moveType, MOVE_LUNGE, "leap cache moveType");
         t.assert(g.monster.state, MS_WINDUP, "windup state");
-        t.assert(g.monster.t, 34, "leap tell 34");
-        t.assert(g.monster.windupMax, 34, "windupMax recorded");
+        t.assert(g.monster.t, 30, "leap tell 30");
+        t.assert(g.monster.windupMax, 30, "windupMax recorded");
         chooseAttack(g, 28);
         t.assert(g.monster.atkIdx, combat::ATTACK_LUNGE_PECK, "dist 28 -> peck");
         t.assert(g.combat.attack.moveType, MOVE_LUNGE, "peck cache moveType");
-        t.assert(g.monster.t, 22, "peck tell 22");
+        t.assert(g.monster.t, 18, "peck tell 18");
         suite.addTest(t);
     }
 
@@ -158,7 +158,7 @@ void MonsterSuite(TestRunner &runner) {
         t.assert(g3.combat.body.w, 32, "legacy cached box w");
         t.assert(g3.combat.body.h, 24, "legacy cached box h");
         t.assert(g3.monster.hp, 200, "legacy hp");
-        t.assert(g3.monster.spd, 5, "legacy speed");
+        t.assert(g3.monster.spd, 6, "legacy speed");
         suite.addTest(t);
     }
 
@@ -339,11 +339,11 @@ void MonsterSuite(TestRunner &runner) {
         chooseAttack(g, 33);
         const CombatAttackCache &ac = g.combat.attack;
         t.assert(g.monster.winRemain, 0, "leap declares one window");
-        t.assert(ac.windup, 34, "cache windup");
-        t.assert(ac.active, 10, "cache active");
-        t.assert(ac.recover, 48, "cache recover");
-        t.assert(ac.dmg, 12, "cache dmg");
-        t.assert(ac.moveSpeedF, 42, "cache speedF");
+        t.assert(ac.windup, 30, "cache windup");
+        t.assert(ac.active, 12, "cache active");
+        t.assert(ac.recover, 52, "cache recover");
+        t.assert(ac.dmg, 13, "cache dmg");
+        t.assert(ac.moveSpeedF, 48, "cache speedF");
         t.assert(ac.winIdx, combat::WINDOW_LUNGE_LEAP_0, "cache first window");
         t.assert(ac.win.t0, 0, "window t0");
         t.assert(ac.win.t1, 10, "window t1");
@@ -402,28 +402,28 @@ void MonsterSuite(TestRunner &runner) {
     }
 
     {
-        Test t("windup tell counts down 34 ticks, then attack starts");
+        Test t("windup tell counts down 30 ticks, then attack starts");
         Game g;
         newHunt(g);
         Monster &m = g.monster;
         monsterAttackSet(g, combat::ATTACK_LUNGE_LEAP);
         m.state = MS_WINDUP;
-        m.t = 34;
-        m.windupMax = 34;
-        beast(g, 33);
-        t.assert(m.state, MS_WINDUP, "still winding up at 33");
+        m.t = 30;
+        m.windupMax = 30;
+        beast(g, 29);
+        t.assert(m.state, MS_WINDUP, "still winding up at 29");
         t.assert(m.t, 1, "one tell tick left");
         beast(g, 1);
         t.assert(m.state, MS_ATTACK, "tell released into attack");
         t.assert(m.t, 0, "attack starts at t 0");
         t.assert(m.fx, -fp::FP, "faced west at release");
-        t.assert(m.lvx, -42, "leap velocity int (-16*42)>>4");
+        t.assert(m.lvx, -48, "leap velocity int (-16*48)>>4");
         t.assert(m.lvy, 0, "flat leap");
         suite.addTest(t);
     }
 
     {
-        Test t("peck recovery window closes, cd = 55 + tick%40, circle flips");
+        Test t("peck recovery window closes, cd = 48 + tick%60, circle flips");
         Game g;
         newHunt(g);
         Monster &m = g.monster;
@@ -432,11 +432,11 @@ void MonsterSuite(TestRunner &runner) {
         m.t = 0;
         m.x = 10;
         m.y = 10;      // far from player: no contact
-        hunt(g, 36);   // peck active 6 + recover 30
-        t.assert(m.state, MS_ATTACK, "still active+recovering at 36");
+        hunt(g, 32);   // peck active 6 + recover 26
+        t.assert(m.state, MS_ATTACK, "still active+recovering at 32");
         hunt(g, 1);
         t.assert(m.state, MS_PURSUE, "attack releases to pursue");
-        t.assert(m.cd, 55 + (g.tick % 40), "post-attack cooldown");
+        t.assert(m.cd, 48 + (g.tick % 60), "post-attack cooldown");
         t.assert(m.circleDir, (g.tick % 2) ? 1 : -1, "circle direction flips");
         suite.addTest(t);
     }
@@ -449,7 +449,7 @@ void MonsterSuite(TestRunner &runner) {
         g.monster.t = 3;
         beast(g, 3);
         t.assert(g.monster.state, MS_PURSUE, "recover -> pursue");
-        t.assert(g.monster.cd, 55, "short cooldown after recover");
+        t.assert(g.monster.cd, 48, "short cooldown after recover");
         suite.addTest(t);
     }
 
@@ -464,7 +464,7 @@ void MonsterSuite(TestRunner &runner) {
         t.assert(g.monster.t, 24, "recover window 24");
         beast(g, 24);
         t.assert(g.monster.state, MS_PURSUE, "recover -> pursue after 24");
-        t.assert(g.monster.cd, 55, "recover cooldown 55");
+        t.assert(g.monster.cd, 48, "recover cooldown 48");
         suite.addTest(t);
     }
 
@@ -525,13 +525,13 @@ void MonsterSuite(TestRunner &runner) {
         m.fy = 0;
         startMonsterAttack(g);
         t.assert(m.state, MS_ATTACK, "attack entered");
-        t.assert(m.lvx, 42, "E leap 42");
+        t.assert(m.lvx, 48, "E leap 48");
         t.assert(m.lvy, 0, "E leap flat");
         m.fx = 11;
         m.fy = 11;
         startMonsterAttack(g);
-        t.assert(m.lvx, 28, "SE leap integer trunc (11*42)>>4");
-        t.assert(m.lvy, 28, "SE leap y");
+        t.assert(m.lvx, 33, "SE leap integer trunc (11*48)>>4");
+        t.assert(m.lvy, 33, "SE leap y");
         monsterAttackSet(g, combat::ATTACK_HEAVY_TAIL_SPIN);
         m.fx = 16;
         m.fy = 0;
@@ -650,7 +650,7 @@ void MonsterSuite(TestRunner &runner) {
         m.fx = 16;
         m.fy = 0;
         startMonsterAttack(g);
-        t.assert(m.lvx, 42, "lunge leap 42 unchanged");
+        t.assert(m.lvx, 48, "lunge leap 48 unchanged");
         t.assert(m.lvy, 0, "lunge leap flat unchanged");
         suite.addTest(t);
     }
@@ -686,7 +686,7 @@ void MonsterSuite(TestRunner &runner) {
         t.assert(m.t, 1, "one stun tick left");
         beast(g, 1);
         t.assert(m.state, MS_PURSUE, "released to pursue after wallStun ticks");
-        t.assert(m.cd, 55, "stagger release uses cdBase 55");
+        t.assert(m.cd, 48, "stagger release uses cdBase 48");
         suite.addTest(t);
     }
 
@@ -809,7 +809,7 @@ void MonsterSuite(TestRunner &runner) {
         // hpPct 0 (default): below/at zero does not fire.
         updateMonster(g);
         t.assert(g.combat.enrage.fired, 0, "hpPct 0 inert");
-        t.assert(m.spd, 5, "spd untouched while disabled");
+        t.assert(m.spd, 6, "spd untouched while disabled");
         // Tiny multiplier: 5 * 3 / 100 = 0 truncates, floored to 1.
         g.combat.enrage.hpPct = 100;
         g.combat.enrage.spdMul = 3;
@@ -937,7 +937,7 @@ void MonsterSuite(TestRunner &runner) {
         monsterAttackSet(g, combat::ATTACK_LUNGE_LEAP);
         m.t = 0;
         hunt(g, 10);
-        t.assert(g.player.hp, 88, "leap 12 dmg lands once");
+        t.assert(g.player.hp, 87, "leap 13 dmg lands once");
         t.assertGreaterThan(g.player.iT, 0, "i-frames started");
         suite.addTest(t);
     }

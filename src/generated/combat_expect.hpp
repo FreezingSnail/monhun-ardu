@@ -8,7 +8,7 @@
 
 namespace combat_expect {
 
-constexpr uint16_t BLOB_SIZE = 1076;
+constexpr uint16_t BLOB_SIZE = 1146;
 constexpr uint8_t ANCHOR_SIZE = 2;
 constexpr uint8_t ATTACK_SIZE = 24;
 constexpr uint8_t CREATURE_SIZE = 29;
@@ -48,11 +48,11 @@ constexpr uint8_t ZONE_HEAVY_APPENDAGE_HP = 60;
 constexpr uint8_t ZONE_HEAVY_APPENDAGE_DMG_MUL = 150;
 constexpr uint8_t ZONE_HEAVY_APPENDAGE_BODY_SHARE = 40;
 constexpr uint16_t CREATURE_LUNGE_HP = 200;
-constexpr uint8_t CREATURE_LUNGE_SPD = 5;
+constexpr uint8_t CREATURE_LUNGE_SPD = 6;
 constexpr uint8_t CREATURE_LUNGE_W = 32;
 constexpr uint8_t CREATURE_LUNGE_H = 24;
-constexpr uint8_t CREATURE_LUNGE_ATTACKS = 2;
-constexpr uint8_t CREATURE_LUNGE_PATTERNS = 2;
+constexpr uint8_t CREATURE_LUNGE_ATTACKS = 3;
+constexpr uint8_t CREATURE_LUNGE_PATTERNS = 4;
 constexpr uint8_t CREATURE_LUNGE_STATIC = 0;
 constexpr uint8_t CREATURE_LUNGE_SHEET = 0;
 constexpr uint8_t CREATURE_LUNGE_BROKEN_W = 0;
@@ -61,16 +61,16 @@ constexpr int8_t CREATURE_LUNGE_COLLIDE_OX = 9;
 constexpr int8_t CREATURE_LUNGE_COLLIDE_OY = 11;
 constexpr uint8_t CREATURE_LUNGE_COLLIDE_W = 12;
 constexpr uint8_t CREATURE_LUNGE_COLLIDE_H = 13;
-constexpr uint8_t PROFILE_LUNGE_FACE_HOLD = 6;
-constexpr uint16_t ATTACK_LUNGE_PECK_WINDUP = 22;
+constexpr uint8_t PROFILE_LUNGE_FACE_HOLD = 5;
+constexpr uint16_t ATTACK_LUNGE_PECK_WINDUP = 18;
 constexpr uint16_t ATTACK_LUNGE_PECK_ACTIVE = 6;
-constexpr uint16_t ATTACK_LUNGE_PECK_RECOVER = 30;
+constexpr uint16_t ATTACK_LUNGE_PECK_RECOVER = 26;
 constexpr uint16_t ATTACK_LUNGE_PECK_DMG = 7;
 constexpr uint8_t ATTACK_LUNGE_PECK_WALLSTUN = 0;
 constexpr uint8_t ATTACK_LUNGE_PECK_TELL = 0;
-constexpr uint8_t PATTERN_LUNGE_P_PECK_MIN_DIST = 0;
-constexpr uint8_t PATTERN_LUNGE_P_PECK_MAX_DIST = 28;
-constexpr uint8_t PATTERN_LUNGE_P_PECK_CHANCE = 100;
+constexpr uint8_t PATTERN_LUNGE_P_FLANK_MIN_DIST = 0;
+constexpr uint8_t PATTERN_LUNGE_P_FLANK_MAX_DIST = 26;
+constexpr uint8_t PATTERN_LUNGE_P_FLANK_CHANCE = 100;
 constexpr uint8_t ZONE_LUNGE_HEAD_HP = 40;
 constexpr uint8_t ZONE_LUNGE_HEAD_DMG_MUL = 130;
 constexpr uint8_t ZONE_LUNGE_HEAD_BODY_SHARE = 100;
@@ -210,12 +210,12 @@ constexpr uint8_t ZONE_SWEEP_APPENDAGE_HP = 60;
 constexpr uint8_t ZONE_SWEEP_APPENDAGE_DMG_MUL = 150;
 constexpr uint8_t ZONE_SWEEP_APPENDAGE_BODY_SHARE = 40;
 
-// sha256 of fxdata/tables/combat.bin: fdcd0897176bb8bdfaf56b5ba8df1ba60bf0732ea7e1f72b2ab85e50c89efe28
+// sha256 of fxdata/tables/combat.bin: 7873e23d9f61a29b2d36ec608d6919e4e44969bcfb234c3f5df357888cfe6404
 constexpr uint8_t BLOB_SHA256[32] = {
-    0xFD, 0xCD, 0x08, 0x97, 0x17, 0x6B, 0xB8, 0xBD,
-    0xFA, 0xF5, 0x6B, 0x5B, 0xA8, 0xDF, 0x1B, 0xA6,
-    0x0B, 0xF0, 0x73, 0x2E, 0xA7, 0xE1, 0xF7, 0x2B,
-    0x2A, 0xB8, 0x5E, 0x50, 0xC8, 0x9E, 0xFE, 0x28,
+    0x78, 0x73, 0xE2, 0x3D, 0x9F, 0x61, 0xA2, 0x9B,
+    0x2D, 0x36, 0xEC, 0x60, 0x8D, 0x69, 0x19, 0xE4,
+    0xE4, 0x49, 0x69, 0xBC, 0xFB, 0x23, 0x4C, 0x3F,
+    0x5D, 0xF3, 0x57, 0x88, 0x8C, 0xFE, 0x64, 0x04,
 };
 
 }   // namespace combat_expect

@@ -98,7 +98,7 @@ static const CombatCreature kCreatures[] PROGMEM = {
      combat::ZONE_LUNGE_APPENDAGE,
      combat::ATTACK_LUNGE_PECK,
      combat_expect::CREATURE_LUNGE_ATTACKS,
-     combat::PATTERN_LUNGE_P_PECK,
+     combat::PATTERN_LUNGE_P_FLANK,
      combat_expect::CREATURE_LUNGE_PATTERNS,
      combat_expect::CREATURE_LUNGE_W,
      combat_expect::CREATURE_LUNGE_H,
@@ -212,7 +212,7 @@ static const CombatAttackValue kAttacks[] PROGMEM = {
      combat_expect::ATTACK_HEAVY_BITE_TELL},
     {MOVE_NONE, 0, 0, 0, COMBAT_FACING_LOCK_AWAY, PHYS_BLUNT, ELEM_NONE, 0, 0, 0, 0, 1, 0, combat::WINDOW_HEAVY_TAIL_SPIN_0, 4, 42, 20, 55, 8, 0},
     {MOVE_LUNGE,
-     18,
+     20,
      0,
      0,
      COMBAT_FACING_TRACK,
@@ -264,12 +264,12 @@ static const CombatWindow kWindows[] PROGMEM = {
 };
 
 static const CombatPattern kPatterns[] PROGMEM = {
-    {combat::STEP_LUNGE_P_PECK_0, 1, combat::GUARD_LUNGE_P_PECK}, {combat::STEP_SWEEP_P_STOMP_0, 1, combat::GUARD_SWEEP_P_STOMP}, {combat::STEP_SWEEP_P_GORE_0, 1, combat::GUARD_SWEEP_P_GORE}};
+    {combat::STEP_LUNGE_P_FLANK_0, 1, combat::GUARD_LUNGE_P_FLANK}, {combat::STEP_SWEEP_P_STOMP_0, 1, combat::GUARD_SWEEP_P_STOMP}, {combat::STEP_SWEEP_P_GORE_0, 1, combat::GUARD_SWEEP_P_GORE}};
 static const CombatGuard kGuards[] PROGMEM = {
-    {combat_expect::PATTERN_LUNGE_P_PECK_MIN_DIST, combat_expect::PATTERN_LUNGE_P_PECK_MAX_DIST, 0, 100, 0, 0, combat_expect::PATTERN_LUNGE_P_PECK_CHANCE, 0, GUARD_FACING_ANY},
+    {combat_expect::PATTERN_LUNGE_P_FLANK_MIN_DIST, combat_expect::PATTERN_LUNGE_P_FLANK_MAX_DIST, 0, 100, 0, 0, combat_expect::PATTERN_LUNGE_P_FLANK_CHANCE, 0, GUARD_FACING_BEHIND},
     {combat_expect::PATTERN_SWEEP_P_STOMP_MIN_DIST, combat_expect::PATTERN_SWEEP_P_STOMP_MAX_DIST, 0, 100, 0, 0, combat_expect::PATTERN_SWEEP_P_STOMP_CHANCE, 0, GUARD_FACING_ANY},
     {24, 255, 0, 100, 0, 0, 100, 0, GUARD_FACING_ANY}};
-static const CombatStep kSteps[] PROGMEM = {{STEP_ATK, combat::ATTACK_LUNGE_PECK, 0, 100}};
+static const CombatStep kSteps[] PROGMEM = {{STEP_ATK, combat::ATTACK_LUNGE_WING_BEAT, 0, 100}};
 static const CombatSkeleton kSkeleton[] PROGMEM = {{2, 2}};
 
 }   // namespace
@@ -389,8 +389,8 @@ inline void test_combat(FxTest &test) {
     test.expectEq(g.combat.profile.keepDist, 16, F("cache keepDist"));
     test.expectEq(g.combat.profile.faceHold, combat_expect::PROFILE_LUNGE_FACE_HOLD, F("cache faceHold"));
     test.expectEq(g.combat.profile.attackDist, 42, F("cache attackDist"));
-    test.expectEq(g.combat.profile.cdBase, 55, F("cache cdBase"));
-    test.expectEq(g.combat.profile.cdJitter, 40, F("cache cdJitter"));
+    test.expectEq(g.combat.profile.cdBase, 48, F("cache cdBase"));
+    test.expectEq(g.combat.profile.cdJitter, 60, F("cache cdJitter"));
     test.expectEq(g.combat.profile.spawnT, 90, F("cache spawnT"));
     test.expectEq(g.combat.profile.spawnCd, 140, F("cache spawnCd"));
     test.expectEq(g.combat.profile.stunRecoverT, 24, F("cache stunRecoverT"));
@@ -402,12 +402,12 @@ inline void test_combat(FxTest &test) {
     const uint16_t attackReads = static_cast<uint16_t>(mhFxReadCount - before);
     test.expectEq(atk, combat::ATTACK_LUNGE_PECK, F("attackLoad returns idx"));
     test.expectEq(attackReads <= 24, 1, F("attack load <= 24 reads"));
-    test.expectEq(g.combat.attack.windup, 22, F("cache windup"));
+    test.expectEq(g.combat.attack.windup, 18, F("cache windup"));
     test.expectEq(g.combat.attack.active, 6, F("cache active"));
-    test.expectEq(g.combat.attack.recover, 30, F("cache recover"));
+    test.expectEq(g.combat.attack.recover, 26, F("cache recover"));
     test.expectEq(g.combat.attack.dmg, 7, F("cache dmg"));
     test.expectEq(g.combat.attack.moveType, 1, F("cache moveType"));
-    test.expectEq(g.combat.attack.moveSpeedF, 18, F("cache moveSpeedF"));
+    test.expectEq(g.combat.attack.moveSpeedF, 20, F("cache moveSpeedF"));
     // feel.7: the hop dx/dy couple is read in the same move burst; shipped
     // none/lunge leaves both 0. One packed word keeps the device image in budget.
     test.expectEq(static_cast<uint16_t>(static_cast<uint8_t>(g.combat.attack.moveDx)) | (static_cast<uint16_t>(static_cast<uint8_t>(g.combat.attack.moveDy)) << 8), 0, F("cache hop moveDx/Dy"));
@@ -426,6 +426,17 @@ inline void test_combat(FxTest &test) {
     test.expectEq(g.combat.attack.win.box.ox, 12, F("window switch ox"));
     test.expectEq(g.combat.attack.win.box.w, 18, F("window switch w"));
 
+    // feel.8: wing_beat — stationary ARC attack whose 26x18 window sits behind
+    // the body (ox -8), loaded through the real cart.
+    test.expectEq(attackLoad(g, combat::ATTACK_LUNGE_WING_BEAT), combat::ATTACK_LUNGE_WING_BEAT, F("wing_beat load"));
+    test.expectEq(g.combat.attack.windup, 16, F("wing_beat windup"));
+    test.expectEq(g.combat.attack.active, 5, F("wing_beat active"));
+    test.expectEq(g.combat.attack.dmg, 9, F("wing_beat dmg"));
+    test.expectEq(g.combat.attack.moveType, 0, F("wing_beat stationary"));
+    test.expectEq(g.combat.attack.tell, TELL_ARC, F("wing_beat arc tell"));
+    test.expectEq(g.combat.attack.win.box.ox, -8, F("wing_beat window behind"));
+    test.expectEq(g.combat.attack.win.box.w, 26, F("wing_beat window w"));
+
     // ---------------------------------------------------- guard evaluation
     before = mhFxReadCount;
     CombatGuardInput in = {33, 100, 0, 0, 0xFFFF, 0};
@@ -443,6 +454,15 @@ inline void test_combat(FxTest &test) {
     in.dist = 0;
     test.expectEq(combatGuardPasses(g, combat::PATTERN_LUNGE_P_LEAP, in), 0, F("leap guard dist 0 rejected"));
     test.expectEq(combatGuardPasses(g, 99, in), 0, F("unknown pattern rejected"));
+
+    // feel.8 p_flank: behind clause (facingDot < 0) plus maxDist 26.
+    in.dist = 10;
+    in.facingDot = -5;
+    test.expectEq(combatGuardPasses(g, combat::PATTERN_LUNGE_P_FLANK, in), 1, F("flank behind accepted"));
+    in.facingDot = 5;
+    test.expectEq(combatGuardPasses(g, combat::PATTERN_LUNGE_P_FLANK, in), 0, F("flank front rejected"));
+    in.facingDot = 0;
+    test.expectEq(combatGuardPasses(g, combat::PATTERN_LUNGE_P_FLANK, in), 0, F("flank abeam rejected"));
 
     creatureLoad(g, combat::CREATURE_HEAVY);
     test.expectEq(g.combat.profile.keepDist, 12, F("heavy cache keepDist 12"));

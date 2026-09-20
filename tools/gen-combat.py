@@ -836,9 +836,11 @@ def pack_model(errors, model):
     for section, count in counts.items():
         if count > 255:
             errors.add("data", "size limit: %d %ss exceed the 255 record limit" % (count, section.lower().rstrip("s")))
-    # unlockMask is a u8 bit per global attack index.
-    if counts["ATTACKS"] > 8:
-        errors.add("data", "size limit: unlockMask is a u8 bit per attack; %d attacks exceed 8" % counts["ATTACKS"])
+    # unlockMask is a u8 bit per global attack index, so the ABI limit is on the
+    # *index of a disabled attack*, not the total attack count: a zone can only
+    # disable global indices 0..7. The runtime mirrors this (combatAttackDisabled
+    # returns false for attackIdx >= 8), so kits may add a 9th/10th attack; the
+    # per-zone `unlock > 255` check below rejects the only unrepresentable case.
     if errors.items:
         return None
 

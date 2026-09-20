@@ -86,8 +86,14 @@ void CombatSuite(TestRunner &runner) {
         t.assert(heavy.faceHold, 10, "heavy faceHold");
         t.assert(heavy.keepDist, 12, "heavy keepDist 12");
         const CombatProfile lunge = combatProfileRead(combatCreatureProfileIdx(combat_data::CREATURE_LUNGE));
-        t.assert(lunge.faceHold, 6, "chicken faceHold 6");
+        t.assert(lunge.faceHold, 5, "chicken faceHold 5 (feel.8)");
         t.assert(lunge.keepDist, 16, "chicken keepDist 16");
+        t.assert(lunge.attackDist, 42, "chicken attackDist 42");
+        t.assert(lunge.cdBase, 48, "chicken cdBase 48 (feel.8)");
+        t.assert(lunge.cdJitter, 60, "chicken cdJitter 60 (feel.8)");
+        t.assert(lunge.staggerMax, 30, "chicken staggerMax 30 (feel.8)");
+        t.assert(lunge.staggerDecay, 2, "chicken staggerDecay 2 (feel.8)");
+        t.assert(lunge.staggerRecoverT, 30, "chicken staggerRecoverT 30 (feel.8)");
         const CombatProfile sweep = combatProfileRead(combatCreatureProfileIdx(combat_data::CREATURE_SWEEP));
         t.assert(sweep.faceHold, combat_expect::PROFILE_SWEEP_FACE_HOLD, "bull faceHold 10");
         t.assert(sweep.keepDist, 18, "bull keepDist 18");
@@ -132,10 +138,10 @@ void CombatSuite(TestRunner &runner) {
         t.assert(combat::ZONES_COUNT, 11, "heavy tail + ravager + lunge + sweep + 4 pole zone records");
         t.assert(combat::CREATURES_COUNT, 8, "3 demo beasts + ravager + 4 static poles");
         t.assert(combat::SKELETONS_COUNT, 5, "bull/chicken/longtail/quad + pole");
-        t.assert(combat::ATTACKS_COUNT, 8, "3x2 shipped + ravager bite/tail_sweep");
-        t.assert(combat::WINDOWS_COUNT, 13, "4 single-window + ravager 2 + heavy bite 1 + tail_spin 4 + sweep gore 2");
-        t.assert(combat::PATTERNS_COUNT, 9, "ravager p_enraged; heavy spin/bite; sweep p_stomp/p_gore");
-        t.assert(combat::GUARDS_COUNT, 9, "one guard per pattern");
+        t.assert(combat::ATTACKS_COUNT, 9, "3x2 shipped + ravager bite/tail_sweep + chicken wing_beat (feel.8)");
+        t.assert(combat::WINDOWS_COUNT, 14, "single-window attacks + ravager 2 + tail_spin 4 + sweep gore 2 + wing_beat");
+        t.assert(combat::PATTERNS_COUNT, 11, "feel.8: chicken p_flank + p_leap2 added; ravager p_enraged; heavy spin/bite; sweep p_stomp/p_gore");
+        t.assert(combat::GUARDS_COUNT, 11, "one guard per pattern");
         for (uint8_t i = 0; i < combat::CREATURES_COUNT; i++) {
             const combat_data::Creature &h = combat_data::CREATURES[i];
             t.assert(combatCreatureSkeletonIdx(i), h.skeletonIdx, "creature skeletonIdx accessor");
@@ -409,6 +415,32 @@ void CombatSuite(TestRunner &runner) {
     }
 
     {
+        // feel.8: the chicken's first combo data. p_flank is the first pattern
+        // (behind punish) and p_leap2 is the two-step enrage combo.
+        Test t("chicken kit: p_flank + p_leap2 step shape (feel.8)");
+        t.assert(combat_data::PATTERN_LUNGE_P_FLANK, combat_data::CREATURES[combat_data::CREATURE_LUNGE].firstPattern, "p_flank is the opener");
+        t.assert(combatPatternStepCount(combat_data::PATTERN_LUNGE_P_FLANK), 1, "p_flank one step");
+        t.assert(combatStepRef(combat_data::STEP_LUNGE_P_FLANK_0), combat_data::ATTACK_LUNGE_WING_BEAT, "p_flank uses wing_beat");
+        const CombatGuard flank = combatGuardRead(combat_data::GUARD_LUNGE_P_FLANK);
+        t.assert(flank.facing, GUARD_FACING_BEHIND, "p_flank guard behind");
+        t.assert(flank.maxDist, combat_expect::PATTERN_LUNGE_P_FLANK_MAX_DIST, "p_flank guard reach");
+
+        t.assert(combatPatternStepCount(combat_data::PATTERN_LUNGE_P_LEAP2), 2, "p_leap2 two steps");
+        const CombatStep leap2a = combatStepRead(combat_data::STEP_LUNGE_P_LEAP2_0);
+        const CombatStep leap2b = combatStepRead(combat_data::STEP_LUNGE_P_LEAP2_1);
+        t.assert(leap2a.kind, STEP_ATK, "leap2 step0 atk");
+        t.assert(leap2a.ref, combat_data::ATTACK_LUNGE_LEAP, "leap2 step0 leap");
+        t.assert(leap2a.after, 10, "leap2 step0 after 10");
+        t.assert(leap2b.kind, STEP_ATK, "leap2 step1 atk");
+        t.assert(leap2b.ref, combat_data::ATTACK_LUNGE_LEAP, "leap2 step1 leap");
+        t.assert(leap2b.chance, 70, "leap2 step1 chance 70");
+        const CombatGuard leap2g = combatGuardRead(combat_data::GUARD_LUNGE_P_LEAP2);
+        t.assert(leap2g.hpLo, 0, "leap2 hp lo 0");
+        t.assert(leap2g.hpHi, 50, "leap2 hp hi 50");
+        suite.addTest(t);
+    }
+
+    {
         Test t("creatureLoad caches profile, resets zones, falls back on bad id");
         Game g;
         const uint8_t idx = creatureLoad(g, combat_data::CREATURE_LUNGE);
@@ -486,12 +518,12 @@ void CombatSuite(TestRunner &runner) {
         creatureLoad(g, combat_data::CREATURE_LUNGE);
         const uint8_t atk = attackLoad(g, combat_data::ATTACK_LUNGE_PECK);
         t.assert(atk, combat_data::ATTACK_LUNGE_PECK, "load returns attack idx");
-        t.assert(g.combat.attack.windup, 22, "cache windup");
+        t.assert(g.combat.attack.windup, 18, "cache windup");
         t.assert(g.combat.attack.active, 6, "cache active");
-        t.assert(g.combat.attack.recover, 30, "cache recover");
+        t.assert(g.combat.attack.recover, 26, "cache recover");
         t.assert(g.combat.attack.dmg, 7, "cache dmg");
         t.assert(g.combat.attack.moveType, 1, "cache moveType lunge");
-        t.assert(g.combat.attack.moveSpeedF, 18, "cache moveSpeedF");
+        t.assert(g.combat.attack.moveSpeedF, 20, "cache moveSpeedF");
         t.assert(g.combat.attack.facing, 0, "cache facing track");
         t.assert(g.combat.attack.wallStun, combat_expect::ATTACK_LUNGE_PECK_WALLSTUN, "cache wallStun");
         t.assert(g.combat.attack.tell, combat_expect::ATTACK_LUNGE_PECK_TELL, "cache tell");
@@ -514,6 +546,25 @@ void CombatSuite(TestRunner &runner) {
 
         // Attack scalars stay cached across a window switch (active phase).
         t.assert(g.combat.attack.dmg, 7, "scalars survive window switch");
+
+        // feel.8: wing_beat is the third chicken attack — stationary, ARC tell,
+        // a 26x18 window offset behind the body (ox -8) for the flank punish.
+        attackLoad(g, combat_data::ATTACK_LUNGE_WING_BEAT);
+        t.assert(g.combat.attack.windup, 16, "wing_beat windup");
+        t.assert(g.combat.attack.active, 5, "wing_beat active");
+        t.assert(g.combat.attack.recover, 34, "wing_beat recover");
+        t.assert(g.combat.attack.dmg, 9, "wing_beat dmg");
+        t.assert(g.combat.attack.moveType, 0, "wing_beat stationary");
+        t.assert(g.combat.attack.moveSpeedF, 0, "wing_beat no speed");
+        t.assert(g.combat.attack.facing, 0, "wing_beat tracks");
+        t.assert(g.combat.attack.tell, TELL_ARC, "wing_beat arc tell");
+        t.assert(g.combat.attack.winIdx, combat_data::WINDOW_LUNGE_WING_BEAT_0, "wing_beat window idx");
+        t.assert(g.combat.attack.win.t0, 0, "wing_beat window t0");
+        t.assert(g.combat.attack.win.t1, 5, "wing_beat window t1");
+        t.assert(g.combat.attack.win.box.ox, -8, "wing_beat window behind");
+        t.assert(g.combat.attack.win.box.oy, 0, "wing_beat window level");
+        t.assert(g.combat.attack.win.box.w, 26, "wing_beat window w");
+        t.assert(g.combat.attack.win.box.h, 18, "wing_beat window h");
 
         const uint8_t bad = attackLoad(g, 200);
         t.assert(bad, 0, "bad attack id falls back to 0");
@@ -561,6 +612,35 @@ void CombatSuite(TestRunner &runner) {
         in.dist = 255;
         t.assert(combatGuardPasses(g, combat_data::PATTERN_LUNGE_P_PECK, in), 0, "peck dist 255 rejected");
         t.assert(combatGuardPasses(g, combat_data::PATTERN_LUNGE_P_LEAP, in), 1, "leap dist 255 accepted");
+
+        // feel.8 p_flank: behind (facingDot < 0) and maxDist 26. Source order
+        // puts it first, so a flanking hunter inside 26 takes the wing beat.
+        in.hpPct = 100;
+        in.facingDot = -6;
+        in.dist = 0;
+        t.assert(combatGuardPasses(g, combat_data::PATTERN_LUNGE_P_FLANK, in), 1, "flank behind accepted");
+        in.dist = 26;
+        t.assert(combatGuardPasses(g, combat_data::PATTERN_LUNGE_P_FLANK, in), 1, "flank behind at 26 accepted");
+        in.dist = 27;
+        t.assert(combatGuardPasses(g, combat_data::PATTERN_LUNGE_P_FLANK, in), 0, "flank behind past 26 rejected");
+        in.dist = 0;
+        in.facingDot = 0;
+        t.assert(combatGuardPasses(g, combat_data::PATTERN_LUNGE_P_FLANK, in), 0, "flank abeam rejected");
+        in.facingDot = 6;
+        t.assert(combatGuardPasses(g, combat_data::PATTERN_LUNGE_P_FLANK, in), 0, "flank in front rejected");
+        in.facingDot = 0;
+
+        // feel.8 p_leap2: hpBand [0,50] enrage combo.
+        in.dist = 33;
+        in.hpPct = 100;
+        t.assert(combatGuardPasses(g, combat_data::PATTERN_LUNGE_P_LEAP2, in), 0, "leap2 above 50% hp rejected");
+        in.hpPct = 51;
+        t.assert(combatGuardPasses(g, combat_data::PATTERN_LUNGE_P_LEAP2, in), 0, "leap2 at 51% rejected");
+        in.hpPct = 50;
+        t.assert(combatGuardPasses(g, combat_data::PATTERN_LUNGE_P_LEAP2, in), 1, "leap2 at 50% accepted");
+        in.hpPct = 0;
+        t.assert(combatGuardPasses(g, combat_data::PATTERN_LUNGE_P_LEAP2, in), 1, "leap2 at 0% accepted");
+        in.hpPct = 100;
 
         creatureLoad(g, combat_data::CREATURE_HEAVY);
         in.dist = 30;

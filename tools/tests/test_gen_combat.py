@@ -445,6 +445,35 @@ class GenCombatTests(unittest.TestCase):
         self.mutate("data/creatures/beast.json", flood)
         self.assert_fails(self.compile(), "size limit: 256 windows exceed the 255 record limit")
 
+    def test_attack_count_may_exceed_eight_when_mask_fits(self):
+        # unlockMask is a u8 over the *disabled attack's global index*, not the
+        # total attack count: the kits add attacks without widening the mask and
+        # the runtime ignores indices >= 8 (combatAttackDisabled). Nine attacks
+        # whose disable list stays on index 0 must therefore compile.
+        def widen(doc):
+            base = doc["attacks"][0]
+            for i in range(2, 10):
+                clone = json.loads(json.dumps(base))
+                clone["id"] = "jab%d" % i
+                doc["attacks"].append(clone)
+
+        self.mutate("data/creatures/beast.json", widen)
+        self.assert_succeeds(self.compile())
+
+    def test_disabled_attack_index_must_fit_unlockmask(self):
+        # The only unrepresentable case: a zone disables an attack whose global
+        # index is >= 8 (bit 8 does not fit the u8 mask). Still rejected.
+        def widen(doc):
+            base = doc["attacks"][0]
+            for i in range(2, 10):
+                clone = json.loads(json.dumps(base))
+                clone["id"] = "jab%d" % i
+                doc["attacks"].append(clone)
+            doc["zones"]["appendage"]["broken"]["disableAttacks"] = ["jab9"]
+
+        self.mutate("data/creatures/beast.json", widen)
+        self.assert_fails(self.compile(), "unlockMask overflows u8 for beast appendage")
+
     # ----------------------------------------------------------- blob ABI
 
     def test_data_facts_match_fixture(self):
