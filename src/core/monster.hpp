@@ -455,16 +455,26 @@ static void chooseAttack(Game &g, int16_t dist) {
     }
 }
 
-// Attack release: lunge velocity comes from the cached move scalars; every
+// Attack release: lunge velocity comes from the cached move scalars; a hop
+// commits the face-relative dx/dy vector rotated by the current facing; every
 // other move type stays native/stationary in migration A.
 static void startMonsterAttack(Game &g) {
     Monster &m = g.monster;
     m.state = MS_ATTACK;
     m.t = 0;
-    if (g.combat.attack.moveType == MOVE_LUNGE) {
+    const uint8_t moveType = g.combat.attack.moveType;
+    if (moveType == MOVE_LUNGE) {
         const int16_t speedF = g.combat.attack.moveSpeedF;
         m.lvx = (m.fx * speedF) >> 4;
         m.lvy = (m.fy * speedF) >> 4;
+    } else if (moveType == MOVE_HOP) {
+        // Hop (feel.7): dx/dy are face-relative (forward, lateral) velocities in
+        // 1/16 px per tick, committed once at release. combatFacePoint rotates
+        // the offset into the world frame with the same math attack windows use.
+        int16_t hx, hy;
+        combatFacePoint(m.fx, m.fy, g.combat.attack.moveDx, g.combat.attack.moveDy, hx, hy);
+        m.lvx = static_cast<int8_t>(hx);
+        m.lvy = static_cast<int8_t>(hy);
     } else {
         m.lvx = 0;
         m.lvy = 0;
@@ -650,7 +660,7 @@ static void updateMonster(Game &g) {
         const int16_t active = static_cast<int16_t>(gp->combat.attack.active);
         const int16_t recover = static_cast<int16_t>(gp->combat.attack.recover);
         m.t++;
-        if (gp->combat.attack.moveType == MOVE_LUNGE && m.t <= active)
+        if ((gp->combat.attack.moveType == MOVE_LUNGE || gp->combat.attack.moveType == MOVE_HOP) && m.t <= active)
             fp::addVel(m, m.lvx, m.lvy);
         if (MULTI_WINDOW_ENABLED)
             monsterWindowNext(g);

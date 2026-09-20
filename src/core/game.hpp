@@ -606,6 +606,7 @@ inline void combatFaceOffset(int16_t fx, int16_t fy, const CombatBox &b, int16_t
 struct CombatAttackCache {
     uint16_t windup, active, recover, dmg;
     uint8_t moveType, moveSpeedF;
+    int8_t moveDx, moveDy;   // hop: face-relative velocity (1/16 px/tick, feel.7)
     uint8_t facing;
     uint8_t wallStun;   // ticks self-stunned on a room-bound clamp (feel.4)
     uint8_t winIdx;     // index of the cached window in the WINDOWS section

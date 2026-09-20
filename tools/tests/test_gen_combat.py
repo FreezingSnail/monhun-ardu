@@ -259,6 +259,55 @@ class GenCombatTests(unittest.TestCase):
                     lambda doc: doc["attacks"][0].__setitem__("wallStun", 1.5))
         self.assert_fails(self.compile(), "attacks[0]: wallStun: expected an integer, got 1.5")
 
+    def test_hop_move_required_dx_dy_rejected(self):
+        # feel.7: move.type hop requires face-relative dx and dy.
+        self.mutate("data/creatures/beast.json",
+                    lambda doc: doc["attacks"][0].__setitem__("move", {"type": "hop"}))
+        self.assert_fails(self.compile(),
+                          "move: dx: required for move type 'hop'",
+                          "move: dy: required for move type 'hop'")
+
+    def test_hop_move_speedf_rejected(self):
+        self.mutate("data/creatures/beast.json",
+                    lambda doc: doc["attacks"][0].__setitem__("move", {"type": "hop", "dx": 6, "dy": -10, "speedF": 20}))
+        self.assert_fails(self.compile(), "move: speedF: not allowed for move type 'hop'")
+
+    def test_hop_move_unknown_key_rejected(self):
+        self.mutate("data/creatures/beast.json",
+                    lambda doc: doc["attacks"][0].__setitem__("move", {"type": "hop", "dx": 6, "dy": -10, "accel": 1}))
+        self.assert_fails(self.compile(), "move: unknown key 'accel'")
+
+    def test_hop_move_range_rejected(self):
+        self.mutate("data/creatures/beast.json",
+                    lambda doc: doc["attacks"][0].__setitem__("move", {"type": "hop", "dx": 128, "dy": 0}))
+        self.assert_fails(self.compile(), "move: dx: out of range -128..127: 128")
+        self.mutate("data/creatures/beast.json",
+                    lambda doc: doc["attacks"][0].__setitem__("move", {"type": "hop", "dx": 0, "dy": -129}))
+        self.assert_fails(self.compile(), "move: dy: out of range -128..127: -129")
+
+    def test_hop_move_integer_only(self):
+        self.mutate("data/creatures/beast.json",
+                    lambda doc: doc["attacks"][0].__setitem__("move", {"type": "hop", "dx": 1.5, "dy": 0}))
+        self.assert_fails(self.compile(), "move: dx: expected an integer, got 1.5")
+        self.mutate("data/creatures/beast.json",
+                    lambda doc: doc["attacks"][0].__setitem__("move", {"type": "hop", "dx": 0, "dy": True}))
+        self.assert_fails(self.compile(), "move: dy: expected an integer, got True")
+
+    def test_hop_move_packs_signed_and_dumps(self):
+        # feel.7: hop packs dx/dy at attack bytes 2/3 (int8, signed); --dump
+        # prints the vector. ATTACK_SIZE stays 23 (the fields were reserved).
+        self.mutate("data/creatures/beast.json",
+                    lambda doc: doc["attacks"][0].__setitem__("move", {"type": "hop", "dx": 6, "dy": -10}))
+        self.assert_succeeds(self.compile())
+        meta = self.meta_constants()
+        self.assertEqual(meta["ATTACK_SIZE"], 23)
+        o = meta["ATTACK_BEAST_JAB_OFF"]
+        self.assertEqual(self.blob()[o + 0], 3, "hop moveType 3")
+        self.assertEqual(self.blob()[o + 1], 0, "hop speedF stays 0")
+        self.assertEqual(self.blob()[o + 2], 6, "hop dx emitted")
+        self.assertEqual(self.blob()[o + 3], 0xF6, "hop dy emitted signed (-10)")
+        self.assertIn("move hop(6,-10)", self.compile("--dump").stdout)
+
     def test_guard_facing_unknown_value_rejected(self):
         self.mutate("data/creatures/beast.json",
                     lambda doc: doc["patterns"][0]["guard"].__setitem__("facing", "sideways"))

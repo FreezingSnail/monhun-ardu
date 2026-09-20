@@ -508,5 +508,25 @@ void CombatPackSuite(TestRunner &runner) {
         suite.addTest(t);
     }
 
+    {
+        // feel.7: move.type hop carries a face-relative dx/dy vector in the
+        // attack record's signed bytes 2/3 (ATTACK_SIZE stays 23; the slots were
+        // reserved). No shipped attack authors hop, so every shipped delta is 0
+        // and lunge still moves through moveSpeedF. The decode loop above pins
+        // blob == host for these bytes; this test names the signed ABI and pins
+        // the shipped zeros so an inserted field cannot silently shift moveDx.
+        Test t("attack move delta: hop dx/dy decode signed at offset 2/3");
+        for (uint8_t i = 0; i < combat::ATTACKS_COUNT; i++) {
+            const size_t o = static_cast<size_t>(combat::ATTACKS_OFF) + i * combat::ATTACK_SIZE;
+            const combat_data::Attack &h = combat_data::ATTACKS[i];
+            t.assert(bi8(blob, o + 2), h.moveDx, "signed moveDx decode");
+            t.assert(bi8(blob, o + 3), h.moveDy, "signed moveDy decode");
+            t.assert(h.moveDx, 0, "shipped moveDx zero (none/lunge)");
+            t.assert(h.moveDy, 0, "shipped moveDy zero (none/lunge)");
+        }
+        t.assert(combat::ATTACK_SIZE, 23, "ATTACK_SIZE unchanged by hop");
+        suite.addTest(t);
+    }
+
     runner.addTestSuite(suite);
 }

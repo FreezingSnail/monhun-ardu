@@ -562,6 +562,100 @@ void MonsterSuite(TestRunner &runner) {
     }
 
     {
+        // feel.7: move.type hop commits a face-relative (forward, lateral)
+        // velocity at release, rotated into the world frame by the current
+        // facing. No shipped attack authors hop yet, so the test installs the
+        // move scalars in the RAM cache and calls the release directly.
+        Test t("hop: release rotates the face-relative dx/dy into lvx/lvy");
+        Game g;
+        newHunt(g);
+        Monster &m = g.monster;
+        g.combat.attack.moveType = MOVE_HOP;
+        g.combat.attack.moveDx = 12;   // forward 0.75 px/tick
+        g.combat.attack.moveDy = 6;    // lateral 0.375 px/tick
+        m.fx = 16;
+        m.fy = 0;   // E: forward +x, lateral +y
+        startMonsterAttack(g);
+        t.assert(m.state, MS_ATTACK, "hop enters attack");
+        t.assert(m.lvx, 12, "E hop forward x");
+        t.assert(m.lvy, 6, "E hop lateral y");
+        m.fx = 0;
+        m.fy = 16;   // S: forward +y, lateral -x
+        startMonsterAttack(g);
+        t.assert(m.lvx, -6, "S hop lateral x");
+        t.assert(m.lvy, 12, "S hop forward y");
+        suite.addTest(t);
+    }
+
+    {
+        // The hop fires m.lvx/lvy through addVel on t <= active only: the
+        // velocity stops at the active boundary and the sub-pixel accumulator
+        // freezes through recovery (no drift).
+        Test t("hop: moves along the vector while active, no drift after");
+        Game g;
+        newHunt(g);
+        Monster &m = g.monster;
+        g.combat.attack.moveType = MOVE_HOP;
+        g.combat.attack.moveDx = 12;
+        g.combat.attack.moveDy = 0;
+        g.combat.attack.active = 3;
+        g.combat.attack.recover = 5;
+        m.fx = 16;
+        m.fy = 0;
+        startMonsterAttack(g);
+        m.x = 100;
+        m.y = 20;
+        m.subX = 0;
+        m.subY = 0;
+        g.player.x = 10;
+        g.player.y = 10;   // clear of the beast: no shove/hit interference
+        beast(g, 3);
+        t.assert(m.x, 102, "12*3/16 = 2 px travelled");
+        t.assert(m.subX, 4, "sub-pixel remainder after the active phase");
+        t.assert(m.state, MS_ATTACK, "still in attack after active");
+        beast(g, 5);   // recovery ticks = active + recover
+        t.assert(m.x, 102, "no drift after the last active tick");
+        t.assert(m.subX, 4, "remainder frozen through recovery");
+        t.assert(m.y, 20, "no lateral movement");
+        t.assert(m.state, MS_ATTACK, "still attack exactly at active+recover");
+        // South facing: the same forward velocity (12,0) rotates to (0,12).
+        m.fx = 0;
+        m.fy = 16;
+        startMonsterAttack(g);
+        m.x = 100;
+        m.y = 20;
+        m.subX = 0;
+        m.subY = 0;
+        beast(g, 3);
+        t.assert(m.y, 22, "S 12*3/16 = 2 px travelled");
+        t.assert(m.subY, 4, "S sub-pixel remainder");
+        t.assert(m.x, 100, "S no sideways movement");
+        suite.addTest(t);
+    }
+
+    {
+        // Regression guard: the none/lunge release paths are unchanged by hop.
+        Test t("hop: none and lunge release paths unchanged");
+        Game g;
+        newHunt(g);
+        Monster &m = g.monster;
+        g.combat.attack.moveType = MOVE_NONE;
+        m.fx = 16;
+        m.fy = 0;
+        startMonsterAttack(g);
+        t.assert(m.state, MS_ATTACK, "none enters attack");
+        t.assert(m.lvx, 0, "none lvx zero");
+        t.assert(m.lvy, 0, "none lvy zero");
+        monsterAttackSet(g, combat::ATTACK_LUNGE_LEAP);
+        m.fx = 16;
+        m.fy = 0;
+        startMonsterAttack(g);
+        t.assert(m.lvx, 42, "lunge leap 42 unchanged");
+        t.assert(m.lvy, 0, "lunge leap flat unchanged");
+        suite.addTest(t);
+    }
+
+    {
         // feel.4: a committed moving attack that reaches a room bound self-stuns
         // for the attack's wallStun ticks, then the shared MS_STAGGER release
         // returns the beast to PURSUE (cdBase). Shipped data leaves wallStun 0,

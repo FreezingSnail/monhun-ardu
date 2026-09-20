@@ -20,8 +20,8 @@
 // two optional zone rects, picks the highest dmgMul (tie -> body, then head,
 // then appendage), drains the zone pool and flips a single broken bit per zone.
 //
-// Cache budget: CombatProfile 23 B + CombatAttackCache 22 B + body box 4 B +
-// 2x CombatZoneCache 22 B + 4 runtime zone bytes + 4 interpreter bytes = 79 B
+// Cache budget: CombatProfile 23 B + CombatAttackCache 24 B + body box 4 B +
+// 2x CombatZoneCache 22 B + 4 runtime zone bytes + 4 interpreter bytes = 81 B
 // on AVR.
 
 #include <stddef.h>
@@ -62,8 +62,8 @@ enum StepKind : uint8_t {
     STEP_ATK = 0,
     STEP_WAIT = 1
 };
-// Move kinds (tools/gen-combat.py MOVE_TYPES). Only lunge is consumed by the
-// shipping interpreter; charge/hop are schema-reserved.
+// Move kinds (tools/gen-combat.py MOVE_TYPES). Lunge and hop are consumed by
+// the shipping interpreter; charge is schema-reserved.
 enum MoveType : uint8_t {
     MOVE_NONE = 0,
     MOVE_LUNGE = 1,
@@ -265,6 +265,8 @@ static_assert(offsetof(PkCreature, patternCount) == offsetof(PkCreature, firstPa
 static_assert(offsetof(PkCreature, enrageHpPct) == offsetof(PkCreature, brokenH) + 1, "creature enrage quad must follow brokenH");
 static_assert(offsetof(PkCreature, enrageCue) == offsetof(PkCreature, enrageHpPct) + 3, "creature enrage quad must stay contiguous");
 static_assert(offsetof(PkAttack, moveSpeedF) == offsetof(PkAttack, moveType) + 1, "attack move pair must stay adjacent");
+static_assert(offsetof(PkAttack, moveDx) == offsetof(PkAttack, moveType) + 2, "attack hop dx must follow the move pair");
+static_assert(offsetof(PkAttack, moveDy) == offsetof(PkAttack, moveDx) + 1, "attack hop dx/dy pair must stay adjacent");
 static_assert(offsetof(PkAttack, windowCount) == offsetof(PkAttack, firstWindow) + 1, "attack window pair must stay adjacent");
 static_assert(offsetof(PkAttack, wallStun) == offsetof(PkAttack, cue) + 1, "attack wallStun must follow cue");
 static_assert(offsetof(PkAttack, dmg) == offsetof(PkAttack, windup) + 6, "attack timing quad must stay contiguous");
@@ -281,9 +283,9 @@ static_assert(offsetof(CombatGuard, facing) == offsetof(PkGuard, facing), "guard
 static_assert(offsetof(CombatStep, chance) == offsetof(PkStep, chance), "step mirror drift");
 static_assert(offsetof(CombatPattern, guardIdx) == offsetof(PkPattern, guardIdx), "pattern mirror drift");
 static_assert(sizeof(CombatWindow) == 9, "window cache must stay 9 B");
-static_assert(sizeof(CombatAttackCache) == 22, "attack cache must stay 22 B");
+static_assert(sizeof(CombatAttackCache) == 24, "attack cache must stay 24 B (windup quad + move prefix incl hop dx/dy + facing + wallStun + idx + window)");
 static_assert(sizeof(CombatZoneCache) == 11, "zone cache must stay 11 B");
-static_assert(sizeof(CombatState) == 89, "CombatState must stay 89 B (zones design + collide + static flag + faceHold + wallStun + enrage)");
+static_assert(sizeof(CombatState) == 91, "CombatState must stay 91 B (zones design + collide + static flag + faceHold + wallStun + enrage + hop dx/dy)");
 
 // Fake cart pointer: the blob lives below 64 KB (generator hard-fails above).
 inline uint16_t combatCartAddr(uint16_t off) {
@@ -982,14 +984,18 @@ inline uint8_t attackLoad(Game &g, uint8_t attackIdx) {
     if (attackIdx >= combat::ATTACKS_COUNT)
         attackIdx = 0;
 #ifdef __AVR__
-    // Scalar burst in four cart accesses: the moveType/moveSpeedF byte pair,
-    // facing, the firstWindow/windowCount pair, and the contiguous u16 quad
-    // windup..dmg. Cache field order is ABI-pinned to the packed record by the
-    // static_asserts at the top of this file.
+    // Scalar burst in four cart accesses: the 4-byte move prefix
+    // (moveType/moveSpeedF/moveDx/moveDy), facing, the wallStun byte, the
+    // firstWindow/windowCount pair, and the contiguous u16 quad windup..dmg.
+    // Cache field order is ABI-pinned to the packed record by the static_asserts
+    // at the top of this file.
     const uint16_t b = static_cast<uint16_t>(combat::ATTACKS_OFF + attackIdx * combat::ATTACK_SIZE);
-    const uint16_t mv = combatReadU16(b + static_cast<uint16_t>(offsetof(detail::PkAttack, moveType)));
-    g.combat.attack.moveType = static_cast<uint8_t>(mv & 0xFF);
-    g.combat.attack.moveSpeedF = static_cast<uint8_t>(mv >> 8);
+    uint8_t mv[4];
+    detail::combatReadBytes(static_cast<uint16_t>(b + offsetof(detail::PkAttack, moveType)), mv, 4);
+    g.combat.attack.moveType = mv[0];
+    g.combat.attack.moveSpeedF = mv[1];
+    g.combat.attack.moveDx = static_cast<int8_t>(mv[2]);
+    g.combat.attack.moveDy = static_cast<int8_t>(mv[3]);
     g.combat.attack.facing = combatReadU8(b + static_cast<uint16_t>(offsetof(detail::PkAttack, facing)));
     g.combat.attack.wallStun = combatReadU8(b + static_cast<uint16_t>(offsetof(detail::PkAttack, wallStun)));
     const uint16_t fw = combatReadU16(b + static_cast<uint16_t>(offsetof(detail::PkAttack, firstWindow)));
@@ -1002,6 +1008,8 @@ inline uint8_t attackLoad(Game &g, uint8_t attackIdx) {
     g.combat.attack.dmg = combatAttackDmg(attackIdx);
     g.combat.attack.moveType = combatAttackMoveType(attackIdx);
     g.combat.attack.moveSpeedF = combatAttackMoveSpeedF(attackIdx);
+    g.combat.attack.moveDx = combat_data::ATTACKS[attackIdx].moveDx;
+    g.combat.attack.moveDy = combat_data::ATTACKS[attackIdx].moveDy;
     g.combat.attack.facing = combatAttackFacing(attackIdx);
     g.combat.attack.wallStun = combatAttackWallStun(attackIdx);
     attackWindowLoad(g, combatAttackFirstWindow(attackIdx));

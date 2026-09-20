@@ -44,10 +44,12 @@ inline void test_combat(FxTest &test) {
     FX::seekData(mhCombat + 2);
     const uint8_t version = FX::readPendingUInt8();
     const uint8_t flags = FX::readEnd();
-    test.expectEq(magicLo, 0x43, F("header magic lo"));
-    test.expectEq(magicHi, 0x4D, F("header magic hi"));
-    test.expectEq(version, combat::VERSION, F("header version"));
-    test.expectEq(flags, combat::FLAGS, F("header flags"));
+    // One packed word per adjacent pair: magic, then version|flags. The device
+    // image has a hard flash ceiling, so adjacent header bytes share an assert
+    // (same coverage, one call/string each).
+    test.expectEq(static_cast<uint16_t>(magicLo) | (static_cast<uint16_t>(magicHi) << 8), 0x4D43, F("header magic"));
+    test.expectEq(static_cast<uint16_t>(version) | (static_cast<uint16_t>(flags) << 8), static_cast<uint16_t>(combat::VERSION) | (static_cast<uint16_t>(combat::FLAGS) << 8),
+                  F("header version+flags"));
 
     static const uint16_t counts[10] = {
         combat::CREATURES_COUNT, combat::PROFILES_COUNT, combat::SKELETONS_COUNT, combat::ZONES_COUNT,  combat::ANCHORS_COUNT,
@@ -228,8 +230,8 @@ inline void test_combat(FxTest &test) {
     test.expectEq(lungeAtk.active, combat_expect::ATTACK_LUNGE_PECK_ACTIVE, F("lunge active"));
     test.expectEq(lungeAtk.recover, combat_expect::ATTACK_LUNGE_PECK_RECOVER, F("lunge recover"));
     test.expectEq(lungeAtk.dmg, combat_expect::ATTACK_LUNGE_PECK_DMG, F("lunge dmg"));
-    test.expectEq(lungeAtk.moveType, 1, F("lunge moveType"));
-    test.expectEq(lungeAtk.moveSpeedF, 18, F("lunge speedF"));
+    test.expectEq(static_cast<uint16_t>(static_cast<uint8_t>(lungeAtk.moveType)) | (static_cast<uint16_t>(lungeAtk.moveSpeedF) << 8), static_cast<uint16_t>(1) | (static_cast<uint16_t>(18) << 8),
+                  F("lunge moveType+speedF"));
     test.expectEq(lungeAtk.phys, PHYS_BLUNT, F("lunge phys"));
     test.expectEq(lungeAtk.wallStun, combat_expect::ATTACK_LUNGE_PECK_WALLSTUN, F("lunge wallStun"));
     test.expectEq(lungeAtk.windowCount, 1, F("lunge windows"));
@@ -305,6 +307,9 @@ inline void test_combat(FxTest &test) {
     test.expectEq(g.combat.attack.dmg, 7, F("cache dmg"));
     test.expectEq(g.combat.attack.moveType, 1, F("cache moveType"));
     test.expectEq(g.combat.attack.moveSpeedF, 18, F("cache moveSpeedF"));
+    // feel.7: the hop dx/dy couple is read in the same move burst; shipped
+    // none/lunge leaves both 0. One packed word keeps the device image in budget.
+    test.expectEq(static_cast<uint16_t>(static_cast<uint8_t>(g.combat.attack.moveDx)) | (static_cast<uint16_t>(static_cast<uint8_t>(g.combat.attack.moveDy)) << 8), 0, F("cache hop moveDx/Dy"));
     test.expectEq(g.combat.attack.facing, 0, F("cache facing"));
     test.expectEq(g.combat.attack.wallStun, combat_expect::ATTACK_LUNGE_PECK_WALLSTUN, F("cache wallStun"));
     test.expectEq(g.combat.attack.winIdx, combat::WINDOW_LUNGE_PECK_0, F("cache winIdx"));
