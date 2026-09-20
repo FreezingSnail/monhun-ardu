@@ -60,6 +60,14 @@ Diff review before commit (it caught five real drifts in one bead):
 - shade-0/erase frames still erase on all planes;
 - telegraph and hit test read the same cached window.
 
+The feel revision behind the current kits is recorded in
+`docs/feel-design.md`: the diagnosis, the five pillars, the data verbs now
+available, the per-beast kit tables, and the attack contract (tell shape ==
+hit-test geometry, windup/recovery floors, positional answers, no stationary
+weak attack). Read it before authoring or reviewing creature data — the
+checklist above is the mechanical half of the same review, and
+`tools/contact_sheet.py` renders the JSON the contract talks about.
+
 ## Releases
 
 - `.github/workflows/release.yml` builds and publishes on tag push
