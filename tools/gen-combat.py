@@ -34,10 +34,11 @@ Blob layout (little-endian, explicit u8/u16, no padding, fixed section order):
                      staggerOnHit, brokenDmgMul, brokenFlags (bit0 hurtOff,
                      bit1 cue), unlockMask (bit per global attack idx)
     anchor      2 B  ox i8, oy i8
-    attack     23 B  moveType, moveSpeedF, moveDx i8, moveDy i8, facing, phys,
+    attack     24 B  moveType, moveSpeedF, moveDx i8, moveDy i8, facing, phys,
                      elem, onHitEffect, onHitPush i8, onHitStun, stagger, cue,
                      wallStun, firstWindow, windowCount, windup u16, active u16,
-                     recover u16, dmg u16
+                     recover u16, dmg u16, tell (0 dot / 1 line / 2 arc /
+                     3 ring / 4 zone, feel.5)
     window     10 B  t0 u16, t1 u16, box(ox i8, oy i8, w, h), dmgMul, flags
     pattern     3 B  firstStep, stepCount, guardIdx
     guard       9 B  minDist, maxDist, hpLo, hpHi, playerFlags, cooldown,
@@ -79,6 +80,10 @@ PHYS = {"SLASH": 0x01, "BLUNT": 0x02, "SHOT": 0x04}
 ELEMS = {"NONE": 0, "FIRE": 1, "WATER": 2, "ICE": 3, "THUNDER": 4}
 MOVE_TYPES = {"none": 0, "lunge": 1, "charge": 2, "hop": 3}
 FACINGS = {"track": 0, "lock-at-windup": 1, "lock-away": 2}
+# Per-attack telegraph shape (feel.5): the render draws the windup tell from the
+# cached window. 0 (dot) is the shipped 2x2 default; the others outline/point at
+# the covered area. Values mirror src/core/combat.hpp enum Tell.
+TELLS = {"dot": 0, "line": 1, "arc": 2, "ring": 3, "zone": 4}
 # Guard facing clause: player position relative to the beast's facing vector.
 GUARD_FACINGS = {"behind": 1, "front": 2}
 ON_HIT_EFFECTS = {"none": 0, "trip": 1, "stun": 2}
@@ -100,7 +105,7 @@ SIZES = {
     "SKELETON": 2,
     "ZONE": 12,
     "ANCHOR": 2,
-    "ATTACK": 23,
+    "ATTACK": 24,
     "WINDOW": 10,
     "PATTERN": 3,
     "GUARD": 9,
@@ -329,7 +334,7 @@ def normalize_zone(errors, ctx, obj, attack_ids):
 
 
 def normalize_attack(errors, ctx, obj):
-    check_keys(errors, ctx, obj, {"id", "windup", "active", "recover", "dmg", "phys", "elem", "move", "facing", "windows"}, {"onHit", "stagger", "cue", "wallStun"})
+    check_keys(errors, ctx, obj, {"id", "windup", "active", "recover", "dmg", "phys", "elem", "move", "facing", "windows"}, {"onHit", "stagger", "cue", "wallStun", "tell"})
     active = read_int(errors, ctx, obj, "active", 0, 65535)
     raw_windows = obj.get("windows")
     if not isinstance(raw_windows, list):
@@ -404,6 +409,8 @@ def normalize_attack(errors, ctx, obj):
         # wallStun: ticks the beast self-stuns when a moving attack's clamp
         # reaches a room bound (feel.4). 0 (default) ships the branch inert.
         "wallStun": read_int(errors, ctx, obj, "wallStun", 0, 255, default=0),
+        # tell: windup telegraph shape (feel.5); "dot" (0) is the shipped default.
+        "tell": read_enum(errors, ctx, obj, "tell", TELLS, default=0),
         "windows": windows,
     }
 
@@ -949,6 +956,7 @@ def pack_model(errors, model):
             u8(attack["stagger"]), u8(attack["cue"] or 0), u8(attack["wallStun"] or 0),
             u8(first_window), u8(len(attack["windows"])),
             u16(attack["windup"]), u16(attack["active"]), u16(attack["recover"]), u16(attack["dmg"]),
+            u8(attack["tell"] or 0),
         ]))
 
     # windows
@@ -1113,6 +1121,7 @@ def emit_data_header(model, compiled):
     app("    uint8_t wallStun;   // ticks self-stunned on a room-bound hit (0 = inert)")
     app("    uint8_t firstWindow, windowCount;")
     app("    uint16_t windup, active, recover, dmg;")
+    app("    uint8_t tell;   // windup telegraph shape (0 dot default, feel.5)")
     app("};")
     app("")
     app("struct Pattern {")
@@ -1202,13 +1211,13 @@ def emit_data_header(model, compiled):
         elif section == "ATTACKS":
             for entry in layout["attacks"]:
                 attack = entry["attack"]
-                app("    {%d, %d, %d, %d, %d, %d, %d, %d, %d, %d, %d, %d, %d, %d, %d, %d, %d, %d, %d}," % (
+                app("    {%d, %d, %d, %d, %d, %d, %d, %d, %d, %d, %d, %d, %d, %d, %d, %d, %d, %d, %d, %d}," % (
                     attack["moveType"], attack["moveSpeedF"], attack["moveDx"], attack["moveDy"],
                     attack["facing"], attack["phys"] or 0, attack["elem"] or 0,
                     attack["onHitEffect"] or 0, attack["onHitPush"] or 0, attack["onHitStun"] or 0,
                     attack["stagger"], attack["cue"] or 0, attack["wallStun"] or 0,
                     entry["first_window"], len(attack["windows"]),
-                    attack["windup"], attack["active"], attack["recover"], attack["dmg"]))
+                    attack["windup"], attack["active"], attack["recover"], attack["dmg"], attack["tell"] or 0))
         elif section == "WINDOWS":
             for entry in layout["windows"]:
                 window = entry["window"]
@@ -1423,6 +1432,7 @@ def emit_expect_header(model, compiled):
             app("constexpr uint16_t ATTACK_%s_%s_RECOVER = %d;" % (cid, first_attack["id"].upper(), first_attack["recover"]))
             app("constexpr uint16_t ATTACK_%s_%s_DMG = %d;" % (cid, first_attack["id"].upper(), first_attack["dmg"]))
             app("constexpr uint8_t ATTACK_%s_%s_WALLSTUN = %d;" % (cid, first_attack["id"].upper(), first_attack["wallStun"] or 0))
+            app("constexpr uint8_t ATTACK_%s_%s_TELL = %d;" % (cid, first_attack["id"].upper(), first_attack["tell"] or 0))
         if creature["patterns"]:
             first_pattern = creature["patterns"][0]
             guard = first_pattern["guard"]
@@ -1470,13 +1480,14 @@ def dump_model(model, compiled):
                 zone["brokenDmgMul"], zone["brokenHurtOff"], ",".join(zone["brokenDisable"]) or "-"))
         for attack in creature["attacks"]:
             move = {0: "none", 1: "lunge", 2: "charge", 3: "hop"}[attack["moveType"]]
+            tell = {0: "dot", 1: "line", 2: "arc", 3: "ring", 4: "zone"}.get(attack["tell"] or 0, "?")
             detail = ""
             if attack["moveType"] in (1, 2):
                 detail = "(%d)" % attack["moveSpeedF"]
             elif attack["moveType"] == 3:
                 detail = "(%d,%d)" % (attack["moveDx"], attack["moveDy"])
-            print("  attack %s: windup%d active%d recover%d dmg%d move %s%s windows %d wallStun %d" % (
-                attack["id"], attack["windup"], attack["active"], attack["recover"], attack["dmg"], move, detail, len(attack["windows"]), attack["wallStun"] or 0))
+            print("  attack %s: windup%d active%d recover%d dmg%d move %s%s windows %d wallStun %d tell %s" % (
+                attack["id"], attack["windup"], attack["active"], attack["recover"], attack["dmg"], move, detail, len(attack["windows"]), attack["wallStun"] or 0, tell))
             for i, window in enumerate(attack["windows"]):
                 box = window["box"]
                 print("    window %d: t[%d,%d] box(%d,%d,%d,%d) dmgMul %d" % (

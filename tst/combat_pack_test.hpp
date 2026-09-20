@@ -416,6 +416,7 @@ void CombatPackSuite(TestRunner &runner) {
             t.assert(b16(blob, o + 17), h.active, "blob attack active");
             t.assert(b16(blob, o + 19), h.recover, "blob attack recover");
             t.assert(b16(blob, o + 21), h.dmg, "blob attack dmg");
+            t.assert(b8(blob, o + 23), h.tell, "blob attack tell");
         }
         for (uint8_t i = 0; i < combat::WINDOWS_COUNT; i++) {
             const size_t o = static_cast<size_t>(combat::WINDOWS_OFF) + i * combat::WINDOW_SIZE;
@@ -492,6 +493,7 @@ void CombatPackSuite(TestRunner &runner) {
         t.assert(b16(blob, static_cast<size_t>(combat::ATTACK_HEAVY_BITE_OFF) + 19), combat_expect::ATTACK_HEAVY_BITE_RECOVER, "expect heavy bite recover");
         t.assert(b16(blob, static_cast<size_t>(combat::ATTACK_HEAVY_BITE_OFF) + 21), combat_expect::ATTACK_HEAVY_BITE_DMG, "expect heavy bite dmg");
         t.assert(b8(blob, static_cast<size_t>(combat::ATTACK_HEAVY_BITE_OFF) + 12), combat_expect::ATTACK_HEAVY_BITE_WALLSTUN, "expect heavy bite wallStun");
+        t.assert(b8(blob, static_cast<size_t>(combat::ATTACK_HEAVY_BITE_OFF) + 23), combat_expect::ATTACK_HEAVY_BITE_TELL, "expect heavy bite tell");
         t.assert(b16(blob, static_cast<size_t>(combat::ATTACK_LUNGE_PECK_OFF) + 15), combat_expect::ATTACK_LUNGE_PECK_WINDUP, "expect lunge windup");
         t.assert(b16(blob, static_cast<size_t>(combat::ATTACK_LUNGE_PECK_OFF) + 17), combat_expect::ATTACK_LUNGE_PECK_ACTIVE, "expect lunge active");
         t.assert(b16(blob, static_cast<size_t>(combat::ATTACK_LUNGE_PECK_OFF) + 19), combat_expect::ATTACK_LUNGE_PECK_RECOVER, "expect lunge recover");
@@ -510,11 +512,12 @@ void CombatPackSuite(TestRunner &runner) {
 
     {
         // feel.7: move.type hop carries a face-relative dx/dy vector in the
-        // attack record's signed bytes 2/3 (ATTACK_SIZE stays 23; the slots were
-        // reserved). No shipped attack authors hop, so every shipped delta is 0
-        // and lunge still moves through moveSpeedF. The decode loop above pins
-        // blob == host for these bytes; this test names the signed ABI and pins
-        // the shipped zeros so an inserted field cannot silently shift moveDx.
+        // attack record's signed bytes 2/3. No shipped attack authors hop, so
+        // every shipped delta is 0 and lunge still moves through moveSpeedF. The
+        // decode loop above pins blob == host for these bytes; this test names
+        // the signed ABI and pins the shipped zeros so an inserted field cannot
+        // silently shift moveDx. ATTACK_SIZE is 24 since feel.5 appended the tell
+        // byte (the hop dx/dy offsets 2/3 are unchanged).
         Test t("attack move delta: hop dx/dy decode signed at offset 2/3");
         for (uint8_t i = 0; i < combat::ATTACKS_COUNT; i++) {
             const size_t o = static_cast<size_t>(combat::ATTACKS_OFF) + i * combat::ATTACK_SIZE;
@@ -524,7 +527,7 @@ void CombatPackSuite(TestRunner &runner) {
             t.assert(h.moveDx, 0, "shipped moveDx zero (none/lunge)");
             t.assert(h.moveDy, 0, "shipped moveDy zero (none/lunge)");
         }
-        t.assert(combat::ATTACK_SIZE, 23, "ATTACK_SIZE unchanged by hop");
+        t.assert(combat::ATTACK_SIZE, 24, "ATTACK_SIZE grew for the tell byte");
         suite.addTest(t);
     }
 

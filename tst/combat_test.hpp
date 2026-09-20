@@ -346,10 +346,12 @@ void CombatSuite(TestRunner &runner) {
             t.assert(a.active, h.active, "attack active");
             t.assert(a.recover, h.recover, "attack recover");
             t.assert(a.dmg, h.dmg, "attack dmg");
+            t.assert(a.tell, h.tell, "attack tell");
             t.assert(combatAttackWindup(i), h.windup, "attack windup accessor");
             t.assert(combatAttackWallStun(i), h.wallStun, "attack wallStun accessor");
             t.assert(combatAttackFirstWindow(i), h.firstWindow, "attack firstWindow accessor");
             t.assert(combatAttackWindowCount(i), h.windowCount, "attack windowCount accessor");
+            t.assert(combatAttackTell(i), h.tell, "attack tell accessor");
         }
         for (uint8_t i = 0; i < combat::WINDOWS_COUNT; i++) {
             const CombatWindow w = combatWindowRead(i);
@@ -492,6 +494,7 @@ void CombatSuite(TestRunner &runner) {
         t.assert(g.combat.attack.moveSpeedF, 18, "cache moveSpeedF");
         t.assert(g.combat.attack.facing, 0, "cache facing track");
         t.assert(g.combat.attack.wallStun, combat_expect::ATTACK_LUNGE_PECK_WALLSTUN, "cache wallStun");
+        t.assert(g.combat.attack.tell, combat_expect::ATTACK_LUNGE_PECK_TELL, "cache tell");
         t.assert(g.combat.attack.winIdx, combat_data::WINDOW_LUNGE_PECK_0, "cache winIdx");
         t.assert(g.combat.attack.win.t0, 0, "cache window t0");
         t.assert(g.combat.attack.win.t1, 6, "cache window t1");

@@ -249,6 +249,30 @@ class GenCombatTests(unittest.TestCase):
                     lambda doc: doc["stats"].__setitem__("enrage", {"hpPct": 40, "spdMul": 150, "faceHold": 8, "cue": "roar"}))
         self.assert_fails(self.compile(), "stats.enrage: cue: unknown value 'roar' (want one of none, part_break, windup)")
 
+    def test_attack_tell_default_emit_and_dump(self):
+        # feel.5: tell is optional (default 0 dot) and packs as the attack
+        # record's 24th/last byte; --dump prints the shape and combat_expect
+        # pins it for the first attack.
+        self.assert_succeeds(self.compile())
+        meta = self.meta_constants()
+        self.assertEqual(meta["ATTACK_SIZE"], 24, "attack record grew for the tell byte")
+        o = meta["ATTACK_BEAST_JAB_OFF"]
+        self.assertEqual(self.blob()[o + 23], 0, "tell defaults to dot")
+        self.assertIn("constexpr uint8_t ATTACK_BEAST_JAB_TELL = 0;", self.read(EXPECT_REL))
+        self.assertIn("tell dot", self.compile("--dump").stdout)
+        self.mutate("data/creatures/beast.json",
+                    lambda doc: doc["attacks"][0].__setitem__("tell", "ring"))
+        self.assert_succeeds(self.compile())
+        self.assertEqual(self.blob()[o + 23], 3, "tell emitted at byte 23")
+        self.assertIn("constexpr uint8_t ATTACK_BEAST_JAB_TELL = 3;", self.read(EXPECT_REL))
+        self.assertIn("tell ring", self.compile("--dump").stdout)
+
+    def test_attack_tell_enum_rejected(self):
+        self.mutate("data/creatures/beast.json",
+                    lambda doc: doc["attacks"][0].__setitem__("tell", "spiral"))
+        self.assert_fails(self.compile(),
+                          "attacks[0]: tell: unknown value 'spiral' (want one of arc, dot, line, ring, zone)")
+
     def test_attack_wallstun_range_rejected(self):
         self.mutate("data/creatures/beast.json",
                     lambda doc: doc["attacks"][0].__setitem__("wallStun", 256))
@@ -295,12 +319,13 @@ class GenCombatTests(unittest.TestCase):
 
     def test_hop_move_packs_signed_and_dumps(self):
         # feel.7: hop packs dx/dy at attack bytes 2/3 (int8, signed); --dump
-        # prints the vector. ATTACK_SIZE stays 23 (the fields were reserved).
+        # prints the vector. ATTACK_SIZE is 24 since feel.5 appended the tell
+        # byte, which does not move the move-prefix offsets.
         self.mutate("data/creatures/beast.json",
                     lambda doc: doc["attacks"][0].__setitem__("move", {"type": "hop", "dx": 6, "dy": -10}))
         self.assert_succeeds(self.compile())
         meta = self.meta_constants()
-        self.assertEqual(meta["ATTACK_SIZE"], 23)
+        self.assertEqual(meta["ATTACK_SIZE"], 24)
         o = meta["ATTACK_BEAST_JAB_OFF"]
         self.assertEqual(self.blob()[o + 0], 3, "hop moveType 3")
         self.assertEqual(self.blob()[o + 1], 0, "hop speedF stays 0")
@@ -517,10 +542,11 @@ class GenCombatTests(unittest.TestCase):
         self.assertEqual(tail, bytes([0xFA, 4, 8, 4, 30, 150, 40, 1, 20, 200, 3, 1]))
 
         attack = blob[meta["ATTACK_BEAST_JAB_OFF"]:meta["ATTACK_BEAST_JAB_OFF"] + meta["ATTACK_SIZE"]]
-        # 23 B attack: 12 scalars (cue then the feel.4 wallStun byte), then
-        # firstWindow/windowCount, then the contiguous u16 timing quad.
+        # 24 B attack: 12 scalars (cue then the feel.4 wallStun byte), then
+        # firstWindow/windowCount, the contiguous u16 timing quad, then the
+        # feel.5 tell byte (0 = dot).
         self.assertEqual(attack, bytes([1, 20, 0, 0, 0, 1, 1, 1, 2, 4, 10, 1, 0, 0, 1,
-                                        20, 0, 6, 0, 30, 0, 7, 0]))
+                                        20, 0, 6, 0, 30, 0, 7, 0, 0]))
 
         window = blob[meta["WINDOW_BEAST_JAB_0_OFF"]:meta["WINDOW_BEAST_JAB_0_OFF"] + meta["WINDOW_SIZE"]]
         self.assertEqual(window, bytes([0, 0, 6, 0, 8, 0, 12, 10, 100, 0]))
@@ -622,6 +648,7 @@ class GenCombatTests(unittest.TestCase):
         self.assertEqual(expect["ATTACK_BEAST_JAB_WINDUP"], 20)
         self.assertEqual(expect["ATTACK_BEAST_JAB_DMG"], 7)
         self.assertEqual(expect["ATTACK_BEAST_JAB_WALLSTUN"], 0)
+        self.assertEqual(expect["ATTACK_BEAST_JAB_TELL"], 0)
         self.assertEqual(expect["PATTERN_BEAST_P_JAB_MAX_DIST"], 36)
         self.assertEqual(expect["ZONE_BEAST_HEAD_DMG_MUL"], 120)
         self.assertEqual(expect["ZONE_BEAST_APPENDAGE_HP"], 30)

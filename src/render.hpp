@@ -586,6 +586,70 @@ static void drawZonePart(const mh::Game &g, int16_t x, int16_t y, uint24_t sheet
     sprDraw(sheet, static_cast<int16_t>(x + ox), static_cast<int16_t>(y + zb.oy), FRAME(f));
 }
 
+// 1 px outline reused by the RING/ZONE tells (shade 2, world clip via blk).
+static void tellOutline(int16_t x, int16_t y, int16_t w, int16_t h) {
+    blk(x, y, w, 1, 2);
+    blk(x, static_cast<int16_t>(y + h - 1), w, 1, 2);
+    blk(x, y, 1, h, 2);
+    blk(static_cast<int16_t>(x + w - 1), y, 1, h, 2);
+}
+
+// Per-attack windup telegraph (feel.5): the shape comes from the cached attack
+// (g.combat.attack.tell) and the area from the cached window, so no cart read
+// happens during paint. `x,y` is the monster's screen top-left. tell 0 keeps the
+// legacy 2x2 shade-2 core; the attack-phase 4x4 shade-3 marker is unchanged.
+static void drawMonsterTell(const mh::Game &g, int16_t x, int16_t y) {
+    const mh::Monster &m = g.monster;
+    if (m.atkIdx == mh::COMBAT_NO_ATTACK)
+        return;
+    const mh::CombatBox &b = g.combat.attack.win.box;
+    int16_t dx, dy;
+    mh::combatFaceOffset(m.fx, m.fy, b, dx, dy);
+    const int16_t cx = static_cast<int16_t>(x + (m.w >> 1));
+    const int16_t cy = static_cast<int16_t>(y + (m.h >> 1));
+    const int16_t ax = static_cast<int16_t>(cx + dx);
+    const int16_t ay = static_cast<int16_t>(cy + dy);
+    if (m.state == mh::MS_ATTACK) {
+        blk(static_cast<int16_t>(ax - 2), static_cast<int16_t>(ay - 2), 4, 4, 3);
+        return;
+    }
+    const uint8_t tell = g.combat.attack.tell;
+    if (!mh::tellNeedsWindow(tell)) {
+        blk(static_cast<int16_t>(ax - 1), static_cast<int16_t>(ay - 1), 2, 2, 2);
+        return;
+    }
+    const int16_t bw = b.w;
+    const int16_t bh = b.h;
+    if (tell == mh::TELL_LINE) {
+        for (uint8_t i = 1; i <= 3; i++) {
+            int16_t ox, oy;
+            mh::tellLineDash(dx, dy, i, ox, oy);
+            blk(static_cast<int16_t>(cx + ox - 1), static_cast<int16_t>(cy + oy - 1), 2, 2, 2);
+        }
+    } else if (tell == mh::TELL_ARC) {
+        int16_t rx, ry;
+        mh::tellRectOrigin(ax, ay, bw, bh, rx, ry);
+        for (uint8_t i = 0; i < 3; i++) {
+            int16_t ox, oy;
+            mh::tellArcSeg(bw, bh, i, ox, oy);
+            blk(static_cast<int16_t>(rx + ox), static_cast<int16_t>(ry + oy), 4, 2, 2);
+        }
+    } else if (tell == mh::TELL_RING) {
+        const int16_t elapsed = static_cast<int16_t>(m.windupMax - m.t);
+        const int16_t hw = mh::tellRingHalf(static_cast<int16_t>(bw >> 1), elapsed);
+        const int16_t hh = mh::tellRingHalf(static_cast<int16_t>(bh >> 1), elapsed);
+        const int16_t rw = static_cast<int16_t>(hw << 1);
+        const int16_t rh = static_cast<int16_t>(hh << 1);
+        int16_t rx, ry;
+        mh::tellRectOrigin(ax, ay, rw, rh, rx, ry);
+        tellOutline(rx, ry, rw, rh);
+    } else {   // ZONE
+        int16_t rx, ry;
+        mh::tellRectOrigin(ax, ay, bw, bh, rx, ry);
+        tellOutline(rx, ry, bw, bh);
+    }
+}
+
 // Mock drawMonster(): dead heap, feet, body, head + eyes, stun sparkle, and the
 // windup/attack telegraph box.
 static void drawMonster(const mh::Game &g, int16_t camX, int16_t camY) {
@@ -745,23 +809,13 @@ static void drawMonster(const mh::Game &g, int16_t camX, int16_t camY) {
         sprDraw(fxtail_spin, static_cast<int16_t>(x + (w >> 1) - 12), static_cast<int16_t>(y + (h >> 1) - 12), FRAME(sf));
     }
 
-    // Telegraph core marker at the cached window centre (migration A): the same
-    // face-relative centre the hit test uses, so no cart read happens during
-    // paint. Only the core is drawn (windup 2x2 shade 2, attack 4x4 shade 3) --
-    // the full-window box fill read as a debug hurt zone on playtest (nch.2).
-    if (m.state == mh::MS_WINDUP || m.state == mh::MS_ATTACK) {
-        if (m.atkIdx != mh::COMBAT_NO_ATTACK) {
-            int16_t dx, dy;
-            mh::combatFaceOffset(m.fx, m.fy, g.combat.attack.win.box, dx, dy);
-            const int16_t ax = static_cast<int16_t>(x + w / 2 + dx);
-            const int16_t ay = static_cast<int16_t>(y + h / 2 + dy);
-            if (m.state == mh::MS_WINDUP) {
-                blk(static_cast<int16_t>(ax - 1), static_cast<int16_t>(ay - 1), 2, 2, 2);
-            } else {
-                blk(static_cast<int16_t>(ax - 2), static_cast<int16_t>(ay - 2), 4, 4, 3);
-            }
-        }
-    }
+    // Telegraph at the cached window (feel.5): tell 0 is the legacy 2x2 shade-2
+    // core, the other shapes describe the area the attack will cover; the
+    // attack-phase 4x4 shade-3 marker is unchanged. Drawn from the cache, so no
+    // cart read happens during paint. The full-window box fill read as a debug
+    // hurt zone on playtest (nch.2), so only the shapes above are drawn.
+    if (m.state == mh::MS_WINDUP || m.state == mh::MS_ATTACK)
+        drawMonsterTell(g, x, y);
 }
 
 // The gen-art part records live in the mhEquip cart blob (equip_meta.hpp holds

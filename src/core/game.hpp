@@ -609,6 +609,7 @@ struct CombatAttackCache {
     int8_t moveDx, moveDy;   // hop: face-relative velocity (1/16 px/tick, feel.7)
     uint8_t facing;
     uint8_t wallStun;   // ticks self-stunned on a room-bound clamp (feel.4)
+    uint8_t tell;       // windup telegraph shape (feel.5)
     uint8_t winIdx;     // index of the cached window in the WINDOWS section
     CombatWindow win;
 };

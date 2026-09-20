@@ -1,82 +1,112 @@
-# monhun-ardu-feel.13 — fix: test_combat device image headroom before kit data lands
+# monhun-ardu-feel.5 — engine+render: per-attack telegraph shapes
 
-Baseline: HEAD `4a39d9b`, clean tree. No commit/push (orchestrator commits).
-Only `tst/fxdatatest/combat_test.hpp` changed. No `src/` production file, no
-`src/generated/*` emission, no blob, no `mock/`, no `tools/` change. No
-`tools/gen-combat.py` gate was needed, so the generated host artifacts stay
-byte-identical (verified by `make gen-check`).
+Baseline: HEAD `3f19ff9`, clean tree. No commit/push (orchestrator commits).
+Blob-record change (`ATTACK_SIZE 23 -> 24`) shifts the FX image offsets, so
+`make gen` was run twice and the generated set stamped together.
 
 ## Result
 
-`test_combat` device image, stock arduino-cli flags (no `MH_NO_USB`):
+| metric | baseline (provided) | now | delta |
+| --- | --- | --- | --- |
+| shipping flash | 27474 / 29696 (2222 free) | **27920 / 29696 (1776 free)** | **+446 B** |
+| RAM | 1740 / 2560 | **1741 / 2560** | **+1 B** |
+| `.text` / `.data` / `.bss` | — | 27880 / 40 / 1701 | — |
+| combat blob | 1068 B | **1076 B** | +8 B (8 attacks x 1) |
+| `ATTACK_SIZE` | 23 | **24** | +1 (tell byte, appended) |
+| `CombatAttackCache` | 24 B | **25 B** | +1 |
+| `CombatState` | 91 B | **92 B** | +1 |
 
-```
-before: Sketch uses 29690 bytes (99%) of program storage space. Maximum is 29696 bytes.   (6 B free)
-after:  Sketch uses 23662 bytes (79%) of program storage space. Maximum is 29696 bytes.   (6034 B free)
-```
+**All five shapes shipped (DOT/LINE/ARC/RING/ZONE) at +446 B — under the ~600 B
+target**, leaving 1776 B >= the 1500 B reserve for the kit data. ARC did not
+need to be deferred.
 
-**Reclaimed 6028 B** (acceptance: >=150 B). RAM unchanged (globals 1821 B
-before/after; the new PROGMEM expectation tables live in flash).
+Perf (`make fxtest-headless FXTEST_ONLY=test_perf`): **`B pUs=6369 pHz=157
+lHz=52 lTk=456 rMx=4772 rAv=4587 ram=588`**, `perf_test PASSED=5 FAILED=0`.
+Render max is **4772 us vs the 7407 us floor — unchanged from baseline** (the
+shipped attacks are all tell 0, so the perf scene still takes the legacy 2x2
+path; the tell branch is one early-out compare).
 
-## What changed (no coverage removed)
+## What changed
 
-The per-record spot checks were **converted** from one `expectEq` per field to
-one whole-struct compare per record, table-driven:
+### Data/schema (`tools/gen-combat.py`)
+- `TELLS = {dot:0, line:1, arc:2, ring:3, zone:4}`; `tell` is an optional attack
+  key (default 0) validated with `read_enum`.
+- Packed as the attack record's 24th/last byte (after the `windup..dmg` quad, so
+  the hop `moveDx/moveDy` offsets 2/3 and the timing quad are unmoved).
+- `--dump` prints `tell dot|line|arc|ring|zone`; `combat_expect.hpp` gains
+  `ATTACK_<creature>_<first>_TELL` for each creature's first attack; the host
+  `Attack` struct gains `uint8_t tell;`.
 
-- new anonymous-namespace tables in `combat_test.hpp`: `kCreatures`/`kCreatureIds`,
-  `kZones`/`kZoneIds`, `kAttacks`/`kAttackIds`, `kWindows`/`kWindowIds`,
-  `kPatterns`, `kGuards`, `kSteps`, `kSkeleton` (all `PROGMEM`),
-- one `progEq(ram, progmem, n)` byte-compare helper; the AVR value structs are
-  padding-free and packed-ABI-sized (new `static_assert(sizeof(...) ==
-  combat_expect::*_SIZE)` guards; `CombatWindow` is `WINDOW_SIZE - 1`, the
-  packed record minus its reserved flags byte),
-- 8 loops (3 creatures, 7 zones, 5 attacks, 11 windows) plus a 12-compare
-  cross-reference walk that follows the same pointer graph the decision code
-  follows (creature -> attack -> window, creature -> pattern -> guard / step),
-- `COMBAT_FACING_LOCK_AWAY == 2` kept as a named pin.
+### ABI (`src/core/combat.hpp`, `src/core/game.hpp`)
+- New `enum Tell` (mirrors the generator).
+- `PkAttack` / `CombatAttackValue` append `tell`; `combatAttackRead`,
+  `combatAttackTell` and `attackLoad` (AVR read + host) load it into the cache.
+- `CombatAttackCache` appends `tell`; static asserts updated (cache 25 B,
+  `CombatState` 92 B, new `offsetof(PkAttack, tell) == dmg + 2`).
 
-Assert call sites: 281 -> 142. Unique `F()` labels: 289 -> 150
-(4961 -> 2766 bytes incl NUL) — every shared label is now one per record kind.
+### Render (`src/render.hpp`, `src/render_math.hpp`)
+- The windup/attack telegraph moved out of `drawMonster` into `drawMonsterTell`,
+  which reads only the cached window (`g.combat.attack.win.box`) and
+  `g.combat.attack.tell` — **no cart read during paint**, same window the hit
+  test uses. The attack-phase 4x4 shade-3 marker is unchanged.
+- tell 0 keeps the legacy 2x2 shade-2 core (byte-identical pixels).
+- LINE: three 2x2 dashes at Q2 fractions of the body-centre -> window-centre ray
+  (`tellLineDash`). ARC: three 4x2 segments across the box width with the centre
+  dropped 2 px (`tellArcSeg`). RING: expanding outline, half-extent grows ~1 px
+  per 2 windup ticks from 2, clamped to the window half (`tellRingHalf`). ZONE:
+  static window-bound outline. RING/ZONE share `tellOutline` +
+  `tellRectOrigin`.
+- The pure geometry lives in `src/render_math.hpp` (Arduino-free) so the host
+  suite pins it; the device suite pins the resulting framebuffer bytes. This
+  split is required because `src/render.hpp` is device-only (ArduboyG/SpritesU)
+  and cannot be compiled into `make test`.
 
-### Field coverage is a strict superset
+## Tests (permanent, native)
 
-Every field the old per-field asserts pinned is still pinned by its record row;
-the whole-struct compares additionally pin fields the old spot checks skipped
-(e.g. creature `flags`/`sheet`/`brokenW`/`brokenH`/enrage quad, attack
-`elem`/`onHitEffect`/`onHitPush`/`onHitStun`/`stagger`/`cue`/`recover`, window
-`oy`/`h`/`dmgMul`, zone `brokenDmgMul`/`brokenFlags`).
-
-| consolidated device group | old asserts | now | host coverage of the same bytes |
-|---|---|---|---|
-| heavy/lunge/sweep creature | 30 | 3 `CombatCreature` rows + 2 locals | `tst/combat_pack_test.hpp` "packed records decode to the generated host structs" (creature loop) + "blob spot values match combat_expect.hpp"; `tst/combat_test.hpp` "creature records match combat_data.hpp" |
-| heavy/lunge/sweep/ravager zones | 35 | 7 `CombatZone` rows | `tst/combat_pack_test.hpp` zone decode loop + expect spot values; `tst/combat_test.hpp` "skeleton + zone records match combat_data.hpp", "ravager zone records", "bull zone records" |
-| heavy bite/spin, lunge peck, bull stomp/gore attacks | 34 | 5 `CombatAttackValue` rows | `tst/combat_pack_test.hpp` attack decode loop + expect spot values + "hop dx/dy" test; `tst/combat_test.hpp` "attack + window records match combat_data.hpp", "attackLoad + attackWindowLoad cache lifecycle" |
-| heavy bite/spin windows, lunge peck/leap, bull stomp/gore, ravager sweep windows | 31 | 11 `CombatWindow` rows | `tst/combat_pack_test.hpp` window decode loop; `tst/combat_test.hpp` window loop |
-| lunge/bull pattern -> guard -> step walk (+ skeleton) | 15 | 12 struct compares following the real indices | `tst/combat_pack_test.hpp` pattern/guard/step decode loops + named-offset table; `tst/combat_test.hpp` "pattern + guard + step records match combat_data.hpp" |
-
-No assertion was deleted outright: each removed per-field check is subsumed by a
-whole-record compare that pins strictly more fields. The device suite still
-exercises the AVR `offsetof` read path for every record type (the part the host
-suites cannot reach) and keeps the cart read-budget / cache lifecycle /
-guard-eval / damage-routing / fallback sections unchanged.
+- **Host** `tst/render_math_test.hpp` — `per-attack telegraph geometry`: pins
+  `tellNeedsWindow` per shape with the tell-0 negative control, the LINE dash
+  coordinates (axis-aligned, diagonal, negative floor), the RING half-extent
+  growth + clamp, the ARC segment offsets, and the shared rect origin. The
+  device-only render means the host pins the exact geometry the draw consumes.
+- **Device** `tst/fxdatatest/tell_test.hpp` + `test_tell.ino` (new suite) —
+  calls `drawMonsterTell` after clearing plane 0 and pins `arduboy.getBuffer()`
+  exact page bytes for DOT, LINE, RING (empty + full windup), ZONE, ARC and the
+  attack-phase 4x4 marker, following the `test_hud` exact-byte pattern inside the
+  FX/OLED bracket.
+- `tst/combat_pack_test.hpp` — attack decode now pins tell at byte 23 + the
+  `ATTACK_HEAVY_BITE_TELL` spot value; the hop test names `ATTACK_SIZE == 24`.
+- `tst/combat_test.hpp` — attack record + accessor tell match; `attackLoad`
+  cache tell pin.
+- `tst/fxdatatest/combat_test.hpp` — `kAttacks` rows carry the tell field and
+  the cache pins `ATTACK_LUNGE_PECK_TELL`.
+- `tools/tests/test_gen_combat.py` — tell default/emit/dump, enum rejection, and
+  the updated 24 B attack payload; `combat_expect.hpp` synced.
 
 ## Verification tails
 
 ```
-# make fxtest-headless FXTEST_ONLY=test_combat
-test_combat
-Sketch uses 23662 bytes (79%) of program storage space. Maximum is 29696 bytes.
-Global variables use 1821 bytes (71%) of dynamic memory, leaving 739 bytes for local variables. Maximum is 2560 bytes.
-C reads spawn=15 attack=6 guard=2 hit=0 tick256=0 simAtk=7 simTk=0 winSw=1
-combat_test PASSED=176 FAILED=0
-P
-test_combat: PASS
+# make gen (x2) + gen-check
+gen-combat: 8 creatures, 8 attacks, 13 windows, 9 patterns, 9 steps, 5 skeletons, 11 zones, 1076 B, sha256 fdcd0897176bb8bdfaf56b5ba8df1ba60bf0732ea7e1f72b2ab85e50c89efe28
+fxdata_manifest: PASS (82 generated artifacts unchanged)
 
-# make fxtest-headless (full, exit=0)
+# make test
+Total Passed: 5671
+Total Failed: 0
+
+# make test-tools
+Ran 197 tests in 11.203s
+OK
+
+# make size
+size: .text=27880 .data=40 .bss=1701
+size: flash=27920/29696 (1776 free)  ram=1741/2560
+size: data facts: HAS_ENRAGE:false HAS_GUARD_CHANCE:false HAS_GUARD_COOLDOWN:false HAS_GUARD_FACING:false HAS_GUARD_HP:false HAS_GUARD_PLAYER:false HAS_GUARD_ZONES:true HAS_HIT_STAGGER:false HAS_MULTI_STEP:false HAS_MULTI_WINDOW:true HAS_SIMPLE_GUARDS:false HAS_STAGGER:true HAS_STEP_AFTER:false HAS_STEP_CHANCE:false HAS_WAIT_STEPS:false HAS_ZONES:true
+
+# make fxtest-headless (full)
 asset_test PASSED=270 FAILED=0
 test_audio PASSED=17 FAILED=0
 test_boot PASSED=4 FAILED=0
-combat_test PASSED=176 FAILED=0
+combat_test PASSED=177 FAILED=0
 data_test PASSED=368 FAILED=0
 test_hub PASSED=57 FAILED=0
 test_hud PASSED=17 FAILED=0
@@ -84,48 +114,23 @@ test_menu_art PASSED=81 FAILED=0
 menu_test PASSED=80 FAILED=0
 test_monster_art PASSED=111 FAILED=0
 parity_test PASSED=660 FAILED=0
+B pUs=6369 pHz=157 lHz=52 lTk=456 rMx=4772 rAv=4587 ram=588
 perf_test PASSED=5 FAILED=0
 test_player_art PASSED=111 FAILED=0
 test_quests PASSED=50 FAILED=0
 test_screens PASSED=78 FAILED=0
 test_smith PASSED=66 FAILED=0
+test_tell PASSED=17 FAILED=0
 zones_test PASSED=69 FAILED=0
-
-# make test
-Total Passed: 5611
-Total Failed: 0
-
-# make test-tools
-Ran 195 tests in 9.824s
-OK
-
-# make gen-check
-gen.sh: FX data + src/fxdata.h regenerated
-fxdata_manifest: PASS (82 generated artifacts unchanged)
-git status: only tst/fxdatatest/combat_test.hpp modified
-
-# make size (shipping image, unchanged vs HEAD)
-Sketch uses 27474 bytes (92%) of program storage space. Maximum is 29696 bytes.
-Global variables use 1740 bytes (67%) of dynamic memory, leaving 820 bytes for local variables. Maximum is 2560 bytes.
-size: .text=27434 .data=40 .bss=1700
-size: flash=27474/29696 (2222 free)  ram=1740/2560
-size: data facts: HAS_ENRAGE:false HAS_GUARD_CHANCE:false HAS_GUARD_COOLDOWN:false
-  HAS_GUARD_FACING:false HAS_GUARD_HP:false HAS_GUARD_PLAYER:false HAS_GUARD_ZONES:true
-  HAS_HIT_STAGGER:false HAS_MULTI_STEP:false HAS_MULTI_WINDOW:true HAS_SIMPLE_GUARDS:false
-  HAS_STAGGER:true HAS_STEP_AFTER:false HAS_STEP_CHANCE:false HAS_WAIT_STEPS:false HAS_ZONES:true
 ```
 
-`HAS_*` facts and the 27474/2222-free shipping line are identical to HEAD
-(`docs/dev-flow.md` feel.7 baseline), confirming no production-data flip.
+## Notes / deviations
 
-## Headroom for the kit beads
-
-`test_combat` now carries **6034 B** of free device flash (was 6 B). The
-`feel.8/9/10` kit data (multi-step/after/chance facts, wallStun/enrage/tell
-bytes) can land without touching this suite for budget.
-
-## Per-file summary
-
-- `tst/fxdatatest/combat_test.hpp` — per-record spot checks converted to
-  table-driven whole-struct `progEq` compares + a pointer-graph cross-reference
-  walk; 6028 B device flash reclaimed; coverage per field expanded.
+- No shipped attack authors a non-zero tell yet (all shipped `tell` are 0), so
+  the shipped look is byte-identical and the tell machinery is compiled but
+  inert until the kit-data beads author shapes. The device `test_tell` drives
+  the cache directly to exercise all shapes.
+- The task's "host render test pinning framebuffer bytes" is not literally
+  possible: `src/render.hpp` needs ArduboyG/SpritesU and is device-only. The
+  host suite pins the pure tell geometry instead; the new Ardens `test_tell`
+  pins the actual framebuffer bytes for every shape. Documented above.
