@@ -98,3 +98,29 @@ were reverted.
 - Main tree `git status --short` clean after removal; `make gen-check` →
   `fxdata_manifest: PASS (82 generated artifacts unchanged)`.
 - No /tmp, no float, no generated-file hand edits in the main tree. No commit.
+
+---
+
+# NOTE — flash reclaim plan (owner decision, 2026-09-19)
+
+Decision: **keep at least one interactive/breakable part per beast** — it is a
+core mechanic and does not get carved. Consequence of `fie.11`: parts are FX
+cart data, so reducing two zones to one per creature is worth **0 B of MCU
+flash**; a code specialization to a single part slot would reclaim only ~372 B
+and is not worth the churn. The zone framework stays as-is.
+
+Measured levers (shipping 29258/29696, 438 B free):
+
+| # | lever | reclaim | cost |
+|---|---|---:|---|
+| 1 | dead guard-zone data cleanup | ~52 B | none |
+| 2 | shelf carve: hub/quests/smith + EEPROM save | ~400-700 B est. | none on demo path; measure first |
+| 3 | part-art overlay carve (`drawZonePart`+`partDraw`) | ~390 B | broken-part visuals lost; mechanic kept |
+| 4 | `MH_AUDIO=0` | 320 B | all cue tones lost |
+| 5 | player-feature carves (charge/sheathe/stances/riposte/whirl/gun reload) | 100-500 B each | gameplay trade, per-feature spike |
+
+Not levers: zone count/data (0 B), full zone strip (-1368 B but kills the
+mechanic), multi-window/stagger/guard (~116 B), per-room bounds (~250 B).
+
+Planned order: 1 + 2 first (no gameplay loss), then decide 3 vs 4 vs 5 against
+the next feature's budget (vx2 art / equipment 05x).
