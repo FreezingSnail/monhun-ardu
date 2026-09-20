@@ -24,11 +24,201 @@
 #include "src/core/projectiles.hpp"   // addEffect (playerHurt side)
 #include "src/generated/combat_expect.hpp"
 
+#include <avr/pgmspace.h>
 #include <stdint.h>
 
 namespace combatcheck {
 
 using namespace mh;
+
+namespace {
+
+// Byte-compare a loader-decoded value struct against a PROGMEM expectation.
+// The device image has a hard flash ceiling, so the per-record spot checks are
+// one assert per record (one call + one shared label) instead of one per field.
+// Every field is still pinned, and the same blob bytes are pinned against the
+// generated structs by the host pack suite (tst/combat_pack_test.hpp).
+inline bool progEq(const void *ram, const void *flash, uint8_t n) {
+    const uint8_t *r = static_cast<const uint8_t *>(ram);
+    const uint8_t *f = static_cast<const uint8_t *>(flash);
+    for (uint8_t i = 0; i < n; i++)
+        if (r[i] != pgm_read_byte(f + i))
+            return false;
+    return true;
+}
+
+// The byte compare is only valid while the AVR value structs stay padding-free
+// and equal to the packed ABI (uint16 alignment is 1 on AVR; the packed record
+// sizes come from the generated expect header). CombatWindow drops the packed
+// record's trailing reserved flags byte.
+static_assert(sizeof(CombatCreature) == combat_expect::CREATURE_SIZE, "creature value struct must stay packed");
+static_assert(sizeof(CombatZone) == combat_expect::ZONE_SIZE, "zone value struct must stay packed");
+static_assert(sizeof(CombatAttackValue) == combat_expect::ATTACK_SIZE, "attack value struct must stay packed");
+static_assert(sizeof(CombatWindow) == combat_expect::WINDOW_SIZE - 1, "window value struct must stay packed minus flags");
+static_assert(sizeof(CombatGuard) == combat_expect::GUARD_SIZE, "guard value struct must stay packed");
+static_assert(sizeof(CombatPattern) == combat_expect::PATTERN_SIZE, "pattern value struct must stay packed");
+static_assert(sizeof(CombatStep) == combat_expect::STEP_SIZE, "step value struct must stay packed");
+static_assert(sizeof(CombatSkeleton) == combat_expect::SKELETON_SIZE, "skeleton value struct must stay packed");
+
+// Expected records read through the cart loader. Values are the generated
+// expect constants where they exist (so a data regen that changes a value
+// fails here too), literals otherwise; `combat::` index constants keep the
+// graph links symbolic.
+static const uint8_t kCreatureIds[] PROGMEM = {combat::CREATURE_HEAVY, combat::CREATURE_LUNGE, combat::CREATURE_SWEEP};
+static const CombatCreature kCreatures[] PROGMEM = {
+    // skeletonIdx, profileIdx, headZone, appendZone, firstAttack, attackCount,
+    // firstPattern, patternCount, w, h, spd, collide, hp, spawnX, spawnY,
+    // flags, sheet, brokenW, brokenH, enrageHpPct/SpdMul/FaceHold/Cue
+    {combat::SKELETON_LONGTAIL,
+     0,
+     COMBAT_NO_ZONE,
+     combat::ZONE_HEAVY_APPENDAGE,
+     combat::ATTACK_HEAVY_BITE,
+     combat_expect::CREATURE_HEAVY_ATTACKS,
+     combat::PATTERN_HEAVY_P_SPIN,
+     combat_expect::CREATURE_HEAVY_PATTERNS,
+     combat_expect::CREATURE_HEAVY_W,
+     combat_expect::CREATURE_HEAVY_H,
+     combat_expect::CREATURE_HEAVY_SPD,
+     {combat_expect::CREATURE_HEAVY_COLLIDE_OX, combat_expect::CREATURE_HEAVY_COLLIDE_OY, combat_expect::CREATURE_HEAVY_COLLIDE_W, combat_expect::CREATURE_HEAVY_COLLIDE_H},
+     combat_expect::CREATURE_HEAVY_HP,
+     200,
+     40,
+     combat_expect::CREATURE_HEAVY_STATIC,
+     combat_expect::CREATURE_HEAVY_SHEET,
+     combat_expect::CREATURE_HEAVY_BROKEN_W,
+     combat_expect::CREATURE_HEAVY_BROKEN_H,
+     0,
+     0,
+     0,
+     0},
+    {combat::SKELETON_CHICKEN,
+     1,
+     combat::ZONE_LUNGE_HEAD,
+     combat::ZONE_LUNGE_APPENDAGE,
+     combat::ATTACK_LUNGE_PECK,
+     combat_expect::CREATURE_LUNGE_ATTACKS,
+     combat::PATTERN_LUNGE_P_PECK,
+     combat_expect::CREATURE_LUNGE_PATTERNS,
+     combat_expect::CREATURE_LUNGE_W,
+     combat_expect::CREATURE_LUNGE_H,
+     combat_expect::CREATURE_LUNGE_SPD,
+     {combat_expect::CREATURE_LUNGE_COLLIDE_OX, combat_expect::CREATURE_LUNGE_COLLIDE_OY, combat_expect::CREATURE_LUNGE_COLLIDE_W, combat_expect::CREATURE_LUNGE_COLLIDE_H},
+     combat_expect::CREATURE_LUNGE_HP,
+     200,
+     40,
+     combat_expect::CREATURE_LUNGE_STATIC,
+     combat_expect::CREATURE_LUNGE_SHEET,
+     combat_expect::CREATURE_LUNGE_BROKEN_W,
+     combat_expect::CREATURE_LUNGE_BROKEN_H,
+     0,
+     0,
+     0,
+     0},
+    {combat::SKELETON_BULL,
+     7,
+     combat::ZONE_SWEEP_HEAD,
+     combat::ZONE_SWEEP_APPENDAGE,
+     combat::ATTACK_SWEEP_STOMP,
+     combat_expect::CREATURE_SWEEP_ATTACKS,
+     combat::PATTERN_SWEEP_P_STOMP,
+     combat_expect::CREATURE_SWEEP_PATTERNS,
+     combat_expect::CREATURE_SWEEP_W,
+     combat_expect::CREATURE_SWEEP_H,
+     combat_expect::CREATURE_SWEEP_SPD,
+     {combat_expect::CREATURE_SWEEP_COLLIDE_OX, combat_expect::CREATURE_SWEEP_COLLIDE_OY, combat_expect::CREATURE_SWEEP_COLLIDE_W, combat_expect::CREATURE_SWEEP_COLLIDE_H},
+     combat_expect::CREATURE_SWEEP_HP,
+     200,
+     40,
+     combat_expect::CREATURE_SWEEP_STATIC,
+     combat_expect::CREATURE_SWEEP_SHEET,
+     combat_expect::CREATURE_SWEEP_BROKEN_W,
+     combat_expect::CREATURE_SWEEP_BROKEN_H,
+     0,
+     0,
+     0,
+     0},
+};
+
+static const uint8_t kZoneIds[] PROGMEM = {combat::ZONE_HEAVY_APPENDAGE, combat::ZONE_LUNGE_HEAD,   combat::ZONE_LUNGE_APPENDAGE,  combat::ZONE_SWEEP_HEAD,
+                                           combat::ZONE_SWEEP_APPENDAGE, combat::ZONE_RAVAGER_HEAD, combat::ZONE_RAVAGER_APPENDAGE};
+static const CombatZone kZones[] PROGMEM = {
+    // box, hp, dmgMul, bodyShare, breakTypes, staggerOnHit, brokenDmgMul, brokenFlags, unlockMask
+    {{-24, 0, 24, 16},
+     combat_expect::ZONE_HEAVY_APPENDAGE_HP,
+     combat_expect::ZONE_HEAVY_APPENDAGE_DMG_MUL,
+     combat_expect::ZONE_HEAVY_APPENDAGE_BODY_SHARE,
+     PHYS_SLASH,
+     30,
+     200,
+     COMBAT_BROKEN_HURT_OFF | COMBAT_BROKEN_CUE,
+     static_cast<uint8_t>(1u << combat::ATTACK_HEAVY_TAIL_SPIN)},
+    {{18, 0, 11, 7}, combat_expect::ZONE_LUNGE_HEAD_HP, combat_expect::ZONE_LUNGE_HEAD_DMG_MUL, combat_expect::ZONE_LUNGE_HEAD_BODY_SHARE, PHYS_SLASH, 12, 130, COMBAT_BROKEN_HURT_OFF, 0},
+    {{9, 0, 9, 24},
+     combat_expect::ZONE_LUNGE_APPENDAGE_HP,
+     combat_expect::ZONE_LUNGE_APPENDAGE_DMG_MUL,
+     combat_expect::ZONE_LUNGE_APPENDAGE_BODY_SHARE,
+     PHYS_SLASH,
+     30,
+     200,
+     COMBAT_BROKEN_HURT_OFF | COMBAT_BROKEN_CUE,
+     static_cast<uint8_t>(1u << combat::ATTACK_LUNGE_LEAP)},
+    {{17, -4, 12, 10}, combat_expect::ZONE_SWEEP_HEAD_HP, combat_expect::ZONE_SWEEP_HEAD_DMG_MUL, combat_expect::ZONE_SWEEP_HEAD_BODY_SHARE, PHYS_SLASH, 12, 130, COMBAT_BROKEN_HURT_OFF, 0},
+    {{4, 12, 20, 10},
+     combat_expect::ZONE_SWEEP_APPENDAGE_HP,
+     combat_expect::ZONE_SWEEP_APPENDAGE_DMG_MUL,
+     combat_expect::ZONE_SWEEP_APPENDAGE_BODY_SHARE,
+     PHYS_SLASH,
+     30,
+     200,
+     COMBAT_BROKEN_HURT_OFF | COMBAT_BROKEN_CUE,
+     static_cast<uint8_t>(1u << combat::ATTACK_SWEEP_STOMP)},
+    {{20, 4, 12, 12}, combat_expect::ZONE_RAVAGER_HEAD_HP, combat_expect::ZONE_RAVAGER_HEAD_DMG_MUL, combat_expect::ZONE_RAVAGER_HEAD_BODY_SHARE, PHYS_SLASH, 12, 130, COMBAT_BROKEN_HURT_OFF, 0},
+    {{-14, 8, 18, 10},
+     combat_expect::ZONE_RAVAGER_APPENDAGE_HP,
+     combat_expect::ZONE_RAVAGER_APPENDAGE_DMG_MUL,
+     combat_expect::ZONE_RAVAGER_APPENDAGE_BODY_SHARE,
+     PHYS_SLASH,
+     30,
+     200,
+     COMBAT_BROKEN_HURT_OFF | COMBAT_BROKEN_CUE,
+     static_cast<uint8_t>(1u << combat::ATTACK_RAVAGER_TAIL_SWEEP)},
+};
+
+static const uint8_t kAttackIds[] PROGMEM = {combat::ATTACK_HEAVY_BITE, combat::ATTACK_HEAVY_TAIL_SPIN, combat::ATTACK_LUNGE_PECK, combat::ATTACK_SWEEP_STOMP, combat::ATTACK_SWEEP_GORE};
+static const CombatAttackValue kAttacks[] PROGMEM = {
+    // moveType, moveSpeedF, moveDx, moveDy, facing, phys, elem, onHitEffect,
+    // onHitPush, onHitStun, stagger, cue, wallStun, firstWindow, windowCount,
+    // windup, active, recover, dmg
+    {MOVE_LUNGE, 26, 0, 0, COMBAT_FACING_TRACK, PHYS_BLUNT, ELEM_NONE, 0, 0, 0, 0, 1, combat_expect::ATTACK_HEAVY_BITE_WALLSTUN, combat::WINDOW_HEAVY_BITE_0, 1,
+     combat_expect::ATTACK_HEAVY_BITE_WINDUP, combat_expect::ATTACK_HEAVY_BITE_ACTIVE, combat_expect::ATTACK_HEAVY_BITE_RECOVER, combat_expect::ATTACK_HEAVY_BITE_DMG},
+    {MOVE_NONE, 0, 0, 0, COMBAT_FACING_LOCK_AWAY, PHYS_BLUNT, ELEM_NONE, 0, 0, 0, 0, 1, 0, combat::WINDOW_HEAVY_TAIL_SPIN_0, 4, 42, 20, 55, 8},
+    {MOVE_LUNGE, 18, 0, 0, COMBAT_FACING_TRACK, PHYS_BLUNT, ELEM_NONE, 0, 0, 0, 0, 1, combat_expect::ATTACK_LUNGE_PECK_WALLSTUN, combat::WINDOW_LUNGE_PECK_0, 1,
+     combat_expect::ATTACK_LUNGE_PECK_WINDUP, combat_expect::ATTACK_LUNGE_PECK_ACTIVE, combat_expect::ATTACK_LUNGE_PECK_RECOVER, combat_expect::ATTACK_LUNGE_PECK_DMG},
+    {MOVE_NONE, 0, 0, 0, COMBAT_FACING_TRACK, PHYS_BLUNT, ELEM_NONE, 0, 0, 0, 0, 1, combat_expect::ATTACK_SWEEP_STOMP_WALLSTUN, combat::WINDOW_SWEEP_STOMP_0, 1,
+     combat_expect::ATTACK_SWEEP_STOMP_WINDUP, combat_expect::ATTACK_SWEEP_STOMP_ACTIVE, combat_expect::ATTACK_SWEEP_STOMP_RECOVER, combat_expect::ATTACK_SWEEP_STOMP_DMG},
+    {MOVE_LUNGE, 34, 0, 0, COMBAT_FACING_LOCK, PHYS_BLUNT, ELEM_NONE, 0, 0, 0, 0, 1, 0, combat::WINDOW_SWEEP_GORE_0, 2, 46, 12, 55, 14},
+};
+
+static const uint8_t kWindowIds[] PROGMEM = {combat::WINDOW_HEAVY_BITE_0,      combat::WINDOW_HEAVY_TAIL_SPIN_0, combat::WINDOW_HEAVY_TAIL_SPIN_1, combat::WINDOW_HEAVY_TAIL_SPIN_2,
+                                             combat::WINDOW_HEAVY_TAIL_SPIN_3, combat::WINDOW_LUNGE_PECK_0,      combat::WINDOW_LUNGE_LEAP_0,      combat::WINDOW_RAVAGER_TAIL_SWEEP_0,
+                                             combat::WINDOW_SWEEP_STOMP_0,     combat::WINDOW_SWEEP_GORE_0,      combat::WINDOW_SWEEP_GORE_1};
+static const CombatWindow kWindows[] PROGMEM = {
+    // t0, t1, box, dmgMul
+    {0, 8, {14, 0, 18, 14}, 100},   {0, 5, {-20, 0, 24, 16}, 100}, {6, 10, {0, -22, 16, 24}, 100}, {11, 15, {22, 0, 24, 16}, 100}, {16, 20, {0, 22, 16, 24}, 100}, {0, 6, {14, -6, 12, 10}, 100},
+    {0, 10, {12, -2, 18, 16}, 100}, {0, 5, {-22, 0, 30, 22}, 100}, {0, 10, {10, 2, 24, 14}, 100},  {0, 6, {16, -2, 16, 10}, 100},  {7, 12, {12, 2, 20, 14}, 100},
+};
+
+static const CombatPattern kPatterns[] PROGMEM = {
+    {combat::STEP_LUNGE_P_PECK_0, 1, combat::GUARD_LUNGE_P_PECK}, {combat::STEP_SWEEP_P_STOMP_0, 1, combat::GUARD_SWEEP_P_STOMP}, {combat::STEP_SWEEP_P_GORE_0, 1, combat::GUARD_SWEEP_P_GORE}};
+static const CombatGuard kGuards[] PROGMEM = {
+    {combat_expect::PATTERN_LUNGE_P_PECK_MIN_DIST, combat_expect::PATTERN_LUNGE_P_PECK_MAX_DIST, 0, 100, 0, 0, combat_expect::PATTERN_LUNGE_P_PECK_CHANCE, 0, GUARD_FACING_ANY},
+    {combat_expect::PATTERN_SWEEP_P_STOMP_MIN_DIST, combat_expect::PATTERN_SWEEP_P_STOMP_MAX_DIST, 0, 100, 0, 0, combat_expect::PATTERN_SWEEP_P_STOMP_CHANCE, 0, GUARD_FACING_ANY},
+    {24, 255, 0, 100, 0, 0, 100, 0, GUARD_FACING_ANY}};
+static const CombatStep kSteps[] PROGMEM = {{STEP_ATK, combat::ATTACK_LUNGE_PECK, 0, 100}};
+static const CombatSkeleton kSkeleton[] PROGMEM = {{2, 2}};
+
+}   // namespace
 
 inline void test_combat(FxTest &test) {
     // -------------------------------------------------- FX/OLED bracket
@@ -71,208 +261,65 @@ inline void test_combat(FxTest &test) {
     test.expectEq(combat_expect::BLOB_SIZE, combat::SIZE, F("expect blob size"));
 
     // ------------------------------------ per-record spot checks vs expect
-    const CombatCreature heavy = combatCreatureRead(combat::CREATURE_HEAVY);
-    test.expectEq(heavy.hp, combat_expect::CREATURE_HEAVY_HP, F("heavy hp"));
-    test.expectEq(heavy.spd, combat_expect::CREATURE_HEAVY_SPD, F("heavy spd"));
-    test.expectEq(heavy.w, combat_expect::CREATURE_HEAVY_W, F("heavy w"));
-    test.expectEq(heavy.h, combat_expect::CREATURE_HEAVY_H, F("heavy h"));
-    test.expectEq(heavy.attackCount, combat_expect::CREATURE_HEAVY_ATTACKS, F("heavy attacks"));
-    test.expectEq(heavy.patternCount, combat_expect::CREATURE_HEAVY_PATTERNS, F("heavy patterns"));
-    test.expectEq(heavy.headZone, COMBAT_NO_ZONE, F("heavy no head zone"));
-    test.expectEq(heavy.appendZone, combat::ZONE_HEAVY_APPENDAGE, F("heavy appendage zone"));
-    // nch.11: long-tail collide box includes the tail base behind the body.
-    test.expectEq(heavy.collide.ox, combat_expect::CREATURE_HEAVY_COLLIDE_OX, F("heavy tail collide ox"));
-    test.expectEq(heavy.collide.oy, combat_expect::CREATURE_HEAVY_COLLIDE_OY, F("heavy tail collide oy"));
-    test.expectEq(heavy.collide.w, combat_expect::CREATURE_HEAVY_COLLIDE_W, F("heavy tail collide w"));
-    test.expectEq(heavy.collide.h, combat_expect::CREATURE_HEAVY_COLLIDE_H, F("heavy tail collide h"));
+    // One assert per record: the loader-decoded value struct is compared
+    // byte-for-byte against a PROGMEM expectation (progEq), so every field is
+    // pinned with one call and one shared label. The same blob bytes are pinned
+    // against the generated structs by the host pack suite
+    // (tst/combat_pack_test.hpp), and the rows below keep the expect-header
+    // constants as the expected values.
+    CombatCreature gotCreatures[3];
+    for (uint8_t i = 0; i < 3; i++) {
+        gotCreatures[i] = combatCreatureRead(pgm_read_byte(kCreatureIds + i));
+        test.expectEq(progEq(&gotCreatures[i], &kCreatures[i], sizeof(CombatCreature)), 1, F("creature record"));
+    }
+    const CombatCreature lunge = gotCreatures[1];
+    const CombatCreature sweep = gotCreatures[2];
 
-    // 4t4: heavy's long tail is a real appendage record with the overlay box.
-    const CombatZone heavyTail = combatZoneRead(combat::ZONE_HEAVY_APPENDAGE);
-    test.expectEq(static_cast<uint32_t>(heavyTail.box.ox), static_cast<uint32_t>(-24), F("heavy tail box ox"));
-    test.expectEq(heavyTail.box.oy, 0, F("heavy tail box oy"));
-    test.expectEq(heavyTail.box.w, 24, F("heavy tail box w"));
-    test.expectEq(heavyTail.box.h, 16, F("heavy tail box h"));
-    test.expectEq(heavyTail.hp, combat_expect::ZONE_HEAVY_APPENDAGE_HP, F("heavy tail hp"));
-    test.expectEq(heavyTail.dmgMul, combat_expect::ZONE_HEAVY_APPENDAGE_DMG_MUL, F("heavy tail dmgMul"));
-    test.expectEq(heavyTail.bodyShare, combat_expect::ZONE_HEAVY_APPENDAGE_BODY_SHARE, F("heavy tail bodyShare"));
-    test.expectEq(heavyTail.breakTypes, PHYS_SLASH, F("heavy tail break slash"));
-    test.expectEq(heavyTail.unlockMask, static_cast<uint8_t>(1u << combat::ATTACK_HEAVY_TAIL_SPIN), F("heavy tail unlocks tail_spin"));
-
-    // nch.1: heavy's bite + 4-window tail_spin, decoded from the real blob.
-    const CombatAttackValue heavyBite = combatAttackRead(combat::ATTACK_HEAVY_BITE);
-    test.expectEq(heavyBite.windup, combat_expect::ATTACK_HEAVY_BITE_WINDUP, F("heavy bite windup"));
-    test.expectEq(heavyBite.active, combat_expect::ATTACK_HEAVY_BITE_ACTIVE, F("heavy bite active"));
-    test.expectEq(heavyBite.dmg, combat_expect::ATTACK_HEAVY_BITE_DMG, F("heavy bite dmg"));
-    test.expectEq(heavyBite.facing, COMBAT_FACING_TRACK, F("heavy bite tracks"));
-    const CombatWindow biteWin = combatWindowRead(heavyBite.firstWindow);
-    test.expectEq(biteWin.t0, 0, F("heavy bite t0"));
-    test.expectEq(biteWin.t1, 8, F("heavy bite t1"));
-    test.expectEq(biteWin.box.ox, 14, F("heavy bite ox"));
-    test.expectEq(biteWin.box.w, 18, F("heavy bite w"));
-    const CombatAttackValue heavySpin = combatAttackRead(combat::ATTACK_HEAVY_TAIL_SPIN);
-    test.expectEq(heavySpin.windowCount, 4, F("heavy spin four windows"));
-    test.expectEq(heavySpin.facing, COMBAT_FACING_LOCK_AWAY, F("heavy spin locks away"));
+    for (uint8_t i = 0; i < 7; i++) {
+        const CombatZone got = combatZoneRead(pgm_read_byte(kZoneIds + i));
+        test.expectEq(progEq(&got, &kZones[i], sizeof(CombatZone)), 1, F("zone record"));
+    }
+    for (uint8_t i = 0; i < 5; i++) {
+        const CombatAttackValue got = combatAttackRead(pgm_read_byte(kAttackIds + i));
+        test.expectEq(progEq(&got, &kAttacks[i], sizeof(CombatAttackValue)), 1, F("attack record"));
+    }
+    for (uint8_t i = 0; i < 11; i++) {
+        const CombatWindow got = combatWindowRead(pgm_read_byte(kWindowIds + i));
+        test.expectEq(progEq(&got, &kWindows[i], sizeof(CombatWindow)), 1, F("window record"));
+    }
+    // Named pin for the lock-away facing mode (the heavy spin row above
+    // already carries facing 2).
     test.expectEq(COMBAT_FACING_LOCK_AWAY, 2, F("lock-away facing value"));
-    const CombatWindow spin0 = combatWindowRead(combat::WINDOW_HEAVY_TAIL_SPIN_0);
-    const CombatWindow spin1 = combatWindowRead(combat::WINDOW_HEAVY_TAIL_SPIN_1);
-    const CombatWindow spin2 = combatWindowRead(combat::WINDOW_HEAVY_TAIL_SPIN_2);
-    const CombatWindow spin3 = combatWindowRead(combat::WINDOW_HEAVY_TAIL_SPIN_3);
-    test.expectEq(spin0.t0, 0, F("spin0 t0"));
-    test.expectEq(spin0.t1, 5, F("spin0 t1"));
-    test.expectEq(static_cast<uint32_t>(spin0.box.ox), static_cast<uint32_t>(-20), F("spin0 behind"));
-    test.expectEq(spin1.t0, 6, F("spin1 t0"));
-    test.expectEq(static_cast<uint32_t>(spin1.box.oy), static_cast<uint32_t>(-22), F("spin1 north"));
-    test.expectEq(spin2.t0, 11, F("spin2 t0"));
-    test.expectEq(spin2.box.ox, 22, F("spin2 front"));
-    test.expectEq(spin3.t0, 16, F("spin3 t0"));
-    test.expectEq(spin3.box.oy, 22, F("spin3 south"));
-    test.expectEq(heavy.firstAttack, combat::ATTACK_HEAVY_BITE, F("heavy first attack bite"));
-
-    const CombatCreature lunge = combatCreatureRead(combat::CREATURE_LUNGE);
-    test.expectEq(lunge.hp, combat_expect::CREATURE_LUNGE_HP, F("lunge hp"));
-    test.expectEq(lunge.spd, combat_expect::CREATURE_LUNGE_SPD, F("lunge spd"));
-    test.expectEq(lunge.w, combat_expect::CREATURE_LUNGE_W, F("lunge w"));
-    test.expectEq(lunge.h, combat_expect::CREATURE_LUNGE_H, F("lunge h"));
-    // 76y: chicken head + legs (appendage) zones and the legs-only collide box.
-    test.expectEq(lunge.headZone, combat::ZONE_LUNGE_HEAD, F("lunge head zone"));
-    test.expectEq(lunge.appendZone, combat::ZONE_LUNGE_APPENDAGE, F("lunge legs zone"));
-    test.expectEq(lunge.collide.ox, 9, F("lunge legs collide ox"));
-    test.expectEq(lunge.collide.oy, 11, F("lunge legs collide oy"));
-    test.expectEq(lunge.collide.w, 12, F("lunge legs collide w"));
-    test.expectEq(lunge.collide.h, 13, F("lunge legs collide h"));
-    const CombatZone lungeHead = combatZoneRead(combat::ZONE_LUNGE_HEAD);
-    test.expectEq(lungeHead.box.ox, 18, F("lunge head box ox"));
-    test.expectEq(lungeHead.box.w, 11, F("lunge head box w"));
-    test.expectEq(lungeHead.box.h, 7, F("lunge head box h"));
-    test.expectEq(lungeHead.hp, combat_expect::ZONE_LUNGE_HEAD_HP, F("lunge head hp"));
-    test.expectEq(lungeHead.dmgMul, combat_expect::ZONE_LUNGE_HEAD_DMG_MUL, F("lunge head dmgMul"));
-    const CombatZone lungeLegs = combatZoneRead(combat::ZONE_LUNGE_APPENDAGE);
-    test.expectEq(lungeLegs.box.ox, 9, F("lunge legs box ox"));
-    test.expectEq(lungeLegs.box.h, 24, F("lunge legs box h"));
-    test.expectEq(lungeLegs.hp, combat_expect::ZONE_LUNGE_APPENDAGE_HP, F("lunge legs hp"));
-    test.expectEq(lungeLegs.dmgMul, combat_expect::ZONE_LUNGE_APPENDAGE_DMG_MUL, F("lunge legs dmgMul"));
-    test.expectEq(lungeLegs.bodyShare, combat_expect::ZONE_LUNGE_APPENDAGE_BODY_SHARE, F("lunge legs bodyShare"));
-    test.expectEq(lungeLegs.breakTypes, PHYS_SLASH, F("lunge legs break slash"));
-
-    const CombatCreature sweep = combatCreatureRead(combat::CREATURE_SWEEP);
-    test.expectEq(sweep.hp, combat_expect::CREATURE_SWEEP_HP, F("sweep hp"));
-    test.expectEq(sweep.spd, combat_expect::CREATURE_SWEEP_SPD, F("sweep spd"));
-    test.expectEq(sweep.w, combat_expect::CREATURE_SWEEP_W, F("sweep w"));
-    test.expectEq(sweep.h, combat_expect::CREATURE_SWEEP_H, F("sweep h"));
-    // nch.9: bull horns/hooves zones and the wide low hooves collide box.
-    test.expectEq(sweep.headZone, combat::ZONE_SWEEP_HEAD, F("sweep head zone"));
-    test.expectEq(sweep.appendZone, combat::ZONE_SWEEP_APPENDAGE, F("sweep hooves zone"));
-    test.expectEq(sweep.collide.ox, combat_expect::CREATURE_SWEEP_COLLIDE_OX, F("sweep hooves collide ox"));
-    test.expectEq(sweep.collide.oy, combat_expect::CREATURE_SWEEP_COLLIDE_OY, F("sweep hooves collide oy"));
-    test.expectEq(sweep.collide.w, combat_expect::CREATURE_SWEEP_COLLIDE_W, F("sweep hooves collide w"));
-    test.expectEq(sweep.collide.h, combat_expect::CREATURE_SWEEP_COLLIDE_H, F("sweep hooves collide h"));
-    const CombatZone bullHead = combatZoneRead(combat::ZONE_SWEEP_HEAD);
-    test.expectEq(bullHead.box.ox, 17, F("bull head ox"));
-    test.expectEq(static_cast<uint32_t>(bullHead.box.oy), static_cast<uint32_t>(-4), F("bull head oy"));
-    test.expectEq(bullHead.box.w, 12, F("bull head w"));
-    test.expectEq(bullHead.box.h, 10, F("bull head h"));
-    test.expectEq(bullHead.dmgMul, combat_expect::ZONE_SWEEP_HEAD_DMG_MUL, F("bull head dmgMul"));
-    test.expectEq(bullHead.hp, combat_expect::ZONE_SWEEP_HEAD_HP, F("bull head hp"));
-    const CombatZone bullHooves = combatZoneRead(combat::ZONE_SWEEP_APPENDAGE);
-    test.expectEq(bullHooves.box.ox, 4, F("bull hooves ox"));
-    test.expectEq(bullHooves.box.oy, 12, F("bull hooves oy"));
-    test.expectEq(bullHooves.box.w, 20, F("bull hooves w"));
-    test.expectEq(bullHooves.box.h, 10, F("bull hooves h"));
-    test.expectEq(bullHooves.dmgMul, combat_expect::ZONE_SWEEP_APPENDAGE_DMG_MUL, F("bull hooves dmgMul"));
-    test.expectEq(bullHooves.unlockMask, static_cast<uint8_t>(1u << combat::ATTACK_SWEEP_STOMP), F("bull hooves disable stomp"));
-
-    // nch.9: the bull swaps lunge/sweep for stomp + a two-window gore.
-    const CombatAttackValue bullStomp = combatAttackRead(combat::ATTACK_SWEEP_STOMP);
-    test.expectEq(sweep.firstAttack, combat::ATTACK_SWEEP_STOMP, F("bull first attack stomp"));
-    test.expectEq(bullStomp.windup, combat_expect::ATTACK_SWEEP_STOMP_WINDUP, F("bull stomp windup"));
-    test.expectEq(bullStomp.active, combat_expect::ATTACK_SWEEP_STOMP_ACTIVE, F("bull stomp active"));
-    test.expectEq(bullStomp.recover, combat_expect::ATTACK_SWEEP_STOMP_RECOVER, F("bull stomp recover"));
-    test.expectEq(bullStomp.dmg, combat_expect::ATTACK_SWEEP_STOMP_DMG, F("bull stomp dmg"));
-    test.expectEq(bullStomp.moveType, 0, F("bull stomp stationary"));
-    test.expectEq(bullStomp.firstWindow, combat::WINDOW_SWEEP_STOMP_0, F("bull stomp window"));
-    const CombatWindow stompWin = combatWindowRead(bullStomp.firstWindow);
-    test.expectEq(stompWin.t0, 0, F("bull stomp t0"));
-    test.expectEq(stompWin.t1, 10, F("bull stomp t1"));
-    test.expectEq(stompWin.box.ox, 10, F("bull stomp ox"));
-    test.expectEq(stompWin.box.oy, 2, F("bull stomp oy"));
-    test.expectEq(stompWin.box.w, 24, F("bull stomp w"));
-    test.expectEq(stompWin.box.h, 14, F("bull stomp h"));
-    const CombatAttackValue bullGore = combatAttackRead(combat::ATTACK_SWEEP_GORE);
-    test.expectEq(bullGore.windup, 46, F("bull gore windup"));
-    test.expectEq(bullGore.active, 12, F("bull gore active"));
-    test.expectEq(bullGore.recover, 55, F("bull gore recover"));
-    test.expectEq(bullGore.dmg, 14, F("bull gore dmg"));
-    test.expectEq(bullGore.moveType, 1, F("bull gore lunges"));
-    test.expectEq(bullGore.moveSpeedF, 34, F("bull gore speedF"));
-    test.expectEq(bullGore.facing, COMBAT_FACING_LOCK, F("bull gore locks at windup"));
-    test.expectEq(bullGore.windowCount, 2, F("bull gore two windows"));
-    const CombatWindow gore0 = combatWindowRead(combat::WINDOW_SWEEP_GORE_0);
-    const CombatWindow gore1 = combatWindowRead(combat::WINDOW_SWEEP_GORE_1);
-    test.expectEq(gore0.t0, 0, F("gore0 t0"));
-    test.expectEq(gore0.t1, 6, F("gore0 t1"));
-    test.expectEq(gore0.box.ox, 16, F("gore0 horns ox"));
-    test.expectEq(static_cast<uint32_t>(gore0.box.oy), static_cast<uint32_t>(-2), F("gore0 horns oy"));
-    test.expectEq(gore1.t0, 7, F("gore1 t0"));
-    test.expectEq(gore1.t1, 12, F("gore1 t1"));
-    test.expectEq(gore1.box.ox, 12, F("gore1 trample ox"));
-    test.expectEq(gore1.box.oy, 2, F("gore1 trample oy"));
-    test.expectEq(gore1.box.w, 20, F("gore1 trample w"));
-    test.expectEq(gore1.box.h, 14, F("gore1 trample h"));
 
     // --------------------------------------------- cross-reference walk
+    // Follow the record graph the live decision code follows
+    // (creature -> attack -> window, creature -> pattern -> guard / step) and
+    // compare each decoded record with its expectation row.
     const CombatSkeleton sk = combatSkeletonRead(lunge.skeletonIdx);
-    test.expectEq(lunge.skeletonIdx, combat::SKELETON_CHICKEN, F("lunge skeleton idx"));
-    test.expectEq(sk.anchorCount, 2, F("lunge skeleton anchors"));
+    test.expectEq(progEq(&sk, &kSkeleton[0], sizeof(CombatSkeleton)), 1, F("lunge skeleton record"));
 
     const CombatAttackValue lungeAtk = combatAttackRead(lunge.firstAttack);
-    test.expectEq(lunge.firstAttack, combat::ATTACK_LUNGE_PECK, F("lunge first attack"));
-    test.expectEq(lungeAtk.windup, combat_expect::ATTACK_LUNGE_PECK_WINDUP, F("lunge windup"));
-    test.expectEq(lungeAtk.active, combat_expect::ATTACK_LUNGE_PECK_ACTIVE, F("lunge active"));
-    test.expectEq(lungeAtk.recover, combat_expect::ATTACK_LUNGE_PECK_RECOVER, F("lunge recover"));
-    test.expectEq(lungeAtk.dmg, combat_expect::ATTACK_LUNGE_PECK_DMG, F("lunge dmg"));
-    test.expectEq(static_cast<uint16_t>(static_cast<uint8_t>(lungeAtk.moveType)) | (static_cast<uint16_t>(lungeAtk.moveSpeedF) << 8), static_cast<uint16_t>(1) | (static_cast<uint16_t>(18) << 8),
-                  F("lunge moveType+speedF"));
-    test.expectEq(lungeAtk.phys, PHYS_BLUNT, F("lunge phys"));
-    test.expectEq(lungeAtk.wallStun, combat_expect::ATTACK_LUNGE_PECK_WALLSTUN, F("lunge wallStun"));
-    test.expectEq(lungeAtk.windowCount, 1, F("lunge windows"));
-    test.expectEq(lungeAtk.firstWindow, combat::WINDOW_LUNGE_PECK_0, F("lunge first window"));
-    const CombatWindow win = combatWindowRead(lungeAtk.firstWindow);
-    test.expectEq(win.t0, 0, F("lunge window t0"));
-    test.expectEq(win.t1, 6, F("lunge window t1"));
-    test.expectEq(win.box.ox, 14, F("lunge window ox"));
-    test.expectEq(win.box.oy, -6, F("lunge window oy"));
-    test.expectEq(win.box.w, 12, F("lunge window w"));
-    test.expectEq(win.box.h, 10, F("lunge window h"));
-    test.expectEq(win.dmgMul, 100, F("lunge window dmgMul"));
+    test.expectEq(progEq(&lungeAtk, &kAttacks[2], sizeof(CombatAttackValue)), 1, F("lunge first attack record"));
 
     const CombatPattern pat = combatPatternRead(lunge.firstPattern);
-    test.expectEq(lunge.firstPattern, combat::PATTERN_LUNGE_P_PECK, F("lunge first pattern"));
-    test.expectEq(pat.guardIdx, combat::GUARD_LUNGE_P_PECK, F("lunge guard idx"));
+    test.expectEq(progEq(&pat, &kPatterns[0], sizeof(CombatPattern)), 1, F("lunge pattern record"));
     const CombatGuard guard = combatGuardRead(pat.guardIdx);
-    test.expectEq(guard.minDist, combat_expect::PATTERN_LUNGE_P_PECK_MIN_DIST, F("lunge minDist"));
-    test.expectEq(guard.maxDist, combat_expect::PATTERN_LUNGE_P_PECK_MAX_DIST, F("lunge maxDist"));
-    test.expectEq(guard.hpLo, 0, F("lunge hpLo"));
-    test.expectEq(guard.hpHi, 100, F("lunge hpHi"));
-    test.expectEq(guard.chance, combat_expect::PATTERN_LUNGE_P_PECK_CHANCE, F("lunge chance"));
-    test.expectEq(guard.zonesBroken, 0, F("lunge no zone clause"));
+    test.expectEq(progEq(&guard, &kGuards[0], sizeof(CombatGuard)), 1, F("lunge guard record"));
     const CombatStep step = combatStepRead(pat.firstStep);
-    test.expectEq(step.kind, STEP_ATK, F("lunge step kind"));
-    test.expectEq(step.ref, combat::ATTACK_LUNGE_PECK, F("lunge step attack ref"));
-    test.expectEq(step.after, 0, F("lunge step after"));
+    test.expectEq(progEq(&step, &kSteps[0], sizeof(CombatStep)), 1, F("lunge step record"));
+
+    const CombatWindow win = combatWindowRead(lungeAtk.firstWindow);
+    test.expectEq(progEq(&win, &kWindows[5], sizeof(CombatWindow)), 1, F("lunge window record"));
 
     // BULL (nch.9) opens with p_stomp (<=24) then p_gore (>=24).
     const CombatPattern sweepPat = combatPatternRead(sweep.firstPattern);
-    test.expectEq(sweep.patternCount, 2, F("bull two patterns"));
-    test.expectEq(sweepPat.guardIdx, combat::GUARD_SWEEP_P_STOMP, F("bull stomp guard idx"));
+    test.expectEq(progEq(&sweepPat, &kPatterns[1], sizeof(CombatPattern)), 1, F("bull stomp pattern record"));
     const CombatGuard sweepGuard = combatGuardRead(sweepPat.guardIdx);
-    test.expectEq(sweepGuard.minDist, combat_expect::PATTERN_SWEEP_P_STOMP_MIN_DIST, F("bull stomp minDist"));
-    test.expectEq(sweepGuard.maxDist, combat_expect::PATTERN_SWEEP_P_STOMP_MAX_DIST, F("bull stomp maxDist"));
-    test.expectEq(sweepGuard.chance, combat_expect::PATTERN_SWEEP_P_STOMP_CHANCE, F("bull stomp chance"));
+    test.expectEq(progEq(&sweepGuard, &kGuards[1], sizeof(CombatGuard)), 1, F("bull stomp guard record"));
     const CombatPattern sweepGorePat = combatPatternRead(static_cast<uint8_t>(sweep.firstPattern + 1));
-    test.expectEq(sweepGorePat.guardIdx, combat::GUARD_SWEEP_P_GORE, F("bull gore guard idx"));
+    test.expectEq(progEq(&sweepGorePat, &kPatterns[2], sizeof(CombatPattern)), 1, F("bull gore pattern record"));
     const CombatGuard sweepGoreGuard = combatGuardRead(sweepGorePat.guardIdx);
-    test.expectEq(sweepGoreGuard.minDist, 24, F("bull gore minDist"));
-    test.expectEq(sweepGoreGuard.maxDist, 255, F("bull gore maxDist"));
+    test.expectEq(progEq(&sweepGoreGuard, &kGuards[2], sizeof(CombatGuard)), 1, F("bull gore guard record"));
 
     // -------------------------------------------------- loader read budget
     static Game g;
