@@ -1,7 +1,7 @@
 {
   "id": "ravager",
   "skeleton": "quad_32x24",
-  "stats": { "w": 32, "h": 24, "hp": 260, "spd": 6, "spawnX": 200, "spawnY": 40 },
+  "stats": { "w": 32, "h": 24, "hp": 2400, "spd": 6, "spawnX": 200, "spawnY": 40 },
   "profile": {
     "engageDist": 36,
     "keepDist": 24,
@@ -25,7 +25,7 @@
     "head": {
       "box": { "ox": 20, "oy": 4, "w": 12, "h": 12 },
       "dmgMul": 130,
-      "hp": 40,
+      "hp": 160,
       "bodyShare": 100,
       "breakTypes": ["SLASH"],
       "hurtOn": true,
@@ -35,7 +35,7 @@
     "appendage": {
       "box": { "ox": -14, "oy": 8, "w": 18, "h": 10 },
       "dmgMul": 150,
-      "hp": 60,
+      "hp": 240,
       "bodyShare": 40,
       "breakTypes": ["SLASH"],
       "hurtOn": true,

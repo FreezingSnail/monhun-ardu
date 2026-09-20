@@ -4,7 +4,7 @@
   "stats": {
     "w": 28,
     "h": 22,
-    "hp": 150,
+    "hp": 1500,
     "spd": 7,
     "spawnX": 200,
     "spawnY": 40,
@@ -15,7 +15,7 @@
     "head": {
       "box": { "ox": 17, "oy": -4, "w": 12, "h": 10 },
       "dmgMul": 130,
-      "hp": 40,
+      "hp": 160,
       "bodyShare": 100,
       "breakTypes": ["SLASH"],
       "hurtOn": true,
@@ -25,7 +25,7 @@
     "appendage": {
       "box": { "ox": 4, "oy": 12, "w": 20, "h": 10 },
       "dmgMul": 150,
-      "hp": 60,
+      "hp": 240,
       "bodyShare": 40,
       "breakTypes": ["SLASH"],
       "hurtOn": true,
@@ -48,7 +48,7 @@
     "spawnT": 90,
     "spawnCd": 140,
     "stunRecoverT": 24,
-    "staggerMax": 40,
+    "staggerMax": 80,
     "staggerDecay": 1,
     "staggerRecoverT": 24
   },

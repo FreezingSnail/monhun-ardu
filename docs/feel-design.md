@@ -24,7 +24,7 @@ flashing.
 | 2 | **Track re-aim** | Every attack recomputed its facing vector every tick, so a sidestep was erased the next tick and there was no flank to punish. | `facing: lock-at-windup` freezes the windup vector; `lock-away` turns the back to the hunter; `profile.faceHold > 0` refreshes a *tracked* heading only every N ticks. All three make the flank reachable. |
 | 3 | **2x2 tell** | A single 2x2 shade-2 dot at the window centre. It said "an attack is coming", not *where*. | Per-attack `tell` shapes (`dot/line/arc/ring/zone`) drawn from the cached hit window. The tell draws the area the attack will cover. |
 | 4 | **Metronome cadence** | Shared `cdBase 55`, single-ATK patterns, so every fight had the same pulse and the same one-beat answer. | Per-beast `cdBase`/`cdJitter` plus multi-step patterns with `after`, `wait`, `chance` and HP bands, so the pressure changes across the fight. |
-| 5 | **Inert stagger** | `profile.staggerMax 0` on all three beasts — the stagger meter and `MS_STAGGER` were wired but dead, so head/leg pressure had no payoff. | Stagger is opt-in: chicken 30, bull 40 (heavy stays 0 to keep its identity). Hits feed `zone.staggerOnHit`; at threshold the pattern is cancelled into `MS_STAGGER`. |
+| 5 | **Inert stagger** | `profile.staggerMax 0` on all three beasts — the stagger meter and `MS_STAGGER` were wired but dead, so head/leg pressure had no payoff. | Stagger is opt-in: chicken 60, bull 80 (heavy stays 0 to keep its identity). Hits feed `zone.staggerOnHit`; at threshold the pattern is cancelled into `MS_STAGGER`. feel.19 doubled the two meters for the longer hunt. |
 | 6 | **Empty arena** | Room bounds silently clamped a charging beast; corners had no consequence. | `attack.wallStun`: a committed *moving* attack that clamps into a room bound self-stuns for the authored ticks, opening the bait-into-wall punish. |
 | 7 | **Soft bodies** | Damage was one body roll-on-dot; head/tail zones had flat multipliers but all attacks tracked, so the flank was never actually reachable. | Behind guards, `faceHold`, locks and hop give positional routing; zone `dmgMul` rewards it and `disableAttacks` gives a break a consequence. |
 | 8 | **Cheap roll** | Roll i-frames 14 of the 16 dodge ticks at 14 stamina, and it cancels into the combo — so roll beat every telegraph. | Player commit tune (bead `monhun-ardu-feel.11`, **still open**): i-frames 14→11, stamina 14→16, finisher recovery +2..4 ticks. Recorded here as the pending half of the revision. |
@@ -126,18 +126,18 @@ windup/active/recover. Window `t` ranges are inclusive, 1-based.
 
 ### Chicken — `data/creatures/lunge.json` (skeleton `chicken`)
 
-**Stats:** w32 h24, hp200, spd6, spawn (200,40), collide (9,11,12,13), no enrage.
+**Stats:** w32 h24, hp1800, spd6, spawn (200,40), collide (9,11,12,13), no enrage.
 
 **Zones**
 
 | Zone | Box | dmgMul | HP | Share | Stagger | Break |
 |---|---|---:|---:|---:|---:|---|
-| head | (18, 0, 11, 7) | 130 | 40 | 100 | 12 | SLASH; broken dmgMul 130, hurtOn false |
-| appendage | (9, 0, 9, 24) | 150 | 60 | 40 | 30 | SLASH; broken dmgMul 200, hurtOn false, disables `leap` |
+| head | (18, 0, 11, 7) | 130 | 160 | 100 | 12 | SLASH; broken dmgMul 130, hurtOn false |
+| appendage | (9, 0, 9, 24) | 150 | 240 | 40 | 30 | SLASH; broken dmgMul 200, hurtOn false, disables `leap` |
 
 **Profile:** engage 36 / keep 16 / attack 42; faceHold 6; turnRate 1; circle 8/10;
 retreat 6/10; cdBase 48 + jitter 60; spawnT 90 / spawnCd 140; stunRecover 24;
-staggerMax 30, decay 2, recover 30.
+staggerMax 60, decay 2, recover 30.
 
 **Attacks**
 
@@ -158,19 +158,19 @@ staggerMax 30, decay 2, recover 30.
 
 ### Bull — `data/creatures/sweep.json` (skeleton `bull`)
 
-**Stats:** w28 h22, hp150, spd7, spawn (200,40), collide (1,14,26,8).
+**Stats:** w28 h22, hp1500, spd7, spawn (200,40), collide (1,14,26,8).
 **Enrage:** hpPct 40, spdMul 130, faceHold 6, cue 0 (spd 7 → 9, faceHold 10 → 6).
 
 **Zones**
 
 | Zone | Box | dmgMul | HP | Share | Stagger | Break |
 |---|---|---:|---:|---:|---:|---|
-| head | (17, -4, 12, 10) | 130 | 40 | 100 | 12 | SLASH; broken dmgMul 130, hurtOn false |
-| appendage | (4, 12, 20, 10) | 150 | 60 | 40 | 30 | SLASH; broken dmgMul 200, hurtOn false, disables `stomp` |
+| head | (17, -4, 12, 10) | 130 | 160 | 100 | 12 | SLASH; broken dmgMul 130, hurtOn false |
+| appendage | (4, 12, 20, 10) | 150 | 240 | 40 | 30 | SLASH; broken dmgMul 200, hurtOn false, disables `stomp` |
 
 **Profile:** engage 36 / keep 18 / attack 42; faceHold 10; turnRate 1; circle 8/10;
 retreat 6/10; cdBase 55 + jitter 40; spawnT 90 / spawnCd 140; stunRecover 24;
-staggerMax 40, decay 1, recover 24.
+staggerMax 80, decay 1, recover 24.
 
 **Attacks**
 
@@ -191,13 +191,13 @@ staggerMax 40, decay 1, recover 24.
 
 ### Heavy — `data/creatures/heavy.json` (skeleton `longtail`)
 
-**Stats:** w40 h28, hp320, spd5, spawn (200,40), collide (-8,3,48,22), no enrage.
+**Stats:** w40 h28, hp2800, spd5, spawn (200,40), collide (-8,3,48,22), no enrage.
 
 **Zone**
 
 | Zone | Box | dmgMul | HP | Share | Stagger | Break |
 |---|---|---:|---:|---:|---:|---|
-| appendage | (-24, 0, 24, 16) | 150 | 60 | 40 | 30 | SLASH; broken dmgMul 200, hurtOn false, disables `tail_spin` |
+| appendage | (-24, 0, 24, 16) | 150 | 240 | 40 | 30 | SLASH; broken dmgMul 200, hurtOn false, disables `tail_spin` |
 
 **Profile:** engage 36 / keep 12 / attack 42; faceHold 10; turnRate 1; circle 8/10;
 retreat 6/10; cdBase 55 + jitter 40; spawnT 90 / spawnCd 140; stunRecover 24;

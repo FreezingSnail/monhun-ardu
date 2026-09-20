@@ -59,8 +59,8 @@ void MonsterSuite(TestRunner &runner) {
         newHunt(g);
         t.assert(g.monster.w, 32, "monster width");
         t.assert(g.monster.h, 24, "monster height");
-        t.assert(g.monster.hp, 200, "monster hp");
-        t.assert(g.monster.hpMax, 200, "monster hpMax");
+        t.assert(g.monster.hp, 1800, "monster hp");
+        t.assert(g.monster.hpMax, 1800, "monster hpMax");
         t.assert(g.monster.state, MS_IDLE, "starts idle");
         t.assert(g.monster.t, 90, "idle timer 90");
         t.assert(g.monster.cd, 140, "cooldown 140");
@@ -123,8 +123,8 @@ void MonsterSuite(TestRunner &runner) {
         t.assert(g.combat.body.h, 22, "sweep cached box h");
         t.assert(g.combat.body.ox, 0, "sweep cached box ox");
         t.assert(g.combat.body.oy, 0, "sweep cached box oy");
-        t.assert(m.hp, 150, "sweep hp");
-        t.assert(m.hpMax, 150, "sweep hpMax");
+        t.assert(m.hp, 1500, "sweep hp");
+        t.assert(m.hpMax, 1500, "sweep hpMax");
         t.assert(m.spd, 7, "sweep pursue speed");
         t.assert(m.x, 200, "spawn x");
         t.assert(m.y, 40, "spawn y");
@@ -148,7 +148,7 @@ void MonsterSuite(TestRunner &runner) {
         t.assert(g2.monster.h, 28, "heavy height");
         t.assert(g2.combat.body.w, 40, "heavy cached box w");
         t.assert(g2.combat.body.h, 28, "heavy cached box h");
-        t.assert(g2.monster.hp, 320, "heavy hp");
+        t.assert(g2.monster.hp, 2800, "heavy hp");
         t.assert(g2.monster.spd, 5, "heavy speed");
 
         Game g3;
@@ -157,7 +157,7 @@ void MonsterSuite(TestRunner &runner) {
         t.assert(g3.monster.w, 32, "legacy width");
         t.assert(g3.combat.body.w, 32, "legacy cached box w");
         t.assert(g3.combat.body.h, 24, "legacy cached box h");
-        t.assert(g3.monster.hp, 200, "legacy hp");
+        t.assert(g3.monster.hp, 1800, "legacy hp");
         t.assert(g3.monster.spd, 6, "legacy speed");
         suite.addTest(t);
     }
@@ -267,8 +267,8 @@ void MonsterSuite(TestRunner &runner) {
         Player &p = g.player;
         m.x = 100;
         m.y = 40;
-        m.hpMax = 150;
-        m.hp = 150;
+        m.hpMax = 1500;
+        m.hp = 1500;
         m.fx = fp::FP;
         m.fy = 0;
         p.y = static_cast<int16_t>(m.y + (m.h >> 1) - (p.h >> 1));
@@ -282,15 +282,15 @@ void MonsterSuite(TestRunner &runner) {
         t.assert(m.atkIdx, combat::ATTACK_SWEEP_REAR_KICK, "bull rear_kicks a close flank");
         // At exactly 40% hp the combo opens at every range: close front now
         // gores (covering the band the broken hooves disable) and arms step 1.
-        m.hp = 60;
+        m.hp = 600;
         p.x = static_cast<int16_t>(m.x + 20);
         chooseAttack(g, 10);
         t.assert(m.atkIdx, combat::ATTACK_SWEEP_GORE, "enraged bull opens the gore combo");
         t.assert(g.combat.patternIdx, combat::PATTERN_SWEEP_P_GORE2, "gore2 pattern selected");
         t.assert(g.combat.stepIdx, 1, "combo armed its second step");
         t.assert(g.combat.stepT, 18, "combo waits 18 ticks before step 1");
-        // 41% hp falls back to the single gore / stomp bands.
-        m.hp = 62;
+        // 41% hp (615/1500) falls back to the single gore / stomp bands.
+        m.hp = 615;
         chooseAttack(g, 10);
         t.assert(m.atkIdx, combat::ATTACK_SWEEP_STOMP, "41% hp keeps the close stomp");
         chooseAttack(g, 40);
@@ -586,10 +586,10 @@ void MonsterSuite(TestRunner &runner) {
         withWeapon(g, W_FLAIL);
         t.assert(g.monsterKind, MON_HEAVY, "swap keeps kind");
         t.assert(g.monster.w, 40, "swap keeps heavy body");
-        t.assert(g.monster.hp, 320, "swap keeps heavy hp");
+        t.assert(g.monster.hp, 2800, "swap keeps heavy hp");
         resetHunt(g);
         t.assert(g.monsterKind, MON_HEAVY, "reset keeps kind");
-        t.assert(g.monster.hp, 320, "reset keeps heavy hp");
+        t.assert(g.monster.hp, 2800, "reset keeps heavy hp");
         suite.addTest(t);
     }
 
@@ -1125,11 +1125,11 @@ void MonsterSuite(TestRunner &runner) {
         t.assert(g.combat.profile.faceHold, 10, "pre-enrage faceHold 10");
         m.state = MS_PURSUE;
         m.cd = 30000;
-        m.hp = 61;   // just above 40% (61 * 100 > 150 * 40)
+        m.hp = 601;   // just above 40% (601 * 100 > 1500 * 40)
         updateMonster(g);
         t.assert(g.combat.enrage.fired, 0, "no fire above 40%");
         t.assert(m.spd, 7, "spd unchanged above the threshold");
-        m.hp = 60;   // exactly 40%: 60*100 <= 150*40 -> fires
+        m.hp = 600;   // exactly 40%: 600*100 <= 1500*40 -> fires
         updateMonster(g);
         t.assert(g.combat.enrage.fired, 1, "fires at the 40% threshold");
         t.assert(m.spd, 9, "7 * 130 / 100 truncates to 9");
@@ -1275,7 +1275,7 @@ void MonsterSuite(TestRunner &runner) {
         hunt(g, 1, Input{0, 0, true, false});
         hunt(g, 1, Input{0, 0, false, false});
         hunt(g, 18);
-        t.assert(m.hp, 188, "sword hit crit for 12");
+        t.assert(m.hp, 1788, "sword hit crit for 12");
         suite.addTest(t);
     }
 

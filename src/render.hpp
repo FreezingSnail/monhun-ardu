@@ -1227,9 +1227,9 @@ static int16_t hudNum(int16_t x, int16_t v, uint8_t digits) {
 }
 
 // Mock bar(): dark back/border, inner fill width round((w-2) * ratio).
-// uint16 arithmetic: (w-2) <= 44 and den <= 320 (generated hp/stam maxima), so
-// the product fits int16 with room to spare; keeps the 32-bit divide helper
-// out of the image.
+// 32-bit product: the beast hp pool now reaches 2800 (feel.19), so (w-2)*num
+// exceeds 16 bits (44 * 2800 = 123200) and a uint16 multiply would wrap. The
+// 16x16->32 multiply and the 32/16 divide are budgeted in the feel.19 ledger.
 static void hudBar(int16_t x, int16_t y, int16_t w, int16_t h, int16_t num, int16_t den, uint8_t shade) {
     hudBlk(x, y, w, h, 1);
     if (den <= 0 || num <= 0)
@@ -1237,7 +1237,8 @@ static void hudBar(int16_t x, int16_t y, int16_t w, int16_t h, int16_t num, int1
     if (num > den)
         num = den;
     const uint16_t u16den = static_cast<uint16_t>(den);
-    uint16_t fw = static_cast<uint16_t>(((static_cast<uint16_t>(w - 2) * static_cast<uint16_t>(num)) + u16den / 2) / u16den);
+    const uint32_t u32num = static_cast<uint16_t>(num);
+    uint16_t fw = static_cast<uint16_t>((static_cast<uint32_t>(static_cast<uint16_t>(w - 2)) * u32num + u16den / 2) / u16den);
     if (fw > w - 2)
         fw = w - 2;
     if (fw > 0)

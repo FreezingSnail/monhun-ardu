@@ -81,7 +81,9 @@ inline void test_quests(FxTest &test) {
         g.questTarget = static_cast<int8_t>(loaded.activeQuest == 0 ? d0.targetKind : -1);
         g.questNeed = d0.need;
         g.questProgress = loaded.progress;
-        damageMonster(g, 9999, g.monster.x, g.monster.y);
+        // 2000 respects damageMonster's int16 contract (dmg*14 <= 32767) and the
+        // crit multiply lands 2800, lethal for every shipped beast pool.
+        damageMonster(g, 2000, g.monster.x, g.monster.y);
         test.expectEq(g.over, OVER_WIN, F("hunt win"));
         loaded.progress = g.questProgress;
         saveStore(loaded, REAL_BACKEND);
@@ -95,7 +97,7 @@ inline void test_quests(FxTest &test) {
     initMonster(g, MON_SWEEP);
     g.questTarget = d0.targetKind;
     g.questProgress = loaded.progress;
-    damageMonster(g, 9999, g.monster.x, g.monster.y);
+    damageMonster(g, 2000, g.monster.x, g.monster.y);
     test.expectEq(g.questProgress, 3, F("off-kind kill not counted"));
 
     // Turn in: payout + done bit, persisted.

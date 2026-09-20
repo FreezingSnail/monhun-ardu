@@ -274,9 +274,9 @@ hunt exit.
 
 | Target | Mode | Size | HP | Spd | Attack |
 |---|---|---|---|---|---|
-| LUNGE | hunt | 32x24 | 200 | 5 | pecks inside 28 px, leaps 29..41 px (leap locks facing at windup) |
-| SWEEP | hunt | 28x22 | 150 | 7 | stomps inside 24 px, gores 25..41 px (gore locks facing at windup) |
-| HEAVY | hunt | 40x28 | 320 | 3 | lunges inside 24 px |
+| LUNGE | hunt | 32x24 | 1800 | 5 | pecks inside 28 px, leaps 29..41 px (leap locks facing at windup) |
+| SWEEP | hunt | 28x22 | 1500 | 7 | stomps inside 24 px, gores 25..41 px (gore locks facing at windup) |
+| HEAVY | hunt | 40x28 | 2800 | 3 | lunges inside 24 px |
 | POLE | train | 20x40 | — | — | static target, head zone = top 16 px |
 
 ### In game (hunt / train)

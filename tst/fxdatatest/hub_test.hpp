@@ -179,7 +179,7 @@ inline void test_hub(FxTest &test) {
     for (uint8_t i = 0; i < 3; i++)
         stepGame(g, H_IDLE);
     test.expectEq(static_cast<uint32_t>(g.over), OVER_NONE, F("still fighting"));
-    damageMonster(g, 9999, g.monster.x, g.monster.y);
+    damageMonster(g, 2000, g.monster.x, g.monster.y);
     test.expectEq(static_cast<uint32_t>(g.over), OVER_WIN, F("hunt won"));
     test.expectEq(static_cast<uint32_t>(g.questProgress), 1, F("one kill counted"));
 

@@ -151,7 +151,7 @@ inline void test_menu(FxTest &test) {
     test.expectEq(static_cast<uint32_t>(g.pole.rect.w), 20, F("crack rect w"));
     test.expectEq(static_cast<uint32_t>(g.pole.rect.h), 36, F("crack rect h"));
 
-    // ---- HEAVY -> hunt, cart def drives size/hp (40x28, 320 hp)
+    // ---- HEAVY -> hunt, cart def drives size/hp (40x28, 2800 hp)
     MenuState h;
     h.weapon = W_FLAIL;
     h.target = MON_HEAVY;
@@ -159,24 +159,24 @@ inline void test_menu(FxTest &test) {
     test.expectEq(static_cast<uint32_t>(g.weapon), W_FLAIL, F("start heavy weapon"));
     test.expectEq(static_cast<uint32_t>(g.mode), MODE_HUNT, F("start heavy mode"));
     test.expectEq(static_cast<uint32_t>(g.monsterKind), MON_HEAVY, F("start heavy kind"));
-    test.expectEq(static_cast<uint32_t>(g.monster.hpMax), 320, F("heavy hp from cart"));
+    test.expectEq(static_cast<uint32_t>(g.monster.hpMax), 2800, F("heavy hp from cart"));
     test.expectEq(static_cast<uint32_t>(g.monster.w), 40, F("heavy w from cart"));
     test.expectEq(static_cast<uint32_t>(g.monster.h), 28, F("heavy h from cart"));
     test.expectEq(static_cast<uint32_t>(g.roomId), zone::ROOM_CAMP, F("hunt start room"));
 
-    // ---- SWEEP -> hunt, cart def 28x22 / 150 hp
+    // ---- SWEEP -> hunt, cart def 28x22 / 1500 hp
     MenuState s;
     s.target = MON_SWEEP;
     menuStart(g, s);
     test.expectEq(static_cast<uint32_t>(g.monsterKind), MON_SWEEP, F("start sweep kind"));
-    test.expectEq(static_cast<uint32_t>(g.monster.hpMax), 150, F("sweep hp from cart"));
+    test.expectEq(static_cast<uint32_t>(g.monster.hpMax), 1500, F("sweep hp from cart"));
 
-    // ---- RAVAGER -> hunt, cart def 32x24 / 260 hp (ljj.6 target slot 3)
+    // ---- RAVAGER -> hunt, cart def 32x24 / 2400 hp (ljj.6 target slot 3)
     MenuState rv;
     rv.target = MON_RAVAGER;
     menuStart(g, rv);
     test.expectEq(static_cast<uint32_t>(g.monsterKind), MON_RAVAGER, F("start ravager kind"));
-    test.expectEq(static_cast<uint32_t>(g.monster.hpMax), 260, F("ravager hp from cart"));
+    test.expectEq(static_cast<uint32_t>(g.monster.hpMax), 2400, F("ravager hp from cart"));
     test.expectEq(static_cast<uint32_t>(g.monster.w), 32, F("ravager w from cart"));
 
     // ---- return edge: over+ A only, exactly once per press

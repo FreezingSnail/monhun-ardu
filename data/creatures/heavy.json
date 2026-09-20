@@ -1,7 +1,7 @@
 {
   "id": "heavy",
   "skeleton": "longtail",
-  "stats": { "w": 40, "h": 28, "hp": 320, "spd": 5, "spawnX": 200, "spawnY": 40 },
+  "stats": { "w": 40, "h": 28, "hp": 2800, "spd": 5, "spawnX": 200, "spawnY": 40 },
   "collide": { "ox": -8, "oy": 3, "w": 48, "h": 22 },
   "profile": {
     "engageDist": 36,
@@ -26,7 +26,7 @@
     "appendage": {
       "box": { "ox": -24, "oy": 0, "w": 24, "h": 16 },
       "dmgMul": 150,
-      "hp": 60,
+      "hp": 240,
       "bodyShare": 40,
       "breakTypes": ["SLASH"],
       "hurtOn": true,

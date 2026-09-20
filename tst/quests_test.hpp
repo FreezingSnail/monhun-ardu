@@ -32,7 +32,7 @@ inline void killBeast(Game &g, int8_t kind) {
     g.questTarget = static_cast<int8_t>(kind);
     g.questNeed = 3;
     g.questProgress = 0;
-    damageMonster(g, 9999, g.monster.x, g.monster.y);
+    damageMonster(g, 2000, g.monster.x, g.monster.y);
 }
 
 }   // namespace queststest
@@ -204,14 +204,14 @@ void QuestSuite(TestRunner &runner) {
         initMonster(g, MON_SWEEP);
         g.questTarget = MON_LUNGE;
         g.questProgress = 1;
-        damageMonster(g, 9999, g.monster.x, g.monster.y);
+        damageMonster(g, 2000, g.monster.x, g.monster.y);
         t.assert(g.questProgress, 1, "off-kind kill not counted");
 
         // No active quest: no count.
         initGame(g, W_SWORD);
         initMonster(g, MON_LUNGE);
         g.questTarget = -1;
-        damageMonster(g, 9999, g.monster.x, g.monster.y);
+        damageMonster(g, 2000, g.monster.x, g.monster.y);
         t.assert(g.questProgress, 0, "no active quest counts nothing");
         suite.addTest(t);
     }
