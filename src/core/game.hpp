@@ -549,16 +549,19 @@ struct CombatBox {
 // combat.hpp's COMBAT_ZONE_COUNT/bit constants mirror this order.
 constexpr uint8_t COMBAT_ZONE_SLOTS = 2;
 
-// Full profile record mirror (17 fields, blob ABI order). Read whole at spawn
+// Full profile record mirror (18 fields, blob ABI order). Read whole at spawn
 // and cached; the interpreter consumes the cache at decision time. zoneFlags
 // carries the per-creature zone presence bits (build/zones-design.md). faceHold
 // (nch.4) is the turn-commitment cadence: 0 recomputes facing every tick, >0
-// refreshes it only every faceHold ticks.
+// refreshes it only every faceHold ticks. turnRate (feel.14) bounds how many
+// DIR8 steps the refreshed facing may rotate toward the player (0 = legacy
+// snap).
 struct CombatProfile {
     uint8_t engageDist, keepDist, attackDist;
     uint8_t circleNum, circleDen, retreatNum, retreatDen;
     uint8_t staggerMax, staggerDecay, zoneFlags;
     uint8_t faceHold;
+    uint8_t turnRate;
     uint16_t cdBase, cdJitter, spawnT, spawnCd, stunRecoverT, staggerRecoverT;
 };
 
@@ -636,7 +639,7 @@ struct CombatZoneCache {
 // and the single broken bit per zone. The pattern step cursor
 // (stepIdx + 256-tick countdown stepT) and stagger meter are unchanged.
 struct CombatState {
-    CombatProfile profile;                     // 23 B AVR
+    CombatProfile profile;                     // 24 B AVR
     CombatAttackCache attack;                  // 21 B AVR
     CombatBox body;                            // 4 B AVR
     CombatBox collide;                         // 4 B AVR: body-collision rect

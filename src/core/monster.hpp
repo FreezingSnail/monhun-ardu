@@ -597,18 +597,48 @@ static void updateMonster(Game &g) {
     // only every faceHold ticks (faceT counts down from faceHold to 0, then the
     // vector refreshes and faceT re-arms). faceHold 0 recomputes every tick, so
     // the shipped lunge/sweep stay byte-identical. Lock modes still freeze.
+    //
+    // Turn-rate limit (feel.14): profile.turnRate bounds the rotation applied on
+    // a refresh. 0 keeps the legacy direct snap (byte-identical shipped data);
+    // 1..8 steps the cached DIR8 facing toward the desired index along the
+    // shortest arc (mod 8) by at most turnRate 45-degree steps. The faceHold
+    // cadence and the lock freezing are unchanged. combat::HAS_TURN_RATE is
+    // generated for the data-fact ledger but not folded here: host tests drive
+    // synthetic turnRate values before any kit authors one, so the stepping
+    // path must stay compiled (see output.md).
     const bool facingLocked = m.atkIdx != COMBAT_NO_ATTACK && combatFacingLockV(gp->combat.attack.facing) && (m.state == MS_WINDUP || m.state == MS_ATTACK);
     if (!facingLocked) {
+        bool refresh;
         if (pr.faceHold == 0) {
-            m.fx = fp::dir8X(di);
-            m.fy = fp::dir8Y(di);
+            refresh = true;
         } else {
-            if (m.faceT == 0) {
+            refresh = (m.faceT == 0);
+            if (refresh)
+                m.faceT = pr.faceHold;
+            m.faceT--;
+        }
+        if (refresh) {
+            const uint8_t rate = pr.turnRate;
+            if (rate == 0) {
                 m.fx = fp::dir8X(di);
                 m.fy = fp::dir8Y(di);
-                m.faceT = pr.faceHold;
+            } else {
+                const int8_t cur = fp::dirIndexFromDelta(m.fx, m.fy);
+                int8_t step = static_cast<int8_t>(di - cur);
+                if (step > 4)
+                    step = static_cast<int8_t>(step - 8);
+                else if (step < -4)
+                    step = static_cast<int8_t>(step + 8);
+                if (step > static_cast<int8_t>(rate))
+                    step = static_cast<int8_t>(rate);
+                else if (step < -static_cast<int8_t>(rate))
+                    step = static_cast<int8_t>(-static_cast<int8_t>(rate));
+                if (step != 0) {
+                    const int8_t next = static_cast<int8_t>((cur + step) & 7);
+                    m.fx = fp::dir8X(next);
+                    m.fy = fp::dir8Y(next);
+                }
             }
-            m.faceT--;
         }
     }
 

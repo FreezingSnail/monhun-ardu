@@ -20,8 +20,8 @@
 // two optional zone rects, picks the highest dmgMul (tie -> body, then head,
 // then appendage), drains the zone pool and flips a single broken bit per zone.
 //
-// Cache budget: CombatProfile 23 B + CombatAttackCache 25 B + body box 4 B +
-// 2x CombatZoneCache 22 B + 4 runtime zone bytes + 4 interpreter bytes = 82 B
+// Cache budget: CombatProfile 24 B + CombatAttackCache 25 B + body box 4 B +
+// 2x CombatZoneCache 22 B + 4 runtime zone bytes + 4 interpreter bytes = 83 B
 // on AVR.
 
 #include <stddef.h>
@@ -217,6 +217,7 @@ struct PkProfile {
     uint8_t engageDist, keepDist, attackDist;
     uint8_t circleNum, circleDen, retreatNum, retreatDen;
     uint8_t staggerMax, staggerDecay, zoneFlags, faceHold;
+    uint8_t turnRate;
     uint16_t cdBase, cdJitter, spawnT, spawnCd, stunRecoverT, staggerRecoverT;
 };
 struct PkSkeleton {
@@ -300,7 +301,7 @@ static_assert(offsetof(CombatPattern, guardIdx) == offsetof(PkPattern, guardIdx)
 static_assert(sizeof(CombatWindow) == 9, "window cache must stay 9 B");
 static_assert(sizeof(CombatAttackCache) == 25, "attack cache must stay 25 B (windup quad + move prefix incl hop dx/dy + facing + wallStun + tell + idx + window)");
 static_assert(sizeof(CombatZoneCache) == 12, "zone cache must stay 12 B");
-static_assert(sizeof(CombatState) == 94, "CombatState must stay 94 B (zones design + collide + static flag + faceHold + wallStun + tell + enrage + hop dx/dy)");
+static_assert(sizeof(CombatState) == 95, "CombatState must stay 95 B (zones design + collide + static flag + faceHold + turnRate + wallStun + tell + enrage + hop dx/dy)");
 
 // Fake cart pointer: the blob lives below 64 KB (generator hard-fails above).
 inline uint16_t combatCartAddr(uint16_t off) {
@@ -717,6 +718,7 @@ inline CombatProfile combatProfileRead(uint8_t i) {
     v.staggerDecay = p.staggerDecay;
     v.zoneFlags = p.zoneFlags;
     v.faceHold = p.faceHold;
+    v.turnRate = p.turnRate;
     v.cdBase = p.cdBase;
     v.cdJitter = p.cdJitter;
     v.spawnT = p.spawnT;

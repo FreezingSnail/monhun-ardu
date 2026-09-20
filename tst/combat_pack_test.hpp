@@ -393,12 +393,13 @@ void CombatPackSuite(TestRunner &runner) {
             t.assert(b8(blob, o + 8), h.staggerDecay, "blob profile staggerDecay");
             t.assert(b8(blob, o + 9), h.zoneFlags, "blob profile zoneFlags");
             t.assert(b8(blob, o + 10), h.faceHold, "blob profile faceHold");
-            t.assert(b16(blob, o + 11), h.cdBase, "blob profile cdBase");
-            t.assert(b16(blob, o + 13), h.cdJitter, "blob profile cdJitter");
-            t.assert(b16(blob, o + 15), h.spawnT, "blob profile spawnT");
-            t.assert(b16(blob, o + 17), h.spawnCd, "blob profile spawnCd");
-            t.assert(b16(blob, o + 19), h.stunRecoverT, "blob profile stunRecoverT");
-            t.assert(b16(blob, o + 21), h.staggerRecoverT, "blob profile staggerRecoverT");
+            t.assert(b8(blob, o + 11), h.turnRate, "blob profile turnRate");
+            t.assert(b16(blob, o + 12), h.cdBase, "blob profile cdBase");
+            t.assert(b16(blob, o + 14), h.cdJitter, "blob profile cdJitter");
+            t.assert(b16(blob, o + 16), h.spawnT, "blob profile spawnT");
+            t.assert(b16(blob, o + 18), h.spawnCd, "blob profile spawnCd");
+            t.assert(b16(blob, o + 20), h.stunRecoverT, "blob profile stunRecoverT");
+            t.assert(b16(blob, o + 22), h.staggerRecoverT, "blob profile staggerRecoverT");
         }
         for (uint8_t i = 0; i < combat::SKELETONS_COUNT; i++) {
             const size_t o = static_cast<size_t>(combat::SKELETONS_OFF) + i * combat::SKELETON_SIZE;
@@ -513,6 +514,12 @@ void CombatPackSuite(TestRunner &runner) {
         t.assert(b8(blob, static_cast<size_t>(combat::CREATURE_LUNGE_OFF) + 26), 0, "shipped lunge enrage spdMul 0");
         t.assert(b8(blob, static_cast<size_t>(combat::CREATURE_LUNGE_OFF) + 27), 0, "shipped lunge enrage faceHold 0");
         t.assert(b8(blob, static_cast<size_t>(combat::CREATURE_LUNGE_OFF) + 28), 0, "shipped lunge enrage cue 0");
+        // feel.14: the profile record grew to 24 B so the turnRate byte sits
+        // between faceHold and the six u16 timers; shipped data leaves it 0.
+        t.assert(combat::PROFILE_SIZE, 24, "profile record grew for turnRate");
+        t.assert(b8(blob, static_cast<size_t>(combat::PROFILE_HEAVY_OFF) + 11), combat_expect::PROFILE_HEAVY_TURN_RATE, "expect heavy turnRate");
+        t.assert(b8(blob, static_cast<size_t>(combat::PROFILE_LUNGE_OFF) + 11), combat_expect::PROFILE_LUNGE_TURN_RATE, "expect lunge turnRate");
+        t.assert(b8(blob, static_cast<size_t>(combat::PROFILE_LUNGE_OFF) + 11), 0, "shipped lunge turnRate 0");
         t.assert(b8(blob, static_cast<size_t>(combat::ZONE_RAVAGER_HEAD_OFF) + 4), combat_expect::ZONE_RAVAGER_HEAD_HP, "expect head hp");
         t.assert(b8(blob, static_cast<size_t>(combat::ZONE_RAVAGER_HEAD_OFF) + 5), combat_expect::ZONE_RAVAGER_HEAD_DMG_MUL, "expect head dmgMul");
         t.assert(b8(blob, static_cast<size_t>(combat::ZONE_RAVAGER_APPENDAGE_OFF) + 4), combat_expect::ZONE_RAVAGER_APPENDAGE_HP, "expect tail hp");

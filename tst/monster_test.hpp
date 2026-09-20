@@ -338,6 +338,135 @@ void MonsterSuite(TestRunner &runner) {
     }
 
     {
+        // feel.14: profile.turnRate bounds how far the refreshed tracked facing
+        // may rotate each faceHold window. 0 snapes (legacy), N steps at most N
+        // DIR8 steps along the shortest arc (mod 8). Shipped data authors 0.
+        Test t("turnRate: 0 snaps, 1 rotates 45 deg per refresh and wraps");
+        Game g;
+        newGame(g, W_SWORD, MODE_HUNT, MON_HEAVY);
+        Monster &m = g.monster;
+        Player &p = g.player;
+        t.assert(g.combat.profile.turnRate, 0, "shipped heavy turnRate 0");
+        m.state = MS_PURSUE;
+        m.cd = 30000;
+        m.spd = 0;   // frozen position: only facing under test
+        m.x = 100;
+        m.y = 40;
+        const int16_t cx = static_cast<int16_t>(m.x + (m.w >> 1));
+        const int16_t cy = static_cast<int16_t>(m.y + (m.h >> 1));
+        // (a) turnRate 0 snaps the full way to the desired index.
+        m.fx = 11;
+        m.fy = -11;   // NE
+        p.x = static_cast<int16_t>(cx + 60 - (p.w >> 1));
+        p.y = static_cast<int16_t>(cy - (p.h >> 1));
+        m.faceT = 0;
+        updateMonster(g);
+        t.assert(m.fx, fp::FP, "turnRate 0 snaps E x");
+        t.assert(m.fy, 0, "turnRate 0 snaps E y");
+        // (b) turnRate 1 steps one DIR8 notch per refresh toward the player.
+        g.combat.profile.turnRate = 1;
+        m.fx = fp::FP;
+        m.fy = 0;   // E
+        p.x = static_cast<int16_t>(cx - (p.w >> 1));
+        p.y = static_cast<int16_t>(cy + 60 - (p.h >> 1));   // due south -> desired S (2)
+        m.faceT = 0;
+        updateMonster(g);
+        t.assert(m.fx, 11, "one 45-deg step toward S: SE x");
+        t.assert(m.fy, 11, "one 45-deg step toward S: SE y");
+        // The faceHold cadence is unchanged: a non-refresh tick does not rotate.
+        updateMonster(g);
+        t.assert(m.fx, 11, "non-refresh tick holds SE x");
+        t.assert(m.fy, 11, "non-refresh tick holds SE y");
+        m.faceT = 0;
+        updateMonster(g);
+        t.assert(m.fx, 0, "second step reaches S x");
+        t.assert(m.fy, 16, "second step reaches S y");
+        // Wrap the short way across index 0/7: NE (7) -> E (0) is +1, not -7.
+        m.fx = 11;
+        m.fy = -11;   // NE (7)
+        p.x = static_cast<int16_t>(cx + 60 - (p.w >> 1));
+        p.y = static_cast<int16_t>(cy - (p.h >> 1));   // E (0)
+        m.faceT = 0;
+        updateMonster(g);
+        t.assert(m.fx, fp::FP, "NE wraps forward to E x");
+        t.assert(m.fy, 0, "NE wraps forward to E y");
+        // And the other way: E (0) -> NE (7) is -1, not +7.
+        m.fx = fp::FP;
+        m.fy = 0;   // E (0)
+        p.x = static_cast<int16_t>(cx + 40 - (p.w >> 1));
+        p.y = static_cast<int16_t>(cy - 40 - (p.h >> 1));   // NE (7)
+        m.faceT = 0;
+        updateMonster(g);
+        t.assert(m.fx, 11, "E wraps backward to NE x");
+        t.assert(m.fy, -11, "E wraps backward to NE y");
+        // (c) desired == current leaves the facing untouched.
+        m.fx = fp::FP;
+        m.fy = 0;   // E
+        p.x = static_cast<int16_t>(cx + 60 - (p.w >> 1));
+        p.y = static_cast<int16_t>(cy - (p.h >> 1));   // E (0)
+        m.faceT = 0;
+        updateMonster(g);
+        t.assert(m.fx, fp::FP, "no-op keeps E x");
+        t.assert(m.fy, 0, "no-op keeps E y");
+        suite.addTest(t);
+    }
+
+    {
+        // feel.14: with faceHold 0 the facing recomputes every tick, so a bounded
+        // turnRate also applies every tick (still one step per refresh).
+        Test t("turnRate: faceHold 0 still bounds the per-tick rotation");
+        Game g;
+        newGame(g, W_SWORD, MODE_HUNT, MON_HEAVY);
+        Monster &m = g.monster;
+        Player &p = g.player;
+        m.state = MS_PURSUE;
+        m.cd = 30000;
+        m.spd = 0;
+        m.x = 100;
+        m.y = 40;
+        g.combat.profile.faceHold = 0;
+        g.combat.profile.turnRate = 1;
+        m.fx = fp::FP;
+        m.fy = 0;   // E
+        p.x = static_cast<int16_t>(m.x + (m.w >> 1) - (p.w >> 1));
+        p.y = static_cast<int16_t>(m.y + (m.h >> 1) + 60 - (p.h >> 1));   // S (2)
+        updateMonster(g);
+        t.assert(m.fx, 11, "faceHold 0 one step toward S: SE x");
+        t.assert(m.fy, 11, "faceHold 0 one step toward S: SE y");
+        updateMonster(g);
+        t.assert(m.fx, 0, "next tick steps again to S x");
+        t.assert(m.fy, 16, "next tick steps again to S y");
+        suite.addTest(t);
+    }
+
+    {
+        // feel.14: a lock-at-windup attack freezes its entry facing even when the
+        // profile has a turn rate (the hunter can out-circle it).
+        Test t("turnRate: lock-at-windup attack still freezes its facing");
+        Game g;
+        newGame(g, W_SWORD, MODE_HUNT, MON_SWEEP);
+        Monster &m = g.monster;
+        Player &p = g.player;
+        g.combat.profile.turnRate = 2;
+        chooseAttack(g, 40);   // gore (lock-at-windup) at range
+        t.assert(m.atkIdx, combat::ATTACK_SWEEP_GORE, "gore selected");
+        t.assert(g.combat.attack.facing, COMBAT_FACING_LOCK, "gore is lock-at-windup");
+        m.fx = fp::FP;
+        m.fy = 0;                               // windup-entry facing E
+        p.x = static_cast<int16_t>(m.x - 60);   // hunter crosses behind
+        p.y = m.y;
+        m.t = 1;
+        beast(g, 1);   // release into attack
+        t.assert(m.state, MS_ATTACK, "released into attack");
+        t.assert(m.fx, fp::FP, "locked facing holds through windup");
+        t.assert(m.fy, 0, "locked facing holds flat");
+        beast(g, 1);
+        t.assert(m.fx, fp::FP, "locked facing holds through attack");
+        t.assert(m.fy, 0, "locked facing holds through attack (flat)");
+        suite.addTest(t);
+    }
+
+    {
         Test t("heavy tail_spin: lock-away turns the back at windup, frozen after");
         Game g;
         newGame(g, W_SWORD, MODE_HUNT, MON_HEAVY);

@@ -85,6 +85,7 @@ All are JSON fields compiled by `tools/gen-combat.py`; the `HAS_*` facts in
 |---|---|
 | `stats.enrage {hpPct, spdMul, faceHold, cue}` | One-shot at `hp*100 <= hpMax*hpPct`: multiply `spd` by `spdMul/100` (floor 1) and replace `profile.faceHold` with `faceHold`. `hpPct 0` disables. `cue` is stored but has no audio wiring yet. |
 | `profile.faceHold` | If > 0, tracked facing refreshes only every N ticks, so the heading is committed between refreshes. `0` = every tick. Enrage can overwrite it. |
+| `profile.turnRate` | `1..8` = max DIR8 steps the refreshed facing may rotate toward the player from its current heading (shortest arc, mod 8), so the beast commits to a direction and can be out-circled. `0` = snap straight to the player delta (legacy; the shipped default). |
 | `profile.staggerMax / staggerDecay / staggerRecoverT` | Stagger meter opt-in. `staggerMax 0` folds the whole meter out. Hits add `zone.staggerOnHit`; decay subtracts each tick; at threshold the active pattern is cancelled and the beast enters `MS_STAGGER` for `staggerRecoverT`. |
 | `zones.head / appendage` | Face-relative box + `dmgMul` + pool. Highest multiplier wins (tie → body, head, appendage). A drained pool flips one broken bit per zone. |
 | `zones.*.broken.disableAttacks[]` | Attacks disabled while the zone is broken (compiled to the zone's `unlockMask` bit per global attack index). |

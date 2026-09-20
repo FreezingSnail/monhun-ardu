@@ -52,6 +52,7 @@ inline bool progEq(const void *ram, const void *flash, uint8_t n) {
 // sizes come from the generated expect header). CombatWindow drops the packed
 // record's trailing reserved flags byte.
 static_assert(sizeof(CombatCreature) == combat_expect::CREATURE_SIZE, "creature value struct must stay packed");
+static_assert(sizeof(CombatProfile) == combat_expect::PROFILE_SIZE, "profile value struct must stay packed");
 static_assert(sizeof(CombatZone) == combat_expect::ZONE_SIZE, "zone value struct must stay packed");
 static_assert(sizeof(CombatAttackValue) == combat_expect::ATTACK_SIZE, "attack value struct must stay packed");
 static_assert(sizeof(CombatWindow) == combat_expect::WINDOW_SIZE - 1, "window value struct must stay packed minus flags");
@@ -438,6 +439,7 @@ inline void test_combat(FxTest &test) {
     test.expectEq(g.combat.profile.engageDist, 36, F("cache engageDist"));
     test.expectEq(g.combat.profile.keepDist, 16, F("cache keepDist"));
     test.expectEq(g.combat.profile.faceHold, combat_expect::PROFILE_LUNGE_FACE_HOLD, F("cache faceHold"));
+    test.expectEq(g.combat.profile.turnRate, combat_expect::PROFILE_LUNGE_TURN_RATE, F("cache turnRate"));
     test.expectEq(g.combat.profile.attackDist, 42, F("cache attackDist"));
     test.expectEq(g.combat.profile.cdBase, 48, F("cache cdBase"));
     test.expectEq(g.combat.profile.cdJitter, 60, F("cache cdJitter"));

@@ -72,6 +72,7 @@ void CombatSuite(TestRunner &runner) {
             t.assert(p.staggerDecay, h.staggerDecay, "profile staggerDecay");
             t.assert(p.zoneFlags, h.zoneFlags, "profile zoneFlags");
             t.assert(p.faceHold, h.faceHold, "profile faceHold");
+            t.assert(p.turnRate, h.turnRate, "profile turnRate");
             t.assert(p.cdBase, h.cdBase, "profile cdBase");
             t.assert(p.cdJitter, h.cdJitter, "profile cdJitter");
             t.assert(p.spawnT, h.spawnT, "profile spawnT");
@@ -83,6 +84,7 @@ void CombatSuite(TestRunner &runner) {
         // faceHold to 8 so the spin can be out-ranged more often.
         const CombatProfile heavy = combatProfileRead(combatCreatureProfileIdx(combat_data::CREATURE_HEAVY));
         t.assert(heavy.faceHold, 8, "heavy faceHold 8 (feel.10)");
+        t.assert(heavy.turnRate, 0, "heavy turnRate 0 (feel.14 default)");
         t.assert(heavy.keepDist, 12, "heavy keepDist 12");
         const CombatProfile lunge = combatProfileRead(combatCreatureProfileIdx(combat_data::CREATURE_LUNGE));
         t.assert(lunge.faceHold, 5, "chicken faceHold 5 (feel.8)");
