@@ -20,7 +20,10 @@ the render path (fie.5) blits the room layers with `seekData`.
       "w": 128, "h": 56,                  // px; h must be a multiple of 8
       "image": "images/maps/mh_map_camp_128x56.png",
       "props":  [ { "type": "tent", "x": 40, "y": 8,
-                    "sheet": "mh_map_tent", "frame": 0, "w": 32, "h": 24 } ],
+                    "sheet": "mh_map_tent", "frame": 0, "w": 32, "h": 24 },
+                  { "type": "post", "x": 8, "y": 8,
+                    "sheet": "mh_map_tent", "frame": 0, "w": 8, "h": 8,
+                    "gather": { "item": "herb", "yield": 1 } } ],
       "spawns": { "entry": { "x": 20, "y": 44 } },   // non-empty
       "doors":  [ { "x": 120, "y": 24, "w": 8, "h": 24,
                     "to": "area", "toSpawn": "from_camp" } ],
@@ -34,6 +37,14 @@ the render path (fie.5) blits the room layers with `seekData`.
 - `props[]`: `type` is one of `tent`, `door`, `pole`, `post`; `sheet` is a C
   symbol that must resolve in `fxdata/fxdata.h` once its art is authored
   (fie.5). `frame`, `w`, `h` are u8, `x`/`y` u16.
+- `props[].gather` (optional, bead monhun-ardu-feel.21): a gather node. `item`
+  names one of the fixed item vocabulary (currently only `herb`) and `yield` is
+  an integer 1..9. The prop's own `x`/`y`/`w`/`h` is the gather rect (it must
+  stay inside the room like any prop rect). Unknown keys are errors. The packed
+  record stores the item index+1 so a plain prop reads `GATHER_NONE` (0); the
+  symbolic `GATHER_*` values live in `src/generated/zone_meta.hpp`. Gather nodes
+  reuse an existing prop sheet for now — the render side draws a small
+  procedural plant keyed off `gatherItem`, so no new art sheet is required.
 - `doors[]`: `to` is another room id, or the reserved `"menu"` (exit to the
   opening menu). A door to a room **requires** `toSpawn` naming a spawn in the
   target room; a door to `"menu"` must **not** carry `toSpawn`.
@@ -62,7 +73,7 @@ inside a room.
 | room | 18 B | w u16, h u16, firstDoor u16, doorCount u8, firstSpawn u16, spawnCount u8, firstProp u16, propCount u8, firstHeal u16, healCount u8, monsterKind u8, monsterSpawn u8 |
 | door | 10 B | x u16, y u16, w u16, h u16, toRoom u8, toSpawn u8 |
 | spawn | 4 B | x u16, y u16 |
-| prop | 9 B | type u8, x u16, y u16, sheet u8, frame u8, w u8, h u8 |
+| prop | 11 B | type u8, x u16, y u16, sheet u8, frame u8, w u8, h u8, gatherItem u8, gatherYield u8 |
 | heal | 6 B | x u16, y u16, w u8, h u8 |
 
 - `first*` are global section indices; per-room counts are u8 (<= 255).
@@ -74,6 +85,9 @@ inside a room.
 - `prop.sheet` is an index into the prop sheet list (the distinct `sheet`
   symbols in first-seen room order), not a raw fxdata address. The generated
   `SHEET_<SYMBOL>_OFF` constants carry the FX-image address.
+- `prop.gatherItem` is `GATHER_NONE` (0) for a plain prop or the item index+1
+  (currently only `GATHER_HERB` = 1); `prop.gatherYield` is the authored yield
+  (1..9) or 0 when `gatherItem` is `GATHER_NONE`.
 
 Size limits (validated): <= 254 rooms, <= 65535 records per section, <= 255
 records per room, <= 255 spawns total (spawn index is u8), blob < 65536 B.
@@ -143,6 +157,7 @@ Generated artifacts (never hand-edit): `images/maps/*.png` (placeholders only),
 ## Tests
 
 `tools/tests/test_gen_zones.py` (native `unittest`, run `make test-tools`)
-covers schema/id/cross-ref/integer errors, the reserved `"menu"` door,
+covers schema/id/cross-ref/integer errors, the reserved `"menu"` door, gather
+nodes (item/yield round-trip, unknown item, bad yield, out-of-room rect),
 determinism, `--dump` smoke, size limits and a layer pixel round-trip against a
 hand-authored PNG.

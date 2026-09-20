@@ -12,7 +12,7 @@
 namespace zone_data {
 
 constexpr uint8_t VERSION = 1;
-constexpr uint16_t BLOB_SIZE = 144;
+constexpr uint16_t BLOB_SIZE = 203;
 constexpr uint8_t MONSTER_NONE = 0xFF;
 
 struct Room {
@@ -44,6 +44,8 @@ struct Prop {
     uint16_t x, y;
     uint8_t sheet;  // prop sheet index (SHEET_* in zone_meta.hpp)
     uint8_t frame, w, h;
+    uint8_t gatherItem;   // GATHER_* item or GATHER_NONE (0)
+    uint8_t gatherYield;  // 1..9 when gatherItem != GATHER_NONE
 };
 
 struct Heal {
@@ -69,8 +71,13 @@ constexpr uint8_t DOOR_CAMP_0 = 1;
 constexpr uint8_t DOOR_POLE_ROOM_0 = 2;
 
 // Prop/heal indices.
-constexpr uint8_t PROP_CAMP_0 = 0;
-constexpr uint8_t PROP_POLE_ROOM_0 = 1;
+constexpr uint8_t PROP_AREA_0 = 0;
+constexpr uint8_t PROP_AREA_1 = 1;
+constexpr uint8_t PROP_AREA_2 = 2;
+constexpr uint8_t PROP_CAMP_0 = 3;
+constexpr uint8_t PROP_CAMP_1 = 4;
+constexpr uint8_t PROP_CAMP_2 = 5;
+constexpr uint8_t PROP_POLE_ROOM_0 = 6;
 constexpr uint8_t HEAL_CAMP_0 = 0;
 
 // Name tables: host-side lookup for loadRoom(roomId, spawnName).
@@ -92,9 +99,9 @@ inline constexpr std::array<SpawnName, 5> SPAWN_NAMES = {{
 
 // Section arrays, in packed order.
 inline constexpr std::array<Room, 3> ROOMS = {{
-    {384, 112, 0, 1, 0, 2, 0, 0, 0, 0, 0, 1},
-    {128, 56, 1, 1, 2, 2, 0, 1, 0, 1, 255, 255},
-    {128, 56, 2, 1, 4, 1, 1, 1, 1, 0, 255, 255},
+    {384, 112, 0, 1, 0, 2, 0, 3, 0, 0, 0, 1},
+    {128, 56, 1, 1, 2, 2, 3, 3, 0, 1, 255, 255},
+    {128, 56, 2, 1, 4, 1, 6, 1, 1, 0, 255, 255},
 }};
 
 inline constexpr std::array<Door, 3> DOORS = {{
@@ -111,9 +118,14 @@ inline constexpr std::array<Spawn, 5> SPAWNS = {{
     {16, 44},
 }};
 
-inline constexpr std::array<Prop, 2> PROPS = {{
-    {0, 40, 8, 0, 0, 32, 24},
-    {2, 54, 8, 1, 0, 20, 40},
+inline constexpr std::array<Prop, 7> PROPS = {{
+    {3, 40, 16, 0, 0, 8, 8, 1, 1},
+    {3, 160, 40, 0, 0, 8, 8, 1, 2},
+    {3, 280, 88, 0, 0, 8, 8, 1, 3},
+    {0, 40, 8, 0, 0, 32, 24, 0, 0},
+    {3, 8, 8, 0, 0, 8, 8, 1, 1},
+    {3, 72, 40, 0, 0, 8, 8, 1, 2},
+    {2, 54, 8, 1, 0, 20, 40, 0, 0},
 }};
 
 inline constexpr std::array<Heal, 1> HEALS = {{

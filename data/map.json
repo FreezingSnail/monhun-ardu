@@ -15,6 +15,32 @@
           "frame": 0,
           "w": 32,
           "h": 24
+        },
+        {
+          "type": "post",
+          "x": 8,
+          "y": 8,
+          "sheet": "mh_map_tent",
+          "frame": 0,
+          "w": 8,
+          "h": 8,
+          "gather": {
+            "item": "herb",
+            "yield": 1
+          }
+        },
+        {
+          "type": "post",
+          "x": 72,
+          "y": 40,
+          "sheet": "mh_map_tent",
+          "frame": 0,
+          "w": 8,
+          "h": 8,
+          "gather": {
+            "item": "herb",
+            "yield": 2
+          }
         }
       ],
       "spawns": {
@@ -52,7 +78,47 @@
       "w": 384,
       "h": 112,
       "image": "images/maps/mh_map_area_384x112.png",
-      "props": [],
+      "props": [
+        {
+          "type": "post",
+          "x": 40,
+          "y": 16,
+          "sheet": "mh_map_tent",
+          "frame": 0,
+          "w": 8,
+          "h": 8,
+          "gather": {
+            "item": "herb",
+            "yield": 1
+          }
+        },
+        {
+          "type": "post",
+          "x": 160,
+          "y": 40,
+          "sheet": "mh_map_tent",
+          "frame": 0,
+          "w": 8,
+          "h": 8,
+          "gather": {
+            "item": "herb",
+            "yield": 2
+          }
+        },
+        {
+          "type": "post",
+          "x": 280,
+          "y": 88,
+          "sheet": "mh_map_tent",
+          "frame": 0,
+          "w": 8,
+          "h": 8,
+          "gather": {
+            "item": "herb",
+            "yield": 3
+          }
+        }
+      ],
       "spawns": {
         "from_camp": {
           "x": 8,

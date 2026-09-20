@@ -62,11 +62,15 @@ struct ZoneHeal {
 
 // Prop record (bead monhun-ardu-fie.5): the render blits the sheet at (x,y).
 // `type` is a zone::PROP_* kind, `sheet` an index into the zone::SHEET_* list.
+// `gatherItem` is a zone::GATHER_* item (0 == zone::GATHER_NONE, not a gather
+// node); `gatherYield` is 1..9 when it is one (bead monhun-ardu-feel.21).
 struct ZoneProp {
     uint8_t type;
     uint16_t x, y;
     uint8_t sheet;
     uint8_t frame, w, h;
+    uint8_t gatherItem;
+    uint8_t gatherYield;
 };
 
 // ================================================================ read layer
@@ -157,6 +161,8 @@ inline ZoneProp zonePropRead(uint8_t i) {
     v.frame = r[zone::PROP_FRAME_OFF];
     v.w = r[zone::PROP_W_OFF];
     v.h = r[zone::PROP_H_OFF];
+    v.gatherItem = r[zone::PROP_GATHER_ITEM_OFF];
+    v.gatherYield = r[zone::PROP_GATHER_YIELD_OFF];
     return v;
 }
 
@@ -220,6 +226,8 @@ inline ZoneProp zonePropRead(uint8_t i) {
     v.frame = p.frame;
     v.w = p.w;
     v.h = p.h;
+    v.gatherItem = p.gatherItem;
+    v.gatherYield = p.gatherYield;
     return v;
 }
 

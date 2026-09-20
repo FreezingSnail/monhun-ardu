@@ -17,24 +17,24 @@ namespace zone {
 constexpr uint16_t MAGIC = 0x5A52;
 constexpr uint8_t VERSION = 1;
 constexpr uint8_t FLAGS = 0x00;
-constexpr uint16_t SIZE = 144;
+constexpr uint16_t SIZE = 203;
 constexpr uint8_t HEADER_SIZE = 16;
 
 constexpr uint8_t ROOM_SIZE = 18;
 constexpr uint8_t DOOR_SIZE = 10;
 constexpr uint8_t SPAWN_SIZE = 4;
-constexpr uint8_t PROP_SIZE = 9;
+constexpr uint8_t PROP_SIZE = 11;
 constexpr uint8_t HEAL_SIZE = 6;
 
 constexpr uint16_t ROOMS_OFF = 16;
 constexpr uint16_t DOORS_OFF = 70;
 constexpr uint16_t SPAWNS_OFF = 100;
 constexpr uint16_t PROPS_OFF = 120;
-constexpr uint16_t HEALS_OFF = 138;
+constexpr uint16_t HEALS_OFF = 197;
 constexpr uint16_t ROOMS_COUNT = 3;
 constexpr uint16_t DOORS_COUNT = 3;
 constexpr uint16_t SPAWNS_COUNT = 5;
-constexpr uint16_t PROPS_COUNT = 2;
+constexpr uint16_t PROPS_COUNT = 7;
 constexpr uint16_t HEALS_COUNT = 1;
 
 // Record field offsets.
@@ -65,6 +65,8 @@ constexpr uint8_t PROP_SHEET_OFF = 5;  // u8
 constexpr uint8_t PROP_FRAME_OFF = 6;  // u8
 constexpr uint8_t PROP_W_OFF = 7;      // u8
 constexpr uint8_t PROP_H_OFF = 8;      // u8
+constexpr uint8_t PROP_GATHER_ITEM_OFF = 9;   // u8 (0 = not a gather node)
+constexpr uint8_t PROP_GATHER_YIELD_OFF = 10; // u8
 constexpr uint8_t HEAL_X_OFF = 0;  // u16
 constexpr uint8_t HEAL_Y_OFF = 2;  // u16
 constexpr uint8_t HEAL_W_OFF = 4;  // u8
@@ -75,6 +77,11 @@ constexpr uint8_t PROP_TENT = 0;
 constexpr uint8_t PROP_DOOR = 1;
 constexpr uint8_t PROP_POLE = 2;
 constexpr uint8_t PROP_POST = 3;
+
+// Gather item kinds; 0 = not a gather node (GATHER_NONE). Prop records
+// store index+1, so a plain prop reads GATHER_NONE.
+constexpr uint8_t GATHER_NONE = 0;
+constexpr uint8_t GATHER_HERB = 1;
 
 // Monster kinds, values mirror MonsterKind in src/core/game.hpp.
 constexpr uint8_t MONSTER_NONE = 0xFF;   // room has no monster
@@ -141,32 +148,42 @@ constexpr uint16_t DOOR_POLE_ROOM_0_OFF = 90;
 constexpr uint8_t DOOR_POLE_ROOM_0_TO_ROOM = DOOR_MENU;
 
 // Prop/heal indices + blob offsets (names use the room-local index).
-constexpr uint8_t PROP_CAMP_0 = 0;
-constexpr uint16_t PROP_CAMP_0_OFF = 120;
-constexpr uint8_t PROP_POLE_ROOM_0 = 1;
-constexpr uint16_t PROP_POLE_ROOM_0_OFF = 129;
+constexpr uint8_t PROP_AREA_0 = 0;
+constexpr uint16_t PROP_AREA_0_OFF = 120;
+constexpr uint8_t PROP_AREA_1 = 1;
+constexpr uint16_t PROP_AREA_1_OFF = 131;
+constexpr uint8_t PROP_AREA_2 = 2;
+constexpr uint16_t PROP_AREA_2_OFF = 142;
+constexpr uint8_t PROP_CAMP_0 = 3;
+constexpr uint16_t PROP_CAMP_0_OFF = 153;
+constexpr uint8_t PROP_CAMP_1 = 4;
+constexpr uint16_t PROP_CAMP_1_OFF = 164;
+constexpr uint8_t PROP_CAMP_2 = 5;
+constexpr uint16_t PROP_CAMP_2_OFF = 175;
+constexpr uint8_t PROP_POLE_ROOM_0 = 6;
+constexpr uint16_t PROP_POLE_ROOM_0_OFF = 186;
 constexpr uint8_t HEAL_CAMP_0 = 0;
-constexpr uint16_t HEAL_CAMP_0_OFF = 138;
+constexpr uint16_t HEAL_CAMP_0_OFF = 197;
 
 // Prop sheet names + FX-image offsets (0 = not yet authored; fie.5 art).
 constexpr uint8_t SHEET_MH_MAP_TENT = 0;
 constexpr bool SHEET_MH_MAP_TENT_RESOLVED = true;
-constexpr uint32_t SHEET_MH_MAP_TENT_OFF = 22309;
+constexpr uint32_t SHEET_MH_MAP_TENT_OFF = 22368;
 constexpr uint8_t SHEET_FXPOLE = 1;
 constexpr bool SHEET_FXPOLE_RESOLVED = true;
-constexpr uint32_t SHEET_FXPOLE_OFF = 21107;
+constexpr uint32_t SHEET_FXPOLE_OFF = 21166;
 
 // Room image symbols + baked FX offsets (the fie.5 blit base). A missing
 // symbol means a first gen pass before fxdata-build emitted it.
 constexpr const char *ROOM_AREA_IMAGE = "mh_map_area";
 constexpr bool ROOM_AREA_IMAGE_RESOLVED = true;
-constexpr uint32_t ROOM_AREA_IMAGE_OFF = 181589;
+constexpr uint32_t ROOM_AREA_IMAGE_OFF = 181648;
 constexpr const char *ROOM_CAMP_IMAGE = "mh_map_camp";
 constexpr bool ROOM_CAMP_IMAGE_RESOLVED = true;
-constexpr uint32_t ROOM_CAMP_IMAGE_OFF = 197717;
+constexpr uint32_t ROOM_CAMP_IMAGE_OFF = 197776;
 constexpr const char *ROOM_POLE_ROOM_IMAGE = "mh_map_pole_room";
 constexpr bool ROOM_POLE_ROOM_IMAGE_RESOLVED = true;
-constexpr uint32_t ROOM_POLE_ROOM_IMAGE_OFF = 200405;
+constexpr uint32_t ROOM_POLE_ROOM_IMAGE_OFF = 200464;
 #if defined(__AVR__)
 static_assert(ROOM_AREA_IMAGE_OFF == static_cast<uint32_t>(mh_map_area), "zone blob stale: re-run make gen");
 static_assert(ROOM_CAMP_IMAGE_OFF == static_cast<uint32_t>(mh_map_camp), "zone blob stale: re-run make gen");

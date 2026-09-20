@@ -35,7 +35,7 @@ HEADER = struct.Struct("<HBBHHHHHH")   # 16 B
 ROOM = struct.Struct("<HHHBHBHBHBBB")  # 18 B
 DOOR = struct.Struct("<HHHHBB")        # 10 B
 SPAWN = struct.Struct("<HH")           # 4 B
-PROP = struct.Struct("<BHHBBBB")       # 9 B
+PROP = struct.Struct("<BHHBBBBBB")     # 11 B
 HEAL = struct.Struct("<HHBB")          # 6 B
 ARRAY_RE = re.compile(r"uint8_t\s+(\w+)\[\]\s*=\s*\n\{\n(.*?)\n\};", re.S)
 
@@ -149,8 +149,9 @@ class GenZonesTests(unittest.TestCase):
         # area spawns sort by name inside the room: from_camp, start.
         self.assertEqual(spawns, [(1, 6), (12, 4), (1, 6), (14, 6)])
 
-        # prop is type u8, x u16, y u16, sheet u8, frame u8, w u8, h u8.
-        self.assertEqual(PROP.unpack_from(blob, off["props"]), (0, 2, 0, 0, 0, 4, 4))
+        # prop is type u8, x u16, y u16, sheet u8, frame u8, w u8, h u8,
+        # gatherItem u8, gatherYield u8.
+        self.assertEqual(PROP.unpack_from(blob, off["props"]), (0, 2, 0, 0, 0, 4, 4, 0, 0))
         self.assertEqual(HEAL.unpack_from(blob, off["heals"]), (2, 0, 4, 4))
 
     def test_clean_meta_header_constants(self):
@@ -162,7 +163,11 @@ class GenZonesTests(unittest.TestCase):
             "constexpr uint8_t HEADER_SIZE = 16;",
             "constexpr uint8_t ROOM_SIZE = 18;",
             "constexpr uint8_t DOOR_SIZE = 10;",
-            "constexpr uint8_t PROP_SIZE = 9;",
+            "constexpr uint8_t PROP_SIZE = 11;",
+            "constexpr uint8_t PROP_GATHER_ITEM_OFF = 9;",
+            "constexpr uint8_t PROP_GATHER_YIELD_OFF = 10;",
+            "constexpr uint8_t GATHER_NONE = 0;",
+            "constexpr uint8_t GATHER_HERB = 1;",
             "constexpr uint16_t ROOMS_COUNT = 2;",
             "constexpr uint8_t MONSTER_LUNGE = 0;",
             "constexpr uint8_t MONSTER_NONE = 0xFF;",
@@ -199,7 +204,7 @@ class GenZonesTests(unittest.TestCase):
         self.assertIn("room area: 16x8 image mh_map_area doors 1 spawns 2 props 0 heals 0 monster lunge@start",
                       result.stdout)
         self.assertIn("door 1: rect(0,0,4,8) -> menu", result.stdout)
-        self.assertIn("gen-zones: 2 rooms, 3 doors, 4 spawns, 1 props, 1 heals, 113 B blob", result.stdout)
+        self.assertIn("gen-zones: 2 rooms, 3 doors, 4 spawns, 1 props, 1 heals, 115 B blob", result.stdout)
         for rel in (BLOB_REL, SPRITES_REL, DATA_REL, META_REL):
             self.assertFalse(os.path.exists(self.path(rel)), rel)
         self.assertFalse(os.path.exists(self.path("images", "maps", "mh_map_camp_16x8.png")))
@@ -230,6 +235,64 @@ class GenZonesTests(unittest.TestCase):
         # layer2: x0 y3      = 0b00001000, x1 = 0
         self.assertEqual(arrays["mh_map_camp"], [0x0E, 0x00, 0x0C, 0x00, 0x08, 0x00])
         self.assertIn("constexpr uint16_t ROOM_CAMP_IMAGE_LAYER_BYTES = 2;", self.read(META_REL))
+
+    # ------------------------------------------------------------- gather props
+
+    def test_gather_prop_packs_item_and_yield(self):
+        self.mutate(lambda doc: doc["rooms"][0]["props"][0].__setitem__(
+            "gather", {"item": "herb", "yield": 3}))
+        self.assert_succeeds(self.compile())
+        blob = self.read_bytes(BLOB_REL)
+        parsed = parse_blob(blob)
+        prop = PROP.unpack_from(blob, parsed["off"]["props"])
+        # type, x, y, sheet, frame, w, h, gatherItem, gatherYield
+        self.assertEqual(prop, (0, 2, 0, 0, 0, 4, 4, 1, 3))
+        text = self.read(META_REL)
+        self.assertIn("constexpr uint8_t GATHER_NONE = 0;", text)
+        self.assertIn("constexpr uint8_t GATHER_HERB = 1;", text)
+        data = self.read(DATA_REL)
+        self.assertIn("uint8_t gatherItem;", data)
+        self.assertIn("uint8_t gatherYield;", data)
+        # Determinism: a second compile writes nothing and keeps the bytes.
+        first = {rel: self.read_bytes(rel) for rel in (BLOB_REL, DATA_REL, META_REL)}
+        second = self.compile()
+        self.assert_succeeds(second)
+        for rel in (BLOB_REL, DATA_REL, META_REL):
+            self.assertIn("%s (unchanged)" % rel, second.stdout)
+            self.assertEqual(first[rel], self.read_bytes(rel), rel)
+
+    def test_gather_unknown_item_rejected(self):
+        self.mutate(lambda doc: doc["rooms"][0]["props"][0].__setitem__(
+            "gather", {"item": "rock", "yield": 1}))
+        self.assert_fails(self.compile(), "item: unknown value 'rock'")
+
+    def test_gather_zero_yield_rejected(self):
+        self.mutate(lambda doc: doc["rooms"][0]["props"][0].__setitem__(
+            "gather", {"item": "herb", "yield": 0}))
+        self.assert_fails(self.compile(), "yield: out of range 1..9: 0")
+
+    def test_gather_yield_above_max_rejected(self):
+        self.mutate(lambda doc: doc["rooms"][0]["props"][0].__setitem__(
+            "gather", {"item": "herb", "yield": 10}))
+        self.assert_fails(self.compile(), "yield: out of range 1..9: 10")
+
+    def test_gather_unknown_key_rejected(self):
+        self.mutate(lambda doc: doc["rooms"][0]["props"][0].__setitem__(
+            "gather", {"item": "herb", "yield": 1, "respawn": 30}))
+        self.assert_fails(self.compile(), "unknown key 'respawn'")
+
+    def test_gather_missing_item_rejected(self):
+        self.mutate(lambda doc: doc["rooms"][0]["props"][0].__setitem__(
+            "gather", {"yield": 1}))
+        self.assert_fails(self.compile(), "missing key 'item'")
+
+    def test_gather_rect_out_of_room_rejected(self):
+        def add_gather_and_shift(doc):
+            prop = doc["rooms"][0]["props"][0]
+            prop["gather"] = {"item": "herb", "yield": 1}
+            prop["x"] = 14   # x + w (4) = 18 > room w 16
+        self.mutate(add_gather_and_shift)
+        self.assert_fails(self.compile(), "leaves the 16x8 room")
 
     # ---------------------------------------------------------- schema errors
 

@@ -392,5 +392,29 @@ void ZoneSuite(TestRunner &runner) {
         suite.addTest(t);
     }
 
+    {
+        Test t("gather props: reader surfaces item/yield, plain props read none");
+        // Camp props: 0 = tent (plain), 1 = herb x1, 2 = herb x2.
+        const ZoneProp tent = zonePropRead(zone::PROP_CAMP_0);
+        t.assert(tent.gatherItem, zone::GATHER_NONE, "camp tent has no gather item");
+        t.assert(tent.gatherYield, 0, "camp tent gather yield 0");
+
+        const ZoneProp campHerb0 = zonePropRead(zone::PROP_CAMP_1);
+        t.assert(campHerb0.gatherItem, zone::GATHER_HERB, "camp herb 0 item");
+        t.assert(campHerb0.gatherYield, 1, "camp herb 0 yield");
+
+        const ZoneProp campHerb1 = zonePropRead(zone::PROP_CAMP_2);
+        t.assert(campHerb1.gatherItem, zone::GATHER_HERB, "camp herb 1 item");
+        t.assert(campHerb1.gatherYield, 2, "camp herb 1 yield");
+
+        const ZoneProp areaHerb0 = zonePropRead(zone::PROP_AREA_0);
+        t.assert(areaHerb0.gatherItem, zone::GATHER_HERB, "area herb 0 item");
+        t.assert(areaHerb0.gatherYield, 1, "area herb 0 yield");
+
+        const ZoneProp pole = zonePropRead(zone::PROP_POLE_ROOM_0);
+        t.assert(pole.gatherItem, zone::GATHER_NONE, "pole prop has no gather item");
+        suite.addTest(t);
+    }
+
     runner.addTestSuite(suite);
 }

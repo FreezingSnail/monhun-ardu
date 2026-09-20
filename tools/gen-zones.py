@@ -26,7 +26,8 @@ Blob layout (little-endian, explicit u8/u16, no padding, fixed order):
                    firstHeal u16, healCount u8, monsterKind u8, monsterSpawn u8
     door     10 B  x u16, y u16, w u16, h u16, toRoom u8, toSpawn u8
     spawn     4 B  x u16, y u16
-    prop      9 B  type u8, x u16, y u16, sheet u8, frame u8, w u8, h u8
+    prop     11 B  type u8, x u16, y u16, sheet u8, frame u8, w u8, h u8,
+                   gatherItem u8, gatherYield u8
     heal      6 B  x u16, y u16, w u8, h u8
 
 Rooms sort by id; spawns sort by name inside a room; doors/props/heals keep
@@ -68,7 +69,7 @@ HEADER_SIZE = 16
 ROOM_SIZE = 18
 DOOR_SIZE = 10
 SPAWN_SIZE = 4
-PROP_SIZE = 9
+PROP_SIZE = 11
 HEAL_SIZE = 6
 
 ROOM_MAX = 254          # room index is u8; 0xFF is reserved
@@ -87,6 +88,13 @@ MAX_ID = 31
 PROP_TYPES = ("tent", "door", "pole", "post")
 MONSTER_KINDS = ("lunge", "sweep", "heavy", "ravager")
 MONSTER_NONE = 0xFF
+# Gather item vocabulary (bead monhun-ardu-feel.21). A prop's optional "gather"
+# block names one of these; the blob stores the index+1 so 0 means "not a gather
+# node". Keep "herb" first (room to add more items later).
+GATHER_ITEMS = ("herb",)
+GATHER_NONE = 0
+GATHER_YIELD_MIN = 1
+GATHER_YIELD_MAX = 9
 DOOR_MENU = 0xFF        # door.toRoom sentinel: exit to the opening menu
 IMAGE_DIR_REL = "images/maps"
 IMAGE_SYMBOL_PREFIX = "mh_map_"
@@ -216,8 +224,30 @@ def room_image_symbol(room):
     return "%s%s" % (IMAGE_SYMBOL_PREFIX, room["id"])
 
 
+def normalize_gather(errors, ctx, obj):
+    """Optional prop.gather block: {item, yield}. The item must name one of
+    GATHER_ITEMS; yield is 1..9 (the runtime clamps the packed u8 anyway)."""
+    check_keys(errors, ctx, obj, {"item", "yield"})
+    if not isinstance(obj, dict):
+        return None
+    item = read_enum_name(errors, ctx, obj, "item", GATHER_ITEMS)
+    yield_ = read_int(errors, ctx, obj, "yield", GATHER_YIELD_MIN, GATHER_YIELD_MAX)
+    if item is None or yield_ is None:
+        return None
+    return {"item": item, "yield": yield_}
+
+
+def prop_gather(prop):
+    """Packed (gatherItem, gatherYield) for a normalized prop: 0/0 when the prop
+    is not a gather node, else item index+1 and the yield."""
+    gather = prop.get("gather")
+    if gather is None:
+        return GATHER_NONE, 0
+    return GATHER_ITEMS.index(gather["item"]) + 1, gather["yield"]
+
+
 def normalize_prop(errors, ctx, obj):
-    check_keys(errors, ctx, obj, {"type", "x", "y", "sheet", "frame", "w", "h"})
+    check_keys(errors, ctx, obj, {"type", "x", "y", "sheet", "frame", "w", "h"}, {"gather"})
     if not isinstance(obj, dict):
         return None
     prop_type = read_enum(errors, ctx, obj, "type", PROP_TYPES)
@@ -230,9 +260,13 @@ def normalize_prop(errors, ctx, obj):
     frame = read_int(errors, ctx, obj, "frame", 0, 255)
     w = read_int(errors, ctx, obj, "w", 1, 255)
     h = read_int(errors, ctx, obj, "h", 1, 255)
+    gather = None
+    if obj.get("gather") is not None:
+        gather = normalize_gather(errors, ctx + ".gather", obj.get("gather"))
     if None in (prop_type, x, y, sheet, frame, w, h):
         return None
-    return {"type": prop_type, "x": x, "y": y, "sheet": sheet, "frame": frame, "w": w, "h": h}
+    return {"type": prop_type, "x": x, "y": y, "sheet": sheet, "frame": frame,
+            "w": w, "h": h, "gather": gather}
 
 
 def normalize_door(errors, ctx, obj):
@@ -562,8 +596,10 @@ def pack_model(errors, layout):
     for entry in layout["props"]:
         prop = entry["prop"]
         prop_offsets[(entry["room"]["id"], entry["index"])] = off["PROPS"] + entry["index"] * PROP_SIZE
-        body += struct.pack("<BHHBBBB", prop["type"], prop["x"], prop["y"],
-                            layout["sheet_index"][prop["sheet"]], prop["frame"], prop["w"], prop["h"])
+        gather_item, gather_yield = prop_gather(prop)
+        body += struct.pack("<BHHBBBBBB", prop["type"], prop["x"], prop["y"],
+                            layout["sheet_index"][prop["sheet"]], prop["frame"], prop["w"], prop["h"],
+                            gather_item, gather_yield)
 
     heal_offsets = {}
     for entry in layout["heals"]:
@@ -646,6 +682,8 @@ def emit_data_header(layout, packed):
     app("    uint16_t x, y;")
     app("    uint8_t sheet;  // prop sheet index (SHEET_* in zone_meta.hpp)")
     app("    uint8_t frame, w, h;")
+    app("    uint8_t gatherItem;   // GATHER_* item or GATHER_NONE (0)")
+    app("    uint8_t gatherYield;  // 1..9 when gatherItem != GATHER_NONE")
     app("};")
     app("")
     app("struct Heal {")
@@ -719,9 +757,10 @@ def emit_data_header(layout, packed):
     app("inline constexpr std::array<Prop, %d> PROPS = {{" % len(layout["props"]))
     for entry in layout["props"]:
         prop = entry["prop"]
-        app("    {%d, %d, %d, %d, %d, %d, %d}," % (
+        gather_item, gather_yield = prop_gather(prop)
+        app("    {%d, %d, %d, %d, %d, %d, %d, %d, %d}," % (
             prop["type"], prop["x"], prop["y"], layout["sheet_index"][prop["sheet"]],
-            prop["frame"], prop["w"], prop["h"]))
+            prop["frame"], prop["w"], prop["h"], gather_item, gather_yield))
     app("}};")
     app("")
     app("inline constexpr std::array<Heal, %d> HEALS = {{" % len(layout["heals"]))
@@ -809,6 +848,8 @@ def emit_meta_header(layout, packed, fx_symbols):
     app("constexpr uint8_t PROP_FRAME_OFF = 6;  // u8")
     app("constexpr uint8_t PROP_W_OFF = 7;      // u8")
     app("constexpr uint8_t PROP_H_OFF = 8;      // u8")
+    app("constexpr uint8_t PROP_GATHER_ITEM_OFF = 9;   // u8 (0 = not a gather node)")
+    app("constexpr uint8_t PROP_GATHER_YIELD_OFF = 10; // u8")
     app("constexpr uint8_t HEAL_X_OFF = 0;  // u16")
     app("constexpr uint8_t HEAL_Y_OFF = 2;  // u16")
     app("constexpr uint8_t HEAL_W_OFF = 4;  // u8")
@@ -817,6 +858,12 @@ def emit_meta_header(layout, packed, fx_symbols):
     app("// Prop kinds; src render switches on these for special behaviour.")
     for i, name in enumerate(PROP_TYPES):
         app("constexpr uint8_t PROP_%s = %d;" % (name.upper(), i))
+    app("")
+    app("// Gather item kinds; 0 = not a gather node (GATHER_NONE). Prop records")
+    app("// store index+1, so a plain prop reads GATHER_NONE.")
+    app("constexpr uint8_t GATHER_NONE = %d;" % GATHER_NONE)
+    for i, name in enumerate(GATHER_ITEMS):
+        app("constexpr uint8_t GATHER_%s = %d;" % (name.upper(), i + 1))
     app("")
     app("// Monster kinds, values mirror MonsterKind in src/core/game.hpp.")
     app("constexpr uint8_t MONSTER_NONE = 0x%02X;   // room has no monster" % MONSTER_NONE)
@@ -922,9 +969,11 @@ def dump_model(layout, packed):
             target = door["to"] if door["to"] == "menu" else "%s.%s" % (door["to"], door["toSpawn"])
             print("  door %d: rect(%d,%d,%d,%d) -> %s" % (i, door["x"], door["y"], door["w"], door["h"], target))
         for i, prop in enumerate(room["props"]):
-            print("  prop %d: %s rect(%d,%d,%d,%d) sheet %s frame %d"
+            gather = prop["gather"]
+            gather_text = "-" if gather is None else "%s x%d" % (gather["item"], gather["yield"])
+            print("  prop %d: %s rect(%d,%d,%d,%d) sheet %s frame %d gather %s"
                   % (i, PROP_TYPES[prop["type"]], prop["x"], prop["y"], prop["w"], prop["h"],
-                     prop["sheet"], prop["frame"]))
+                     prop["sheet"], prop["frame"], gather_text))
         for i, heal in enumerate(room["heals"]):
             print("  heal %d: rect(%d,%d,%d,%d)" % (i, heal["x"], heal["y"], heal["w"], heal["h"]))
     print("gen-zones: %d rooms, %d doors, %d spawns, %d props, %d heals, %d B blob"

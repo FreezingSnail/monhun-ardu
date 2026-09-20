@@ -125,13 +125,27 @@ inline void test_zones(FxTest &test) {
     const uint8_t campProps = FX::readEnd();
     test.expectEq(campW, zone::ROOM_CAMP_W, F("camp record w"));
     test.expectEq(campH, zone::ROOM_CAMP_H, F("camp record h"));
-    test.expectEq(campProps, 1, F("camp prop count"));
+    test.expectEq(campProps, 3, F("camp prop count"));
+
+    // Gather nodes (bead monhun-ardu-feel.21): camp's tent (global 3) is a
+    // plain prop, the two herb props (4, 5) carry item herb + yield 1/2.
+    const ZoneProp campTent = zonePropRead(zone::PROP_CAMP_0);
+    test.expectEq(campTent.gatherItem, zone::GATHER_NONE, F("camp tent gather none"));
+    test.expectEq(campTent.gatherYield, 0, F("camp tent gather yield 0"));
+    const ZoneProp campHerb0 = zonePropRead(zone::PROP_CAMP_1);
+    test.expectEq(campHerb0.gatherItem, zone::GATHER_HERB, F("camp herb item"));
+    test.expectEq(campHerb0.gatherYield, 1, F("camp herb 0 yield"));
+    const ZoneProp campHerb1 = zonePropRead(zone::PROP_CAMP_2);
+    test.expectEq(campHerb1.gatherYield, 2, F("camp herb 1 yield"));
+    const ZoneProp areaHerb = zonePropRead(zone::PROP_AREA_0);
+    test.expectEq(areaHerb.gatherItem, zone::GATHER_HERB, F("area herb item"));
+    test.expectEq(areaHerb.gatherYield, 1, F("area herb yield"));
 
     // ------------------------------------------ 2. camp view: v == 0 copy
     loadRoom(g, zone::ROOM_CAMP, zone::SPAWN_CAMP_ENTRY);
     test.expectEq(g.camX, 0, F("camp camX pinned"));
     test.expectEq(g.camY, 0, F("camp camY pinned"));
-    test.expectEq(g.roomPropCount, 1, F("camp prop range cached"));
+    test.expectEq(g.roomPropCount, 3, F("camp prop range cached"));
 
     syncPlane(0);
     test.expectEq(arduboy.currentPlane(), 0, F("camp on plane 0"));
