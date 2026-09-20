@@ -232,7 +232,7 @@ MH_PROGMEM const WeaponDef WEAPON_DEFS[3] = {
     // sword: fast taps, dodge (i-frames), parry stance + riposte special
     {
         W_SWORD,
-        18,
+        14,
         {{3, 5, 8, 9, 13, 12, 10, 9, 0, 0, 0, false, ATK_NONE}, {3, 5, 8, 10, 13, 12, 10, 9, 0, 0, 0, false, ATK_NONE}, {5, 6, 14, 17, 16, 18, 14, 15, 0, 0, 0, false, ATK_NONE}},
         {4, 6, 16, 24, 18, 20, 16, 20, 0, 0, 0, false, ATK_NONE},
         {{1, ST_NONE, 0, {3, 5, 12, 12, 18, 14, 12, 10, 42, 0, 0, false, ATK_STEPSLASH}},
@@ -248,7 +248,7 @@ MH_PROGMEM const WeaponDef WEAPON_DEFS[3] = {
     // flail: slow momentum chain, deflect step, whirl stance + ball throw
     {
         W_FLAIL,
-        15,
+        12,
         {{8, 6, 9, 14, 19, 20, 16, 13, 0, 0, 0, false, ATK_NONE}, {6, 6, 9, 17, 21, 22, 16, 12, 0, 0, 0, false, ATK_NONE}, {5, 7, 15, 25, 24, 24, 20, 17, 0, 0, 0, false, ATK_NONE}},
         {4, 8, 14, 27, 32, 14, 18, 22, 0, 0, 0, false, ATK_NONE},
         {{1, ST_WHIRL, 50, {0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, false, ATK_NONE}},
@@ -265,7 +265,7 @@ MH_PROGMEM const WeaponDef WEAPON_DEFS[3] = {
     // gunshield: slow walk, shove, guard stance + gun (ball / scatter)
     {
         W_GUN,
-        9,
+        7,
         {{5, 4, 11, 6, 11, 14, 12, 8, 0, 0, 0, false, ATK_NONE}, {5, 4, 11, 7, 11, 14, 12, 8, 0, 0, 0, false, ATK_NONE}, {7, 5, 15, 11, 13, 16, 14, 13, 0, 0, 0, false, ATK_NONE}},
         {0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, false, ATK_NONE},   // gunshield fires shells, no melee special
         {{1, ST_NONE, 0, {4, 5, 16, 22, 15, 18, 16, 6, 0, 0, 0, true, ATK_POINTBLANK}},

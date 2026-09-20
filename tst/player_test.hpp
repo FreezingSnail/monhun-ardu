@@ -119,9 +119,9 @@ void PlayerSuite(TestRunner &runner) {
 
     {
         Test t("WEAPON_DEFS tables match prototype numbers");
-        t.assert(WEAPON_DEFS[W_SWORD].spd, 18, "sword spd");
-        t.assert(WEAPON_DEFS[W_FLAIL].spd, 15, "flail spd");
-        t.assert(WEAPON_DEFS[W_GUN].spd, 9, "gun spd");
+        t.assert(WEAPON_DEFS[W_SWORD].spd, 14, "sword spd");
+        t.assert(WEAPON_DEFS[W_FLAIL].spd, 12, "flail spd");
+        t.assert(WEAPON_DEFS[W_GUN].spd, 7, "gun spd");
         // sword combo + special
         t.assert(WEAPON_DEFS[W_SWORD].attacks[0].startup, 3, "s0 startup");
         t.assert(WEAPON_DEFS[W_SWORD].attacks[0].active, 5, "s0 active");

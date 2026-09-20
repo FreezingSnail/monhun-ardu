@@ -76,7 +76,8 @@ void WorldSuite(TestRunner &runner) {
         wparkBeast(g, 20, 0);
         // start player x 96 -> centre 104, tx = 104-64 = 40 (pre-move position)
         stepGame(g, WTEST_RIGHT);
-        t.assert(g.player.x, 97, "player moved one pixel this tick");
+        t.assert(g.player.x, 96, "player sub-pixel step only (sword 14/16)");
+        t.assert(g.player.subX, 14, "sub-pixel accumulator carried");
         t.assert(g.camX, 40, "camera saw the pre-move centre (mock order)");
         t.assert(g.camY, 40, "camera y from the start row");
         suite.addTest(t);

@@ -104,7 +104,7 @@ inline void test_data(FxTest &test) {
 
     // ------------------------------------------ sword values (mock/game.js)
     test.expectEq(weaponId(w0), W_SWORD, F("sword id"));
-    test.expectEq(weaponSpd(w0), 18, F("sword spd"));
+    test.expectEq(weaponSpd(w0), 14, F("sword spd"));
     test.expectEq(weaponCanCancel(w0), 1, F("sword cancel"));
 
     const Attack *a0 = weaponAttack(w0, 0);
@@ -184,7 +184,7 @@ inline void test_data(FxTest &test) {
 
     // ------------------------------------------ flail values (mock/game.js)
     test.expectEq(weaponId(w1), W_FLAIL, F("flail id"));
-    test.expectEq(weaponSpd(w1), 15, F("flail spd"));
+    test.expectEq(weaponSpd(w1), 12, F("flail spd"));
     test.expectEq(weaponCanCancel(w1), 0, F("flail cancel"));
 
     const Attack *f0 = weaponAttack(w1, 0);
@@ -241,7 +241,7 @@ inline void test_data(FxTest &test) {
 
     // ---------------------------------------- gunshield values (mock/game.js)
     test.expectEq(weaponId(w2), W_GUN, F("gun id"));
-    test.expectEq(weaponSpd(w2), 9, F("gun spd"));
+    test.expectEq(weaponSpd(w2), 7, F("gun spd"));
     test.expectEq(weaponCanCancel(w2), 1, F("gun cancel"));
 
     const Attack *g0 = weaponAttack(w2, 0);

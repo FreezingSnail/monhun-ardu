@@ -20,7 +20,7 @@ flashing.
 
 | # | Problem | Pre-revision symptom | Revision answer |
 |---|---|---|---|
-| 1 | **Beast speed vs hunter** | Beast `spd` 3–7 (1/16 px/tick; heavy 3 at the start of the wave) against a hunter who walks 9–18 and runs 24 while stowed. Attacks did not move the beast, so kiting was free and the fight never closed. | Attacks are the mobility. `move.type lunge/charge/hop` closes distance, `keepDist` holds a threat band, and the hop commits a face-relative vector. |
+| 1 | **Beast speed vs hunter** | Beast `spd` 3–7 (1/16 px/tick; heavy 3 at the start of the wave) against a hunter who walks 7–14 and runs 24 while stowed. Attacks did not move the beast, so kiting was free and the fight never closed. | Attacks are the mobility. `move.type lunge/charge/hop` closes distance, `keepDist` holds a threat band, and the hop commits a face-relative vector. |
 | 2 | **Track re-aim** | Every attack recomputed its facing vector every tick, so a sidestep was erased the next tick and there was no flank to punish. | `facing: lock-at-windup` freezes the windup vector; `lock-away` turns the back to the hunter; `profile.faceHold > 0` refreshes a *tracked* heading only every N ticks. All three make the flank reachable. |
 | 3 | **2x2 tell** | A single 2x2 shade-2 dot at the window centre. It said "an attack is coming", not *where*. | Per-attack `tell` shapes (`dot/line/arc/ring/zone`) drawn from the cached hit window. The tell draws the area the attack will cover. |
 | 4 | **Metronome cadence** | Shared `cdBase 55`, single-ATK patterns, so every fight had the same pulse and the same one-beat answer. | Per-beast `cdBase`/`cdJitter` plus multi-step patterns with `after`, `wait`, `chance` and HP bands, so the pressure changes across the fight. |

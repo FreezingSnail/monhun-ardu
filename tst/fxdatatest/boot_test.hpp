@@ -26,7 +26,7 @@ inline void test_boot(FxTest &test) {
         for (int i = 0; i < 16; ++i) {
             mh::stepPlayer(g, inp);
         }
-        test.expectEq(static_cast<uint32_t>(g.player.x), static_cast<uint32_t>(startX + 18), F("boot move 16 ticks right"));
+        test.expectEq(static_cast<uint32_t>(g.player.x), static_cast<uint32_t>(startX + 14), F("boot move 16 ticks right"));
         test.expectEq(static_cast<uint32_t>(g.tick), 16, F("boot tick count"));
     }
 
