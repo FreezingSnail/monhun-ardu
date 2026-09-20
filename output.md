@@ -1,159 +1,97 @@
-# monhun-ardu-feel.15 — data: creature turn rates + wider flank bands
+# monhun-ardu-feel.16 — input: double-tap d-pad rolls
 
-HEAD at start: `23097b1` (feel.14 turn-rate engine), clean tree. No commit/push
-(orchestrator commits). Base flash `28720/29696 (976 free)`, RAM `1744/2560`.
+HEAD at start: `56b34c3` (balance: slow weapon-out walk), clean tree. No
+commit/push (orchestrator commits). Base flash `28720/29696 (976 free)`,
+RAM `1744/2560`.
 
 ## What changed
 
-| File | Change |
-|---|---|
-| `data/creatures/lunge.json` | chicken `profile.faceHold` 5→6, `turnRate` 0→1; `p_flank` maxDist 26→32 |
-| `data/creatures/sweep.json` | bull `turnRate` 0→1 (faceHold stays 10); `p_rear_kick` maxDist 24→30 |
-| `data/creatures/heavy.json` | heavy `profile.faceHold` 8→10, `turnRate` 0→1; `p_tail_slam` band 20..60→16..64 |
-| `data/creatures/ravager.json` | ravager `faceHold` default 0→8, `turnRate` default 0→2 |
-| `docs/feel-design.md` | profile/pattern table cells + `turnRate` data-verb row + feel.14/15 budget entry |
-| `src/generated/*`, `src/fxdata.h`, `fxdata/*`, `fxdata/manifest.json` | `make gen` regen (see below) |
-| `tst/monster_test.hpp` | heavy faceHold 8→10 (turnRate isolated to 0 for that sub-test); shipped-heavy turnRate 0→1; heavy slam band 16..64 boundaries; new chicken 6/1 circling-behind reachability test |
-| `tst/combat_test.hpp` | profile pins (heavy 10/1, chicken 6/1, bull 10/1, ravager 8/2); p_flank 32, rear_kick 30, tail_slam 16..64 boundary pins |
-| `tst/combat_pack_test.hpp` | lunge turnRate literal 0→1, added ravager turnRate expect pin, retitled comment |
-| `tst/fxdatatest/combat_test.hpp` | comments only (guard bands read from regenerated expect constants) |
+- `src/core/game.hpp`: `DTAP_WIN = 10` next to the other input windows;
+  `Player` gains `dTapDir` (last press-edge dir8, 0xFF none), `dTapT`
+  (window countdown) and `pDir` (dir8 last tick, 0xFF idle), appended last so
+  existing fields/sizes do not move.
+- `src/core/player.hpp`: `Player::init` zeroes the three fields. In
+  `updatePlayer`, between the sheathe block and the B handling, a press edge
+  (`dirIndexFromInput >= 0 && != pDir`) inside `DTAP_WIN` of the previous
+  same-dir edge calls the existing `tapDefense(g, def, inp)`; otherwise it arms
+  the window. `dTapT` ticks down each tick, `pDir` updates every tick. A/B are
+  never consumed and held directions never fire (no edge).
+  - `tapDefense` keeps every gate/action untouched, so the double-tap gets the
+    same weapon action, stamina and state checks as the B tap.
+  - Interaction: the sheathe block watches its own Down edges, so double-tap
+    Down arms the sheathe sequence AND rolls. The sheathe seq window (18t)
+    outlives the 16t stow-roll, so the A+B chord still lands (host helper waits
+    the roll out, see below). Documented in the code comment; revisit after
+    playtest.
+- `tst/player_test.hpp`: `doubleTap()` helper; the `stowWeapon()` sheathe
+  helper now waits out the second-tap roll before the chord (behavior unchanged,
+  just sequencing). New permanent tests below.
+- `README.md`: in-game controls row for the d-pad double-tap.
+- `docs/feel-design.md`: one-line player-input verb note at the end of section 3.
 
-Interface: no new symbols/types. `profile.turnRate` (u8, packed byte 11,
-`PROFILE_SIZE` 24) and `profile.faceHold` already existed; this bead only
-authors values. `HAS_TURN_RATE` flips `false -> true` in
-`src/generated/combat_meta.hpp` (generated for the ledger only — the engine
-comment at `src/core/monster.hpp` records that the stepping path stays compiled,
-so the flip does not fold code).
+## New tests (all permanent, in `tst/player_test.hpp`)
 
-## Authored rates — `python3 tools/gen-combat.py --dump` (changed sections)
-
-```
-creature heavy (skeleton longtail, stats w40 h28 hp320 spd5, ... )
-  profile: engage36 keep12 attack42 circle8/10 retreat6/10 stagger0/0/0 faceHold10 turnRate1 cd55+40 spawn90/140 stun24
-  pattern p_tail_slam: guard minDist16 maxDist64 hp[0,100] player0x00 cd0 chance100 zonesBroken - facing behind
-creature lunge (skeleton chicken, stats w32 h24 hp200 spd6, ...)
-  profile: engage36 keep16 attack42 circle8/10 retreat6/10 stagger30/2/30 faceHold6 turnRate1 cd48+60 spawn90/140 stun24
-  pattern p_flank: guard minDist0 maxDist32 hp[0,100] player0x00 cd0 chance100 zonesBroken - facing behind
-creature ravager (skeleton quad_32x24, stats w32 h24 hp260 spd6, ...)
-  profile: engage36 keep24 attack42 circle8/10 retreat6/10 stagger60/1/24 faceHold8 turnRate2 cd50+30 spawn90/120 stun24
-creature sweep (skeleton bull, stats w28 h22 hp150 spd7, ...)
-  profile: engage36 keep18 attack42 circle8/10 retreat6/10 stagger40/1/24 faceHold10 turnRate1 cd55+40 spawn90/140 stun24
-  pattern p_rear_kick: guard minDist0 maxDist30 hp[0,100] player0x00 cd0 chance100 zonesBroken - facing behind
-```
-
-Generated expect constants now: `PROFILE_LUNGE_FACE_HOLD=6`,
-`PROFILE_LUNGE_TURN_RATE=1`, `PROFILE_SWEEP_TURN_RATE=1`,
-`PROFILE_HEAVY_FACE_HOLD=10`, `PROFILE_HEAVY_TURN_RATE=1`,
-`PROFILE_RAVAGER_FACE_HOLD=8`, `PROFILE_RAVAGER_TURN_RATE=2`,
-`PATTERN_LUNGE_P_FLANK_MAX_DIST=32`, `PATTERN_SWEEP_P_REAR_KICK_MAX_DIST=30`,
-`PATTERN_HEAVY_P_TAIL_SLAM_MIN_DIST=16`, `..._MAX_DIST=64`.
-
-## Band exclusivity (no shadowing)
-
-Pattern lists evaluated source-order, first match wins; the behind guards sit
-ahead of the same-frontage bands and only claim behind-hemisphere points:
-
-- chicken: `p_flank` behind 0..32 → `p_peck` any 0..28 → `p_leap`/`p_leap2`
-  28..255 (hp 51..100 / 0..50). Non-behind at 28 still pecks; behind at >32
-  falls through to peck/leap as before.
-- bull: `p_rear_kick` behind 0..30 → `p_gore2` any hp 0..40 → `p_stomp` any
-  0..24 → `p_gore` 24..255 hp 41..100. The two-zone overlap at exactly 24
-  (stomp vs gore, hp 41..100) is resolved by source order and is unchanged from
-  feel.9; the widened kick only steals behind points ≤30.
-- heavy: `p_tail_slam` behind 16..64 → `p_bite_spin` any 0..20 → `p_spin` any
-  21..30 → `p_bite` any 31..255 hp 0..100. The front bands are still an
-  exclusive tile (0..20 / 21..30 / 31..255); behind 16..64 is disjoint by the
-  facing clause. Behind <16 or >64 falls through to the frontage bands.
-
-## Contact sheet review
-
-`python3 tools/contact_sheet.py --creature lunge|sweep|heavy` rendered
-`build/sheet_lunge.png`, `build/sheet_sweep.png`, `build/sheet_heavy.png`
-(480x404 each). Attack windup/active/recover timelines and window boxes are
-unchanged by this bead (only profile scalars and guard bands changed), so all
-tell shapes / hit geometry read exactly as the feel.10 sheets; the guard bands
-above are the dump-verified half of the review.
-
-## Sanity-sim (host)
-
-New `tst/monster_test.hpp` case
-`turnRate: chicken faceHold 6 / turnRate 1 lets a circling hunter reach behind`:
-frozen beast in PURSUE, hunter stepping one DIR8 position per tick around an
-18 px radius (`~16-20 px`), `updateMonster` driven each tick; asserts shipped
-chicken 6/1, then `facingDot < 0` on the third tick (`behindTick == 3`), well
-inside the 24-tick bound. PASS (5/5 asserts).
+- double-tap E: sword `PS_DODGE` + east vx + i-frames; flail `PS_DEFLECT` +
+  west vx; gun `PS_SHOVE`.
+- single tap idle; tap, wait `DTAP_WIN+1`, tap idle; tap E then tap W idle.
+- held E 30t idle (no edge).
+- zero stamina idle; flail mid-attack (`canCancel` false) stays `PS_ATTACK`.
+- sheathed double-tap E: `PS_DODGE`, `iT 14`, stam `100-14=86`, vx > 40
+  (54-based stowed numbers).
+- Existing B-tap + sheathe tests stayed green (sheathe helper adjusted only).
 
 ## Verification tails
-
-`make gen` (run twice; identical, `make gen-check` clean):
-
-```
-gen.sh: FX data + src/fxdata.h regenerated
-fxdata_manifest: fxdata/manifest.json up to date (52 images, 62 inputs, 19 outputs)
-```
 
 `make gen-check`:
 
 ```
+fxdata_manifest: fxdata/manifest.json up to date (52 images, 62 inputs, 19 outputs)
+gen.sh: FX data + src/fxdata.h regenerated
 fxdata_manifest: PASS (82 generated artifacts unchanged)
 ```
 
 `make test`:
 
 ```
-Total Passed: 6513
+Total Passed: 6532
 Total Failed: 0
 ```
+(new suites: 6+3+1+3+5 = 18 asserts, all pass)
 
 `make test-tools`:
 
 ```
-Ran 202 tests in 10.986s
-
+Ran 202 tests in 11.862s
 OK
 ```
 
-`make fxtest-headless` (full default set, `test_parity` excluded by policy):
+`make fxtest-headless` (full, 16 suites; parity excluded by design):
 
 ```
-=== test_assets ===   test_assets PASSED=270 FAILED=0
-=== test_audio ===    test_audio PASSED=17 FAILED=0
-=== test_boot ===     test_boot PASSED=4 FAILED=0
-=== test_combat ===   C reads spawn=15 attack=7 guard=2 hit=0 tick256=0 simAtk=8 simTk=0 winSw=1
-                      combat_test PASSED=237 FAILED=0
-=== test_data ===     data_test PASSED=368 FAILED=0
-=== test_hub ===      test_hub PASSED=57 FAILED=0
-=== test_hud ===      test_hud PASSED=17 FAILED=0
-=== test_menu_art === test_menu_art PASSED=81 FAILED=0
-=== test_menu ===     menu_test PASSED=80 FAILED=0
-=== test_monster_art === test_monster_art PASSED=111 FAILED=0
-=== test_perf ===     B pUs=6369 pHz=157 lHz=52 lTk=456 rMx=4772 rAv=4593 ram=581
-                      perf_test PASSED=5 FAILED=0
-=== test_player_art === test_player_art PASSED=111 FAILED=0
-=== test_quests ===   test_quests PASSED=50 FAILED=0
-=== test_screens ===  test_screens PASSED=78 FAILED=0
-=== test_smith ===    test_smith PASSED=66 FAILED=0
-=== test_tell ===     test_tell PASSED=17 FAILED=0
-=== test_zones ===    zones_test PASSED=69 FAILED=0
+test_perf: B pUs=6369 pHz=157 lHz=52 lTk=456 rMx=4772 rAv=4593 ram=582
+perf_test PASSED=5 FAILED=0
+... every suite PASSED=... FAILED=0
 ```
 
 `make size`:
 
 ```
-size: .text=28680 .data=40 .bss=1704
-size: flash=28720/29696 (976 free)  ram=1744/2560
-size: data facts: HAS_ENRAGE:true ... HAS_TURN_RATE:true ...
+Sketch uses 28796 bytes (96%) of program storage space. Maximum is 29696 bytes.
+Global variables use 1747 bytes (68%) of dynamic memory, leaving 813 bytes.
+size: flash=28796/29696 (900 free)  ram=1747/2560
 ```
 
 ## Budget
 
-Delta over `23097b1`: **+0 B flash, +0 B RAM** — the changed fields already
-exist in the packed profile record (`PROFILE_SIZE` 24) and pattern guards
-(`GUARD_SIZE` 9), so only bytes already allocated change value. `HAS_TURN_RATE`
-flips `false -> true`, generated for the ledger only and not folded into the
-shipping path (no size effect). Flash remains `28720/29696 (976 free)`.
+- Flash: `28720 -> 28796` = **+76 B** (target <=150 B). 900 free.
+- RAM: `1744 -> 1747` = **+3 B** as designed (the three detector fields).
+- No data/pack change; `make gen` was a no-op (manifest unchanged), `gen-check`
+  passed with no generated diff.
 
-## Result
+## Notes
 
-All gates green; no deviation. Data authored as specified, bands exclusive, new
-behind-reachability assertion PASS.
+- `test_parity` remains excluded (AGENTS.md: not a gate). It was already over
+  the board at baseline: `30258 bytes (101%)` on a stashed clean `56b34c3`;
+  with this change `30298 bytes (101%)` (+40 B). No `MH_DTAP` carve added —
+  the image cannot fit either way and is unmaintained diagnostics.
+- No commit/push performed.

@@ -44,7 +44,10 @@ constexpr uint8_t B_BRANCH_BUFFER = 36;   // B branch tap buffer: bridges recove
 // Sheathe combo (ddab only): double-tap Down then an A+B chord within a 3t grace.
 constexpr uint8_t SHEATHE_SEQ_WIN = 18;   // d-pad tap -> chord window (~300ms)
 constexpr uint8_t CHORD_WIN = 3;          // A/B chord grace (~50ms)
-constexpr uint8_t SHEATHE_SPD = 24;       // 1/16 px per tick while stowed (1.5 px/t run)
+// Double-tap d-pad dodge (feel.16): two same-direction press edges inside this
+// window fire the weapon tap-defense toward the tapped direction.
+constexpr uint8_t DTAP_WIN = 10;
+constexpr uint8_t SHEATHE_SPD = 24;   // 1/16 px per tick while stowed (1.5 px/t run)
 // Parity carve facts (same pattern as MH_COMBAT_PARTS): the test_parity scenes
 // never sheathe and never queue a B branch through recovery/lock, so those input
 // paths fold out of that image; the host suite keeps covering them.
@@ -528,6 +531,12 @@ struct Player : fp::FpBody, fp::FpStam {
     uint8_t aHold;
     uint8_t chargeT;
     bool chargeArmed;
+    // Double-tap d-pad dodge (feel.16). dTapDir = last press-edge dir8 (0xFF when
+    // none), dTapT = DTAP_WIN countdown, pDir = dir8 sampled last tick (0xFF
+    // idle). Appended last so existing fields/sizes do not move.
+    int8_t dTapDir;
+    uint8_t dTapT;
+    int8_t pDir;
 
     void init(int8_t weapon);
 };

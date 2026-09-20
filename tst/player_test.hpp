@@ -103,13 +103,24 @@ void holdToStance(Game &g) {
     stepN(g, 13, Input{0, 0, false, true});
 }
 
-// stow via the device ddab combo: double-tap Down then an A+B chord
+// stow via the device ddab combo: double-tap Down then an A+B chord. The second
+// Down tap also fires the feel.16 double-tap roll, so wait the roll out before
+// the chord; the sheathe seq window (18t) outlives the 16t roll.
 void stowWeapon(Game &g) {
     stepN(g, 1, Input{0, 1, false, false});
     stepN(g, 1, Input{0, 0, false, false});
-    stepN(g, 1, Input{0, 1, false, false});
+    stepN(g, 1, Input{0, 1, false, false});   // second tap: sheathe armed + roll
     stepN(g, 1, Input{0, 0, false, false});
+    for (int i = 0; i < 20 && g.player.state != PS_IDLE; i++)
+        stepN(g, 1);
     stepN(g, 1, Input{0, 0, true, true});
+}
+
+// double-tap a d-pad direction (press, release, press) -- feel.16 roll input
+void doubleTap(Game &g, int8_t mx, int8_t my) {
+    stepN(g, 1, Input{mx, my, false, false});
+    stepN(g, 1, Input{0, 0, false, false});
+    stepN(g, 1, Input{mx, my, false, false});
 }
 
 }   // namespace
@@ -894,6 +905,95 @@ void PlayerSuite(TestRunner &runner) {
         for (int i = 0; i < 40; i++)
             stepPlayer(g, Input{0, 0, false, false});
         t.assert(g.player.state, PS_IDLE, "no charge after a tap");
+        suite.addTest(t);
+    }
+
+    // ------------------------------- double-tap d-pad roll (feel.16)
+    {
+        Test t("double-tap E rolls toward E (sword dodge, flail deflect, gun shove)");
+        Game g;
+        initGame(g, W_SWORD);
+        doubleTap(g, 1, 0);
+        t.assert(g.player.state, PS_DODGE, "sword: dodge state");
+        t.assertGreaterThan(g.player.vx, 0, "sword: rolls east");
+        t.assertGreaterThan(g.player.iT, 0, "sword: i-frames armed");
+
+        initGame(g, W_FLAIL);
+        doubleTap(g, 1, 0);
+        t.assert(g.player.state, PS_DEFLECT, "flail: deflect state");
+        t.assertLessThan(g.player.vx, 0, "flail: backstep west");
+
+        initGame(g, W_GUN);
+        doubleTap(g, 1, 0);
+        t.assert(g.player.state, PS_SHOVE, "gun: shove state");
+        suite.addTest(t);
+    }
+
+    {
+        Test t("double-tap timing: single, expired window and different dir do not roll");
+        Game g;
+        initGame(g, W_SWORD);
+        stepN(g, 1, Input{1, 0, false, false});
+        stepN(g, 1, Input{0, 0, false, false});
+        t.assert(g.player.state, PS_IDLE, "single tap does not roll");
+
+        initGame(g, W_SWORD);
+        stepN(g, 1, Input{1, 0, false, false});
+        stepN(g, 1, Input{0, 0, false, false});
+        stepN(g, DTAP_WIN + 1);
+        stepN(g, 1, Input{1, 0, false, false});
+        stepN(g, 1, Input{0, 0, false, false});
+        t.assert(g.player.state, PS_IDLE, "second tap after the window does not roll");
+
+        initGame(g, W_SWORD);
+        stepN(g, 1, Input{1, 0, false, false});
+        stepN(g, 1, Input{0, 0, false, false});
+        stepN(g, 1, Input{-1, 0, false, false});
+        stepN(g, 1, Input{0, 0, false, false});
+        t.assert(g.player.state, PS_IDLE, "different direction does not roll");
+        suite.addTest(t);
+    }
+
+    {
+        Test t("held direction does not roll (no press edge)");
+        Game g;
+        initGame(g, W_SWORD);
+        stepN(g, 30, Input{1, 0, false, false});
+        t.assert(g.player.state, PS_IDLE, "held east stays idle");
+        suite.addTest(t);
+    }
+
+    {
+        Test t("double-tap gated: zero stamina and non-cancelable attack do not roll");
+        Game g;
+        initGame(g, W_SWORD);
+        g.player.stam = 0;
+        g.player.stamSub = 0;
+        doubleTap(g, 1, 0);
+        t.assert(g.player.state, PS_IDLE, "no stamina, no roll");
+
+        initGame(g, W_FLAIL);
+        stepN(g, 1, Input{0, 0, true, false});   // swing: flail cannot cancel
+        t.assert(g.player.state, PS_ATTACK, "flail attack running");
+        doubleTap(g, 1, 0);
+        t.assert(g.player.state, PS_ATTACK, "cannot roll out of a flail attack");
+        suite.addTest(t);
+    }
+
+    {
+        Test t("sheathed double-tap rolls with the stowed numbers (stam 14, vx 54)");
+        Game g;
+        initGame(g, W_FLAIL);
+        stowWeapon(g);
+        stepN(g, 1);   // release B, clears the sheathe latch
+        g.player.stam = 100;
+        g.player.stamSub = 0;
+        doubleTap(g, 1, 0);
+        t.assert(g.player.sheathed, true, "still stowed");
+        t.assert(g.player.state, PS_DODGE, "stowed roll state");
+        t.assert(g.player.iT, 14, "stowed roll i-frames");
+        t.assert(g.player.stam, 86, "stowed roll cost 14");
+        t.assertGreaterThan(g.player.vx, 40, "stowed roll velocity from 54");
         suite.addTest(t);
     }
 

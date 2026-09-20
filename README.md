@@ -284,6 +284,7 @@ hunt exit.
 | Input | Action |
 |---|---|
 | D-pad | move |
+| D-pad double-tap | dodge (sword) / deflect (flail) / shove (gunshield) toward the tapped direction (stamina + state gates as the B tap; when stowed, the stowed roll) |
 | A | attack (in a stance: stance special) |
 | B tap | dodge (sword) / deflect (flail) / shove (gunshield) |
 | B hold ~11 ticks | enter stance (parry / whirl / guard); release exits |

@@ -68,6 +68,9 @@ void Player::init(int8_t weapon) {
     aHold = 0;
     chargeT = 0;
     chargeArmed = false;
+    dTapDir = -1;
+    dTapT = 0;
+    pDir = -1;
 }
 
 MH_NOINLINE void initGame(Game &g, int8_t weapon) {
@@ -719,6 +722,28 @@ static void updatePlayer(Game &g, const Input &inp, bool aP, bool bP, bool bR) {
                 p.chordT = CHORD_WIN;
         }
     }
+
+    // Double-tap d-pad -> weapon tap-defense toward the tapped direction
+    // (feel.16). From the sheathe block down, BEFORE the B handling: the same
+    // tapDefense() the B tap uses re-checks the stamina/state gates and picks
+    // the weapon action, so the three weapons keep their own numbers. A press
+    // edge is a dir8 the pad did not carry last tick: held directions never
+    // fire, and A/B are untouched. Interaction: the sheathe prototype watches
+    // its own Down edges, so double-tap Down arms the sheathe sequence AND
+    // rolls (the seq window outlives the 16t roll, so the chord still lands).
+    if (p.dTapT > 0)
+        p.dTapT--;
+    const int8_t dNow = fp::dirIndexFromInput(inp.mx, inp.my);
+    if (dNow >= 0 && dNow != p.pDir) {
+        if (p.dTapT > 0 && dNow == p.dTapDir) {
+            p.dTapT = 0;   // second edge inside the window: fire and disarm
+            tapDefense(g, def, inp);
+        } else {
+            p.dTapDir = dNow;
+            p.dTapT = DTAP_WIN;
+        }
+    }
+    p.pDir = dNow;
 
     const bool draining = p.stance == ST_WHIRL || p.stance == ST_GUARD;
     if (!draining && p.stam < p.stamMax) {
