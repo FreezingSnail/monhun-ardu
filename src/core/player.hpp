@@ -115,6 +115,9 @@ MH_NOINLINE void initGame(Game &g, int8_t weapon) {
     for (uint8_t i = 0; i < ITEM_COUNT; i++)
         g.items[i] = 0;
     g.gatherMask = 0;
+    // Carve (prg.3): a fresh hunt has three carves and no live carcass interact.
+    g.carvesDone = 0;
+    g.carveHold = false;
 }
 
 static Rect meleeHitbox(const Player &p, const Attack *a) {

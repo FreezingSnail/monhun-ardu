@@ -175,8 +175,11 @@ void run() {
     if (mh::appHuntCommit(g.over != mh::OVER_NONE, s_huntOver, s_save, g.questProgress))
         mh::saveStore(s_save, SAVE_BACKEND);
     // Win/lose over screen: a fresh A returns to the opening menu (picks
-    // preserved); the menu's next A starts a fully reset hunt.
-    if (mh::menuReturnStep(s_menu, g.over != mh::OVER_NONE, in))
+    // preserved); the menu's next A starts a fully reset hunt. While a carcass
+    // carve is live (prg.3) the A belongs to the carve, so consume the menu
+    // edge but skip the return nav; the hunt end still routes out otherwise.
+    const bool huntReturn = mh::menuReturnStep(s_menu, g.over != mh::OVER_NONE, in);
+    if (huntReturn && mh::appHuntReturnAllowed(g))
         mh::appNavApply(mh::appHuntReturn(), s_menu, s_screen, s_save, g, in);
 }
 

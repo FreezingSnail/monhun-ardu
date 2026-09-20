@@ -1,0 +1,7 @@
+{
+  "version": 1,
+  "items": [
+    { "id": "herb", "kind": "consumable", "heal": 20, "stam": 0, "sell": 10 },
+    { "id": "scale", "kind": "material", "heal": 0, "stam": 0, "sell": 25 }
+  ]
+}

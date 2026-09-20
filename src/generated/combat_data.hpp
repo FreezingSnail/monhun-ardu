@@ -12,7 +12,7 @@
 namespace combat_data {
 
 constexpr uint8_t VERSION = 1;
-constexpr uint16_t BLOB_SIZE = 1045;
+constexpr uint16_t BLOB_SIZE = 1093;
 
 struct Box {
     int8_t ox;
@@ -80,6 +80,10 @@ struct Step {
     uint8_t kind, ref, after, chance;
 };
 
+struct Carve {
+    uint8_t item, count, chance;   // count 0 = empty slot
+};
+
 struct Creature {
     uint8_t skeletonIdx, profileIdx;
     uint8_t headZone, appendZone;
@@ -92,6 +96,7 @@ struct Creature {
     uint8_t sheet;   // art sheet id (0 = default monster sheet)
     uint8_t brokenW, brokenH;   // target rect on break (0 = unchanged)
     uint8_t enrageHpPct, enrageSpdMul, enrageFaceHold, enrageCue;   // hpPct 0 = disabled
+    Carve carve[4];   // prg.3 drop table; count 0 slots are inert
 };
 
 // Index constants (creatures sorted by id; attacks, windows, patterns and
@@ -190,10 +195,10 @@ constexpr uint8_t ZONE_SWEEP_APPENDAGE = 6;
 constexpr uint8_t ZONE_SWEEP_HEAD = 5;
 
 inline constexpr std::array<Creature, 4> CREATURES = {{
-    {2, 0, 255, 0, 0, 3, 0, 4, 40, 28, 5, {-8, 3, 48, 22}, 2800, 200, 40, 0, 0, 0, 0, 0, 0, 0, 0},
-    {1, 1, 1, 2, 3, 3, 4, 4, 32, 24, 6, {9, 11, 12, 13}, 1800, 200, 40, 0, 0, 0, 0, 0, 0, 0, 0},
-    {4, 2, 3, 4, 6, 2, 8, 3, 32, 24, 6, {0, 0, 32, 24}, 2400, 200, 40, 0, 0, 0, 0, 0, 0, 0, 0},
-    {0, 3, 5, 6, 8, 3, 11, 4, 28, 22, 7, {1, 14, 26, 8}, 1500, 200, 40, 0, 0, 0, 0, 40, 130, 6, 0},
+    {2, 0, 255, 0, 0, 3, 0, 4, 40, 28, 5, {-8, 3, 48, 22}, 2800, 200, 40, 0, 0, 0, 0, 0, 0, 0, 0, {{7, 1, 100}, {4, 1, 55}, {5, 1, 25}, {0, 0, 0}}},
+    {1, 1, 1, 2, 3, 3, 4, 4, 32, 24, 6, {9, 11, 12, 13}, 1800, 200, 40, 0, 0, 0, 0, 0, 0, 0, 0, {{4, 1, 100}, {5, 1, 45}, {0, 0, 0}, {0, 0, 0}}},
+    {4, 2, 3, 4, 6, 2, 8, 3, 32, 24, 6, {0, 0, 32, 24}, 2400, 200, 40, 0, 0, 0, 0, 0, 0, 0, 0, {{6, 1, 100}, {7, 1, 45}, {4, 2, 30}, {0, 0, 0}}},
+    {0, 3, 5, 6, 8, 3, 11, 4, 28, 22, 7, {1, 14, 26, 8}, 1500, 200, 40, 0, 0, 0, 0, 40, 130, 6, 0, {{5, 1, 100}, {6, 1, 40}, {0, 0, 0}, {0, 0, 0}}},
 }};
 
 inline constexpr std::array<Profile, 4> PROFILES = {{

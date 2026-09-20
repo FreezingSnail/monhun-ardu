@@ -132,6 +132,19 @@ inventory is a fixed `Game::items[]` indexed by the generated item ids, the
 gather code is the item index + 1, and the herb's 20 hp heal is the table's
 `heal` value (a data edit, not a code edit).
 
+Carving the kill (prg.3): each creature authors a `carve` drop table
+(`data/creatures/*.json`), packed by `tools/gen-combat.py` into a fixed 4-slot
+tail on the creature record (item index, count 1..3, chance 0..100; a padded
+slot is chance 0). After `MS_DEAD` the carcass stays at the beast's last body
+box; while `over == WIN` a sheathed-style A inside that box runs `PS_CARVE`
+(~40 rooted ticks, move/damage cancels) and on completion rolls every authored
+slot through the same deterministic tick hash the pattern `chance` uses
+(`combatChancePasses`), adds the yields and sparks. Three carves per hunt, then
+the carcass is inert. The over-screen return edge is gated on `Game::carveHold`
+(`appHuntReturnAllowed`), so the A that carves never also exits to the menu. A
+victory walk was trimmed for the flash budget (see the prg.3 ledger below), so
+a carve needs the hunter to be in reach when the beast falls.
+
 ---
 
 ## 4. Per-beast kit reference
@@ -384,6 +397,24 @@ so `drawArena` is still the shipping ground and removing it would blank the
 playfield — and (b) the per-cut deltas were measured independently and do not
 sum linearly under LTO. Device perf improved as a strict render subtraction:
 `test_perf` `rMx` 4768 → 3348 µs, `rAv` 4540 → 3075 (budget 7407), ram 724.
+
+### prg.3 carve — budget
+
+Measured from `HEAD ca437db` (`27180/29696 flash (2516 free)`, `1591/2560 RAM`):
+
+```
+make size
+size: flash=27770/29696 (1926 free)  ram=1593/2560
+size: .text=27750 .data=20 .bss=1573
+```
+
+**+590 B flash / +2 B RAM.** The carve interact, the packed-table reader and
+the app return gate are ~570 B; the over-screen call site and the new
+`Game::carveHold`/`carvesDone` fields are the rest. A victory walk (move to the
+carcass after the win) measured +194 B and was trimmed to stay inside the
+600 B bead target, so carve requires the hunter to be in reach at the kill. The
+carve data rides the cart blob (+48 B to `combat.bin`), not the ELF; the only
+new fact is `HAS_CARVE true`.
 
 ### Test scope
 

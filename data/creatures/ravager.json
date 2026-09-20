@@ -2,6 +2,11 @@
   "id": "ravager",
   "skeleton": "quad_32x24",
   "stats": { "w": 32, "h": 24, "hp": 2400, "spd": 6, "spawnX": 200, "spawnY": 40 },
+  "carve": [
+    { "item": "fang", "count": 1, "chance": 100 },
+    { "item": "tail", "count": 1, "chance": 45 },
+    { "item": "scale", "count": 2, "chance": 30 }
+  ],
   "profile": {
     "engageDist": 36,
     "keepDist": 24,

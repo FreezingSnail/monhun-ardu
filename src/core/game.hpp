@@ -57,11 +57,21 @@ static_assert(ITEM_COUNT <= item::ITEM_MAX, "Game::items[] cap is item::ITEM_MAX
 constexpr uint8_t ITEM_NODE_NONE = 0xFF;   // Player::itemNode: no node bound
 constexpr uint8_t GATHER_TICKS = 40;       // rooted gather window (ticks)
 constexpr uint8_t ITEM_USE_TICKS = 40;     // rooted herb-use window (ticks)
-constexpr int16_t CHAIN_WIN = 14;          // chain follow-up window after a combo hit
-constexpr uint8_t CHAIN_GAP = 9;           // HEAVY debounce: lock after a non-finisher hit
-constexpr uint8_t COMBO_LOCK = 24;         // HEAVY debounce: lock after the finisher (chain >= 2)
-constexpr uint8_t A_BUFFER = 16;           // attack input buffer in ticks (covers the gap lock)
-constexpr uint8_t B_BRANCH_BUFFER = 36;    // B branch tap buffer: bridges recovery + lock
+// Carve (bead monhun-ardu-prg.3): after a win the carcass is a sheathed-style
+// interact. CARVE_TICKS is the rooted window; CARVE_MAX carves per hunt; the
+// packed drop table has combat::CARVE_SLOTS fixed slots.
+constexpr uint8_t CARVE_TICKS = 40;
+constexpr uint8_t CARVE_MAX = 3;
+// Fixed packed drop-table slot count. Kept literal so the toolchain bootstrap
+// (gen.sh compiles fxdump, which includes this header, before gen-combat.py
+// rewrites the generated headers) never depends on the fresh symbol;
+// combat.hpp static_asserts it against the generated combat::CARVE_SLOTS.
+constexpr uint8_t CARVE_SLOTS = 4;
+constexpr int16_t CHAIN_WIN = 14;         // chain follow-up window after a combo hit
+constexpr uint8_t CHAIN_GAP = 9;          // HEAVY debounce: lock after a non-finisher hit
+constexpr uint8_t COMBO_LOCK = 24;        // HEAVY debounce: lock after the finisher (chain >= 2)
+constexpr uint8_t A_BUFFER = 16;          // attack input buffer in ticks (covers the gap lock)
+constexpr uint8_t B_BRANCH_BUFFER = 36;   // B branch tap buffer: bridges recovery + lock
 // Sheathe (feel.17): hold B and double-tap Down. The stow rides the feel.16
 // double-tap detector instead of the old A+B chord, since B is the stance
 // modifier for every weapon.
@@ -80,6 +90,13 @@ constexpr uint8_t SHEATHE_SPD = 24;   // 1/16 px per tick while stowed (1.5 px/t
 #endif
 constexpr bool SHEATHE_ENABLED = MH_SHEATHE;
 constexpr bool B_BRANCH_BUFFER_ENABLED = MH_B_BRANCH_BUFFER;
+// Carve carve (prg.3, same pattern as MH_SHEATHE): the carcass interact is the
+// stowed A verb, so a build that folds out the sheathe path (the at-budget
+// parity image, MH_SHEATHE 0) also folds carve out. Shipping/host keep it.
+#ifndef MH_CARVE
+#define MH_CARVE 1
+#endif
+constexpr bool CARVE_ENABLED = MH_CARVE && SHEATHE_ENABLED;
 // Roll-attack + direction+A opener carve (same pattern as MH_SHEATHE): prg.8
 // turned the shipping default off (the direction+A opener and the A-out-of-
 // evade roll attack are trimmed for the progression-wave budget). The carve
@@ -158,7 +175,8 @@ enum PState : int8_t {
     PS_STUN,
     PS_CHARGE,   // appended (ynb): existing 0..6 values must not move
     PS_GATHER,   // appended (feel.22): sheathed node gather, stationary
-    PS_ITEM      // appended (feel.22): sheathed herb use, stationary
+    PS_ITEM,     // appended (feel.22): sheathed herb use, stationary
+    PS_CARVE     // appended (prg.3): carcass carve, stationary on the over screen
 };
 enum Stance : int8_t {
     ST_NONE = 0,
@@ -881,6 +899,13 @@ struct Game {
     // Appended last so a default Game keeps every existing field offset.
     uint8_t items[ITEM_COUNT];
     uint16_t gatherMask;
+    // Carve (bead monhun-ardu-prg.3): carvesDone is the successful-carve count
+    // this hunt (cap CARVE_MAX; newGame resets it). carveHold mirrors a live
+    // PS_CARVE so the over-screen app layer knows the A press belongs to the
+    // carcass, not the return-to-menu edge. Appended last so every existing
+    // field offset holds.
+    uint8_t carvesDone;
+    bool carveHold;
 };
 
 // Active-room extents for the bound expressions. With ROOM_BOUNDS_ENABLED

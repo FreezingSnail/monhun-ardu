@@ -238,8 +238,9 @@ class GenCombatTests(unittest.TestCase):
         self.assert_succeeds(self.compile())
         meta = self.meta_constants()
         o = meta["CREATURE_BEAST_OFF"]
-        self.assertEqual(meta["CREATURE_SIZE"], 29, "creature record grew for the enrage quad")
+        self.assertEqual(meta["CREATURE_SIZE"], 41, "creature record grew for the prg.3 carve tail")
         self.assertEqual(self.blob()[o + 25:o + 29], bytes([0, 0, 0, 0]), "enrage defaults to disabled")
+        self.assertEqual(self.blob()[o + 29:o + 41], bytes([0] * 12), "carve tail defaults to empty slots")
         # No expect pins while the creature disables enrage (device-image budget).
         self.assertNotIn("CREATURE_BEAST_ENRAGE_", self.read(EXPECT_REL))
         self.mutate("data/creatures/beast.json",
@@ -538,6 +539,7 @@ class GenCombatTests(unittest.TestCase):
             "HAS_GUARD_FACING": "false",
             "HAS_ENRAGE": "false",
             "HAS_TURN_RATE": "false",
+            "HAS_CARVE": "false",
         }
         self.assertEqual(facts, expected)
 
@@ -585,11 +587,12 @@ class GenCombatTests(unittest.TestCase):
         meta = self.meta_constants()
 
         creature = blob[meta["CREATURE_BEAST_OFF"]:meta["CREATURE_BEAST_OFF"] + meta["CREATURE_SIZE"]]
-        # 29 B creature record: stats then the default collide box (body 16x12
+        # 41 B creature record: stats then the default collide box (body 16x12
         # at the origin) then hp/spawnX/spawnY (epic monhun-ardu-nch), then the
         # static/sheet/brokenBody fields (6zb.6; 0 = dynamic, default sheet, no
-        # broken shrink), then the feel.6 enrage quad (all 0 = disabled).
-        self.assertEqual(creature, bytes([0, 0, 0, 1, 0, 1, 0, 1, 16, 12, 4, 0, 0, 16, 12, 80, 0, 100, 0, 32, 0, 0, 0, 0, 0, 0, 0, 0, 0]))
+        # broken shrink), then the feel.6 enrage quad (all 0 = disabled) and the
+        # prg.3 carve tail (4 empty item/count/chance slots).
+        self.assertEqual(creature, bytes([0, 0, 0, 1, 0, 1, 0, 1, 16, 12, 4, 0, 0, 16, 12, 80, 0, 100, 0, 32, 0, 0, 0, 0, 0, 0, 0, 0, 0] + [0] * 12))
 
         profile = blob[meta["PROFILE_BEAST_OFF"]:meta["PROFILE_BEAST_OFF"] + meta["PROFILE_SIZE"]]
         # 24 B profile: 12 u8 scalars (zoneFlags, the nch.4 faceHold byte, then
@@ -661,10 +664,10 @@ class GenCombatTests(unittest.TestCase):
         rec = blob[o:o + meta["CREATURE_SIZE"]]
         # skeleton, profile(=creature idx), head/append zone, no attacks/patterns,
         # body 20x36, default collide, hp/spawn, static flags, sheet, brokenBody,
-        # then the inert feel.6 enrage quad.
+        # then the inert feel.6 enrage quad and the prg.3 carve tail (empty).
         self.assertEqual(rec, bytes([0, 1, 2, 3, 0, 0, 0, 0, 20, 36, 0,
                                      0, 0, 20, 36, 0, 0, 140, 0, 40, 0,
-                                     1, 3, 20, 36, 0, 0, 0, 0]))
+                                     1, 3, 20, 36, 0, 0, 0, 0] + [0] * 12))
 
         # Static profile is inert (all zero, denominators 1, zoneFlags 0x03).
         p = meta["PROFILE_POLE_OFF"]
@@ -704,7 +707,10 @@ class GenCombatTests(unittest.TestCase):
                        "ATTACK", "WINDOW", "PATTERN", "GUARD", "STEP"):
             self.assertEqual(expect["%s_SIZE" % record], meta["%s_SIZE" % record])
         self.assertEqual(expect["BLOB_SIZE"], len(blob))
-        self.assertEqual(expect["CREATURE_SIZE"], 29)
+        self.assertEqual(expect["CREATURE_SIZE"], 41)
+        self.assertEqual(expect["CREATURE_CORE_SIZE"], 29)
+        self.assertEqual(expect["CARVE_SIZE"], 3)
+        self.assertEqual(expect["CARVE_SLOTS"], 4)
         self.assertEqual(expect["CREATURE_BEAST_HP"], 80)
         self.assertNotIn("CREATURE_BEAST_ENRAGE_HP_PCT", expect)
         self.assertEqual(expect["CREATURE_BEAST_SPD"], 4)
@@ -726,12 +732,96 @@ class GenCombatTests(unittest.TestCase):
         self.assert_succeeds(self.compile())
         text = self.read(DATA_REL)
         for needle in ("struct Creature {", "struct Attack {", "struct Guard {", "struct Window {",
-                       "struct Zone {", "std::array<Creature, 1> CREATURES", "std::array<Attack, 1> ATTACKS",
+                       "struct Zone {", "struct Carve {", "carve[4]", "std::array<Creature, 1> CREATURES", "std::array<Attack, 1> ATTACKS",
                        "std::array<Guard, 1> GUARDS", "std::array<Step, 2> STEPS"):
             self.assertIn(needle, text)
         self.assertIn("constexpr uint8_t CREATURE_BEAST = 0;", text)
         self.assertIn("constexpr uint8_t ATTACK_BEAST_JAB = 0;", text)
         self.assertIn("constexpr uint8_t ZONE_BEAST_APPENDAGE = 1;", text)
+
+    # ------------------------------------------------------------- carve (prg.3)
+
+    def test_carve_default_empty_and_fact(self):
+        # A creature with no carve key packs the fixed tail as empty slots and
+        # leaves HAS_CARVE false (no crate machinery opted in).
+        self.assert_succeeds(self.compile())
+        meta = self.meta_constants()
+        self.assertEqual(meta["CARVE_SIZE"], 3, "carve slot is item/count/chance")
+        self.assertEqual(meta["CARVE_SLOTS"], 4, "four fixed slots")
+        self.assertEqual(meta["CREATURE_CARVE_OFF"], 29, "carve tail follows the creature core")
+        self.assertEqual(self.blob()[meta["CREATURE_BEAST_OFF"] + 29:meta["CREATURE_BEAST_OFF"] + 41], bytes([0] * 12), "empty tail")
+        self.assertIn("constexpr bool HAS_CARVE = false;", self.read(META_REL))
+        self.assertIn("constexpr uint8_t CREATURE_BEAST_CARVES = 0;", self.read(EXPECT_REL))
+        self.assertNotIn("CREATURE_BEAST_CARVE0_", self.read(EXPECT_REL))
+
+    def test_carve_emit_validate_and_dump(self):
+        # Item names resolve to data/items.json indices; count 1..3; chance
+        # 0..100. The tail packs item/count/chance per authored slot, pads the
+        # rest with count 0, the expect header pins each entry and the fact flips.
+        self.mutate("data/creatures/beast.json",
+                    lambda doc: doc.__setitem__("carve", [
+                        {"item": "scale", "count": 2, "chance": 75},
+                        {"item": "herb", "count": 1, "chance": 100},
+                    ]))
+        self.assert_succeeds(self.compile())
+        meta = self.meta_constants()
+        o = meta["CREATURE_BEAST_OFF"] + meta["CREATURE_CARVE_OFF"]
+        blob = self.blob()
+        self.assertEqual(blob[o + 0:o + 6], bytes([1, 2, 75, 0, 1, 100]), "authored slots packed in order")
+        self.assertEqual(blob[o + 6:o + 12], bytes([0] * 6), "unused slots padded")
+        self.assertIn("constexpr bool HAS_CARVE = true;", self.read(META_REL))
+        expect = self.read(EXPECT_REL)
+        self.assertIn("constexpr uint8_t CREATURE_BEAST_CARVES = 2;", expect)
+        self.assertIn("constexpr uint8_t CREATURE_BEAST_CARVE0_ITEM = 1;", expect)
+        self.assertIn("constexpr uint8_t CREATURE_BEAST_CARVE0_COUNT = 2;", expect)
+        self.assertIn("constexpr uint8_t CREATURE_BEAST_CARVE0_CHANCE = 75;", expect)
+        self.assertIn("constexpr uint8_t CREATURE_BEAST_CARVE1_ITEM = 0;", expect)
+        self.assertIn("carve: item1 x2 @75% item0 x1 @100%", self.compile("--dump").stdout)
+
+    def test_carve_unknown_item_rejected(self):
+        self.mutate("data/creatures/beast.json",
+                    lambda doc: doc.__setitem__("carve", [{"item": "wing", "count": 1, "chance": 100}]))
+        self.assert_fails(self.compile(), "carve[0]: item: unknown item id 'wing'")
+
+    def test_carve_count_and_chance_range_rejected(self):
+        self.mutate("data/creatures/beast.json",
+                    lambda doc: doc.__setitem__("carve", [{"item": "herb", "count": 0, "chance": 100}]))
+        self.assert_fails(self.compile(), "carve[0]: count: out of range 1..3: 0")
+        self.mutate("data/creatures/beast.json",
+                    lambda doc: doc.__setitem__("carve", [{"item": "herb", "count": 4, "chance": 100}]))
+        self.assert_fails(self.compile(), "carve[0]: count: out of range 1..3: 4")
+        self.mutate("data/creatures/beast.json",
+                    lambda doc: doc.__setitem__("carve", [{"item": "herb", "count": 1, "chance": 101}]))
+        self.assert_fails(self.compile(), "carve[0]: chance: out of range 0..100: 101")
+
+    def test_carve_slot_cap_rejected(self):
+        self.mutate("data/creatures/beast.json",
+                    lambda doc: doc.__setitem__("carve", [{"item": "herb", "count": 1, "chance": 100}] * 5))
+        self.assert_fails(self.compile(), "size limit: 5 carve entries exceed the 4 slot cap")
+
+    def test_carve_missing_and_unknown_keys_rejected(self):
+        self.mutate("data/creatures/beast.json",
+                    lambda doc: doc.__setitem__("carve", [{"item": "herb", "count": 1}]))
+        self.assert_fails(self.compile(), "carve[0]: missing key 'chance'")
+        self.mutate("data/creatures/beast.json",
+                    lambda doc: doc.__setitem__("carve", [{"item": "herb", "count": 1, "chance": 100, "rate": 5}]))
+        self.assert_fails(self.compile(), "carve[0]: unknown key 'rate'")
+
+    def test_carve_duplicate_item_rejected(self):
+        self.mutate("data/creatures/beast.json",
+                    lambda doc: doc.__setitem__("carve", [
+                        {"item": "herb", "count": 1, "chance": 100},
+                        {"item": "herb", "count": 2, "chance": 50},
+                    ]))
+        self.assert_fails(self.compile(), "carve[1]: duplicate item 'herb'")
+
+    def test_carve_requires_item_file(self):
+        # data/items.json resolves the item ids; a tree with carve but no item
+        # file fails loudly instead of packing bogus indices.
+        os.remove(self.path("data", "items.json"))
+        self.mutate("data/creatures/beast.json",
+                    lambda doc: doc.__setitem__("carve", [{"item": "herb", "count": 1, "chance": 100}]))
+        self.assert_fails(self.compile(), "missing item file (carve item ids resolve against it)")
 
 
 if __name__ == "__main__":

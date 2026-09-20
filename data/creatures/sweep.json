@@ -11,6 +11,10 @@
     "enrage": { "hpPct": 40, "spdMul": 130, "faceHold": 6 }
   },
   "collide": { "ox": 1, "oy": 14, "w": 26, "h": 8 },
+  "carve": [
+    { "item": "shell", "count": 1, "chance": 100 },
+    { "item": "fang", "count": 1, "chance": 40 }
+  ],
   "zones": {
     "head": {
       "box": { "ox": 17, "oy": -4, "w": 12, "h": 10 },

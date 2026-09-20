@@ -65,6 +65,7 @@ import sys
 REPO_ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 SKELETONS_REL = "data/skeletons.json"
 CREATURES_REL = "data/creatures"
+ITEMS_REL = "data/items.json"
 BLOB_REL = "fxdata/tables/combat.bin"
 DATA_HPP_REL = "src/generated/combat_data.hpp"
 META_HPP_REL = "src/generated/combat_meta.hpp"
@@ -92,6 +93,19 @@ CUES = {"none": 0, "windup": 1, "part_break": 2}
 STEP_ATK = 0
 STEP_WAIT = 1
 
+# Carve table (bead monhun-ardu-prg.3): a per-creature drop list packed into the
+# creature record as CARVE_SLOTS fixed 3-byte entries (item index u8, count
+# 1..3, chance 0..100). count 0 marks an empty slot. Item ids resolve against
+# data/items.json (tools/gen-items.py); the runtime roll is deterministic
+# (combatChancePasses, no RNG state), so the blob carries no extra state.
+CARVE_SLOTS = 4
+CARVE_SIZE = 3
+CARVE_ITEM_OFF = 0
+CARVE_COUNT_OFF = 1
+CARVE_CHANCE_OFF = 2
+CARVE_COUNT_MIN = 1
+CARVE_COUNT_MAX = 3
+
 # Fixed 3-hitzone model (build/zones-design.md): body is implicit, these are
 # the two optional per-creature records. Bit order is the zone flag / broken
 # bit contract shared with src/core/combat.hpp.
@@ -101,7 +115,7 @@ ZONE_APPENDAGE = 0x02
 COMBAT_NO_ZONE = 0xFF
 
 SIZES = {
-    "CREATURE": 29,
+    "CREATURE": 29 + CARVE_SIZE * CARVE_SLOTS,
     "PROFILE": 24,
     "SKELETON": 2,
     "ZONE": 13,
@@ -111,6 +125,7 @@ SIZES = {
     "PATTERN": 3,
     "GUARD": 9,
     "STEP": 4,
+    "CARVE": CARVE_SIZE,
 }
 SECTION_RECORD = {
     "CREATURES": "CREATURE",
@@ -516,6 +531,71 @@ def load_json(errors, path):
     return None
 
 
+def load_item_ids(errors, root):
+    """Ordered item ids from data/items.json (source order == item index).
+
+    Only needed when a creature authors a `carve` table; a tree without the item
+    file compiles as long as no carve block is present, so lightweight schema
+    fixtures do not have to ship the full item table (prg.2)."""
+    path = os.path.join(root, ITEMS_REL)
+    if not os.path.isfile(path):
+        return None
+    doc = load_json(errors, path)
+    if doc is None:
+        return None
+    check_keys(errors, ITEMS_REL, doc, {"version", "items"})
+    read_int(errors, ITEMS_REL, doc, "version", 1, 1)
+    raw_items = doc.get("items")
+    if not isinstance(raw_items, list) or not raw_items:
+        errors.add(ITEMS_REL, "items: expected a non-empty array")
+        return None
+    ids = []
+    seen = set()
+    for i, obj in enumerate(raw_items):
+        ids.append(read_id(errors, "%s: items[%d]" % (ITEMS_REL, i), obj, "id", seen))
+    return None if errors.items else ids
+
+
+def normalize_carve(errors, ctx, raw, item_ids):
+    """Optional per-creature carve table (prg.3): [{item, count, chance}, ...].
+
+    Item names resolve to data/items.json indices; count is 1..3; chance is the
+    deterministic per-entry drop percent. At most CARVE_SLOTS entries; the packer
+    pads the fixed record with count-0 empty slots."""
+    if raw is None:
+        return []
+    if not isinstance(raw, list):
+        errors.add(ctx, "carve: expected an array")
+        return []
+    if len(raw) > CARVE_SLOTS:
+        errors.add(ctx, "size limit: %d carve entries exceed the %d slot cap" % (len(raw), CARVE_SLOTS))
+    if item_ids is None:
+        errors.add(ITEMS_REL, "missing item file (carve item ids resolve against it)")
+        return []
+    entries = []
+    seen = set()
+    for i, entry in enumerate(raw):
+        c = "%s[%d]" % (ctx, i)
+        check_keys(errors, c, entry, {"item", "count", "chance"})
+        item = entry.get("item") if isinstance(entry, dict) else None
+        if not isinstance(item, str) or item not in item_ids:
+            errors.add(c, "item: unknown item id %r" % item)
+            index = 0
+        else:
+            index = item_ids.index(item)
+            if item in seen:
+                errors.add(c, "duplicate item '%s'" % item)
+            seen.add(item)
+        count = read_int(errors, c, entry, "count", CARVE_COUNT_MIN, CARVE_COUNT_MAX)
+        chance = read_int(errors, c, entry, "chance", 0, 100)
+        entries.append({
+            "item": index,
+            "count": count if count is not None else 0,
+            "chance": chance if chance is not None else 0,
+        })
+    return entries
+
+
 PROFILE_REQUIRED = {"engageDist", "keepDist", "attackDist", "circleNum", "circleDen", "retreatNum", "retreatDen", "cdBase", "cdJitter", "spawnT", "spawnCd", "stunRecoverT"}
 PROFILE_OPTIONAL = {"staggerMax", "staggerDecay", "staggerRecoverT", "faceHold", "turnRate"}
 
@@ -609,6 +689,7 @@ def compile_model(errors, root):
         errors.add(CREATURES_REL, "no creature JSON files found")
         return None
     skeletons_by_id = {skeleton["id"]: skeleton for skeleton in skeletons}
+    item_ids = load_item_ids(errors, root)
     creatures = []
     creature_ids = set()
     for name in creature_files:
@@ -618,7 +699,7 @@ def compile_model(errors, root):
         if obj is None:
             continue
         check_keys(errors, ctx, obj, {"id", "skeleton", "stats"},
-                   {"profile", "attacks", "patterns", "zones", "collide", "static", "sheet"})
+                   {"profile", "attacks", "patterns", "zones", "collide", "static", "sheet", "carve"})
         is_static = bool(read_bool(errors, ctx, obj, "static", default=0))
         sheet_id = read_int(errors, ctx, obj, "sheet", 0, 255, default=0)
         cid = read_id(errors, ctx, obj, "id")
@@ -697,6 +778,7 @@ def compile_model(errors, root):
                     errors.add(pc, "duplicate local id '%s'" % pattern["id"])
                 pattern_ids.add(pattern["id"])
             patterns.append(pattern)
+        carve = normalize_carve(errors, ctx + ".carve", obj.get("carve"), item_ids)
         creatures.append({
             "id": cid,
             "skeleton": skeleton,
@@ -717,6 +799,7 @@ def compile_model(errors, root):
             "attacks": attacks,
             "zones": zones,
             "patterns": patterns,
+            "carve": carve,
         })
     if errors.items:
         return None
@@ -875,6 +958,10 @@ def pack_model(errors, model):
         collide = creature["collide"] or {"ox": 0, "oy": 0, "w": stats["w"], "h": stats["h"]}
         broken_body = creature["brokenBody"] or {"w": 0, "h": 0}
         enrage = creature["enrage"]
+        carve_bytes = bytearray()
+        for slot in range(CARVE_SLOTS):
+            drop = creature["carve"][slot] if slot < len(creature["carve"]) else {"item": 0, "count": 0, "chance": 0}
+            carve_bytes += u8(drop["item"]) + u8(drop["count"]) + u8(drop["chance"])
         record("CREATURE", b"".join([
             u8(model["skeletons"].index(creature["skeleton"])), u8(i),
             u8(entry["head_zone"]), u8(entry["append_zone"]),
@@ -885,6 +972,7 @@ def pack_model(errors, model):
             u16(stats["hp"]), u16(stats["spawnX"]), u16(stats["spawnY"]),
             u8(creature["static"]), u8(creature["sheet"]), u8(broken_body["w"]), u8(broken_body["h"]),
             u8(enrage["hpPct"]), u8(enrage["spdMul"]), u8(enrage["faceHold"]), u8(enrage["cue"] or 0),
+            bytes(carve_bytes),
         ]))
 
     # profiles
@@ -1146,6 +1234,10 @@ def emit_data_header(model, compiled):
     app("    uint8_t kind, ref, after, chance;")
     app("};")
     app("")
+    app("struct Carve {")
+    app("    uint8_t item, count, chance;   // count 0 = empty slot")
+    app("};")
+    app("")
     app("struct Creature {")
     app("    uint8_t skeletonIdx, profileIdx;")
     app("    uint8_t headZone, appendZone;")
@@ -1158,6 +1250,7 @@ def emit_data_header(model, compiled):
     app("    uint8_t sheet;   // art sheet id (0 = default monster sheet)")
     app("    uint8_t brokenW, brokenH;   // target rect on break (0 = unchanged)")
     app("    uint8_t enrageHpPct, enrageSpdMul, enrageFaceHold, enrageCue;   // hpPct 0 = disabled")
+    app("    Carve carve[%d];   // prg.3 drop table; count 0 slots are inert" % CARVE_SLOTS)
     app("};")
     app("")
     app("// Index constants (creatures sorted by id; attacks, windows, patterns and")
@@ -1176,7 +1269,12 @@ def emit_data_header(model, compiled):
                 collide = creature["collide"] or {"ox": 0, "oy": 0, "w": stats["w"], "h": stats["h"]}
                 broken_body = creature["brokenBody"] or {"w": 0, "h": 0}
                 enrage = creature["enrage"]
-                app("    {%d, %d, %d, %d, %d, %d, %d, %d, %d, %d, %d, {%d, %d, %d, %d}, %d, %d, %d, %d, %d, %d, %d, %d, %d, %d, %d}," % (
+                carve = creature["carve"]
+                carve_init = ", ".join("{%d, %d, %d}" % (
+                    carve[slot]["item"] if slot < len(carve) else 0,
+                    carve[slot]["count"] if slot < len(carve) else 0,
+                    carve[slot]["chance"] if slot < len(carve) else 0) for slot in range(CARVE_SLOTS))
+                app("    {%d, %d, %d, %d, %d, %d, %d, %d, %d, %d, %d, {%d, %d, %d, %d}, %d, %d, %d, %d, %d, %d, %d, %d, %d, %d, %d, {%s}}," % (
                     model["skeletons"].index(creature["skeleton"]), compiled["indices"]["CREATURE_%s" % creature["id"].upper()],
                     entry["head_zone"], entry["append_zone"], entry["first_attack"], len(creature["attacks"]),
                     entry["first_pattern"], len(creature["patterns"]),
@@ -1184,7 +1282,8 @@ def emit_data_header(model, compiled):
                     collide["ox"], collide["oy"], collide["w"], collide["h"],
                     stats["hp"], stats["spawnX"], stats["spawnY"],
                     creature["static"], creature["sheet"], broken_body["w"], broken_body["h"],
-                    enrage["hpPct"], enrage["spdMul"], enrage["faceHold"], enrage["cue"] or 0))
+                    enrage["hpPct"], enrage["spdMul"], enrage["faceHold"], enrage["cue"] or 0,
+                    carve_init))
         elif section == "PROFILES":
             for entry in layout["creatures"]:
                 creature = entry["creature"]
@@ -1287,6 +1386,10 @@ def data_facts(model):
     has_guard_facing = False
     has_zones = any(c["zones"] for c in model["creatures"])
     has_enrage = any(c["enrage"]["hpPct"] > 0 for c in model["creatures"])
+    # prg.3: true once any creature authors a drop table. Emitted for the
+    # data-fact ledger; the runtime carve interact folds on MH_CARVE (shipping
+    # and host on, the legacy parity image off), not on this fact.
+    has_carve = any(c["carve"] for c in model["creatures"])
     # feel.14: true once any creature authors a bounded turn rate. Emitted for
     # the data-fact ledger; the interpreter does not fold on it yet (the host
     # tests drive synthetic turnRate values before any kit authors one).
@@ -1342,6 +1445,7 @@ def data_facts(model):
         "HAS_GUARD_ZONES": has_guard_zones,
         "HAS_GUARD_FACING": has_guard_facing,
         "HAS_TURN_RATE": has_turn_rate,
+        "HAS_CARVE": has_carve,
     }
 
 
@@ -1379,6 +1483,15 @@ def emit_meta_header(model, compiled):
     for record_name in sorted(SIZES):
         app("constexpr uint8_t %s_SIZE = %d;" % (record_name, SIZES[record_name]))
     app("")
+    app("// Carve table (prg.3): a fixed %d-slot array inside the creature record," % CARVE_SLOTS)
+    app("// each slot %d B (item index, count 1..3, chance 0..100; count 0 = empty)." % CARVE_SIZE)
+    app("constexpr uint8_t CARVE_SLOTS = %d;" % CARVE_SLOTS)
+    app("constexpr uint8_t CARVE_ITEM_OFF = %d;" % CARVE_ITEM_OFF)
+    app("constexpr uint8_t CARVE_COUNT_OFF = %d;" % CARVE_COUNT_OFF)
+    app("constexpr uint8_t CARVE_CHANCE_OFF = %d;" % CARVE_CHANCE_OFF)
+    app("constexpr uint8_t CREATURE_CARVE_OFF = %d;" % (SIZES["CREATURE"] - CARVE_SIZE * CARVE_SLOTS))
+    app("constexpr uint8_t CREATURE_CORE_SIZE = %d;   // creature bytes before the carve table" % (SIZES["CREATURE"] - CARVE_SIZE * CARVE_SLOTS))
+    app("")
     app("// Per-record offsets and indices (creatures sorted by id; attacks, windows,")
     app("// patterns, guards and steps keep source order inside each creature).")
     for name in sorted(compiled["offsets"]):
@@ -1408,6 +1521,8 @@ def emit_expect_header(model, compiled):
     app("constexpr uint16_t BLOB_SIZE = %d;" % len(compiled["blob"]))
     for record_name in sorted(SIZES):
         app("constexpr uint8_t %s_SIZE = %d;" % (record_name, SIZES[record_name]))
+    app("constexpr uint8_t CARVE_SLOTS = %d;" % CARVE_SLOTS)
+    app("constexpr uint8_t CREATURE_CORE_SIZE = %d;" % (SIZES["CREATURE"] - CARVE_SIZE * CARVE_SLOTS))
     app("")
     for creature in model["creatures"]:
         cid = creature["id"].upper()
@@ -1428,6 +1543,14 @@ def emit_expect_header(model, compiled):
         app("constexpr int8_t CREATURE_%s_COLLIDE_OY = %d;" % (cid, collide["oy"]))
         app("constexpr uint8_t CREATURE_%s_COLLIDE_W = %d;" % (cid, collide["w"]))
         app("constexpr uint8_t CREATURE_%s_COLLIDE_H = %d;" % (cid, collide["h"]))
+        # Carve table pins (prg.3): one ordinal + item/count/chance per authored
+        # slot, so the host and device suites pin the packed drop table.
+        carve = creature["carve"]
+        app("constexpr uint8_t CREATURE_%s_CARVES = %d;" % (cid, len(carve)))
+        for slot, drop in enumerate(carve):
+            app("constexpr uint8_t CREATURE_%s_CARVE%d_ITEM = %d;" % (cid, slot, drop["item"]))
+            app("constexpr uint8_t CREATURE_%s_CARVE%d_COUNT = %d;" % (cid, slot, drop["count"]))
+            app("constexpr uint8_t CREATURE_%s_CARVE%d_CHANCE = %d;" % (cid, slot, drop["chance"]))
         # Enrage pins only for creatures that author the phase: 0 on every
         # shipped creature, so emitting four dead constants per creature only
         # bloats the device test image (feel.6 budget).
@@ -1485,6 +1608,8 @@ def dump_model(model, compiled):
         print("creature %s (skeleton %s, stats w%d h%d hp%d spd%d, spawn %d,%d, collide %s, enrage hpPct%d spdMul%d faceHold%d cue%d) zones %s" % (
             cid, creature["skeleton"]["id"], stats["w"], stats["h"], stats["hp"], stats["spd"], stats["spawnX"], stats["spawnY"], collide,
             enrage["hpPct"], enrage["spdMul"], enrage["faceHold"], enrage["cue"] or 0, zones or "-"))
+        carve = " ".join("item%d x%d @%d%%" % (c["item"], c["count"], c["chance"]) for c in creature["carve"])
+        print("  carve: %s" % (carve or "-"))
         print("  profile: engage%d keep%d attack%d circle%d/%d retreat%d/%d stagger%d/%d/%d faceHold%d turnRate%d cd%d+%d spawn%d/%d stun%d" % (
             profile["engageDist"], profile["keepDist"], profile["attackDist"],
             profile["circleNum"], profile["circleDen"], profile["retreatNum"], profile["retreatDen"],

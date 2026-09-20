@@ -50,8 +50,10 @@ inline bool progEq(const void *ram, const void *flash, uint8_t n) {
 // The byte compare is only valid while the AVR value structs stay padding-free
 // and equal to the packed ABI (uint16 alignment is 1 on AVR; the packed record
 // sizes come from the generated expect header). CombatWindow drops the packed
-// record's trailing reserved flags byte.
-static_assert(sizeof(CombatCreature) == combat_expect::CREATURE_SIZE, "creature value struct must stay packed");
+// record's trailing reserved flags byte; CombatCreature mirrors the creature
+// core and leaves the prg.3 carve tail to combatCarveRead.
+static_assert(sizeof(CombatCreature) == combat_expect::CREATURE_CORE_SIZE, "creature value struct must stay packed to the core size");
+static_assert(sizeof(CombatCarve) == combat_expect::CARVE_SIZE, "carve value struct must stay packed");
 static_assert(sizeof(CombatProfile) == combat_expect::PROFILE_SIZE, "profile value struct must stay packed");
 static_assert(sizeof(CombatZone) == combat_expect::ZONE_SIZE, "zone value struct must stay packed");
 static_assert(sizeof(CombatAttackValue) == combat_expect::ATTACK_SIZE, "attack value struct must stay packed");

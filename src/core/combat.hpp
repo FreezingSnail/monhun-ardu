@@ -122,6 +122,10 @@ constexpr uint8_t COMBAT_BROKEN_CUE = 0x02;
 constexpr uint8_t COMBAT_NO_ATTACK = 0xFF;
 // CombatState::patternIdx sentinel: no pattern cursor active.
 constexpr uint8_t COMBAT_NO_PATTERN = 0xFF;
+// Carve table (prg.3): the packed slot count must match the runtime constant in
+// src/core/game.hpp (kept literal there so the gen.sh bootstrap never depends on
+// a freshly generated symbol).
+static_assert(combat::CARVE_SLOTS == CARVE_SLOTS, "carve slot count drifted from the generated blob");
 
 // --------------------------------------------------------- value structs
 // Plain value mirrors of the blob records (field order = packed ABI order).
@@ -164,6 +168,12 @@ struct CombatSpawn {
     CombatBox collide;   // body-collision rect (legs-only for the chicken)
 };
 
+// One packed carve-table slot (prg.3): item index into the generated table,
+// count 1..3, deterministic drop chance 0..100. count 0 marks an empty slot.
+struct CombatCarve {
+    uint8_t item, count, chance;
+};
+
 struct CombatAttackValue {
     uint8_t moveType, moveSpeedF;
     int8_t moveDx, moveDy;
@@ -201,6 +211,9 @@ struct CombatStep {
 namespace detail {
 
 #pragma pack(push, 1)
+struct PkCarve {
+    uint8_t item, count, chance;
+};
 struct PkCreature {
     uint8_t skeletonIdx, profileIdx;
     uint8_t headZone, appendZone;
@@ -212,6 +225,7 @@ struct PkCreature {
     uint16_t hp, spawnX, spawnY;
     uint8_t flags, sheet, brokenW, brokenH;
     uint8_t enrageHpPct, enrageSpdMul, enrageFaceHold, enrageCue;
+    PkCarve carve[combat::CARVE_SLOTS];   // prg.3 drop table (count 0 = empty)
 };
 struct PkProfile {
     uint8_t engageDist, keepDist, attackDist;
@@ -264,6 +278,8 @@ struct PkStep {
 #pragma pack(pop)
 
 static_assert(sizeof(PkCreature) == combat::CREATURE_SIZE, "creature ABI drift");
+static_assert(sizeof(PkCarve) == combat::CARVE_SIZE, "carve ABI drift");
+static_assert(offsetof(PkCreature, carve) == combat::CREATURE_CARVE_OFF, "creature carve table offset drift");
 static_assert(sizeof(PkProfile) == combat::PROFILE_SIZE, "profile ABI drift");
 static_assert(sizeof(PkSkeleton) == combat::SKELETON_SIZE, "skeleton ABI drift");
 static_assert(sizeof(PkZone) == combat::ZONE_SIZE, "zone ABI drift");
@@ -443,6 +459,17 @@ inline CombatSpawn combatCreatureSpawnRead(uint8_t i) {
     v.hp = combatReadU16(b + MH_COMBAT_FIELD(detail::PkCreature, hp));
     v.x = combatReadU16(b + MH_COMBAT_FIELD(detail::PkCreature, spawnX));
     v.y = combatReadU16(b + MH_COMBAT_FIELD(detail::PkCreature, spawnY));
+    return v;
+}
+
+// One carve slot (prg.3): 3 contiguous bytes at CREATURE_CARVE_OFF + slot*3.
+// Bad ids read inert (all zero), matching the other loaders.
+inline CombatCarve combatCarveRead(uint8_t creatureId, uint8_t slot) {
+    CombatCarve v{0, 0, 0};
+    if (creatureId >= combat::CREATURES_COUNT || slot >= combat::CARVE_SLOTS)
+        return v;
+    const uint16_t b = static_cast<uint16_t>(combat::CREATURES_OFF + creatureId * combat::CREATURE_SIZE + combat::CREATURE_CARVE_OFF + slot * combat::CARVE_SIZE);
+    detail::combatReadBytes(b, &v, sizeof(v));
     return v;
 }
 
@@ -701,6 +728,18 @@ inline CombatSpawn combatCreatureSpawnRead(uint8_t i) {
     v.hp = c.hp;
     v.x = c.spawnX;
     v.y = c.spawnY;
+    return v;
+}
+
+// Host carve read: bad ids read inert (all zero).
+inline CombatCarve combatCarveRead(uint8_t creatureId, uint8_t slot) {
+    CombatCarve v{0, 0, 0};
+    if (creatureId >= combat::CREATURES_COUNT || slot >= combat::CARVE_SLOTS)
+        return v;
+    const combat_data::Carve &c = combat_data::CREATURES[creatureId].carve[slot];
+    v.item = c.item;
+    v.count = c.count;
+    v.chance = c.chance;
     return v;
 }
 

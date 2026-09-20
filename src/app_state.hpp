@@ -81,6 +81,14 @@ inline AppNav appHuntReturn() {
     return APP_NAV_MENU;
 }
 
+// Hunt-end A gate (bead monhun-ardu-prg.3): while a carcass carve is live the
+// over-screen A is the carve verb, so the caller keeps the menu edge current
+// (menuReturnStep) but must not apply the return nav. True = the edge may leave
+// the hunt. Game::carveHold is cleared the tick the carve ends or is cancelled.
+inline bool appHuntReturnAllowed(const Game &g) {
+    return !g.carveHold;
+}
+
 // Camp hold-B (sheathed): the core raises Game::menuRequest.
 // The app layer consumes it exactly once -> opening menu, so a held B cannot
 // re-fire once the menu is up. Returns the nav for the caller to apply.

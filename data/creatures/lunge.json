@@ -3,6 +3,10 @@
   "skeleton": "chicken",
   "stats": { "w": 32, "h": 24, "hp": 1800, "spd": 6, "spawnX": 200, "spawnY": 40 },
   "collide": { "ox": 9, "oy": 11, "w": 12, "h": 13 },
+  "carve": [
+    { "item": "scale", "count": 1, "chance": 100 },
+    { "item": "shell", "count": 1, "chance": 45 }
+  ],
   "zones": {
     "head": {
       "box": { "ox": 18, "oy": 0, "w": 11, "h": 7 },

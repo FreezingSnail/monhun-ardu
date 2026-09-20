@@ -11,6 +11,7 @@
 
 #include <stdint.h>
 #include "projectiles.hpp"
+#include "carve.hpp"   // carcass carve over-screen step (prg.3)
 #include "zones.hpp"   // room record readers + roomIsSafe
 
 namespace mh {
@@ -248,7 +249,8 @@ static void stepGame(Game &g, const Input &inp) {
     inputEdges(inp, g.prevA, g.prevB, aP, bP, bR);   // edges run even while frozen
     updateCamera(g);
     if (g.over != OVER_NONE) {
-        updateEffects(g);   // mock: effects keep ticking after win/lose
+        stepCarve(g, inp, aP);   // win-screen carcass interact (prg.3)
+        updateEffects(g);        // mock: effects keep ticking after win/lose
         return;
     }
     if (g.freeze > 0) {

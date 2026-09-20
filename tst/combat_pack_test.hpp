@@ -370,6 +370,13 @@ void CombatPackSuite(TestRunner &runner) {
             t.assert(b8(blob, o + 26), h.enrageSpdMul, "blob creature enrageSpdMul");
             t.assert(b8(blob, o + 27), h.enrageFaceHold, "blob creature enrageFaceHold");
             t.assert(b8(blob, o + 28), h.enrageCue, "blob creature enrageCue");
+            // prg.3: fixed carve tail (item/count/chance per slot).
+            for (uint8_t slot = 0; slot < combat::CARVE_SLOTS; slot++) {
+                const size_t co = o + combat::CREATURE_CARVE_OFF + slot * combat::CARVE_SIZE;
+                t.assert(b8(blob, co + 0), h.carve[slot].item, "blob creature carve item");
+                t.assert(b8(blob, co + 1), h.carve[slot].count, "blob creature carve count");
+                t.assert(b8(blob, co + 2), h.carve[slot].chance, "blob creature carve chance");
+            }
         }
         for (uint8_t i = 0; i < combat::PROFILES_COUNT; i++) {
             const size_t o = static_cast<size_t>(combat::PROFILES_OFF) + i * combat::PROFILE_SIZE;
@@ -506,6 +513,21 @@ void CombatPackSuite(TestRunner &runner) {
         t.assert(b8(blob, static_cast<size_t>(combat::CREATURE_LUNGE_OFF) + 26), 0, "shipped lunge enrage spdMul 0");
         t.assert(b8(blob, static_cast<size_t>(combat::CREATURE_LUNGE_OFF) + 27), 0, "shipped lunge enrage faceHold 0");
         t.assert(b8(blob, static_cast<size_t>(combat::CREATURE_LUNGE_OFF) + 28), 0, "shipped lunge enrage cue 0");
+        // prg.3: the carve tail sits after the enrage quad (CREATURE_CARVE_OFF 29)
+        // and is pinned against combat_expect for every creature that authored a
+        // table. Slots are item/count/chance triples.
+        t.assert(combat::CREATURE_CARVE_OFF, 29, "carve tail follows the creature core");
+        t.assert(combat::CARVE_SIZE, 3, "carve slot is item/count/chance");
+        t.assert(b8(blob, static_cast<size_t>(combat::CREATURE_LUNGE_OFF) + combat::CREATURE_CARVE_OFF + 0), combat_expect::CREATURE_LUNGE_CARVE0_ITEM, "expect lunge carve0 item");
+        t.assert(b8(blob, static_cast<size_t>(combat::CREATURE_LUNGE_OFF) + combat::CREATURE_CARVE_OFF + 1), combat_expect::CREATURE_LUNGE_CARVE0_COUNT, "expect lunge carve0 count");
+        t.assert(b8(blob, static_cast<size_t>(combat::CREATURE_LUNGE_OFF) + combat::CREATURE_CARVE_OFF + 2), combat_expect::CREATURE_LUNGE_CARVE0_CHANCE, "expect lunge carve0 chance");
+        t.assert(b8(blob, static_cast<size_t>(combat::CREATURE_LUNGE_OFF) + combat::CREATURE_CARVE_OFF + 3), combat_expect::CREATURE_LUNGE_CARVE1_ITEM, "expect lunge carve1 item");
+        t.assert(b8(blob, static_cast<size_t>(combat::CREATURE_LUNGE_OFF) + combat::CREATURE_CARVE_OFF + 5), combat_expect::CREATURE_LUNGE_CARVE1_CHANCE, "expect lunge carve1 chance");
+        // Slot 2 is empty on the 2-entry lunge table (padded count 0).
+        t.assert(b8(blob, static_cast<size_t>(combat::CREATURE_LUNGE_OFF) + combat::CREATURE_CARVE_OFF + 7), 0, "lunge carve2 empty count");
+        t.assert(b8(blob, static_cast<size_t>(combat::CREATURE_SWEEP_OFF) + combat::CREATURE_CARVE_OFF + 0), combat_expect::CREATURE_SWEEP_CARVE0_ITEM, "expect sweep carve0 item");
+        t.assert(b8(blob, static_cast<size_t>(combat::CREATURE_HEAVY_OFF) + combat::CREATURE_CARVE_OFF + 8), combat_expect::CREATURE_HEAVY_CARVE2_CHANCE, "expect heavy carve2 chance");
+        t.assert(b8(blob, static_cast<size_t>(combat::CREATURE_RAVAGER_OFF) + combat::CREATURE_CARVE_OFF + 7), combat_expect::CREATURE_RAVAGER_CARVE2_COUNT, "expect ravager carve2 count");
         // feel.14/feel.15: the profile record is 24 B so the turnRate byte sits
         // between faceHold and the six u16 timers; feel.15 authors real rates
         // (lunge/bull/heavy 1, ravager 2) after feel.14 left them all 0.

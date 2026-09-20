@@ -12,6 +12,7 @@
 
 #include "harness/fxtest.hpp"
 #include "src/core/world.hpp"
+#include "src/generated/combat_expect.hpp"
 #include "src/generated/items_expect.hpp"
 
 #include <stdint.h>
@@ -76,6 +77,37 @@ inline void test_items(FxTest &test) {
     test.expectEq(itemCount(g, ITEM_HERB), 3, F("itemAdd accumulates"));
     test.expectEq(itemConsume(g, ITEM_HERB), 1, F("itemConsume ok"));
     test.expectEq(itemCount(g, ITEM_HERB), 2, F("itemConsume decrements"));
+
+    // -------------------------------------------------- carve table (prg.3)
+    // Read the packed carve tail through the shipping loader and pin it against
+    // combat_expect, then drive one full carve so a stale blob, a bad offset or
+    // a broken over-screen step fails on the real cart.
+    const CombatCarve lunge0 = combatCarveRead(combat::CREATURE_LUNGE, 0);
+    test.expectEq(lunge0.item, ITEM_SCALE, F("carve lunge0 item"));
+    test.expectEq(lunge0.count, combat_expect::CREATURE_LUNGE_CARVE0_COUNT, F("carve lunge0 count"));
+    test.expectEq(lunge0.chance, combat_expect::CREATURE_LUNGE_CARVE0_CHANCE, F("carve lunge0 chance"));
+    test.expectEq(combatCarveRead(combat::CREATURE_LUNGE, 2).count, 0, F("carve lunge padded slot"));
+    test.expectEq(combatCarveRead(combat::CREATURE_HEAVY, 2).chance, combat_expect::CREATURE_HEAVY_CARVE2_CHANCE, F("carve heavy2 chance"));
+    test.expectEq(combatCarveRead(99, 0).count, 0, F("carve bad id inert"));
+
+    // Reuse the inventory Game (reset to the lunge hunt, then kill it in place)
+    // instead of a second ~600 B static: the device image RAM budget is tight.
+    newGame(g, W_SWORD, MODE_HUNT, MON_LUNGE);
+    g.monster.state = MS_DEAD;
+    g.over = OVER_WIN;
+    g.monster.x = 100;
+    g.monster.y = 40;
+    g.player.x = 100;
+    g.player.y = 40;
+    const Input carveA = {0, 0, true, false};
+    const Input carveIdle = {0, 0, false, false};
+    stepGame(g, carveA);
+    test.expectEq(g.player.state, PS_CARVE, F("device carve starts"));
+    test.expectEq(g.carveHold, 1, F("device carve hold"));
+    for (uint8_t i = 0; i < CARVE_TICKS + 2 && g.player.state == PS_CARVE; i++)
+        stepGame(g, carveIdle);
+    test.expectEq(g.carvesDone, 1, F("device carve completes"));
+    test.expectEq(itemCount(g, ITEM_SCALE) >= 1, 1, F("device carve yields scale"));
 }
 
 }   // namespace itemsfx
