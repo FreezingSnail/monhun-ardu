@@ -648,6 +648,84 @@ void MonsterSuite(TestRunner &runner) {
     }
 
     {
+        // feel.6: the enrage phase is cached at spawn (CombatEnrage) and applied
+        // once when HP crosses hpPct. No shipped creature authors stats.enrage
+        // yet, so tests set the RAM cache directly; hpPct 0 folds the branch out.
+        Test t("enrage: crossing the threshold applies spdMul truncating + faceHold once");
+        Game g;
+        newHunt(g);
+        Monster &m = g.monster;
+        t.assert(g.combat.enrage.hpPct, 0, "shipped enrage disabled");
+        t.assert(g.combat.enrage.fired, 0, "latch starts clear");
+        m.state = MS_PURSUE;
+        m.cd = 30000;
+        m.hpMax = 100;
+        m.spd = 7;
+        g.combat.profile.faceHold = 0;
+        g.combat.enrage.hpPct = 50;
+        g.combat.enrage.spdMul = 150;   // 7 * 150 / 100 = 10 (truncating)
+        g.combat.enrage.faceHold = 8;
+        m.hp = 51;   // above the 50% threshold
+        updateMonster(g);
+        t.assert(g.combat.enrage.fired, 0, "no fire above threshold");
+        t.assert(m.spd, 7, "spd unchanged above threshold");
+        t.assert(g.combat.profile.faceHold, 0, "faceHold unchanged above threshold");
+        m.hp = 50;   // exactly 50%: 50*100 <= 100*50 -> fires
+        updateMonster(g);
+        t.assert(g.combat.enrage.fired, 1, "fires at the threshold");
+        t.assert(m.spd, 10, "spdMul 150 applied with truncation");
+        t.assert(g.combat.profile.faceHold, 8, "profile cache faceHold replaced");
+        suite.addTest(t);
+    }
+
+    {
+        Test t("enrage: never re-fires after further damage (one-shot latch)");
+        Game g;
+        newHunt(g);
+        Monster &m = g.monster;
+        m.state = MS_PURSUE;
+        m.cd = 30000;
+        m.hpMax = 100;
+        m.spd = 6;
+        g.combat.enrage.hpPct = 80;
+        g.combat.enrage.spdMul = 200;
+        g.combat.enrage.faceHold = 4;
+        m.hp = 80;
+        updateMonster(g);
+        t.assert(g.combat.enrage.fired, 1, "fires at 80%");
+        t.assert(m.spd, 12, "200% of 6");
+        // More damage below the threshold: spd/faceHold must not re-apply or grow.
+        m.hp = 20;
+        updateMonster(g);
+        t.assert(m.spd, 12, "spd stays after further damage");
+        t.assert(g.combat.profile.faceHold, 4, "faceHold stays");
+        suite.addTest(t);
+    }
+
+    {
+        Test t("enrage: hpPct 0 disabled, and a tiny spdMul floors at 1");
+        Game g;
+        newHunt(g);
+        Monster &m = g.monster;
+        m.state = MS_PURSUE;
+        m.cd = 30000;
+        m.hpMax = 100;
+        m.hp = 0;
+        m.hp = 1;
+        // hpPct 0 (default): below/at zero does not fire.
+        updateMonster(g);
+        t.assert(g.combat.enrage.fired, 0, "hpPct 0 inert");
+        t.assert(m.spd, 5, "spd untouched while disabled");
+        // Tiny multiplier: 5 * 3 / 100 = 0 truncates, floored to 1.
+        g.combat.enrage.hpPct = 100;
+        g.combat.enrage.spdMul = 3;
+        updateMonster(g);
+        t.assert(g.combat.enrage.fired, 1, "fires once enabled");
+        t.assert(m.spd, 1, "tiny spdMul floors at 1");
+        suite.addTest(t);
+    }
+
+    {
         Test t("attack wallStun: 0 at a bound is inert (shipped behavior)");
         Game g;
         newHunt(g);

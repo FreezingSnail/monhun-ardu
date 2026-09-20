@@ -40,6 +40,11 @@ void CombatSuite(TestRunner &runner) {
             t.assert(c.hp, h.hp, "creature hp");
             t.assert(c.spawnX, h.spawnX, "creature spawnX");
             t.assert(c.spawnY, h.spawnY, "creature spawnY");
+            // feel.6: creature enrage quad mirrors the host struct.
+            t.assert(c.enrageHpPct, h.enrageHpPct, "creature enrageHpPct");
+            t.assert(c.enrageSpdMul, h.enrageSpdMul, "creature enrageSpdMul");
+            t.assert(c.enrageFaceHold, h.enrageFaceHold, "creature enrageFaceHold");
+            t.assert(c.enrageCue, h.enrageCue, "creature enrageCue");
             t.assert(combatCreatureFirstAttack(i), h.firstAttack, "creature firstAttack accessor");
             t.assert(combatCreatureHeadZone(i), h.headZone, "creature headZone accessor");
             t.assert(combatCreatureAppendZone(i), h.appendZone, "creature appendZone accessor");
@@ -435,6 +440,11 @@ void CombatSuite(TestRunner &runner) {
         t.assert(g.combat.stepIdx, 0, "step cursor reset");
         t.assert(g.combat.stepT, 0, "step timer reset");
         t.assert(g.combat.stagger, 0, "stagger reset");
+        t.assert(g.combat.enrage.hpPct, 0, "enrage hpPct reset");
+        t.assert(g.combat.enrage.spdMul, 0, "enrage spdMul reset");
+        t.assert(g.combat.enrage.faceHold, 0, "enrage faceHold reset");
+        t.assert(g.combat.enrage.cue, 0, "enrage cue reset");
+        t.assert(g.combat.enrage.fired, 0, "enrage latch cleared");
         t.assert(g.combat.attack.windup, 0, "attack cache cleared");
 
         g.combat.zoneBroken = 0xFF;   // dirty before reload

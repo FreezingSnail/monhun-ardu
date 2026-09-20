@@ -1,89 +1,113 @@
-# monhun-ardu-feel.4 — engine: attack wallStun (charge into a room bound staggers)
+# monhun-ardu-feel.6 — engine: creature enrage phase (hpPct, spdMul, faceHold, cue)
 
-Baseline: HEAD `f74d10b`, clean tree. No commit/push (orchestrator commits).
+Baseline: HEAD `4934b30`, clean tree. No commit/push (orchestrator commits).
 Verification: `make gen` x2, `make gen-check`, `make test`, `make test-tools`,
 `make fxtest-headless` (full), `make size`.
 
 ## Schema + pack (tools/gen-combat.py)
 
-- Attack gains an optional key `wallStun` (u8 ticks, range 0..255, default 0).
-  Unknown values of any kind already fail via `read_int`/`check_keys`; range and
-  integer-only are exercised by the new tool tests.
-- Packed as the attack record's 13th byte, immediately after `cue` (byte 12):
-  `... stagger, cue, wallStun, firstWindow, windowCount, windup..dmg`.
-  `SIZES["ATTACK"]` 22 -> 23. `firstWindow`/`windowCount` stay adjacent and the
-  `windup..dmg` u16 quad stays contiguous (static_asserts updated).
-- `--dump` prints `... windows N wallStun W`.
-- `combat_expect.hpp` gains `ATTACK_<CREATURE>_<FIRST_ATTACK>_WALLSTUN` (spot
-  value 0 for every shipped creature).
-- No `HAS_*` fact: `wallStun` 0 in all shipped data means the runtime branch is
-  inert, so the branch is compiled unconditionally per the bead (not gated).
+- Creature `stats.enrage` optional object: `{ hpPct 0..100, spdMul 0..255,
+  faceHold 0..255, cue optional CUES }`. Missing required keys, unknown keys,
+  range violations and non-integer values all fail via `check_keys`/`read_int`;
+  `cue` validates against the existing `CUES` table (`none`/`windup`/
+  `part_break`). Absent = all-zero (disabled).
+- Packed as the creature record's last four bytes (25..28), after `brokenH`:
+  `enrageHpPct, enrageSpdMul, enrageFaceHold, enrageCue`. `SIZES["CREATURE"]`
+  25 -> 29.
+- `--dump` prints `..., enrage hpPct40 spdMul150 faceHold8 cue2`.
+- `combat_expect.hpp` gains `CREATURE_<ID>_ENRAGE_{HP_PCT,SPD_MUL,FACE_HOLD,CUE}`
+  **only for creatures that author `hpPct > 0`** (device-image budget: four dead
+  constants per creature otherwise; see "Device test budget" below). No shipped
+  creature declares enrage, so no pins ship today.
+- New data fact `HAS_ENRAGE` (true iff any creature's `hpPct > 0`). False on the
+  shipped set. The runtime branch is compiled unconditionally per the bead
+  (`hpPct == 0` is the disabled path); the fact is emitted for visibility and
+  future gating, exactly like the DESIGN's "New data fact HAS_ENRAGE".
 
 ## Loader (src/core/combat.hpp, src/core/game.hpp)
 
-- `CombatAttackValue` / packed `PkAttack` / generated `combat_data::Attack` gain
-  `wallStun` (after `cue`); `combatAttackRead` + new `combatAttackWallStun`
-  accessor carry it on both host and AVR.
-- `CombatAttackCache` gains `uint8_t wallStun` after `facing`. AVR `attackLoad`
-  reads the one extra byte (attack-load burst 22 -> 23 reads, still under the
-  device test's 24-read gate). Host `attackLoad` sets it from the accessor.
-- Static asserts: `sizeof(CombatAttackCache)` 21 -> 22, `sizeof(CombatState)`
-  83 -> 84; new `PkAttack` adjacency assert (wallStun == cue + 1).
+- `CombatCreature` / packed `PkCreature` / generated `combat_data::Creature` gain
+  the four enrage bytes; `combatCreatureRead` decodes them.
+- `CombatEnrage` (game.hpp): `hpPct, spdMul, faceHold, cue, fired` — 5 B AVR.
+  Added to `CombatState` (offset 84).
+- AVR: `combatCreatureEnrageRead(cid, e)` fetches the quad in two cart u16 reads
+  (hpPct/spdMul, faceHold/cue) at spawn; host reads the generated struct.
+- Static asserts: `sizeof(CombatState)` 84 -> 89 (nested packs to 92 on the host,
+  asserted as 89 on AVR by construction); new `PkCreature` adjacency asserts
+  (enrage quad follows `brokenH` and stays contiguous).
+- `creatureCacheReset` clears `enrage` (latch to 0); `creatureLoad` seeds it after
+  the collide/isStatic reads.
 
-## Detection (src/core/monster.hpp, updateMonster)
+## Apply (src/core/monster.hpp, updateMonster)
 
-- The pre-clamp anchor is captured immediately before `clampMonster` (after the
-  state switch has applied this tick's movement), then compared post-clamp. A
-  delta means the tick's movement hit a room bound and was clipped. (Capturing
-  before the switch does not work: a beast already pinned at the bound moves out
-  and is clamped straight back, so pre == post. This is the one deviation from
-  the bead's wording; the observable rule — "clamp displaced the beast" — is
-  what is implemented and tested.)
-- Trigger requires `m.state == MS_ATTACK`, `attack.wallStun > 0`,
-  `attack.moveType != MOVE_NONE` (lunge/charge/hop), and a pre/post clamp delta:
-  sets `MS_STAGGER`, `m.t = wallStun`, and clears the active pattern cursor
-  exactly like `monsterStaggerAdd` (`patternIdx = COMBAT_NO_PATTERN`, `stepIdx =
-  0`, `stepT = 0`). Release reuses the existing MS_STAGGER path (PURSUE +
-  `cdBase`).
-- One trigger per attack: the state change is the latch; the beast leaves
-  MS_ATTACK, so sustained wall contact cannot re-arm or stack. Shipped data
-  leaves `wallStun` 0, so shipped fights are byte-identical (existing host fight
-  suites pin this).
-- Audio/render: no new cue path. The existing MS_STAGGER whirl-dot render
-  carries the tell. A wall-hit audio/visual cue edge is a reasonable follow-up
-  (the DESIGN mentions it) but is out of this bead's scope.
+- After the dead check and before the facing block / FSM switch, so the tick it
+  fires already uses the new values:
+  - fires once when `!fired && hpPct > 0 && m.hp*100 <= m.hpMax*hpPct`
+    (int16 hp/hpMax promoted to `int32_t`, so no overflow);
+  - `m.spd = max(1, (m.spd * spdMul) / 100)` (truncating, floor 1);
+  - `pr.faceHold = enrage.faceHold` (the RAM profile cache, so the facing block
+    this tick reads the new hold);
+  - `fired = 1` — one-shot latch.
+- `cue` is stored in the cache but no audio path is added: the audio edge on
+  enrage is a follow-up (see below).
+- Shipped data leaves `hpPct` 0, so shipped fights are byte-identical; existing
+  host/device suites pin this (test_parity 660/660).
 
 ## Tests (permanent, native frameworks, co-located)
 
-- `tst/monster_test.hpp` — 4 new cases: (a) lunge into the west bound staggers
-  for exactly `wallStun` ticks, clears the pattern cursor, then releases to
-  PURSUE with cd 55; (b) same lunge mid-arena does not stagger; (c) continued
-  bound contact through the stun drains the timer without re-arming/stacking;
-  (d) `wallStun` 0 at the bound is inert (clamp only).
-- `tst/combat_pack_test.hpp` — attack decode loop pins byte 12 == `wallStun`;
-  shifted firstWindow/windowCount/quad byte positions; spot values extended with
-  the expect wallStun pin.
-- `tst/combat_test.hpp` — attack mirror loop adds `wallStun` + accessor;
-  `attackLoad` cache lifecycle asserts `wallStun`.
-- `tst/fxdatatest/combat_test.hpp` — device loader test asserts the decoded and
-  cached `wallStun` against `combat_expect::ATTACK_LUNGE_PECK_WALLSTUN`.
-- `tools/tests/test_gen_combat.py` — dump string, packed attack bytes (23 B),
-  default/emit test (byte 12 + expect constant + dump), range rejection,
-  integer-only rejection; expect-header spot assertion.
-- No fact-map change, so `test_data_facts_match_fixture` is unchanged.
+- `tst/monster_test.hpp` — 3 new cases: (a) crossing the threshold applies
+  spdMul truncating (7*150/100 = 10) and faceHold (0 -> 8) exactly at the
+  boundary, and nothing above it; (b) further damage below the threshold does
+  not re-fire or grow (one-shot latch); (c) hpPct 0 inert and a tiny mul
+  (5*3/100 = 0) floors spd at 1.
+- `tst/combat_pack_test.hpp` — creature decode loop pins bytes 25..28; spot
+  values pin the shipped quad at 0.
+- `tst/combat_test.hpp` — creature mirror loop adds the four fields;
+  `creatureLoad` cache lifecycle asserts enrage reset + latch clear.
+- `tst/fxdatatest/combat_test.hpp` — one combined check that the spawn-cached
+  enrage word is 0 (see budget note).
+- `tools/tests/test_gen_combat.py` — default/emit/dump, missing key, unknown key,
+  range, integer-only, cue-enum rejection, `HAS_ENRAGE` fact, expect pin
+  presence/absence; packed-record bytes updated for the new record size.
+- `tst/combat_test.hpp` counts unchanged; no `HAS_*` fact flips, so
+  `test_data_facts_match_fixture` gains only the `HAS_ENRAGE` key.
 
 ## Two-pass gen
 
-`make gen` run twice after the `ATTACK_SIZE` change (first pass moves the FX
-image offsets and the zone/equip images; second converges). Generated sets
-(`combat.bin`, `combat_*`, `equip_meta.hpp`, `zone_meta.hpp`, `fxdata*`) staged
-together. `make gen-check` clean.
+`make gen` run twice after the `CREATURE_SIZE` change (first pass moves the FX
+image/zone/equip offsets, second converges). Generated sets staged together.
+`make gen-check` clean.
+
+## Device test budget (deviation, documented)
+
+`test_combat` builds at 29474 B against the 29696 B ceiling at HEAD (99%); the
+`CombatState` +5 B struct change plus the enrage branch pushed the same test to
+29664 B (+190 B). That leaves 32 B. Two budget guards were applied so the suite
+still fits:
+
+1. `combat_expect.hpp` emits enrage pins only for creatures that author the
+   phase. Emitting four dead constants per shipped creature added a device-test
+   `.text` cost with zero AVR-side value; the host pack test still pins bytes
+   25..28 directly.
+2. `tst/fxdatatest/combat_test.hpp` uses one combined word check instead of four
+   per-field expects.
+
+The AVR enrage read path (`combatCreatureEnrageRead`) is exercised by
+`creatureLoad` in `test_combat`; its read cost is covered by the existing
+`spawn burst <= 40 reads` gate (2 extra u16 reads, actual ~36).
+
+## Audio follow-up
+
+`enrage.cue` is validated, packed, cached and available on `g.combat.enrage.cue`,
+but this bead adds **no** audio consumer. An enrage cue needs a follow-up bead to
+route the cue byte into `audio.hpp` (an edge-triggered play at the latch tick,
+mirroring the attack-cue path) plus a test. `audio.hpp` was not touched.
 
 ## Verification tails
 
 ```
 # make gen (2nd run)
-gen-combat: 8 creatures, 8 attacks, 13 windows, 9 patterns, 9 steps, 5 skeletons, 11 zones, 1036 B, sha256 e38c229ab45f3d28a8cd1b518f0d5a10e46d240ae6988d0e047d711f3bb2038f
+gen-combat: 8 creatures, 8 attacks, 13 windows, 9 patterns, 9 steps, 5 skeletons, 11 zones, 1068 B, sha256 8f9a1f70efdd4f9dfb423a997c77bf6d0f9ee43a35b976125e9ff47359ae6bd6
 gen-combat: fxdata/tables/combat.bin (unchanged)
 gen-combat: src/generated/combat_data.hpp (unchanged)
 gen-combat: src/generated/combat_meta.hpp (unchanged)
@@ -93,45 +117,58 @@ gen-combat: src/generated/combat_expect.hpp (unchanged)
 fxdata_manifest: PASS (82 generated artifacts unchanged)
 
 # make test
-Total Passed: 5469
+Total Passed: 5558
 Total Failed: 0
 
 # make test-tools
-Ran 183 tests in 9.569s
+Ran 189 tests in 10.828s
 OK
 
 # make fxtest-headless (full)
+asset_test PASSED=270 FAILED=0
+test_audio PASSED=17 FAILED=0
+test_boot PASSED=4 FAILED=0
 combat_test PASSED=295 FAILED=0
+data_test PASSED=368 FAILED=0
+test_hub PASSED=57 FAILED=0
+test_hud PASSED=17 FAILED=0
+test_menu_art PASSED=81 FAILED=0
+menu_test PASSED=80 FAILED=0
+test_monster_art PASSED=111 FAILED=0
 parity_test PASSED=660 FAILED=0
 perf_test PASSED=5 FAILED=0
-B pUs=6371 pHz=156 lHz=52 lTk=456 rMx=4772 rAv=4587 ram=594
-(asset=270, audio=17, boot=4, data=368, hub=57, hud=17, menu_art=81,
- menu=80, monster_art=111, player_art=111, quests=50, screens=78,
- smith=66, zones=69 — all PASS)
+test_player_art PASSED=111 FAILED=0
+test_quests PASSED=50 FAILED=0
+test_screens PASSED=78 FAILED=0
+test_smith PASSED=66 FAILED=0
+zones_test PASSED=69 FAILED=0
 
 # make size
-size: .text=27026 .data=40 .bss=1693
-size: flash=27066/29696 (2630 free)  ram=1733/2560
-size: data facts: HAS_GUARD_CHANCE:false HAS_GUARD_COOLDOWN:false HAS_GUARD_FACING:false
-  HAS_GUARD_HP:false HAS_GUARD_PLAYER:false HAS_GUARD_ZONES:true HAS_HIT_STAGGER:false
-  HAS_MULTI_STEP:false HAS_MULTI_WINDOW:true HAS_SIMPLE_GUARDS:false HAS_STAGGER:true
-  HAS_STEP_AFTER:false HAS_STEP_CHANCE:false HAS_WAIT_STEPS:false HAS_ZONES:true
+size: .text=27338 .data=40 .bss=1698
+size: flash=27378/29696 (2318 free)  ram=1738/2560
+size: data facts: HAS_ENRAGE:false HAS_GUARD_CHANCE:false HAS_GUARD_COOLDOWN:false
+  HAS_GUARD_FACING:false HAS_GUARD_HP:false HAS_GUARD_PLAYER:false HAS_GUARD_ZONES:true
+  HAS_HIT_STAGGER:false HAS_MULTI_STEP:false HAS_MULTI_WINDOW:true HAS_SIMPLE_GUARDS:false
+  HAS_STAGGER:true HAS_STEP_AFTER:false HAS_STEP_CHANCE:false HAS_WAIT_STEPS:false HAS_ZONES:true
 ```
 
-Baseline at HEAD `f74d10b` (feel.3): `flash=26962/29696 (2734 free) ram=1732/2560`,
-`.text=26922`, `.bss=1692`. **Delta: +104 B flash / +1 RAM** (spike predicted
-+134/+1; the extra byte on the attack field plus the gated detection are inside
-that). Cart blob: 1028 -> 1036 B (+8, one byte per attack). Perf unchanged
-(rMx 4772, ~2635 us under the 7407 us floor).
+Baseline at HEAD `4934b30` (feel.4): `flash=27066/29696 (2630 free) ram=1733/2560`,
+`.text=27026`, `.bss=1693`. **Delta: +312 B flash / +5 RAM**. Spike predicted
++170 B / +5 RAM; the measured value is +142 B over the spike. The extra is the
+`CombatState` size assert/struct growth and, more, the inline enrage branch in
+`updateMonster` (the spike's prototype folded on its fact; this bead compiles the
+branch unconditionally per the bead wording). Perf unchanged (rMx 4772; ~2636 us
+under the 7407 us floor). Cart blob: 1036 -> 1068 B (+32, four bytes per creature).
+`test_combat` device image: 29474 -> 29664 B (+190), 32 B below the ceiling.
 
 ## Per-file summary
 
-- `tools/gen-combat.py` — attack `wallStun` schema, pack, dump, expect spot.
-- `tools/tests/test_gen_combat.py` — schema/pack/dump/expect tests.
-- `src/core/combat.hpp` — value/packed/generated mirrors, accessor, attackLoad,
-  asserts.
-- `src/core/game.hpp` — `CombatAttackCache.wallStun`.
-- `src/core/monster.hpp` — clamp-delta wall-stun detection in MS_ATTACK.
+- `tools/gen-combat.py` — creature enrage schema, pack, dump, expect pins
+  (conditional), `HAS_ENRAGE` fact.
+- `tools/tests/test_gen_combat.py` — schema/pack/dump/fact tests; record bytes.
+- `src/core/combat.hpp` — value/packed/generated mirrors, enrage read, assert.
+- `src/core/game.hpp` — `CombatEnrage`; `CombatState.enrage`.
+- `src/core/monster.hpp` — one-shot enrage apply in `updateMonster`.
 - `tst/monster_test.hpp`, `tst/combat_test.hpp`, `tst/combat_pack_test.hpp`,
   `tst/fxdatatest/combat_test.hpp` — host + pack + device tests.
 - `src/generated/*`, `fxdata/*`, `src/fxdata.h` — regenerated (two-pass).

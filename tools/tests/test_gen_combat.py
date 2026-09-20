@@ -101,7 +101,7 @@ class GenCombatTests(unittest.TestCase):
     def test_dump_mode_lists_model_and_writes_nothing(self):
         result = self.compile("--dump")
         self.assert_succeeds(result)
-        self.assertIn("creature beast (skeleton beast_16x12, stats w16 h12 hp80 spd4, spawn 100,32, collide body) zones appendage D150 HP30 S40 ST20 head D120 HP10 S100 ST5", result.stdout)
+        self.assertIn("creature beast (skeleton beast_16x12, stats w16 h12 hp80 spd4, spawn 100,32, collide body, enrage hpPct0 spdMul0 faceHold0 cue0) zones appendage D150 HP30 S40 ST20 head D120 HP10 S100 ST5", result.stdout)
         self.assertIn("zone head: box(10,2,6,6) dmgMul 120 hp 10 share 100 break 0x02 stagger 5 brokenOverride 120 hurtOff 1 disable -", result.stdout)
         self.assertIn("zone appendage: box(-6,4,8,4) dmgMul 150 hp 30 share 40 break 0x01 stagger 20 brokenOverride 200 hurtOff 1 disable jab", result.stdout)
         self.assertIn("attack jab: windup20 active6 recover30 dmg7 move lunge(20) windows 1 wallStun 0", result.stdout)
@@ -195,6 +195,59 @@ class GenCombatTests(unittest.TestCase):
         self.assertEqual(self.blob()[o + 12], 14, "wallStun emitted at byte 12")
         self.assertIn("constexpr uint8_t ATTACK_BEAST_JAB_WALLSTUN = 14;", self.read(EXPECT_REL))
         self.assertIn("wallStun 14", self.compile("--dump").stdout)
+
+    def test_enrage_default_emit_and_dump(self):
+        # feel.6: stats.enrage is optional (all-zero = disabled) and packs as the
+        # last four creature bytes (hpPct, spdMul, faceHold, cue); --dump prints
+        # the quad and combat_expect pins the spot values.
+        self.assert_succeeds(self.compile())
+        meta = self.meta_constants()
+        o = meta["CREATURE_BEAST_OFF"]
+        self.assertEqual(meta["CREATURE_SIZE"], 29, "creature record grew for the enrage quad")
+        self.assertEqual(self.blob()[o + 25:o + 29], bytes([0, 0, 0, 0]), "enrage defaults to disabled")
+        # No expect pins while the creature disables enrage (device-image budget).
+        self.assertNotIn("CREATURE_BEAST_ENRAGE_", self.read(EXPECT_REL))
+        self.mutate("data/creatures/beast.json",
+                    lambda doc: doc["stats"].__setitem__("enrage", {"hpPct": 40, "spdMul": 150, "faceHold": 8, "cue": "part_break"}))
+        self.assert_succeeds(self.compile())
+        self.assertEqual(self.blob()[o + 25:o + 29], bytes([40, 150, 8, 2]), "enrage emitted hpPct/spdMul/faceHold/cue")
+        expect = self.read(EXPECT_REL)
+        self.assertIn("constexpr uint8_t CREATURE_BEAST_ENRAGE_HP_PCT = 40;", expect)
+        self.assertIn("constexpr uint8_t CREATURE_BEAST_ENRAGE_SPD_MUL = 150;", expect)
+        self.assertIn("constexpr uint8_t CREATURE_BEAST_ENRAGE_FACE_HOLD = 8;", expect)
+        self.assertIn("constexpr uint8_t CREATURE_BEAST_ENRAGE_CUE = 2;", expect)
+        self.assertIn("enrage hpPct40 spdMul150 faceHold8 cue2", self.compile("--dump").stdout)
+
+    def test_enrage_missing_keys_rejected(self):
+        self.mutate("data/creatures/beast.json",
+                    lambda doc: doc["stats"].__setitem__("enrage", {"hpPct": 40, "spdMul": 150}))
+        self.assert_fails(self.compile(), "stats.enrage: missing key 'faceHold'")
+
+    def test_enrage_unknown_key_rejected(self):
+        self.mutate("data/creatures/beast.json",
+                    lambda doc: doc["stats"].__setitem__("enrage", {"hpPct": 40, "spdMul": 150, "faceHold": 8, "roar": 1}))
+        self.assert_fails(self.compile(), "stats.enrage: unknown key 'roar'")
+
+    def test_enrage_range_rejected(self):
+        self.mutate("data/creatures/beast.json",
+                    lambda doc: doc["stats"].__setitem__("enrage", {"hpPct": 101, "spdMul": 150, "faceHold": 8}))
+        self.assert_fails(self.compile(), "stats.enrage: hpPct: out of range 0..100: 101")
+        self.mutate("data/creatures/beast.json",
+                    lambda doc: doc["stats"].__setitem__("enrage", {"hpPct": 40, "spdMul": 256, "faceHold": 8}))
+        self.assert_fails(self.compile(), "stats.enrage: spdMul: out of range 0..255: 256")
+
+    def test_enrage_integer_only(self):
+        self.mutate("data/creatures/beast.json",
+                    lambda doc: doc["stats"].__setitem__("enrage", {"hpPct": 40.0, "spdMul": 150, "faceHold": 8}))
+        self.assert_fails(self.compile(), "stats.enrage: hpPct: expected an integer, got 40.0")
+        self.mutate("data/creatures/beast.json",
+                    lambda doc: doc["stats"].__setitem__("enrage", {"hpPct": 40, "spdMul": True, "faceHold": 8}))
+        self.assert_fails(self.compile(), "stats.enrage: spdMul: expected an integer, got True")
+
+    def test_enrage_cue_enum_rejected(self):
+        self.mutate("data/creatures/beast.json",
+                    lambda doc: doc["stats"].__setitem__("enrage", {"hpPct": 40, "spdMul": 150, "faceHold": 8, "cue": "roar"}))
+        self.assert_fails(self.compile(), "stats.enrage: cue: unknown value 'roar' (want one of none, part_break, windup)")
 
     def test_attack_wallstun_range_rejected(self):
         self.mutate("data/creatures/beast.json",
@@ -345,6 +398,7 @@ class GenCombatTests(unittest.TestCase):
             "HAS_GUARD_CHANCE": "false",
             "HAS_GUARD_ZONES": "true",
             "HAS_GUARD_FACING": "false",
+            "HAS_ENRAGE": "false",
         }
         self.assertEqual(facts, expected)
 
@@ -392,11 +446,11 @@ class GenCombatTests(unittest.TestCase):
         meta = self.meta_constants()
 
         creature = blob[meta["CREATURE_BEAST_OFF"]:meta["CREATURE_BEAST_OFF"] + meta["CREATURE_SIZE"]]
-        # 25 B creature record: stats then the default collide box (body 16x12
+        # 29 B creature record: stats then the default collide box (body 16x12
         # at the origin) then hp/spawnX/spawnY (epic monhun-ardu-nch), then the
         # static/sheet/brokenBody fields (6zb.6; 0 = dynamic, default sheet, no
-        # broken shrink).
-        self.assertEqual(creature, bytes([0, 0, 0, 1, 0, 1, 0, 1, 16, 12, 4, 0, 0, 16, 12, 80, 0, 100, 0, 32, 0, 0, 0, 0, 0]))
+        # broken shrink), then the feel.6 enrage quad (all 0 = disabled).
+        self.assertEqual(creature, bytes([0, 0, 0, 1, 0, 1, 0, 1, 16, 12, 4, 0, 0, 16, 12, 80, 0, 100, 0, 32, 0, 0, 0, 0, 0, 0, 0, 0, 0]))
 
         profile = blob[meta["PROFILE_BEAST_OFF"]:meta["PROFILE_BEAST_OFF"] + meta["PROFILE_SIZE"]]
         # 23 B profile: 11 u8 scalars (zoneFlags then the nch.4 faceHold byte)
@@ -466,10 +520,11 @@ class GenCombatTests(unittest.TestCase):
         o = meta["CREATURE_POLE_OFF"]
         rec = blob[o:o + meta["CREATURE_SIZE"]]
         # skeleton, profile(=creature idx), head/append zone, no attacks/patterns,
-        # body 20x36, default collide, hp/spawn, static flags, sheet, brokenBody.
+        # body 20x36, default collide, hp/spawn, static flags, sheet, brokenBody,
+        # then the inert feel.6 enrage quad.
         self.assertEqual(rec, bytes([0, 1, 2, 3, 0, 0, 0, 0, 20, 36, 0,
                                      0, 0, 20, 36, 0, 0, 140, 0, 40, 0,
-                                     1, 3, 20, 36]))
+                                     1, 3, 20, 36, 0, 0, 0, 0]))
 
         # Static profile is inert (all zero, denominators 1, zoneFlags 0x03).
         p = meta["PROFILE_POLE_OFF"]
@@ -509,7 +564,9 @@ class GenCombatTests(unittest.TestCase):
                        "ATTACK", "WINDOW", "PATTERN", "GUARD", "STEP"):
             self.assertEqual(expect["%s_SIZE" % record], meta["%s_SIZE" % record])
         self.assertEqual(expect["BLOB_SIZE"], len(blob))
+        self.assertEqual(expect["CREATURE_SIZE"], 29)
         self.assertEqual(expect["CREATURE_BEAST_HP"], 80)
+        self.assertNotIn("CREATURE_BEAST_ENRAGE_HP_PCT", expect)
         self.assertEqual(expect["CREATURE_BEAST_SPD"], 4)
         self.assertEqual(expect["CREATURE_BEAST_ATTACKS"], 1)
         self.assertEqual(expect["CREATURE_BEAST_PATTERNS"], 1)

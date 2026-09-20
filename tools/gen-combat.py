@@ -19,10 +19,11 @@ resolvable local refs, unique local ids and u8/u16 section limits.
 Blob layout (little-endian, explicit u8/u16, no padding, fixed section order):
 
     header     32 B  magic u16, version u8, flags u8, 10x u16 counts + 4x u16 reserved
-    creature   21 B  skeletonIdx, profileIdx, headZone, appendZone,
+    creature   29 B  skeletonIdx, profileIdx, headZone, appendZone,
                      firstAttack, attackCount, firstPattern, patternCount,
                      w, h, spd, collide(ox i8, oy i8, w, h),
-                     hp u16, spawnX u16, spawnY u16
+                     hp u16, spawnX u16, spawnY u16, flags, sheet,
+                     brokenW, brokenH, enrage(hpPct, spdMul, faceHold, cue)
     profile    23 B  engageDist, keepDist, attackDist, circleNum, circleDen,
                      retreatNum, retreatDen, staggerMax, staggerDecay,
                      zoneFlags (bit0 head, bit1 appendage), faceHold u8 tick
@@ -94,7 +95,7 @@ ZONE_APPENDAGE = 0x02
 COMBAT_NO_ZONE = 0xFF
 
 SIZES = {
-    "CREATURE": 25,
+    "CREATURE": 29,
     "PROFILE": 23,
     "SKELETON": 2,
     "ZONE": 12,
@@ -275,6 +276,21 @@ def normalize_broken_body(errors, ctx, obj):
     return {
         "w": read_int(errors, ctx, obj, "w", 1, 255),
         "h": read_int(errors, ctx, obj, "h", 1, 255),
+    }
+
+
+def normalize_enrage(errors, ctx, obj):
+    """Optional stats.enrage phase record (feel.6): one-shot escalation when the
+    creature's HP percent crosses hpPct. hpPct 0 disables it (the shipped
+    default); spdMul is the speed percent applied once with a floor of 1,
+    faceHold replaces profile.faceHold, cue names the existing audio cue stored
+    for a future enrage cue path."""
+    check_keys(errors, ctx, obj, {"hpPct", "spdMul", "faceHold"}, {"cue"})
+    return {
+        "hpPct": read_int(errors, ctx, obj, "hpPct", 0, 100),
+        "spdMul": read_int(errors, ctx, obj, "spdMul", 0, 255),
+        "faceHold": read_int(errors, ctx, obj, "faceHold", 0, 255),
+        "cue": read_enum(errors, ctx, obj, "cue", CUES, default=0),
     }
 
 
@@ -606,9 +622,10 @@ def compile_model(errors, root):
             errors.add(ctx, "skeleton: unknown skeleton id %r" % skeleton_id)
             skeleton = skeletons[0]
         stats = obj.get("stats")
-        check_keys(errors, ctx + ".stats", stats, {"w", "h", "hp", "spd", "spawnX", "spawnY"}, {"brokenBody"})
+        check_keys(errors, ctx + ".stats", stats, {"w", "h", "hp", "spd", "spawnX", "spawnY"}, {"brokenBody", "enrage"})
         collide = normalize_collide(errors, ctx + ".collide", obj["collide"]) if "collide" in obj else None
         broken_body = normalize_broken_body(errors, ctx + ".stats.brokenBody", stats["brokenBody"]) if "brokenBody" in stats else None
+        enrage = normalize_enrage(errors, ctx + ".stats.enrage", stats["enrage"]) if "enrage" in stats else {"hpPct": 0, "spdMul": 0, "faceHold": 0, "cue": 0}
         if "profile" in obj:
             profile = normalize_profile(errors, ctx + ".profile", obj.get("profile"))
         elif is_static:
@@ -682,6 +699,7 @@ def compile_model(errors, root):
                 "spawnY": read_int(errors, ctx + ".stats", stats, "spawnY", 0, 65535),
             },
             "brokenBody": broken_body,
+            "enrage": enrage,
             "collide": collide,
             "profile": profile,
             "attacks": attacks,
@@ -842,6 +860,7 @@ def pack_model(errors, model):
         # at the origin) so collision is unchanged for creatures without one.
         collide = creature["collide"] or {"ox": 0, "oy": 0, "w": stats["w"], "h": stats["h"]}
         broken_body = creature["brokenBody"] or {"w": 0, "h": 0}
+        enrage = creature["enrage"]
         record("CREATURE", b"".join([
             u8(model["skeletons"].index(creature["skeleton"])), u8(i),
             u8(entry["head_zone"]), u8(entry["append_zone"]),
@@ -851,6 +870,7 @@ def pack_model(errors, model):
             i8(collide["ox"]), i8(collide["oy"]), u8(collide["w"]), u8(collide["h"]),
             u16(stats["hp"]), u16(stats["spawnX"]), u16(stats["spawnY"]),
             u8(creature["static"]), u8(creature["sheet"]), u8(broken_body["w"]), u8(broken_body["h"]),
+            u8(enrage["hpPct"]), u8(enrage["spdMul"]), u8(enrage["faceHold"]), u8(enrage["cue"] or 0),
         ]))
 
     # profiles
@@ -1120,6 +1140,7 @@ def emit_data_header(model, compiled):
     app("    uint8_t flags;   // bit0: static prop (pole); no FSM/attacks")
     app("    uint8_t sheet;   // art sheet id (0 = default monster sheet)")
     app("    uint8_t brokenW, brokenH;   // target rect on break (0 = unchanged)")
+    app("    uint8_t enrageHpPct, enrageSpdMul, enrageFaceHold, enrageCue;   // hpPct 0 = disabled")
     app("};")
     app("")
     app("// Index constants (creatures sorted by id; attacks, windows, patterns and")
@@ -1137,14 +1158,16 @@ def emit_data_header(model, compiled):
                 stats = creature["stats"]
                 collide = creature["collide"] or {"ox": 0, "oy": 0, "w": stats["w"], "h": stats["h"]}
                 broken_body = creature["brokenBody"] or {"w": 0, "h": 0}
-                app("    {%d, %d, %d, %d, %d, %d, %d, %d, %d, %d, %d, {%d, %d, %d, %d}, %d, %d, %d, %d, %d, %d, %d}," % (
+                enrage = creature["enrage"]
+                app("    {%d, %d, %d, %d, %d, %d, %d, %d, %d, %d, %d, {%d, %d, %d, %d}, %d, %d, %d, %d, %d, %d, %d, %d, %d, %d, %d}," % (
                     model["skeletons"].index(creature["skeleton"]), compiled["indices"]["CREATURE_%s" % creature["id"].upper()],
                     entry["head_zone"], entry["append_zone"], entry["first_attack"], len(creature["attacks"]),
                     entry["first_pattern"], len(creature["patterns"]),
                     stats["w"], stats["h"], stats["spd"],
                     collide["ox"], collide["oy"], collide["w"], collide["h"],
                     stats["hp"], stats["spawnX"], stats["spawnY"],
-                    creature["static"], creature["sheet"], broken_body["w"], broken_body["h"]))
+                    creature["static"], creature["sheet"], broken_body["w"], broken_body["h"],
+                    enrage["hpPct"], enrage["spdMul"], enrage["faceHold"], enrage["cue"] or 0))
         elif section == "PROFILES":
             for entry in layout["creatures"]:
                 creature = entry["creature"]
@@ -1246,6 +1269,7 @@ def data_facts(model):
     has_guard_zones = False
     has_guard_facing = False
     has_zones = any(c["zones"] for c in model["creatures"])
+    has_enrage = any(c["enrage"]["hpPct"] > 0 for c in model["creatures"])
     for creature in model["creatures"]:
         for attack in creature["attacks"]:
             if len(attack["windows"]) > 1:
@@ -1289,6 +1313,7 @@ def data_facts(model):
         "HAS_MULTI_WINDOW": has_multi_window,
         "HAS_SIMPLE_GUARDS": simple_guards,
         "HAS_ZONES": has_zones,
+        "HAS_ENRAGE": has_enrage,
         "HAS_GUARD_HP": has_guard_hp,
         "HAS_GUARD_PLAYER": has_guard_player,
         "HAS_GUARD_COOLDOWN": has_guard_cooldown,
@@ -1381,6 +1406,15 @@ def emit_expect_header(model, compiled):
         app("constexpr int8_t CREATURE_%s_COLLIDE_OY = %d;" % (cid, collide["oy"]))
         app("constexpr uint8_t CREATURE_%s_COLLIDE_W = %d;" % (cid, collide["w"]))
         app("constexpr uint8_t CREATURE_%s_COLLIDE_H = %d;" % (cid, collide["h"]))
+        # Enrage pins only for creatures that author the phase: 0 on every
+        # shipped creature, so emitting four dead constants per creature only
+        # bloats the device test image (feel.6 budget).
+        enrage = creature["enrage"]
+        if enrage["hpPct"] > 0:
+            app("constexpr uint8_t CREATURE_%s_ENRAGE_HP_PCT = %d;" % (cid, enrage["hpPct"]))
+            app("constexpr uint8_t CREATURE_%s_ENRAGE_SPD_MUL = %d;" % (cid, enrage["spdMul"]))
+            app("constexpr uint8_t CREATURE_%s_ENRAGE_FACE_HOLD = %d;" % (cid, enrage["faceHold"]))
+            app("constexpr uint8_t CREATURE_%s_ENRAGE_CUE = %d;" % (cid, enrage["cue"] or 0))
         app("constexpr uint8_t PROFILE_%s_FACE_HOLD = %d;" % (cid, creature["profile"]["faceHold"]))
         if creature["attacks"]:
             first_attack = creature["attacks"][0]
@@ -1422,8 +1456,10 @@ def dump_model(model, compiled):
             name, z["dmgMul"], z["hp"], z["bodyShare"], z["staggerOnHit"]) for name, z in sorted(creature["zones"].items()))
         collide = "body" if creature["collide"] is None else "box(%d,%d,%d,%d)" % (
             creature["collide"]["ox"], creature["collide"]["oy"], creature["collide"]["w"], creature["collide"]["h"])
-        print("creature %s (skeleton %s, stats w%d h%d hp%d spd%d, spawn %d,%d, collide %s) zones %s" % (
-            cid, creature["skeleton"]["id"], stats["w"], stats["h"], stats["hp"], stats["spd"], stats["spawnX"], stats["spawnY"], collide, zones or "-"))
+        enrage = creature["enrage"]
+        print("creature %s (skeleton %s, stats w%d h%d hp%d spd%d, spawn %d,%d, collide %s, enrage hpPct%d spdMul%d faceHold%d cue%d) zones %s" % (
+            cid, creature["skeleton"]["id"], stats["w"], stats["h"], stats["hp"], stats["spd"], stats["spawnX"], stats["spawnY"], collide,
+            enrage["hpPct"], enrage["spdMul"], enrage["faceHold"], enrage["cue"] or 0, zones or "-"))
         for name in ZONE_NAMES:
             if name not in creature["zones"]:
                 continue

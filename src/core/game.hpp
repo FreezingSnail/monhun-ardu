@@ -562,6 +562,18 @@ struct CombatProfile {
     uint16_t cdBase, cdJitter, spawnT, spawnCd, stunRecoverT, staggerRecoverT;
 };
 
+// Creature enrage phase (feel.6): one-shot escalation cached at spawn, applied
+// when the creature's HP percent first crosses hpPct. hpPct 0 (the shipped
+// default) keeps the runtime branch inert. fired is the one-shot latch; cue is
+// stored for a future enrage audio path (no audio consumer in this bead).
+struct CombatEnrage {
+    uint8_t hpPct;
+    uint8_t spdMul;
+    uint8_t faceHold;
+    uint8_t cue;
+    uint8_t fired;   // one-shot latch
+};
+
 // One hit window (blob ABI order minus the reserved flags byte, which the
 // loader does not cache: always 0 today and never read).
 struct CombatWindow {
@@ -634,8 +646,9 @@ struct CombatState {
     uint8_t isStatic;     // creature record flags bit0: static prop (pole)
     uint8_t patternIdx;
     uint8_t stepIdx;
-    uint8_t stepT;     // 8-bit countdown: step `after`/WAIT ticks cap at 255
-    uint8_t stagger;   // stagger meter accumulator (profile.staggerMax = 0 -> unused)
+    uint8_t stepT;         // 8-bit countdown: step `after`/WAIT ticks cap at 255
+    uint8_t stagger;       // stagger meter accumulator (profile.staggerMax = 0 -> unused)
+    CombatEnrage enrage;   // 5 B AVR: one-shot HP-threshold escalation cache
 };
 
 // Monster attack table — byte-for-byte port of mock/game.js MONSTER_ATTACKS.

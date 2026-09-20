@@ -556,6 +556,22 @@ static void updateMonster(Game &g) {
     if (m.state == MS_DEAD)
         return;
 
+    // Creature enrage phase (feel.6): one-shot escalation when HP first crosses
+    // the authored threshold. The four scalars are cached at spawn
+    // (CombatEnrage, no per-tick cart reads); hpPct 0 is the shipped default, so
+    // the branch is inert until a creature authors stats.enrage. The fired latch
+    // makes it fire exactly once. Applied before the facing block and the FSM
+    // switch, so the tick it fires already uses the new speed and faceHold.
+    {
+        CombatEnrage &en = gp->combat.enrage;
+        if (!en.fired && en.hpPct > 0 && static_cast<int32_t>(m.hp) * 100 <= static_cast<int32_t>(m.hpMax) * en.hpPct) {
+            en.fired = 1;
+            const uint16_t spd = static_cast<uint16_t>((static_cast<uint16_t>(m.spd) * en.spdMul) / 100);
+            m.spd = static_cast<uint8_t>(spd < 1 ? 1 : spd);
+            gp->combat.profile.faceHold = en.faceHold;
+        }
+    }
+
     const int32_t dx = (p.x + (p.w >> 1)) - (m.x + (m.w >> 1));
     const int32_t dy = (p.y + (p.h >> 1)) - (m.y + (m.h >> 1));
     const int16_t dist = fp::isqrt(dx * dx + dy * dy);

@@ -125,9 +125,10 @@ struct CombatCreature {
     uint8_t w, h, spd;
     CombatBox collide;   // body-collision rect (legs-only for the chicken)
     uint16_t hp, spawnX, spawnY;
-    uint8_t flags;              // bit0: static prop (pole); no FSM/attacks
-    uint8_t sheet;              // art sheet id (0 = default monster sheet)
-    uint8_t brokenW, brokenH;   // target rect on break (0 = unchanged)
+    uint8_t flags;                                                  // bit0: static prop (pole); no FSM/attacks
+    uint8_t sheet;                                                  // art sheet id (0 = default monster sheet)
+    uint8_t brokenW, brokenH;                                       // target rect on break (0 = unchanged)
+    uint8_t enrageHpPct, enrageSpdMul, enrageFaceHold, enrageCue;   // feel.6 (hpPct 0 = disabled)
 };
 
 struct CombatSkeleton {
@@ -198,6 +199,7 @@ struct PkCreature {
     uint8_t collideW, collideH;
     uint16_t hp, spawnX, spawnY;
     uint8_t flags, sheet, brokenW, brokenH;
+    uint8_t enrageHpPct, enrageSpdMul, enrageFaceHold, enrageCue;
 };
 struct PkProfile {
     uint8_t engageDist, keepDist, attackDist;
@@ -260,6 +262,8 @@ static_assert(sizeof(PkStep) == combat::STEP_SIZE, "step ABI drift");
 // pairs; attackLoad's scalar burst relies on the same layout as before.
 static_assert(offsetof(PkCreature, h) == offsetof(PkCreature, w) + 1, "creature size pair must stay adjacent");
 static_assert(offsetof(PkCreature, patternCount) == offsetof(PkCreature, firstPattern) + 1, "pattern head pair must stay adjacent");
+static_assert(offsetof(PkCreature, enrageHpPct) == offsetof(PkCreature, brokenH) + 1, "creature enrage quad must follow brokenH");
+static_assert(offsetof(PkCreature, enrageCue) == offsetof(PkCreature, enrageHpPct) + 3, "creature enrage quad must stay contiguous");
 static_assert(offsetof(PkAttack, moveSpeedF) == offsetof(PkAttack, moveType) + 1, "attack move pair must stay adjacent");
 static_assert(offsetof(PkAttack, windowCount) == offsetof(PkAttack, firstWindow) + 1, "attack window pair must stay adjacent");
 static_assert(offsetof(PkAttack, wallStun) == offsetof(PkAttack, cue) + 1, "attack wallStun must follow cue");
@@ -279,7 +283,7 @@ static_assert(offsetof(CombatPattern, guardIdx) == offsetof(PkPattern, guardIdx)
 static_assert(sizeof(CombatWindow) == 9, "window cache must stay 9 B");
 static_assert(sizeof(CombatAttackCache) == 22, "attack cache must stay 22 B");
 static_assert(sizeof(CombatZoneCache) == 11, "zone cache must stay 11 B");
-static_assert(sizeof(CombatState) == 84, "CombatState must stay 84 B (zones design + collide + static flag + faceHold + wallStun)");
+static_assert(sizeof(CombatState) == 89, "CombatState must stay 89 B (zones design + collide + static flag + faceHold + wallStun + enrage)");
 
 // Fake cart pointer: the blob lives below 64 KB (generator hard-fails above).
 inline uint16_t combatCartAddr(uint16_t off) {
@@ -332,7 +336,26 @@ inline CombatCreature combatCreatureRead(uint8_t i) {
     v.sheet = combatReadU8(b + MH_COMBAT_FIELD(detail::PkCreature, sheet));
     v.brokenW = combatReadU8(b + MH_COMBAT_FIELD(detail::PkCreature, brokenW));
     v.brokenH = combatReadU8(b + MH_COMBAT_FIELD(detail::PkCreature, brokenH));
+    // Enrage quad (feel.6): hpPct/spdMul then faceHold/cue, two adjacent u16.
+    const uint16_t en0 = combatReadU16(b + MH_COMBAT_FIELD(detail::PkCreature, enrageHpPct));
+    const uint16_t en1 = combatReadU16(b + MH_COMBAT_FIELD(detail::PkCreature, enrageFaceHold));
+    v.enrageHpPct = static_cast<uint8_t>(en0 & 0xFF);
+    v.enrageSpdMul = static_cast<uint8_t>(en0 >> 8);
+    v.enrageFaceHold = static_cast<uint8_t>(en1 & 0xFF);
+    v.enrageCue = static_cast<uint8_t>(en1 >> 8);
     return v;
+}
+
+// One-shot enrage cache read (feel.6): the packed quad is two adjacent u16
+// (hpPct/spdMul, faceHold/cue). Spawn burst only; no per-tick cart access.
+inline void combatCreatureEnrageRead(uint8_t i, CombatEnrage &e) {
+    const uint16_t b = static_cast<uint16_t>(combat::CREATURES_OFF + i * combat::CREATURE_SIZE);
+    const uint16_t en0 = combatReadU16(b + MH_COMBAT_FIELD(detail::PkCreature, enrageHpPct));
+    const uint16_t en1 = combatReadU16(b + MH_COMBAT_FIELD(detail::PkCreature, enrageFaceHold));
+    e.hpPct = static_cast<uint8_t>(en0 & 0xFF);
+    e.spdMul = static_cast<uint8_t>(en0 >> 8);
+    e.faceHold = static_cast<uint8_t>(en1 & 0xFF);
+    e.cue = static_cast<uint8_t>(en1 >> 8);
 }
 
 inline uint8_t combatCreatureProfileIdx(uint8_t i) {
@@ -572,7 +595,19 @@ inline CombatCreature combatCreatureRead(uint8_t i) {
     v.sheet = c.sheet;
     v.brokenW = c.brokenW;
     v.brokenH = c.brokenH;
+    v.enrageHpPct = c.enrageHpPct;
+    v.enrageSpdMul = c.enrageSpdMul;
+    v.enrageFaceHold = c.enrageFaceHold;
+    v.enrageCue = c.enrageCue;
     return v;
+}
+
+inline void combatCreatureEnrageRead(uint8_t i, CombatEnrage &e) {
+    const combat_data::Creature &c = combat_data::CREATURES[i];
+    e.hpPct = c.enrageHpPct;
+    e.spdMul = c.enrageSpdMul;
+    e.faceHold = c.enrageFaceHold;
+    e.cue = c.enrageCue;
 }
 
 inline uint8_t combatCreatureProfileIdx(uint8_t i) {
@@ -887,6 +922,7 @@ inline void creatureCacheReset(Game &g, uint8_t creatureId) {
     g.combat.stepIdx = 0;
     g.combat.stepT = 0;
     g.combat.stagger = 0;
+    g.combat.enrage = CombatEnrage{};
     g.combat.attack = CombatAttackCache{};
 }
 
@@ -921,6 +957,7 @@ inline uint8_t creatureLoad(Game &g, uint8_t creatureId) {
     combatCreatureBodyBox(creatureId, g.combat.body, g.combat.headZone, g.combat.appendZone);
     g.combat.collide = combatCreatureCollideBox(creatureId);
     g.combat.isStatic = combatCreatureStatic(creatureId);
+    combatCreatureEnrageRead(creatureId, g.combat.enrage);   // feel.6; fired latched to 0 by reset
     if (ZONES_ENABLED) {
         combatZoneSeed(g, COMBAT_ZONE_HEAD, g.combat.headZone);
         combatZoneSeed(g, COMBAT_ZONE_APPENDAGE, g.combat.appendZone);

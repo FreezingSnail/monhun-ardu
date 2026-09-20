@@ -346,6 +346,10 @@ void CombatPackSuite(TestRunner &runner) {
             t.assert(b8(blob, o + 22), h.sheet, "blob creature sheet");
             t.assert(b8(blob, o + 23), h.brokenW, "blob creature brokenW");
             t.assert(b8(blob, o + 24), h.brokenH, "blob creature brokenH");
+            t.assert(b8(blob, o + 25), h.enrageHpPct, "blob creature enrageHpPct");
+            t.assert(b8(blob, o + 26), h.enrageSpdMul, "blob creature enrageSpdMul");
+            t.assert(b8(blob, o + 27), h.enrageFaceHold, "blob creature enrageFaceHold");
+            t.assert(b8(blob, o + 28), h.enrageCue, "blob creature enrageCue");
         }
         for (uint8_t i = 0; i < combat::PROFILES_COUNT; i++) {
             const size_t o = static_cast<size_t>(combat::PROFILES_OFF) + i * combat::PROFILE_SIZE;
@@ -471,6 +475,14 @@ void CombatPackSuite(TestRunner &runner) {
         t.assert(b8(blob, static_cast<size_t>(combat::CREATURE_LUNGE_OFF) + 10), combat_expect::CREATURE_LUNGE_SPD, "expect lunge spd");
         t.assert(b16(blob, static_cast<size_t>(combat::CREATURE_SWEEP_OFF) + 15), combat_expect::CREATURE_SWEEP_HP, "expect sweep hp");
         t.assert(b8(blob, static_cast<size_t>(combat::CREATURE_SWEEP_OFF) + 10), combat_expect::CREATURE_SWEEP_SPD, "expect sweep spd");
+        // feel.6: the enrage quad is the creature record's last four bytes and is
+        // disabled (halves 0) on every shipped creature. The decode loop above
+        // pins it against the host struct; no expect constants exist while no
+        // data authors the phase.
+        t.assert(b8(blob, static_cast<size_t>(combat::CREATURE_LUNGE_OFF) + 25), 0, "shipped lunge enrage hpPct 0");
+        t.assert(b8(blob, static_cast<size_t>(combat::CREATURE_LUNGE_OFF) + 26), 0, "shipped lunge enrage spdMul 0");
+        t.assert(b8(blob, static_cast<size_t>(combat::CREATURE_LUNGE_OFF) + 27), 0, "shipped lunge enrage faceHold 0");
+        t.assert(b8(blob, static_cast<size_t>(combat::CREATURE_LUNGE_OFF) + 28), 0, "shipped lunge enrage cue 0");
         t.assert(b8(blob, static_cast<size_t>(combat::ZONE_RAVAGER_HEAD_OFF) + 4), combat_expect::ZONE_RAVAGER_HEAD_HP, "expect head hp");
         t.assert(b8(blob, static_cast<size_t>(combat::ZONE_RAVAGER_HEAD_OFF) + 5), combat_expect::ZONE_RAVAGER_HEAD_DMG_MUL, "expect head dmgMul");
         t.assert(b8(blob, static_cast<size_t>(combat::ZONE_RAVAGER_APPENDAGE_OFF) + 4), combat_expect::ZONE_RAVAGER_APPENDAGE_HP, "expect tail hp");
