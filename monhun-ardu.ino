@@ -91,6 +91,7 @@ void setup() {
     mh::saveLoad(s_save, SAVE_BACKEND);   // first boot / bad block -> defaults
     mh::questApplyToGame(g, s_save);
     mh::upgradeApplyToGame(g, s_save);
+    mh::itemsApplyToGame(g, s_save);   // restore the persisted inventory
 }
 
 // One input sample per logic tick, shared by the menu and the sim. The menu
@@ -127,6 +128,7 @@ void run() {
             if (mh::appNavApply(mh::appMenuAccept(), s_menu, s_screen, s_save, g, in)) {
                 mh::questApplyToGame(g, s_save);
                 mh::upgradeApplyToGame(g, s_save);
+                mh::itemsApplyToGame(g, s_save);
                 s_huntOver = false;
             }
         }
@@ -152,6 +154,7 @@ void run() {
             if (mh::appNavApply(nav, s_menu, s_screen, s_save, g, in)) {
                 mh::questApplyToGame(g, s_save);
                 mh::upgradeApplyToGame(g, s_save);
+                mh::itemsApplyToGame(g, s_save);
                 s_huntOver = false;
             }
             return;
@@ -172,7 +175,7 @@ void run() {
     // Hunt-end quest commit (qs.2/qs.4): persist the kill progress exactly once
     // per hunt. The save is otherwise untouched during a hunt (write-cycle
     // hygiene); appHuntCommit() owns the latch.
-    if (mh::appHuntCommit(g.over != mh::OVER_NONE, s_huntOver, s_save, g.questProgress))
+    if (mh::appHuntCommit(g.over != mh::OVER_NONE, s_huntOver, s_save, g))
         mh::saveStore(s_save, SAVE_BACKEND);
     // Win/lose over screen: a fresh A returns to the opening menu (picks
     // preserved); the menu's next A starts a fully reset hunt. While a carcass

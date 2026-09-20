@@ -155,6 +155,137 @@ void ScreenSuite(TestRunner &runner) {
         suite.addTest(t);
     }
 
+    // ------------------------------------------------- save v2 (prg.5 tail)
+    {
+        Test t("v2 record: equipment slots + inventory counts encode/decode at exact offsets");
+        t.assert(SAVE_BYTES, static_cast<uint8_t>(14 + 3 + 1 + ITEM_COUNT + 1), "27 B for 8 items");
+        t.assert(SAVE_EQUIP_OFF, 14, "equip starts after the v2 prefix");
+        t.assert(SAVE_FLAGS_OFF, 17, "flags after the 3 equip slots");
+        t.assert(SAVE_ITEMS_OFF, 18, "inventory after flags");
+        t.assert(SAVE_CHECKSUM_OFF, static_cast<uint8_t>(18 + ITEM_COUNT), "checksum last");
+        SaveBlock s;
+        saveDefaults(s);
+        s.equip[0] = 2;   // head
+        s.equip[1] = 1;   // body
+        s.equip[2] = 3;   // charm
+        s.flags = SAVE_FLAG_SMITHY_SEEN;
+        s.items[ITEM_HERB] = 7;
+        s.items[ITEM_ORE] = 255;
+        uint8_t bytes[SAVE_BYTES];
+        saveEncode(s, bytes);
+        t.assert(bytes[SAVE_EQUIP_OFF + 0], 2, "head slot byte");
+        t.assert(bytes[SAVE_EQUIP_OFF + 1], 1, "body slot byte");
+        t.assert(bytes[SAVE_EQUIP_OFF + 2], 3, "charm slot byte");
+        t.assert(bytes[SAVE_FLAGS_OFF], SAVE_FLAG_SMITHY_SEEN, "flags byte");
+        t.assert(bytes[SAVE_ITEMS_OFF + ITEM_HERB], 7, "herb count byte");
+        t.assert(bytes[SAVE_ITEMS_OFF + ITEM_ORE], 255, "ore count byte");
+        uint8_t sum = 0;
+        for (uint8_t i = 0; i < SAVE_CHECKSUM_OFF; i++)
+            sum = static_cast<uint8_t>(sum + bytes[i]);
+        t.assert(bytes[SAVE_CHECKSUM_OFF], sum, "checksum covers the v2 tail");
+        SaveBlock out;
+        t.assert(saveDecode(bytes, out), true, "v3 decodes");
+        t.assert(out.equip[0], 2, "head round-trip");
+        t.assert(out.equip[2], 3, "charm round-trip");
+        t.assert(out.flags, SAVE_FLAG_SMITHY_SEEN, "flags round-trip");
+        t.assert(out.items[ITEM_HERB], 7, "herb round-trip");
+        t.assert(out.items[ITEM_ORE], 255, "ore round-trip");
+        suite.addTest(t);
+    }
+
+    {
+        Test t("saveItemAdd/Consume saturate + ignore out-of-range; fold takes the larger");
+        SaveBlock s;
+        saveDefaults(s);
+        saveItemAdd(s, ITEM_HERB, 2);
+        saveItemAdd(s, ITEM_HERB, 3);
+        t.assert(saveItemCount(s, ITEM_HERB), 5, "adds accumulate");
+        saveItemAdd(s, ITEM_ORE, 250);
+        saveItemAdd(s, ITEM_ORE, 100);
+        t.assert(saveItemCount(s, ITEM_ORE), 255, "clamps at 255");
+        saveItemAdd(s, 200, 5);
+        t.assert(saveItemCount(s, 200), 0, "id past the table inert");
+        t.assert(saveItemConsume(s, ITEM_HERB), 1, "consume ok");
+        t.assert(saveItemCount(s, ITEM_HERB), 4, "consumed one");
+        t.assert(saveItemConsume(s, ITEM_FANG), 0, "empty consume fails");
+        t.assert(saveItemConsume(s, 200), 0, "out-of-range consume fails");
+
+        // Hunt-end fold: gathered gains persist, a consumed herb does not erase stock.
+        SaveBlock store;
+        saveDefaults(store);
+        store.items[ITEM_HERB] = 5;
+        store.items[ITEM_SCALE] = 2;
+        uint8_t live[ITEM_COUNT] = {0};
+        live[ITEM_HERB] = 3;    // used herbs this hunt: lower than saved, kept
+        live[ITEM_SCALE] = 4;   // carved scales: higher, folded in
+        live[ITEM_ORE] = 6;     // gathered ore: new
+        saveFoldItems(store, live);
+        t.assert(store.items[ITEM_HERB], 5, "lower live count keeps the stock");
+        t.assert(store.items[ITEM_SCALE], 4, "higher live count folds in");
+        t.assert(store.items[ITEM_ORE], 6, "new gain folds in");
+        suite.addTest(t);
+    }
+
+    {
+        Test t("migration: a version-2 record keeps its prefix, v2 tail defaults, never crashes");
+        // Build a valid v2 record (prg.5 tail is not present in the stream).
+        SaveBlock v2;
+        saveDefaults(v2);
+        v2.zenny = 4321;
+        v2.tier[1] = 2;
+        saveQuestSet(v2, 5, 0);
+        uint8_t bytes[SAVE_BYTES];
+        saveEncode(v2, bytes);
+        bytes[2] = SAVE_VERSION_V2;
+        bytes[SAVE_CHECKSUM_OFF] = 0;
+        for (uint8_t i = 0; i < SAVE_CHECKSUM_OFF; i++)
+            bytes[SAVE_CHECKSUM_OFF] = static_cast<uint8_t>(bytes[SAVE_CHECKSUM_OFF] + bytes[i]);
+
+        for (uint8_t i = 0; i < 64; i++)
+            hostEeprom[i] = 0xEE;
+        for (uint8_t i = 0; i < SAVE_BYTES; i++)
+            hostEeprom[SAVE_EEPROM_ADDR + i] = bytes[i];
+        SaveBlock out;
+        t.assert(saveLoad(out, HOST_BACKEND), true, "older-version record migrates (fields loaded)");
+        t.assert(out.zenny, 4321, "v2 zenny preserved");
+        t.assert(out.tier[1], 2, "v2 tier preserved");
+        t.assert(saveQuestGet(out, 5, 0), true, "v2 quest bit preserved");
+        t.assert(out.items[ITEM_HERB], 0, "v2 inventory defaults empty");
+        t.assert(out.equip[0], SAVE_EQUIP_NONE, "v2 equipment defaults none");
+        suite.addTest(t);
+    }
+
+    {
+        Test t("migration: a version-1 record preserves zenny/quests/tiers, no active quest");
+        SaveBlock v1;
+        saveDefaults(v1);
+        v1.zenny = 999;
+        v1.tier[0] = 1;
+        saveQuestSet(v1, 2, 1);
+        uint8_t bytes[SAVE_BYTES];
+        saveEncode(v1, bytes);
+        bytes[2] = SAVE_VERSION_V1;
+        // v1 had no active-quest/progress bytes: zero them, then fix the checksum.
+        bytes[SAVE_ACTIVE_OFF] = 0;
+        bytes[SAVE_PROGRESS_OFF] = 0;
+        bytes[SAVE_CHECKSUM_OFF] = 0;
+        for (uint8_t i = 0; i < SAVE_CHECKSUM_OFF; i++)
+            bytes[SAVE_CHECKSUM_OFF] = static_cast<uint8_t>(bytes[SAVE_CHECKSUM_OFF] + bytes[i]);
+
+        for (uint8_t i = 0; i < 64; i++)
+            hostEeprom[i] = 0xEE;
+        for (uint8_t i = 0; i < SAVE_BYTES; i++)
+            hostEeprom[SAVE_EEPROM_ADDR + i] = bytes[i];
+        SaveBlock out;
+        t.assert(saveLoad(out, HOST_BACKEND), true, "older-version record migrates (fields loaded)");
+        t.assert(out.zenny, 999, "v1 zenny preserved");
+        t.assert(out.tier[0], 1, "v1 tier preserved");
+        t.assert(saveQuestGet(out, 2, 1), true, "v1 done bit preserved");
+        t.assert(out.activeQuest, SAVE_QUEST_NONE, "v1 has no active quest");
+        t.assert(out.progress, 0, "v1 progress default 0");
+        suite.addTest(t);
+    }
+
     // ---------------------------------------------------------- conditions
     {
         Test t("conditions: zenny >= cost, flag set, tier < max, always");

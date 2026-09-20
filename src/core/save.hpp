@@ -1,17 +1,22 @@
 #pragma once
-// Persistent save block (bead monhun-ardu-cgz, docs/quests-shops.md).
+// Persistent save block (bead monhun-ardu-cgz, docs/quests-shops.md; v2 layout
+// bead monhun-ardu-prg.5).
 //
-// 15-byte packed little-endian record in EEPROM (version 2, bead
-// monhun-ardu-me6):
+// Packed little-endian record in EEPROM (version 3). The record is the v2
+// prefix (bead monhun-ardu-me6) followed by the progression tail (prg.5:
+// equipment + inventory counts):
 //
-//   0..1  magic  u16 0x484D ("MH")
-//   2     version u8
-//   3..4  zenny  u16
-//   5..8  quest  u8[4]  (16 quests x 2 bits: taken, done)
-//   9     activeQuest u8 (0xFF = none; the quest progress is counted for)
-//   10    progress    u8 (target-kind kills for the active quest)
+//   0..1   magic  u16 0x484D ("MH")
+//   2      version u8 (3)
+//   3..4   zenny  u16
+//   5..8   quest  u8[4]  (16 quests x 2 bits: taken, done)
+//   9      activeQuest u8 (0xFF = none; the quest progress is counted for)
+//   10     progress    u8 (target-kind kills for the active quest)
 //   11..13 tier  u8[3] (per weapon upgrade tier)
-//   14    checksum u8 (sum of bytes 0..13)
+//   14..16 equip u8[3] (head/body/charm slot id; 0 = none)
+//   17     flags  u8 (reserved progression bits, e.g. smithy seen)
+//   18..25 items  u8[ITEM_COUNT] (inventory counts, cap 255)
+//   26     checksum u8 (sum of bytes 0..25)
 //
 // Load runs once on boot; anything but a good magic + version + checksum falls
 // back to defaults. saveStore() only writes bytes that differ and verifies the
@@ -19,27 +24,45 @@
 // called during a hunt: only screen actions and the hunt-end progress commit
 // write (write-cycle hygiene).
 //
+// Migration (prg.5): a blank/old block never crashes. saveLoad() decodes the
+// shared v2 prefix from a version-2 record (inventory/equip default to empty)
+// and rejects anything else into saveDefaults(). saveDecodeV1 covers the
+// original 15-byte bead-cgz record (no active quest/progress) for the same
+// reason: older EEPROM contents load with their zenny/quests/tiers intact.
+//
 // Host-testable: the logic takes a SaveBackend of three-address read/write
 // functions rather than touching Arduino.h. On AVR save.hpp also provides the
 // EEPROM-backed functions (EEPROM.update == write-if-different).
 
 #include <stdint.h>
-#include "progmem.hpp"   // MH_NOINLINE
+#include "progmem.hpp"                   // MH_NOINLINE
+#include "../generated/items_meta.hpp"   // item::ITEM_COUNT (inventory slot count)
 
 namespace mh {
 
 constexpr uint16_t SAVE_MAGIC = 0x484D;   // 'M','H' little-endian
-constexpr uint8_t SAVE_VERSION = 2;
+constexpr uint8_t SAVE_VERSION = 3;
+constexpr uint8_t SAVE_VERSION_V2 = 2;   // bead me6: v2 prefix (15 B)
+constexpr uint8_t SAVE_VERSION_V1 = 1;   // bead cgz: original 15 B, no quest progress
 constexpr uint8_t SAVE_QUEST_BYTES = 4;
 constexpr uint8_t SAVE_TIER_COUNT = 3;   // N_WEAPONS, matches screens::TIER_COUNT
 constexpr uint8_t SAVE_ACTIVE_OFF = 9;   // activeQuest u8 (0xFF = none)
 constexpr uint8_t SAVE_PROGRESS_OFF = 10;
 constexpr uint8_t SAVE_TIER_OFF = 11;
-constexpr uint8_t SAVE_CHECKSUM_OFF = 14;
-constexpr uint8_t SAVE_BYTES = 15;
+constexpr uint8_t SAVE_EQUIP_OFF = 14;   // u8[3]: head, body, charm
+constexpr uint8_t SAVE_EQUIP_COUNT = 3;
+constexpr uint8_t SAVE_FLAGS_OFF = 17;      // reserved progression bits
+constexpr uint8_t SAVE_ITEMS_OFF = 18;      // u8[item::ITEM_COUNT]
+constexpr uint8_t SAVE_PREFIX_BYTES = 14;   // bytes shared with the v1/v2 record (checksum was at 14)
+constexpr uint8_t SAVE_CHECKSUM_OFF = static_cast<uint8_t>(SAVE_ITEMS_OFF + item::ITEM_COUNT);
+constexpr uint8_t SAVE_BYTES = static_cast<uint8_t>(SAVE_CHECKSUM_OFF + 1);
 constexpr uint8_t SAVE_QUEST_NONE = 0xFF;
+constexpr uint8_t SAVE_EQUIP_NONE = 0;   // empty equipment slot
 // Arduboy2 reserves EEPROM 0..15 for system settings (EEPROM_STORAGE_SPACE_START).
 constexpr uint16_t SAVE_EEPROM_ADDR = 16;
+
+// Progression flag bits (SAVE_FLAGS_OFF); reserved for prg.7.
+constexpr uint8_t SAVE_FLAG_SMITHY_SEEN = 0x01;
 
 struct SaveBlock {
     uint16_t zenny;
@@ -47,8 +70,12 @@ struct SaveBlock {
     uint8_t activeQuest;   // quest id or SAVE_QUEST_NONE
     uint8_t progress;      // target-kind kills for the active quest
     uint8_t tier[SAVE_TIER_COUNT];
+    uint8_t equip[SAVE_EQUIP_COUNT];   // head/body/charm slot id (0 = none)
+    uint8_t flags;                     // SAVE_FLAG_* bits
+    uint8_t items[item::ITEM_COUNT];   // inventory counts, cap 255
 };
 
+// Sum of the payload bytes (everything before the checksum).
 inline uint8_t saveChecksum(const uint8_t *bytes) {
     uint8_t sum = 0;
     for (uint8_t i = 0; i < SAVE_CHECKSUM_OFF; i++)
@@ -70,15 +97,19 @@ inline void saveEncode(const SaveBlock &s, uint8_t *out) {
     out[SAVE_PROGRESS_OFF] = s.progress;
     for (uint8_t i = 0; i < SAVE_TIER_COUNT; i++)
         out[SAVE_TIER_OFF + i] = s.tier[i];
+    for (uint8_t i = 0; i < SAVE_EQUIP_COUNT; i++)
+        out[SAVE_EQUIP_OFF + i] = s.equip[i];
+    out[SAVE_FLAGS_OFF] = s.flags;
+    for (uint8_t i = 0; i < item::ITEM_COUNT; i++)
+        out[SAVE_ITEMS_OFF + i] = s.items[i];
     out[SAVE_CHECKSUM_OFF] = saveChecksum(out);
 }
 
-// Validate + unpack. False leaves `s` unspecified: callers fall back to
-// saveDefaults(). Magic/version/checksum are all checked.
-inline bool saveDecode(const uint8_t *in, SaveBlock &s) {
+// Unpack the shared v1/v2 prefix (bytes 0..14) into `s`, leaving the prg.5 tail
+// at defaults. Only magic and checksum are checked; the version is the caller's
+// concern. False leaves `s` unspecified.
+inline bool saveDecodePrefix(const uint8_t *in, SaveBlock &s) {
     if (in[0] != static_cast<uint8_t>(SAVE_MAGIC & 0xFF) || in[1] != static_cast<uint8_t>(SAVE_MAGIC >> 8))
-        return false;
-    if (in[2] != SAVE_VERSION)
         return false;
     if (in[SAVE_CHECKSUM_OFF] != saveChecksum(in))
         return false;
@@ -89,6 +120,11 @@ inline bool saveDecode(const uint8_t *in, SaveBlock &s) {
     s.progress = in[SAVE_PROGRESS_OFF];
     for (uint8_t i = 0; i < SAVE_TIER_COUNT; i++)
         s.tier[i] = in[SAVE_TIER_OFF + i];
+    for (uint8_t i = 0; i < SAVE_EQUIP_COUNT; i++)
+        s.equip[i] = SAVE_EQUIP_NONE;
+    s.flags = 0;
+    for (uint8_t i = 0; i < item::ITEM_COUNT; i++)
+        s.items[i] = 0;
     return true;
 }
 
@@ -100,6 +136,26 @@ inline void saveDefaults(SaveBlock &s) {
     s.progress = 0;
     for (uint8_t i = 0; i < SAVE_TIER_COUNT; i++)
         s.tier[i] = 0;
+    for (uint8_t i = 0; i < SAVE_EQUIP_COUNT; i++)
+        s.equip[i] = SAVE_EQUIP_NONE;
+    s.flags = 0;
+    for (uint8_t i = 0; i < item::ITEM_COUNT; i++)
+        s.items[i] = 0;
+}
+
+// Validate + unpack the current record. False leaves `s` unspecified: callers
+// fall back to saveDefaults(). Magic/version/checksum are all checked.
+inline bool saveDecode(const uint8_t *in, SaveBlock &s) {
+    if (in[2] != SAVE_VERSION)
+        return false;
+    if (!saveDecodePrefix(in, s))
+        return false;
+    for (uint8_t i = 0; i < SAVE_EQUIP_COUNT; i++)
+        s.equip[i] = in[SAVE_EQUIP_OFF + i];
+    s.flags = in[SAVE_FLAGS_OFF];
+    for (uint8_t i = 0; i < item::ITEM_COUNT; i++)
+        s.items[i] = in[SAVE_ITEMS_OFF + i];
+    return true;
 }
 
 // Quest bits: 2 consecutive bits per quest id (taken, done) inside quest[4].
@@ -119,6 +175,35 @@ inline void saveQuestClear(SaveBlock &s, uint8_t quest, uint8_t which) {
     s.quest[(bit >> 3) & 3] &= static_cast<uint8_t>(~(1u << (bit & 7)));
 }
 
+// Inventory helpers on the save block (host + device, same rules as
+// core/items.hpp: id-checked, saturating at 255).
+inline uint8_t saveItemCount(const SaveBlock &s, uint8_t id) {
+    return id < item::ITEM_COUNT ? s.items[id] : 0;
+}
+inline void saveItemAdd(SaveBlock &s, uint8_t id, uint8_t n) {
+    if (id >= item::ITEM_COUNT)
+        return;
+    const uint16_t v = static_cast<uint16_t>(s.items[id]) + n;
+    s.items[id] = v > 255 ? 255 : static_cast<uint8_t>(v);
+}
+inline bool saveItemConsume(SaveBlock &s, uint8_t id) {
+    if (id >= item::ITEM_COUNT || s.items[id] == 0)
+        return false;
+    s.items[id]--;
+    return true;
+}
+
+// Fold the live hunt inventory into the save's counts (hunt-end commit). Each
+// slot takes the larger of the two so a hunt that consumed herbs (RAM lower
+// than saved) never destroys the persistent stock, while gathered/carved gains
+// (RAM higher) persist. Coalesced: called once per hunt, never per item.
+inline void saveFoldItems(SaveBlock &s, const uint8_t *live) {
+    for (uint8_t i = 0; i < item::ITEM_COUNT; i++) {
+        if (live[i] > s.items[i])
+            s.items[i] = live[i];
+    }
+}
+
 using SaveReadFn = uint8_t (*)(uint16_t);
 using SaveWriteFn = void (*)(uint16_t, uint8_t);
 
@@ -127,15 +212,27 @@ struct SaveBackend {
     SaveWriteFn write;
 };
 
+// Load + migrate. Reads the current SAVE_BYTES; a good v3 record decodes, a v2
+// record decodes its shared prefix (prg.5 tail = defaults), a v1 record decodes
+// the bead-cgz prefix, and anything else falls back to saveDefaults(). Returns
+// true when a well-formed record was loaded (including a migrated older
+// version); false only for blank/junk, where `s` holds the defaults.
 inline bool saveLoad(SaveBlock &s, const SaveBackend &backend) {
     uint8_t bytes[SAVE_BYTES];
     for (uint8_t i = 0; i < SAVE_BYTES; i++)
         bytes[i] = backend.read(static_cast<uint16_t>(SAVE_EEPROM_ADDR + i));
-    if (!saveDecode(bytes, s)) {
-        saveDefaults(s);
-        return false;
+    if (saveDecode(bytes, s))
+        return true;
+    // Migration: an older but well-formed record keeps its fields.
+    if (bytes[2] == SAVE_VERSION_V2 && saveDecodePrefix(bytes, s))
+        return true;
+    if (bytes[2] == SAVE_VERSION_V1 && saveDecodePrefix(bytes, s)) {
+        s.activeQuest = SAVE_QUEST_NONE;   // v1 had no active-quest model
+        s.progress = 0;
+        return true;
     }
-    return true;
+    saveDefaults(s);
+    return false;
 }
 
 // Write-on-change + verify read. Returns false when the verify mismatches.

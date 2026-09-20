@@ -87,10 +87,11 @@ static AppNav pressB(ScreenState &s, SaveBlock &save) {
 }
 
 inline void test_hub(FxTest &test) {
-    // Known save: 500 zenny, no quest, no tier.
+    // Known save: 500 zenny, a 4-herb pantry, no quest, no tier.
     SaveBlock save;
     saveDefaults(save);
     save.zenny = 500;
+    save.items[ITEM_HERB] = 4;
     saveStore(save, REAL_BACKEND);
 
     MenuState menu;   // boot picks SWD / LUNGE
@@ -169,11 +170,13 @@ inline void test_hub(FxTest &test) {
     test.expectEq(static_cast<uint32_t>(appNavApply(appMenuAccept(), menu, screen, save, g, H_A)), 1, F("second hunt started"));
     questApplyToGame(g, save);
     upgradeApplyToGame(g, save);
+    itemsApplyToGame(g, save);
     test.expectEq(static_cast<uint32_t>(g.weapon), W_SWORD, F("hunt weapon"));
     test.expectEq(static_cast<uint32_t>(g.monsterKind), MON_LUNGE, F("hunt beast"));
     test.expectEq(static_cast<uint32_t>(g.questTarget), MON_LUNGE, F("quest target armed"));
     test.expectEq(static_cast<uint32_t>(g.questNeed), 3, F("quest need armed"));
     test.expectEq(static_cast<uint32_t>(g.dmgMul), 110, F("tier 1 damage multiplier applied"));
+    test.expectEq(static_cast<uint32_t>(g.items[ITEM_HERB]), 4, F("inventory restored from the save"));
 
     // ------------------------------- fight a few ticks, then win + commit
     for (uint8_t i = 0; i < 3; i++)
@@ -182,15 +185,22 @@ inline void test_hub(FxTest &test) {
     damageMonster(g, 2000, g.monster.x, g.monster.y);
     test.expectEq(static_cast<uint32_t>(g.over), OVER_WIN, F("hunt won"));
     test.expectEq(static_cast<uint32_t>(g.questProgress), 1, F("one kill counted"));
+    // A carved scale + a gathered ore land in RAM only; the hunt-end commit
+    // folds them into the save (coalesced, not per item).
+    g.items[ITEM_SCALE] = 2;
+    g.items[ITEM_ORE] = 1;
 
-    test.expectEq(static_cast<uint32_t>(appHuntCommit(g.over != OVER_NONE, huntLatched, save, g.questProgress)), 1, F("end commit fires"));
+    test.expectEq(static_cast<uint32_t>(appHuntCommit(g.over != OVER_NONE, huntLatched, save, g)), 1, F("end commit fires"));
     saveStore(save, REAL_BACKEND);
-    test.expectEq(static_cast<uint32_t>(appHuntCommit(g.over != OVER_NONE, huntLatched, save, g.questProgress)), 0, F("end commit latched"));
+    test.expectEq(static_cast<uint32_t>(appHuntCommit(g.over != OVER_NONE, huntLatched, save, g)), 0, F("end commit latched"));
     test.expectEq(static_cast<uint32_t>(save.progress), 1, F("progress written"));
     SaveBlock reloaded;
     test.expectEq(static_cast<uint32_t>(saveLoad(reloaded, REAL_BACKEND)), 1, F("progress reloads"));
     test.expectEq(static_cast<uint32_t>(reloaded.progress), 1, F("reloaded progress"));
     test.expectEq(reloaded.zenny, 400, F("reloaded zenny"));
+    test.expectEq(static_cast<uint32_t>(reloaded.items[ITEM_HERB]), 4, F("pantry herb persisted"));
+    test.expectEq(static_cast<uint32_t>(reloaded.items[ITEM_SCALE]), 2, F("carved scale persisted"));
+    test.expectEq(static_cast<uint32_t>(reloaded.items[ITEM_ORE]), 1, F("gathered ore persisted"));
 
     // Over screen: the sketch runs menuReturnStep each tick; a fresh A returns
     // to the opening menu (demo flow), not the hub.

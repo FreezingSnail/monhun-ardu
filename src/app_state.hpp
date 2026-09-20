@@ -145,12 +145,18 @@ MH_NOINLINE inline bool appNavApply(AppNav nav, MenuState &menu, ScreenState &sc
     }
 }
 
-// Hunt-end quest-progress commit (bead monhun-ardu-me6), exactly once per hunt:
-// returns true on the single tick where the caller must saveStore(). `latched`
-// is the caller's per-hunt flag; it clears when the hunt ends (over false) so
-// the next hunt commits again. No active quest means nothing to persist, but
-// the latch still arms so a later over tick cannot re-enter the write path.
-inline bool appHuntCommit(bool over, bool &latched, SaveBlock &save, uint8_t progress) {
+// Hunt-end commit (beads monhun-ardu-me6 qs.2, prg.5 save v2): folds the hunt's
+// quest progress and its RAM inventory gains into the save exactly once per
+// hunt, returning true on the single tick where the caller must saveStore().
+// `latched` is the caller's per-hunt flag; it clears when the hunt ends (over
+// false) so the next hunt commits again. A hunt that neither advanced a quest
+// nor gained an item returns false (no EEPROM write), but the latch still arms
+// so a later over tick cannot re-enter the write path.
+//
+// Inventory folding is coalesced: gather/carve update Game::items[] in RAM only
+// (never per item); this once-per-hunt call takes the max of the live hunt
+// counts and the saved stock, so a hunted-out herb never erases the pantry.
+inline bool appHuntCommit(bool over, bool &latched, SaveBlock &save, Game &g) {
     if (!over) {
         latched = false;
         return false;
@@ -158,10 +164,18 @@ inline bool appHuntCommit(bool over, bool &latched, SaveBlock &save, uint8_t pro
     if (latched)
         return false;
     latched = true;
-    if (save.activeQuest == SAVE_QUEST_NONE)
-        return false;
-    save.progress = progress;
-    return true;
+    bool changed = false;
+    if (save.activeQuest != SAVE_QUEST_NONE) {
+        save.progress = g.questProgress;
+        changed = true;
+    }
+    for (uint8_t i = 0; i < item::ITEM_COUNT; i++) {
+        if (g.items[i] > save.items[i]) {
+            save.items[i] = g.items[i];
+            changed = true;
+        }
+    }
+    return changed;
 }
 
 }   // namespace mh

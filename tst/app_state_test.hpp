@@ -192,29 +192,54 @@ void AppSuite(TestRunner &runner) {
         SaveBlock save;
         saveDefaults(save);
         save.activeQuest = 2;
+        Game g;
+        newGame(g, W_SWORD, MODE_HUNT);
+        g.questProgress = 37;
         bool latched = false;
-        t.assert(appHuntCommit(true, latched, save, 37), true, "first over tick commits");
+        t.assert(appHuntCommit(true, latched, save, g), true, "first over tick commits");
         t.assert(save.progress, 37, "progress written");
-        t.assert(appHuntCommit(true, latched, save, 37), false, "later over ticks silent");
-        t.assert(appHuntCommit(true, latched, save, 37), false, "still silent");
-        t.assert(appHuntCommit(false, latched, save, 37), false, "over cleared: no commit");
+        t.assert(appHuntCommit(true, latched, save, g), false, "later over ticks silent");
+        t.assert(appHuntCommit(true, latched, save, g), false, "still silent");
+        t.assert(appHuntCommit(false, latched, save, g), false, "over cleared: no commit");
         t.assert(latched, false, "latch cleared with the hunt");
-        t.assert(appHuntCommit(true, latched, save, 41), true, "next hunt commits again");
+        g.questProgress = 41;
+        t.assert(appHuntCommit(true, latched, save, g), true, "next hunt commits again");
         t.assert(save.progress, 41, "new progress written");
         suite.addTest(t);
     }
 
     {
-        Test t("hunt-end commit with no active quest arms the latch without writing");
+        Test t("hunt-end commit folds the hunt inventory (max of live vs saved)");
+        SaveBlock save;
+        saveDefaults(save);
+        save.items[ITEM_HERB] = 5;   // pantry stock
+        Game g;
+        newGame(g, W_SWORD, MODE_HUNT);   // items reset to 0
+        bool latched = false;
+        g.items[ITEM_HERB] = 2;    // used 3 herbs: live lower, must not erase stock
+        g.items[ITEM_SCALE] = 4;   // carved scales: new, folds in
+        g.items[ITEM_ORE] = 6;     // gathered ore: new, folds in
+        t.assert(appHuntCommit(true, latched, save, g), true, "item gains commit");
+        t.assert(save.items[ITEM_HERB], 5, "consumed herb keeps the pantry stock");
+        t.assert(save.items[ITEM_SCALE], 4, "carved scales persisted");
+        t.assert(save.items[ITEM_ORE], 6, "gathered ore persisted");
+        suite.addTest(t);
+    }
+
+    {
+        Test t("hunt-end commit with no active quest and no gains arms the latch without writing");
         SaveBlock save;
         saveDefaults(save);
         save.progress = 9;
+        Game g;
+        newGame(g, W_SWORD, MODE_HUNT);
+        g.questProgress = 5;
         bool latched = false;
-        t.assert(appHuntCommit(true, latched, save, 5), false, "nothing to persist");
+        t.assert(appHuntCommit(true, latched, save, g), false, "nothing to persist");
         t.assert(latched, true, "latch armed");
         t.assert(save.progress, 9, "progress untouched");
-        t.assert(appHuntCommit(true, latched, save, 5), false, "no second attempt");
-        t.assert(appHuntCommit(false, latched, save, 5), false, "clear");
+        t.assert(appHuntCommit(true, latched, save, g), false, "no second attempt");
+        t.assert(appHuntCommit(false, latched, save, g), false, "clear");
         suite.addTest(t);
     }
 

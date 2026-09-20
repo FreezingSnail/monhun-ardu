@@ -36,4 +36,13 @@ static void upgradeApplyToGame(Game &g, const SaveBlock &save) {
     smithResolve(static_cast<uint8_t>(weapon), tier, g.dmgMul, g.spdMul);
 }
 
+// Restore the persisted inventory into the live hunt (prg.5 save v2). newGame
+// clears Game::items[], so this re-seeds the pantry at hunt start; gather/carve
+// then add to the RAM counts and the hunt-end commit folds them back with
+// saveFoldItems (max), so a hunt can spend herbs without erasing the stock.
+static void itemsApplyToGame(Game &g, const SaveBlock &save) {
+    for (uint8_t i = 0; i < ITEM_COUNT; i++)
+        g.items[i] = save.items[i];
+}
+
 }   // namespace mh

@@ -156,6 +156,10 @@ inline void test_screens(FxTest &test) {
     saveDefaults(eep);
     eep.zenny = 1234;
     eep.tier[0] = 2;
+    eep.equip[0] = 3;   // head slot (prg.5 tail)
+    eep.flags = SAVE_FLAG_SMITHY_SEEN;
+    eep.items[ITEM_HERB] = 6;
+    eep.items[ITEM_FANG] = 2;
     saveQuestSet(eep, 4, 0);
     test.expectEq(saveStore(eep, REAL_BACKEND), 1, F("eeprom store verifies"));
 
@@ -164,6 +168,10 @@ inline void test_screens(FxTest &test) {
     test.expectEq(out.zenny, 1234, F("eeprom zenny"));
     test.expectEq(out.tier[0], 2, F("eeprom tier"));
     test.expectEq(saveQuestGet(out, 4, 0), 1, F("eeprom quest taken"));
+    test.expectEq(out.equip[0], 3, F("eeprom equip head"));
+    test.expectEq(out.flags, SAVE_FLAG_SMITHY_SEEN, F("eeprom flags"));
+    test.expectEq(out.items[ITEM_HERB], 6, F("eeprom herb count"));
+    test.expectEq(out.items[ITEM_FANG], 2, F("eeprom fang count"));
 
     // Write-on-change: an identical block rewrites nothing; one changed field
     // rewrites the field byte plus the checksum.
@@ -173,6 +181,11 @@ inline void test_screens(FxTest &test) {
     eep.zenny = 1235;
     saveStore(eep, COUNT_BACKEND);
     test.expectEq(eepWrites, 2, F("zenny + checksum rewritten"));
+    // A changed inventory byte rewrites exactly that byte + the checksum.
+    eepWrites = 0;
+    eep.items[ITEM_ORE] = 9;
+    saveStore(eep, COUNT_BACKEND);
+    test.expectEq(eepWrites, 2, F("inventory byte + checksum rewritten"));
 
     // Corrupt magic -> safe defaults.
     saveEepromWrite(SAVE_EEPROM_ADDR, 0x00);
