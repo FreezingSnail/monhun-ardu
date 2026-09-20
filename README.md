@@ -288,9 +288,9 @@ hunt exit.
 | B held + double-tap Down | sheathe (stow the weapon); A draws into combo hit 1 |
 | A | attack (in a stance: stance special) |
 | A (sheathed, at a herb node) | gather the node (rooted ~40 ticks; a tap away from a node draws instead) |
-| B tap | dodge (sword) / deflect (flail) / shove (gunshield) |
+| B tap | dodge (sword) / deflect (flail) / shove (gunshield); inert while sheathed |
 | B hold ~11 ticks | enter stance (parry / whirl / guard); release exits |
-| B hold ~11 ticks (sheathed, herb held) | eat a herb: +20 hp, rooted ~40 ticks; release before the hold is still the stowed roll |
+| B hold ~11 ticks (sheathed, herb held) | eat a herb: +20 hp, rooted ~40 ticks; a shorter hold does nothing (roll is the double-tap) |
 
 
 ---

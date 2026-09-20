@@ -594,15 +594,16 @@ void PlayerSuite(TestRunner &runner) {
     }
 
     {
-        Test t("sheathe feel.17: stowed B rolls with sword numbers, run speed 24");
+        Test t("sheathe feel.23: stowed B tap is inert, run speed 24");
         Game g;
         initGame(g, W_FLAIL);
         stowWeapon(g);
         stepN(g, 1);   // release B
+        g.player.stam = 100;
         tapB(g);
-        t.assert(g.player.state, PS_DODGE, "stowed B tap rolls (any weapon)");
-        t.assert(g.player.iT, 14, "sword i-frames");
-        t.assert(g.player.t, 15, "sword dodge length (16 set, same-tick switch ticks once)");
+        t.assert(g.player.state, PS_IDLE, "stowed B tap does nothing");
+        t.assert(g.player.iT, 0, "no i-frames from a stowed B tap");
+        t.assert(g.player.stam, 100, "no stamina spent");
 
         Game w;
         initGame(w, W_SWORD);

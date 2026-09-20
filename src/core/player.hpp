@@ -473,9 +473,10 @@ static void tapDefense(Game &g, const WeaponDef *def, const Input &inp) {
     }
 
     const int8_t defId = weaponId(def);
-    if (p.sheathed || defId == W_SWORD) {
-        // stowed: every weapon rolls with the sword dodge numbers (MH-style run +
-        // evade while sheathed). Sword: the same roll.
+    if (p.sheathed) {
+        return;   // stowed B is inert: dodge roll is the double-tap input now (feel.23)
+    }
+    if (defId == W_SWORD) {
         startDodgeRoll(g, dx, dy);
     } else if (defId == W_FLAIL) {
         if (p.stam < 10)

@@ -123,7 +123,7 @@ picks the node for the rest of the hunt (`newGame` resets nodes + inventory;
 `loadRoom` does not). A tap away from a node still draws the weapon. While
 stowed, holding B `HOLD_TICKS` runs `PS_ITEM` (~40 rooted ticks) when a herb is
 held, healing exactly 20 hp (clamped) and decrementing on completion; a B
-release before the hold stays the stowed roll. A camp heal-rect B press wins on
+a shorter hold does nothing (the stowed B roll was removed in feel.23; the roll is the d-pad double-tap). A camp heal-rect B press wins on
 the same press (the heal latches `bLocked`, so the hold cannot also eat).
 Gather completion and eat fire `CUE_GATHER`/`CUE_EAT` through the existing audio
 edge detector (inventory edge, no new sim event field).
