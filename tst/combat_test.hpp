@@ -97,6 +97,9 @@ void CombatSuite(TestRunner &runner) {
         const CombatProfile sweep = combatProfileRead(combatCreatureProfileIdx(combat_data::CREATURE_SWEEP));
         t.assert(sweep.faceHold, combat_expect::PROFILE_SWEEP_FACE_HOLD, "bull faceHold 10");
         t.assert(sweep.keepDist, 18, "bull keepDist 18");
+        t.assert(sweep.staggerMax, 40, "bull staggerMax 40 (feel.9)");
+        t.assert(sweep.staggerDecay, 1, "bull staggerDecay 1 (feel.9)");
+        t.assert(sweep.staggerRecoverT, 24, "bull staggerRecoverT 24 (feel.9)");
         suite.addTest(t);
     }
 
@@ -138,10 +141,11 @@ void CombatSuite(TestRunner &runner) {
         t.assert(combat::ZONES_COUNT, 11, "heavy tail + ravager + lunge + sweep + 4 pole zone records");
         t.assert(combat::CREATURES_COUNT, 8, "3 demo beasts + ravager + 4 static poles");
         t.assert(combat::SKELETONS_COUNT, 5, "bull/chicken/longtail/quad + pole");
-        t.assert(combat::ATTACKS_COUNT, 9, "3x2 shipped + ravager bite/tail_sweep + chicken wing_beat (feel.8)");
-        t.assert(combat::WINDOWS_COUNT, 14, "single-window attacks + ravager 2 + tail_spin 4 + sweep gore 2 + wing_beat");
-        t.assert(combat::PATTERNS_COUNT, 11, "feel.8: chicken p_flank + p_leap2 added; ravager p_enraged; heavy spin/bite; sweep p_stomp/p_gore");
-        t.assert(combat::GUARDS_COUNT, 11, "one guard per pattern");
+        t.assert(combat::ATTACKS_COUNT, 10, "3x2 shipped + ravager bite/tail_sweep + chicken wing_beat + sweep rear_kick (feel.9)");
+        t.assert(combat::WINDOWS_COUNT, 15, "single-window attacks + ravager 2 + tail_spin 4 + sweep stomp 1/gore 2 + wing_beat + rear_kick");
+        t.assert(combat::PATTERNS_COUNT, 13, "feel.9: sweep p_rear_kick + p_gore2; feel.8 chicken p_flank/p_leap2; ravager p_enraged; heavy spin/bite");
+        t.assert(combat::GUARDS_COUNT, 13, "one guard per pattern");
+        t.assert(combat::STEPS_COUNT, 15, "feel.9: sweep rear_kick step + gore2 two steps");
         for (uint8_t i = 0; i < combat::CREATURES_COUNT; i++) {
             const combat_data::Creature &h = combat_data::CREATURES[i];
             t.assert(combatCreatureSkeletonIdx(i), h.skeletonIdx, "creature skeletonIdx accessor");
@@ -441,6 +445,102 @@ void CombatSuite(TestRunner &runner) {
     }
 
     {
+        // feel.9: the bull kit. stomp is a single body-centred ring window (the
+        // RING tell draws the real hit area, so a sidestep alone is not safe);
+        // gore is the committed charge with a LINE tell and a 70-tick wall stun;
+        // rear_kick is the anti-flank ARC behind the body; p_gore2 doubles the
+        // charge below 40% hp at every range, so breaking the hooves (stomp
+        // disabled) does not make the fight easier.
+        Test t("bull kit: ring stomp, gore wallStun/line, rear_kick arc, gore2 combo (feel.9)");
+        t.assert(combatAttackWindowCount(combat_data::ATTACK_SWEEP_STOMP), 1, "stomp one window");
+        const CombatWindow stomp0 = combatWindowRead(combat_data::WINDOW_SWEEP_STOMP_0);
+        t.assert(stomp0.t0, 0, "stomp w0 t0");
+        t.assert(stomp0.t1, 10, "stomp w0 t1");
+        t.assert(stomp0.box.ox, 0, "stomp ring ox");
+        t.assert(stomp0.box.oy, 0, "stomp ring oy");
+        t.assert(stomp0.box.w, 36, "stomp ring w");
+        t.assert(stomp0.box.h, 26, "stomp ring h");
+        t.assert(combatAttackTell(combat_data::ATTACK_SWEEP_STOMP), TELL_RING, "stomp ring tell");
+        t.assert(combatAttackFacing(combat_data::ATTACK_SWEEP_STOMP), COMBAT_FACING_TRACK, "stomp tracks");
+        t.assert(combatAttackMoveType(combat_data::ATTACK_SWEEP_STOMP), MOVE_NONE, "stomp stationary");
+        t.assert(combatAttackWindup(combat_data::ATTACK_SWEEP_STOMP), 34, "stomp windup 34");
+        t.assert(combatAttackActive(combat_data::ATTACK_SWEEP_STOMP), 11, "stomp active 11");
+        t.assert(combatAttackRecover(combat_data::ATTACK_SWEEP_STOMP), 46, "stomp recover 46");
+
+        t.assert(combatAttackWindowCount(combat_data::ATTACK_SWEEP_GORE), 2, "gore two windows");
+        t.assert(combatWindowRead(combat_data::WINDOW_SWEEP_GORE_0).box.ox, 16, "gore horns ox");
+        t.assert(combatWindowRead(combat_data::WINDOW_SWEEP_GORE_0).t1, 6, "gore horns t1");
+        t.assert(combatWindowRead(combat_data::WINDOW_SWEEP_GORE_1).box.ox, 12, "gore trample ox");
+        t.assert(combatWindowRead(combat_data::WINDOW_SWEEP_GORE_1).t1, 12, "gore trample t1");
+        t.assert(combatAttackFacing(combat_data::ATTACK_SWEEP_GORE), COMBAT_FACING_LOCK, "gore locks at windup");
+        t.assert(combatAttackWallStun(combat_data::ATTACK_SWEEP_GORE), 70, "gore wallStun 70");
+        t.assert(combatAttackTell(combat_data::ATTACK_SWEEP_GORE), TELL_LINE, "gore line tell");
+        t.assert(combatAttackMoveSpeedF(combat_data::ATTACK_SWEEP_GORE), 40, "gore speedF 40");
+        t.assert(combatAttackWindup(combat_data::ATTACK_SWEEP_GORE), 42, "gore windup 42");
+        t.assert(combatAttackActive(combat_data::ATTACK_SWEEP_GORE), 14, "gore active 14");
+        t.assert(combatAttackRecover(combat_data::ATTACK_SWEEP_GORE), 58, "gore recover 58");
+
+        t.assert(combatAttackWindowCount(combat_data::ATTACK_SWEEP_REAR_KICK), 1, "rear_kick one window");
+        const CombatWindow kick = combatWindowRead(combat_data::WINDOW_SWEEP_REAR_KICK_0);
+        t.assert(kick.t0, 0, "rear_kick t0");
+        t.assert(kick.t1, 4, "rear_kick t1");
+        t.assert(kick.box.ox, -14, "rear_kick window behind the body");
+        t.assert(kick.box.oy, 4, "rear_kick oy");
+        t.assert(kick.box.w, 22, "rear_kick w");
+        t.assert(kick.box.h, 14, "rear_kick h");
+        t.assert(combatAttackFacing(combat_data::ATTACK_SWEEP_REAR_KICK), COMBAT_FACING_TRACK, "rear_kick tracks");
+        t.assert(combatAttackTell(combat_data::ATTACK_SWEEP_REAR_KICK), TELL_ARC, "rear_kick arc tell");
+        t.assert(combatAttackMoveType(combat_data::ATTACK_SWEEP_REAR_KICK), MOVE_NONE, "rear_kick stationary");
+        t.assert(combatAttackWindup(combat_data::ATTACK_SWEEP_REAR_KICK), 14, "rear_kick windup 14");
+        t.assert(combatAttackActive(combat_data::ATTACK_SWEEP_REAR_KICK), 4, "rear_kick active 4");
+        t.assert(combatAttackRecover(combat_data::ATTACK_SWEEP_REAR_KICK), 30, "rear_kick recover 30");
+
+        // Source order is semantic: rear_kick punishes flanks first, and gore2
+        // must precede stomp so the low-HP enrage covers the close band even
+        // after the hooves break disables stomp.
+        t.assert(combat_data::PATTERN_SWEEP_P_REAR_KICK, combat_data::CREATURES[combat_data::CREATURE_SWEEP].firstPattern, "p_rear_kick is the opener");
+        t.assertLessThan(combat_data::PATTERN_SWEEP_P_GORE2, combat_data::PATTERN_SWEEP_P_STOMP, "gore2 precedes stomp");
+        t.assertLessThan(combat_data::PATTERN_SWEEP_P_STOMP, combat_data::PATTERN_SWEEP_P_GORE, "stomp precedes gore");
+
+        t.assert(combatPatternStepCount(combat_data::PATTERN_SWEEP_P_REAR_KICK), 1, "p_rear_kick one step");
+        t.assert(combatStepRef(combat_data::STEP_SWEEP_P_REAR_KICK_0), combat_data::ATTACK_SWEEP_REAR_KICK, "p_rear_kick uses rear_kick");
+        const CombatGuard kickGuard = combatGuardRead(combat_data::GUARD_SWEEP_P_REAR_KICK);
+        t.assert(kickGuard.facing, GUARD_FACING_BEHIND, "p_rear_kick guard behind");
+        t.assert(kickGuard.maxDist, 24, "p_rear_kick guard reach 24");
+
+        t.assert(combatPatternStepCount(combat_data::PATTERN_SWEEP_P_GORE2), 2, "p_gore2 two steps");
+        const CombatStep g2a = combatStepRead(combat_data::STEP_SWEEP_P_GORE2_0);
+        const CombatStep g2b = combatStepRead(combat_data::STEP_SWEEP_P_GORE2_1);
+        t.assert(g2a.kind, STEP_ATK, "gore2 step0 atk");
+        t.assert(g2a.ref, combat_data::ATTACK_SWEEP_GORE, "gore2 step0 gore");
+        t.assert(g2a.after, 18, "gore2 step0 after 18");
+        t.assert(g2b.ref, combat_data::ATTACK_SWEEP_GORE, "gore2 step1 gore");
+        t.assert(g2b.chance, 70, "gore2 step1 chance 70");
+        const CombatGuard g2 = combatGuardRead(combat_data::GUARD_SWEEP_P_GORE2);
+        t.assert(g2.hpLo, 0, "gore2 hp lo 0");
+        t.assert(g2.hpHi, 40, "gore2 hp hi 40");
+        t.assert(g2.minDist, 0, "gore2 reaches point blank");
+        t.assert(g2.maxDist, 255, "gore2 reaches long range");
+        suite.addTest(t);
+    }
+
+    {
+        Test t("sweep enrage record + spawn cache (feel.9)");
+        const CombatCreature c = combatCreatureRead(combat_data::CREATURE_SWEEP);
+        t.assert(c.enrageHpPct, combat_expect::CREATURE_SWEEP_ENRAGE_HP_PCT, "sweep enrage hpPct 40");
+        t.assert(c.enrageSpdMul, combat_expect::CREATURE_SWEEP_ENRAGE_SPD_MUL, "sweep enrage spdMul 130");
+        t.assert(c.enrageFaceHold, combat_expect::CREATURE_SWEEP_ENRAGE_FACE_HOLD, "sweep enrage faceHold 6");
+        t.assert(c.enrageCue, combat_expect::CREATURE_SWEEP_ENRAGE_CUE, "sweep enrage cue none");
+        Game g;
+        creatureLoad(g, combat_data::CREATURE_SWEEP);
+        t.assert(g.combat.enrage.hpPct, 40, "enrage hpPct cached");
+        t.assert(g.combat.enrage.spdMul, 130, "enrage spdMul cached");
+        t.assert(g.combat.enrage.faceHold, 6, "enrage faceHold cached");
+        t.assert(g.combat.enrage.fired, 0, "enrage latch clear at spawn");
+        suite.addTest(t);
+    }
+
+    {
         Test t("creatureLoad caches profile, resets zones, falls back on bad id");
         Game g;
         const uint8_t idx = creatureLoad(g, combat_data::CREATURE_LUNGE);
@@ -651,11 +751,26 @@ void CombatSuite(TestRunner &runner) {
         t.assert(combatGuardPasses(g, combat_data::PATTERN_HEAVY_P_BITE, in), 1, "heavy bite dist 31 accepted");
 
         creatureLoad(g, combat_data::CREATURE_SWEEP);
-        // Bull (nch.9): p_stomp 0..24, p_gore 24..255; both match at the
-        // inclusive 24 boundary (source order picks stomp).
+        // Bull (feel.9): p_rear_kick (behind, <=24) is listed first, then
+        // p_gore2 (hp <=40, every range), p_stomp (<=24) and p_gore (>=24, hp
+        // 41..100). The hp bands are disjoint, so remaining HP swaps the gore
+        // pattern; gore2 covers close range so breaking the hooves (stomp
+        // disabled) does not open a free punish window during the enrage.
+        in.hpPct = 100;
+        in.facingDot = 0;
         in.dist = 24;
+        t.assert(combatGuardPasses(g, combat_data::PATTERN_SWEEP_P_REAR_KICK, in), 0, "rear_kick needs a behind flank");
         t.assert(combatGuardPasses(g, combat_data::PATTERN_SWEEP_P_STOMP, in), 1, "stomp dist 24 accepted");
-        t.assert(combatGuardPasses(g, combat_data::PATTERN_SWEEP_P_GORE, in), 1, "gore dist 24 accepted (stomp wins order)");
+        t.assert(combatGuardPasses(g, combat_data::PATTERN_SWEEP_P_GORE, in), 1, "gore dist 24 accepted");
+        t.assert(combatGuardPasses(g, combat_data::PATTERN_SWEEP_P_GORE2, in), 0, "gore2 above 40% hp rejected");
+        in.facingDot = -6;
+        t.assert(combatGuardPasses(g, combat_data::PATTERN_SWEEP_P_REAR_KICK, in), 1, "rear_kick behind at 24 accepted");
+        in.dist = 25;
+        t.assert(combatGuardPasses(g, combat_data::PATTERN_SWEEP_P_REAR_KICK, in), 0, "rear_kick past 24 rejected");
+        in.facingDot = 6;
+        in.dist = 10;
+        t.assert(combatGuardPasses(g, combat_data::PATTERN_SWEEP_P_REAR_KICK, in), 0, "rear_kick in front rejected");
+        in.facingDot = 0;
         in.dist = 25;
         t.assert(combatGuardPasses(g, combat_data::PATTERN_SWEEP_P_STOMP, in), 0, "stomp dist 25 rejected");
         t.assert(combatGuardPasses(g, combat_data::PATTERN_SWEEP_P_GORE, in), 1, "gore dist 25 accepted");
@@ -665,6 +780,16 @@ void CombatSuite(TestRunner &runner) {
         in.dist = 255;
         t.assert(combatGuardPasses(g, combat_data::PATTERN_SWEEP_P_STOMP, in), 0, "stomp dist 255 rejected");
         t.assert(combatGuardPasses(g, combat_data::PATTERN_SWEEP_P_GORE, in), 1, "gore dist 255 accepted");
+        // HP band swap at 40% (the enrage threshold): gore2 replaces gore.
+        in.hpPct = 41;
+        in.dist = 40;
+        t.assert(combatGuardPasses(g, combat_data::PATTERN_SWEEP_P_GORE2, in), 0, "gore2 at 41% hp rejected");
+        t.assert(combatGuardPasses(g, combat_data::PATTERN_SWEEP_P_GORE, in), 1, "gore at 41% hp accepted");
+        in.hpPct = 40;
+        t.assert(combatGuardPasses(g, combat_data::PATTERN_SWEEP_P_GORE2, in), 1, "gore2 at 40% hp accepted");
+        t.assert(combatGuardPasses(g, combat_data::PATTERN_SWEEP_P_GORE, in), 0, "gore at 40% hp rejected");
+        in.dist = 255;
+        t.assert(combatGuardPasses(g, combat_data::PATTERN_SWEEP_P_GORE2, in), 1, "gore2 reaches 255");
         t.assert(combatGuardPasses(g, 99, in), 0, "unknown pattern rejected");
         suite.addTest(t);
     }
@@ -932,6 +1057,7 @@ void CombatSuite(TestRunner &runner) {
         g.combat.zoneBroken = COMBAT_ZONE_APPENDAGE_BIT;
         t.assert(combatAttackDisabled(g, combat_data::ATTACK_SWEEP_STOMP), 1, "broken hooves disable stomp");
         t.assert(combatAttackDisabled(g, combat_data::ATTACK_SWEEP_GORE), 0, "broken hooves keep gore");
+        t.assert(combatAttackDisabled(g, combat_data::ATTACK_SWEEP_REAR_KICK), 0, "broken hooves keep rear_kick");
         suite.addTest(t);
     }
 

@@ -1,7 +1,15 @@
 {
   "id": "sweep",
   "skeleton": "bull",
-  "stats": { "w": 28, "h": 22, "hp": 150, "spd": 7, "spawnX": 200, "spawnY": 40 },
+  "stats": {
+    "w": 28,
+    "h": 22,
+    "hp": 150,
+    "spd": 7,
+    "spawnX": 200,
+    "spawnY": 40,
+    "enrage": { "hpPct": 40, "spdMul": 130, "faceHold": 6 }
+  },
   "collide": { "ox": 1, "oy": 14, "w": 26, "h": 8 },
   "zones": {
     "head": {
@@ -39,23 +47,24 @@
     "spawnT": 90,
     "spawnCd": 140,
     "stunRecoverT": 24,
-    "staggerMax": 0,
-    "staggerDecay": 0,
-    "staggerRecoverT": 0
+    "staggerMax": 40,
+    "staggerDecay": 1,
+    "staggerRecoverT": 24
   },
   "attacks": [
     {
       "id": "stomp",
-      "windup": 36,
-      "active": 10,
-      "recover": 44,
+      "windup": 34,
+      "active": 11,
+      "recover": 46,
       "dmg": 9,
       "phys": "BLUNT",
       "elem": "NONE",
       "move": { "type": "none" },
       "facing": "track",
+      "tell": "ring",
       "windows": [
-        { "t0": 0, "t1": 10, "box": { "ox": 10, "oy": 2, "w": 24, "h": 14 }, "dmgMul": 100 }
+        { "t0": 0, "t1": 10, "box": { "ox": 0, "oy": 0, "w": 36, "h": 26 }, "dmgMul": 100 }
       ],
       "onHit": { "effect": "none", "push": 0, "stun": 0 },
       "stagger": 0,
@@ -63,17 +72,37 @@
     },
     {
       "id": "gore",
-      "windup": 46,
-      "active": 12,
-      "recover": 55,
+      "windup": 42,
+      "active": 14,
+      "recover": 58,
       "dmg": 14,
       "phys": "BLUNT",
       "elem": "NONE",
-      "move": { "type": "lunge", "speedF": 34 },
+      "move": { "type": "lunge", "speedF": 40 },
       "facing": "lock-at-windup",
+      "tell": "line",
+      "wallStun": 70,
       "windows": [
         { "t0": 0, "t1": 6, "box": { "ox": 16, "oy": -2, "w": 16, "h": 10 }, "dmgMul": 100 },
         { "t0": 7, "t1": 12, "box": { "ox": 12, "oy": 2, "w": 20, "h": 14 }, "dmgMul": 100 }
+      ],
+      "onHit": { "effect": "none", "push": 0, "stun": 0 },
+      "stagger": 0,
+      "cue": "windup"
+    },
+    {
+      "id": "rear_kick",
+      "windup": 14,
+      "active": 4,
+      "recover": 30,
+      "dmg": 10,
+      "phys": "BLUNT",
+      "elem": "NONE",
+      "move": { "type": "none" },
+      "facing": "track",
+      "tell": "arc",
+      "windows": [
+        { "t0": 0, "t1": 4, "box": { "ox": -14, "oy": 4, "w": 22, "h": 14 }, "dmgMul": 100 }
       ],
       "onHit": { "effect": "none", "push": 0, "stun": 0 },
       "stagger": 0,
@@ -82,13 +111,26 @@
   ],
   "patterns": [
     {
+      "id": "p_rear_kick",
+      "guard": { "facing": "behind", "maxDist": 24, "chance": 100 },
+      "steps": [ { "atk": "rear_kick", "after": 0 } ]
+    },
+    {
+      "id": "p_gore2",
+      "guard": { "hpBand": [0, 40], "chance": 100 },
+      "steps": [
+        { "atk": "gore", "after": 18 },
+        { "atk": "gore", "chance": 70 }
+      ]
+    },
+    {
       "id": "p_stomp",
       "guard": { "maxDist": 24, "chance": 100 },
       "steps": [ { "atk": "stomp", "after": 0 } ]
     },
     {
       "id": "p_gore",
-      "guard": { "minDist": 24, "maxDist": 255, "hpBand": [0, 100], "chance": 100 },
+      "guard": { "minDist": 24, "maxDist": 255, "hpBand": [41, 100], "chance": 100 },
       "steps": [ { "atk": "gore", "after": 0 } ]
     }
   ]

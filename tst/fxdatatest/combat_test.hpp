@@ -121,7 +121,7 @@ static const CombatCreature kCreatures[] PROGMEM = {
      combat::ZONE_SWEEP_APPENDAGE,
      combat::ATTACK_SWEEP_STOMP,
      combat_expect::CREATURE_SWEEP_ATTACKS,
-     combat::PATTERN_SWEEP_P_STOMP,
+     combat::PATTERN_SWEEP_P_REAR_KICK,
      combat_expect::CREATURE_SWEEP_PATTERNS,
      combat_expect::CREATURE_SWEEP_W,
      combat_expect::CREATURE_SWEEP_H,
@@ -134,10 +134,10 @@ static const CombatCreature kCreatures[] PROGMEM = {
      combat_expect::CREATURE_SWEEP_SHEET,
      combat_expect::CREATURE_SWEEP_BROKEN_W,
      combat_expect::CREATURE_SWEEP_BROKEN_H,
-     0,
-     0,
-     0,
-     0},
+     combat_expect::CREATURE_SWEEP_ENRAGE_HP_PCT,
+     combat_expect::CREATURE_SWEEP_ENRAGE_SPD_MUL,
+     combat_expect::CREATURE_SWEEP_ENRAGE_FACE_HOLD,
+     combat_expect::CREATURE_SWEEP_ENRAGE_CUE},
 };
 
 static const uint8_t kZoneIds[] PROGMEM = {combat::ZONE_HEAVY_APPENDAGE, combat::ZONE_LUNGE_HEAD,   combat::ZONE_LUNGE_APPENDAGE,  combat::ZONE_SWEEP_HEAD,
@@ -185,7 +185,8 @@ static const CombatZone kZones[] PROGMEM = {
      static_cast<uint8_t>(1u << combat::ATTACK_RAVAGER_TAIL_SWEEP)},
 };
 
-static const uint8_t kAttackIds[] PROGMEM = {combat::ATTACK_HEAVY_BITE, combat::ATTACK_HEAVY_TAIL_SPIN, combat::ATTACK_LUNGE_PECK, combat::ATTACK_SWEEP_STOMP, combat::ATTACK_SWEEP_GORE};
+static const uint8_t kAttackIds[] PROGMEM = {combat::ATTACK_HEAVY_BITE,  combat::ATTACK_HEAVY_TAIL_SPIN, combat::ATTACK_LUNGE_PECK,
+                                             combat::ATTACK_SWEEP_STOMP, combat::ATTACK_SWEEP_GORE,      combat::ATTACK_SWEEP_REAR_KICK};
 static const CombatAttackValue kAttacks[] PROGMEM = {
     // moveType, moveSpeedF, moveDx, moveDy, facing, phys, elem, onHitEffect,
     // onHitPush, onHitStun, stagger, cue, wallStun, firstWindow, windowCount,
@@ -231,6 +232,8 @@ static const CombatAttackValue kAttacks[] PROGMEM = {
      combat_expect::ATTACK_LUNGE_PECK_RECOVER,
      combat_expect::ATTACK_LUNGE_PECK_DMG,
      combat_expect::ATTACK_LUNGE_PECK_TELL},
+    // feel.9: stomp is a single body-centred ring window; that window is the
+    // cached windup tell (RING), so the tell draws the real hit area.
     {MOVE_NONE,
      0,
      0,
@@ -251,25 +254,42 @@ static const CombatAttackValue kAttacks[] PROGMEM = {
      combat_expect::ATTACK_SWEEP_STOMP_RECOVER,
      combat_expect::ATTACK_SWEEP_STOMP_DMG,
      combat_expect::ATTACK_SWEEP_STOMP_TELL},
-    {MOVE_LUNGE, 34, 0, 0, COMBAT_FACING_LOCK, PHYS_BLUNT, ELEM_NONE, 0, 0, 0, 0, 1, 0, combat::WINDOW_SWEEP_GORE_0, 2, 46, 12, 55, 14, 0},
+    // feel.9: gore commits speedF 40 with a 70-tick wall stun and a LINE tell.
+    {MOVE_LUNGE, 40, 0, 0, COMBAT_FACING_LOCK, PHYS_BLUNT, ELEM_NONE, 0, 0, 0, 0, 1, 70, combat::WINDOW_SWEEP_GORE_0, 2, 42, 14, 58, 14, TELL_LINE},
+    // feel.9: rear_kick is the stationary anti-flank ARC behind the body.
+    {MOVE_NONE, 0, 0, 0, COMBAT_FACING_TRACK, PHYS_BLUNT, ELEM_NONE, 0, 0, 0, 0, 1, 0, combat::WINDOW_SWEEP_REAR_KICK_0, 1, 14, 4, 30, 10, TELL_ARC},
 };
 
 static const uint8_t kWindowIds[] PROGMEM = {combat::WINDOW_HEAVY_BITE_0,      combat::WINDOW_HEAVY_TAIL_SPIN_0, combat::WINDOW_HEAVY_TAIL_SPIN_1, combat::WINDOW_HEAVY_TAIL_SPIN_2,
                                              combat::WINDOW_HEAVY_TAIL_SPIN_3, combat::WINDOW_LUNGE_PECK_0,      combat::WINDOW_LUNGE_LEAP_0,      combat::WINDOW_RAVAGER_TAIL_SWEEP_0,
-                                             combat::WINDOW_SWEEP_STOMP_0,     combat::WINDOW_SWEEP_GORE_0,      combat::WINDOW_SWEEP_GORE_1};
+                                             combat::WINDOW_SWEEP_STOMP_0,     combat::WINDOW_SWEEP_GORE_0,      combat::WINDOW_SWEEP_GORE_1,      combat::WINDOW_SWEEP_REAR_KICK_0};
 static const CombatWindow kWindows[] PROGMEM = {
     // t0, t1, box, dmgMul
     {0, 8, {14, 0, 18, 14}, 100},   {0, 5, {-20, 0, 24, 16}, 100}, {6, 10, {0, -22, 16, 24}, 100}, {11, 15, {22, 0, 24, 16}, 100}, {16, 20, {0, 22, 16, 24}, 100}, {0, 6, {14, -6, 12, 10}, 100},
-    {0, 10, {12, -2, 18, 16}, 100}, {0, 5, {-22, 0, 30, 22}, 100}, {0, 10, {10, 2, 24, 14}, 100},  {0, 6, {16, -2, 16, 10}, 100},  {7, 12, {12, 2, 20, 14}, 100},
+    {0, 10, {12, -2, 18, 16}, 100}, {0, 5, {-22, 0, 30, 22}, 100}, {0, 10, {0, 0, 36, 26}, 100},   {0, 6, {16, -2, 16, 10}, 100},  {7, 12, {12, 2, 20, 14}, 100},  {0, 4, {-14, 4, 22, 14}, 100},
 };
 
 static const CombatPattern kPatterns[] PROGMEM = {
-    {combat::STEP_LUNGE_P_FLANK_0, 1, combat::GUARD_LUNGE_P_FLANK}, {combat::STEP_SWEEP_P_STOMP_0, 1, combat::GUARD_SWEEP_P_STOMP}, {combat::STEP_SWEEP_P_GORE_0, 1, combat::GUARD_SWEEP_P_GORE}};
+    // lunge p_flank (feel.8)
+    {combat::STEP_LUNGE_P_FLANK_0, 1, combat::GUARD_LUNGE_P_FLANK},
+    // bull p_stomp (feel.9: now the third pattern in source order)
+    {combat::STEP_SWEEP_P_STOMP_0, 1, combat::GUARD_SWEEP_P_STOMP},
+    // bull p_gore
+    {combat::STEP_SWEEP_P_GORE_0, 1, combat::GUARD_SWEEP_P_GORE},
+    // bull p_rear_kick (feel.9, first in source order)
+    {combat::STEP_SWEEP_P_REAR_KICK_0, 1, combat::GUARD_SWEEP_P_REAR_KICK},
+    // bull p_gore2 (feel.9, two-step low-HP combo)
+    {combat::STEP_SWEEP_P_GORE2_0, 2, combat::GUARD_SWEEP_P_GORE2}};
 static const CombatGuard kGuards[] PROGMEM = {
     {combat_expect::PATTERN_LUNGE_P_FLANK_MIN_DIST, combat_expect::PATTERN_LUNGE_P_FLANK_MAX_DIST, 0, 100, 0, 0, combat_expect::PATTERN_LUNGE_P_FLANK_CHANCE, 0, GUARD_FACING_BEHIND},
-    {combat_expect::PATTERN_SWEEP_P_STOMP_MIN_DIST, combat_expect::PATTERN_SWEEP_P_STOMP_MAX_DIST, 0, 100, 0, 0, combat_expect::PATTERN_SWEEP_P_STOMP_CHANCE, 0, GUARD_FACING_ANY},
-    {24, 255, 0, 100, 0, 0, 100, 0, GUARD_FACING_ANY}};
-static const CombatStep kSteps[] PROGMEM = {{STEP_ATK, combat::ATTACK_LUNGE_WING_BEAT, 0, 100}};
+    {0, 24, 0, 100, 0, 0, 100, 0, GUARD_FACING_ANY},
+    {24, 255, 41, 100, 0, 0, 100, 0, GUARD_FACING_ANY},
+    {combat_expect::PATTERN_SWEEP_P_REAR_KICK_MIN_DIST, combat_expect::PATTERN_SWEEP_P_REAR_KICK_MAX_DIST, 0, 100, 0, 0, combat_expect::PATTERN_SWEEP_P_REAR_KICK_CHANCE, 0, GUARD_FACING_BEHIND},
+    {0, 255, 0, 40, 0, 0, 100, 0, GUARD_FACING_ANY}};
+static const CombatStep kSteps[] PROGMEM = {{STEP_ATK, combat::ATTACK_LUNGE_WING_BEAT, 0, 100},
+                                            {STEP_ATK, combat::ATTACK_SWEEP_REAR_KICK, 0, 100},
+                                            {STEP_ATK, combat::ATTACK_SWEEP_GORE, 18, 100},
+                                            {STEP_ATK, combat::ATTACK_SWEEP_GORE, 0, 70}};
 static const CombatSkeleton kSkeleton[] PROGMEM = {{2, 2}};
 
 }   // namespace
@@ -333,11 +353,11 @@ inline void test_combat(FxTest &test) {
         const CombatZone got = combatZoneRead(pgm_read_byte(kZoneIds + i));
         test.expectEq(progEq(&got, &kZones[i], sizeof(CombatZone)), 1, F("zone record"));
     }
-    for (uint8_t i = 0; i < 5; i++) {
+    for (uint8_t i = 0; i < 6; i++) {
         const CombatAttackValue got = combatAttackRead(pgm_read_byte(kAttackIds + i));
         test.expectEq(progEq(&got, &kAttacks[i], sizeof(CombatAttackValue)), 1, F("attack record"));
     }
-    for (uint8_t i = 0; i < 11; i++) {
+    for (uint8_t i = 0; i < 12; i++) {
         const CombatWindow got = combatWindowRead(pgm_read_byte(kWindowIds + i));
         test.expectEq(progEq(&got, &kWindows[i], sizeof(CombatWindow)), 1, F("window record"));
     }
@@ -365,15 +385,36 @@ inline void test_combat(FxTest &test) {
     const CombatWindow win = combatWindowRead(lungeAtk.firstWindow);
     test.expectEq(progEq(&win, &kWindows[5], sizeof(CombatWindow)), 1, F("lunge window record"));
 
-    // BULL (nch.9) opens with p_stomp (<=24) then p_gore (>=24).
-    const CombatPattern sweepPat = combatPatternRead(sweep.firstPattern);
+    // BULL (feel.9) opens with p_rear_kick, then p_gore2 (low hp), p_stomp and
+    // p_gore. Walk the record graph in the same source order the decision code
+    // uses.
+    const CombatPattern sweepKickPat = combatPatternRead(sweep.firstPattern);
+    test.expectEq(progEq(&sweepKickPat, &kPatterns[3], sizeof(CombatPattern)), 1, F("bull rear_kick pattern record"));
+    const CombatGuard sweepKickGuard = combatGuardRead(sweepKickPat.guardIdx);
+    test.expectEq(progEq(&sweepKickGuard, &kGuards[3], sizeof(CombatGuard)), 1, F("bull rear_kick guard record"));
+    const CombatStep sweepKickStep = combatStepRead(sweepKickPat.firstStep);
+    test.expectEq(progEq(&sweepKickStep, &kSteps[1], sizeof(CombatStep)), 1, F("bull rear_kick step record"));
+
+    const CombatPattern sweepGore2Pat = combatPatternRead(static_cast<uint8_t>(sweep.firstPattern + 1));
+    test.expectEq(progEq(&sweepGore2Pat, &kPatterns[4], sizeof(CombatPattern)), 1, F("bull gore2 pattern record"));
+    const CombatGuard sweepGore2Guard = combatGuardRead(sweepGore2Pat.guardIdx);
+    test.expectEq(progEq(&sweepGore2Guard, &kGuards[4], sizeof(CombatGuard)), 1, F("bull gore2 guard record"));
+    const CombatStep sweepGore2Step0 = combatStepRead(sweepGore2Pat.firstStep);
+    test.expectEq(progEq(&sweepGore2Step0, &kSteps[2], sizeof(CombatStep)), 1, F("bull gore2 step0 record"));
+
+    const CombatPattern sweepPat = combatPatternRead(static_cast<uint8_t>(sweep.firstPattern + 2));
     test.expectEq(progEq(&sweepPat, &kPatterns[1], sizeof(CombatPattern)), 1, F("bull stomp pattern record"));
     const CombatGuard sweepGuard = combatGuardRead(sweepPat.guardIdx);
     test.expectEq(progEq(&sweepGuard, &kGuards[1], sizeof(CombatGuard)), 1, F("bull stomp guard record"));
-    const CombatPattern sweepGorePat = combatPatternRead(static_cast<uint8_t>(sweep.firstPattern + 1));
+    const CombatPattern sweepGorePat = combatPatternRead(static_cast<uint8_t>(sweep.firstPattern + 3));
     test.expectEq(progEq(&sweepGorePat, &kPatterns[2], sizeof(CombatPattern)), 1, F("bull gore pattern record"));
     const CombatGuard sweepGoreGuard = combatGuardRead(sweepGorePat.guardIdx);
     test.expectEq(progEq(&sweepGoreGuard, &kGuards[2], sizeof(CombatGuard)), 1, F("bull gore guard record"));
+
+    // feel.9: the bull authors the first stats.enrage phase (40% / 130% /
+    // faceHold 6). Adjacent byte pairs share one packed-word assert (flash).
+    test.expectEq(static_cast<uint16_t>(sweep.enrageHpPct) | (static_cast<uint16_t>(sweep.enrageSpdMul) << 8), static_cast<uint16_t>(40) | (static_cast<uint16_t>(130) << 8), F("bull enrage hp/spd"));
+    test.expectEq(static_cast<uint16_t>(sweep.enrageFaceHold) | (static_cast<uint16_t>(sweep.enrageCue) << 8), 6, F("bull enrage faceHold/cue"));
 
     // -------------------------------------------------- loader read budget
     static Game g;
@@ -436,6 +477,37 @@ inline void test_combat(FxTest &test) {
     test.expectEq(g.combat.attack.tell, TELL_ARC, F("wing_beat arc tell"));
     test.expectEq(g.combat.attack.win.box.ox, -8, F("wing_beat window behind"));
     test.expectEq(g.combat.attack.win.box.w, 26, F("wing_beat window w"));
+
+    // feel.9: the bull kit through the real cart — stomp's ring window with the
+    // RING tell, gore's wallStun/LINE tell, and the rear_kick ARC behind the
+    // body.
+    test.expectEq(attackLoad(g, combat::ATTACK_SWEEP_STOMP), combat::ATTACK_SWEEP_STOMP, F("stomp load"));
+    test.expectEq(g.combat.attack.windup, combat_expect::ATTACK_SWEEP_STOMP_WINDUP, F("stomp windup"));
+    test.expectEq(g.combat.attack.active, combat_expect::ATTACK_SWEEP_STOMP_ACTIVE, F("stomp active"));
+    test.expectEq(g.combat.attack.dmg, combat_expect::ATTACK_SWEEP_STOMP_DMG, F("stomp dmg"));
+    test.expectEq(g.combat.attack.tell, TELL_RING, F("stomp ring tell"));
+    test.expectEq(g.combat.attack.winIdx, combat::WINDOW_SWEEP_STOMP_0, F("stomp ring window"));
+    test.expectEq(g.combat.attack.win.t0, 0, F("stomp ring t0"));
+    test.expectEq(g.combat.attack.win.t1, 10, F("stomp ring t1"));
+    test.expectEq(g.combat.attack.win.box.w, 36, F("stomp ring w"));
+    test.expectEq(g.combat.attack.win.box.h, 26, F("stomp ring h"));
+
+    test.expectEq(attackLoad(g, combat::ATTACK_SWEEP_GORE), combat::ATTACK_SWEEP_GORE, F("gore load"));
+    test.expectEq(g.combat.attack.windup, 42, F("gore windup"));
+    test.expectEq(g.combat.attack.active, 14, F("gore active"));
+    test.expectEq(g.combat.attack.dmg, 14, F("gore dmg"));
+    test.expectEq(g.combat.attack.moveSpeedF, 40, F("gore speedF"));
+    test.expectEq(g.combat.attack.wallStun, 70, F("gore wallStun"));
+    test.expectEq(g.combat.attack.tell, TELL_LINE, F("gore line tell"));
+    test.expectEq(g.combat.attack.facing, COMBAT_FACING_LOCK, F("gore lock"));
+
+    test.expectEq(attackLoad(g, combat::ATTACK_SWEEP_REAR_KICK), combat::ATTACK_SWEEP_REAR_KICK, F("rear_kick load"));
+    test.expectEq(g.combat.attack.windup, 14, F("rear_kick windup"));
+    test.expectEq(g.combat.attack.active, 4, F("rear_kick active"));
+    test.expectEq(g.combat.attack.dmg, 10, F("rear_kick dmg"));
+    test.expectEq(g.combat.attack.tell, TELL_ARC, F("rear_kick arc tell"));
+    test.expectEq(g.combat.attack.win.box.ox, -14, F("rear_kick window behind"));
+    test.expectEq(g.combat.attack.win.box.w, 22, F("rear_kick window w"));
 
     // ---------------------------------------------------- guard evaluation
     before = mhFxReadCount;

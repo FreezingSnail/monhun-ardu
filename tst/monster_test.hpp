@@ -220,6 +220,47 @@ void MonsterSuite(TestRunner &runner) {
     }
 
     {
+        // feel.9: the bull's rear_kick (behind guard, first pattern) answers a
+        // close flank; the low-HP gore2 combo arms a second charge at any range.
+        Test t("chooseAttack bull (feel.9): rear_kick flank, gore2 enrage combo");
+        Game g;
+        newGame(g, W_SWORD, MODE_HUNT, MON_SWEEP);
+        Monster &m = g.monster;
+        Player &p = g.player;
+        m.x = 100;
+        m.y = 40;
+        m.hpMax = 150;
+        m.hp = 150;
+        m.fx = fp::FP;
+        m.fy = 0;
+        p.y = static_cast<int16_t>(m.y + (m.h >> 1) - (p.h >> 1));
+        // Close and in front: stomp.
+        p.x = static_cast<int16_t>(m.x + 20);
+        chooseAttack(g, 10);
+        t.assert(m.atkIdx, combat::ATTACK_SWEEP_STOMP, "bull stomps a close front");
+        // Close and behind: the anti-flank kick wins source order.
+        p.x = static_cast<int16_t>(m.x - 20);
+        chooseAttack(g, 10);
+        t.assert(m.atkIdx, combat::ATTACK_SWEEP_REAR_KICK, "bull rear_kicks a close flank");
+        // At exactly 40% hp the combo opens at every range: close front now
+        // gores (covering the band the broken hooves disable) and arms step 1.
+        m.hp = 60;
+        p.x = static_cast<int16_t>(m.x + 20);
+        chooseAttack(g, 10);
+        t.assert(m.atkIdx, combat::ATTACK_SWEEP_GORE, "enraged bull opens the gore combo");
+        t.assert(g.combat.patternIdx, combat::PATTERN_SWEEP_P_GORE2, "gore2 pattern selected");
+        t.assert(g.combat.stepIdx, 1, "combo armed its second step");
+        t.assert(g.combat.stepT, 18, "combo waits 18 ticks before step 1");
+        // 41% hp falls back to the single gore / stomp bands.
+        m.hp = 62;
+        chooseAttack(g, 10);
+        t.assert(m.atkIdx, combat::ATTACK_SWEEP_STOMP, "41% hp keeps the close stomp");
+        chooseAttack(g, 40);
+        t.assert(m.atkIdx, combat::ATTACK_SWEEP_GORE, "41% hp gores at range");
+        suite.addTest(t);
+    }
+
+    {
         // nch.4: heavy profile.faceHold 10 commits the tracked facing; the hunter
         // can cross behind and a from-behind hit lands the appendage/tail zone.
         Test t("heavy faceHold: facing stale for faceHold ticks, flank hit lands the tail");
@@ -658,8 +699,8 @@ void MonsterSuite(TestRunner &runner) {
     {
         // feel.4: a committed moving attack that reaches a room bound self-stuns
         // for the attack's wallStun ticks, then the shared MS_STAGGER release
-        // returns the beast to PURSUE (cdBase). Shipped data leaves wallStun 0,
-        // so the branch is inert until a test sets the RAM cache directly.
+        // returns the beast to PURSUE (cdBase). The synthetic tests below set
+        // the RAM cache directly; the bull's gore authors wallStun 70 (feel.9).
         Test t("attack wallStun: lunge into a bound staggers for wallStun ticks");
         Game g;
         newHunt(g);
@@ -743,8 +784,8 @@ void MonsterSuite(TestRunner &runner) {
 
     {
         // feel.6: the enrage phase is cached at spawn (CombatEnrage) and applied
-        // once when HP crosses hpPct. No shipped creature authors stats.enrage
-        // yet, so tests set the RAM cache directly; hpPct 0 folds the branch out.
+        // once when HP crosses hpPct. These tests drive synthetic values into the
+        // RAM cache; the bull authors the first real phase (feel.9, below).
         Test t("enrage: crossing the threshold applies spdMul truncating + faceHold once");
         Game g;
         newHunt(g);
@@ -816,6 +857,34 @@ void MonsterSuite(TestRunner &runner) {
         updateMonster(g);
         t.assert(g.combat.enrage.fired, 1, "fires once enabled");
         t.assert(m.spd, 1, "tiny spdMul floors at 1");
+        suite.addTest(t);
+    }
+
+    {
+        // feel.9: the bull is the first creature to author stats.enrage; the
+        // loader caches the real 40% / 130% / faceHold 6 phase at spawn and the
+        // FSM applies it once when HP crosses the threshold.
+        Test t("enrage: the bull's authored 40% phase caches and fires (feel.9)");
+        Game g;
+        newGame(g, W_SWORD, MODE_HUNT, MON_SWEEP);
+        Monster &m = g.monster;
+        t.assert(g.combat.enrage.hpPct, 40, "bull enrage hpPct 40");
+        t.assert(g.combat.enrage.spdMul, 130, "bull enrage spdMul 130");
+        t.assert(g.combat.enrage.faceHold, 6, "bull enrage faceHold 6");
+        t.assert(g.combat.enrage.fired, 0, "latch starts clear");
+        t.assert(m.spd, 7, "pre-enrage spd 7");
+        t.assert(g.combat.profile.faceHold, 10, "pre-enrage faceHold 10");
+        m.state = MS_PURSUE;
+        m.cd = 30000;
+        m.hp = 61;   // just above 40% (61 * 100 > 150 * 40)
+        updateMonster(g);
+        t.assert(g.combat.enrage.fired, 0, "no fire above 40%");
+        t.assert(m.spd, 7, "spd unchanged above the threshold");
+        m.hp = 60;   // exactly 40%: 60*100 <= 150*40 -> fires
+        updateMonster(g);
+        t.assert(g.combat.enrage.fired, 1, "fires at the 40% threshold");
+        t.assert(m.spd, 9, "7 * 130 / 100 truncates to 9");
+        t.assert(g.combat.profile.faceHold, 6, "profile faceHold swaps to 6");
         suite.addTest(t);
     }
 

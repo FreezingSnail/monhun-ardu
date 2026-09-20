@@ -12,7 +12,7 @@
 namespace combat_data {
 
 constexpr uint8_t VERSION = 1;
-constexpr uint16_t BLOB_SIZE = 1146;
+constexpr uint16_t BLOB_SIZE = 1216;
 
 struct Box {
     int8_t ox;
@@ -103,6 +103,7 @@ constexpr uint8_t ATTACK_LUNGE_WING_BEAT = 4;
 constexpr uint8_t ATTACK_RAVAGER_BITE = 5;
 constexpr uint8_t ATTACK_RAVAGER_TAIL_SWEEP = 6;
 constexpr uint8_t ATTACK_SWEEP_GORE = 8;
+constexpr uint8_t ATTACK_SWEEP_REAR_KICK = 9;
 constexpr uint8_t ATTACK_SWEEP_STOMP = 7;
 constexpr uint8_t CREATURE_HEAVY = 0;
 constexpr uint8_t CREATURE_LUNGE = 1;
@@ -121,8 +122,10 @@ constexpr uint8_t GUARD_LUNGE_P_PECK = 3;
 constexpr uint8_t GUARD_RAVAGER_P_BITE = 8;
 constexpr uint8_t GUARD_RAVAGER_P_ENRAGED = 6;
 constexpr uint8_t GUARD_RAVAGER_P_SWEEP = 7;
-constexpr uint8_t GUARD_SWEEP_P_GORE = 10;
-constexpr uint8_t GUARD_SWEEP_P_STOMP = 9;
+constexpr uint8_t GUARD_SWEEP_P_GORE = 12;
+constexpr uint8_t GUARD_SWEEP_P_GORE2 = 10;
+constexpr uint8_t GUARD_SWEEP_P_REAR_KICK = 9;
+constexpr uint8_t GUARD_SWEEP_P_STOMP = 11;
 constexpr uint8_t PATTERN_HEAVY_P_BITE = 1;
 constexpr uint8_t PATTERN_HEAVY_P_SPIN = 0;
 constexpr uint8_t PATTERN_LUNGE_P_FLANK = 2;
@@ -132,8 +135,10 @@ constexpr uint8_t PATTERN_LUNGE_P_PECK = 3;
 constexpr uint8_t PATTERN_RAVAGER_P_BITE = 8;
 constexpr uint8_t PATTERN_RAVAGER_P_ENRAGED = 6;
 constexpr uint8_t PATTERN_RAVAGER_P_SWEEP = 7;
-constexpr uint8_t PATTERN_SWEEP_P_GORE = 10;
-constexpr uint8_t PATTERN_SWEEP_P_STOMP = 9;
+constexpr uint8_t PATTERN_SWEEP_P_GORE = 12;
+constexpr uint8_t PATTERN_SWEEP_P_GORE2 = 10;
+constexpr uint8_t PATTERN_SWEEP_P_REAR_KICK = 9;
+constexpr uint8_t PATTERN_SWEEP_P_STOMP = 11;
 constexpr uint8_t SKELETON_BULL = 0;
 constexpr uint8_t SKELETON_CHICKEN = 1;
 constexpr uint8_t SKELETON_LONGTAIL = 2;
@@ -149,8 +154,11 @@ constexpr uint8_t STEP_LUNGE_P_PECK_0 = 3;
 constexpr uint8_t STEP_RAVAGER_P_BITE_0 = 9;
 constexpr uint8_t STEP_RAVAGER_P_ENRAGED_0 = 7;
 constexpr uint8_t STEP_RAVAGER_P_SWEEP_0 = 8;
-constexpr uint8_t STEP_SWEEP_P_GORE_0 = 11;
-constexpr uint8_t STEP_SWEEP_P_STOMP_0 = 10;
+constexpr uint8_t STEP_SWEEP_P_GORE2_0 = 11;
+constexpr uint8_t STEP_SWEEP_P_GORE2_1 = 12;
+constexpr uint8_t STEP_SWEEP_P_GORE_0 = 14;
+constexpr uint8_t STEP_SWEEP_P_REAR_KICK_0 = 10;
+constexpr uint8_t STEP_SWEEP_P_STOMP_0 = 13;
 constexpr uint8_t WINDOW_HEAVY_BITE_0 = 0;
 constexpr uint8_t WINDOW_HEAVY_TAIL_SPIN_0 = 1;
 constexpr uint8_t WINDOW_HEAVY_TAIL_SPIN_1 = 2;
@@ -164,6 +172,7 @@ constexpr uint8_t WINDOW_RAVAGER_TAIL_SWEEP_0 = 9;
 constexpr uint8_t WINDOW_RAVAGER_TAIL_SWEEP_1 = 10;
 constexpr uint8_t WINDOW_SWEEP_GORE_0 = 12;
 constexpr uint8_t WINDOW_SWEEP_GORE_1 = 13;
+constexpr uint8_t WINDOW_SWEEP_REAR_KICK_0 = 14;
 constexpr uint8_t WINDOW_SWEEP_STOMP_0 = 11;
 constexpr uint8_t ZONE_HEAVY_APPENDAGE = 0;
 constexpr uint8_t ZONE_LUNGE_APPENDAGE = 2;
@@ -185,7 +194,7 @@ inline constexpr std::array<Creature, 8> CREATURES = {{
     {3, 4, 255, 5, 0, 0, 0, 0, 20, 36, 0, {0, 0, 20, 36}, 0, 140, 40, 1, 4, 0, 0, 0, 0, 0, 0},
     {3, 5, 255, 6, 0, 0, 0, 0, 20, 36, 0, {0, 0, 20, 36}, 0, 140, 40, 1, 2, 0, 0, 0, 0, 0, 0},
     {4, 6, 7, 8, 5, 2, 6, 3, 32, 24, 6, {0, 0, 32, 24}, 260, 200, 40, 0, 0, 0, 0, 0, 0, 0, 0},
-    {0, 7, 9, 10, 7, 2, 9, 2, 28, 22, 7, {1, 14, 26, 8}, 150, 200, 40, 0, 0, 0, 0, 0, 0, 0, 0},
+    {0, 7, 9, 10, 7, 3, 9, 4, 28, 22, 7, {1, 14, 26, 8}, 150, 200, 40, 0, 0, 0, 0, 40, 130, 6, 0},
 }};
 
 inline constexpr std::array<Profile, 8> PROFILES = {{
@@ -196,7 +205,7 @@ inline constexpr std::array<Profile, 8> PROFILES = {{
     {0, 0, 0, 0, 1, 0, 1, 0, 0, 2, 0, 0, 0, 0, 0, 0, 0},
     {0, 0, 0, 0, 1, 0, 1, 0, 0, 2, 0, 0, 0, 0, 0, 0, 0},
     {36, 24, 42, 8, 10, 6, 10, 60, 1, 3, 0, 50, 30, 90, 120, 24, 24},
-    {36, 18, 42, 8, 10, 6, 10, 0, 0, 3, 10, 55, 40, 90, 140, 24, 0},
+    {36, 18, 42, 8, 10, 6, 10, 40, 1, 3, 10, 55, 40, 90, 140, 24, 24},
 }};
 
 inline constexpr std::array<Skeleton, 5> SKELETONS = {{
@@ -234,7 +243,7 @@ inline constexpr std::array<Anchor, 10> ANCHORS = {{
     {22, 6},
 }};
 
-inline constexpr std::array<Attack, 9> ATTACKS = {{
+inline constexpr std::array<Attack, 10> ATTACKS = {{
     {1, 26, 0, 0, 0, 2, 0, 0, 0, 0, 0, 1, 0, 0, 1, 30, 8, 40, 10, 0},
     {0, 0, 0, 0, 2, 2, 0, 0, 0, 0, 0, 1, 0, 1, 4, 42, 20, 55, 8, 0},
     {1, 20, 0, 0, 0, 2, 0, 0, 0, 0, 0, 1, 0, 5, 1, 18, 6, 26, 7, 0},
@@ -242,11 +251,12 @@ inline constexpr std::array<Attack, 9> ATTACKS = {{
     {0, 0, 0, 0, 0, 2, 0, 0, 0, 0, 0, 1, 0, 7, 1, 16, 5, 34, 9, 2},
     {1, 30, 0, 0, 0, 2, 0, 0, 0, 0, 0, 1, 0, 8, 1, 36, 8, 45, 10, 0},
     {0, 0, 0, 0, 0, 2, 0, 0, 0, 0, 0, 1, 0, 9, 2, 48, 12, 60, 9, 0},
-    {0, 0, 0, 0, 0, 2, 0, 0, 0, 0, 0, 1, 0, 11, 1, 36, 10, 44, 9, 0},
-    {1, 34, 0, 0, 1, 2, 0, 0, 0, 0, 0, 1, 0, 12, 2, 46, 12, 55, 14, 0},
+    {0, 0, 0, 0, 0, 2, 0, 0, 0, 0, 0, 1, 0, 11, 1, 34, 11, 46, 9, 3},
+    {1, 40, 0, 0, 1, 2, 0, 0, 0, 0, 0, 1, 70, 12, 2, 42, 14, 58, 14, 1},
+    {0, 0, 0, 0, 0, 2, 0, 0, 0, 0, 0, 1, 0, 14, 1, 14, 4, 30, 10, 2},
 }};
 
-inline constexpr std::array<Window, 14> WINDOWS = {{
+inline constexpr std::array<Window, 15> WINDOWS = {{
     {0, 8, {14, 0, 18, 14}, 100, 0},
     {0, 5, {-20, 0, 24, 16}, 100, 0},
     {6, 10, {0, -22, 16, 24}, 100, 0},
@@ -258,12 +268,13 @@ inline constexpr std::array<Window, 14> WINDOWS = {{
     {0, 8, {13, 0, 22, 18}, 100, 0},
     {0, 5, {-22, 0, 30, 22}, 100, 0},
     {6, 11, {20, 0, 30, 22}, 100, 0},
-    {0, 10, {10, 2, 24, 14}, 100, 0},
+    {0, 10, {0, 0, 36, 26}, 100, 0},
     {0, 6, {16, -2, 16, 10}, 100, 0},
     {7, 12, {12, 2, 20, 14}, 100, 0},
+    {0, 4, {-14, 4, 22, 14}, 100, 0},
 }};
 
-inline constexpr std::array<Pattern, 11> PATTERNS = {{
+inline constexpr std::array<Pattern, 13> PATTERNS = {{
     {0, 1, 0},
     {1, 1, 1},
     {2, 1, 2},
@@ -274,10 +285,12 @@ inline constexpr std::array<Pattern, 11> PATTERNS = {{
     {8, 1, 7},
     {9, 1, 8},
     {10, 1, 9},
-    {11, 1, 10},
+    {11, 2, 10},
+    {13, 1, 11},
+    {14, 1, 12},
 }};
 
-inline constexpr std::array<Guard, 11> GUARDS = {{
+inline constexpr std::array<Guard, 13> GUARDS = {{
     {0, 30, 0, 100, 0, 0, 100, 0, 0},
     {30, 255, 0, 100, 0, 0, 100, 0, 0},
     {0, 26, 0, 100, 0, 0, 100, 0, 1},
@@ -287,11 +300,13 @@ inline constexpr std::array<Guard, 11> GUARDS = {{
     {0, 255, 0, 100, 0, 0, 100, 2, 0},
     {0, 24, 0, 100, 0, 0, 100, 0, 0},
     {25, 255, 0, 100, 0, 0, 100, 0, 0},
+    {0, 24, 0, 100, 0, 0, 100, 0, 1},
+    {0, 255, 0, 40, 0, 0, 100, 0, 0},
     {0, 24, 0, 100, 0, 0, 100, 0, 0},
-    {24, 255, 0, 100, 0, 0, 100, 0, 0},
+    {24, 255, 41, 100, 0, 0, 100, 0, 0},
 }};
 
-inline constexpr std::array<Step, 12> STEPS = {{
+inline constexpr std::array<Step, 15> STEPS = {{
     {0, 1, 0, 100},
     {0, 0, 0, 100},
     {0, 4, 0, 100},
@@ -302,6 +317,9 @@ inline constexpr std::array<Step, 12> STEPS = {{
     {0, 5, 0, 100},
     {0, 6, 0, 100},
     {0, 5, 0, 100},
+    {0, 9, 0, 100},
+    {0, 8, 18, 100},
+    {0, 8, 0, 70},
     {0, 7, 0, 100},
     {0, 8, 0, 100},
 }};
