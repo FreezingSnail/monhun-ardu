@@ -79,11 +79,10 @@ void CombatSuite(TestRunner &runner) {
             t.assert(p.stunRecoverT, h.stunRecoverT, "profile stunRecoverT");
             t.assert(p.staggerRecoverT, h.staggerRecoverT, "profile staggerRecoverT");
         }
-        // nch.4: heavy commits its turn (faceHold 10) and holds ground at 12;
-        // nch.7: the chicken commits for 6 (faceHold) and holds at keepDist 16.
-        // nch.9: the bull commits for 10 (faceHold) and holds at keepDist 18.
+        // nch.4: heavy commits its turn and holds ground at 12; feel.10 drops
+        // faceHold to 8 so the spin can be out-ranged more often.
         const CombatProfile heavy = combatProfileRead(combatCreatureProfileIdx(combat_data::CREATURE_HEAVY));
-        t.assert(heavy.faceHold, 10, "heavy faceHold");
+        t.assert(heavy.faceHold, 8, "heavy faceHold 8 (feel.10)");
         t.assert(heavy.keepDist, 12, "heavy keepDist 12");
         const CombatProfile lunge = combatProfileRead(combatCreatureProfileIdx(combat_data::CREATURE_LUNGE));
         t.assert(lunge.faceHold, 5, "chicken faceHold 5 (feel.8)");
@@ -142,11 +141,11 @@ void CombatSuite(TestRunner &runner) {
         t.assert(combat::ZONES_COUNT, 11, "heavy tail + ravager + lunge + sweep + 4 pole zone records");
         t.assert(combat::CREATURES_COUNT, 8, "3 demo beasts + ravager + 4 static poles");
         t.assert(combat::SKELETONS_COUNT, 5, "bull/chicken/longtail/quad + pole");
-        t.assert(combat::ATTACKS_COUNT, 10, "3x2 shipped + ravager bite/tail_sweep + chicken wing_beat + sweep rear_kick (feel.9)");
-        t.assert(combat::WINDOWS_COUNT, 15, "single-window attacks + ravager 2 + tail_spin 4 + sweep stomp 1/gore 2 + wing_beat + rear_kick");
-        t.assert(combat::PATTERNS_COUNT, 13, "feel.9: sweep p_rear_kick + p_gore2; feel.8 chicken p_flank/p_leap2; ravager p_enraged; heavy spin/bite");
-        t.assert(combat::GUARDS_COUNT, 13, "one guard per pattern");
-        t.assert(combat::STEPS_COUNT, 15, "feel.9: sweep rear_kick step + gore2 two steps");
+        t.assert(combat::ATTACKS_COUNT, 11, "3x2 shipped + ravager bite/tail_sweep + chicken wing_beat + sweep rear_kick + heavy tail_slam (feel.10)");
+        t.assert(combat::WINDOWS_COUNT, 16, "single-window attacks + ravager 2 + tail_spin 4 + sweep stomp 1/gore 2 + wing_beat + rear_kick + tail_slam");
+        t.assert(combat::PATTERNS_COUNT, 15, "feel.10: heavy p_tail_slam + p_bite_spin; feel.9 sweep p_rear_kick/p_gore2; feel.8 chicken p_flank/p_leap2; ravager p_enraged; heavy spin/bite");
+        t.assert(combat::GUARDS_COUNT, 15, "one guard per pattern");
+        t.assert(combat::STEPS_COUNT, 19, "feel.10: heavy tail_slam step + bite_spin three steps");
         for (uint8_t i = 0; i < combat::CREATURES_COUNT; i++) {
             const combat_data::Creature &h = combat_data::CREATURES[i];
             t.assert(combatCreatureSkeletonIdx(i), h.skeletonIdx, "creature skeletonIdx accessor");
@@ -744,12 +743,42 @@ void CombatSuite(TestRunner &runner) {
         in.hpPct = 100;
 
         creatureLoad(g, combat_data::CREATURE_HEAVY);
+        // feel.10: source order is p_tail_slam (behind, 20..60) then p_bite_spin
+        // (0..20), p_spin (21..30) and p_bite (31..255). The three base bands are
+        // exclusive, so tail_spin stays reachable <=30 and bite beyond; the slam
+        // only answers a hunter who has circled behind at pounce range.
+        in.hpPct = 100;
+        in.facingDot = 0;
         in.dist = 30;
         t.assert(combatGuardPasses(g, combat_data::PATTERN_HEAVY_P_SPIN, in), 1, "heavy spin dist 30 accepted");
-        t.assert(combatGuardPasses(g, combat_data::PATTERN_HEAVY_P_BITE, in), 1, "heavy bite band reaches 30 (spin wins)");
+        t.assert(combatGuardPasses(g, combat_data::PATTERN_HEAVY_P_BITE_SPIN, in), 0, "heavy bite_spin dist 30 rejected");
+        t.assert(combatGuardPasses(g, combat_data::PATTERN_HEAVY_P_BITE, in), 0, "heavy bite dist 30 rejected");
+        in.dist = 20;
+        t.assert(combatGuardPasses(g, combat_data::PATTERN_HEAVY_P_BITE_SPIN, in), 1, "heavy bite_spin dist 20 accepted");
+        t.assert(combatGuardPasses(g, combat_data::PATTERN_HEAVY_P_SPIN, in), 0, "heavy spin dist 20 rejected");
+        in.dist = 21;
+        t.assert(combatGuardPasses(g, combat_data::PATTERN_HEAVY_P_SPIN, in), 1, "heavy spin dist 21 accepted");
+        t.assert(combatGuardPasses(g, combat_data::PATTERN_HEAVY_P_BITE_SPIN, in), 0, "heavy bite_spin dist 21 rejected");
         in.dist = 31;
         t.assert(combatGuardPasses(g, combat_data::PATTERN_HEAVY_P_SPIN, in), 0, "heavy spin dist 31 rejected");
         t.assert(combatGuardPasses(g, combat_data::PATTERN_HEAVY_P_BITE, in), 1, "heavy bite dist 31 accepted");
+        // tail_slam behind clause: 20..60 only, dot < 0.
+        in.dist = 40;
+        in.facingDot = -6;
+        t.assert(combatGuardPasses(g, combat_data::PATTERN_HEAVY_P_TAIL_SLAM, in), 1, "tail_slam behind at 40 accepted");
+        in.dist = 20;
+        t.assert(combatGuardPasses(g, combat_data::PATTERN_HEAVY_P_TAIL_SLAM, in), 1, "tail_slam behind at 20 accepted");
+        in.dist = 19;
+        t.assert(combatGuardPasses(g, combat_data::PATTERN_HEAVY_P_TAIL_SLAM, in), 0, "tail_slam behind below 20 rejected");
+        in.dist = 60;
+        t.assert(combatGuardPasses(g, combat_data::PATTERN_HEAVY_P_TAIL_SLAM, in), 1, "tail_slam behind at 60 accepted");
+        in.dist = 61;
+        t.assert(combatGuardPasses(g, combat_data::PATTERN_HEAVY_P_TAIL_SLAM, in), 0, "tail_slam behind past 60 rejected");
+        in.dist = 40;
+        in.facingDot = 6;
+        t.assert(combatGuardPasses(g, combat_data::PATTERN_HEAVY_P_TAIL_SLAM, in), 0, "tail_slam in front rejected");
+        in.facingDot = 0;
+        t.assert(combatGuardPasses(g, combat_data::PATTERN_HEAVY_P_TAIL_SLAM, in), 0, "tail_slam abeam rejected");
 
         creatureLoad(g, combat_data::CREATURE_SWEEP);
         // Bull (feel.9): p_rear_kick (behind, <=24) is listed first, then
@@ -1097,14 +1126,19 @@ void CombatSuite(TestRunner &runner) {
     }
 
     {
-        Test t("heavy bite + 4-window tail_spin decode + facing lock");
-        // nch.1: the longtail swaps lunge/sweep for bite + a 360 tail_spin
-        // whose four contiguous windows whip behind -> side -> front -> side.
+        Test t("heavy kit: bite + 4-window tail_spin + hop tail_slam + patterns");
+        // nch.1/feel.10: the longtail keeps bite + a 360 tail_spin whose four
+        // contiguous windows whip behind -> side -> front -> side, retimed to
+        // active 18 with each long axis widened +4 px, plus the tail_slam pounce.
         t.assert(combatAttackWindowCount(combat_data::ATTACK_HEAVY_BITE), 1, "bite single window");
         t.assert(combatAttackWindowCount(combat_data::ATTACK_HEAVY_TAIL_SPIN), 4, "tail_spin four windows");
         t.assert(combatAttackFacing(combat_data::ATTACK_HEAVY_BITE), COMBAT_FACING_TRACK, "bite tracks");
         t.assert(combatAttackFacing(combat_data::ATTACK_HEAVY_TAIL_SPIN), COMBAT_FACING_LOCK_AWAY, "tail_spin locks away");
         t.assert(COMBAT_FACING_LOCK_AWAY, 2, "lock-away facing value");
+        t.assert(combatAttackWindup(combat_data::ATTACK_HEAVY_TAIL_SPIN), 34, "spin windup 34");
+        t.assert(combatAttackActive(combat_data::ATTACK_HEAVY_TAIL_SPIN), 18, "spin active 18");
+        t.assert(combatAttackRecover(combat_data::ATTACK_HEAVY_TAIL_SPIN), 62, "spin recover 62");
+        t.assert(combatAttackTell(combat_data::ATTACK_HEAVY_TAIL_SPIN), TELL_ARC, "spin arc tell");
         const CombatWindow bite = combatWindowRead(combat_data::WINDOW_HEAVY_BITE_0);
         t.assert(bite.t0, 0, "bite t0");
         t.assert(bite.t1, 8, "bite t1");
@@ -1112,6 +1146,7 @@ void CombatSuite(TestRunner &runner) {
         t.assert(bite.box.oy, 0, "bite oy");
         t.assert(bite.box.w, 18, "bite w");
         t.assert(bite.box.h, 14, "bite h");
+        t.assert(combatAttackTell(combat_data::ATTACK_HEAVY_BITE), TELL_LINE, "bite line tell");
         const CombatWindow spin0 = combatWindowRead(combat_data::WINDOW_HEAVY_TAIL_SPIN_0);
         const CombatWindow spin1 = combatWindowRead(combat_data::WINDOW_HEAVY_TAIL_SPIN_1);
         const CombatWindow spin2 = combatWindowRead(combat_data::WINDOW_HEAVY_TAIL_SPIN_2);
@@ -1120,19 +1155,64 @@ void CombatSuite(TestRunner &runner) {
         t.assert(spin0.t1, 5, "spin0 t1");
         t.assert(spin0.box.ox, -20, "spin0 whips behind");
         t.assert(spin0.box.oy, 0, "spin0 level");
+        t.assert(spin0.box.w, 28, "spin0 widened behind");
         t.assert(spin1.t0, 6, "spin1 t0");
         t.assert(spin1.t1, 10, "spin1 t1");
         t.assert(spin1.box.ox, 0, "spin1 centred x");
         t.assert(spin1.box.oy, -22, "spin1 whips north");
+        t.assert(spin1.box.h, 28, "spin1 widened north");
         t.assert(spin2.t0, 11, "spin2 t0");
-        t.assert(spin2.t1, 15, "spin2 t1");
+        t.assert(spin2.t1, 14, "spin2 t1");
         t.assert(spin2.box.ox, 22, "spin2 whips front");
-        t.assert(spin3.t0, 16, "spin3 t0");
-        t.assert(spin3.t1, 20, "spin3 t1");
+        t.assert(spin2.box.w, 28, "spin2 widened front");
+        t.assert(spin3.t0, 15, "spin3 t0");
+        t.assert(spin3.t1, 18, "spin3 t1");
         t.assert(spin3.box.oy, 22, "spin3 whips south");
+        t.assert(spin3.box.h, 28, "spin3 widened south");
         t.assert(combatAttackFirstWindow(combat_data::ATTACK_HEAVY_TAIL_SPIN), combat_data::WINDOW_HEAVY_TAIL_SPIN_0, "spin first window");
-        // Source order is semantic: p_spin (<=24) is listed before p_bite (>=25).
-        t.assertLessThan(combat_data::PATTERN_HEAVY_P_SPIN, combat_data::PATTERN_HEAVY_P_BITE, "spin pattern listed first");
+        // feel.10 tail_slam: hop pounce, lock-at-windup, ring tell, one behind
+        // window covering the 20..60 decision band.
+        t.assert(combatAttackMoveType(combat_data::ATTACK_HEAVY_TAIL_SLAM), MOVE_HOP, "tail_slam is a hop");
+        t.assert(combatAttackFacing(combat_data::ATTACK_HEAVY_TAIL_SLAM), COMBAT_FACING_LOCK, "tail_slam locks at windup");
+        t.assert(combatAttackTell(combat_data::ATTACK_HEAVY_TAIL_SLAM), TELL_RING, "tail_slam ring tell");
+        t.assert(combatAttackWindup(combat_data::ATTACK_HEAVY_TAIL_SLAM), 26, "tail_slam windup");
+        t.assert(combatAttackActive(combat_data::ATTACK_HEAVY_TAIL_SLAM), 8, "tail_slam active");
+        t.assert(combatAttackRecover(combat_data::ATTACK_HEAVY_TAIL_SLAM), 44, "tail_slam recover");
+        t.assert(combatAttackDmg(combat_data::ATTACK_HEAVY_TAIL_SLAM), 12, "tail_slam dmg");
+        const CombatAttackValue slam = combatAttackRead(combat_data::ATTACK_HEAVY_TAIL_SLAM);
+        t.assert(slam.moveDx, -56, "tail_slam hop dx");
+        t.assert(slam.moveDy, 0, "tail_slam hop dy");
+        const CombatWindow slamWin = combatWindowRead(combat_data::WINDOW_HEAVY_TAIL_SLAM_0);
+        t.assert(slamWin.t0, 0, "tail_slam window t0");
+        t.assert(slamWin.t1, 8, "tail_slam window t1");
+        t.assert(slamWin.box.ox, -16, "tail_slam window behind");
+        t.assert(slamWin.box.w, 36, "tail_slam window w");
+        t.assert(slamWin.box.h, 28, "tail_slam window h");
+        // Source order is semantic: p_tail_slam first, then p_bite_spin, p_spin,
+        // p_bite. The three base bands are exclusive.
+        t.assert(combat_data::CREATURES[combat_data::CREATURE_HEAVY].firstPattern, combat_data::PATTERN_HEAVY_P_TAIL_SLAM, "tail_slam pattern first");
+        t.assertLessThan(combat_data::PATTERN_HEAVY_P_TAIL_SLAM, combat_data::PATTERN_HEAVY_P_BITE_SPIN, "slam before combo");
+        t.assertLessThan(combat_data::PATTERN_HEAVY_P_BITE_SPIN, combat_data::PATTERN_HEAVY_P_SPIN, "combo before spin");
+        t.assertLessThan(combat_data::PATTERN_HEAVY_P_SPIN, combat_data::PATTERN_HEAVY_P_BITE, "spin before bite");
+        const CombatGuard slamGuard = combatGuardRead(combat_data::GUARD_HEAVY_P_TAIL_SLAM);
+        t.assert(slamGuard.facing, GUARD_FACING_BEHIND, "tail_slam guard behind");
+        t.assert(slamGuard.minDist, 20, "tail_slam guard minDist 20");
+        t.assert(slamGuard.maxDist, 60, "tail_slam guard maxDist 60");
+        t.assert(combatStepRef(combat_data::STEP_HEAVY_P_TAIL_SLAM_0), combat_data::ATTACK_HEAVY_TAIL_SLAM, "tail_slam step attack");
+        // p_bite_spin combo: bite after 12, WAIT 16, tail_spin.
+        t.assert(combatPatternStepCount(combat_data::PATTERN_HEAVY_P_BITE_SPIN), 3, "bite_spin three steps");
+        const CombatStep bs0 = combatStepRead(combat_data::STEP_HEAVY_P_BITE_SPIN_0);
+        const CombatStep bs1 = combatStepRead(combat_data::STEP_HEAVY_P_BITE_SPIN_1);
+        const CombatStep bs2 = combatStepRead(combat_data::STEP_HEAVY_P_BITE_SPIN_2);
+        t.assert(bs0.kind, STEP_ATK, "bite_spin step0 atk");
+        t.assert(bs0.ref, combat_data::ATTACK_HEAVY_BITE, "bite_spin step0 bite");
+        t.assert(bs0.after, 12, "bite_spin step0 after 12");
+        t.assert(bs1.kind, STEP_WAIT, "bite_spin step1 wait");
+        t.assert(bs1.ref, 16, "bite_spin step1 wait 16");
+        t.assert(bs2.kind, STEP_ATK, "bite_spin step2 atk");
+        t.assert(bs2.ref, combat_data::ATTACK_HEAVY_TAIL_SPIN, "bite_spin step2 tail_spin");
+        const CombatGuard bsg = combatGuardRead(combat_data::GUARD_HEAVY_P_BITE_SPIN);
+        t.assert(bsg.maxDist, 20, "bite_spin guard reach 20");
         t.assert(combatStepRef(combat_data::STEP_HEAVY_P_SPIN_0), combat_data::ATTACK_HEAVY_TAIL_SPIN, "spin step attack");
         t.assert(combatStepRef(combat_data::STEP_HEAVY_P_BITE_0), combat_data::ATTACK_HEAVY_BITE, "bite step attack");
         suite.addTest(t);

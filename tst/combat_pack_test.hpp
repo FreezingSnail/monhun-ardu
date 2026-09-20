@@ -264,6 +264,7 @@ void CombatPackSuite(TestRunner &runner) {
             {"ANCHOR_QUAD_32X24_HEAD", combat::ANCHOR_QUAD_32X24_HEAD_OFF, combat::ANCHORS_OFF, 9, combat::ANCHOR_SIZE, combat::ANCHORS_COUNT},
             {"ATTACK_HEAVY_BITE", combat::ATTACK_HEAVY_BITE_OFF, combat::ATTACKS_OFF, combat::ATTACK_HEAVY_BITE, combat::ATTACK_SIZE, combat::ATTACKS_COUNT},
             {"ATTACK_HEAVY_TAIL_SPIN", combat::ATTACK_HEAVY_TAIL_SPIN_OFF, combat::ATTACKS_OFF, combat::ATTACK_HEAVY_TAIL_SPIN, combat::ATTACK_SIZE, combat::ATTACKS_COUNT},
+            {"ATTACK_HEAVY_TAIL_SLAM", combat::ATTACK_HEAVY_TAIL_SLAM_OFF, combat::ATTACKS_OFF, combat::ATTACK_HEAVY_TAIL_SLAM, combat::ATTACK_SIZE, combat::ATTACKS_COUNT},
             {"ATTACK_LUNGE_PECK", combat::ATTACK_LUNGE_PECK_OFF, combat::ATTACKS_OFF, combat::ATTACK_LUNGE_PECK, combat::ATTACK_SIZE, combat::ATTACKS_COUNT},
             {"ATTACK_LUNGE_LEAP", combat::ATTACK_LUNGE_LEAP_OFF, combat::ATTACKS_OFF, combat::ATTACK_LUNGE_LEAP, combat::ATTACK_SIZE, combat::ATTACKS_COUNT},
             {"ATTACK_LUNGE_WING_BEAT", combat::ATTACK_LUNGE_WING_BEAT_OFF, combat::ATTACKS_OFF, combat::ATTACK_LUNGE_WING_BEAT, combat::ATTACK_SIZE, combat::ATTACKS_COUNT},
@@ -277,6 +278,7 @@ void CombatPackSuite(TestRunner &runner) {
             {"WINDOW_HEAVY_TAIL_SPIN_1", combat::WINDOW_HEAVY_TAIL_SPIN_1_OFF, combat::WINDOWS_OFF, combat::WINDOW_HEAVY_TAIL_SPIN_1, combat::WINDOW_SIZE, combat::WINDOWS_COUNT},
             {"WINDOW_HEAVY_TAIL_SPIN_2", combat::WINDOW_HEAVY_TAIL_SPIN_2_OFF, combat::WINDOWS_OFF, combat::WINDOW_HEAVY_TAIL_SPIN_2, combat::WINDOW_SIZE, combat::WINDOWS_COUNT},
             {"WINDOW_HEAVY_TAIL_SPIN_3", combat::WINDOW_HEAVY_TAIL_SPIN_3_OFF, combat::WINDOWS_OFF, combat::WINDOW_HEAVY_TAIL_SPIN_3, combat::WINDOW_SIZE, combat::WINDOWS_COUNT},
+            {"WINDOW_HEAVY_TAIL_SLAM_0", combat::WINDOW_HEAVY_TAIL_SLAM_0_OFF, combat::WINDOWS_OFF, combat::WINDOW_HEAVY_TAIL_SLAM_0, combat::WINDOW_SIZE, combat::WINDOWS_COUNT},
             {"WINDOW_LUNGE_PECK_0", combat::WINDOW_LUNGE_PECK_0_OFF, combat::WINDOWS_OFF, combat::WINDOW_LUNGE_PECK_0, combat::WINDOW_SIZE, combat::WINDOWS_COUNT},
             {"WINDOW_LUNGE_LEAP_0", combat::WINDOW_LUNGE_LEAP_0_OFF, combat::WINDOWS_OFF, combat::WINDOW_LUNGE_LEAP_0, combat::WINDOW_SIZE, combat::WINDOWS_COUNT},
             {"WINDOW_LUNGE_WING_BEAT_0", combat::WINDOW_LUNGE_WING_BEAT_0_OFF, combat::WINDOWS_OFF, combat::WINDOW_LUNGE_WING_BEAT_0, combat::WINDOW_SIZE, combat::WINDOWS_COUNT},
@@ -289,6 +291,8 @@ void CombatPackSuite(TestRunner &runner) {
             {"WINDOW_SWEEP_REAR_KICK_0", combat::WINDOW_SWEEP_REAR_KICK_0_OFF, combat::WINDOWS_OFF, combat::WINDOW_SWEEP_REAR_KICK_0, combat::WINDOW_SIZE, combat::WINDOWS_COUNT},
             {"PATTERN_HEAVY_P_SPIN", combat::PATTERN_HEAVY_P_SPIN_OFF, combat::PATTERNS_OFF, combat::PATTERN_HEAVY_P_SPIN, combat::PATTERN_SIZE, combat::PATTERNS_COUNT},
             {"PATTERN_HEAVY_P_BITE", combat::PATTERN_HEAVY_P_BITE_OFF, combat::PATTERNS_OFF, combat::PATTERN_HEAVY_P_BITE, combat::PATTERN_SIZE, combat::PATTERNS_COUNT},
+            {"PATTERN_HEAVY_P_TAIL_SLAM", combat::PATTERN_HEAVY_P_TAIL_SLAM_OFF, combat::PATTERNS_OFF, combat::PATTERN_HEAVY_P_TAIL_SLAM, combat::PATTERN_SIZE, combat::PATTERNS_COUNT},
+            {"PATTERN_HEAVY_P_BITE_SPIN", combat::PATTERN_HEAVY_P_BITE_SPIN_OFF, combat::PATTERNS_OFF, combat::PATTERN_HEAVY_P_BITE_SPIN, combat::PATTERN_SIZE, combat::PATTERNS_COUNT},
             {"PATTERN_LUNGE_P_PECK", combat::PATTERN_LUNGE_P_PECK_OFF, combat::PATTERNS_OFF, combat::PATTERN_LUNGE_P_PECK, combat::PATTERN_SIZE, combat::PATTERNS_COUNT},
             {"PATTERN_LUNGE_P_LEAP", combat::PATTERN_LUNGE_P_LEAP_OFF, combat::PATTERNS_OFF, combat::PATTERN_LUNGE_P_LEAP, combat::PATTERN_SIZE, combat::PATTERNS_COUNT},
             {"PATTERN_LUNGE_P_FLANK", combat::PATTERN_LUNGE_P_FLANK_OFF, combat::PATTERNS_OFF, combat::PATTERN_LUNGE_P_FLANK, combat::PATTERN_SIZE, combat::PATTERNS_COUNT},
@@ -302,6 +306,8 @@ void CombatPackSuite(TestRunner &runner) {
             {"PATTERN_SWEEP_P_GORE", combat::PATTERN_SWEEP_P_GORE_OFF, combat::PATTERNS_OFF, combat::PATTERN_SWEEP_P_GORE, combat::PATTERN_SIZE, combat::PATTERNS_COUNT},
             {"GUARD_HEAVY_P_SPIN", combat::GUARD_HEAVY_P_SPIN_OFF, combat::GUARDS_OFF, combat::GUARD_HEAVY_P_SPIN, combat::GUARD_SIZE, combat::GUARDS_COUNT},
             {"GUARD_HEAVY_P_BITE", combat::GUARD_HEAVY_P_BITE_OFF, combat::GUARDS_OFF, combat::GUARD_HEAVY_P_BITE, combat::GUARD_SIZE, combat::GUARDS_COUNT},
+            {"GUARD_HEAVY_P_TAIL_SLAM", combat::GUARD_HEAVY_P_TAIL_SLAM_OFF, combat::GUARDS_OFF, combat::GUARD_HEAVY_P_TAIL_SLAM, combat::GUARD_SIZE, combat::GUARDS_COUNT},
+            {"GUARD_HEAVY_P_BITE_SPIN", combat::GUARD_HEAVY_P_BITE_SPIN_OFF, combat::GUARDS_OFF, combat::GUARD_HEAVY_P_BITE_SPIN, combat::GUARD_SIZE, combat::GUARDS_COUNT},
             {"GUARD_LUNGE_P_PECK", combat::GUARD_LUNGE_P_PECK_OFF, combat::GUARDS_OFF, combat::GUARD_LUNGE_P_PECK, combat::GUARD_SIZE, combat::GUARDS_COUNT},
             {"GUARD_LUNGE_P_LEAP", combat::GUARD_LUNGE_P_LEAP_OFF, combat::GUARDS_OFF, combat::GUARD_LUNGE_P_LEAP, combat::GUARD_SIZE, combat::GUARDS_COUNT},
             {"GUARD_LUNGE_P_FLANK", combat::GUARD_LUNGE_P_FLANK_OFF, combat::GUARDS_OFF, combat::GUARD_LUNGE_P_FLANK, combat::GUARD_SIZE, combat::GUARDS_COUNT},
@@ -315,6 +321,10 @@ void CombatPackSuite(TestRunner &runner) {
             {"GUARD_SWEEP_P_GORE", combat::GUARD_SWEEP_P_GORE_OFF, combat::GUARDS_OFF, combat::GUARD_SWEEP_P_GORE, combat::GUARD_SIZE, combat::GUARDS_COUNT},
             {"STEP_HEAVY_P_SPIN_0", combat::STEP_HEAVY_P_SPIN_0_OFF, combat::STEPS_OFF, combat::STEP_HEAVY_P_SPIN_0, combat::STEP_SIZE, combat::STEPS_COUNT},
             {"STEP_HEAVY_P_BITE_0", combat::STEP_HEAVY_P_BITE_0_OFF, combat::STEPS_OFF, combat::STEP_HEAVY_P_BITE_0, combat::STEP_SIZE, combat::STEPS_COUNT},
+            {"STEP_HEAVY_P_TAIL_SLAM_0", combat::STEP_HEAVY_P_TAIL_SLAM_0_OFF, combat::STEPS_OFF, combat::STEP_HEAVY_P_TAIL_SLAM_0, combat::STEP_SIZE, combat::STEPS_COUNT},
+            {"STEP_HEAVY_P_BITE_SPIN_0", combat::STEP_HEAVY_P_BITE_SPIN_0_OFF, combat::STEPS_OFF, combat::STEP_HEAVY_P_BITE_SPIN_0, combat::STEP_SIZE, combat::STEPS_COUNT},
+            {"STEP_HEAVY_P_BITE_SPIN_1", combat::STEP_HEAVY_P_BITE_SPIN_1_OFF, combat::STEPS_OFF, combat::STEP_HEAVY_P_BITE_SPIN_1, combat::STEP_SIZE, combat::STEPS_COUNT},
+            {"STEP_HEAVY_P_BITE_SPIN_2", combat::STEP_HEAVY_P_BITE_SPIN_2_OFF, combat::STEPS_OFF, combat::STEP_HEAVY_P_BITE_SPIN_2, combat::STEP_SIZE, combat::STEPS_COUNT},
             {"STEP_LUNGE_P_PECK_0", combat::STEP_LUNGE_P_PECK_0_OFF, combat::STEPS_OFF, combat::STEP_LUNGE_P_PECK_0, combat::STEP_SIZE, combat::STEPS_COUNT},
             {"STEP_LUNGE_P_LEAP_0", combat::STEP_LUNGE_P_LEAP_0_OFF, combat::STEPS_OFF, combat::STEP_LUNGE_P_LEAP_0, combat::STEP_SIZE, combat::STEPS_COUNT},
             {"STEP_LUNGE_P_FLANK_0", combat::STEP_LUNGE_P_FLANK_0_OFF, combat::STEPS_OFF, combat::STEP_LUNGE_P_FLANK_0, combat::STEP_SIZE, combat::STEPS_COUNT},
@@ -513,15 +523,39 @@ void CombatPackSuite(TestRunner &runner) {
         t.assert(b16(blob, static_cast<size_t>(combat::ATTACK_HEAVY_BITE_OFF) + 21), combat_expect::ATTACK_HEAVY_BITE_DMG, "expect heavy bite dmg");
         t.assert(b8(blob, static_cast<size_t>(combat::ATTACK_HEAVY_BITE_OFF) + 12), combat_expect::ATTACK_HEAVY_BITE_WALLSTUN, "expect heavy bite wallStun");
         t.assert(b8(blob, static_cast<size_t>(combat::ATTACK_HEAVY_BITE_OFF) + 23), combat_expect::ATTACK_HEAVY_BITE_TELL, "expect heavy bite tell");
+        // feel.10: bite TELL is now LINE (1); tail_spin retimes to 34/18/62 with
+        // ARC (2); tail_slam is the hop pounce with RING (3) and signed dx -56.
+        t.assert(b8(blob, static_cast<size_t>(combat::ATTACK_HEAVY_BITE_OFF) + 23), 1, "expect heavy bite line tell");
+        t.assert(b16(blob, static_cast<size_t>(combat::ATTACK_HEAVY_TAIL_SPIN_OFF) + 15), 34, "expect heavy spin windup");
+        t.assert(b16(blob, static_cast<size_t>(combat::ATTACK_HEAVY_TAIL_SPIN_OFF) + 17), 18, "expect heavy spin active");
+        t.assert(b16(blob, static_cast<size_t>(combat::ATTACK_HEAVY_TAIL_SPIN_OFF) + 19), 62, "expect heavy spin recover");
+        t.assert(b8(blob, static_cast<size_t>(combat::ATTACK_HEAVY_TAIL_SPIN_OFF) + 23), 2, "expect heavy spin arc tell");
+        t.assert(b8(blob, static_cast<size_t>(combat::ATTACK_HEAVY_TAIL_SLAM_OFF) + 0), 3, "expect tail_slam hop moveType");
+        t.assert(bi8(blob, static_cast<size_t>(combat::ATTACK_HEAVY_TAIL_SLAM_OFF) + 2), -56, "expect tail_slam hop dx");
+        t.assert(bi8(blob, static_cast<size_t>(combat::ATTACK_HEAVY_TAIL_SLAM_OFF) + 3), 0, "expect tail_slam hop dy");
+        t.assert(b8(blob, static_cast<size_t>(combat::ATTACK_HEAVY_TAIL_SLAM_OFF) + 4), COMBAT_FACING_LOCK, "expect tail_slam lock-at-windup");
+        t.assert(b16(blob, static_cast<size_t>(combat::ATTACK_HEAVY_TAIL_SLAM_OFF) + 15), 26, "expect tail_slam windup");
+        t.assert(b16(blob, static_cast<size_t>(combat::ATTACK_HEAVY_TAIL_SLAM_OFF) + 17), 8, "expect tail_slam active");
+        t.assert(b16(blob, static_cast<size_t>(combat::ATTACK_HEAVY_TAIL_SLAM_OFF) + 19), 44, "expect tail_slam recover");
+        t.assert(b16(blob, static_cast<size_t>(combat::ATTACK_HEAVY_TAIL_SLAM_OFF) + 21), 12, "expect tail_slam dmg");
+        t.assert(b8(blob, static_cast<size_t>(combat::ATTACK_HEAVY_TAIL_SLAM_OFF) + 23), 3, "expect tail_slam ring tell");
         t.assert(b16(blob, static_cast<size_t>(combat::ATTACK_LUNGE_PECK_OFF) + 15), combat_expect::ATTACK_LUNGE_PECK_WINDUP, "expect lunge windup");
         t.assert(b16(blob, static_cast<size_t>(combat::ATTACK_LUNGE_PECK_OFF) + 17), combat_expect::ATTACK_LUNGE_PECK_ACTIVE, "expect lunge active");
         t.assert(b16(blob, static_cast<size_t>(combat::ATTACK_LUNGE_PECK_OFF) + 19), combat_expect::ATTACK_LUNGE_PECK_RECOVER, "expect lunge recover");
         t.assert(b16(blob, static_cast<size_t>(combat::ATTACK_LUNGE_PECK_OFF) + 21), combat_expect::ATTACK_LUNGE_PECK_DMG, "expect lunge dmg");
         t.assert(b8(blob, static_cast<size_t>(combat::ATTACK_LUNGE_PECK_OFF) + 12), combat_expect::ATTACK_LUNGE_PECK_WALLSTUN, "expect lunge wallStun");
-        t.assert(b8(blob, static_cast<size_t>(combat::GUARD_HEAVY_P_SPIN_OFF) + 0), combat_expect::PATTERN_HEAVY_P_SPIN_MIN_DIST, "expect heavy spin minDist");
-        t.assert(b8(blob, static_cast<size_t>(combat::GUARD_HEAVY_P_SPIN_OFF) + 1), combat_expect::PATTERN_HEAVY_P_SPIN_MAX_DIST, "expect heavy spin maxDist");
-        // p_bite is the second heavy pattern: minDist 30 .. maxDist 255 (nch.4).
-        t.assert(b8(blob, static_cast<size_t>(combat::GUARD_HEAVY_P_BITE_OFF) + 0), 30, "expect heavy bite minDist");
+        // feel.10: p_tail_slam is now the heavy's first pattern (behind, 20..60);
+        // p_bite_spin (<=20), p_spin (21..30) and p_bite (31..255) are no longer
+        // first, so their reaches are pinned literally.
+        t.assert(b8(blob, static_cast<size_t>(combat::GUARD_HEAVY_P_TAIL_SLAM_OFF) + 0), combat_expect::PATTERN_HEAVY_P_TAIL_SLAM_MIN_DIST, "expect heavy tail_slam minDist");
+        t.assert(b8(blob, static_cast<size_t>(combat::GUARD_HEAVY_P_TAIL_SLAM_OFF) + 1), combat_expect::PATTERN_HEAVY_P_TAIL_SLAM_MAX_DIST, "expect heavy tail_slam maxDist");
+        t.assert(b8(blob, static_cast<size_t>(combat::GUARD_HEAVY_P_TAIL_SLAM_OFF) + 8), GUARD_FACING_BEHIND, "expect heavy tail_slam behind facing");
+        t.assert(b8(blob, static_cast<size_t>(combat::GUARD_HEAVY_P_BITE_SPIN_OFF) + 0), 0, "expect heavy bite_spin minDist");
+        t.assert(b8(blob, static_cast<size_t>(combat::GUARD_HEAVY_P_BITE_SPIN_OFF) + 1), 20, "expect heavy bite_spin maxDist");
+        t.assert(b8(blob, static_cast<size_t>(combat::GUARD_HEAVY_P_SPIN_OFF) + 0), 21, "expect heavy spin minDist");
+        t.assert(b8(blob, static_cast<size_t>(combat::GUARD_HEAVY_P_SPIN_OFF) + 1), 30, "expect heavy spin maxDist");
+        // p_bite is the fourth heavy pattern: minDist 31 .. maxDist 255.
+        t.assert(b8(blob, static_cast<size_t>(combat::GUARD_HEAVY_P_BITE_OFF) + 0), 31, "expect heavy bite minDist");
         t.assert(b8(blob, static_cast<size_t>(combat::GUARD_HEAVY_P_BITE_OFF) + 1), 255, "expect heavy bite maxDist");
         // feel.8: p_flank is the chicken's first pattern (behind guard, <=26).
         t.assert(b8(blob, static_cast<size_t>(combat::GUARD_LUNGE_P_FLANK_OFF) + 0), combat_expect::PATTERN_LUNGE_P_FLANK_MIN_DIST, "expect lunge flank minDist");
@@ -551,21 +585,26 @@ void CombatPackSuite(TestRunner &runner) {
     }
 
     {
-        // feel.7: move.type hop carries a face-relative dx/dy vector in the
-        // attack record's signed bytes 2/3. No shipped attack authors hop, so
-        // every shipped delta is 0 and lunge still moves through moveSpeedF. The
-        // decode loop above pins blob == host for these bytes; this test names
-        // the signed ABI and pins the shipped zeros so an inserted field cannot
-        // silently shift moveDx. ATTACK_SIZE is 24 since feel.5 appended the tell
-        // byte (the hop dx/dy offsets 2/3 are unchanged).
+        // feel.7/feel.10: move.type hop carries a face-relative dx/dy vector in
+        // the attack record's signed bytes 2/3. feel.10 makes heavy.tail_slam the
+        // first shipped hop (dx -56, dy 0); every other attack keeps the signed
+        // zeros so an inserted field cannot silently shift moveDx. ATTACK_SIZE is
+        // 24 since feel.5 appended the tell byte (the hop dx/dy offsets 2/3 are
+        // unchanged).
         Test t("attack move delta: hop dx/dy decode signed at offset 2/3");
         for (uint8_t i = 0; i < combat::ATTACKS_COUNT; i++) {
             const size_t o = static_cast<size_t>(combat::ATTACKS_OFF) + i * combat::ATTACK_SIZE;
             const combat_data::Attack &h = combat_data::ATTACKS[i];
             t.assert(bi8(blob, o + 2), h.moveDx, "signed moveDx decode");
             t.assert(bi8(blob, o + 3), h.moveDy, "signed moveDy decode");
-            t.assert(h.moveDx, 0, "shipped moveDx zero (none/lunge)");
-            t.assert(h.moveDy, 0, "shipped moveDy zero (none/lunge)");
+            if (i == combat_data::ATTACK_HEAVY_TAIL_SLAM) {
+                t.assert(h.moveType, 3, "tail_slam is the shipped hop");
+                t.assert(h.moveDx, -56, "tail_slam hop dx -56");
+                t.assert(h.moveDy, 0, "tail_slam hop dy 0");
+            } else {
+                t.assert(h.moveDx, 0, "shipped moveDx zero (none/lunge)");
+                t.assert(h.moveDy, 0, "shipped moveDy zero (none/lunge)");
+            }
         }
         t.assert(combat::ATTACK_SIZE, 24, "ATTACK_SIZE grew for the tell byte");
         suite.addTest(t);

@@ -75,7 +75,7 @@ static const CombatCreature kCreatures[] PROGMEM = {
      combat::ZONE_HEAVY_APPENDAGE,
      combat::ATTACK_HEAVY_BITE,
      combat_expect::CREATURE_HEAVY_ATTACKS,
-     combat::PATTERN_HEAVY_P_SPIN,
+     combat::PATTERN_HEAVY_P_TAIL_SLAM,
      combat_expect::CREATURE_HEAVY_PATTERNS,
      combat_expect::CREATURE_HEAVY_W,
      combat_expect::CREATURE_HEAVY_H,
@@ -189,7 +189,7 @@ static const CombatZone kZones[] PROGMEM = {
      static_cast<uint8_t>(((1u << combat::ATTACK_RAVAGER_TAIL_SWEEP) >> 8) & 0xFFu)},
 };
 
-static const uint8_t kAttackIds[] PROGMEM = {combat::ATTACK_HEAVY_BITE,  combat::ATTACK_HEAVY_TAIL_SPIN, combat::ATTACK_LUNGE_PECK,
+static const uint8_t kAttackIds[] PROGMEM = {combat::ATTACK_HEAVY_BITE,  combat::ATTACK_HEAVY_TAIL_SPIN, combat::ATTACK_HEAVY_TAIL_SLAM, combat::ATTACK_LUNGE_PECK,
                                              combat::ATTACK_SWEEP_STOMP, combat::ATTACK_SWEEP_GORE,      combat::ATTACK_SWEEP_REAR_KICK};
 static const CombatAttackValue kAttacks[] PROGMEM = {
     // moveType, moveSpeedF, moveDx, moveDy, facing, phys, elem, onHitEffect,
@@ -215,7 +215,10 @@ static const CombatAttackValue kAttacks[] PROGMEM = {
      combat_expect::ATTACK_HEAVY_BITE_RECOVER,
      combat_expect::ATTACK_HEAVY_BITE_DMG,
      combat_expect::ATTACK_HEAVY_BITE_TELL},
-    {MOVE_NONE, 0, 0, 0, COMBAT_FACING_LOCK_AWAY, PHYS_BLUNT, ELEM_NONE, 0, 0, 0, 0, 1, 0, combat::WINDOW_HEAVY_TAIL_SPIN_0, 4, 42, 20, 55, 8, 0},
+    {MOVE_NONE, 0, 0, 0, COMBAT_FACING_LOCK_AWAY, PHYS_BLUNT, ELEM_NONE, 0, 0, 0, 0, 1, 0, combat::WINDOW_HEAVY_TAIL_SPIN_0, 4, 34, 18, 62, 8, TELL_ARC},
+    // feel.10: tail_slam is the hop pounce (dx -56 backward), lock-at-windup,
+    // RING tell, one window behind the body covering the 20..60 decision band.
+    {MOVE_HOP, 0, -56, 0, COMBAT_FACING_LOCK, PHYS_BLUNT, ELEM_NONE, 0, 0, 0, 0, 1, 0, combat::WINDOW_HEAVY_TAIL_SLAM_0, 1, 26, 8, 44, 12, TELL_RING},
     {MOVE_LUNGE,
      20,
      0,
@@ -266,11 +269,13 @@ static const CombatAttackValue kAttacks[] PROGMEM = {
 
 static const uint8_t kWindowIds[] PROGMEM = {combat::WINDOW_HEAVY_BITE_0,      combat::WINDOW_HEAVY_TAIL_SPIN_0, combat::WINDOW_HEAVY_TAIL_SPIN_1, combat::WINDOW_HEAVY_TAIL_SPIN_2,
                                              combat::WINDOW_HEAVY_TAIL_SPIN_3, combat::WINDOW_LUNGE_PECK_0,      combat::WINDOW_LUNGE_LEAP_0,      combat::WINDOW_RAVAGER_TAIL_SWEEP_0,
-                                             combat::WINDOW_SWEEP_STOMP_0,     combat::WINDOW_SWEEP_GORE_0,      combat::WINDOW_SWEEP_GORE_1,      combat::WINDOW_SWEEP_REAR_KICK_0};
+                                             combat::WINDOW_SWEEP_STOMP_0,     combat::WINDOW_SWEEP_GORE_0,      combat::WINDOW_SWEEP_GORE_1,      combat::WINDOW_SWEEP_REAR_KICK_0,
+                                             combat::WINDOW_HEAVY_TAIL_SLAM_0};
 static const CombatWindow kWindows[] PROGMEM = {
     // t0, t1, box, dmgMul
-    {0, 8, {14, 0, 18, 14}, 100},   {0, 5, {-20, 0, 24, 16}, 100}, {6, 10, {0, -22, 16, 24}, 100}, {11, 15, {22, 0, 24, 16}, 100}, {16, 20, {0, 22, 16, 24}, 100}, {0, 6, {14, -6, 12, 10}, 100},
-    {0, 10, {12, -2, 18, 16}, 100}, {0, 5, {-22, 0, 30, 22}, 100}, {0, 10, {0, 0, 36, 26}, 100},   {0, 6, {16, -2, 16, 10}, 100},  {7, 12, {12, 2, 20, 14}, 100},  {0, 4, {-14, 4, 22, 14}, 100},
+    {0, 8, {14, 0, 18, 14}, 100},  {0, 5, {-20, 0, 28, 16}, 100},  {6, 10, {0, -22, 16, 28}, 100}, {11, 14, {22, 0, 28, 16}, 100}, {15, 18, {0, 22, 16, 28}, 100},
+    {0, 6, {14, -6, 12, 10}, 100}, {0, 10, {12, -2, 18, 16}, 100}, {0, 5, {-22, 0, 30, 22}, 100},  {0, 10, {0, 0, 36, 26}, 100},   {0, 6, {16, -2, 16, 10}, 100},
+    {7, 12, {12, 2, 20, 14}, 100}, {0, 4, {-14, 4, 22, 14}, 100},  {0, 8, {-16, 0, 36, 28}, 100},
 };
 
 static const CombatPattern kPatterns[] PROGMEM = {
@@ -357,11 +362,11 @@ inline void test_combat(FxTest &test) {
         const CombatZone got = combatZoneRead(pgm_read_byte(kZoneIds + i));
         test.expectEq(progEq(&got, &kZones[i], sizeof(CombatZone)), 1, F("zone record"));
     }
-    for (uint8_t i = 0; i < 6; i++) {
+    for (uint8_t i = 0; i < 7; i++) {
         const CombatAttackValue got = combatAttackRead(pgm_read_byte(kAttackIds + i));
         test.expectEq(progEq(&got, &kAttacks[i], sizeof(CombatAttackValue)), 1, F("attack record"));
     }
-    for (uint8_t i = 0; i < 12; i++) {
+    for (uint8_t i = 0; i < 13; i++) {
         const CombatWindow got = combatWindowRead(pgm_read_byte(kWindowIds + i));
         test.expectEq(progEq(&got, &kWindows[i], sizeof(CombatWindow)), 1, F("window record"));
     }
@@ -377,7 +382,7 @@ inline void test_combat(FxTest &test) {
     test.expectEq(progEq(&sk, &kSkeleton[0], sizeof(CombatSkeleton)), 1, F("lunge skeleton record"));
 
     const CombatAttackValue lungeAtk = combatAttackRead(lunge.firstAttack);
-    test.expectEq(progEq(&lungeAtk, &kAttacks[2], sizeof(CombatAttackValue)), 1, F("lunge first attack record"));
+    test.expectEq(progEq(&lungeAtk, &kAttacks[3], sizeof(CombatAttackValue)), 1, F("lunge first attack record"));
 
     const CombatPattern pat = combatPatternRead(lunge.firstPattern);
     test.expectEq(progEq(&pat, &kPatterns[0], sizeof(CombatPattern)), 1, F("lunge pattern record"));
@@ -453,8 +458,9 @@ inline void test_combat(FxTest &test) {
     test.expectEq(g.combat.attack.dmg, 7, F("cache dmg"));
     test.expectEq(g.combat.attack.moveType, 1, F("cache moveType"));
     test.expectEq(g.combat.attack.moveSpeedF, 20, F("cache moveSpeedF"));
-    // feel.7: the hop dx/dy couple is read in the same move burst; shipped
-    // none/lunge leaves both 0. One packed word keeps the device image in budget.
+    // feel.7: the hop dx/dy couple is read in the same move burst; this lunge
+    // leaves both 0 (feel.10 tail_slam is the shipped hop, checked below). One
+    // packed word keeps the device image in budget.
     test.expectEq(static_cast<uint16_t>(static_cast<uint8_t>(g.combat.attack.moveDx)) | (static_cast<uint16_t>(static_cast<uint8_t>(g.combat.attack.moveDy)) << 8), 0, F("cache hop moveDx/Dy"));
     test.expectEq(g.combat.attack.facing, 0, F("cache facing"));
     test.expectEq(g.combat.attack.wallStun, combat_expect::ATTACK_LUNGE_PECK_WALLSTUN, F("cache wallStun"));
@@ -513,6 +519,17 @@ inline void test_combat(FxTest &test) {
     test.expectEq(g.combat.attack.win.box.ox, -14, F("rear_kick window behind"));
     test.expectEq(g.combat.attack.win.box.w, 22, F("rear_kick window w"));
 
+    // feel.10: the heavy tail_slam pounce through the real cart — hop moveType
+    // with the face-relative dx -56 (packed byte 0xC8), lock-at-windup facing,
+    // RING tell and one behind window.
+    test.expectEq(attackLoad(g, combat::ATTACK_HEAVY_TAIL_SLAM), combat::ATTACK_HEAVY_TAIL_SLAM, F("tail_slam load"));
+    test.expectEq(g.combat.attack.moveType, MOVE_HOP, F("tail_slam hop"));
+    test.expectEq(static_cast<uint16_t>(static_cast<uint8_t>(g.combat.attack.moveDx)) | (static_cast<uint16_t>(static_cast<uint8_t>(g.combat.attack.moveDy)) << 8), 200, F("tail_slam hop dx/dy"));
+    test.expectEq(g.combat.attack.facing, COMBAT_FACING_LOCK, F("tail_slam lock"));
+    test.expectEq(g.combat.attack.tell, TELL_RING, F("tail_slam ring tell"));
+    test.expectEq(g.combat.attack.win.box.ox, -16, F("tail_slam window behind"));
+    test.expectEq(g.combat.attack.win.box.w, 36, F("tail_slam window w"));
+
     // ---------------------------------------------------- guard evaluation
     before = mhFxReadCount;
     CombatGuardInput in = {33, 100, 0, 0, 0xFFFF, 0};
@@ -543,12 +560,24 @@ inline void test_combat(FxTest &test) {
     creatureLoad(g, combat::CREATURE_HEAVY);
     test.expectEq(g.combat.profile.keepDist, 12, F("heavy cache keepDist 12"));
     test.expectEq(g.combat.profile.faceHold, combat_expect::PROFILE_HEAVY_FACE_HOLD, F("heavy cache faceHold"));
+    // feel.10 bands (facingDot 0 = abeam, so the behind slam is rejected):
+    // bite_spin <=20, spin 21..30, bite 31+.
     in.dist = 30;
     test.expectEq(combatGuardPasses(g, combat::PATTERN_HEAVY_P_SPIN, in), 1, F("heavy spin dist 30 accepted"));
-    test.expectEq(combatGuardPasses(g, combat::PATTERN_HEAVY_P_BITE, in), 1, F("heavy bite band reaches 30"));
+    test.expectEq(combatGuardPasses(g, combat::PATTERN_HEAVY_P_BITE_SPIN, in), 0, F("heavy bite_spin dist 30 rejected"));
+    test.expectEq(combatGuardPasses(g, combat::PATTERN_HEAVY_P_BITE, in), 0, F("heavy bite dist 30 rejected"));
+    in.dist = 20;
+    test.expectEq(combatGuardPasses(g, combat::PATTERN_HEAVY_P_BITE_SPIN, in), 1, F("heavy bite_spin dist 20 accepted"));
     in.dist = 31;
     test.expectEq(combatGuardPasses(g, combat::PATTERN_HEAVY_P_SPIN, in), 0, F("heavy spin dist 31 rejected"));
     test.expectEq(combatGuardPasses(g, combat::PATTERN_HEAVY_P_BITE, in), 1, F("heavy bite dist 31 accepted"));
+    // tail_slam behind clause (dot < 0) at 20..60.
+    in.dist = 40;
+    in.facingDot = -5;
+    test.expectEq(combatGuardPasses(g, combat::PATTERN_HEAVY_P_TAIL_SLAM, in), 1, F("heavy tail_slam behind accepted"));
+    in.facingDot = 5;
+    test.expectEq(combatGuardPasses(g, combat::PATTERN_HEAVY_P_TAIL_SLAM, in), 0, F("heavy tail_slam front rejected"));
+    in.facingDot = 0;
 
     // Deterministic chance (pinned roll vectors, same function host-tested).
     test.expectEq(combatChanceRoll(0, 1, 2, 0), 9, F("roll tick0"));

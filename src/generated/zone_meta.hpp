@@ -151,22 +151,22 @@ constexpr uint16_t HEAL_CAMP_0_OFF = 138;
 // Prop sheet names + FX-image offsets (0 = not yet authored; fie.5 art).
 constexpr uint8_t SHEET_MH_MAP_TENT = 0;
 constexpr bool SHEET_MH_MAP_TENT_RESOLVED = true;
-constexpr uint32_t SHEET_MH_MAP_TENT_OFF = 22425;
+constexpr uint32_t SHEET_MH_MAP_TENT_OFF = 22499;
 constexpr uint8_t SHEET_FXPOLE = 1;
 constexpr bool SHEET_FXPOLE_RESOLVED = true;
-constexpr uint32_t SHEET_FXPOLE_OFF = 21223;
+constexpr uint32_t SHEET_FXPOLE_OFF = 21297;
 
 // Room image symbols + baked FX offsets (the fie.5 blit base). A missing
 // symbol means a first gen pass before fxdata-build emitted it.
 constexpr const char *ROOM_AREA_IMAGE = "mh_map_area";
 constexpr bool ROOM_AREA_IMAGE_RESOLVED = true;
-constexpr uint32_t ROOM_AREA_IMAGE_OFF = 182857;
+constexpr uint32_t ROOM_AREA_IMAGE_OFF = 182931;
 constexpr const char *ROOM_CAMP_IMAGE = "mh_map_camp";
 constexpr bool ROOM_CAMP_IMAGE_RESOLVED = true;
-constexpr uint32_t ROOM_CAMP_IMAGE_OFF = 198985;
+constexpr uint32_t ROOM_CAMP_IMAGE_OFF = 199059;
 constexpr const char *ROOM_POLE_ROOM_IMAGE = "mh_map_pole_room";
 constexpr bool ROOM_POLE_ROOM_IMAGE_RESOLVED = true;
-constexpr uint32_t ROOM_POLE_ROOM_IMAGE_OFF = 201673;
+constexpr uint32_t ROOM_POLE_ROOM_IMAGE_OFF = 201747;
 #if defined(__AVR__)
 static_assert(ROOM_AREA_IMAGE_OFF == static_cast<uint32_t>(mh_map_area), "zone blob stale: re-run make gen");
 static_assert(ROOM_CAMP_IMAGE_OFF == static_cast<uint32_t>(mh_map_camp), "zone blob stale: re-run make gen");

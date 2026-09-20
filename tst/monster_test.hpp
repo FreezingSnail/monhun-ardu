@@ -149,7 +149,7 @@ void MonsterSuite(TestRunner &runner) {
         t.assert(g2.combat.body.w, 40, "heavy cached box w");
         t.assert(g2.combat.body.h, 28, "heavy cached box h");
         t.assert(g2.monster.hp, 320, "heavy hp");
-        t.assert(g2.monster.spd, 3, "heavy speed");
+        t.assert(g2.monster.spd, 5, "heavy speed");
 
         Game g3;
         newGame(g3, W_SWORD, MODE_HUNT);   // default kind 0 = legacy beast
@@ -198,14 +198,49 @@ void MonsterSuite(TestRunner &runner) {
         Game g2;
         newGame(g2, W_SWORD, MODE_HUNT, MON_HEAVY);
         Monster &h = g2.monster;
+        Player &p2 = g2.player;
+        h.x = 100;
+        h.y = 40;
+        h.fx = -fp::FP;   // faces W
+        h.fy = 0;
+        p2.y = static_cast<int16_t>(h.y + (h.h >> 1) - (p2.h >> 1));
+        // feel.10 bands in front (west of the beast): 0..20 opens the bite/spin
+        // combo, 21..30 the pure spin, 31+ the bite.
+        p2.x = static_cast<int16_t>(h.x - 60);
+        h.fx = -fp::FP;
         chooseAttack(g2, 41);
-        t.assert(h.atkIdx, combat::ATTACK_HEAVY_BITE, "heavy bites at 41");
+        t.assert(h.atkIdx, combat::ATTACK_HEAVY_BITE, "heavy bites at 41 (front)");
+        h.fx = -fp::FP;
         chooseAttack(g2, 31);
-        t.assert(h.atkIdx, combat::ATTACK_HEAVY_BITE, "heavy bites at 31");
+        t.assert(h.atkIdx, combat::ATTACK_HEAVY_BITE, "heavy bites at 31 (front)");
+        h.fx = -fp::FP;
         chooseAttack(g2, 30);
-        t.assert(h.atkIdx, combat::ATTACK_HEAVY_TAIL_SPIN, "heavy spins at 30");
-        chooseAttack(g2, 24);
-        t.assert(h.atkIdx, combat::ATTACK_HEAVY_TAIL_SPIN, "heavy spins at 24");
+        t.assert(h.atkIdx, combat::ATTACK_HEAVY_TAIL_SPIN, "heavy spins at 30 (front)");
+        h.fx = -fp::FP;
+        chooseAttack(g2, 21);
+        t.assert(h.atkIdx, combat::ATTACK_HEAVY_TAIL_SPIN, "heavy spins at 21 (front)");
+        h.fx = -fp::FP;
+        chooseAttack(g2, 20);
+        t.assert(h.atkIdx, combat::ATTACK_HEAVY_BITE, "heavy opens bite_spin at 20 (front)");
+        t.assert(g2.combat.patternIdx, combat::PATTERN_HEAVY_P_BITE_SPIN, "bite_spin pattern selected");
+        h.fx = -fp::FP;
+        chooseAttack(g2, 0);
+        t.assert(h.atkIdx, combat::ATTACK_HEAVY_BITE, "heavy opens bite_spin at 0 (front)");
+        // Behind (east of the beast): the slam pounces at 20..60, else the base
+        // bands still apply.
+        p2.x = static_cast<int16_t>(h.x + 60);
+        h.fx = -fp::FP;
+        chooseAttack(g2, 40);
+        t.assert(h.atkIdx, combat::ATTACK_HEAVY_TAIL_SLAM, "heavy slams a flank at 40");
+        h.fx = -fp::FP;
+        chooseAttack(g2, 60);
+        t.assert(h.atkIdx, combat::ATTACK_HEAVY_TAIL_SLAM, "heavy slams a flank at 60");
+        h.fx = -fp::FP;
+        chooseAttack(g2, 61);
+        t.assert(h.atkIdx, combat::ATTACK_HEAVY_BITE, "heavy bites past the slam band");
+        h.fx = -fp::FP;
+        chooseAttack(g2, 19);
+        t.assert(h.atkIdx, combat::ATTACK_HEAVY_BITE, "heavy bites inside the slam floor");
         Game g3;
         newGame(g3, W_SWORD, MODE_HUNT, MON_LUNGE);
         chooseAttack(g3, 41);
@@ -261,14 +296,14 @@ void MonsterSuite(TestRunner &runner) {
     }
 
     {
-        // nch.4: heavy profile.faceHold 10 commits the tracked facing; the hunter
-        // can cross behind and a from-behind hit lands the appendage/tail zone.
+        // nch.4/feel.10: heavy profile.faceHold 8 commits the tracked facing; the
+        // hunter can cross behind and a from-behind hit lands the appendage/tail.
         Test t("heavy faceHold: facing stale for faceHold ticks, flank hit lands the tail");
         Game g;
         newGame(g, W_SWORD, MODE_HUNT, MON_HEAVY);
         Monster &m = g.monster;
         Player &p = g.player;
-        t.assert(g.combat.profile.faceHold, 10, "heavy faceHold 10");
+        t.assert(g.combat.profile.faceHold, 8, "heavy faceHold 8 (feel.10)");
         t.assert(g.combat.appendZone != COMBAT_NO_ZONE, true, "heavy appendage zone loaded");
         // Beast parked in PURSUE (never chooses), hunter due east -> facing E.
         m.state = MS_PURSUE;
@@ -280,11 +315,11 @@ void MonsterSuite(TestRunner &runner) {
         updateMonster(g);
         t.assert(m.fx, fp::FP, "facing E after the first refresh");
         t.assert(m.fy, 0, "level E");
-        t.assert(m.faceT, 9, "faceHold countdown armed (10 set, decremented)");
+        t.assert(m.faceT, 7, "faceHold countdown armed (8 set, decremented)");
         // Hunter crosses behind (west); facing stays E for the rest of the hold.
         p.x = 40;
         p.y = static_cast<int16_t>(m.y + (m.h >> 1) - (p.h >> 1));
-        for (int i = 0; i < 9; i++)
+        for (int i = 0; i < 7; i++)
             updateMonster(g);
         t.assert(m.fx, fp::FP, "facing stale through the full hold");
         t.assert(m.faceT, 0, "countdown reached zero");
@@ -310,16 +345,17 @@ void MonsterSuite(TestRunner &runner) {
         Player &p = g.player;
         // Hunter due east of the beast centre: the tracked vector is +E, then
         // lock-away negates it once at windup entry so the tail (window 0 behind
-        // the turned-away back) points at the hunter.
+        // the turned-away back) points at the hunter. feel.10: the pure spin now
+        // owns 21..30 px (the <=20 band opens the bite/spin combo).
         m.x = 80;
         m.y = 40;
-        p.x = 110;
+        p.x = 120;
         p.y = static_cast<int16_t>(m.y + (m.h >> 1) - (p.h >> 1));
         p.iT = 0;
         m.state = MS_PURSUE;
         m.cd = 0;
         updateMonster(g);
-        t.assert(m.atkIdx, combat::ATTACK_HEAVY_TAIL_SPIN, "spin selected inside 24");
+        t.assert(m.atkIdx, combat::ATTACK_HEAVY_TAIL_SPIN, "spin selected inside 21..30");
         t.assert(m.state, MS_WINDUP, "windup entered");
         t.assert(m.fx, -fp::FP, "turned away from the hunter");
         t.assert(m.fy, 0, "level turn-away");
@@ -603,10 +639,11 @@ void MonsterSuite(TestRunner &runner) {
     }
 
     {
-        // feel.7: move.type hop commits a face-relative (forward, lateral)
+        // feel.7/feel.10: move.type hop commits a face-relative (forward, lateral)
         // velocity at release, rotated into the world frame by the current
-        // facing. No shipped attack authors hop yet, so the test installs the
-        // move scalars in the RAM cache and calls the release directly.
+        // facing. heavy.tail_slam ships hop (the real-data release is tested
+        // below); this test installs synthetic move scalars in the RAM cache and
+        // calls the release directly to pin the rotation math.
         Test t("hop: release rotates the face-relative dx/dy into lvx/lvy");
         Game g;
         newHunt(g);
@@ -693,6 +730,34 @@ void MonsterSuite(TestRunner &runner) {
         startMonsterAttack(g);
         t.assert(m.lvx, 48, "lunge leap 48 unchanged");
         t.assert(m.lvy, 0, "lunge leap flat unchanged");
+        suite.addTest(t);
+    }
+
+    {
+        // feel.10: heavy.tail_slam is the first shipped hop. With lock-at-windup
+        // facing away from a flanking hunter, the face-relative dx -56 releases
+        // backward (toward the hunter) and travels 8 active ticks * 3.5 px = 28 px.
+        Test t("tail_slam hop: backward vector pounces 28 px toward the flank");
+        Game g;
+        newGame(g, W_SWORD, MODE_HUNT, MON_HEAVY);
+        Monster &m = g.monster;
+        monsterAttackSet(g, combat::ATTACK_HEAVY_TAIL_SLAM);
+        m.fx = 16;
+        m.fy = 0;   // facing E, away from the hunter
+        startMonsterAttack(g);
+        t.assert(m.state, MS_ATTACK, "tail_slam enters attack");
+        t.assert(m.lvx, -56, "E facing releases backward -56");
+        t.assert(m.lvy, 0, "no lateral hop");
+        m.x = 100;
+        m.y = 20;
+        m.subX = 0;
+        m.subY = 0;
+        g.player.x = 10;
+        g.player.y = 10;   // clear of the beast: no shove/hit interference
+        beast(g, 8);       // active phase
+        t.assert(m.x, 72, "8 active ticks * -56/16 = -28 px pounce");
+        beast(g, 44);   // recovery: no drift
+        t.assert(m.x, 72, "hop frozen through recovery");
         suite.addTest(t);
     }
 

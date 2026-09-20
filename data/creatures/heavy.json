@@ -1,13 +1,13 @@
 {
   "id": "heavy",
   "skeleton": "longtail",
-  "stats": { "w": 40, "h": 28, "hp": 320, "spd": 3, "spawnX": 200, "spawnY": 40 },
+  "stats": { "w": 40, "h": 28, "hp": 320, "spd": 5, "spawnX": 200, "spawnY": 40 },
   "collide": { "ox": -8, "oy": 3, "w": 48, "h": 22 },
   "profile": {
     "engageDist": 36,
     "keepDist": 12,
     "attackDist": 42,
-    "faceHold": 10,
+    "faceHold": 8,
     "circleNum": 8,
     "circleDen": 10,
     "retreatNum": 6,
@@ -44,6 +44,7 @@
       "elem": "NONE",
       "move": { "type": "lunge", "speedF": 26 },
       "facing": "track",
+      "tell": "line",
       "windows": [
         { "t0": 0, "t1": 8, "box": { "ox": 14, "oy": 0, "w": 18, "h": 14 }, "dmgMul": 100 }
       ],
@@ -53,19 +54,38 @@
     },
     {
       "id": "tail_spin",
-      "windup": 42,
-      "active": 20,
-      "recover": 55,
+      "windup": 34,
+      "active": 18,
+      "recover": 62,
       "dmg": 8,
       "phys": "BLUNT",
       "elem": "NONE",
       "move": { "type": "none" },
       "facing": "lock-away",
+      "tell": "arc",
       "windows": [
-        { "t0": 0, "t1": 5, "box": { "ox": -20, "oy": 0, "w": 24, "h": 16 }, "dmgMul": 100 },
-        { "t0": 6, "t1": 10, "box": { "ox": 0, "oy": -22, "w": 16, "h": 24 }, "dmgMul": 100 },
-        { "t0": 11, "t1": 15, "box": { "ox": 22, "oy": 0, "w": 24, "h": 16 }, "dmgMul": 100 },
-        { "t0": 16, "t1": 20, "box": { "ox": 0, "oy": 22, "w": 16, "h": 24 }, "dmgMul": 100 }
+        { "t0": 0, "t1": 5, "box": { "ox": -20, "oy": 0, "w": 28, "h": 16 }, "dmgMul": 100 },
+        { "t0": 6, "t1": 10, "box": { "ox": 0, "oy": -22, "w": 16, "h": 28 }, "dmgMul": 100 },
+        { "t0": 11, "t1": 14, "box": { "ox": 22, "oy": 0, "w": 28, "h": 16 }, "dmgMul": 100 },
+        { "t0": 15, "t1": 18, "box": { "ox": 0, "oy": 22, "w": 16, "h": 28 }, "dmgMul": 100 }
+      ],
+      "onHit": { "effect": "none", "push": 0, "stun": 0 },
+      "stagger": 0,
+      "cue": "windup"
+    },
+    {
+      "id": "tail_slam",
+      "windup": 26,
+      "active": 8,
+      "recover": 44,
+      "dmg": 12,
+      "phys": "BLUNT",
+      "elem": "NONE",
+      "move": { "type": "hop", "dx": -56, "dy": 0 },
+      "facing": "lock-at-windup",
+      "tell": "ring",
+      "windows": [
+        { "t0": 0, "t1": 8, "box": { "ox": -16, "oy": 0, "w": 36, "h": 28 }, "dmgMul": 100 }
       ],
       "onHit": { "effect": "none", "push": 0, "stun": 0 },
       "stagger": 0,
@@ -74,13 +94,27 @@
   ],
   "patterns": [
     {
+      "id": "p_tail_slam",
+      "guard": { "facing": "behind", "minDist": 20, "maxDist": 60, "chance": 100 },
+      "steps": [ { "atk": "tail_slam", "after": 0 } ]
+    },
+    {
+      "id": "p_bite_spin",
+      "guard": { "maxDist": 20, "chance": 100 },
+      "steps": [
+        { "atk": "bite", "after": 12 },
+        { "wait": 16 },
+        { "atk": "tail_spin" }
+      ]
+    },
+    {
       "id": "p_spin",
-      "guard": { "maxDist": 30, "chance": 100 },
+      "guard": { "minDist": 21, "maxDist": 30, "chance": 100 },
       "steps": [ { "atk": "tail_spin", "after": 0 } ]
     },
     {
       "id": "p_bite",
-      "guard": { "minDist": 30, "maxDist": 255, "hpBand": [0, 100], "chance": 100 },
+      "guard": { "minDist": 31, "maxDist": 255, "hpBand": [0, 100], "chance": 100 },
       "steps": [ { "atk": "bite", "after": 0 } ]
     }
   ]
