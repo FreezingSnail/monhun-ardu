@@ -1,139 +1,119 @@
-# monhun-ardu-fie.14 — Spike: global Game, drop `Game &` params (flash)
+# monhun-ardu-feel.1 — Wave-B engine add budget spike
 
-Baseline HEAD `e666bdb`, tree clean. Baseline shipping **26980/29696 (2716
-free), RAM 1732/2560** (`.text` 26940, `.data` 40, `.bss` 1692; the global
-`g` symbol is 602 B). Measurement only — no shipped change, no commit/push.
+Baseline: HEAD `44a5596`, clean tree. All numbers are whole-image deltas
+measured with `make size` (LTO; per-symbol math meaningless). Every prototype
+was reverted; end tree is clean and `make test` is green (5391 passed).
 
-## Verdict
+## Baseline (measured first)
 
-**No bytes on the table.** Dropping the `Game &g` parameter is flash-neutral to
-slightly negative; adding the hidden-base barrier to global access is a clear
-regression.
+```
+size: .text=26940 .data=40 .bss=1692
+size: flash=26980/29696 (2716 free)  ram=1732/2560
+size: data facts: HAS_GUARD_CHANCE:false HAS_GUARD_COOLDOWN:false HAS_GUARD_HP:false
+  HAS_GUARD_PLAYER:false HAS_GUARD_ZONES:true HAS_HIT_STAGGER:false HAS_MULTI_STEP:false
+  HAS_MULTI_WINDOW:true HAS_SIMPLE_GUARDS:false HAS_STAGGER:true HAS_STEP_AFTER:false
+  HAS_STEP_CHANCE:false HAS_WAIT_STEPS:false HAS_ZONES:true
+```
 
-- **Variant A (param dropped, existing addressing kept): 26992 → +12 B.**
-- **Variant B (A + hidden-base barrier on the global): 27282 → +302 B.**
+Perf baseline `make fxtest-headless FXTEST_ONLY=test_perf` (Ardens at
+`/Users/connorfranc/code/Ardens/.../Ardens`, present):
 
-Hypothesis confirmed: LTO already constant-propagates the single global ref to
-the known absolute address, so the parameter is free; removing it only perturbs
-(spill/frame) allocation. Global-only does **not** remove the 4-byte `lds`/`sts`
-— it makes them more likely.
+```
+B pUs=6372 pHz=156 lHz=52 lTk=452 rMx=4772 rAv=4587 ram=595
+perf_test PASSED=5 FAILED=0
+```
+Render-max gate floor is `1000000/135 = 7407 us`; baseline rMx 4772 leaves
+2635 us of headroom.
 
-## Method / scratch
+## Per-item results
 
-Scratch worktree `build/spike-global/monhun-ardu` (nested, detached at HEAD;
-`Arduboy-Python-Utilities` symlinked because it is gitignored), shipping flags
-via `make build` (`-mcall-prologues -mrelax -DMH_NO_USB`), sizes from `make
-build` + `avr-size -A` + `avr-nm -S --size-sort`. Variant patches and ELFs were
-kept under `build/spike-global/` during the run; worktree + scratch removed at
-the end.
+| item | flash delta B | RAM delta B | notes / risk |
+| --- | --- | --- | --- |
+| 1. behind guard (`facing` clause) | **+160** | +0 | GUARD_SIZE 8→9 (cart +9 B); evaluator adds `combatGuardFacingOk` + behind dot. Under 400. |
+| 2. wallStun (attack field + clamp) | **+134** | +1 | ATTACK_SIZE 22→23; CombatAttackCache +1 B. Detection folds on `HAS_ATTACK_WALLSTUN`. |
+| 3. tell shapes DOT/LINE/ARC/RING | **+590** ⚠ | +1 | OVER 400. ATTACK_SIZE 22→23; CombatAttackCache +1 B; render switch. Perf rMx +148 us. |
+| 4. enrage (hpPct/spdMul/faceHold/cue) | **+170** | +5 | CREATURE_SIZE 25→29; 5 cache bytes incl latch. cue stored only (audio wiring not measured). |
+| 5. hop (`move.type hop`) | **+82** | +2 | ATTACK_SIZE unchanged (dx/dy already packed); cache +2 B for dx/dy. Cheapest. |
 
-Converted representative set (the highest-access / highest-call-count sim
-functions), one global named `g` declared `extern mh::Game g;` at global scope
-in `src/core/game.hpp` (definition already exists in `monhun-ardu.ino`):
+Engine-item total: **+1136 B flash / +9 B RAM**. Free budget 2716 B → fits with
+~1580 B left, but item 3 alone is 52% of the total.
 
-`updateCamera`, `loadRoom`, `initGame`, `initMonster`, `updatePlayer`,
-`updateMonster`, `stepWorldBody` — every caller (`stepGame`, `newGame`,
-`updateDoors`, `stepPlayer`, `stepMonster`, `stepHunt`, `stepWorld`,
-`menuStart`) updated to drop the argument.
+### Item 3 perf (prototype compiled into the perf image)
 
-## Variant A — parameter removal alone (+12 B)
+```
+B pUs=6374 pHz=156 lHz=52 lTk=452 rMx=4920 rAv=4735 ram=592
+perf_test PASSED=5 FAILED=0
+```
+Deltas vs baseline: pUs +2 us, pHz 0, lHz 0, lTk 0, **rMx +148 us**, rAv +148 us,
+free ram −3 B. rMx 4920 is 2487 us below the 7407 floor → **no perf-gate risk**.
+The bench's worst plane happened to draw a tell; the delta is one shape's draw.
 
-Kept the existing hidden-base pointers the code already had
-(`updateCamera`/`loadRoom`/`initMonster`/`updateMonster`/`updatePlayer`'s `pp`);
-changed only the signatures/argument lists.
+## Pattern step facts (chicken combo data)
 
-| symbol | baseline | A | delta |
-|---|---:|---:|---:|
-| `.text` (whole image) | 26940 | 26952 | **+12** |
-| `updatePlayer` | 3710 | 3744 | +34 |
-| `updateMonster` | 2416 | 2402 | -14 |
-| `initGame` | 290 | 290 | 0 |
-| `loadRoom` | 268 | 268 | 0 |
-| `updateCamera` | 122 | 122 | 0 |
-| `main` | 9408 | 9408 | 0 |
+Each fact measured in isolation from lunge's `p_peck` pattern, then all four
+together. All are RAM-neutral.
 
-`initMonster` and `stepWorldBody` do not get their own symbol (inlined). The
-tracked functions sum to +20; the remaining -8 sits in renamed LTO clones.
+| data pattern | flash delta B | facts flipped |
+| --- | --- | --- |
+| 2 steps, after 0, chance 100 | **+98** | HAS_MULTI_STEP |
+| 1 step, after 6 | **+124** | HAS_STEP_AFTER |
+| 1 step, chance 50 | **+246** | HAS_STEP_CHANCE |
+| 1 WAIT step | **+156** | HAS_WAIT_STEPS |
+| 2 steps + after + chance + WAIT | **+306** | all four |
 
-**Why ~0:** the baseline `updatePlayer` prologue already emits
-`lds r20, 0x056D <g+0x3>` for `g.weapon` although `g` arrives in `r24:r25` —
-LTO has const-propagated the only caller's argument to the known global. The
-function bodies are otherwise near byte-identical; the only change is the
-prologue/`__prologue_saves__` frame (`ldi r30,0x2C/r31,0x0F` →
-`ldi r30,0x3F/r31,0x15`) because freeing `r24:r25` reassigns spills. So the
-parameter costs nothing to pass and nothing to drop.
+Individual costs sum to 624 B because each forces the generic runner on its
+own; combined they share the runner, so the real combo price is **+306 B**.
+`HAS_STEP_CHANCE` is the heavyweight (pulls in `combatChanceRoll`'s 16-bit
+hash). All under the ~400 B flag individually except none; combo 306 < 400.
 
-## Variant B — + hidden-base on global access (+302 B)
+## Recommended implement order (feel-per-byte, lowest risk first)
 
-Added `Game *gp = &g; __asm__("" : "+r"(gp));` (and `gp->` addressing) at the
-top of the functions that still had direct global access (`initGame`,
-`stepWorldBody`, plus the residual direct `g.` reads in `updatePlayer`);
-functions that already carried a base pointer were unchanged.
+1. **hop** (+82 / +2 RAM) — cheapest, no render, no perf.
+2. **behind guard** (+160 / +0) — biggest positional lever, no RAM; only cart
+   blob growth (GUARD_SIZE 8→9).
+3. **wallStun** (+134 / +1) — small, folds cleanly on its fact.
+4. **enrage** (+170 / +5) — moderate RAM; audio cue wiring still to budget.
+5. **chicken step combo data** (+306 / +0) — do as its own data bead
+   (`monhun-ardu-feel.8`); ships the generic runner.
+6. **tell shapes** (+590 / +1, +148 us render) — last and split. Drawing only
+   DOT+LINE (~2 arms) or reusing the existing debug `wireDot` rect for RING
+   should cut the 590 B materially; ARC is the most bespoke arm. Flagged >400.
 
-| symbol | baseline | A | B | B-base |
-|---|---:|---:|---:|---:|
-| `.text` (whole image) | 26940 | 26952 | 27242 | **+302** |
-| `initGame` | 290 | 290 | 312 | +22 |
-| `updatePlayer` | 3710 | 3744 | 3782 | +72 |
-| `updateMonster` | 2416 | 2402 | 2406 | -10 |
-| `main` | 9408 | 9408 | 9572 | **+164** |
+## Risk/flag notes
 
-`main` +164 is the dominant cost: `stepWorldBody` is inlined into the loop, and
-hoisting a base pointer + keeping it live across its many calls forces extra
-spills. `initGame` +22 is pure base maintenance (4 B `ldi` + spills) for a
-one-shot function. The existing per-site barriers only pay off where a function
-is access-dense and self-contained (fie.13's measured -208/-34); applying the
-barrier globally inverts that.
+- **>400 B**: only tell shapes (+590). Everything else ≤170.
+- **RAM**: total engine adds 9 B; enrage is 5 of it. CombatState static asserts
+  shift for every attack-field add (83→84→85...) — update them in each bead.
+- **Two-pass `make gen`**: any packed-record size change (GUARD 8→9, ATTACK
+  22→23, CREATURE 25→29) shifts the FX image and the generated room/equip image
+  offsets, so **`make gen` must run twice** (first pass moves `mh_map_area`,
+  second converges `zone_meta.hpp`). A single pass fails the
+  `zone blob stale` / `equip blob stale` static asserts. Confirmed manually.
+- **Cart blob growth** (not flash): GUARD_SIZE 8→9 (+9 B all guards),
+  ATTACK_SIZE 22→23 (+1 B/attack, 8 attacks = +8 B), CREATURE_SIZE 25→29
+  (+4 B/creature, 8 = +32 B). Blob still far under the 64 KB pointer bound.
+- **enrage cue** was stored as a byte but no audio path was compiled in; if the
+  cue needs `audioUpdate` detection, budget that separately.
+- **wallStun/hop MOVE_CHARGE/MOVE_HOP handling**: prototypes also taught
+  `startMonsterAttack` charge/hop velocity branches; folded on their facts so
+  baseline is byte-identical.
 
-## Where the bytes come from, and full-conversion extrapolation
+## Verification tails
 
-- **Call sequences:** passing `&g` was already free — LTO knows the single
-  global address, so callers either had it in a register or materialise it once.
-  Removing the argument saves nothing and can force the callee to re-derive it.
-- **`lds`/`sts`:** global-only access does not eliminate 4-byte absolute
-  accesses; it removes the ability to reuse a live base register. Re-adding the
-  base costs `ldi`+`ldi` (4 B) plus register pressure/spills.
-- **LTO clones:** the conversion renames clones (`.constprop.80` → a plain
-  symbol) but does not multiply them; no clone explosion.
-- **Extrapolation:** the converted set already contains the largest sim bodies
-  (`updatePlayer` 3.7 KB, `updateMonster` 2.4 KB) and every function that
-  inlines into `main`, i.e. the bulk of all call sites. The remaining ~74
-  non-const `Game &` sites are low-access helpers (attack/projectile/combat
-  helpers, callbacks) where parameter removal showed no measurable gain here.
-  Expected full-image delta: **0 to +30 B (a small cost), never a saving.** Do
-  not pursue global-only.
+```
+# item 3 (largest)
+size: .text=27530 .data=40 .bss=1693
+size: flash=27570/29696 (2126 free)  ram=1733/2560
+# perf
+B pUs=6374 pHz=156 lHz=52 lTk=452 rMx=4920 rAv=4735 ram=592
+perf_test PASSED=5 FAILED=0
+# combined step facts
+size: flash=27286/29696 (2410 free)  ram=1732/2560
+# final clean baseline
+size: flash=26980/29696 (2716 free)  ram=1732/2560
+make test -> Total Passed: 5391  Total Failed: 0
+git status --short -> (empty)
+```
 
-## Landing cost (why not anyway)
-
-A global-only core means no function can be handed a different `Game`:
-
-- **138** call sites in `tst/` + `tst/fxdatatest/` call the converted set;
-  a full conversion touches all ~81 non-const `Game &` signatures and cascades
-  to more call sites.
-- **181** local `Game` declarations in tests, including **15 multi-instance**
-  cases (`g2`/`g3`/`h`/`w`/`a`/`u`/`t`) across 8 tests — `player_test`
-  independence checks, `shells_test` g/g2/g3, `monster_test` g2/g3,
-  `zone_test` u/a, `fxdatatest/boot_test` `mh::Game w`. One global breaks
-  simultaneous independent worlds; tests would need a reset/instance strategy
-  (`g = Game{}` copy-in/out, or a test-only active-pointer redirect).
-- Zero flash benefit to pay for that: the `Game &` parameter is free after LTO,
-  so it is pure testability with no budget cost.
-
-## Verification
-
-- Baseline reproduced in the worktree: `make build` → 26980.
-- A reproduced twice (reset + re-apply patch): 26992 both times.
-- Scratch worktree removed (`git worktree list` no longer shows it);
-  `build/spike-global/` deleted.
-- Main tree clean after (`git status --short` empty, HEAD `e666bdb`).
-- `make gen-check`: **PASS (82 generated artifacts unchanged)**.
-- No `/tmp`, no float, no commit/push.
-
-## Update 2026-09-19 — shelf carve rejected
-
-Lever 2 (shelf carve: hub/quests/smith + EEPROM save out of shipping) is
-**rejected**: quests (and the hub/smith they hang off) are required for the full
-game, so that code stays compiled into shipping and covered by the test builds.
-Remaining levers if more flash is needed: dead guard-zone cleanup (~52 B),
-part-art overlay carve (~390 B, loses broken-part visuals), audio carve
-(320 B), or another measured sweep. Current: 26980/29696 (2716 free).
+All prototypes reverted; no code committed. Ardens was available, so the item-3
+perf numbers above are real device-model captures (not N/A).
