@@ -45,7 +45,9 @@
 // with `&table[i].field`, so struct layout is whatever the target compiler
 // chose and no manual offset math is needed.
 #if defined(__AVR__)
-inline uint8_t mhPgmReadU8(const uint8_t *p) {
+// LPM byte read duplicated at many call sites; one out-of-line copy measured
+// -4 B whole-image.
+MH_NOINLINE inline uint8_t mhPgmReadU8(const uint8_t *p) {
     return pgm_read_byte(p);
 }
 inline int8_t mhPgmReadI8(const int8_t *p) {

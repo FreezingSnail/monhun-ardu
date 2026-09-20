@@ -1,126 +1,139 @@
-# monhun-ardu-fie.11 — Spike: single-interactive-part ceiling
+# monhun-ardu-fie.13 — trim: finish the Kiro byte-savings sweep
 
-Measurement only. No shipped data/code change. Baseline HEAD 43ed644, main tree
-clean before and after; `make gen-check` PASS. All builds used the shipping
-flags (`-mcall-prologues -mrelax -DMH_NO_USB`, FQBN
-`arduboy-homemade:avr:arduboy-fx`) and the packaged
-`avr-gcc/7.3.0-atmel3.6.1-arduino7/bin/avr-size`. Flash = `.text + .data`.
+Baseline HEAD `f0ac4f2`, tree clean before. Final: **flash 26980/29696 (2716
+free), RAM 1732/2560**. Net additional reclaim vs the 27188 baseline: **-208 B**.
+`make test` 5391/0, full `make fxtest-headless` 17/17 (log
+`build/fxtest13.log`), `make gen-check` PASS (82 generated artifacts
+unchanged). No behavior change intended; host + device suites green. No
+commit/push.
 
 ## Method / deviations
 
-- `git worktree add --detach build/spike-zones/monhun-ardu HEAD`. **Nested one
-  level** (not `build/spike-zones` itself): arduino-cli requires the sketch
-  folder basename to equal the main `.ino` name (`monhun-ardu`), else
-  `Can't open sketch: main file missing from sketch: .../spike-zones.ino`.
-- `Arduboy-Python-Utilities/` is gitignored (`.gitignore:34 Arduboy*`) and is
-  absent from a fresh worktree, so `tools/gen.sh` failed at `fxdata-build.py`;
-  symlinked it from the main tree into the worktree.
-- After any change that shifts `combat.bin` size, `tools/gen.sh` must run
-  **twice**: `gen-zones.py`/`gen-equipment.py` read the *existing*
-  `fxdata/fxdata.h` for symbol offsets (gen-zones.py `load_fxdata_symbols`), so
-  the first pass still sees the old image and the meta `static_assert`s fail on
-  the first build. Second pass converges (normal case: committed `fxdata.h` is
-  already current, hence single-pass `gen-check`).
-- `V2` is a bounded code experiment (resolver/seed/disable edits), not a
-  mergeable implementation; the sketch compiles, tests were not run.
+- One candidate at a time, whole-image `make size` delta, keep only wins,
+  revert losers. Scratch drivers in gitignored `build/`:
+  `gp2.awk` (portable hidden-register-base rewrite; Kiro's `gp.awk` used the
+  BSD-awk-unsupported `[[:<:]]` class and silently failed), `try_gp.sh`,
+  `try_ni.sh`; fresh disassembly `build/dis13.txt`, `build/disdl13.txt`.
+- LTO makes per-symbol arithmetic unreliable; every number below is a
+  whole-image `.text + .data` delta.
+- Host `make test` run after the first kept batch and again at the end; the
+  full device gate ran once at the end. `make size` re-run after `gen-check`.
+- No `/tmp`, no Python harness, no generated-file hand edits.
 
-## Per-variant build command
+## Kept candidates (final diff, 7 files)
 
-```sh
-AVRSZ=$HOME/Library/Arduino15/packages/arduino/tools/avr-gcc/7.3.0-atmel3.6.1-arduino7/bin/avr-size
-arduino-cli compile --fqbn "arduboy-homemade:avr:arduboy-fx" --optimize-for-debug \
-  --output-dir DIST \
-  --build-property "compiler.cpp.extra_flags=-mcall-prologues -mrelax -DMH_NO_USB ${EXTRA}" \
-  --build-property compiler.c.extra_flags="-mrelax" \
-  --build-property compiler.c.elf.extra_flags="-mrelax"
-$AVRSZ -A DIST/monhun-ardu.ino.elf
-```
+| Candidate | File | Kind | Delta |
+|---|---|---|---|
+| `applyDrift` sub-pixel carry via `fpCarry` (drops `tdiv` + `%FP`) | `player.hpp` | narrowing/reuse | **-52** |
+| `tapDefense` shove `mdx/mdy` int32 -> int16 (squares still int32) | `player.hpp` | narrowing | **-54** |
+| `drawPlayer` reach products `(int32_t)p.fx*reach` -> int16 | `render.hpp` | narrowing | **-34** |
+| `initMonster` hidden register base | `monster.hpp` | base ptr | **-44** |
+| `updateCamera` hidden register base | `world.hpp` | base ptr | **-8** |
+| `loadRoom` hidden register base | `world.hpp` | base ptr | **-2** |
+| `beginAttack` hidden register base | `player.hpp` | base ptr | **-2** |
+| `mhPgmReadU8` noinline | `progmem.hpp` | noinline | **-4** |
+| `attackWindowLoad` noinline (cold cart-load path) | `combat.hpp` | noinline | **-4** |
+| `shellPellets` noinline | `game.hpp` | noinline | **-4** |
 
-## Results
+Kept total -208 B (measured 27188 -> 26980, matches the sum of the
+independently-measured deltas).
 
-| Variant | flash | Δ vs 29258 | RAM | cart image | kept / lost |
-|---|---:|---:|---:|---:|---|
-| V0 baseline | 29258 | 0 | 1780 | 204153 | all |
-| V1 data-only 1 zone/beast (keep head) | 29258 | **0** | 1780 | 204117 (−36) | head kept; appendage gone on lunge/sweep/ravager (legs/hooves/tail break+disable); `ZONES_COUNT` 11→8 |
-| V1b = V1 + drop dead `p_enraged` | 29206 | **−52** | 1780 | — | same parts; `HAS_GUARD_ZONES`→false, `HAS_SIMPLE_GUARDS`→true |
-| V2 single-candidate resolver+seed+disable (approx) | 28886 | **−372** | 1780 | — | one part slot (needs heavy/pole remap to slot 0); whole zone machinery otherwise kept |
-| V2a resolver branch only | 28974 | −284 | 1780 | — | as above |
-| V3a data-strip all zones | 27890 | **−1368** | 1780 | combat.bin 1019→872 | `HAS_ZONES`→false; STAGGER + MULTI_WINDOW still true |
-| V3b `-DMH_COMBAT_PARTS=0` (upper bound) | 27774 | **−1484** | 1780 | — | zones + multi-window + stagger all carved |
-| V4 zone-art overlay carve (`-DMH_ZONE_ART=0`) | 28868 | **−390** | 1780 | — | hit/pool/break mechanics kept; loses broken/intact part overlays (legs/hooves/tail/head art) |
+## Reverted candidates (measured, then reverted)
 
-Decomposition from the measurements:
+### Base-pointer sweep (hidden register base, `gp2.awk`)
 
-- Whole zone machinery (`HAS_ZONES` false): **−1368**; of that the zones-broken
-  guard + simple-guard fast path is **−52**, so zone records/cache/resolve +
-  pole/overlay paths ≈ **−1316**.
-- Extra to reach the full parts carve (`MH_COMBAT_PARTS=0`): **−116**
-  (multi-window + stagger code).
-- RAM is **unchanged in every variant** (1780): `CombatState` is a fixed
-  83 B / 2-slot layout; removing zones/data does not shrink `.bss`.
-- Note: `flash` does not include the FX cart. V1 shrank the cart by only 36 B
-  (36× faster: 3×12 B zone records); the blob is flashed separately, so
-  data-only zone edits move **no** device flash.
+| Function | Delta | Result |
+|---|---|---|
+| `newGame` | +10 (neutral after `initMonster` split) | revert |
+| `creatureLoad` | +18 | revert |
+| `initGame` | +22 | revert |
+| `tryBranch` | +2 | revert |
+| `patternStepsSingle` | +16 | revert |
+| `syncMonsterTarget` | +18 | revert |
+| `initPoleKind` | +6 | revert |
+| `updateActiveTarget` | +4 | revert |
+| `armPoleTarget` | +12 | revert |
+| `startAttack` | +26 | revert |
+| `initWorld` | +32 | revert |
+| `updateEffects` | +18 | revert |
+| `updatePole` | +26 | revert |
+| `spawnShot` | +82 | revert |
+| `combatZoneHitResolveAt` | +2 | revert |
+| `monsterOnHit` | +10 | revert |
+| `playerHurt` | +166 | revert |
+| `addEffect` / `withWeapon` / `resetHunt` | 0 | revert |
+| `drawMonster` / `drawPlayer` / `drawHud` / `drawPole` / `drawProps` / `drawEffects` / `renderScene` (const base) | +168/+126/+60/+58/+26/+32/+32 | revert |
+| `drawProjectiles` / `drawDebug` / `drawRoom` (const base) | +2/0/0 | revert |
+| `appNavApply` / `menuStart` / `screenReset` | no direct `g.` access; not applied | n/a |
 
-## Recommendation
+Only cold functions with many direct `g.` writes win; warm/draw paths lose to
+register pressure (matches Kiro's `drawPlayer` note). `creatureLoad` /
+`initGame` / `newGame` lose because the win is eaten by base maintenance and
+caller inlining.
 
-**Single-part specialization is not an honest lever.** Data-only single-zone is
-exactly **0 B** of device flash (−36 B cart). A real body+1-part refactor
-(current bounded approximation: one resolver candidate, one seed, one
-disable-check) is only **−372 B**, i.e. ~25% of the full −1484 carve, and still
-requires the entire zone resolve/cache/render stack plus remapping heavy/pole's
-single zone to slot 0, collapsing the two broken bits, and updating render,
-`static_assert`s and `tst/`. Owner keeps the one interactive part, so the
-−1368/−1484 numbers are unreachable.
+### Noinline sweep
 
-The honest smaller levers (no mechanic loss):
+| Function | Delta | Result |
+|---|---|---|
+| `cos256` | -2 | revert (hot render math; not worth the call) |
+| `partSheet` | +2 | revert |
+| `mhFxReadI16` | +4 | revert |
+| `combatReadBytes` | +6 | revert |
+| `shellReload` / `shellStam` | +6 | revert |
+| `bodyRect` | +64 | revert |
+| `hudBlk` | +38 | revert |
+| `combatMulPercent` | +16 | revert |
+| `attackStartup` | +4 | revert |
+| `attackActive` / `attackReach` / `combatReadU8` / `mhFxReadU8` | 0 | revert |
+| `questTakeable` | +30 | revert |
+| `questReady` | +54 | revert |
+| `weaponHasChargeShells` | +8 | revert |
+| `weaponCanCancel` | +4 | revert |
+| `combatCreatureFirstAttack` | +10 | revert |
+| `saveChecksum` | +48 | revert |
+| `screenRowNext` | +6 | revert |
+| `weaponId` / `shellCount` | +4 | revert |
+| `mhFxReadBool` | +10 | revert |
+| `combatFacingLockV` | +18 | revert |
+| `mhPgmReadI16` | +4 | revert |
+| `saveQuestBit` | +24 | revert |
+| `questDone` | +60 | revert |
 
-- **V4 part-art overlay carve −390 B** — wrap the `drawZonePart` block in
-  `src/render.hpp` (≈ lines 708–721) behind a `MH_ZONE_ART`/`HAS_ZONES`-style
-  carve. Hit tests, pools, break bits, disables and the stagger meter all stay;
-  only the intact/broken part overlay art is dropped. Trade: the `part_break`
-  visual cue is gone (owner-visible), and pole break art is separate and stays.
-- **Guard data cleanup −52 B** — with a single zone per beast the
-  `p_enraged` `zonesBroken:["appendage"]` guard is dead data; removing it flips
-  `HAS_GUARD_ZONES` false / `HAS_SIMPLE_GUARDS` true (fast guard path).
-- V4 + guard cleanup ≈ **−442 B** with the one-part mechanic intact.
+LTO already inlines the small helpers well; forcing them out-of-line grows the
+image except for the three accessors kept above.
 
-For the remaining headroom the levers are elsewhere: full
-zones/multi-window/stagger carve is −1484 (rejected), so shelf/audio/player-
-feature carves are the larger honest targets. Exact commands above; V2 edits
-were reverted.
+### Narrowing / other
 
-## Hygiene
+| Candidate | Delta | Result |
+|---|---|---|
+| `drawPlayer` ANG `uint32_t` -> `uint16_t` (low byte identical) | 0 | revert |
+| `updateMonster` delta `dx/dy` int32 -> int16 (isqrt product stays int32) | 0 | revert |
+| `drawMonster` windup flash `% 2` -> `& 1` | 0 | revert (GCC already optimises power-of-two `%`) |
+| `monster` hpPct `(uint32_t)hp*100/hpMax` narrowing | not applied | no provable 16-bit bound (hp*100 can exceed 65535) |
 
-- `git worktree remove --force build/spike-zones/monhun-ardu`; parent
-  `build/spike-zones` removed. `git worktree list` shows only main +
-  the pre-existing `mh-baseline`.
-- Main tree `git status --short` clean after removal; `make gen-check` →
-  `fxdata_manifest: PASS (82 generated artifacts unchanged)`.
-- No /tmp, no float, no generated-file hand edits in the main tree. No commit.
+## Remaining 32-bit helper call sites (callers.awk, post-change)
 
----
+- `main` `__divmodhi4` x7, `__udivmodhi4` x1, `__divmodsi4` x1: constant/runtime
+  divisions inside inlined render (charge-bar `/20`, effect `/3`, bar-fill
+  `/u16den`/`/u16rmax`). Not power-of-two and not provably narrowable; left.
+- `updateMonster` `__mulhisi3` x2 (the `isqrt(dx*dx+dy*dy)` products, already
+  the cheapest 16x16->32 form) and `__divmodhi4` x2 + `__udivmodhi4` x1
+  (`% jitter`, `% 2`, `/ circleDen`); `% 2` is already optimised, the others are
+  genuine runtime moduli.
+- `updatePlayer` `__mulhisi3` x2: the same `isqrt` product.
+- `combatZoneHitResolveAt` `__udivmodsi4` x2 / `__muluhisi3` / `__mulsi3`:
+  uint32 percent scaling; `base` is clamped to 0xFFFF, so a 16-bit product is
+  not provably safe.
 
-# NOTE — flash reclaim plan (owner decision, 2026-09-19)
+## Perf (test_perf, whole-image)
 
-Decision: **keep at least one interactive/breakable part per beast** — it is a
-core mechanic and does not get carved. Consequence of `fie.11`: parts are FX
-cart data, so reducing two zones to one per creature is worth **0 B of MCU
-flash**; a code specialization to a single part slot would reclaim only ~372 B
-and is not worth the churn. The zone framework stays as-is.
+`pUs 6371 -> 6372`, `pHz 156`, `lHz 52`, `lTk 452`, `rMx 4768 -> 4772`,
+`rAv 4582 -> 4587`, `ram 595`. The noinline accessors cost ~5 us/render pass
+well inside the gate.
 
-Measured levers (shipping 29258/29696, 438 B free):
+## Conclusion
 
-| # | lever | reclaim | cost |
-|---|---|---:|---|
-| 1 | dead guard-zone data cleanup | ~52 B | none |
-| 2 | shelf carve: hub/quests/smith + EEPROM save | ~400-700 B est. | none on demo path; measure first |
-| 3 | part-art overlay carve (`drawZonePart`+`partDraw`) | ~390 B | broken-part visuals lost; mechanic kept |
-| 4 | `MH_AUDIO=0` | 320 B | all cue tones lost |
-| 5 | player-feature carves (charge/sheathe/stances/riposte/whirl/gun reload) | 100-500 B each | gameplay trade, per-feature spike |
-
-Not levers: zone count/data (0 B), full zone strip (-1368 B but kills the
-mechanic), multi-window/stagger/guard (~116 B), per-room bounds (~250 B).
-
-Planned order: 1 + 2 first (no gameplay loss), then decide 3 vs 4 vs 5 against
-the next feature's budget (vx2 art / equipment 05x).
+Net -208 B with all gates green. The base-pointer and noinline wells are dry
+beyond the kept list (documented above with measured losses); the remaining
+reclaimable bytes are the runtime constant divisions in render, which are not
+provably narrowable without a behavior change.

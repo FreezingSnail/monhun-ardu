@@ -907,7 +907,9 @@ inline uint8_t creatureLoad(Game &g, uint8_t creatureId) {
 
 // attackWindowLoad: refresh the cached window during the active phase. This is
 // the only mid-attack cart read; per-tick active code consumes the cache.
-inline void attackWindowLoad(Game &g, uint8_t windowIdx) {
+// Out-of-line: shipped attacks declare one window, so this only runs on the
+// cart-load path (measured -4 B).
+MH_NOINLINE inline void attackWindowLoad(Game &g, uint8_t windowIdx) {
     if (windowIdx >= combat::WINDOWS_COUNT)
         return;
     g.combat.attack.winIdx = windowIdx;

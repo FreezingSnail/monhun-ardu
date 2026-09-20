@@ -408,7 +408,7 @@ inline int16_t shellReload(const ShellDef *s) {
 inline int16_t shellStam(const ShellDef *s) {
     return mhFxReadI16(&s->stam);
 }
-inline int8_t shellPellets(const ShellDef *s) {
+MH_NOINLINE inline int8_t shellPellets(const ShellDef *s) {
     return mhFxReadI8(&s->pellets);
 }
 

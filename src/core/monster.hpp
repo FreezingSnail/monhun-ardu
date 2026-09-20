@@ -264,23 +264,28 @@ static void monsterOnStun(Game &g, uint8_t ticks) {
 // those values). The combat caches are reset to this creature's identity; the
 // attack cache stays empty until the pattern interpreter loads one.
 static void initMonster(Game &g, int8_t kind = 0) {
+    // Hidden register base (same trick as updatePlayer/updateMonster): spawn is
+    // cold, so the ldd/std addressing is a pure size win here. Measured -44 B
+    // whole-image; the callees still take `g` directly.
+    Game *gp = &g;
+    __asm__("" : "+r"(gp));
     if (kind < 0 || kind > MON_RAVAGER)
         kind = 0;
-    g.monsterKind = kind;
+    gp->monsterKind = kind;
     const uint8_t creatureId = creatureLoad(g, monsterCreatureId(kind));
     const CombatSpawn spawn = combatCreatureSpawnRead(creatureId);
-    Monster &m = g.monster;
+    Monster &m = gp->monster;
     m.x = static_cast<int16_t>(spawn.x);
     m.y = static_cast<int16_t>(spawn.y);
-    m.w = g.combat.body.w;
-    m.h = g.combat.body.h;
+    m.w = gp->combat.body.w;
+    m.h = gp->combat.body.h;
     m.subX = 0;
     m.subY = 0;
     m.hp = static_cast<int16_t>(spawn.hp);
     m.hpMax = m.hp;
     m.state = MS_IDLE;
-    m.t = static_cast<int16_t>(g.combat.profile.spawnT);
-    m.cd = static_cast<int16_t>(g.combat.profile.spawnCd);
+    m.t = static_cast<int16_t>(gp->combat.profile.spawnT);
+    m.cd = static_cast<int16_t>(gp->combat.profile.spawnCd);
     m.fx = -fp::FP;
     m.fy = 0;   // face W
     m.atkIdx = COMBAT_NO_ATTACK;
@@ -293,10 +298,10 @@ static void initMonster(Game &g, int8_t kind = 0) {
     m.circleDir = 1;
     m.spd = spawn.spd;
     m.faceT = 0;   // nch.4: refresh facing on the first update tick
-    g.over = OVER_NONE;
-    g.target.onHit = monsterOnHit;
-    g.target.onShove = monsterOnShove;
-    g.target.onStun = monsterOnStun;
+    gp->over = OVER_NONE;
+    gp->target.onHit = monsterOnHit;
+    gp->target.onShove = monsterOnShove;
+    gp->target.onStun = monsterOnStun;
     syncMonsterTarget(g);
 }
 

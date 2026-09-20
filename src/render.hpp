@@ -880,8 +880,11 @@ static void drawPlayer(const mh::Game &g, int16_t camX, int16_t camY) {
                 int16_t reach = mh::attackReach(a);
                 if (phase != 1)
                     reach = static_cast<int16_t>(reach * 6 / 10);   // mock 0.6 arc
-                const int16_t hx = static_cast<int16_t>(cx + (((int32_t)p.fx * reach) >> 4));
-                const int16_t hy = static_cast<int16_t>(cy + (((int32_t)p.fy * reach) >> 4));
+                // int16 product on purpose: |p.fx|,|p.fy| <= 16 (DIR8 unit) and
+                // reach is a pixel reach from the attack record (< 256), so the
+                // 16-bit multiply stays inside int16 and no int32 cast is needed.
+                const int16_t hx = static_cast<int16_t>(cx + ((p.fx * reach) >> 4));
+                const int16_t hy = static_cast<int16_t>(cy + ((p.fy * reach) >> 4));
                 const int16_t hw = mh::attackHw(a);
                 const int16_t hh = mh::attackHh(a);
                 // Attack slot -> slash frame (VARIANT_SWORD_SLASH): combo chain
@@ -931,9 +934,9 @@ static void drawPlayer(const mh::Game &g, int16_t camX, int16_t camY) {
                     // the 4x4 white chip, both at the mock's exact positions.
                     for (int8_t i = 1; i <= 3; i++) {
                         const int16_t rr = static_cast<int16_t>((reach * i) >> 2);
-                        partDraw(equip::PART_FLAIL_CHAIN, equip::POSE_IDLE, face, static_cast<int16_t>(cx + (((int32_t)p.fx * rr) >> 4)), static_cast<int16_t>(cy + (((int32_t)p.fy * rr) >> 4)));
+                        partDraw(equip::PART_FLAIL_CHAIN, equip::POSE_IDLE, face, static_cast<int16_t>(cx + ((p.fx * rr) >> 4)), static_cast<int16_t>(cy + ((p.fy * rr) >> 4)));
                     }
-                    partDraw(equip::PART_CHIP_BALL, equip::POSE_IDLE, face, static_cast<int16_t>(cx + (((int32_t)p.fx * reach) >> 4)), static_cast<int16_t>(cy + (((int32_t)p.fy * reach) >> 4)));
+                    partDraw(equip::PART_CHIP_BALL, equip::POSE_IDLE, face, static_cast<int16_t>(cx + ((p.fx * reach) >> 4)), static_cast<int16_t>(cy + ((p.fy * reach) >> 4)));
                 }
             } else {
                 partDraw(equip::PART_FLAIL_CHAIN, equip::POSE_IDLE, face, static_cast<int16_t>(cx + ((p.fx * 4) >> 4)), static_cast<int16_t>(cy + ((p.fy * 4) >> 4)));

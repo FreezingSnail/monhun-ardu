@@ -156,10 +156,11 @@ static void movePlayer(Player &p, int8_t mx, int8_t my, uint8_t spd, bool lockFa
 static void applyDrift(Player &p, uint8_t mult = 13) {
     p.subX += p.vx;
     p.subY += p.vy;
-    p.x += fp::tdiv(p.subX, fp::FP);
-    p.y += fp::tdiv(p.subY, fp::FP);
-    p.subX %= fp::FP;
-    p.subY %= fp::FP;
+    // Same sub-pixel carry as addVel(): |vx|,|vy| <= 54 (Player velocity bound)
+    // keeps subX/subY inside int8, so fpCarry's shift replaces tdiv + %FP and
+    // drops two __divmodhi4 calls (measured -52 B whole-image).
+    fp::fpCarry(p.subX, p.x);
+    fp::fpCarry(p.subY, p.y);
     const int16_t avx = p.vx < 0 ? static_cast<int16_t>(-p.vx) : p.vx;
     const int16_t avy = p.vy < 0 ? static_cast<int16_t>(-p.vy) : p.vy;
     const int16_t ax = static_cast<int16_t>((avx * mult) / 16);
@@ -185,7 +186,9 @@ static void applyLunge(Player &p, const Attack *a) {
 // Shared attack-entry tail: pay the move's stamina with the mock's clamp, then
 // arm the attack. Callers keep their own guards and state clears around this.
 static void beginAttack(Game &g, const Attack *a) {
-    Player &p = g.player;
+    Game *gp = &g;   // hidden base: keeps the Player access displaced (measured -2 B)
+    __asm__("" : "+r"(gp));
+    Player &p = gp->player;
     const int16_t stam = attackStam(a);
     p.stam = (stam >= p.stam) ? 0 : static_cast<uint8_t>(p.stam - stam);
     p.state = PS_ATTACK;
@@ -475,10 +478,14 @@ static void tapDefense(Game &g, const WeaponDef *def, const Input &inp) {
         exitStance(p);
         if (g.target.alive) {
             const Rect &m = g.target.rect;
-            const int32_t mdx = (m.x + (m.w >> 1)) - (p.x + (p.w >> 1));
-            const int32_t mdy = (m.y + (m.h >> 1)) - (p.y + (p.h >> 1));
-            const int32_t dist = fp::isqrt(mdx * mdx + mdy * mdy);
-            const int32_t dot = (mdx * p.fx + mdy * p.fy) >> 4;   // px along facing
+            // int16 delta: both centres sit in a <= 256 px room with <= 128 px
+            // bodies, so |mdx|,|mdy| <= 384. The squares still need int32 (384^2
+            // overflows int16) but the 16x16->32 multiply is cheaper than the
+            // 32x32 one; dot's products fit int16 (384*16 = 6144).
+            const int16_t mdx = static_cast<int16_t>((m.x + (m.w >> 1)) - (p.x + (p.w >> 1)));
+            const int16_t mdy = static_cast<int16_t>((m.y + (m.h >> 1)) - (p.y + (p.h >> 1)));
+            const int16_t dist = fp::isqrt(static_cast<int32_t>(mdx) * mdx + static_cast<int32_t>(mdy) * mdy);
+            const int16_t dot = static_cast<int16_t>((mdx * p.fx + mdy * p.fy) >> 4);   // px along facing
             if (dist > 0 && dist < 38 && dot * 5 > dist * 2) {
                 const int8_t di = fp::dirIndexFromDelta(mdx, mdy);
                 if (g.target.onShove)

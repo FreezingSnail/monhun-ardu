@@ -39,8 +39,13 @@ MH_NOINLINE static int16_t camMaxY(const Game &g) {
 // Every operand is an int (w/2, SCREEN_W/2 and ARENA_H/2 are exact), so this
 // matches the mock's float expression exactly.
 static void updateCamera(Game &g) {
-    int16_t tx = static_cast<int16_t>(g.player.x + (g.player.w >> 1) - (SCREEN_W >> 1));
-    int16_t ty = static_cast<int16_t>(g.player.y + (g.player.h >> 1) - (ARENA_H >> 1));
+    // Hidden register base: camera runs every tick but touches g.player/g.camX/
+    // g.camY only, so the ldd/std form beats the absolute 4-byte lds/sts without
+    // register pressure (measured -8 B). camMaxX/Y still take `g`.
+    Game *gp = &g;
+    __asm__("" : "+r"(gp));
+    int16_t tx = static_cast<int16_t>(gp->player.x + (gp->player.w >> 1) - (SCREEN_W >> 1));
+    int16_t ty = static_cast<int16_t>(gp->player.y + (gp->player.h >> 1) - (ARENA_H >> 1));
     const int16_t mx = camMaxX(g);
     const int16_t my = camMaxY(g);
     if (tx < 0)
@@ -51,8 +56,8 @@ static void updateCamera(Game &g) {
         ty = 0;
     else if (ty > my)
         ty = my;
-    g.camX = tx;
-    g.camY = ty;
+    gp->camX = tx;
+    gp->camY = ty;
 }
 
 // Mock activeTarget(): the pole in train, the live beast in hunt, null once the
@@ -99,6 +104,10 @@ static inline Rect bodyRect(const Player &p) {
 // beast. `spawn` is a global spawn index (zone::SPAWN_*); invalid ids fall back
 // to room 0 / spawn 0. Carved out of the parity image (no room scenes there).
 static void loadRoom(Game &g, uint8_t roomId, uint8_t spawn) {
+    // Hidden register base: the room install writes 20 g fields, so the
+    // displaced ldd/std addressing wins (measured -2 B). Callees take `g`.
+    Game *gp = &g;
+    __asm__("" : "+r"(gp));
     if (!ROOM_BOUNDS_ENABLED)
         return;
     if (roomId >= zone::ROOMS_COUNT)
@@ -106,32 +115,32 @@ static void loadRoom(Game &g, uint8_t roomId, uint8_t spawn) {
     if (spawn >= zone::SPAWNS_COUNT)
         spawn = 0;
     const ZoneRoom room = zoneRoomRead(roomId);
-    g.roomId = roomId;
-    g.roomW = static_cast<int16_t>(room.w);
-    g.roomH = static_cast<int16_t>(room.h);
-    g.roomFirstDoor = room.firstDoor;
-    g.roomDoorCount = room.doorCount;
-    g.roomFirstHeal = room.firstHeal;
-    g.roomHealCount = room.healCount;
-    g.roomFirstProp = room.firstProp;
-    g.roomPropCount = room.propCount;
-    g.roomMonsterKind = room.monsterKind;
+    gp->roomId = roomId;
+    gp->roomW = static_cast<int16_t>(room.w);
+    gp->roomH = static_cast<int16_t>(room.h);
+    gp->roomFirstDoor = room.firstDoor;
+    gp->roomDoorCount = room.doorCount;
+    gp->roomFirstHeal = room.firstHeal;
+    gp->roomHealCount = room.healCount;
+    gp->roomFirstProp = room.firstProp;
+    gp->roomPropCount = room.propCount;
+    gp->roomMonsterKind = room.monsterKind;
 
     const ZoneSpawn sp = zoneSpawnRead(spawn);
-    g.player.x = static_cast<int16_t>(sp.x);
-    g.player.y = static_cast<int16_t>(sp.y);
-    g.player.subX = 0;
-    g.player.subY = 0;
-    g.player.vx = 0;
-    g.player.vy = 0;
+    gp->player.x = static_cast<int16_t>(sp.x);
+    gp->player.y = static_cast<int16_t>(sp.y);
+    gp->player.subX = 0;
+    gp->player.subY = 0;
+    gp->player.vx = 0;
+    gp->player.vy = 0;
 
-    g.projN = 0;   // clear projectiles / effects (mock newGame's transient state)
-    g.fxN = 0;
-    g.lastShot = 0;
+    gp->projN = 0;   // clear projectiles / effects (mock newGame's transient state)
+    gp->fxN = 0;
+    gp->lastShot = 0;
 
-    updateCamera(g);       // clamp the follow to the new room's extents
-    g.doorLatch = true;    // suppress doors until the spawn rect is left
-    g.fade = FADE_TICKS;   // render black-wipe on arrival (no cart traffic)
+    updateCamera(g);         // clamp the follow to the new room's extents
+    gp->doorLatch = true;    // suppress doors until the spawn rect is left
+    gp->fade = FADE_TICKS;   // render black-wipe on arrival (no cart traffic)
     // Re-arm the target for the arrival room: a safe room clears it, a beast
     // room re-wires the monster callbacks (a prior safe load nulled them, and
     // the per-tick syncMonsterTarget only refreshes alive/rect, so without this
