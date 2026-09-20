@@ -128,3 +128,12 @@ A global-only core means no function can be handed a different `Game`:
 - Main tree clean after (`git status --short` empty, HEAD `e666bdb`).
 - `make gen-check`: **PASS (82 generated artifacts unchanged)**.
 - No `/tmp`, no float, no commit/push.
+
+## Update 2026-09-19 — shelf carve rejected
+
+Lever 2 (shelf carve: hub/quests/smith + EEPROM save out of shipping) is
+**rejected**: quests (and the hub/smith they hang off) are required for the full
+game, so that code stays compiled into shipping and covered by the test builds.
+Remaining levers if more flash is needed: dead guard-zone cleanup (~52 B),
+part-art overlay carve (~390 B, loses broken-part visuals), audio carve
+(320 B), or another measured sweep. Current: 26980/29696 (2716 free).
