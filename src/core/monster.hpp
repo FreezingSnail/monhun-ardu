@@ -330,6 +330,17 @@ static bool patternGuardFull(Game &g, uint8_t patternIdx, uint8_t dist) {
     in.tick = static_cast<uint16_t>(g.tick);
     in.sinceUse = 0xFFFF;   // cooldown guards: profile cd gates decisions today
     in.stepIdx = 0;
+    // Facing clause (HAS_GUARD_FACING): player-centre offset projected on the
+    // beast's 1/16 facing vector, body centres mirroring the dist math above.
+    // Decision-time only; folds out while no shipped guard declares a facing.
+    in.facingDot = 0;
+    if (combat::HAS_GUARD_FACING) {
+        const int16_t px = static_cast<int16_t>(g.player.x + (g.player.w >> 1));
+        const int16_t py = static_cast<int16_t>(g.player.y + (g.player.h >> 1));
+        const int16_t mx = static_cast<int16_t>(m.x + (m.w >> 1));
+        const int16_t my = static_cast<int16_t>(m.y + (m.h >> 1));
+        in.facingDot = combatFacingDot(px, py, mx, my, m.fx, m.fy);
+    }
     return combatGuardPasses(g, patternIdx, in);
 }
 

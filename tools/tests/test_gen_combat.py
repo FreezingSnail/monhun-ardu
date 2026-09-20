@@ -106,7 +106,7 @@ class GenCombatTests(unittest.TestCase):
         self.assertIn("zone appendage: box(-6,4,8,4) dmgMul 150 hp 30 share 40 break 0x01 stagger 20 brokenOverride 200 hurtOff 1 disable jab", result.stdout)
         self.assertIn("attack jab: windup20 active6 recover30 dmg7 move lunge(20) windows 1", result.stdout)
         self.assertIn("window 0: t[0,6] box(8,0,12,10) dmgMul 100", result.stdout)
-        self.assertIn("pattern p_jab: guard minDist0 maxDist36 hp[0,100] player0x01 cd0 chance100 zonesBroken appendage", result.stdout)
+        self.assertIn("pattern p_jab: guard minDist0 maxDist36 hp[0,100] player0x01 cd0 chance100 zonesBroken appendage facing any", result.stdout)
         self.assertIn("step 0: ATK beast.jab after2 chance100", result.stdout)
         self.assertIn("step 1: WAIT 5 after0", result.stdout)
         self.assertFalse(os.path.exists(self.path(BLOB_REL)))
@@ -180,6 +180,31 @@ class GenCombatTests(unittest.TestCase):
         meta = self.meta_constants()
         attack = blob[meta["ATTACK_BEAST_JAB_OFF"]:meta["ATTACK_BEAST_JAB_OFF"] + meta["ATTACK_SIZE"]]
         self.assertEqual(attack[4], 2)
+
+    def test_guard_facing_unknown_value_rejected(self):
+        self.mutate("data/creatures/beast.json",
+                    lambda doc: doc["patterns"][0]["guard"].__setitem__("facing", "sideways"))
+        self.assert_fails(self.compile(),
+                          "guard: facing: unknown value 'sideways' (want one of behind, front)")
+
+    def test_guard_facing_encodes_behind_front_and_fact(self):
+        # Guard facing clause: behind = 1, front = 2 in the guard record's 9th
+        # byte (after zonesBroken); the fact flips true once a shipped guard uses it.
+        self.assert_succeeds(self.compile())
+        meta = self.meta_constants()
+        off = meta["GUARD_BEAST_P_JAB_OFF"]
+        self.assertEqual(self.blob()[off + 8], 0, "facing defaults to any")
+        self.assertIn("constexpr bool HAS_GUARD_FACING = false;", self.read(META_REL))
+        self.mutate("data/creatures/beast.json",
+                    lambda doc: doc["patterns"][0]["guard"].__setitem__("facing", "behind"))
+        self.assert_succeeds(self.compile())
+        self.assertEqual(self.blob()[off + 8], 1, "behind emits 1")
+        self.assertIn("constexpr bool HAS_GUARD_FACING = true;", self.read(META_REL))
+        self.assertIn("facing behind", self.compile("--dump").stdout)
+        self.mutate("data/creatures/beast.json",
+                    lambda doc: doc["patterns"][0]["guard"].__setitem__("facing", "front"))
+        self.assert_succeeds(self.compile())
+        self.assertEqual(self.blob()[off + 8], 2, "front emits 2")
 
     def test_unknown_zone_rejected(self):
         def add_zone(doc):
@@ -294,6 +319,7 @@ class GenCombatTests(unittest.TestCase):
             "HAS_GUARD_COOLDOWN": "false",
             "HAS_GUARD_CHANCE": "false",
             "HAS_GUARD_ZONES": "true",
+            "HAS_GUARD_FACING": "false",
         }
         self.assertEqual(facts, expected)
 
@@ -372,7 +398,7 @@ class GenCombatTests(unittest.TestCase):
         pattern = blob[meta["PATTERN_BEAST_P_JAB_OFF"]:meta["PATTERN_BEAST_P_JAB_OFF"] + meta["PATTERN_SIZE"]]
         self.assertEqual(pattern, bytes([0, 2, 0]))
         guard = blob[meta["GUARD_BEAST_P_JAB_OFF"]:meta["GUARD_BEAST_P_JAB_OFF"] + meta["GUARD_SIZE"]]
-        self.assertEqual(guard, bytes([0, 36, 0, 100, 1, 0, 100, 2]))   # zone bit 2 = appendage
+        self.assertEqual(guard, bytes([0, 36, 0, 100, 1, 0, 100, 2, 0]))   # zone bit 2 = appendage; facing any
 
         step0 = blob[meta["STEP_BEAST_P_JAB_0_OFF"]:meta["STEP_BEAST_P_JAB_0_OFF"] + meta["STEP_SIZE"]]
         self.assertEqual(step0, bytes([0, 0, 2, 100]))

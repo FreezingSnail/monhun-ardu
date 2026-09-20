@@ -442,6 +442,7 @@ void CombatPackSuite(TestRunner &runner) {
             t.assert(b8(blob, o + 5), h.cooldown, "blob guard cooldown");
             t.assert(b8(blob, o + 6), h.chance, "blob guard chance");
             t.assert(b8(blob, o + 7), h.zonesBroken, "blob guard zonesBroken");
+            t.assert(b8(blob, o + 8), h.facing, "blob guard facing");
         }
         for (uint8_t i = 0; i < combat::STEPS_COUNT; i++) {
             const size_t o = static_cast<size_t>(combat::STEPS_OFF) + i * combat::STEP_SIZE;

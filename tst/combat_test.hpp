@@ -381,6 +381,7 @@ void CombatSuite(TestRunner &runner) {
             t.assert(g.cooldown, h.cooldown, "guard cooldown");
             t.assert(g.chance, h.chance, "guard chance");
             t.assert(g.zonesBroken, h.zonesBroken, "guard zonesBroken");
+            t.assert(g.facing, h.facing, "guard facing");
         }
         for (uint8_t i = 0; i < combat::STEPS_COUNT; i++) {
             const CombatStep s = combatStepRead(i);
@@ -598,6 +599,30 @@ void CombatSuite(TestRunner &runner) {
         t.assert(combatGuardZonesOk(COMBAT_ZONE_APPENDAGE_BIT, COMBAT_ZONE_APPENDAGE_BIT), 1, "required zone broken");
         t.assert(combatGuardZonesOk(COMBAT_ZONE_APPENDAGE_BIT, COMBAT_ZONE_HEAD_BIT), 0, "wrong zone broken");
         t.assert(combatGuardZonesOk(COMBAT_ZONE_HEAD_BIT | COMBAT_ZONE_APPENDAGE_BIT, COMBAT_ZONE_APPENDAGE_BIT), 0, "one of two missing");
+        suite.addTest(t);
+    }
+
+    {
+        Test t("guard facing: behind/front/edge + dot sign (west-facing beast)");
+        // Any clause always passes, whatever the dot.
+        t.assert(combatGuardFacingOk(GUARD_FACING_ANY, -5), 1, "any ignores behind");
+        t.assert(combatGuardFacingOk(GUARD_FACING_ANY, 0), 1, "any ignores abeam");
+        t.assert(combatGuardFacingOk(GUARD_FACING_ANY, 7), 1, "any ignores front");
+        // Behind: negative dot only; front: positive only; dot 0 matches neither.
+        t.assert(combatGuardFacingOk(GUARD_FACING_BEHIND, -1), 1, "behind accepts negative");
+        t.assert(combatGuardFacingOk(GUARD_FACING_BEHIND, 0), 0, "behind rejects abeam");
+        t.assert(combatGuardFacingOk(GUARD_FACING_BEHIND, 1), 0, "behind rejects front");
+        t.assert(combatGuardFacingOk(GUARD_FACING_FRONT, 1), 1, "front accepts positive");
+        t.assert(combatGuardFacingOk(GUARD_FACING_FRONT, 0), 0, "front rejects abeam");
+        t.assert(combatGuardFacingOk(GUARD_FACING_FRONT, -1), 0, "front rejects behind");
+        // Dot math on body centres: a west-facing beast (fx=-16, fy=0) sees a
+        // player to its east (px > mx) as behind (negative), to its west as front
+        // (positive); a player in the same column is dead abeam (0).
+        t.assert(combatFacingDot(40, 20, 20, 20, -16, 0), -20, "west beast, east player behind");
+        t.assert(combatFacingDot(0, 20, 20, 20, -16, 0), 20, "west beast, west player front");
+        t.assert(combatFacingDot(20, 20, 20, 20, -16, 0), 0, "west beast, same column abeam");
+        t.assert(combatFacingDot(40, 20, 20, 20, 16, 0), 20, "east beast, east player front");
+        t.assert(combatFacingDot(40, 40, 20, 20, -16, 0), -20, "vertical offset ignored when facing west");
         suite.addTest(t);
     }
 

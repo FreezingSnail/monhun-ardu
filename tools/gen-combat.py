@@ -39,8 +39,9 @@ Blob layout (little-endian, explicit u8/u16, no padding, fixed section order):
                      recover u16, dmg u16
     window     10 B  t0 u16, t1 u16, box(ox i8, oy i8, w, h), dmgMul, flags
     pattern     3 B  firstStep, stepCount, guardIdx
-    guard       8 B  minDist, maxDist, hpLo, hpHi, playerFlags, cooldown,
-                     chance, zonesBroken (bitmask)
+    guard       9 B  minDist, maxDist, hpLo, hpHi, playerFlags, cooldown,
+                     chance, zonesBroken (bitmask), facing (0 any / 1 behind /
+                     2 front)
     step        4 B  kind (0 ATK / 1 WAIT), ref (attackIdx or ticks), after,
                      chance
 
@@ -77,6 +78,8 @@ PHYS = {"SLASH": 0x01, "BLUNT": 0x02, "SHOT": 0x04}
 ELEMS = {"NONE": 0, "FIRE": 1, "WATER": 2, "ICE": 3, "THUNDER": 4}
 MOVE_TYPES = {"none": 0, "lunge": 1, "charge": 2, "hop": 3}
 FACINGS = {"track": 0, "lock-at-windup": 1, "lock-away": 2}
+# Guard facing clause: player position relative to the beast's facing vector.
+GUARD_FACINGS = {"behind": 1, "front": 2}
 ON_HIT_EFFECTS = {"none": 0, "trip": 1, "stun": 2}
 CUES = {"none": 0, "windup": 1, "part_break": 2}
 STEP_ATK = 0
@@ -99,7 +102,7 @@ SIZES = {
     "ATTACK": 22,
     "WINDOW": 10,
     "PATTERN": 3,
-    "GUARD": 8,
+    "GUARD": 9,
     "STEP": 4,
 }
 SECTION_RECORD = {
@@ -387,10 +390,10 @@ def normalize_attack(errors, ctx, obj):
 
 
 def normalize_guard(errors, ctx, obj):
-    guard = {"minDist": 0, "maxDist": 255, "hpLo": 0, "hpHi": 100, "playerFlags": 0, "cooldown": 0, "chance": 100, "zonesBroken": []}
+    guard = {"minDist": 0, "maxDist": 255, "hpLo": 0, "hpHi": 100, "playerFlags": 0, "cooldown": 0, "chance": 100, "zonesBroken": [], "facing": 0}
     if obj is None:
         return guard
-    check_keys(errors, ctx, obj, set(), {"minDist", "maxDist", "hpBand", "zonesBroken", "player", "cooldown", "chance"})
+    check_keys(errors, ctx, obj, set(), {"minDist", "maxDist", "hpBand", "zonesBroken", "player", "cooldown", "chance", "facing"})
     guard["minDist"] = read_int(errors, ctx, obj, "minDist", 0, 255, default=0)
     guard["maxDist"] = read_int(errors, ctx, obj, "maxDist", 0, 255, default=255)
     if guard["minDist"] is not None and guard["maxDist"] is not None and guard["minDist"] > guard["maxDist"]:
@@ -429,6 +432,7 @@ def normalize_guard(errors, ctx, obj):
                 guard["playerFlags"] |= 0x01
     guard["cooldown"] = read_int(errors, ctx, obj, "cooldown", 0, 255, default=0)
     guard["chance"] = read_int(errors, ctx, obj, "chance", 0, 100, default=100)
+    guard["facing"] = read_enum(errors, ctx, obj, "facing", GUARD_FACINGS, default=0)
     return guard
 
 
@@ -968,6 +972,7 @@ def pack_model(errors, model):
             u8(guard["cooldown"] if guard["cooldown"] is not None else 0),
             u8(guard["chance"] if guard["chance"] is not None else 100),
             u8(entry["zones_mask"]),
+            u8(guard["facing"]),
         ]))
 
     # steps
@@ -1093,6 +1098,7 @@ def emit_data_header(model, compiled):
     app("struct Guard {")
     app("    uint8_t minDist, maxDist, hpLo, hpHi, playerFlags, cooldown, chance;")
     app("    uint8_t zonesBroken;")
+    app("    uint8_t facing;   // 0 any, 1 behind, 2 front");
     app("};")
     app("")
     app("struct Step {")
@@ -1188,13 +1194,13 @@ def emit_data_header(model, compiled):
         elif section == "GUARDS":
             for entry in layout["guards"]:
                 guard = entry["guard"]
-                app("    {%d, %d, %d, %d, %d, %d, %d, %d}," % (
+                app("    {%d, %d, %d, %d, %d, %d, %d, %d, %d}," % (
                     guard["minDist"] if guard["minDist"] is not None else 0,
                     guard["maxDist"] if guard["maxDist"] is not None else 255,
                     guard["hpLo"], guard["hpHi"], guard["playerFlags"],
                     guard["cooldown"] if guard["cooldown"] is not None else 0,
                     guard["chance"] if guard["chance"] is not None else 100,
-                    entry["zones_mask"]))
+                    entry["zones_mask"], guard["facing"]))
         elif section == "STEPS":
             for entry in layout["steps"]:
                 step = entry["step"]
@@ -1233,6 +1239,7 @@ def data_facts(model):
     has_guard_cooldown = False
     has_guard_chance = False
     has_guard_zones = False
+    has_guard_facing = False
     has_zones = any(c["zones"] for c in model["creatures"])
     for creature in model["creatures"]:
         for attack in creature["attacks"]:
@@ -1243,7 +1250,8 @@ def data_facts(model):
         for pattern in creature["patterns"]:
             guard = pattern["guard"]
             if guard["hpLo"] != 0 or guard["hpHi"] != 100 or guard["playerFlags"] != 0 \
-                    or guard["cooldown"] != 0 or guard["chance"] != 100 or guard["zonesBroken"]:
+                    or guard["cooldown"] != 0 or guard["chance"] != 100 or guard["zonesBroken"] \
+                    or guard["facing"] != 0:
                 simple_guards = False
             if guard["hpLo"] != 0 or guard["hpHi"] != 100:
                 has_guard_hp = True
@@ -1255,6 +1263,8 @@ def data_facts(model):
                 has_guard_chance = True
             if guard["zonesBroken"]:
                 has_guard_zones = True
+            if guard["facing"] != 0:
+                has_guard_facing = True
             if len(pattern["steps"]) > 1:
                 has_multi_step = True
             for step in pattern["steps"]:
@@ -1279,6 +1289,7 @@ def data_facts(model):
         "HAS_GUARD_COOLDOWN": has_guard_cooldown,
         "HAS_GUARD_CHANCE": has_guard_chance,
         "HAS_GUARD_ZONES": has_guard_zones,
+        "HAS_GUARD_FACING": has_guard_facing,
     }
 
 
@@ -1430,9 +1441,10 @@ def dump_model(model, compiled):
                     i, window["t0"], window["t1"], box["ox"], box["oy"], box["w"], box["h"], window["dmgMul"]))
         for pattern in creature["patterns"]:
             guard = pattern["guard"]
-            print("  pattern %s: guard minDist%d maxDist%d hp[%d,%d] player0x%02X cd%d chance%d zonesBroken %s" % (
+            facing = {0: "any", 1: "behind", 2: "front"}.get(guard["facing"], "?")
+            print("  pattern %s: guard minDist%d maxDist%d hp[%d,%d] player0x%02X cd%d chance%d zonesBroken %s facing %s" % (
                 pattern["id"], guard["minDist"], guard["maxDist"], guard["hpLo"], guard["hpHi"],
-                guard["playerFlags"], guard["cooldown"], guard["chance"], ",".join(guard["zonesBroken"]) or "-"))
+                guard["playerFlags"], guard["cooldown"], guard["chance"], ",".join(guard["zonesBroken"]) or "-", facing))
             for i, step in enumerate(pattern["steps"]):
                 if step["kind"] == STEP_ATK:
                     print("    step %d: ATK %s.%s after%d chance%d" % (i, cid, step["ref"], step["after"], step["chance"]))

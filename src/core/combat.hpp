@@ -73,6 +73,14 @@ enum MoveType : uint8_t {
 enum GuardPlayer : uint8_t {
     GUARD_PLAYER_ATTACKING = 0x01
 };
+// Guard facing clause (tools/gen-combat.py GUARD_FACINGS): the pattern matches
+// only when the player body centre lies behind / in front of the beast's facing
+// vector. ANY (0) is the default and folds the evaluator out via HAS_GUARD_FACING.
+enum GuardFacing : uint8_t {
+    GUARD_FACING_ANY = 0,
+    GUARD_FACING_BEHIND = 1,
+    GUARD_FACING_FRONT = 2
+};
 // Attack facing mode (tools/gen-combat.py FACINGS): track recomputes the
 // facing vector from the player delta every tick; the lock modes freeze the
 // windup-start facing through WINDUP + ATTACK. lock-at-windup keeps that
@@ -161,6 +169,7 @@ struct CombatPattern {
 struct CombatGuard {
     uint8_t minDist, maxDist, hpLo, hpHi, playerFlags, cooldown, chance;
     uint8_t zonesBroken;   // bitmask: all listed zones must be broken
+    uint8_t facing;        // GuardFacing: 0 any, 1 behind, 2 front
 };
 
 struct CombatStep {
@@ -228,6 +237,7 @@ struct PkPattern {
 struct PkGuard {
     uint8_t minDist, maxDist, hpLo, hpHi, playerFlags, cooldown, chance;
     uint8_t zonesBroken;
+    uint8_t facing;
 };
 struct PkStep {
     uint8_t kind, ref, after, chance;
@@ -254,12 +264,13 @@ static_assert(offsetof(PkAttack, dmg) == offsetof(PkAttack, windup) + 6, "attack
 // Bulk-read cache mirrors: these caches are byte-identical to their packed
 // records, so the reads fetch the whole record in one transaction.
 static_assert(sizeof(CombatZone) == combat::ZONE_SIZE, "zone cache must stay 12 B");
-static_assert(sizeof(CombatGuard) == combat::GUARD_SIZE, "guard cache must stay 8 B");
+static_assert(sizeof(CombatGuard) == combat::GUARD_SIZE, "guard cache must stay 9 B");
 static_assert(sizeof(CombatStep) == combat::STEP_SIZE, "step cache must stay 4 B");
 static_assert(sizeof(CombatPattern) == combat::PATTERN_SIZE, "pattern cache must stay 3 B");
 static_assert(offsetof(CombatProfile, zoneFlags) == offsetof(PkProfile, zoneFlags), "profile mirror drift");
 static_assert(offsetof(CombatProfile, cdBase) == offsetof(PkProfile, cdBase), "profile mirror drift");
 static_assert(offsetof(CombatGuard, zonesBroken) == offsetof(PkGuard, zonesBroken), "guard mirror drift");
+static_assert(offsetof(CombatGuard, facing) == offsetof(PkGuard, facing), "guard facing mirror drift");
 static_assert(offsetof(CombatStep, chance) == offsetof(PkStep, chance), "step mirror drift");
 static_assert(offsetof(CombatPattern, guardIdx) == offsetof(PkPattern, guardIdx), "pattern mirror drift");
 static_assert(sizeof(CombatWindow) == 9, "window cache must stay 9 B");
@@ -790,6 +801,7 @@ inline CombatGuard combatGuardRead(uint8_t i) {
     v.cooldown = g.cooldown;
     v.chance = g.chance;
     v.zonesBroken = g.zonesBroken;
+    v.facing = g.facing;
     return v;
 }
 
@@ -998,6 +1010,22 @@ inline bool combatGuardCooldownOk(uint8_t cooldown, uint16_t sinceUse) {
 inline bool combatGuardZonesOk(uint8_t required, uint8_t broken) {
     return (broken & required) == required;
 }
+// Facing clause helpers (decision-time only; no cart read beyond the guard
+// record). combatFacingDot projects the player-centre offset on the beast's
+// 1/16 facing vector: negative = behind, positive = in front, 0 = dead abeam
+// (neither). Mirrors the body-centre dist math in updateMonster.
+inline int16_t combatFacingDot(int16_t px, int16_t py, int16_t mx, int16_t my, int8_t fx, int8_t fy) {
+    const int32_t dx = static_cast<int32_t>(px) - static_cast<int32_t>(mx);
+    const int32_t dy = static_cast<int32_t>(py) - static_cast<int32_t>(my);
+    return static_cast<int16_t>((dx * fx + dy * fy) >> 4);
+}
+inline bool combatGuardFacingOk(uint8_t required, int16_t dot) {
+    if (required == GUARD_FACING_ANY)
+        return true;
+    if (required == GUARD_FACING_BEHIND)
+        return dot < 0;
+    return dot > 0;   // GUARD_FACING_FRONT
+}
 
 struct CombatGuardInput {
     uint8_t dist;          // integer px to the player
@@ -1006,6 +1034,7 @@ struct CombatGuardInput {
     uint16_t tick;         // decision tick (chance is tick-derived)
     uint16_t sinceUse;     // ticks since this pattern last ran (0xFFFF = never)
     uint8_t stepIdx;       // chance hash step input (0 at decision time)
+    int16_t facingDot;     // player-centre dot on the beast facing (HAS_GUARD_FACING)
 };
 
 // First-match-wins selection calls this in pattern list order. The clause
@@ -1025,6 +1054,8 @@ inline bool combatGuardPasses(const Game &g, uint8_t patternIdx, const CombatGua
     if (combat::HAS_GUARD_COOLDOWN && !combatGuardCooldownOk(gu.cooldown, in.sinceUse))
         return false;
     if (GUARD_ZONES_ENABLED && !combatGuardZonesOk(gu.zonesBroken, g.combat.zoneBroken))
+        return false;
+    if (combat::HAS_GUARD_FACING && !combatGuardFacingOk(gu.facing, in.facingDot))
         return false;
     if (combat::HAS_GUARD_CHANCE)
         return combatChancePasses(in.tick, g.combat.creature, patternIdx, in.stepIdx, gu.chance);

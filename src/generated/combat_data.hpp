@@ -12,7 +12,7 @@
 namespace combat_data {
 
 constexpr uint8_t VERSION = 1;
-constexpr uint16_t BLOB_SIZE = 1019;
+constexpr uint16_t BLOB_SIZE = 1028;
 
 struct Box {
     int8_t ox;
@@ -70,6 +70,7 @@ struct Pattern {
 struct Guard {
     uint8_t minDist, maxDist, hpLo, hpHi, playerFlags, cooldown, chance;
     uint8_t zonesBroken;
+    uint8_t facing;   // 0 any, 1 behind, 2 front
 };
 
 struct Step {
@@ -261,15 +262,15 @@ inline constexpr std::array<Pattern, 9> PATTERNS = {{
 }};
 
 inline constexpr std::array<Guard, 9> GUARDS = {{
-    {0, 30, 0, 100, 0, 0, 100, 0},
-    {30, 255, 0, 100, 0, 0, 100, 0},
-    {0, 28, 0, 100, 0, 0, 100, 0},
-    {28, 255, 0, 100, 0, 0, 100, 0},
-    {0, 255, 0, 100, 0, 0, 100, 2},
-    {0, 24, 0, 100, 0, 0, 100, 0},
-    {25, 255, 0, 100, 0, 0, 100, 0},
-    {0, 24, 0, 100, 0, 0, 100, 0},
-    {24, 255, 0, 100, 0, 0, 100, 0},
+    {0, 30, 0, 100, 0, 0, 100, 0, 0},
+    {30, 255, 0, 100, 0, 0, 100, 0, 0},
+    {0, 28, 0, 100, 0, 0, 100, 0, 0},
+    {28, 255, 0, 100, 0, 0, 100, 0, 0},
+    {0, 255, 0, 100, 0, 0, 100, 2, 0},
+    {0, 24, 0, 100, 0, 0, 100, 0, 0},
+    {25, 255, 0, 100, 0, 0, 100, 0, 0},
+    {0, 24, 0, 100, 0, 0, 100, 0, 0},
+    {24, 255, 0, 100, 0, 0, 100, 0, 0},
 }};
 
 inline constexpr std::array<Step, 9> STEPS = {{
