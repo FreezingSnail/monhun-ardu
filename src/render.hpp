@@ -611,40 +611,25 @@ static void drawMonster(const mh::Game &g, int16_t camX, int16_t camY) {
     // flash frame (the tell + telegraph core carry the timing).
     const bool spinning = (m.state == mh::MS_WINDUP || m.state == mh::MS_ATTACK) && m.atkIdx != mh::COMBAT_NO_ATTACK && mh::combatFacingLockV(g.combat.attack.facing);
     const bool spinSheet = spinning && g.monsterKind == mh::MON_HEAVY;
-    // Chicken attack overlay (bead monhun-ardu-nch.8): during the peck/leap
-    // windup+attack the whole chicken is drawn from the 4-frame 32x24
-    // fxchickenatk sheet instead of the generic BEAST_POSES coil/lunge frame, so
-    // both attacks read as bespoke art. MON_LUNGE is the chicken roster kind
-    // (monsterCreatureId maps it to data/creatures/lunge.json). Frame order is
-    // [peck E, peck W, leap E, leap W]: ordinal 0 = peck, 1 = leap, taken from
-    // the attack index relative to the creature's first authored attack so the
-    // mapping keeps following the JSON attack order without a literal index;
-    // frame = (ordinal << 1) | (west). Windup and attack share the pose (the
-    // overlay has no windup-flash frame; the tell + telegraph carry the timing,
-    // same trade as fxtailspin). Cosmetic only: no hit-test or window change.
-    // feel.8 added the third chicken attack (wing_beat), which has no pose in
-    // the 4-frame sheet: only attacks whose ordinal fits the sheet (frames/2)
-    // take the overlay, the rest fall through to the generic chicken sheet, so
-    // the frame index can never leave the sheet.
-    const bool chickenAtk = g.monsterKind == mh::MON_LUNGE && (m.state == mh::MS_WINDUP || m.state == mh::MS_ATTACK) && m.atkIdx != mh::COMBAT_NO_ATTACK &&
-                            static_cast<uint8_t>(m.atkIdx - mh::combatCreatureFirstAttack(combat::CREATURE_LUNGE)) < static_cast<uint8_t>(art_dims::chickenatk_frames >> 1);
-    // Bull attack overlay (bead monhun-ardu-nch.10): during the stomp/gore
-    // windup+attack the whole bull is drawn from the 4-frame 32x24 fxbullatk
-    // sheet instead of the generic BEAST_POSES coil/lunge frame. MON_SWEEP is
-    // the bull roster kind (monsterCreatureId maps it to data/creatures/
-    // sweep.json, whose authored attack order is stomp then gore). Frame order
-    // is [stomp E, stomp W, gore E, gore W]: ordinal 0 = stomp, 1 = gore, taken
-    // from the attack index relative to the creature's first authored attack so
-    // the mapping keeps following the JSON order without a literal index; frame
-    // = (ordinal << 1) | (west). Windup and attack share the pose (the overlay
-    // has no windup-flash frame; the tell + telegraph carry the timing, same
-    // trade as fxtailspin/fxchickenatk). Cosmetic only: no hit-test or window
-    // change.
-    const bool bullAtk = g.monsterKind == mh::MON_SWEEP && (m.state == mh::MS_WINDUP || m.state == mh::MS_ATTACK) && m.atkIdx != mh::COMBAT_NO_ATTACK;
+    // Demo-beast attack overlays (beads monhun-ardu-nch.8/nch.10, prg.12): during
+    // windup+attack the whole chicken/bull/longtail is drawn from its bespoke
+    // 2-facing attack sheet instead of the generic BEAST_POSES coil/lunge frame.
+    // The sheet ordinal selects the pose: during attack it is the attack index
+    // relative to the creature's first authored attack (the generated
+    // ATTACK_<CID>_<FIRST> constant, no literal record index); during windup the
+    // prg.11 tell slot wins when authored (tell 1..3). Frame = (ordinal << 1) |
+    // (west). The frame index stays inside every sheet: chicken 3 ordinals
+    // (peck/leap/wing_beat), bull 4 (stomp/gore/rear_kick/stomp windup), heavy 4
+    // (bite/bite windup/spin windup/slam windup; the locked spin branch wins for
+    // the last two). Windup and attack share the pose (the overlays have no
+    // windup-flash frame; the tell + marker carry the timing). Cosmetic only: no
+    // hit-test or window change.
+    const bool beastAtk = (g.monsterKind == mh::MON_LUNGE || g.monsterKind == mh::MON_SWEEP || g.monsterKind == mh::MON_HEAVY) && (m.state == mh::MS_WINDUP || m.state == mh::MS_ATTACK) &&
+                          m.atkIdx != mh::COMBAT_NO_ATTACK;
     // Windup tell frame (prg.11): combat.attack.tell selects the bespoke windup
-    // pose on the beast's attack sheet. prg.12 authors the frames; with
-    // TELL_FRAMES_AUTHORED 0 the selector returns NONE, so the existing ordinal
-    // pose stands and the core marker carries the read.
+    // pose on the beast's attack sheet. prg.12 authored tells 1..3; an authored
+    // tell overrides the attack-order ordinal pose and suppresses the core
+    // marker, an unauthored tell (0/4) keeps the ordinal pose + 2x2 core marker.
     const uint8_t tellSlot = (m.state == mh::MS_WINDUP) ? mh::tellWindupFrame(g.combat.attack.tell, mh::TELL_FRAMES_AUTHORED) : mh::TELL_WINDUP_NONE;
     uint8_t f;
     if (g.monsterKind == mh::MON_RAVAGER) {
@@ -687,22 +672,21 @@ static void drawMonster(const mh::Game &g, int16_t camX, int16_t camY) {
         const uint8_t start8 = static_cast<uint8_t>(fp::dirIndexFromDelta(m.fx, m.fy)) & 7;
         const uint8_t spinF = (m.state == mh::MS_WINDUP) ? start8 : mh::spinSheetFrame(start8, m.t, static_cast<int16_t>(g.combat.attack.active));
         sprDraw(fxtailspin, static_cast<int16_t>(x + (w >> 1) - 20), static_cast<int16_t>(y + (h >> 1) - 20), FRAME(spinF));
-    } else if (chickenAtk) {
-        // Ordinal from the creature's first attack (peck; leap is +1 in the
-        // authored attack order): no literal record index, and the sheet frame
-        // selects facing with the low bit. Windup: an authored tell frame
-        // (prg.12) wins; unauthored tells keep the ordinal pose + core marker.
-        const uint8_t ordinal = (tellSlot != mh::TELL_WINDUP_NONE) ? tellSlot : static_cast<uint8_t>(m.atkIdx - mh::combatCreatureFirstAttack(combat::CREATURE_LUNGE));
-        const uint8_t cf = static_cast<uint8_t>((ordinal << 1) | (m.fx < 0 ? 1 : 0));
-        sprDraw(fxchickenatk, x, y, FRAME(cf));
-    } else if (bullAtk) {
-        // Ordinal from the creature's first attack (stomp; gore is +1 in the
-        // authored attack order): no literal record index, and the sheet frame
-        // selects facing with the low bit. Windup: an authored tell frame
-        // (prg.12) wins; unauthored tells keep the ordinal pose + core marker.
-        const uint8_t ordinal = (tellSlot != mh::TELL_WINDUP_NONE) ? tellSlot : static_cast<uint8_t>(m.atkIdx - mh::combatCreatureFirstAttack(combat::CREATURE_SWEEP));
-        const uint8_t bf = static_cast<uint8_t>((ordinal << 1) | (m.fx < 0 ? 1 : 0));
-        sprDraw(fxbullatk, x, y, FRAME(bf));
+    } else if (beastAtk) {
+        // Pick the beast's 2-facing attack sheet + its first authored attack
+        // (generated constant) by roster kind, then the ordinal: the authored
+        // tell slot during windup wins over the attack-order offset.
+        uint24_t sheet = fxchickenatk;
+        uint8_t first = combat::ATTACK_LUNGE_PECK;
+        if (g.monsterKind == mh::MON_SWEEP) {
+            sheet = fxbullatk;
+            first = combat::ATTACK_SWEEP_STOMP;
+        } else if (g.monsterKind == mh::MON_HEAVY) {
+            sheet = fxheavyatk;
+            first = combat::ATTACK_HEAVY_BITE;
+        }
+        const uint8_t ordinal = (tellSlot != mh::TELL_WINDUP_NONE) ? tellSlot : static_cast<uint8_t>(m.atkIdx - first);
+        sprDraw(sheet, x, y, FRAME(static_cast<uint8_t>((ordinal << 1) | (m.fx < 0 ? 1 : 0))));
     } else {
         sprDraw(monsterSheet(g.monsterKind), x, y, FRAME(f));
     }
@@ -720,12 +704,12 @@ static void drawMonster(const mh::Game &g, int16_t camX, int16_t camY) {
     if (g.monsterKind == mh::MON_HEAVY) {
         if (g.combat.appendZone != mh::COMBAT_NO_ZONE && !spinning)
             drawZonePart(g, x, y, fxtail_heavy, mh::COMBAT_ZONE_APPENDAGE, mh::COMBAT_ZONE_APPENDAGE_BIT);
-    } else if (g.monsterKind == mh::MON_LUNGE && !chickenAtk) {
+    } else if (g.monsterKind == mh::MON_LUNGE && !beastAtk) {
         if (g.combat.headZone != mh::COMBAT_NO_ZONE)
             drawZonePart(g, x, y, fxhead_chicken, mh::COMBAT_ZONE_HEAD, mh::COMBAT_ZONE_HEAD_BIT);
         if (g.combat.appendZone != mh::COMBAT_NO_ZONE)
             drawZonePart(g, x, y, fxlegs_chicken, mh::COMBAT_ZONE_APPENDAGE, mh::COMBAT_ZONE_APPENDAGE_BIT);
-    } else if (g.monsterKind == mh::MON_SWEEP && !bullAtk) {
+    } else if (g.monsterKind == mh::MON_SWEEP && !beastAtk) {
         if (g.combat.headZone != mh::COMBAT_NO_ZONE)
             drawZonePart(g, x, y, fxhead_bull, mh::COMBAT_ZONE_HEAD, mh::COMBAT_ZONE_HEAD_BIT);
         if (g.combat.appendZone != mh::COMBAT_NO_ZONE)

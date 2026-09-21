@@ -52,14 +52,18 @@ void testTellWindupFrame(Test &t) {
     t.assert(mh::TELL_RING, 3, "ring shape id");
     t.assert(mh::TELL_ZONE, 4, "zone shape id");
 
-    // Shipping carries no authored bespoke frames (prg.12 authors them), so
-    // every tell falls back to the core marker.
-    t.assert(mh::TELL_FRAMES_AUTHORED, 0, "no authored tell frames shipping");
+    // prg.12 authored the per-attack windup poses on fxchickenatk/fxbullatk/
+    // fxheavyatk, so tells 1..3 select an authored slot and tell 0 (generic
+    // coil) stays unauthored.
+    t.assert(mh::TELL_FRAMES_AUTHORED, 3, "three authored tell frames shipping");
     t.assert(mh::tellHasAuthoredFrame(mh::TELL_DOT, mh::TELL_FRAMES_AUTHORED), false, "dot has no bespoke frame");
-    t.assert(mh::tellHasAuthoredFrame(mh::TELL_LINE, mh::TELL_FRAMES_AUTHORED), false, "line unauthored");
-    t.assert(mh::tellHasAuthoredFrame(mh::TELL_RING, mh::TELL_FRAMES_AUTHORED), false, "ring unauthored");
-    t.assert(mh::tellWindupFrame(mh::TELL_LINE, mh::TELL_FRAMES_AUTHORED), mh::TELL_WINDUP_NONE, "line falls back");
-    t.assert(mh::tellWindupFrame(mh::TELL_RING, mh::TELL_FRAMES_AUTHORED), mh::TELL_WINDUP_NONE, "ring falls back");
+    t.assert(mh::tellHasAuthoredFrame(mh::TELL_LINE, mh::TELL_FRAMES_AUTHORED), true, "line authored");
+    t.assert(mh::tellHasAuthoredFrame(mh::TELL_ARC, mh::TELL_FRAMES_AUTHORED), true, "arc authored");
+    t.assert(mh::tellHasAuthoredFrame(mh::TELL_RING, mh::TELL_FRAMES_AUTHORED), true, "ring authored");
+    t.assert(mh::tellHasAuthoredFrame(mh::TELL_ZONE, mh::TELL_FRAMES_AUTHORED), false, "zone unauthored");
+    t.assert(mh::tellWindupFrame(mh::TELL_LINE, mh::TELL_FRAMES_AUTHORED), mh::TELL_LINE, "line slot = tell");
+    t.assert(mh::tellWindupFrame(mh::TELL_RING, mh::TELL_FRAMES_AUTHORED), mh::TELL_RING, "ring slot = tell");
+    t.assert(mh::tellWindupFrame(mh::TELL_ZONE, mh::TELL_FRAMES_AUTHORED), mh::TELL_WINDUP_NONE, "zone falls back");
 
     // tell 0 is the generic coil, never a bespoke frame, even with art authored.
     t.assert(mh::tellHasAuthoredFrame(mh::TELL_DOT, 8), false, "dot stays generic");

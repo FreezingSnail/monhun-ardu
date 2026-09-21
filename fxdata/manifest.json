@@ -11,15 +11,15 @@
     {
       "declaration": "fxdata/blocks/Sprites.txt",
       "path": "images/blocks/fxbullatk_32x24.png",
-      "sha256": "476a96dd77713943a7822e6cd652f5afcd9f1d9faf7b212b4af641b9f7b69951",
-      "size": 568,
+      "sha256": "ee8d1301f96eb13fcbac01750c1ec35f36b3f1a3edb34432697432f5b5279a45",
+      "size": 982,
       "symbol": "fxbullatk"
     },
     {
       "declaration": "fxdata/blocks/Sprites.txt",
       "path": "images/blocks/fxchickenatk_32x24.png",
-      "sha256": "d86112962a09965f07d1d880dc5f25c6225546e5cdb10b3ca4a3bd043a60aa01",
-      "size": 631,
+      "sha256": "ad6be8509b7bca5dfcf64a6f27932df32a253021ec47c697ce8da012f68713e7",
+      "size": 846,
       "symbol": "fxchickenatk"
     },
     {
@@ -63,6 +63,13 @@
       "sha256": "ab94fef09605ffd9bd743cb08703b6cc4b08288e3dbc15e12a0e4fe71ac3717d",
       "size": 169,
       "symbol": "fxhead_chicken"
+    },
+    {
+      "declaration": "fxdata/blocks/Sprites.txt",
+      "path": "images/blocks/fxheavyatk_32x24.png",
+      "sha256": "163c20789e34a818b84199a30d3a22446f8c42c42784f8f76f9330c0df4d39d8",
+      "size": 732,
+      "symbol": "fxheavyatk"
     },
     {
       "declaration": "fxdata/blocks/Sprites.txt",
@@ -587,8 +594,8 @@
     },
     {
       "path": "fxdata/blocks/Sprites.txt",
-      "sha256": "1c5b6ae5e3e041d3ea642314c1da258c5ad6ca25f87170367a988c702849a951",
-      "size": 517991,
+      "sha256": "fc12f0ec2f46ca70609689d73db5e19a0906c55d40df32170dac3a5934154369",
+      "size": 560370,
       "symbols": [
         "fxtail",
         "fxdeflect",
@@ -614,6 +621,7 @@
         "fxhead_chicken",
         "fxplayer",
         "fxripspecial",
+        "fxheavyatk",
         "fxtail_heavy",
         "fxhead_bull",
         "fxpole_crack",
@@ -690,7 +698,7 @@
     },
     {
       "path": "fxdata/tables/equip.bin",
-      "sha256": "8fef2d7d81739cb60a58d730b3619c91569963e8d758ddb507264b495bc7e00e",
+      "sha256": "cec9b8a6c351cda447a64bc289e4d14b7c1bc958eba7575eebd77057ae2062f3",
       "size": 876,
       "symbol": "mhEquip"
     },
@@ -752,18 +760,18 @@
   "outputs": [
     {
       "path": "fxdata/fxdata-data.bin",
-      "sha256": "56dc8d3f858021386c4f4ab91011410d043d5ea40e08da99e90217dca97a00a0",
-      "size": 200418
+      "sha256": "ad4489ec9f39c9a2c3c5105dc2cf6cf10d12d18dd9fe9d393dc98beb0b445fdf",
+      "size": 208484
     },
     {
       "path": "fxdata/fxdata.bin",
-      "sha256": "b288576fb82503a216605383db3b095c1dd578009dc3043c00c4720e1b0fabba",
-      "size": 200448
+      "sha256": "f7cf059fa9e1a015ea8d8cb39d3fa1ac98fb86f45ed3ca8e627ec29de6962631",
+      "size": 208640
     },
     {
       "path": "fxdata/fxdata.h",
-      "sha256": "bb082c9c72f5dfabfe6577d7a42b856b9c77b510c433896415bfd54f21263264",
-      "size": 2946
+      "sha256": "99d4c3f5a885379a02dd31575b84ab275f46537a8cdff120568c6fb4b7d654c7",
+      "size": 2988
     },
     {
       "path": "fxdata/tables/armor.bin",
@@ -777,7 +785,7 @@
     },
     {
       "path": "fxdata/tables/equip.bin",
-      "sha256": "8fef2d7d81739cb60a58d730b3619c91569963e8d758ddb507264b495bc7e00e",
+      "sha256": "cec9b8a6c351cda447a64bc289e4d14b7c1bc958eba7575eebd77057ae2062f3",
       "size": 876
     },
     {
@@ -802,8 +810,8 @@
     },
     {
       "path": "src/fxdata.h",
-      "sha256": "bb082c9c72f5dfabfe6577d7a42b856b9c77b510c433896415bfd54f21263264",
-      "size": 2946
+      "sha256": "99d4c3f5a885379a02dd31575b84ab275f46537a8cdff120568c6fb4b7d654c7",
+      "size": 2988
     },
     {
       "path": "src/generated/armor_data.hpp",
@@ -822,8 +830,8 @@
     },
     {
       "path": "src/generated/art_dims.hpp",
-      "sha256": "4a35cc4d716e511f7969f41af4337c0a2053e70d6f3eff751a553d762d1807ba",
-      "size": 7266
+      "sha256": "726f62ab61fd3a47ea2e592c6ff4d75dfef93f595c9a0bfef04b0d7b39642d34",
+      "size": 7387
     },
     {
       "path": "src/generated/combat_data.hpp",
@@ -842,8 +850,8 @@
     },
     {
       "path": "src/generated/equip_meta.hpp",
-      "sha256": "c1440ee32b561168f5953df67597a2a114bdd27c89b2cec6b37b16de3a452658",
-      "size": 22331
+      "sha256": "fcc6ce02e172583b6247084fb0072d3b56186b76f15970cdfccaa0243ca50554",
+      "size": 22334
     },
     {
       "path": "src/generated/items_data.hpp",
@@ -887,7 +895,7 @@
     },
     {
       "path": "src/generated/zone_meta.hpp",
-      "sha256": "6c6afd33d7cb81090c0a0de5246ddb15f793a6013722fe9dd7b3d5da40dd1218",
+      "sha256": "ee0b346528fdfc26ef78bee5205d6e5b38b8e155cff1e2358468f14409773252",
       "size": 8388
     }
   ],

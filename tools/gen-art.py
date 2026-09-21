@@ -326,6 +326,15 @@ def icon_defs(dims):
         # 24 is a multiple of 8 so the SpritesU plus-mask page stride is exact.
         {"id": "bullatk", "w": 32, "h": 24, "anchor": "body top-left",
          "frames": bullatk_frames()},
+        # Heavy attack sheet (bead monhun-ardu-prg.12): 8 frames 32x24 in ordinal
+        # order [bite, bite-windup, tail_spin-windup, tail_slam-windup] x facing.
+        # The tell selector (prg.11) indexes this sheet by windup slot: line(1) =
+        # bite windup, arc(2) / ring(3) are carried by the fxtailspin sheet for
+        # the locked spin/slam (the spin branch wins), so only ordinal 0 (bite
+        # release, from the attack order) and ordinal 1 (bite windup) draw. Frame
+        # origin is the body top-left; height 24 is a multiple of 8.
+        {"id": "heavyatk", "w": 32, "h": 24, "anchor": "body top-left",
+         "frames": heavyatk_frames()},
         # Breakable-zone part overlays (bead monhun-ardu-kt7.6): one 4-frame
         # combatPartArtFrame() sheet per breakable demo-roster zone, drawn at the
         # face-relative zone box origin (the same world rect the hit test uses).
@@ -698,21 +707,66 @@ def longtail_frames():
     return _beast_frames(_longtail_east, _longtail_dead)
 
 
-# ---- Chicken attack sheet (bead monhun-ardu-nch.8). The whole chicken is drawn
-# from this 4-frame 32x24 sheet during the peck/leap windup+attack instead of
-# the generic BEAST_POSES coil/lunge frame, so both attacks read as bespoke
-# poses. Frame order is [peck E, peck W, leap E, leap W]: both attacks LOWER
-# the head into the target (peck to rows 4..9 with the body leaned 1 px, leap to
-# rows 3..8 off the raised body) with the beak at the lowered head's front edge;
-# the leap also raises the body ~2 px, folds/tucks the legs (knees up, shanks
-# shortened) and lifts the plumes/wing. Frames are authored east and mirrored
-# by the _beast_frame put wrapper, exactly like the idle/windup/attack frames.
-# Windup and attack share the pose: the overlay has no windup-flash frame, so
-# the telegraph window + tell carry the timing (same trade as fxtailspin).
-def _chicken_attack_east(put, body, head, leap):
+# ---- Chicken attack sheet (bead monhun-ardu-nch.8; prg.12 windup frames). The
+# whole chicken is drawn from this 6-frame 32x24 sheet during the peck/leap/
+# wing_beat windup+attack instead of the generic BEAST_POSES coil/lunge frame, so
+# every attack reads as bespoke art. Frame order is [peck E, peck W, leap E,
+# leap W, wing E, wing W]: peck and leap LOWER the head into the target (peck to
+# rows 4..9 with the body leaned 1 px, leap to rows 3..8 off the raised body);
+# wing_beat crouches and sweeps the near wing out behind the body as a wide
+# horizontal panel while the head stays level, so the arc sweep reads apart from
+# the two jabs. Frames are authored east and mirrored by the _beast_frame put
+# wrapper, exactly like the idle/windup/attack frames. Windup and attack share
+# the pose: the overlay has no windup-flash frame, so the telegraph window +
+# tell carry the timing (same trade as fxtailspin).
+def _chicken_attack_east(put, body, head, mode):
     hi, lo = _beast_tone(body)
 
-    if leap:
+    if mode == 2:
+        # wing_beat (arc): crouched body, near wing swept out behind as a wide
+        # horizontal panel with feather rows, head level (rows 3..8) rather than
+        # lowered, plumes fanned over the wing.
+        put(0, 2, 6, 3, body)         # upper plume fanned
+        put(0, 5, 9, 3, body)         # middle plume fanned
+        put(1, 8, 8, 3, body)         # lower plume fanned
+        put(0, 2, 3, 1, hi)
+        put(0, 5, 3, 1, hi)
+        put(1, 8, 3, 1, hi)
+
+        put(7, 7, 14, 9, body)        # crouched body
+        put(15, 8, 5, 6, hi)          # chest highlight
+        put(8, 14, 12, 2, lo)         # belly shadow
+
+        put(0, 9, 14, 5, body)        # near wing swept out behind
+        put(0, 9, 12, 1, hi)          # wing leading edge
+        put(1, 11, 12, 1, lo)         # wing feather row 1
+        put(2, 13, 10, 1, lo)         # wing feather row 2
+        put(12, 8, 6, 3, body)        # wing shoulder
+
+        put(18, 5, 5, 4, body)        # neck level
+        put(19, 3, 10, 6, head)       # head level (rows 3..8), not lowered
+        put(21, 2, 3, 1, head)        # comb front
+        put(25, 2, 2, 1, head)        # comb back
+        put(28, 6, 2, 2, lo)          # beak at the level head's front edge
+        put(24, 5, 2, 2, BLACK)       # eye
+
+        put(12, 13, 2, 4, DARK)       # near thigh
+        put(11, 16, 4, 2, DARK)       # near knee
+        put(12, 18, 2, 3, DARK)
+        put(12, 18, 1, 3, LIGHT)
+        put(10, 21, 5, 1, DARK)
+        put(10, 20, 1, 1, DARK)
+        put(11, 21, 2, 1, LIGHT)
+        put(17, 13, 2, 4, DARK)       # far thigh
+        put(16, 16, 4, 2, DARK)
+        put(17, 18, 2, 3, DARK)
+        put(17, 18, 1, 3, LIGHT)
+        put(16, 21, 5, 1, DARK)
+        put(20, 20, 1, 1, DARK)
+        put(19, 21, 2, 1, LIGHT)
+        return
+
+    if mode == 1:
         # Plumes/wing raised with the body (~2 px). The head LOWERS into the
         # charge (head-down posture) instead of holding the idle head high: the
         # neck angles down off the raised body, the head drops to rows 3..8 and
@@ -800,39 +854,117 @@ def _chicken_attack_east(put, body, head, leap):
     put(19, 21, 2, 1, LIGHT)          # far foot front highlight
 
 
-def _chicken_attack_pose(leap):
+def _chicken_attack_pose(mode):
     def draw(put, body, head):
-        _chicken_attack_east(put, body, head, leap)
+        _chicken_attack_east(put, body, head, mode)
     return draw
 
 
 def chickenatk_frames():
-    """[peck E, peck W, leap E, leap W] as rect-block frame defs, so
-    check_sheets/render_icon re-composite each authored pose exactly (the
+    """[peck E, peck W, leap E, leap W, wing E, wing W] as rect-block frame defs,
+    so check_sheets/render_icon re-composite each authored pose exactly (the
     tailspin icon pattern)."""
     frames = []
-    for leap in (False, True):
+    for mode in (0, 1, 2):
         for east in (True, False):
             frames.append(_image_blocks(
-                _beast_frame(_chicken_attack_pose(leap), _chicken_dead, DARK, WHITE, east)))
+                _beast_frame(_chicken_attack_pose(mode), _chicken_dead, DARK, WHITE, east)))
     return frames
 
 
-# ---- Bull attack sheet (bead monhun-ardu-nch.10). The whole bull is drawn from
-# this 4-frame 32x24 sheet during the stomp/gore windup+attack instead of the
-# generic BEAST_POSES coil/lunge frame, so both attacks read as bespoke poses.
-# Frame order is [stomp E, stomp W, gore E, gore W]. The stomp raises both front
-# hooves (tucked back under the chest), pitches the body forward onto the planted
-# rear legs and holds the head/horns high for the slam windup; the gore lowers
-# the head, drives the horns forward along the facing edge, leans the body 1 px,
-# and raises the tail. Frames are authored east and mirrored by the _beast_frame
-# put wrapper, exactly like the idle/windup/attack frames. Windup and attack
-# share the pose: the overlay has no windup-flash frame, so the telegraph window
-# + tell carry the timing (same trade as fxtailspin/fxchickenatk).
-def _bull_attack_east(put, body, head, gore):
+# ---- Bull attack sheet (bead monhun-ardu-nch.10; prg.12 windup frames). The
+# whole bull is drawn from this 8-frame 32x24 sheet during the stomp/gore/
+# rear_kick windup+attack instead of the generic BEAST_POSES coil/lunge frame,
+# so every attack reads as bespoke art. The ordinal order is the prg.11 tell-slot
+# order the selector indexes: 0 stomp release, 1 gore (line), 2 rear_kick (arc),
+# 3 stomp WINDUP (ring; reared ground-slam read). The stomp release raises both
+# front hooves tucked back under the chest, pitches the body forward onto the
+# planted rear legs and holds the head/horns high; the gore lowers the head,
+# drives the horns forward, leans the body 1 px and raises the tail; the
+# rear_kick bucks with the hind legs kicked back off the ground; the stomp windup
+# rears on the planted hind legs with both front hooves high and spread. Frames
+# are authored east and mirrored by the _beast_frame put wrapper.
+def _bull_attack_east(put, body, head, mode):
     hi, lo = _beast_tone(body)
 
-    if gore:
+    if mode == 3:
+        # Stomp windup (ring): reared on the planted hind legs, both front
+        # hooves raised high and spread (the ground-slam area read), head and
+        # horns held high. Distinct from the release stomp (hooves tucked back
+        # low) and from the gore (head down, horns forward).
+        put(1, 8, 2, 8, body)         # hanging tail
+        put(0, 6, 3, 2, lo)           # tail tuft
+
+        put(4, 9, 20, 10, body)       # reared body, front raised
+        put(14, 4, 11, 5, body)       # raised front chest/shoulder
+        put(6, 7, 12, 3, body)        # shoulder hump
+        put(4, 9, 15, 2, hi)          # back highlight
+        put(5, 12, 9, 3, hi)          # rib highlight
+        put(5, 18, 16, 2, lo)         # belly shadow
+
+        put(20, 0, 11, 8, head)       # head high
+        put(21, 0, 2, 2, head)        # ear
+        put(28, 5, 4, 3, lo)          # muzzle high
+        put(28, 4, 4, 1, hi)          # muzzle bridge
+        put(25, 3, 2, 2, BLACK)       # eye
+        put(22, 0, 2, 2, head)        # near horn base
+        put(23, 0, 2, 1, head)        # near horn tip
+        put(29, 0, 2, 2, head)        # far horn base
+        put(29, 0, 2, 1, head)        # far horn tip
+
+        put(15, 8, 3, 5, body)        # near front thigh raised
+        put(13, 5, 4, 3, body)        # near shank up
+        put(12, 4, 4, 1, BLACK)       # near raised hoof, spread back
+        put(23, 9, 3, 4, body)        # far front thigh
+        put(24, 6, 4, 3, body)        # far shank up
+        put(25, 5, 4, 1, BLACK)       # far raised hoof, spread forward
+
+        for lx in (5, 10):            # planted rear legs
+            put(lx, 18, 3, 4, body)
+            put(lx, 20, 1, 2, hi)
+            put(lx - 1, 22, 4, 1, BLACK)
+        return
+
+    if mode == 2:
+        # rear_kick (arc behind): bucking counter-attack. The hindquarters kick
+        # back off the ground while the front hooves stay planted forward; the
+        # head stays low and forward and the tail whips up. The raised, extended
+        # hind legs are the pose signature (stomp/gore keep all hooves planted
+        # or tucked).
+        put(1, 4, 2, 8, body)         # tail raised
+        put(0, 2, 3, 2, lo)           # tail tuft
+
+        put(6, 9, 19, 10, body)       # body pitched, rear high
+        put(7, 7, 11, 3, body)        # shoulder hump
+        put(7, 9, 14, 2, hi)          # back highlight
+        put(8, 12, 8, 3, hi)          # rib highlight
+        put(7, 18, 17, 2, lo)         # belly shadow
+
+        put(21, 16, 10, 6, head)      # low forward head
+        put(22, 15, 2, 2, head)       # ear
+        put(28, 19, 4, 3, lo)         # muzzle
+        put(28, 18, 4, 1, hi)         # muzzle bridge
+        put(25, 18, 2, 2, BLACK)      # eye
+        put(23, 14, 2, 2, head)       # near horn base
+        put(26, 14, 3, 2, head)       # near horn forward
+        put(28, 13, 3, 2, head)       # near horn tip
+        put(27, 12, 2, 2, head)       # far horn base
+        put(30, 12, 2, 2, head)       # far horn tip
+
+        for lx in (20, 25):           # front hooves planted forward
+            put(lx, 18, 3, 4, body)
+            put(lx, 20, 1, 2, hi)
+            put(lx - 1, 22, 4, 1, BLACK)
+
+        put(4, 13, 4, 3, body)        # near hind thigh raised
+        put(1, 15, 5, 2, body)        # near shank extended back
+        put(0, 14, 3, 1, BLACK)       # near raised hoof
+        put(9, 12, 4, 3, body)        # far hind thigh raised
+        put(6, 14, 5, 2, body)        # far shank extended back
+        put(5, 13, 3, 1, BLACK)       # far raised hoof
+        return
+
+    if mode == 1:
         # Tail raised (base rows 7..15 -> 2..10); body leaned 1 px forward;
         # head lowered and horns driven forward along the facing edge.
         put(1, 2, 2, 9, body)         # tail raised
@@ -898,21 +1030,125 @@ def _bull_attack_east(put, body, head, gore):
     put(19, 14, 4, 1, BLACK)          # far raised hoof
 
 
-def _bull_attack_pose(gore):
+def _bull_attack_pose(mode):
     def draw(put, body, head):
-        _bull_attack_east(put, body, head, gore)
+        _bull_attack_east(put, body, head, mode)
     return draw
 
 
 def bullatk_frames():
-    """[stomp E, stomp W, gore E, gore W] as rect-block frame defs, so
-    check_sheets/render_icon re-composite each authored pose exactly (the
-    tailspin/chickenatk icon pattern)."""
+    """[stomp E, stomp W, gore E, gore W, rear_kick E/W, stomp_windup E/W] as
+    rect-block frame defs, so check_sheets/render_icon re-composite each authored
+    pose exactly (the tailspin/chickenatk icon pattern)."""
     frames = []
-    for gore in (False, True):
+    for mode in (0, 1, 2, 3):
         for east in (True, False):
             frames.append(_image_blocks(
-                _beast_frame(_bull_attack_pose(gore), _bull_dead, DARK, WHITE, east)))
+                _beast_frame(_bull_attack_pose(mode), _bull_dead, DARK, WHITE, east)))
+    return frames
+
+
+# ---- Heavy attack sheet (bead monhun-ardu-prg.12). The longtail is drawn from
+# this 8-frame 32x24 sheet for the non-locked attacks, indexed by the prg.11 tell
+# slot: ordinal 0 bite release (from the attack order), 1 bite windup (line),
+# 2 tail_spin windup (arc), 3 tail_slam windup (ring). The locked tail_spin/
+# tail_slam branch wins in drawMonster, so only ordinals 0/1 draw; 2/3 author the
+# remaining slots so the selector can never leave the sheet. Frames are authored
+# east and mirrored by the _beast_frame put wrapper.
+def _heavy_attack_east(put, body, head, mode):
+    hi, lo = _beast_tone(body)
+
+    if mode == 3:
+        # tail_slam windup: tail raised high overhead (the slam read), body
+        # braced, head forward and level.
+        put(0, 0, 8, 6, body)         # tail raised overhead
+        put(0, 0, 4, 1, hi)           # tail top highlight
+        put(6, 5, 3, 3, body)         # tail root shoulder
+        put(8, 7, 15, 13, body)       # braced bulk
+        put(16, 9, 5, 9, hi)          # chest highlight
+        put(9, 18, 13, 2, lo)         # belly shadow
+        put(19, 4, 11, 9, head)       # head forward/level
+        put(28, 8, 4, 4, head)        # snout
+        put(27, 12, 4, 2, lo)         # jaw
+        put(24, 7, 2, 2, BLACK)       # eye
+        for lx in (10, 15, 20, 25):
+            put(lx, 19, 3, 3, body)
+            put(lx - 1, 22, 4, 1, BLACK)
+        return
+
+    if mode == 2:
+        # tail_spin windup: tail whipped up-left, body crouched, head turned up.
+        put(0, 1, 7, 9, body)         # tail raised up-left
+        put(1, 1, 1, 8, lo)           # tail segments
+        put(5, 0, 2, 2, body)         # ridge spike up
+        put(2, 0, 2, 2, body)         # ridge spike up
+        put(9, 6, 14, 14, body)       # crouched bulk
+        put(16, 8, 5, 10, hi)         # chest highlight
+        put(10, 17, 12, 2, lo)        # belly shadow
+        put(18, 2, 12, 9, head)       # head turned up
+        put(28, 5, 4, 4, head)        # snout
+        put(27, 9, 4, 2, lo)          # jaw
+        put(24, 4, 2, 2, BLACK)       # eye
+        for lx in (11, 16, 21, 26):
+            put(lx, 19, 3, 3, body)
+            put(lx - 1, 22, 4, 1, BLACK)
+        return
+
+    if mode == 1:
+        # bite windup (line): head/neck drawn back and high, snout up, jaw open
+        # below it; the body coils back onto the rear legs. The raised head is
+        # the pose signature (release thrusts the head forward and low).
+        put(0, 6, 8, 11, body)        # tail braced/raised
+        put(3, 7, 1, 9, lo)           # tail segment
+        put(1, 4, 2, 2, body)         # ridge spike
+        put(3, 3, 2, 2, body)         # ridge spike
+        put(0, 15, 6, 2, lo)          # tail underside
+        put(7, 6, 15, 14, body)       # coiled bulk (weight back)
+        put(15, 8, 5, 10, hi)         # chest highlight
+        put(8, 17, 13, 2, lo)         # belly shadow
+        put(18, 1, 12, 10, head)      # head drawn back and high
+        put(28, 4, 4, 4, head)        # snout up
+        put(27, 8, 4, 2, lo)          # jaw open
+        put(30, 5, 1, 1, BLACK)       # nostril
+        put(23, 3, 2, 2, BLACK)       # eye
+        for lx in (9, 14, 19, 24):
+            put(lx, 19, 3, 3, body)
+            put(lx - 1, 22, 4, 1, BLACK)
+        return
+
+    # mode 0 bite release: head/neck thrust forward and low, jaw open, tail
+    # braced counter to the lunge.
+    put(0, 8, 8, 10, body)            # tail braced low
+    put(3, 9, 1, 8, lo)               # tail segment
+    put(6, 9, 2, 2, body)             # ridge spike
+    put(0, 15, 6, 2, lo)              # tail underside
+    put(7, 8, 14, 13, body)           # bulk leaning forward
+    put(15, 10, 5, 9, hi)             # chest highlight
+    put(8, 19, 12, 2, lo)             # belly shadow
+    put(19, 7, 13, 9, head)           # head thrust forward
+    put(28, 11, 4, 4, head)           # snout
+    put(27, 14, 4, 2, lo)             # jaw open
+    put(30, 12, 1, 1, BLACK)          # nostril
+    put(24, 9, 2, 2, BLACK)           # eye
+    for lx in (9, 14, 19, 24):
+        put(lx, 19, 3, 3, body)
+        put(lx - 1, 22, 4, 1, BLACK)
+
+
+def _heavy_attack_pose(mode):
+    def draw(put, body, head):
+        _heavy_attack_east(put, body, head, mode)
+    return draw
+
+
+def heavyatk_frames():
+    """[bite E, bite W, bite_windup E/W, spin_windup E/W, slam_windup E/W] as
+    rect-block frame defs (the tailspin/chickenatk icon pattern)."""
+    frames = []
+    for mode in (0, 1, 2, 3):
+        for east in (True, False):
+            frames.append(_image_blocks(
+                _beast_frame(_heavy_attack_pose(mode), _longtail_dead, DARK, WHITE, east)))
     return frames
 
 

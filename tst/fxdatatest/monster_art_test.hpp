@@ -89,6 +89,10 @@ static void setupBeast(Game &g, int8_t kind, int8_t fx, int8_t fy) {
     m.stun = 0;
     m.hitFlash = 0;
     m.atkIdx = COMBAT_NO_ATTACK;
+    // initGame does not clear the combat cache, and setup functions overwrite
+    // state/atk without touching facing, so reset it here: a stale lock facing
+    // would flip MON_HEAVY's non-locked bite onto the fxtailspin sheet.
+    g.combat.attack.facing = COMBAT_FACING_TRACK;
     g.tick = 0;
     g.combat.zoneBroken = 0;
 }
@@ -127,38 +131,74 @@ static void setupSpinWindup(Game &g, uint8_t window, int8_t fx, int8_t fy = 0) {
     g.combat.attack.win = combatWindowRead(window);   // full box, no shrink
 }
 
-// nch.8: park the chicken (MON_LUNGE) in a peck/leap WINDUP or ATTACK so
-// drawMonster swaps the generic BEAST_POSES frame for the 4-frame fxchickenatk
-// sheet. The cached window box is shrunk to 1x1 at the body centre (like
-// setupSpinAttack) so the telegraph core stays inside the centre band the
-// facing checks exclude; the frame pick depends only on atkIdx + m.fx.
-static void setupChickenAttack(Game &g, uint8_t atk, uint8_t state, int8_t fx) {
+// nch.8/prg.12: park the chicken (MON_LUNGE) in a peck/leap/wing_beat WINDUP or
+// ATTACK so drawMonster swaps the generic BEAST_POSES frame for the 6-frame
+// fxchickenatk sheet. `tell` is the cached combat.attack.tell the selector reads
+// during MS_WINDUP: an authored tell (1..3) picks that sheet slot, tell 0 (DOT)
+// falls back to the attack-order ordinal (peck 0 / leap 1 / wing 2). The cached
+// window box is shrunk to 1x1 at the body centre (like setupSpinAttack) so the
+// telegraph core stays inside the centre band the facing checks exclude.
+static void setupChickenAttack(Game &g, uint8_t atk, uint8_t state, int8_t fx, uint8_t tell = 0) {
     setupBeast(g, MON_LUNGE, fx, 0);
     Monster &m = g.monster;
     m.state = state;
     m.atkIdx = atk;
     m.windupMax = 22;
     m.t = 20;   // windup flash phase, ignored by the overlay
-    g.combat.attack.win = combatWindowRead(atk == combat::ATTACK_LUNGE_LEAP ? combat::WINDOW_LUNGE_LEAP_0 : combat::WINDOW_LUNGE_PECK_0);
+    uint8_t win = combat::WINDOW_LUNGE_PECK_0;
+    if (atk == combat::ATTACK_LUNGE_LEAP)
+        win = combat::WINDOW_LUNGE_LEAP_0;
+    else if (atk == combat::ATTACK_LUNGE_WING_BEAT)
+        win = combat::WINDOW_LUNGE_WING_BEAT_0;
+    g.combat.attack.tell = tell;
+    g.combat.attack.win = combatWindowRead(win);
     g.combat.attack.win.box.ox = 0;
     g.combat.attack.win.box.oy = 0;
     g.combat.attack.win.box.w = 1;
     g.combat.attack.win.box.h = 1;
 }
 
-// nch.10: park the bull (MON_SWEEP) in a stomp/gore WINDUP or ATTACK so
-// drawMonster swaps the generic BEAST_POSES frame for the 4-frame fxbullatk
-// sheet. The cached window box is shrunk to 1x1 at the body centre (like
-// setupChickenAttack) so the telegraph core stays clear of the pose checks;
-// the frame pick depends only on atkIdx + m.fx.
-static void setupBullAttack(Game &g, uint8_t atk, uint8_t state, int8_t fx) {
+// nch.10/prg.12: park the bull (MON_SWEEP) in a stomp/gore/rear_kick WINDUP or
+// ATTACK so drawMonster swaps the generic BEAST_POSES frame for the 8-frame
+// fxbullatk sheet. `tell` is the cached combat.attack.tell the selector reads
+// during MS_WINDUP: authored tells pick their sheet slot (1 gore, 2 rear_kick,
+// 3 stomp windup), tell 0 falls back to the attack-order ordinal. The cached
+// window box is shrunk to 1x1 at the body centre so the telegraph core stays
+// clear of the pose checks.
+static void setupBullAttack(Game &g, uint8_t atk, uint8_t state, int8_t fx, uint8_t tell = 0) {
     setupBeast(g, MON_SWEEP, fx, 0);
     Monster &m = g.monster;
     m.state = state;
     m.atkIdx = atk;
     m.windupMax = 30;
     m.t = 20;   // windup flash phase, ignored by the overlay
-    g.combat.attack.win = combatWindowRead(atk == combat::ATTACK_SWEEP_GORE ? combat::WINDOW_SWEEP_GORE_0 : combat::WINDOW_SWEEP_STOMP_0);
+    uint8_t win = combat::WINDOW_SWEEP_STOMP_0;
+    if (atk == combat::ATTACK_SWEEP_GORE)
+        win = combat::WINDOW_SWEEP_GORE_0;
+    else if (atk == combat::ATTACK_SWEEP_REAR_KICK)
+        win = combat::WINDOW_SWEEP_REAR_KICK_0;
+    g.combat.attack.tell = tell;
+    g.combat.attack.win = combatWindowRead(win);
+    g.combat.attack.win.box.ox = 0;
+    g.combat.attack.win.box.oy = 0;
+    g.combat.attack.win.box.w = 1;
+    g.combat.attack.win.box.h = 1;
+}
+
+// prg.12: park the longtail (MON_HEAVY) in a non-locked bite WINDUP so the
+// selector swaps the generic BEAST_POSES frame for the 8-frame fxheavyatk sheet
+// (the locked tail_spin/tail_slam keep the rotating fxtailspin sheet and never
+// reach it). tell 1 (LINE) picks the bite windup slot; the shrunk 1x1 window
+// keeps the telegraph out of the pose checks.
+static void setupHeavyAttack(Game &g, uint8_t state, int8_t fx, uint8_t tell = 0) {
+    setupBeast(g, MON_HEAVY, fx, 0);
+    Monster &m = g.monster;
+    m.state = state;
+    m.atkIdx = combat::ATTACK_HEAVY_BITE;
+    m.windupMax = 30;
+    m.t = 20;   // windup flash phase, ignored by the overlay
+    g.combat.attack.tell = tell;
+    g.combat.attack.win = combatWindowRead(combat::WINDOW_HEAVY_BITE_0);
     g.combat.attack.win.box.ox = 0;
     g.combat.attack.win.box.oy = 0;
     g.combat.attack.win.box.w = 1;
@@ -299,15 +339,17 @@ inline void test_monster_art(FxTest &test) {
     test.expectEq(countRegionBit(40, 46, 40, 16) > 0 ? 1 : 0, 1, F("windup away south head bottom"));
     test.expectEq(countRegionBit(40, 22, 40, 16), 0, F("windup away south top band clear"));
 
-    // ---- nch.8 chicken attack overlay: during the peck/leap windup+attack
-    // drawMonster swaps the generic BEAST_POSES coil/lunge frame for the
-    // 4-frame fxchickenatk sheet, frame = (ordinal << 1) | (west). Both attacks
-    // LOWER the head (peck to rows 4..9, leap to rows 3..8) with the BLACK beak
-    // as an erase notch at the lowered head's front edge -- no beak/wattle wedge
-    // below the head. The peck keeps the feet planted (y21); the leap raises the
-    // body to y2 and tucks the feet to y18 with the planted row clear. The head
-    // is the only WHITE ink in the cell (tail/legs are dark/light), so plane 2
-    // reads its lowered rows, the high idle rows stay clear and the beak/eye
+    // ---- nch.8/prg.12 chicken attack overlay: during the peck/leap/wing_beat
+    // windup+attack drawMonster swaps the generic BEAST_POSES coil/lunge frame
+    // for the 6-frame fxchickenatk sheet, frame = (ordinal << 1) | (west) with
+    // ordinal 0 = peck, 1 = leap, 2 = wing_beat. During the windup an authored
+    // tell (1..3) selects the slot directly; the peck's tell is dot (0), so it
+    // keeps the peck ordinal. Peck and leap LOWER the head (peck to rows 4..9,
+    // leap to rows 3..8) with the BLACK beak as an erase notch at the lowered
+    // head's front edge. The peck keeps the feet planted (y21); the leap raises
+    // the body to y2 and tucks the feet to y18 with the planted row clear. The
+    // head is the only WHITE ink in the cell (tail/legs are dark/light), so plane
+    // 2 reads its lowered rows, the high idle rows stay clear and the beak/eye
     // erase notches read as 0.
     setupChickenAttack(g, combat::ATTACK_LUNGE_PECK, MS_WINDUP, 16);   // peck E
     renderMonster(g, 0);
@@ -343,14 +385,28 @@ inline void test_monster_art(FxTest &test) {
     test.expectEq(bitAt(BX + 18, BY + 18), 1, F("chicken leap west feet tucked"));
     test.expectEq(bitAt(BX + 18, BY + 21), 0, F("chicken leap west planted row clear"));
 
-    // ---- nch.10 bull attack overlay: during the stomp/gore windup+attack
-    // drawMonster swaps the generic BEAST_POSES coil/lunge frame for the
-    // 4-frame fxbullatk sheet, frame = (ordinal << 1) | (west) with ordinal 0 =
-    // stomp, 1 = gore. The stomp holds the WHITE head high (plane2 at y4) with
-    // the front hooves raised as BLACK erasers over the DARK chest (plane0
-    // clear at y14 but lit on the body behind); the gore lowers the head (plane2
-    // at y17, clear high), drives a white horn forward to (30,12) and raises the
-    // tail (plane0 at y3). Facing mirrors all of it.
+    // ---- prg.12 authored windup (selector): the wing_beat tell is arc (2) and
+    // selects sheet slot 2 (frame 4 E). The near wing sweeps out behind as a
+    // BLACK feather-row panel while the head stays level (rows 3..8) and the
+    // feet stay planted. The authored tell suppresses the core marker.
+    setupChickenAttack(g, combat::ATTACK_LUNGE_WING_BEAT, MS_WINDUP, 16, TELL_ARC);
+    renderMonster(g, 2);
+    test.expectEq(bitAt(BX + 27, BY + 5), 1, F("chicken wing windup level head white"));
+    test.expectEq(bitAt(BX + 27, BY + 2), 0, F("chicken wing windup head not high"));
+    renderMonster(g, 0);
+    test.expectEq(bitAt(BX + 2, BY + 13), 0, F("chicken wing windup feather black eraser"));
+    test.expectEq(bitAt(BX + 12, BY + 21), 1, F("chicken wing windup foot planted"));
+
+    // ---- nch.10/prg.12 bull attack overlay: during the stomp/gore/rear_kick
+    // windup+attack drawMonster swaps the generic BEAST_POSES coil/lunge frame
+    // for the 8-frame fxbullatk sheet, frame = (ordinal << 1) | (west) with the
+    // ordinal = tell slot during the windup (1 gore, 2 rear_kick, 3 stomp windup)
+    // or the attack-order offset (0 stomp, 1 gore, 2 rear_kick) otherwise. The
+    // release stomp holds the WHITE head high (plane2 at y4) with the front
+    // hooves raised as BLACK erasers over the DARK chest (plane0 clear at y14 but
+    // lit on the body behind); the gore lowers the head (plane2 at y17, clear
+    // high), drives a white horn forward to (30,12) and raises the tail (plane0
+    // at y3). Facing mirrors all of it.
     setupBullAttack(g, combat::ATTACK_SWEEP_STOMP, MS_WINDUP, 16);   // stomp E
     renderMonster(g, 2);
     test.expectEq(bitAt(BX + 25, BY + 4), 1, F("bull stomp east head high"));
@@ -382,6 +438,40 @@ inline void test_monster_art(FxTest &test) {
     test.expectEq(bitAt(BX + 1, BY + 12), 1, F("bull gore west horn forward"));
     renderMonster(g, 0);
     test.expectEq(bitAt(BX + 30, BY + 3), 1, F("bull gore west tail raised"));
+
+    // ---- prg.12 authored windups (selector): the stomp tell is ring (3) and
+    // selects sheet slot 3 (frame 6 E): reared on the planted hind legs with
+    // both front hooves raised high and spread (BLACK erasers) and the head high
+    // -- distinct from the release stomp's tucked, low hooves. The rear_kick
+    // tell is arc (2) and selects slot 2 (frame 4 E): the hind legs kick back off
+    // the ground while the front hooves stay planted and the head stays low.
+    setupBullAttack(g, combat::ATTACK_SWEEP_STOMP, MS_WINDUP, 16, TELL_RING);
+    renderMonster(g, 2);
+    test.expectEq(bitAt(BX + 23, BY + 3), 1, F("bull stomp windup head high white"));
+    test.expectEq(bitAt(BX + 25, BY + 17), 0, F("bull stomp windup head not low"));
+    renderMonster(g, 0);
+    test.expectEq(bitAt(BX + 13, BY + 4), 0, F("bull stomp windup near hoof eraser"));
+    test.expectEq(bitAt(BX + 16, BY + 14), 1, F("bull stomp windup hoof row is body"));
+    test.expectEq(bitAt(BX + 5, BY + 19), 1, F("bull stomp windup rear leg planted"));
+
+    setupBullAttack(g, combat::ATTACK_SWEEP_REAR_KICK, MS_WINDUP, 16, TELL_ARC);
+    renderMonster(g, 0);
+    test.expectEq(bitAt(BX + 0, BY + 14), 0, F("bull rear_kick windup raised hoof eraser"));
+    test.expectEq(bitAt(BX + 20, BY + 19), 1, F("bull rear_kick windup front leg planted"));
+    renderMonster(g, 2);
+    test.expectEq(bitAt(BX + 23, BY + 17), 1, F("bull rear_kick windup head low white"));
+    test.expectEq(bitAt(BX + 25, BY + 4), 0, F("bull rear_kick windup head not high"));
+
+    // ---- prg.12 heavy bite windup (selector): the non-locked bite tell is line
+    // (1) and selects sheet slot 1 (frame 2 E): the head is drawn back and high
+    // with the snout up (the raised head is the pose signature) while the tail
+    // braces. The locked tail_spin/tail_slam keep the fxtailspin sheet.
+    setupHeavyAttack(g, MS_WINDUP, 16, TELL_LINE);
+    renderMonster(g, 2);
+    test.expectEq(bitAt(BX + 25, BY + 6), 1, F("heavy bite windup head high white"));
+    test.expectEq(bitAt(BX + 25, BY + 17), 0, F("heavy bite windup head not low"));
+    renderMonster(g, 0);
+    test.expectEq(bitAt(BX + 1, BY + 8), 1, F("heavy bite windup tail braced plane0"));
 
     // ---- kt7.6 breakable-zone part overlays: at rest (no attack sheet) each
     // breakable demo-roster zone draws its part overlay snapped to the sprite

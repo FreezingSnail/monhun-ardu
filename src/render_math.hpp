@@ -22,11 +22,12 @@ namespace mh {
 // Sentinel: no authored windup frame for this tell (render draws the core
 // marker instead).
 constexpr uint8_t TELL_WINDUP_NONE = 0xFF;
-// Number of bespoke windup frames the beast sheets carry. Shipping is 0: the
-// prg.11 carve removes the procedural tells before prg.12 authors the frames, so
-// every tell falls back to the core marker. Host/device tests pass a synthetic
-// count to pin the selector; prg.12 raises this with the art.
-constexpr uint8_t TELL_FRAMES_AUTHORED = 0;
+// Number of bespoke windup frames the beast sheets carry. prg.12 authored the
+// per-attack windup poses on fxchickenatk (slots 1..2), fxbullatk (slots 1..3)
+// and fxheavyatk (slots 1..3), so a tell 1..3 now selects an authored pose and
+// suppresses the legacy core marker; tell 0 stays the generic coil + core
+// marker. Host/device tests pass a synthetic count to pin the selector.
+constexpr uint8_t TELL_FRAMES_AUTHORED = 3;
 
 // True when `tell` selects a bespoke windup frame on a sheet that carries
 // `authored` of them. tell 0 is the generic coil (not a bespoke frame).

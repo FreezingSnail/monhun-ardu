@@ -488,12 +488,14 @@ void testMonsterSheets(Test &t) {
 
 // ------------------------------------------- chicken attack overlay (nch.8)
 
-// fxchickenatk is the chicken's peck/leap overlay: a 4-frame 32x24 sheet in
-// [peck E, peck W, leap E, leap W] order, drawn during both windup and attack.
-// Both attacks LOWER the head onto the target (peck to rows 4..9, leap to rows
-// 3..8) with the BLACK beak as an erase notch at the lowered head's front edge;
-// the leap also lifts the body 2 px and folds the legs (feet at y18 vs the
-// planted y21). West frames must be the exact horizontal mirror of east.
+// fxchickenatk is the chicken's peck/leap/wing_beat overlay: a 6-frame 32x24
+// sheet in [peck E, peck W, leap E, leap W, wing E, wing W] order, drawn during
+// both windup and attack. Peck and leap LOWER the head onto the target (peck to
+// rows 4..9, leap to rows 3..8) with the BLACK beak as an erase notch at the
+// lowered head's front edge; the leap also lifts the body 2 px and folds the
+// legs (feet at y18 vs the planted y21). wing_beat crouches (body rows 7..15)
+// and sweeps the near wing out behind as a wide panel with BLACK feather rows.
+// West frames must be the exact horizontal mirror of east.
 void testChickenAttackSheet(Test &t) {
     std::cout << "---------- chicken attack sheet ----------" << std::endl;
     Blob atk;
@@ -504,7 +506,7 @@ void testChickenAttackSheet(Test &t) {
     t.assert(atk.frames, art_dims::chickenatk_frames, "chickenatk blob frames");
     t.assert(art_dims::chickenatk_frame_w, 32, "chickenatk frame w");
     t.assert(art_dims::chickenatk_frame_h, 24, "chickenatk frame h");
-    t.assert(art_dims::chickenatk_frames, 4, "chickenatk frames");
+    t.assert(art_dims::chickenatk_frames, 6, "chickenatk frames");
 
     // Frame 0 peck E: feet stay planted (dark ink at y21), the head lowers to
     // rows 4..9 (white ink on plane 2 at the front) and the beak/eye are the
@@ -529,7 +531,20 @@ void testChickenAttackSheet(Test &t) {
     t.assert(planeAtF(atk, 2, 0, 12, 18), 1, "leap tucked foot plane0");
     t.assert(maskAtF(atk, 2, 12, 21), 0, "leap planted row clear");
 
-    // West frames are the exact horizontal mirrors (1<->0, 3<->2).
+    // Frame 4 wing_beat E: the body crouches (belly row y14 lit, the peck/leap
+    // y2 body band clear), the near wing sweeps out behind as a wide panel with
+    // BLACK feather rows ((2,13) mask set, plane 0 clear), and the head stays
+    // level (white at rows 3..8). The y2 comb is white too, so the no-high probe
+    // samples (27,2), clear of the comb horns at x21..23/x25..26; the planted
+    // foot probe samples the near foot at x12 (the peck/leap planted column).
+    t.assert(planeAtF(atk, 4, 2, 27, 5), 1, "wing level head white");
+    t.assert(planeAtF(atk, 4, 2, 27, 2), 0, "wing head not high");
+    t.assert(maskAtF(atk, 4, 2, 13), 1, "wing feather row ink");
+    t.assert(planeAtF(atk, 4, 0, 2, 13), 0, "wing feather black eraser");
+    t.assert(maskAtF(atk, 0, 2, 13), 0, "peck has no wing feather row");
+    t.assert(maskAtF(atk, 4, 12, 21), 1, "wing foot planted");
+
+    // West frames are the exact horizontal mirrors (1<->0, 3<->2, 5<->4).
     auto mirrored = [&](int a, int b) {
         for (int shade = 0; shade < 3; shade++)
             for (int page = 0; page < 3; page++)
@@ -543,25 +558,28 @@ void testChickenAttackSheet(Test &t) {
     };
     t.assert(mirrored(0, 1) ? 1 : 0, 1, "chickenatk west peck mirrors east");
     t.assert(mirrored(2, 3) ? 1 : 0, 1, "chickenatk west leap mirrors east");
+    t.assert(mirrored(4, 5) ? 1 : 0, 1, "chickenatk west wing mirrors east");
 
-    // All four frames differ, so both attacks and both facings are distinct.
-    uint32_t h[4];
-    for (int i = 0; i < 4; i++)
+    // All six frames differ, so every attack and both facings are distinct.
+    uint32_t h[6];
+    for (int i = 0; i < 6; i++)
         h[i] = blobFrameHash(atk, i);
-    for (int i = 0; i < 4; i++)
-        for (int j = i + 1; j < 4; j++)
+    for (int i = 0; i < 6; i++)
+        for (int j = i + 1; j < 6; j++)
             t.assert(h[i] != h[j] ? 1 : 0, 1, "chickenatk frames distinct");
 }
 
 // ------------------------------------------- bull attack overlay (nch.10)
 
-// fxbullatk is the bull's stomp/gore overlay: a 4-frame 32x24 sheet in
-// [stomp E, stomp W, gore E, gore W] order, drawn during both windup and
-// attack. The stomp raises both front hooves (tucked back under the chest),
-// pitches the body forward onto the planted rear legs and holds the head/horns
-// high; the gore lowers the head, drives the horns forward along the facing
-// edge, leans the body 1 px and raises the tail. West frames must be the exact
-// horizontal mirror of east.
+// fxbullatk is the bull's stomp/gore/rear_kick overlay: an 8-frame 32x24 sheet
+// in [stomp E/W, gore E/W, rear_kick E/W, stomp_windup E/W] order (the prg.12
+// tell-slot ordinal order), drawn during both windup and attack. The stomp
+// release raises both front hooves (tucked back under the chest), pitches the
+// body forward onto the planted rear legs and holds the head/horns high; the
+// gore lowers the head, drives the horns forward and raises the tail; the
+// rear_kick bucks the hind legs back off the ground; the stomp windup rears on
+// the planted hind legs with both front hooves raised high and spread. West
+// frames must be the exact horizontal mirror of east.
 void testBullAttackSheet(Test &t) {
     std::cout << "---------- bull attack sheet ----------" << std::endl;
     Blob atk;
@@ -572,7 +590,7 @@ void testBullAttackSheet(Test &t) {
     t.assert(atk.frames, art_dims::bullatk_frames, "bullatk blob frames");
     t.assert(art_dims::bullatk_frame_w, 32, "bullatk frame w");
     t.assert(art_dims::bullatk_frame_h, 24, "bullatk frame h");
-    t.assert(art_dims::bullatk_frames, 4, "bullatk frames");
+    t.assert(art_dims::bullatk_frames, 8, "bullatk frames");
 
     // Frame 0 stomp E: rear hooves planted (ink at y22), front hooves raised and
     // tucked back over the chest (the BLACK hoof at y14 overwrites the DARK body
@@ -598,7 +616,35 @@ void testBullAttackSheet(Test &t) {
     t.assert(planeAtF(atk, 2, 2, 30, 12), 1, "gore horn forward white");
     t.assert(planeAtF(atk, 2, 0, 16, 14), 1, "gore hoof row planted body");
 
-    // West frames are the exact horizontal mirrors (1<->0, 3<->2).
+    // Frame 4 rear_kick E: the hind legs kick back off the ground ((0,14) is a
+    // BLACK raised hoof, (4,13) the raised thigh) while the front hooves stay
+    // planted forward (ink at (20,22)); the head stays low (white at y18, clear
+    // high). Frame 0/6 have no raised hind hoof. The (23,17) sample avoids the
+    // black eye at (25..26,18..19) so it reads the low white head.
+    t.assert(maskAtF(atk, 4, 0, 14), 1, "rear_kick raised hoof ink");
+    t.assert(planeAtF(atk, 4, 0, 0, 14), 0, "rear_kick raised hoof black eraser");
+    t.assert(planeAtF(atk, 4, 0, 4, 13), 1, "rear_kick raised hind thigh plane0");
+    t.assert(maskAtF(atk, 4, 20, 22), 1, "rear_kick front hoof planted");
+    t.assert(planeAtF(atk, 4, 2, 23, 17), 1, "rear_kick head low white");
+    t.assert(planeAtF(atk, 4, 2, 25, 4), 0, "rear_kick head not high");
+    t.assert(maskAtF(atk, 0, 0, 14), 0, "stomp release no raised hind hoof");
+
+    // Frame 6 stomp windup E: reared on planted rear legs (ink at (4,22)) with
+    // BOTH front hooves raised high and spread -- (13,4) and (26,5) are BLACK
+    // erasers -- and the head high (white at y3, clear low). The release stomp's
+    // tucked-hoof eraser row (16,14) is normal body ink here. The (23,3) sample
+    // avoids the black eye at (25..26,3..4) so it reads the high white head.
+    t.assert(maskAtF(atk, 6, 4, 22), 1, "stomp windup rear hoof planted");
+    t.assert(maskAtF(atk, 6, 13, 4), 1, "stomp windup near raised hoof ink");
+    t.assert(planeAtF(atk, 6, 0, 13, 4), 0, "stomp windup near raised hoof black eraser");
+    t.assert(maskAtF(atk, 6, 26, 5), 1, "stomp windup far raised hoof ink");
+    t.assert(planeAtF(atk, 6, 0, 26, 5), 0, "stomp windup far raised hoof black eraser");
+    t.assert(planeAtF(atk, 6, 2, 23, 3), 1, "stomp windup head high white");
+    t.assert(planeAtF(atk, 6, 2, 25, 17), 0, "stomp windup head not low");
+    t.assert(planeAtF(atk, 6, 0, 16, 14), 1, "stomp windup hoof row is body");
+    t.assert(planeAtF(atk, 0, 0, 16, 14), 0, "stomp release hoof row eraser");
+
+    // West frames are the exact horizontal mirrors (1<->0, 3<->2, 5<->4, 7<->6).
     auto mirrored = [&](int a, int b) {
         for (int shade = 0; shade < 3; shade++)
             for (int page = 0; page < 3; page++)
@@ -612,14 +658,73 @@ void testBullAttackSheet(Test &t) {
     };
     t.assert(mirrored(0, 1) ? 1 : 0, 1, "bullatk west stomp mirrors east");
     t.assert(mirrored(2, 3) ? 1 : 0, 1, "bullatk west gore mirrors east");
+    t.assert(mirrored(4, 5) ? 1 : 0, 1, "bullatk west rear_kick mirrors east");
+    t.assert(mirrored(6, 7) ? 1 : 0, 1, "bullatk west stomp windup mirrors east");
 
-    // All four frames differ, so both attacks and both facings are distinct.
-    uint32_t h[4];
-    for (int i = 0; i < 4; i++)
+    // All eight frames differ, so every attack and both facings are distinct.
+    uint32_t h[8];
+    for (int i = 0; i < 8; i++)
         h[i] = blobFrameHash(atk, i);
-    for (int i = 0; i < 4; i++)
-        for (int j = i + 1; j < 4; j++)
+    for (int i = 0; i < 8; i++)
+        for (int j = i + 1; j < 8; j++)
             t.assert(h[i] != h[j] ? 1 : 0, 1, "bullatk frames distinct");
+}
+
+// ------------------------------------------- heavy attack overlay (prg.12)
+
+// fxheavyatk is the longtail's non-locked attack overlay: an 8-frame 32x24 sheet
+// in [bite E/W, bite_windup E/W, spin_windup E/W, slam_windup E/W] order (the
+// prg.11 tell-slot ordinal order). The bite release thrusts the head forward and
+// low; the bite windup draws it back and high with the snout up; the spin/slam
+// windups raise the tail (the locked spin branch draws fxtailspin instead, so
+// those two slots are authored for selector completeness). West frames must be
+// the exact horizontal mirror of east.
+void testHeavyAttackSheet(Test &t) {
+    std::cout << "---------- heavy attack sheet ----------" << std::endl;
+    Blob atk;
+    if (!parseBlob("fxheavyatk", atk, t))
+        return;
+    t.assert(atk.w, art_dims::heavyatk_frame_w, "heavyatk blob frame w");
+    t.assert(atk.h, art_dims::heavyatk_frame_h, "heavyatk blob frame h");
+    t.assert(atk.frames, art_dims::heavyatk_frames, "heavyatk blob frames");
+    t.assert(art_dims::heavyatk_frame_w, 32, "heavyatk frame w");
+    t.assert(art_dims::heavyatk_frame_h, 24, "heavyatk frame h");
+    t.assert(art_dims::heavyatk_frames, 8, "heavyatk frames");
+
+    // Frame 0 bite release: head thrust forward and LOW (white at y11, clear
+    // high). Frame 2 bite windup: head drawn back and HIGH (white at y6, clear
+    // at the release row), the pose signature the windup tell selects.
+    t.assert(planeAtF(atk, 0, 2, 25, 11), 1, "bite release head low white");
+    t.assert(planeAtF(atk, 0, 2, 25, 2), 0, "bite release head not high");
+    t.assert(planeAtF(atk, 2, 2, 25, 6), 1, "bite windup head high white");
+    t.assert(planeAtF(atk, 2, 2, 25, 17), 0, "bite windup head not low");
+    t.assert(planeAtF(atk, 4, 0, 2, 1), 1, "spin windup tail raised plane0");
+    t.assert(planeAtF(atk, 6, 0, 2, 1), 1, "slam windup tail raised plane0");
+
+    // West frames are the exact horizontal mirrors (1<->0, 3<->2, 5<->4, 7<->6).
+    auto mirrored = [&](int a, int b) {
+        for (int shade = 0; shade < 3; shade++)
+            for (int page = 0; page < 3; page++)
+                for (int x = 0; x < atk.w; x++) {
+                    if (pixelData(atk, a, shade, x, page) != pixelData(atk, b, shade, atk.w - 1 - x, page))
+                        return false;
+                    if (pixelMask(atk, a, shade, x, page) != pixelMask(atk, b, shade, atk.w - 1 - x, page))
+                        return false;
+                }
+        return true;
+    };
+    t.assert(mirrored(0, 1) ? 1 : 0, 1, "heavyatk west bite mirrors east");
+    t.assert(mirrored(2, 3) ? 1 : 0, 1, "heavyatk west bite windup mirrors east");
+    t.assert(mirrored(4, 5) ? 1 : 0, 1, "heavyatk west spin windup mirrors east");
+    t.assert(mirrored(6, 7) ? 1 : 0, 1, "heavyatk west slam windup mirrors east");
+
+    // All eight frames differ, so every pose and both facings are distinct.
+    uint32_t h[8];
+    for (int i = 0; i < 8; i++)
+        h[i] = blobFrameHash(atk, i);
+    for (int i = 0; i < 8; i++)
+        for (int j = i + 1; j < 8; j++)
+            t.assert(h[i] != h[j] ? 1 : 0, 1, "heavyatk frames distinct");
 }
 
 // ------------------------------------------- breakable-zone part overlays (kt7.6)
@@ -1086,13 +1191,18 @@ void ArtDimsSuite(TestRunner &runner) {
         suite.addTest(t);
     }
     {
-        Test t("chicken attack overlay is a 4-frame peck/leap mirror sheet");
+        Test t("chicken attack overlay is a 6-frame peck/leap/wing mirror sheet");
         testChickenAttackSheet(t);
         suite.addTest(t);
     }
     {
-        Test t("bull attack overlay is a 4-frame stomp/gore mirror sheet");
+        Test t("bull attack overlay is an 8-frame stomp/gore/rear_kick/windup mirror sheet");
         testBullAttackSheet(t);
+        suite.addTest(t);
+    }
+    {
+        Test t("heavy attack overlay is an 8-frame bite/windup mirror sheet");
+        testHeavyAttackSheet(t);
         suite.addTest(t);
     }
     {
