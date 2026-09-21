@@ -123,7 +123,9 @@ MH_NOINLINE void initGame(Game &g, int8_t weapon) {
     g.carveHold = false;
     // Armor cache (arm.2): empty until the sketch arms it from the save
     // (armorApplyToGame); a default Game therefore keeps the base head/body.
+    // armorFx (arm.3) is the same story: identity effects until armed.
     g.armor = ArmorAgg{};
+    armorEffectsBase(g.armorFx);
     g.armorHead = 0;
 }
 
@@ -340,7 +342,7 @@ static void updateStance(Game &g, const WeaponDef *def) {
                 const int16_t cy = static_cast<int16_t>(p.y + (p.h >> 1));
                 if (circleRectOverlap(cx, cy, 24, g.target.rect)) {
                     if (g.target.onHit)
-                        g.target.onHit(g, static_cast<uint8_t>(upgradeMul(8, g.dmgMul)), cx, cy, 8, 0);
+                        g.target.onHit(g, static_cast<uint8_t>(attackMulFold(8, g.dmgMul, g.armorFx.dmgMul)), cx, cy, 8, 0);
                 }
             }
         }
@@ -441,8 +443,8 @@ static bool startDodgeRoll(Game &g, int16_t dx, int16_t dy) {
     p.stam -= 14;
     p.state = PS_DODGE;
     p.t = 16;
-    p.iT = 14;
-    p.vx = (dx * 54) >> 4;   // 3.4 px/t
+    p.iT = static_cast<uint8_t>(14 + g.armorFx.iT);   // EVADE_WINDOW extends dodge i-frames (arm.3)
+    p.vx = (dx * 54) >> 4;                            // 3.4 px/t
     p.vy = (dy * 54) >> 4;
     exitStance(p);
     return true;
@@ -569,6 +571,11 @@ static void playerHurt(Game &g, int16_t dmg, int16_t faceX, int16_t faceY) {
     Player &p = g.player;
     if (p.iT > 0)
         return;
+
+    // Armor defense (arm.3): reduce the incoming hit before the guard/parry
+    // branches, so a guard chip is computed off the reduced value. def 0 is
+    // identity, and positive damage floors at 1 (never a free hit).
+    dmg = armorReduce(dmg, g.armorFx.defense);
 
     if (p.state == PS_DEFLECT && p.t > 0) {
         if (g.target.onStun)
@@ -839,10 +846,11 @@ static void updatePlayer(Game &g, const Input &inp, bool aP, bool bP, bool bR) {
                 const int16_t hx = static_cast<int16_t>(hit.x + hit.w / 2);
                 const int16_t hy = static_cast<int16_t>(hit.y + hit.h / 2);
                 if (g.target.onHit) {
-                    // Smith tier damage (integer percent, truncating) applied
-                    // before the riposte x2, then flows on through the existing
-                    // Target::onHit -> monsterOnHit chain.
-                    const int16_t dmg = upgradeMul(attackDmg(a), g.dmgMul);
+                    // Smith tier + armor ATTACK_UP damage (integer percents,
+                    // truncating at each step) applied before the riposte x2,
+                    // then flows on through the existing Target::onHit ->
+                    // monsterOnHit chain.
+                    const int16_t dmg = attackMulFold(attackDmg(a), g.dmgMul, g.armorFx.dmgMul);
                     g.target.onHit(g, static_cast<uint8_t>(dmg * mult), hx, hy, attackPush(a), attackEffect(a));
                 }
             }

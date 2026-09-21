@@ -32,9 +32,20 @@ inline void armorReadPiece(uint8_t index, ArmorPiece &p) {
     }
 }
 
+// Decode skill `index` into the plain engine view (armor_state.hpp ArmorSkill).
+inline void armorReadSkill(uint8_t index, ArmorSkill &s) {
+    const uint16_t off = static_cast<uint16_t>(armor::SKILLS_OFF + armor::SKILL_SIZE * index);
+    s.kind = mhFxReadU8(armorCart(static_cast<uint16_t>(off + armor::SKILL_KIND_OFF)));
+    s.maxPoints = mhFxReadU8(armorCart(static_cast<uint16_t>(off + armor::SKILL_MAX_OFF)));
+    s.perPoint = mhFxReadU8(armorCart(static_cast<uint16_t>(off + armor::SKILL_PER_POINT_OFF)));
+    s.pad = 0;
+}
+
 // Cache the save's equipped pieces into g.armor (+ g.armorHead for the render
-// slot loop). A slot holding an out-of-range or wrong-slot id is ignored, so a
-// hand-edited/corrupt save cannot read past the table.
+// slot loop) and resolve the skill magnitudes into g.armorFx (arm.3). A slot
+// holding an out-of-range or wrong-slot id is ignored, so a hand-edited/corrupt
+// save cannot read past the table. Called at hunt start / camp return, so the
+// live hp/stam are re-armed from the resolved maxes (a fresh hunt starts full).
 inline void armorApplyToGame(Game &g, const SaveBlock &save) {
     ArmorAgg agg;
     armorClear(agg);
@@ -52,6 +63,11 @@ inline void armorApplyToGame(Game &g, const SaveBlock &save) {
             g.armorHead = id;
     }
     armorFinalize(agg);
+    ArmorSkill skills[armor::SKILL_COUNT];
+    for (uint8_t i = 0; i < armor::SKILL_COUNT; i++)
+        armorReadSkill(i, skills[i]);
+    armorEffects(agg, skills, g.armorFx);
+    armorRestoreStats(g.armorFx, g.player.hp, g.player.hpMax, g.player.stam, g.player.stamMax);
     g.armor = agg;
 }
 

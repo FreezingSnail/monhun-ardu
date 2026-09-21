@@ -244,11 +244,22 @@ inline void test_smith(FxTest &test) {
     test.expectEq(ag.armor.points[armor::SKILL_ATTACK_UP], 3, F("cart attack_up points"));
     test.expectEq(ag.armor.tier[armor::SKILL_ATTACK_UP], 0, F("3 points inert"));
     test.expectEq(ag.armorHead, armor::ARMOR_HUNTER_HELM + 1, F("armorHead set"));
+    // arm.3: the resolved effect cache comes off the same cart read. The shipped
+    // 3 attack_up points are below S, so the damage fold stays identity (100)
+    // while the 10 helm defense lands in the combat reduction.
+    test.expectEq(ag.armorFx.defense, 10, F("cart effect defense"));
+    test.expectEq(ag.armorFx.dmgMul, 100, F("inert attack_up identity mul"));
+    test.expectEq(ag.armorFx.hpMax, 100, F("no health_up -> hpMax 100"));
+    test.expectEq(ag.armorFx.stamMax, 100, F("no stamina_up -> stamMax 100"));
+    test.expectEq(ag.armorFx.iT, 0, F("no evade_window -> no iT bonus"));
+    test.expectEq(ag.player.hpMax, 100, F("live hpMax armed"));
+    test.expectEq(ag.player.hp, 100, F("live hp topped to max"));
     test.expectEq(screenApplyAction(aloaded, helm), 1, F("second A unequips"));
     test.expectEq(aloaded.equip[armor::SLOT_HEAD], SAVE_EQUIP_NONE, F("unequipped"));
     armorApplyToGame(ag, aloaded);
     test.expectEq(ag.armor.defense, 0, F("unequipped defense 0"));
     test.expectEq(ag.armorHead, 0, F("armorHead cleared"));
+    test.expectEq(ag.armorFx.defense, 0, F("unequipped effect defense 0"));
 
     // ----------------------------------------- buy -> damage/speed change
     test.expectEq(meleeHit(100), 9, F("baseline sword hit 9"));

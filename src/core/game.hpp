@@ -914,10 +914,12 @@ struct Game {
     bool carveHold;
     // Armor engine cache (bead monhun-ardu-arm.2): resolved from the save's
     // equipped pieces at hunt start / equip change (src/armor.hpp). armorHead is
-    // the equipped head piece + 1 for the render slot loop (0 = base head).
-    // Appended last so every existing field offset holds.
+    // the equipped head piece + 1 for the render slot loop (0 = base head), and
+    // armorFx is the magnitude cache the combat path reads (arm.3). Appended
+    // last so every existing field offset holds.
     ArmorAgg armor;
     uint8_t armorHead;
+    ArmorEffects armorFx;
 };
 
 // Active-room extents for the bound expressions. With ROOM_BOUNDS_ENABLED

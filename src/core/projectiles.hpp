@@ -116,9 +116,10 @@ static void spawnShot(Game &g) {
         pr.vy = static_cast<int16_t>((dirY[i] * speedF) >> 4);
         pr.w = shellW(sh);
         pr.h = shellH(sh);
-        // Smith tier damage (integer percent, truncating); captured at spawn so
-        // the in-flight projectile carries the resolved hit value.
-        pr.dmg = static_cast<uint8_t>(upgradeMul(shellDmg(sh), g.dmgMul));
+        // Smith tier + armor ATTACK_UP damage (integer percents, truncating at
+        // each step); captured at spawn so the in-flight projectile carries the
+        // resolved hit value.
+        pr.dmg = static_cast<uint8_t>(attackMulFold(shellDmg(sh), g.dmgMul, g.armorFx.dmgMul));
         pr.life = PROJ_LIFE;
         pr.heavy = (shellPellets(sh) == 1);
     }

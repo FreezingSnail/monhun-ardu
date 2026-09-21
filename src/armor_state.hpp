@@ -89,6 +89,106 @@ inline void armorFinalize(ArmorAgg &out) {
     }
 }
 
+// ------------------------------------------------------------- arm.3 effects
+// Plain view of one skill record (the packed 3 B mhArmor skill entry): the
+// effect kind + the per-point magnitude. The host passes armor_data::SKILLS;
+// the device reads the cart records (src/armor.hpp armorReadSkill).
+struct ArmorSkill {
+    uint8_t kind;        // armor::KIND_*
+    uint8_t maxPoints;   // per-skill cap (THRESHOLD_M shipped)
+    uint8_t perPoint;    // effect magnitude contributed per skill point
+    uint8_t pad;         // host struct padding; device reads fields by name
+};
+
+// Resolved armor effects the combat path reads every hit (arm.3). The ArmorAgg
+// above is the defense / skill-point cache; this is the magnitude cache armed
+// alongside it at hunt start / on equip change (Game::armorFx).
+struct ArmorEffects {
+    uint16_t defense;   // summed defense + DEFENSE_UP bonus
+    uint8_t hpMax;      // HEALTH_UP: 100 + bonus, clamped to 255
+    uint8_t stamMax;    // STAMINA_UP: 100 + bonus, clamped to 255
+    uint8_t dmgMul;     // ATTACK_UP: 100 + bonus (integer percent, 100 = none)
+    uint8_t iT;         // EVADE_WINDOW: extra dodge i-frames
+};
+
+// Base (no armor equipped) block: the identity every default Game holds.
+inline void armorEffectsBase(ArmorEffects &out) {
+    out.defense = 0;
+    out.hpMax = 100;
+    out.stamMax = 100;
+    out.dmgMul = 100;
+    out.iT = 0;
+}
+
+// Effect magnitude of one aggregated skill: 0 while inert (tier 0), else
+// min(points, maxPoints) * perPoint. armorFinalize already clamps points to
+// THRESHOLD_M; the extra min keeps a hand-built ArmorAgg honest.
+inline uint16_t armorSkillBonus(const ArmorAgg &agg, uint8_t skill, const ArmorSkill &def) {
+    if (skill >= armor::SKILL_COUNT || agg.tier[skill] == 0)
+        return 0;
+    uint8_t points = agg.points[skill];
+    if (points > def.maxPoints)
+        points = def.maxPoints;
+    return static_cast<uint16_t>(points) * def.perPoint;
+}
+
+inline uint8_t armorClampStat(uint16_t v) {
+    return v > 255 ? 255 : static_cast<uint8_t>(v);
+}
+
+// Resolve the cached aggregation + skill table into the combat effect block:
+// base defense plus every active skill's magnitude by kind.
+inline void armorEffects(const ArmorAgg &agg, const ArmorSkill *skills, ArmorEffects &out) {
+    armorEffectsBase(out);
+    out.defense = agg.defense;
+    for (uint8_t i = 0; i < armor::SKILL_COUNT; i++) {
+        const uint16_t bonus = armorSkillBonus(agg, i, skills[i]);
+        if (bonus == 0)
+            continue;
+        switch (skills[i].kind) {
+        case armor::KIND_ATTACK_UP:
+            out.dmgMul = armorClampStat(static_cast<uint16_t>(100 + bonus));
+            break;
+        case armor::KIND_DEFENSE_UP:
+            out.defense = static_cast<uint16_t>(out.defense + bonus);
+            break;
+        case armor::KIND_HEALTH_UP:
+            out.hpMax = armorClampStat(static_cast<uint16_t>(100 + bonus));
+            break;
+        case armor::KIND_STAMINA_UP:
+            out.stamMax = armorClampStat(static_cast<uint16_t>(100 + bonus));
+            break;
+        case armor::KIND_EVADE_WINDOW:
+            out.iT = armorClampStat(bonus);
+            break;
+        default:
+            break;
+        }
+    }
+}
+
+// Incoming-damage reduction (arm.3): dmg * 100 / (100 + def), floor 1. Applied
+// in playerHurt before the guard/parry branches, so a guard chip is computed
+// off the reduced value. int32 so a hostile/garbage def cannot overflow the
+// denominator; positive damage never drops below 1.
+inline int16_t armorReduce(int16_t dmg, uint16_t def) {
+    if (dmg <= 0)
+        return dmg;
+    const int32_t denom = 100 + static_cast<int32_t>(def);
+    const int32_t reduced = (static_cast<int32_t>(dmg) * 100) / denom;
+    return reduced < 1 ? 1 : static_cast<int16_t>(reduced);
+}
+
+// Hunt start / camp return: arm the live hp/stam fields from the resolved
+// effects and top them up, so a hunt with HEALTH_UP starts at its new max.
+// Clamping the maxes keeps a corrupt/synthetic bonus from wrapping a u8.
+inline void armorRestoreStats(const ArmorEffects &fx, uint8_t &hp, uint8_t &hpMax, uint8_t &stam, uint8_t &stamMax) {
+    hpMax = fx.hpMax;
+    stamMax = fx.stamMax;
+    hp = hpMax;
+    stam = stamMax;
+}
+
 // Full host aggregation: walk the piece table, add every piece whose index+1 is
 // in its own slot (save.equip[slot] == piece + 1), then finalize. The device
 // walks only the three equipped slots and calls armorAdd/armorFinalize directly.

@@ -61,6 +61,13 @@ MH_NOINLINE inline int16_t upgradeMul(int16_t value, uint8_t mul) {
     return static_cast<int16_t>((static_cast<int32_t>(value) * mul) / 100);
 }
 
+// arm.3: fold the armor ATTACK_UP percent (Game::armorFx.dmgMul, 100 = none)
+// after the smith tier mul, truncating at each step. One place so melee, whirl
+// and shell spawns share the exact arithmetic.
+inline int16_t attackMulFold(int16_t base, uint8_t smithMul, uint8_t armorMul) {
+    return upgradeMul(upgradeMul(base, smithMul), armorMul);
+}
+
 // Linear scan for a (weapon, tier) record. Returns -1 when absent; tier 0 is
 // never stored (tier 0 is "no upgrade").
 inline int16_t upgradeFind(const UpgradeDef *defs, uint8_t count, uint8_t weapon, uint8_t tier) {

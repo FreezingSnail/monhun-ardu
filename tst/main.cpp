@@ -21,6 +21,7 @@
 #include "items_test.hpp"
 #include "armor_test.hpp"
 #include "armor_engine_test.hpp"
+#include "armor_effect_test.hpp"
 #include "carve_test.hpp"
 
 int main() {
@@ -46,6 +47,7 @@ int main() {
     ItemsSuite(runner);
     ArmorSuite(runner);
     ArmorEngineSuite(runner);
+    ArmorEffectSuite(runner);
     CarveSuite(runner);
     runner.printSummary();
     return runner.fail() ? 1 : 0;

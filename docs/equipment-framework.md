@@ -234,6 +234,36 @@ closest existing layered head sheet (`src/render.hpp armorHeadPart`):
 oracle (`tst/fxdatatest/player_art_test.hpp`, cases 37..39) pins the two head
 layers; when the real sheets land this is a data/art change, not a render edit.
 
+### Armor effects in combat (monhun-ardu-arm.3)
+
+`src/armor_state.hpp` resolves the cached aggregation + the skill table into an
+`ArmorEffects` block (`defense`, `hpMax`, `stamMax`, `dmgMul`, `iT`). The device
+fills it in `armorApplyToGame` (`src/armor.hpp`, reads the 5 packed skill records
+off the cart) and caches it in `Game::armorFx`; a default `Game`/`initGame` holds
+the identity block (defense 0, maxes 100, `dmgMul` 100, iT 0), so a build with no
+equipped armor is byte-identical to before. `armorApplyToGame` also re-arms the
+live hp/stam maxes (topping them up — it only runs at hunt start / camp return).
+
+| skill (`armor::KIND_*`) | effect once active | where |
+|---|---|---|
+| `ATTACK_UP` | `dmgMul = 100 + points*perPoint`; folded after the smith tier mul with `attackMulFold()` (truncating at each step) | melee, whirl, shell spawns |
+| `DEFENSE_UP` | `defense += points*perPoint` | `armorReduce` in `playerHurt` |
+| `HEALTH_UP` | `hpMax = clamp(100 + bonus, 255)` | `armorRestoreStats` |
+| `STAMINA_UP` | `stamMax = clamp(100 + bonus, 255)` | `armorRestoreStats` |
+| `EVADE_WINDOW` | extra dodge i-frames (`startDodgeRoll`) | `p.iT` |
+
+- **Defense**: `playerHurt` reduces incoming damage before the guard/parry
+  branches: `armorReduce(dmg, def) = dmg * 100 / (100 + def)`, floor 1 for
+  positive damage. A guard chip is computed off the reduced value and still
+  floors at 1, so armor cannot make a hit free or a chip underflow `hp`.
+- **Resistance** (`resist[]`) stays plumbed but inert: no element damage exists
+  yet, so nothing consumes it.
+- **Magnitude rule**: `min(points, maxPoints) * perPoint` once the tier is
+  nonzero (`armorSkillBonus`); inert tiers contribute nothing. Shipped data only
+  reaches 3 points per skill, so every skill is inert in the shipping build —
+  only the flat defense applies. `tst/armor_effect_test.hpp` drives synthetic
+  aggs/skill tables to pin the magnitudes and thresholds.
+
 ## Pipeline
 
 1. `tools/gen-equipment.py` (new) reads `data/equipment/**`, validates schema,
@@ -295,7 +325,10 @@ of this sprite framework:
    `armor_state.hpp` aggregation + `armor.hpp` cart cache, smith armor
    craft/equip rows, placeholder head-layer render (see the section above).
 3. `arm.3` armor effects in combat: defense, hpMax/stamMax, attack/evade/
-   stamina modifiers from the aggregated skill points + thresholds.
+   stamina modifiers from the aggregated skill points + thresholds. Landed:
+   `ArmorEffects` cache in `Game::armorFx`, `armorReduce` in `playerHurt`,
+   `attackMulFold` on the damage paths, dodge i-frames from EVADE_WINDOW, docs
+   table above.
 
 Art review per `docs/dev-flow.md`: shades exact, anchors vs sim dims, shade-0
 erase, telegraph window == hit-test window.
