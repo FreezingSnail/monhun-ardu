@@ -42,66 +42,37 @@ void testSpinSheetFrame(Test &t) {
     t.assert(mh::spinSheetFrame(3, -1, 20), 3, "negative tick collapses");
 }
 
-void testTellShapes(Test &t) {
-    std::cout << "---------- per-attack telegraph geometry ----------" << std::endl;
+void testTellWindupFrame(Test &t) {
+    std::cout << "---------- windup animation-frame selector ----------" << std::endl;
 
-    // Dot default negative control: tell 0 draws the legacy 2x2 core only, so
-    // the render takes the no-window path.
+    // The tell ids stay the authored order (DOT/LINE/ARC/RING/ZONE).
     t.assert(mh::TELL_DOT, 0, "dot shape id");
-    t.assert(mh::tellNeedsWindow(mh::TELL_DOT), false, "dot needs no window");
-    t.assert(mh::tellNeedsWindow(mh::TELL_LINE), true, "line uses the window");
-    t.assert(mh::tellNeedsWindow(mh::TELL_ARC), true, "arc uses the window");
-    t.assert(mh::tellNeedsWindow(mh::TELL_RING), true, "ring uses the window");
-    t.assert(mh::tellNeedsWindow(mh::TELL_ZONE), true, "zone uses the window");
-    t.assert(mh::tellNeedsWindow(200), true, "unknown shape uses the window");
-
-    // Line dashes: Q2 fractions of the window-centre vector, floor shifts.
-    int16_t ox = 0, oy = 0;
-    mh::tellLineDash(14, 0, 1, ox, oy);
-    t.assert(ox, 3, "line dash 1/4 ox");
-    t.assert(oy, 0, "line dash 1/4 oy");
-    mh::tellLineDash(14, 0, 2, ox, oy);
-    t.assert(ox, 7, "line dash 2/4 ox");
-    mh::tellLineDash(14, 0, 3, ox, oy);
-    t.assert(ox, 10, "line dash 3/4 ox");
-    mh::tellLineDash(12, -8, 2, ox, oy);
-    t.assert(ox, 6, "line diagonal ox");
-    t.assert(oy, -4, "line diagonal oy");
-    mh::tellLineDash(-14, 0, 3, ox, oy);
-    t.assert(ox, -11, "line negative dx floors");
-
-    // Ring expansion: ~1 px per 2 elapsed windup ticks from 2, clamped.
-    t.assert(mh::tellRingHalf(6, -5), 2, "ring negative elapsed clamps to 2");
-    t.assert(mh::tellRingHalf(6, 0), 2, "ring starts at 2");
-    t.assert(mh::tellRingHalf(6, 1), 2, "ring t1 still 2");
-    t.assert(mh::tellRingHalf(6, 2), 3, "ring t2 -> 3");
-    t.assert(mh::tellRingHalf(6, 4), 4, "ring t4 -> 4");
-    t.assert(mh::tellRingHalf(6, 8), 6, "ring t8 reaches half");
-    t.assert(mh::tellRingHalf(6, 100), 6, "ring clamps to half");
-    t.assert(mh::tellRingHalf(2, 10), 2, "ring clamps to a tiny box");
-
-    // Arc segments: left/centre/right across the box width, centre dropped 2.
+    t.assert(mh::TELL_LINE, 1, "line shape id");
     t.assert(mh::TELL_ARC, 2, "arc shape id");
-    mh::tellArcSeg(12, 10, 0, ox, oy);
-    t.assert(ox, 0, "arc left ox");
-    t.assert(oy, 4, "arc left oy");
-    mh::tellArcSeg(12, 10, 1, ox, oy);
-    t.assert(ox, 4, "arc centre ox");
-    t.assert(oy, 6, "arc centre drop");
-    mh::tellArcSeg(12, 10, 2, ox, oy);
-    t.assert(ox, 8, "arc right ox");
-    t.assert(oy, 4, "arc right oy");
-    mh::tellArcSeg(18, 16, 1, ox, oy);
-    t.assert(ox, 7, "arc wide centre ox");
+    t.assert(mh::TELL_RING, 3, "ring shape id");
+    t.assert(mh::TELL_ZONE, 4, "zone shape id");
 
-    // Window rect origin shared by ring/zone; clamps the hit-test box maths.
-    int16_t rx = 0, ry = 0;
-    mh::tellRectOrigin(78, 36, 12, 10, rx, ry);
-    t.assert(rx, 72, "rect origin x");
-    t.assert(ry, 31, "rect origin y");
-    mh::tellRectOrigin(10, 10, 1, 1, rx, ry);
-    t.assert(rx, 10, "1px rect origin x");
-    t.assert(ry, 10, "1px rect origin y");
+    // Shipping carries no authored bespoke frames (prg.12 authors them), so
+    // every tell falls back to the core marker.
+    t.assert(mh::TELL_FRAMES_AUTHORED, 0, "no authored tell frames shipping");
+    t.assert(mh::tellHasAuthoredFrame(mh::TELL_DOT, mh::TELL_FRAMES_AUTHORED), false, "dot has no bespoke frame");
+    t.assert(mh::tellHasAuthoredFrame(mh::TELL_LINE, mh::TELL_FRAMES_AUTHORED), false, "line unauthored");
+    t.assert(mh::tellHasAuthoredFrame(mh::TELL_RING, mh::TELL_FRAMES_AUTHORED), false, "ring unauthored");
+    t.assert(mh::tellWindupFrame(mh::TELL_LINE, mh::TELL_FRAMES_AUTHORED), mh::TELL_WINDUP_NONE, "line falls back");
+    t.assert(mh::tellWindupFrame(mh::TELL_RING, mh::TELL_FRAMES_AUTHORED), mh::TELL_WINDUP_NONE, "ring falls back");
+
+    // tell 0 is the generic coil, never a bespoke frame, even with art authored.
+    t.assert(mh::tellHasAuthoredFrame(mh::TELL_DOT, 8), false, "dot stays generic");
+    t.assert(mh::tellWindupFrame(mh::TELL_DOT, 8), mh::TELL_WINDUP_NONE, "dot never a bespoke slot");
+
+    // With authored frames the tell selects slot 1..N; beyond N falls back.
+    t.assert(mh::tellHasAuthoredFrame(mh::TELL_LINE, 3), true, "line authored at 3");
+    t.assert(mh::tellWindupFrame(mh::TELL_LINE, 3), mh::TELL_LINE, "line slot = tell");
+    t.assert(mh::tellWindupFrame(mh::TELL_RING, 3), mh::TELL_RING, "ring slot = tell");
+    t.assert(mh::tellHasAuthoredFrame(mh::TELL_ZONE, 3), false, "zone beyond authored");
+    t.assert(mh::tellWindupFrame(mh::TELL_ZONE, 3), mh::TELL_WINDUP_NONE, "zone falls back");
+    t.assert(mh::tellWindupFrame(mh::TELL_LINE, 0), mh::TELL_WINDUP_NONE, "zero authored falls back");
+    t.assert(mh::tellWindupFrame(200, 255), 200, "high tell within count resolves");
 }
 
 void RenderMathSuite(TestRunner &runner) {
@@ -112,8 +83,8 @@ void RenderMathSuite(TestRunner &runner) {
         suite.addTest(t);
     }
     {
-        Test t("per-attack telegraph geometry");
-        testTellShapes(t);
+        Test t("windup animation-frame selector");
+        testTellWindupFrame(t);
         suite.addTest(t);
     }
     runner.addTestSuite(suite);

@@ -395,10 +395,9 @@ inline void test_data(FxTest &test) {
     test.expectEq(attackPush(galt), 14, F("gun alt push"));
     test.expectEq(attackId(galt), ATK_NONE, F("gun alt id"));
 
-    // ------------------------------- charge attacks + charge shells (ynb)
-    // Sword has no charge data: both slots zero (weaponHasCharge false).
+    // ------------------------------- charge attacks (ynb, charge-lite prg.11)
+    // Sword has no charge data: slot 0 zero (weaponHasCharge false).
     test.expectEq(weaponHasCharge(w0), 0, F("sword has no charge"));
-    test.expectEq(weaponHasChargeShells(w0), 0, F("sword has no charge shells"));
 
     const Attack *fc0 = weaponCharge(w1, 0);
     test.expectEq(attackStartup(fc0), 4, F("chargeslam1 startup"));
@@ -411,38 +410,11 @@ inline void test_data(FxTest &test) {
     test.expectEq(attackStam(fc0), 14, F("chargeslam1 stam"));
     test.expectEq(attackEffect(fc0), 0, F("chargeslam1 effect"));
     test.expectEq(attackId(fc0), ATK_NONE, F("chargeslam1 id"));
-
-    const Attack *fc1 = weaponCharge(w1, 1);
-    test.expectEq(attackStartup(fc1), 5, F("chargeslam2 startup"));
-    test.expectEq(attackActive(fc1), 8, F("chargeslam2 active"));
-    test.expectEq(attackRecover(fc1), 20, F("chargeslam2 recover"));
-    test.expectEq(attackDmg(fc1), 36, F("chargeslam2 dmg"));
-    test.expectEq(attackReach(fc1), 28, F("chargeslam2 reach"));
-    test.expectEq(attackHw(fc1), 34, F("chargeslam2 hw"));
-    test.expectEq(attackHh(fc1), 24, F("chargeslam2 hh"));
-    test.expectEq(attackStam(fc1), 22, F("chargeslam2 stam"));
-    test.expectEq(attackEffect(fc1), 1, F("chargeslam2 trip"));
     test.expectEq(weaponHasCharge(w1), 1, F("flail has charge"));
 
+    // Gun has no melee charge; the ynb charged ball (chargeShells) is dead data
+    // after the prg.11 carve, so no shell accessor is pinned here.
     test.expectEq(weaponHasCharge(w2), 0, F("gun has no melee charge"));
-    const ShellDef *gcs0 = weaponChargeShell(w2, 0);
-    test.expectEq(shellDmg(gcs0), 34, F("charge ball L1 dmg"));
-    test.expectEq(shellSpeedF(gcs0), 45, F("charge ball L1 speedF"));
-    test.expectEq(shellW(gcs0), 7, F("charge ball L1 w"));
-    test.expectEq(shellH(gcs0), 6, F("charge ball L1 h"));
-    test.expectEq(shellReload(gcs0), 70, F("charge ball L1 reload"));
-    test.expectEq(shellStam(gcs0), 12, F("charge ball L1 stam"));
-    test.expectEq(shellPellets(gcs0), 1, F("charge ball L1 pellets"));
-
-    const ShellDef *gcs1 = weaponChargeShell(w2, 1);
-    test.expectEq(shellDmg(gcs1), 46, F("charge ball L2 dmg"));
-    test.expectEq(shellSpeedF(gcs1), 55, F("charge ball L2 speedF"));
-    test.expectEq(shellW(gcs1), 8, F("charge ball L2 w"));
-    test.expectEq(shellH(gcs1), 8, F("charge ball L2 h"));
-    test.expectEq(shellReload(gcs1), 70, F("charge ball L2 reload"));
-    test.expectEq(shellStam(gcs1), 18, F("charge ball L2 stam"));
-    test.expectEq(shellPellets(gcs1), 1, F("charge ball L2 pellets"));
-    test.expectEq(weaponHasChargeShells(w2), 1, F("gun has charge shells"));
 
     // ------------------------------------ monster values (mock/game.js)
     const MonsterAttack *m0 = &MONSTER_ATTACKS[0];

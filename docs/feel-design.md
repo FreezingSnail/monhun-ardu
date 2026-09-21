@@ -8,8 +8,8 @@ schema reference in `docs/creature-framework.md`.
 
 Sources of truth: `src/core/monster.hpp` (FSM, facing, `wallStun`, enrage, hop),
 `src/core/combat.hpp` (guards, attack fields, windows), `src/render.hpp` +
-`src/render_math.hpp` (tell shapes), and `data/creatures/*.json` (the kits).
-Every number in the tables is the current JSON, verified against
+`src/render_math.hpp` (windup animation tells), and `data/creatures/*.json` (the
+kits). Every number in the tables is the current JSON, verified against
 `python3 tools/gen-combat.py --dump`; regenerate the blob after any edit
 (`make gen`) and review the sheet (`python3 tools/contact_sheet.py`) before
 flashing.
@@ -22,7 +22,7 @@ flashing.
 |---|---|---|---|
 | 1 | **Beast speed vs hunter** | Beast `spd` 3–7 (1/16 px/tick; heavy 3 at the start of the wave) against a hunter who walks 7–14 and runs 24 while stowed. Attacks did not move the beast, so kiting was free and the fight never closed. | Attacks are the mobility. `move.type lunge/charge/hop` closes distance, `keepDist` holds a threat band, and the hop commits a face-relative vector. |
 | 2 | **Track re-aim** | Every attack recomputed its facing vector every tick, so a sidestep was erased the next tick and there was no flank to punish. | `facing: lock-at-windup` freezes the windup vector; `lock-away` turns the back to the hunter; `profile.faceHold > 0` refreshes a *tracked* heading only every N ticks. All three make the flank reachable. |
-| 3 | **2x2 tell** | A single 2x2 shade-2 dot at the window centre. It said "an attack is coming", not *where*. | Per-attack `tell` shapes (`dot/line/arc/ring/zone`) drawn from the cached hit window. The tell draws the area the attack will cover. |
+| 3 | **2x2 tell** | A single 2x2 shade-2 dot at the window centre. It said "an attack is coming", not *where*. | Per-attack `tell` ids (`dot/line/arc/ring/zone`) drawn from the cached hit window (feel.5). prg.11 replaced the procedural shapes with a windup animation-frame selector: the tell picks the beast's authored windup pose, with the 2x2 core marker as the fallback until prg.12 authors the frames. |
 | 4 | **Metronome cadence** | Shared `cdBase 55`, single-ATK patterns, so every fight had the same pulse and the same one-beat answer. | Per-beast `cdBase`/`cdJitter` plus multi-step patterns with `after`, `wait`, `chance` and HP bands, so the pressure changes across the fight. |
 | 5 | **Inert stagger** | `profile.staggerMax 0` on all three beasts — the stagger meter and `MS_STAGGER` were wired but dead, so head/leg pressure had no payoff. | Stagger is opt-in: chicken 60, bull 80 (heavy stays 0 to keep its identity). Hits feed `zone.staggerOnHit`; at threshold the pattern is cancelled into `MS_STAGGER`. feel.19 doubled the two meters for the longer hunt. |
 | 6 | **Empty arena** | Room bounds silently clamped a charging beast; corners had no consequence. | `attack.wallStun`: a committed *moving* attack that clamps into a room bound self-stuns for the authored ticks, opening the bait-into-wall punish. |
@@ -61,7 +61,7 @@ All are JSON fields compiled by `tools/gen-combat.py`; the `HAS_*` facts in
 | | `lock-at-windup` | Freeze the tracked vector at windup entry; it holds through WINDUP + ATTACK. The hunter can step out of the frozen line. |
 | | `lock-away` | Like `lock-at-windup`, but negate the vector once at windup entry: the beast turns its back so a behind window points at the hunter (heavy `tail_spin`). |
 | `wallStun` | ticks (0 = off) | A committed moving attack that hits a room bound self-stuns for this many ticks. One-trigger: leaving `MS_ATTACK` latches it, so sustained wall contact cannot stack (`monster.hpp`). |
-| `tell` | `dot` / `line` / `arc` / `ring` / `zone` | Windup telegraph shape. `dot` is the legacy 2x2 core; the others draw from the cached window (see below). |
+| `tell` | `dot` / `line` / `arc` / `ring` / `zone` | Windup animation-frame selector (prg.11). `dot` (0) is the generic coil; `line`/`arc`/`ring`/`zone` select a bespoke windup pose on the beast's attack sheet (prg.12 authors them). Until a frame is authored the render draws the legacy 2x2 core marker. |
 | `move.type` | `none` | Stationary release. |
 | | `lunge` + `speedF` | Committed forward velocity `fx*speedF>>4` for the active ticks. |
 | | `charge` | Schema-reserved; not consumed by the shipping interpreter. |
@@ -91,19 +91,33 @@ All are JSON fields compiled by `tools/gen-combat.py`; the `HAS_*` facts in
 | `zones.*.broken.disableAttacks[]` | Attacks disabled while the zone is broken (compiled to the zone's `unlockMask` bit per global attack index). |
 | `zones.*.broken.hurtOn: false` | Broken zone is no longer a hurtbox (`brokenFlags` bit0); `dmgMul` override applies. |
 
-### Tell shapes (`src/render_math.hpp`)
+### Windup animation tells (`src/render_math.hpp`, prg.11)
 
-Drawn only in `MS_WINDUP` from `g.combat.attack.win.box` and the cached
-`g.combat.attack.tell` (no cart read during paint). In `MS_ATTACK` the draw is
-the unchanged 4x4 shade-3 marker at the window centre.
+`combat.attack.tell` is a windup animation-frame selector, not a procedural
+shape. `mh::tellWindupFrame(tell, authored)` returns the bespoke pose slot (1..N)
+when the beast's attack sheet carries it, or `TELL_WINDUP_NONE` when it does not;
+`mh::tellHasAuthoredFrame` is the predicate the render uses to decide the
+fallback. The render reads the cached `g.combat.attack.tell` and window (no cart
+read during paint): an authored frame lets the pose carry the read, an unauthored
+tell draws the legacy 2x2 shade-2 core marker at the window centre. In `MS_ATTACK`
+the draw is the unchanged 4x4 shade-3 marker.
 
-| `tell` | Draw |
-|---|---|
-| `dot` (0) | Legacy 2x2 shade-2 core at the window centre. No window needed. |
-| `line` (1) | Three 2x2 dashes at 1/4, 2/4, 3/4 along the body-centre → window-centre ray. For lunge/charge reach. |
-| `arc` (2) | Three 4x2 segments spanning the window rect width across its vertical middle (centre dropped 2 px). For sweeps/spins. |
-| `ring` (3) | 1 px outline expanding from half-extent 2, ~1 px per 2 elapsed windup ticks, clamped to the window half-extent. For slams/AoE. |
-| `zone` (4) | Static 1 px outline of the full window rect. Schema-reserved; no demo kit uses it yet. |
+`TELL_FRAMES_AUTHORED` is the number of bespoke frames the sheets carry; shipping
+is 0 (prg.12 authors them), so every tell currently falls back to the core
+marker. The frame selector is the prg.12 hook and the contact sheet names the
+window class per attack so the pose/window-class match stays reviewable.
+
+| `tell` | Window class | Windup pose (prg.12) |
+|---|---|---|
+| `dot` (0) | core | Generic coil (`BEAST_POSES` windup); core marker. |
+| `line` (1) | ray | Forward lunge/thrust pose. |
+| `arc` (2) | sweep | Sweep/spin pose. |
+| `ring` (3) | AoE | Slam pose (bull stomp). |
+| `zone` (4) | rect | Full-rect claim; schema-reserved, no demo kit uses it. |
+
+The procedural shapes and their geometry helpers (`drawMonsterTell`,
+`tellNeedsWindow`, `tellLineDash`, `tellRingHalf`, `tellArcSeg`, `tellRectOrigin`)
+were removed by prg.11; the prg.10 spike measured the set at −370 B.
 
 Player input verb (feel.16, universal feel.18): a d-pad double-tap fires the
 dodge roll toward the tapped direction for every weapon (and sheathed) — the
@@ -290,10 +304,14 @@ checklist in `docs/dev-flow.md` is the mechanical half of the same review.
   area at least body-sized or a behind guard. There is no stationary
   small-reach jab. (`wing_beat` 26×18 behind, `stomp` 36×26, `tail_spin` full
   rotation.)
-- [ ] **Telegraph == hit-test window.** `drawMonsterTell` and
-  `monsterHitsPlayer` both read the cached `g.combat.attack.win.box`; the
-  telegraph must never be a separate hardcoded rect. The `MS_ATTACK` marker is
-  the shared 4x4 shade-3 core.
+- [ ] **Tell class matches the hit window.** The tell id selects the windup pose
+  whose class matches the hit-test geometry (`line` ray/lunge, `arc` sweep/spin,
+  `ring` AoE slam, `zone` full rect). `drawAttackMarker` and `monsterHitsPlayer`
+  read the same cached `g.combat.attack.win.box`; the marker must never be a
+  separate hardcoded rect. The `MS_ATTACK` marker is the shared 4x4 shade-3 core;
+  an unauthored tell falls back to the 2x2 core. The contact sheet names the
+  class per attack (`tools/contact_sheet.py`), so the pose/window-class match is
+  reviewable before flashing.
 - [ ] **Review before device.** Run `python3 tools/contact_sheet.py` (per
   creature) and cross-check the numbers against
   `python3 tools/gen-combat.py --dump` before flashing. The sheet renders the
@@ -370,7 +388,9 @@ unchanged and still tile their ranges.
 ### prg.8 trim — reclaim adopted (HEAD `8abac2e` + prg.8)
 
 The progression wave needed flash headroom, so the prg.1 spike's reclaim set was
-adopted (keeping charged attacks, telegraph shapes and the zone part overlays):
+adopted (keeping charged attacks, telegraph shapes and the zone part overlays;
+prg.11 later cut charge to one melee level and replaced the telegraph shapes
+with the animation-frame selector):
 
 | Cut | How |
 |---|---|
@@ -415,6 +435,32 @@ carcass after the win) measured +194 B and was trimmed to stay inside the
 600 B bead target, so carve requires the hunter to be in reach at the kill. The
 carve data rides the cart blob (+48 B to `combat.bin`), not the ELF; the only
 new fact is `HAS_CARVE true`.
+
+### prg.11 trim — charge-lite + animation tells + branch/push carves
+
+Measured from `HEAD 3d98de4` (the prg.10 spike: `29136/29696 flash (560 free)`,
+`1610/2560 RAM`):
+
+```
+make size
+size: flash=28274/29696 (1422 free)  ram=1610/2560
+size: .text=28254 .data=20 .bss=1590
+```
+
+**−862 B flash / +0 B RAM.** Adopts the prg.10 measured set:
+
+| Cut | How |
+|---|---|
+| charge-lite | removed `CHARGE_L2`, the L2 tier + charged-ball release (`weaponChargeShell`/`weaponHasChargeShells`/`fireChargeShot`), the `shot >= 3` charged-ball spawn branch, and the L2 bar state. Kept the single-level melee charge (`charge[0]`, flail `chargeslam1`) and `CHARGE_MIN`; the bar fills to `CHARGE_MIN` in shade 2. The gun has no charge at all now (its only charge was the ball). |
+| tell→animation | removed `drawMonsterTell` + the `render_math` shape helpers (`tellNeedsWindow`/`tellLineDash`/`tellRingHalf`/`tellArcSeg`/`tellRectOrigin`) and `tellOutline`. `combat.attack.tell` is now a windup animation-frame selector (`mh::tellWindupFrame`) consumed by the chicken/bull pose path; unauthored tells draw the legacy 2x2 core marker (`drawAttackMarker`). prg.12 authors the per-attack frames. |
+| B-branch buffer | `MH_B_BRANCH_BUFFER=0` shipping (carve kept; host `TEST_FLAGS` forces 1). A loose A A B no longer queues through recovery/lock. |
+| push-move | `MH_PUSH_MOVE=0` shipping (carve kept; host `TEST_FLAGS` forces 1). `pushApart` falls back to the pre-fix give-way rule. |
+
+The bull stomp's `ring` tell loses its procedural area read (the spike measured
+keeping the static window outline at +144 B, which would drop the reclaim to
+718 B, under the ≥800 B target), so prg.11 takes the core-marker fallback and
+prg.12 restores the read with the authored stomp windup pose. Device perf is a
+strict render subtraction (see the bead report).
 
 ### Test scope
 

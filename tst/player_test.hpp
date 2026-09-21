@@ -4,7 +4,7 @@
 // source of truth for numbers).
 #include "test.hpp"
 #include "../src/core/player.hpp"
-#include "../src/core/projectiles.hpp"   // spawnShot: charged-ball host assertions (ynb)
+#include "../src/core/projectiles.hpp"   // spawnShot: shot-code host assertions
 
 using namespace mh;
 
@@ -869,8 +869,8 @@ void PlayerSuite(TestRunner &runner) {
 
     // ---------------------------------------- charge attacks (ynb, mock game.test.js)
     {
-        Test t("charge: flail hold A past the swing -> level 1, longer hold -> level 2");
-        // level 1: enter charge, release immediately
+        Test t("charge: flail hold A past the swing -> single-level chargeslam1");
+        // charge-lite (prg.11): one level, slot 0 only.
         Game g;
         initGame(g, W_FLAIL);
         for (int i = 0; i < 80 && g.player.state != PS_CHARGE; i++)
@@ -885,58 +885,37 @@ void PlayerSuite(TestRunner &runner) {
         t.assert(g.player.atk->hh, 18, "chargeslam1 hh");
         t.assert(g.player.atk->stam, 14, "chargeslam1 stam");
 
-        // level 2: hold to CHARGE_L2
+        // A long hold still fires the single level: no chargeslam2 tier.
         Game g2;
         initGame(g2, W_FLAIL);
         for (int i = 0; i < 80 && g2.player.state != PS_CHARGE; i++)
             stepPlayer(g2, Input{0, 0, true, false});
-        for (int i = 0; i < CHARGE_L2; i++)
+        for (int i = 0; i < 40; i++)
             stepPlayer(g2, Input{0, 0, true, false});
+        t.assertGreaterThan(g2.player.chargeT, 20, "held well past the old L2");
         stepPlayer(g2, Input{0, 0, false, false});
-        t.assert(g2.player.state, PS_ATTACK, "level 2 swing runs");
-        t.assert(g2.player.atk->dmg, 36, "chargeslam2 dmg");
-        t.assert(g2.player.atk->hw, 34, "chargeslam2 hw");
-        t.assert(g2.player.atk->hh, 24, "chargeslam2 hh");
-        t.assert(g2.player.atk->stam, 22, "chargeslam2 stam");
-        t.assert(g2.player.atk->effect, 1, "chargeslam2 trips");
+        t.assert(g2.player.state, PS_ATTACK, "long-hold swing runs");
+        t.assert(g2.player.atk->dmg, 24, "long hold still chargeslam1");
+        t.assert(g2.player.atk->stam, 14, "long hold still chargeslam1 stam");
         suite.addTest(t);
     }
 
     {
-        Test t("charge: gun release fires the charged ball (level-1 dmg 34)");
+        Test t("charge: gun never enters PS_CHARGE (charged ball removed, prg.11)");
         Game g;
         initGame(g, W_GUN);
         initWorld(g, MODE_HUNT);
-        for (int i = 0; i < 80 && g.player.state != PS_CHARGE; i++)
+        for (int i = 0; i < 80; i++) {
             stepWorld(g, Input{0, 0, true, false});
-        t.assert(g.player.state, PS_CHARGE, "gun charge entered");
-        stepWorld(g, Input{0, 0, false, false});   // release
-        t.assert(g.projN, 1, "charged ball spawned");
-        t.assert(g.proj[0].dmg, 34, "level-1 charge ball dmg");
-        t.assert(g.proj[0].vx, 45, "level-1 charge ball speedF");
-        t.assert(g.proj[0].w, 7, "level-1 charge ball w");
-        t.assert(g.proj[0].h, 6, "level-1 charge ball h");
-        t.assert(g.proj[0].heavy, 1, "charged ball is heavy");
-        t.assert(g.player.reload, 70, "charged reload armed");
-        t.assert(g.lastShot, 0, "shot record cleared");
-        suite.addTest(t);
-    }
-
-    {
-        Test t("charge: gun level 2 release fires the 46 dmg ball");
-        Game g;
-        initGame(g, W_GUN);
-        initWorld(g, MODE_HUNT);
-        for (int i = 0; i < 80 && g.player.state != PS_CHARGE; i++)
-            stepWorld(g, Input{0, 0, true, false});
-        for (int i = 0; i < CHARGE_L2; i++)
-            stepWorld(g, Input{0, 0, true, false});
+            if (g.player.state == PS_CHARGE)
+                break;
+        }
+        t.assert(g.player.state != PS_CHARGE ? 1 : 0, 1, "gun has no charge stance");
+        t.assert(weaponHasCharge(&WEAPON_DEFS[W_GUN]), 0, "gun has no melee charge");
+        // A long hold + release fires no charged ball; the shot record stays clear.
         stepWorld(g, Input{0, 0, false, false});
-        t.assert(g.projN, 1, "level-2 charged ball spawned");
-        t.assert(g.proj[0].dmg, 46, "level-2 charge ball dmg");
-        t.assert(g.proj[0].vx, 55, "level-2 charge ball speedF");
-        t.assert(g.proj[0].w, 8, "level-2 charge ball w");
-        t.assert(g.proj[0].h, 8, "level-2 charge ball h");
+        t.assert(g.projN, 0, "no charged ball spawned");
+        t.assert(g.lastShot, 0, "no charged shot queued");
         suite.addTest(t);
     }
 
@@ -951,7 +930,6 @@ void PlayerSuite(TestRunner &runner) {
         }
         t.assert(g.player.state != PS_CHARGE ? 1 : 0, 1, "sword has no charge");
         t.assert(weaponHasCharge(&WEAPON_DEFS[W_SWORD]), 0, "no melee charge");
-        t.assert(weaponHasChargeShells(&WEAPON_DEFS[W_SWORD]), 0, "no charge shells");
         suite.addTest(t);
     }
 

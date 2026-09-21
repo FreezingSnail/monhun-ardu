@@ -1,85 +1,151 @@
-# monhun-ardu-prg.10 — Spike: charge-lite + animation tells + cue trim budget
+# monhun-ardu-prg.11 — trim: charge-lite + animation tells + branch/push carves
 
-HEAD at start: `2d5040d` (prg.7), clean tree. No commit/push (orchestrator
-commits). End state: clean tree, `make test` green, all prototypes reverted.
+HEAD at start: `3d98de4` (prg.10 spike), clean tree. No commit/push
+(orchestrator commits). Adopts the prg.10 measured set (a)+(b1)+(d1)+(d2).
 
-Method: each candidate is a whole-image `make build` + `avr-size` (LTO makes
-per-symbol math meaningless), one prototype at a time, reverted before the
-next. Deltas are vs the baseline below. Render-touching variants also get a
-`test_perf` line. Flag-only candidates were measured by passing `-D` through
-`SIZE_FLAGS` (no source edit).
+## What changed
 
-## Baseline (`make size`)
+**(a) charge-lite** — single-level melee charge.
+- `src/core/game.hpp`: removed `CHARGE_L2`; removed the `weaponChargeShell`
+  accessor and `weaponHasChargeShells`; `weaponCharge` reads slot 0 only.
+- `src/core/player.hpp`: `startChargeAttack` fires `weaponCharge(def, 0)`;
+  removed `fireChargeShot`; PS_CHARGE release + stance entry gate on
+  `weaponHasCharge(def)` only.
+- `src/core/projectiles.hpp`: `spawnShot` accepts shot codes 1/2 only (removed
+  the `shot >= 3` charged-ball branch).
+- `src/render.hpp`: charge bar fills to `CHARGE_MIN` in shade 2 (no white L2
+  state).
+- The gun has no charge at all now (its only charge was the ball); the flail
+  keeps `chargeslam1` (`charge[0]`, dmg 24). `chargeShells` stays as dead packed
+  data (no accessor).
 
+**(b1) tell → animation.**
+- `src/render_math.hpp`: removed the shape geometry
+  (`tellNeedsWindow`/`tellLineDash`/`tellRingHalf`/`tellArcSeg`/`tellRectOrigin`);
+  added `TELL_WINDUP_NONE`, `TELL_FRAMES_AUTHORED` (0 in shipping),
+  `tellHasAuthoredFrame`, `tellWindupFrame` — `combat.attack.tell` is now a
+  windup animation-frame selector.
+- `src/render.hpp`: removed `drawMonsterTell` + `tellOutline`; added
+  `drawAttackMarker` (MS_ATTACK 4x4 shade-3; MS_WINDUP legacy 2x2 shade-2 core
+  when the tell is unauthored). The chicken/bull windup pose path consumes
+  `tellWindupFrame` (`tellSlot`); the heavy spin sheet keeps its locked-facing
+  windup frame (the selector cannot index the 8-direction sheet) and falls back
+  to the core marker.
+- `src/core/combat.hpp`: `Tell` enum kept (values unchanged, now frame ids);
+  comments updated.
+- prg.12 authors the per-attack frames; unauthored tells fall back to the core
+  marker.
+
+**(c) branch/push carves.**
+- `src/core/game.hpp`: `MH_B_BRANCH_BUFFER` default 1 → 0, `MH_PUSH_MOVE`
+  default 1 → 0 (carves kept, mirroring MH_STAGE3/MH_ROLL_ALT).
+- `Makefile`: `TEST_FLAGS` forces `-DMH_B_BRANCH_BUFFER=1 -DMH_PUSH_MOVE=1` for
+  the host suite.
+
+**(d) pins/docs.** `tst/render_math_test.hpp` (frame-selector pin),
+`tst/fxdatatest/tell_test.hpp` (core-marker/attack-marker bytes + selector),
+`tst/player_test.hpp` (charge-lite + gun-no-charge), `tst/shells_test.hpp`
+(codes 3/4 inert), `tst/fxdatatest/data_test.hpp` (chargeslam1 only),
+`tools/contact_sheet.py` (+`tell_class` window-class note) and
+`tools/tests/test_contact_sheet.py`, `docs/feel-design.md`, `docs/dev-flow.md`,
+`README.md`.
+
+## Contact-sheet review (`tools/contact_sheet.py`, three beasts)
+
+Rendered `build/review_{lunge,sweep,heavy}_prg11.png` + `review_all_prg11.png`.
+`tell_class()` note per attack — pose/window-class match:
+
+| beast | attack | tell | window class | match |
+|---|---|---|---|---|
+| lunge | peck | dot | core | generic coil / core marker (small forward jab) |
+| lunge | leap | line | ray | forward lunge |
+| lunge | wing_beat | arc | sweep | body-wide behind |
+| sweep | stomp | ring | aoe | centred 36×26 slam |
+| sweep | gore | line | ray | forward lunge |
+| sweep | rear_kick | arc | sweep | behind |
+| heavy | bite | line | ray | forward lunge |
+| heavy | tail_spin | arc | sweep | 4-window rotation |
+| heavy | tail_slam | ring | aoe | hop slam 36×28 |
+
+All nine demo attacks name the class their hit window uses; every tell is
+currently unauthored so the note is `FRAME-PRG12` and the core marker draws.
+
+**Ring decision (reported cost).** The bull stomp's `ring` tell loses its
+procedural AoE read. Keeping ONE small static window outline measured
+**+144 B** (`make size` 28418, delta **−718 B**), which drops the reclaim under
+the ≥800 B acceptance. prg.11 therefore takes the core-marker fallback and
+prg.12 restores the stomp read with the authored windup pose (the designed path).
+
+## Verification (exact tails)
+
+`make gen` / `make gen-check` (no generated data changed; gen ran once inside
+gen-check):
 ```
-size: .text=29116 .data=20 .bss=1590
-size: flash=29136/29696 (560 free)  ram=1610/2560
+fxdata_manifest: PASS (86 generated artifacts unchanged)
 ```
 
-Baseline perf (`make fxtest-headless FXTEST_ONLY=test_perf`):
-
+`make test`:
 ```
-B pUs=6348 pHz=157 lHz=52 lTk=476 rMx=3344 rAv=3074 ram=709
+Total Passed: 6020
+Total Failed: 0
+```
+(6060 → 6020: the removed L2/charged-ball tests; live coverage unchanged.)
+
+`make test-tools`:
+```
+Ran 251 tests in 15.487s
+
+OK
+```
+
+`make fxtest-headless` (full, all suites PASS):
+```
+asset_test PASSED=270 FAILED=0
+test_audio PASSED=10 FAILED=0
+test_boot PASSED=4 FAILED=0
+combat_test PASSED=237 FAILED=0
+data_test PASSED=343 FAILED=0
+test_hub PASSED=63 FAILED=0
+test_hud PASSED=25 FAILED=0
+test_items PASSED=35 FAILED=0
+test_menu_art PASSED=53 FAILED=0
+menu_test PASSED=60 FAILED=0
+test_monster_art PASSED=111 FAILED=0
 perf_test PASSED=5 FAILED=0
+test_player_art PASSED=111 FAILED=0
+test_quests PASSED=50 FAILED=0
+test_screens PASSED=85 FAILED=0
+test_smith PASSED=70 FAILED=0
+test_tell PASSED=14 FAILED=0
+zones_test PASSED=80 FAILED=0
 ```
-
-## Measured table (all vs 29136/1610)
-
-| Candidate | flash | Δflash | RAM | ΔRAM | perf (rMx/rAv) | what it removes | risk |
-|---|---|---|---|---|---|---|---|
-| **a. charge-lite** | 28918 | **−218** | 1610 | 0 | — | L2 melee charge (`weaponCharge(def,1)`), `fireChargeShot` + `fireChargeShells` callsite, charged-ball spawn branch (`shot >= 3`), L2 bar state (bar now fills to `CHARGE_MIN`, shade 2) | MED — flail loses chargeslam2 (L1 chargeslam1 + all normal attacks stay); gun loses the charged ball entirely (its melee `charge` slots are already zero, so its ONLY charge was the ball → gun has no charge after this). Sword never charged. |
-| **b1. tell→animation** | 28766 | **−370** | 1610 | 0 | 3348 / 3075 | `drawMonsterTell` LINE/ARC/RING/ZONE shapes + `tellOutline` + all `render_math` tell helpers; the per-attack windup frame byte (`combat.attack.tell`, already in the record) now selects the beast windup frame, 0 keeps the generic coil; legacy 2x2 shade-2 core + 4x4 shade-3 attack marker kept | MED — trades the procedural shape for an animation frame; needs authored per-attack windup art (FX cart = free MCU flash). **Contact-sheet review must check the windup pose matches the window class** (line-lunge reads as a thrust, ring-stomp as a windup curl, etc.). |
-| **b2. RING-only tells** | 28910 | **−226** | 1610 | 0 | 3348 / 3075 | LINE/ARC/ZONE shapes + their `render_math` helpers; RING kept for the stomp shock class + core marker (tell types stay in the record) | MED-LOW — smaller reclaim than b1 but keeps the expanding shock ring; still breaks "telegraph == hit window" for the other classes. |
-| **c. rare audio cues** | 29136 | **0** | 1610 | 0 | — | (already removed in prg.8: `CUE_BREAK`/`CUE_GATHER`/`CUE_EAT`/`CUE_WINDUP`, `mhCueTable` 14→9 rows) | n/a — nothing left to cut |
-| **d1. B-branch buffer** (flag) | 28996 | **−140** | 1610 | 0 | — | `B_BRANCH_BUFFER_ENABLED` input path (tap-B through recovery/lock) | MED — input feel: loose A A B stops comboing through a gap |
-| **d2. push-move flag** (flag) | 29014 | **−122** | 1610 | 0 | — | `PUSH_MOVE_ENABLED` per-tick player-move flag (`playerMoved`) | MED — reintroduces the body-push give-way bug |
-| **d4. hub/quests shelf fold** | 28470 | **−666** | 1601 | **−9** | — | unreachable hub/quests graph from the sketch: `appScreenAccept` hub switch + `appScreenBack` hub level, the `.ino` screen `nav` block, `questApplyToGame` boot arm (its `questTarget/Need/Progress` now stay at the `newGame` defaults) | MED — demo-path-neutral (sketch already never activates hub/quests; gear/tier/items boot arm stays). Quest kill-tracking is inert while no quest is active. Tests referencing the shelf must be updated; `quest_state`/`quest_meta` stay for a future re-enable. `APP_NAV_HUB`+`MENU_UI` toggle left intact (menu-toggle idea) to avoid shifting `MenuState`/`appNavApply`. |
-
-## Combined sets (measured, exact)
-
-| Set | flags / edits | flash | Δflash | free | RAM |
-|---|---|---|---|---|---|
-| (a)+(b1) | charge-lite + tell→anim | 28560 | **−576** | 1136 | 1610 |
-| (a)+(b1)+(d1)+(d2) | + B-branch buffer + push-move | 28302 | **−834** | 1394 | 1610 |
-| (a)+(b1)+d4 | + hub/quests shelf fold | 28212 | **−924** | 1484 | 1601 |
-| (a)+(b1)+(d1)+(d2)+d4 | full recommended set | 28212 | **−924** | 1484 | 1601 |
-
-Perf for the full recommended set (`test_perf`):
-
+`test_perf` line:
 ```
 B pUs=6348 pHz=157 lHz=52 lTk=480 rMx=3348 rAv=3075 ram=710
 perf_test PASSED=5 FAILED=0
 ```
+(rMx 3344 → 3348, rAv 3074 → 3075: noise; pHz 157≥135, lHz 52≥45, ram 710≥300.)
 
-Render carve is a strict subtraction: `rMx` 3344→3348 (noise; tell shapes were
-cheap), `rAv` 3074→3075, all gates pass (pHz 157≥135, lHz 52≥45, ram 710≥300).
+`make size` (baseline prg.10: flash 29136/29696, 560 free; ram 1610/2560):
+```
+size: .text=28254 .data=20 .bss=1590
+size: flash=28274/29696 (1422 free)  ram=1610/2560
+```
+**Reclaimed: 862 B flash (−2.96%), 0 B RAM.** Target ≥800 B met (without the
+ring outline; +144 B if kept, see above).
 
-## Recommendation
+## Interfaces
 
-**Recommended set: (a)+(b1)+d4 = −924 B** (flash 28212, **1484 free**; RAM 1601,
-−9). Clears the ≥800 B target with overlays / charge-existence / gather / drops
-/ smith intact.
-
-- **(a) charge-lite** (−218): keeps a single-level melee charge for the flail
-  (chargeslam1) and drops only the L2 tier + the gun charged ball. If the owner
-  wants the gun's charge back, use **b1+d4 (−706)** and fund the gun charge from
-  the `MH_TRAIN`/cosmetic pool prg.8 already knows.
-- **(b1) tell→animation** (−370): matches the owner constraint (tell readability
-  in beast art, FX cart art free). Requires authored per-attack windup frames
-  before shipping; **contact-sheet review must confirm each windup pose matches
-  its window class** (dev-flow: telegraph == hit-test window). `b2` (−226) is
-  the lower-risk fallback if the art is not ready.
-- **d4 hub/quests fold** (−666, −9 RAM): removes unreachable demo-path weight;
-  the only behavioural change is the inert quest kill-arm. Flips no `HAS_*` fact.
-
-**If input-feel risk is acceptable**: add **d1+d2 (−262)** → full set −924 B but
-drops B-branch buffering (combo feel) and reintroduces the push bug; not
-recommended for a demo where combat feel is the point.
+- `mh::tellWindupFrame(uint8_t tell, uint8_t authored) -> uint8_t` — bespoke
+  windup frame index or `TELL_WINDUP_NONE` (0xFF).
+- `mh::tellHasAuthoredFrame(uint8_t tell, uint8_t authored) -> bool`.
+- `mh::TELL_WINDUP_NONE`, `mh::TELL_FRAMES_AUTHORED` (0; prg.12 raises it).
+- `drawAttackMarker(const mh::Game&, int16_t x, int16_t y)` replaces
+  `drawMonsterTell`.
+- `tools/contact_sheet.tell_class(tell)` → `core/ray/sweep/aoe/rect/?`.
 
 ## Notes
 
-- All prototypes reverted; `git status --short` empty at end.
-- `make test` on the clean baseline: **Total Passed: 6060 / Total Failed: 0**.
-- `make size` baseline unchanged: flash 29136/29696 (560 free), ram 1610/2560.
-- Candidate (c) is already gone (prg.8); no further rare-cue reclaim exists.
-- No generated artifacts touched; `output.md` is the only tree change.
+- `test_parity` / `mock/` untouched (excluded from the gate).
+- No generated artifacts changed; `git status` shows only source/test/doc edits.
+- No commit/push (orchestrator commits).

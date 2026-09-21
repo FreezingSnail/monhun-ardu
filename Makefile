@@ -2,10 +2,11 @@
 
 # Common compiler flags
 CXX_FLAGS = -std=c++17 -I/src -w -O0 -g3
-# Host suites must exercise every carved path, so force the prg.8 trims back on
-# for the host build (shipping defaults MH_STAGE3/MH_ROLL_ALT to 0; test_parity
-# carves them off and the host suite is the coverage for those branches).
-TEST_FLAGS = -DTEST -DMH_STAGE3=1 -DMH_ROLL_ALT=1
+# Host suites must exercise every carved path, so force the prg.8/prg.11 trims
+# back on for the host build (shipping defaults MH_STAGE3/MH_ROLL_ALT/
+# MH_B_BRANCH_BUFFER/MH_PUSH_MOVE to 0; test_parity carves them off and the host
+# suite is the coverage for those branches).
+TEST_FLAGS = -DTEST -DMH_STAGE3=1 -DMH_ROLL_ALT=1 -DMH_B_BRANCH_BUFFER=1 -DMH_PUSH_MOVE=1
 DEBUG_FLAGS = -DDEBUG
 
 # Common source files for main tests (host tests live in tst/, binary in build/)

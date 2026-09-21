@@ -1,12 +1,18 @@
 #pragma once
-// On-device framebuffer suite for the per-attack telegraph shapes (bead
-// monhun-ardu-feel.5).
+// On-device framebuffer suite for the windup animation tells (bead
+// monhun-ardu-feel.5; reworked for the prg.11 tell->animation carve).
 //
 // src/render.hpp is device-only (ArduboyG/SpritesU), so the host suite
-// (tst/render_math_test.hpp) pins the pure tell geometry and this suite pins the
-// actual arduboy.getBuffer() bytes drawMonsterTell() leaves. The render already
-// owns the plane wait (hud_test pattern): select plane 0, clear the buffer, draw
-// the tell, assert exact page bytes. No cart read happens in the draw.
+// (tst/render_math_test.hpp) pins the pure frame selector (mh::tellWindupFrame)
+// and this suite pins the actual arduboy.getBuffer() bytes drawAttackMarker()
+// leaves. The render already owns the plane wait (hud_test pattern): select
+// plane 0, clear the buffer, draw the marker, assert exact page bytes. No cart
+// read happens in the draw.
+//
+// prg.11 replaced the procedural tell shapes with a frame selector: a tell with
+// no authored windup frame (prg.12 authors them; TELL_FRAMES_AUTHORED is 0 in
+// shipping) falls back to the legacy 2x2 shade-2 core marker, and MS_ATTACK
+// keeps the 4x4 shade-3 marker.
 //
 // Scene is chosen so every rect lands on a known page: the monster body centre
 // is screen (64,36), the window is 12x10 at facing offset (14,0), so the window
@@ -68,65 +74,56 @@ inline void test_tell(FxTest &test) {
         FX::disableOLED();
     }
 
+    // Selector pin: shipping carries no authored bespoke frames, so every tell
+    // falls back to the core marker (prg.12 authors the frames).
+    test.expectEq(tellHasAuthoredFrame(TELL_DOT, TELL_FRAMES_AUTHORED), 0, F("dot no bespoke frame"));
+    test.expectEq(tellHasAuthoredFrame(TELL_LINE, TELL_FRAMES_AUTHORED), 0, F("line unauthored"));
+    test.expectEq(tellHasAuthoredFrame(TELL_RING, TELL_FRAMES_AUTHORED), 0, F("ring unauthored"));
+    test.expectEq(tellWindupFrame(TELL_RING, TELL_FRAMES_AUTHORED), TELL_WINDUP_NONE, F("ring falls back"));
+
     // DOT (tell 0): the legacy single 2x2 shade-2 core at the window centre
     // (78,36). One page, mask 0x18 at x=77..78.
     static Game g;
     primeTell(g, TELL_DOT, MS_WINDUP, 10, 10);
     clearFb();
-    drawMonsterTell(g, kX, kY);
+    drawAttackMarker(g, kX, kY);
     test.expectEq(countPage(4, 77, 78, 0x18), 2, F("dot core bytes"));
 
-    // LINE: 3 dashed 2x2 blocks at the Q2 fractions of the centre vector
-    // (14,0) -> x 66, 70, 73 on rows 35..36. Six columns of 0x18, three empty.
+    // LINE (tell 1): unauthored -> the same core marker fallback.
     primeTell(g, TELL_LINE, MS_WINDUP, 10, 10);
     clearFb();
-    drawMonsterTell(g, kX, kY);
-    test.expectEq(countPage(4, 66, 74, 0x18), 6, F("line dash bytes"));
-    test.expectEq(countPage(4, 66, 74, 0x00), 3, F("line dash gaps"));
+    drawAttackMarker(g, kX, kY);
+    test.expectEq(countPage(4, 77, 78, 0x18), 2, F("line falls back to core"));
+    test.expectEq(countPage(4, 66, 74, 0x00), 9, F("line draws no dashes"));
 
-    // ZONE: static outline of the 12x10 window at (72,31). Top/bottom rows are
-    // single-bit pages; the side columns are solid through the middle page.
-    primeTell(g, TELL_ZONE, MS_WINDUP, 10, 10);
-    clearFb();
-    drawMonsterTell(g, kX, kY);
-    test.expectEq(countPage(3, 72, 83, 0x80), 12, F("zone top row"));
-    test.expectEq(countPage(4, 72, 83, 0xFF), 2, F("zone side columns"));
-    test.expectEq(countPage(4, 72, 83, 0x00), 10, F("zone hollow middle"));
-    test.expectEq(countPage(5, 72, 83, 0x01), 12, F("zone bottom row"));
-
-    // RING: expanding outline at elapsed 0 clamps to a 4x4 box at (76,34):
-    // corners 0x3C, edges 0x24.
+    // RING (tell 3): unauthored -> the same core marker fallback.
     primeTell(g, TELL_RING, MS_WINDUP, 10, 10);
     clearFb();
-    drawMonsterTell(g, kX, kY);
-    test.expectEq(countPage(4, 76, 79, 0x3C), 2, F("ring corners"));
-    test.expectEq(countPage(4, 76, 79, 0x24), 2, F("ring edges"));
+    drawAttackMarker(g, kX, kY);
+    test.expectEq(countPage(4, 77, 78, 0x18), 2, F("ring falls back to core"));
+    test.expectEq(countPage(4, 72, 83, 0x00), 10, F("ring draws no outline"));
 
-    // RING full windup: half-extents clamp to the window half (6,5) -> 12x10 at
-    // (72,31), the same bounds ZONE draws.
-    primeTell(g, TELL_RING, MS_WINDUP, 10, 0);
+    // ZONE (tell 4): unauthored -> the same core marker fallback.
+    primeTell(g, TELL_ZONE, MS_WINDUP, 10, 10);
     clearFb();
-    drawMonsterTell(g, kX, kY);
-    test.expectEq(countPage(3, 72, 83, 0x80), 12, F("ring expanded top"));
-    test.expectEq(countPage(4, 72, 83, 0xFF), 2, F("ring expanded sides"));
-    test.expectEq(countPage(5, 72, 83, 0x01), 12, F("ring expanded bottom"));
+    drawAttackMarker(g, kX, kY);
+    test.expectEq(countPage(4, 77, 78, 0x18), 2, F("zone falls back to core"));
+    test.expectEq(countPage(4, 72, 83, 0x00), 10, F("zone draws no outline"));
 
-    // ARC: 3x 4x2 segments across the box width: left/right rows 35..36 (0x18),
-    // centre dropped to rows 37..38 (0x60) at x=77..79.
-    primeTell(g, TELL_ARC, MS_WINDUP, 10, 10);
-    clearFb();
-    drawMonsterTell(g, kX, kY);
-    test.expectEq(countPage(4, 72, 75, 0x18), 4, F("arc left segment"));
-    test.expectEq(countPage(4, 80, 83, 0x18), 4, F("arc right segment"));
-    test.expectEq(countPage(4, 76, 79, 0x60), 4, F("arc centre drop"));
-
-    // Attack phase: the tell is replaced by the 4x4 shade-3 marker at the
-    // window centre (76,34) regardless of tell; rows 34..37 -> 0x3C for x76..79.
+    // Attack phase: the 4x4 shade-3 marker at the window centre (76,34)
+    // regardless of tell; rows 34..37 -> 0x3C for x76..79.
     primeTell(g, TELL_RING, MS_ATTACK, 10, 0);
     clearFb();
-    drawMonsterTell(g, kX, kY);
+    drawAttackMarker(g, kX, kY);
     test.expectEq(countPage(4, 76, 79, 0x3C), 4, F("attack 4x4 marker"));
     test.expectEq(countPage(4, 66, 74, 0x00), 9, F("attack phase skips tell"));
+
+    // No cached attack: nothing draws.
+    primeTell(g, TELL_LINE, MS_WINDUP, 10, 10);
+    g.monster.atkIdx = COMBAT_NO_ATTACK;
+    clearFb();
+    drawAttackMarker(g, kX, kY);
+    test.expectEq(countPage(4, 66, 83, 0x00), 18, F("no attack draws nothing"));
 }
 
 }   // namespace tell

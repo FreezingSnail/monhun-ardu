@@ -32,7 +32,7 @@ flashing. Controls are below; no USB serial device comes up while the game runs
 | Device tests (Ardens) | 16 suites / 2266 asserts — boot 4, assets 270, audio 17, menu 78, menu_art 81, hud 17, parity 660, data 368, combat 293, hub 57, monster_art 111, player_art 111, quests 50, screens 78, smith 66, perf 5 — all PASS |
 | Perf gate (`monhun-ardu-8v7`, re-verified through `kt7.7`) | **PASS.** plane 156 Hz (≥135), logic 52 Hz (≥45), render max 4868 µs (≤7407), tick 540 µs, RAM free 572 B (bench) |
 | Perf tooling | Headless Ardens profiler dump (`profiledump=<path>`, local patch) + on-device cycle bench (`test_perf`) |
-| Shipping build | flash **27128 / 29696 B** (91%), RAM **1584 / 2560 B** (976 free); USB-free, see below |
+| Shipping build | flash **28274 / 29696 B** (95%, 1422 free), RAM **1610 / 2560 B** (950 free); USB-free, see below |
 | FX data image | **199971 B** of 16 MB used |
 
 Speculative gameplay status: combat (sword / flail / gunshield), monster FSM,
@@ -42,8 +42,14 @@ projectile trail, the rare cues (part break / gather / eat / windup), and the
 stage-3 finisher + direction+A opener / roll attack (`MH_STAGE3=0`,
 `MH_ROLL_ALT=0` shipping; the carves stay for tests). The procedural ground-dot
 field is kept (the shipping ground; only the room-image blit would cover it).
-Perf-verified on device. Remaining: real art pass (`vx2`, human), feel tuning
-(`1to`, human), EEPROM save (`qyb`, deferred).
+The prg.11 trim then cut charge to a single melee level (no `CHARGE_L2`, no
+charged ball), replaced the procedural tell shapes with a windup
+animation-frame selector (the `tell` byte picks the beast's authored windup
+pose; unauthored tells fall back to the 2x2 core marker until prg.12 authors
+the frames), and carved the A-A-B branch buffer + player-move push flag out of
+shipping (`MH_B_BRANCH_BUFFER=0`, `MH_PUSH_MOVE=0`; the carves stay for tests):
+**−862 B flash**. Perf-verified on device. Remaining: real art pass (`vx2`,
+human), feel tuning (`1to`, human), EEPROM save (`qyb`, deferred).
 
 ---
 

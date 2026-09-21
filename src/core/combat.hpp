@@ -70,9 +70,11 @@ enum MoveType : uint8_t {
     MOVE_CHARGE = 2,
     MOVE_HOP = 3
 };
-// Per-attack windup telegraph shape (tools/gen-combat.py TELLS, feel.5). The
-// render draws this from the cached window during MS_WINDUP only; DOT (0) is the
-// legacy 2x2 core and leaves the shipped look byte-identical.
+// Per-attack windup animation-frame selector (tools/gen-combat.py TELLS,
+// feel.5; prg.11 turned the shapes into frame ids). The render uses this to pick
+// the beast's bespoke windup pose (mh::tellWindupFrame) and falls back to the
+// legacy 2x2 core marker when the frame is unauthored. DOT (0) is the generic
+// coil / core marker; the id order mirrors the authored tell order.
 enum Tell : uint8_t {
     TELL_DOT = 0,
     TELL_LINE = 1,
@@ -183,7 +185,7 @@ struct CombatAttackValue {
     uint8_t wallStun;   // ticks self-stunned on a room-bound clamp (feel.4)
     uint8_t firstWindow, windowCount;
     uint16_t windup, active, recover, dmg;
-    uint8_t tell;   // Tell: windup telegraph shape (feel.5)
+    uint8_t tell;   // Tell: windup animation-frame selector (feel.5 / prg.11)
 };
 
 struct CombatPattern {

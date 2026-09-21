@@ -558,68 +558,30 @@ static void drawZonePart(const mh::Game &g, int16_t x, int16_t y, uint24_t sheet
     sprDraw(sheet, static_cast<int16_t>(x + ox), static_cast<int16_t>(y + zb.oy), FRAME(f));
 }
 
-// 1 px outline reused by the RING/ZONE tells (shade 2, world clip via blk).
-static void tellOutline(int16_t x, int16_t y, int16_t w, int16_t h) {
-    blk(x, y, w, 1, 2);
-    blk(x, static_cast<int16_t>(y + h - 1), w, 1, 2);
-    blk(x, y, 1, h, 2);
-    blk(static_cast<int16_t>(x + w - 1), y, 1, h, 2);
-}
-
-// Per-attack windup telegraph (feel.5): the shape comes from the cached attack
-// (g.combat.attack.tell) and the area from the cached window, so no cart read
-// happens during paint. `x,y` is the monster's screen top-left. tell 0 keeps the
-// legacy 2x2 shade-2 core; the attack-phase 4x4 shade-3 marker is unchanged.
-static void drawMonsterTell(const mh::Game &g, int16_t x, int16_t y) {
+// Windup/attack marker (prg.11). The per-attack telegraph is now an animation
+// frame selected by combat.attack.tell (mh::tellWindupFrame); until a tell has
+// an authored frame (prg.12) the legacy 2x2 shade-2 core marker draws at the
+// cached window centre. MS_ATTACK keeps the unchanged 4x4 shade-3 marker. `x,y`
+// is the monster's screen top-left; the window + tell come from the cache, so no
+// cart read happens during paint.
+static void drawAttackMarker(const mh::Game &g, int16_t x, int16_t y) {
     const mh::Monster &m = g.monster;
     if (m.atkIdx == mh::COMBAT_NO_ATTACK)
         return;
     const mh::CombatBox &b = g.combat.attack.win.box;
     int16_t dx, dy;
     mh::combatFaceOffset(m.fx, m.fy, b, dx, dy);
-    const int16_t cx = static_cast<int16_t>(x + (m.w >> 1));
-    const int16_t cy = static_cast<int16_t>(y + (m.h >> 1));
-    const int16_t ax = static_cast<int16_t>(cx + dx);
-    const int16_t ay = static_cast<int16_t>(cy + dy);
+    const int16_t ax = static_cast<int16_t>(x + (m.w >> 1) + dx);
+    const int16_t ay = static_cast<int16_t>(y + (m.h >> 1) + dy);
     if (m.state == mh::MS_ATTACK) {
         blk(static_cast<int16_t>(ax - 2), static_cast<int16_t>(ay - 2), 4, 4, 3);
         return;
     }
-    const uint8_t tell = g.combat.attack.tell;
-    if (!mh::tellNeedsWindow(tell)) {
-        blk(static_cast<int16_t>(ax - 1), static_cast<int16_t>(ay - 1), 2, 2, 2);
+    // MS_WINDUP: an authored tell frame carries the area read; otherwise the
+    // legacy shade-2 core marker.
+    if (mh::tellHasAuthoredFrame(g.combat.attack.tell, mh::TELL_FRAMES_AUTHORED))
         return;
-    }
-    const int16_t bw = b.w;
-    const int16_t bh = b.h;
-    if (tell == mh::TELL_LINE) {
-        for (uint8_t i = 1; i <= 3; i++) {
-            int16_t ox, oy;
-            mh::tellLineDash(dx, dy, i, ox, oy);
-            blk(static_cast<int16_t>(cx + ox - 1), static_cast<int16_t>(cy + oy - 1), 2, 2, 2);
-        }
-    } else if (tell == mh::TELL_ARC) {
-        int16_t rx, ry;
-        mh::tellRectOrigin(ax, ay, bw, bh, rx, ry);
-        for (uint8_t i = 0; i < 3; i++) {
-            int16_t ox, oy;
-            mh::tellArcSeg(bw, bh, i, ox, oy);
-            blk(static_cast<int16_t>(rx + ox), static_cast<int16_t>(ry + oy), 4, 2, 2);
-        }
-    } else if (tell == mh::TELL_RING) {
-        const int16_t elapsed = static_cast<int16_t>(m.windupMax - m.t);
-        const int16_t hw = mh::tellRingHalf(static_cast<int16_t>(bw >> 1), elapsed);
-        const int16_t hh = mh::tellRingHalf(static_cast<int16_t>(bh >> 1), elapsed);
-        const int16_t rw = static_cast<int16_t>(hw << 1);
-        const int16_t rh = static_cast<int16_t>(hh << 1);
-        int16_t rx, ry;
-        mh::tellRectOrigin(ax, ay, rw, rh, rx, ry);
-        tellOutline(rx, ry, rw, rh);
-    } else {   // ZONE
-        int16_t rx, ry;
-        mh::tellRectOrigin(ax, ay, bw, bh, rx, ry);
-        tellOutline(rx, ry, bw, bh);
-    }
+    blk(static_cast<int16_t>(ax - 1), static_cast<int16_t>(ay - 1), 2, 2, 2);
 }
 
 // Mock drawMonster(): dead heap, feet, body, head + eyes, stun sparkle, and the
@@ -678,6 +640,11 @@ static void drawMonster(const mh::Game &g, int16_t camX, int16_t camY) {
     // trade as fxtailspin/fxchickenatk). Cosmetic only: no hit-test or window
     // change.
     const bool bullAtk = g.monsterKind == mh::MON_SWEEP && (m.state == mh::MS_WINDUP || m.state == mh::MS_ATTACK) && m.atkIdx != mh::COMBAT_NO_ATTACK;
+    // Windup tell frame (prg.11): combat.attack.tell selects the bespoke windup
+    // pose on the beast's attack sheet. prg.12 authors the frames; with
+    // TELL_FRAMES_AUTHORED 0 the selector returns NONE, so the existing ordinal
+    // pose stands and the core marker carries the read.
+    const uint8_t tellSlot = (m.state == mh::MS_WINDUP) ? mh::tellWindupFrame(g.combat.attack.tell, mh::TELL_FRAMES_AUTHORED) : mh::TELL_WINDUP_NONE;
     uint8_t f;
     if (g.monsterKind == mh::MON_RAVAGER) {
         // Legacy fxmonster sheet: idle/recover/flash/dead x facing.
@@ -714,22 +681,25 @@ static void drawMonster(const mh::Game &g, int16_t camX, int16_t camY) {
         // active-window slice, so the beast completes one visible revolution.
         // The sheet is 40x40 with the body centre at (20,20), so it is centred
         // on the body box centre. No per-tick cart read: sheet constant + frame
-        // math only.
+        // math only. (The tell selector cannot index this 8-direction sheet; the
+        // spin's tell falls back to the core marker.)
         const uint8_t start8 = static_cast<uint8_t>(fp::dirIndexFromDelta(m.fx, m.fy)) & 7;
         const uint8_t spinF = (m.state == mh::MS_WINDUP) ? start8 : mh::spinSheetFrame(start8, m.t, static_cast<int16_t>(g.combat.attack.active));
         sprDraw(fxtailspin, static_cast<int16_t>(x + (w >> 1) - 20), static_cast<int16_t>(y + (h >> 1) - 20), FRAME(spinF));
     } else if (chickenAtk) {
         // Ordinal from the creature's first attack (peck; leap is +1 in the
         // authored attack order): no literal record index, and the sheet frame
-        // selects facing with the low bit.
-        const uint8_t ordinal = static_cast<uint8_t>(m.atkIdx - mh::combatCreatureFirstAttack(combat::CREATURE_LUNGE));
+        // selects facing with the low bit. Windup: an authored tell frame
+        // (prg.12) wins; unauthored tells keep the ordinal pose + core marker.
+        const uint8_t ordinal = (tellSlot != mh::TELL_WINDUP_NONE) ? tellSlot : static_cast<uint8_t>(m.atkIdx - mh::combatCreatureFirstAttack(combat::CREATURE_LUNGE));
         const uint8_t cf = static_cast<uint8_t>((ordinal << 1) | (m.fx < 0 ? 1 : 0));
         sprDraw(fxchickenatk, x, y, FRAME(cf));
     } else if (bullAtk) {
         // Ordinal from the creature's first attack (stomp; gore is +1 in the
         // authored attack order): no literal record index, and the sheet frame
-        // selects facing with the low bit.
-        const uint8_t ordinal = static_cast<uint8_t>(m.atkIdx - mh::combatCreatureFirstAttack(combat::CREATURE_SWEEP));
+        // selects facing with the low bit. Windup: an authored tell frame
+        // (prg.12) wins; unauthored tells keep the ordinal pose + core marker.
+        const uint8_t ordinal = (tellSlot != mh::TELL_WINDUP_NONE) ? tellSlot : static_cast<uint8_t>(m.atkIdx - mh::combatCreatureFirstAttack(combat::CREATURE_SWEEP));
         const uint8_t bf = static_cast<uint8_t>((ordinal << 1) | (m.fx < 0 ? 1 : 0));
         sprDraw(fxbullatk, x, y, FRAME(bf));
     } else {
@@ -786,13 +756,13 @@ static void drawMonster(const mh::Game &g, int16_t camX, int16_t camY) {
         sprDraw(fxtail_spin, static_cast<int16_t>(x + (w >> 1) - 12), static_cast<int16_t>(y + (h >> 1) - 12), FRAME(sf));
     }
 
-    // Telegraph at the cached window (feel.5): tell 0 is the legacy 2x2 shade-2
-    // core, the other shapes describe the area the attack will cover; the
-    // attack-phase 4x4 shade-3 marker is unchanged. Drawn from the cache, so no
-    // cart read happens during paint. The full-window box fill read as a debug
-    // hurt zone on playtest (nch.2), so only the shapes above are drawn.
+    // Telegraph at the cached window (prg.11): the tell is now an animation
+    // frame selector, so this draws only the shared core marker. MS_ATTACK keeps
+    // the 4x4 shade-3 marker; MS_WINDUP draws the legacy 2x2 shade-2 core until
+    // prg.12 authors a per-tell pose. Drawn from the cache, so no cart read
+    // happens during paint.
     if (m.state == mh::MS_WINDUP || m.state == mh::MS_ATTACK)
-        drawMonsterTell(g, x, y);
+        drawAttackMarker(g, x, y);
 }
 
 // The gen-art part records live in the mhEquip cart blob (equip_meta.hpp holds
@@ -885,12 +855,13 @@ static void drawPlayer(const mh::Game &g, int16_t camX, int16_t camY) {
     partDraw(equip::DEFAULT_HEAD, equip::POSE_IDLE, face, cx, cy);
 
     // Charge meter above the hunter (mock drawPlayer): 16 px bar at cx-8, y-4,
-    // 2 px tall; fill fraction min(1, chargeT/CHARGE_L2); light gray normally,
-    // white at/above CHARGE_L2. Only the ynb charge stance draws it.
+    // 2 px tall; fill fraction min(1, chargeT/CHARGE_MIN), shade 2. Charge-lite
+    // (prg.11): one level, so there is no white-at-L2 state. Only the charge
+    // stance draws it.
     if (p.state == mh::PS_CHARGE) {
-        const int16_t fill = (p.chargeT * 16 + (mh::CHARGE_L2 >> 1)) / mh::CHARGE_L2;
+        const int16_t fill = (p.chargeT * 16 + (mh::CHARGE_MIN >> 1)) / mh::CHARGE_MIN;
         const int16_t w = fill < 1 ? 1 : (fill > 16 ? 16 : fill);
-        blk(static_cast<int16_t>(cx - 8), static_cast<int16_t>(y - 4), w, 2, p.chargeT >= mh::CHARGE_L2 ? 3 : 2);
+        blk(static_cast<int16_t>(cx - 8), static_cast<int16_t>(y - 4), w, 2, 2);
     }
 
     // Shared attack timing (sword and flail read the same startup/active/reach;

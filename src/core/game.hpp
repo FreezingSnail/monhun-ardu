@@ -82,11 +82,16 @@ constexpr uint8_t SHEATHE_SPD = 24;   // 1/16 px per tick while stowed (1.5 px/t
 // Parity carve facts (same pattern as MH_COMBAT_PARTS): the test_parity scenes
 // never sheathe and never queue a B branch through recovery/lock, so those input
 // paths fold out of that image; the host suite keeps covering them.
+// B-branch buffer carve (prg.11, same pattern as MH_STAGE3/MH_ROLL_ALT): prg.11
+// turned the shipping default off (the A-A-B queue through recovery/lock is
+// trimmed for the progression-wave budget; a loose A A B no longer combos
+// through the gap). The carve stays: -DMH_B_BRANCH_BUFFER=1 re-enables the
+// buffer, and the host suite (Makefile TEST_FLAGS) covers the path forced on.
 #ifndef MH_SHEATHE
 #define MH_SHEATHE 1
 #endif
 #ifndef MH_B_BRANCH_BUFFER
-#define MH_B_BRANCH_BUFFER 1
+#define MH_B_BRANCH_BUFFER 0
 #endif
 constexpr bool SHEATHE_ENABLED = MH_SHEATHE;
 constexpr bool B_BRANCH_BUFFER_ENABLED = MH_B_BRANCH_BUFFER;
@@ -123,12 +128,14 @@ constexpr bool STAGE3_ENABLED = MH_STAGE3;
 #define MH_CHARGE 1
 #endif
 constexpr bool CHARGE_ENABLED = MH_CHARGE;
-// Player-move carve (push-rule bug fix 2026-09-19): no test_parity scene walks
-// the hunter into the beast, so the per-tick player-move flag folds out of that
-// image (its budget is at the board limit); the host suite and the shipping
-// build keep it and pushApart defaults to the pre-fix give-way rule there.
+// Player-move carve (push-rule bug fix 2026-09-19): prg.11 turned the shipping
+// default off (the per-tick player-move flag is trimmed for the progression-wave
+// budget; pushApart falls back to the pre-fix give-way rule, so a hunter pressing
+// into a body can shove it). The carve stays: -DMH_PUSH_MOVE=1 re-enables it, and
+// the host suite (Makefile TEST_FLAGS) covers the fix forced on. test_parity
+// (MH_PUSH_MOVE 0) never walked the hunter into the beast either way.
 #ifndef MH_PUSH_MOVE
-#define MH_PUSH_MOVE 1
+#define MH_PUSH_MOVE 0
 #endif
 constexpr bool PUSH_MOVE_ENABLED = MH_PUSH_MOVE;
 // Active-room bounds carve (bead monhun-ardu-fie.4, same pattern as MH_SHEATHE):
@@ -142,7 +149,6 @@ constexpr bool PUSH_MOVE_ENABLED = MH_PUSH_MOVE;
 #endif
 constexpr bool ROOM_BOUNDS_ENABLED = MH_ROOM_BOUNDS;
 constexpr int16_t CHARGE_MIN = 14;   // A held this long past the swing -> charge stance
-constexpr int16_t CHARGE_L2 = 20;    // extra charge ticks for level 2 (bar flashes white)
 constexpr int16_t WORLD_W = 256;
 constexpr int16_t WORLD_H = 112;
 
@@ -252,8 +258,8 @@ struct WeaponDef {
     ShellDef shells[2];
     Attack roll;                // A out of dodge/deflect/shove (bead monhun-ardu-8xx)
     Attack alt;                 // direction+A opener, replaces combo hit 1 at chain 0
-    Attack charge[2];           // held-A release melee (ynb); zero = no charge data
-    ShellDef chargeShells[2];   // held-A release shells (ynb); zero = no charge data
+    Attack charge[2];           // held-A release melee (ynb); charge-lite reads slot 0 only
+    ShellDef chargeShells[2];   // held-A release shells (ynb); dead after the prg.11 carve
 };
 
 // On AVR the table lives on the FX cart as one packed 987 B blob (bead
@@ -361,24 +367,16 @@ inline const Branch *weaponBranch(const WeaponDef *d, int16_t i) {
 inline const ShellDef *weaponShell(const WeaponDef *d, int16_t i) {
     return &d->shells[i];
 }
-// Held-A release data (ynb). A weapon "has charge data" when its level-1 entry
-// is non-zero (the mock's `def.charge` / `def.chargeShells` truthiness).
+// Held-A release data (ynb). Charge-lite (prg.11): only slot 0 is ever read —
+// a single-level melee charge. A weapon "has charge data" when its slot-0 entry
+// is non-zero; the level-1 dmg is the single read that distinguishes the shipped
+// sets (flail charge dmg 24, all others 0). The gun's charge shells are dead
+// data after the carve (the charged ball was removed), so no shell accessor.
 inline const Attack *weaponCharge(const WeaponDef *d, int16_t i) {
     return &d->charge[i];
 }
-inline const ShellDef *weaponChargeShell(const WeaponDef *d, int16_t i) {
-    return &d->chargeShells[i];
-}
-// "Has charge data" tests: the mock checks the truthiness of def.charge /
-// def.chargeShells (absent for weapons that cannot charge). The packed table
-// always carries the slots, so a zeroed level-1 entry stands in for absence;
-// the level-1 dmg is the single read that distinguishes the shipped sets
-// (flail charge dmg 24, gun chargeShell dmg 34, all others 0).
 inline bool weaponHasCharge(const WeaponDef *d) {
     return mhFxReadI16(&d->charge[0].dmg) != 0;
-}
-inline bool weaponHasChargeShells(const WeaponDef *d) {
-    return mhFxReadI16(&d->chargeShells[0].dmg) != 0;
 }
 
 inline int16_t attackStartup(const Attack *a) {

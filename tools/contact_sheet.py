@@ -97,6 +97,23 @@ TICK_W = 3
 PHASE_COLORS = {"windup": MID, "active": BLACK, "recover": LIGHT}
 WINDOW_COLORS = [BLACK, DARK, MID]
 
+# prg.11: `tell` is a windup animation-frame selector, not a procedural shape.
+# The sheet names the window class each tell selects so a reviewer can confirm
+# the windup pose matches the hit window; unauthored frames fall back to the 2x2
+# core marker (prg.12 authors the per-attack frames on the FX cart).
+TELL_CLASS = {
+    "dot": "core",
+    "line": "ray",
+    "arc": "sweep",
+    "ring": "aoe",
+    "zone": "rect",
+}
+
+
+def tell_class(tell):
+    """Window class a tell selects (prg.11); unknown/absent -> '?'."""
+    return TELL_CLASS.get(tell, "?")
+
 PREVIEW_W = 72
 PREVIEW_H = 44
 MARGIN = 8
@@ -187,8 +204,10 @@ def draw_attack_band(draw, attack, body_w, body_h, y):
     active = int(attack["active"])
     recover = int(attack["recover"])
     total = windup + active + recover
-    text(draw, MARGIN, y, "ATTACK %s W%d A%d R%d DMG%d %s" % (
-        attack["id"], windup, active, recover, attack["dmg"], attack.get("phys", "-")))
+    tell = attack.get("tell", "dot")
+    text(draw, MARGIN, y, "ATTACK %s W%d A%d R%d DMG%d %s TELL %s/%s FRAME-PRG12" % (
+        attack["id"], windup, active, recover, attack["dmg"], attack.get("phys", "-"),
+        tell, tell_class(tell)))
     y += TEXT_H + 4
 
     # timeline: one column per tick, phase shaded, window spans highlighted

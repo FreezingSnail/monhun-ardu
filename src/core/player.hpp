@@ -233,12 +233,13 @@ static void startAttack(Game &g, const WeaponDef *def, bool alt = false) {
         p.chargeArmed = true;   // hold A through this swing -> charge
 }
 
-// Held-A charge helpers (monhun-ardu-ynb), ported from mock/game.js
-// startChargeAttack() / fireChargeShot(). Reached only from the PS_CHARGE
+// Held-A charge helper (monhun-ardu-ynb), ported from mock/game.js
+// startChargeAttack(). Charge-lite (prg.11): a single level — slot 0 only, no
+// CHARGE_L2 tier and no charged-ball release. Reached only from the PS_CHARGE
 // release, which is itself gated by CHARGE_ENABLED.
 static bool startChargeAttack(Game &g, const WeaponDef *def) {
     Player &p = g.player;
-    const Attack *a = weaponCharge(def, p.chargeT >= CHARGE_L2 ? 1 : 0);
+    const Attack *a = weaponCharge(def, 0);
     if (!a)
         return false;
     const int16_t stam = attackStam(a);
@@ -251,25 +252,6 @@ static bool startChargeAttack(Game &g, const WeaponDef *def) {
     if (STAGE3_ENABLED)
         p.finWin = false;
     applyLunge(p, a);
-    return true;
-}
-
-static bool fireChargeShot(Game &g, const WeaponDef *def) {
-    Player &p = g.player;
-    const bool l2 = p.chargeT >= CHARGE_L2;
-    const ShellDef *sh = weaponChargeShell(def, l2 ? 1 : 0);
-    const int16_t stam = shellStam(sh);
-    if (p.stam < stam)
-        return false;
-    p.stam = static_cast<uint8_t>(p.stam - stam);
-    p.reload = static_cast<uint8_t>(shellReload(sh));
-    // Charged ball codes: 3 = level 1, 4 = level 2 (projectiles.hpp spawnShot
-    // reads weaponChargeShell(def, shot - 3)); 1/2 stay the normal shells.
-    g.lastShot = l2 ? 4 : 3;
-    g.lastShotX = static_cast<uint8_t>(p.x + (p.w >> 1));
-    g.lastShotY = static_cast<uint8_t>(p.y + (p.h >> 1));
-    g.lastShotFx = p.fx;
-    g.lastShotFy = p.fy;
     return true;
 }
 
@@ -690,9 +672,9 @@ static void updatePlayer(Game &g, const Input &inp, bool aP, bool bP, bool bR) {
     if (p.aBuffer > 0)
         p.aBuffer--;
 
-    // A press/hold/release: charge attacks build after a swing while A is held
-    // (CHARGE_MIN), then release fires level 1 (or level 2 at CHARGE_L2). Folded
-    // out of the parity image by CHARGE_ENABLED (its scenes never hold A).
+    // A press/hold/release: a charge attack builds after a swing while A is
+    // held (CHARGE_MIN), then release fires the single-level charge. Folded out
+    // of the parity image by CHARGE_ENABLED (its scenes never hold A).
     bool aR = false;
     if (CHARGE_ENABLED) {
         aR = !inp.a && p.pA;
@@ -900,13 +882,13 @@ static void updatePlayer(Game &g, const Input &inp, bool aP, bool bP, bool bR) {
         break;
     }
     case PS_CHARGE: {
-        // rooted windup; release fires the level-1 or level-2 charge. The whole
-        // body folds out of the parity image (CHARGE_ENABLED), which never
-        // enters the state.
+        // rooted windup; release fires the single-level charge (charge-lite,
+        // prg.11). The whole body folds out of the parity image (CHARGE_ENABLED),
+        // which never enters the state.
         if (CHARGE_ENABLED) {
             p.chargeT = static_cast<uint8_t>(p.chargeT + 1 > 255 ? 255 : p.chargeT + 1);
             if (aR) {
-                const bool fired = weaponHasCharge(def) ? startChargeAttack(g, def) : weaponHasChargeShells(def) ? fireChargeShot(g, def) : false;
+                const bool fired = weaponHasCharge(def) ? startChargeAttack(g, def) : false;
                 if (!fired)
                     p.state = PS_IDLE;
                 // chargeArmed was already cleared by the top-of-tick release.
@@ -941,8 +923,8 @@ static void updatePlayer(Game &g, const Input &inp, bool aP, bool bP, bool bR) {
         p.state = PS_IDLE;
     }
 
-    // held A past the swing -> charge stance (weapons with charge data only)
-    if (CHARGE_ENABLED && p.state == PS_IDLE && p.chargeArmed && inp.a && p.aHold >= CHARGE_MIN && (weaponHasCharge(def) || weaponHasChargeShells(def))) {
+    // held A past the swing -> charge stance (weapons with melee charge data only)
+    if (CHARGE_ENABLED && p.state == PS_IDLE && p.chargeArmed && inp.a && p.aHold >= CHARGE_MIN && weaponHasCharge(def)) {
         p.state = PS_CHARGE;
         p.chargeT = 0;
     }

@@ -62,11 +62,12 @@ Diff review before commit (it caught five real drifts in one bead):
 
 The feel revision behind the current kits is recorded in
 `docs/feel-design.md`: the diagnosis, the five pillars, the data verbs now
-available, the per-beast kit tables, and the attack contract (tell shape ==
+available, the per-beast kit tables, and the attack contract (tell class ==
 hit-test geometry, windup/recovery floors, positional answers, no stationary
 weak attack). Read it before authoring or reviewing creature data — the
 checklist above is the mechanical half of the same review, and
-`tools/contact_sheet.py` renders the JSON the contract talks about.
+`tools/contact_sheet.py` renders the JSON the contract talks about (it names the
+window class each `tell` selects).
 
 ## Releases
 

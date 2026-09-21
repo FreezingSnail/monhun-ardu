@@ -104,6 +104,17 @@ class ContactSheetTests(unittest.TestCase):
         self.assertEqual(px[contact_sheet.MARGIN + 10 * contact_sheet.TICK_W, y],
                          contact_sheet.PHASE_COLORS["active"])
 
+    def test_tell_class_names_window_class(self):
+        # prg.11: the sheet names the window class each tell selects so the
+        # windup-pose/window-class match is reviewable.
+        self.assertEqual(contact_sheet.tell_class("dot"), "core")
+        self.assertEqual(contact_sheet.tell_class("line"), "ray")
+        self.assertEqual(contact_sheet.tell_class("arc"), "sweep")
+        self.assertEqual(contact_sheet.tell_class("ring"), "aoe")
+        self.assertEqual(contact_sheet.tell_class("zone"), "rect")
+        self.assertEqual(contact_sheet.tell_class("bogus"), "?")
+        self.assertEqual(contact_sheet.tell_class(None), "?")
+
     def test_main_writes_png_under_build(self):
         out = os.path.join(SCRATCH, "sheet.png")
         rc = contact_sheet.main(["--root", self.root, "--out", out, "--creature", "tester"])
