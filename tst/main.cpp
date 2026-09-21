@@ -20,6 +20,7 @@
 #include "gather_test.hpp"
 #include "items_test.hpp"
 #include "armor_test.hpp"
+#include "armor_engine_test.hpp"
 #include "carve_test.hpp"
 
 int main() {
@@ -44,6 +45,7 @@ int main() {
     GatherSuite(runner);
     ItemsSuite(runner);
     ArmorSuite(runner);
+    ArmorEngineSuite(runner);
     CarveSuite(runner);
     runner.printSummary();
     return runner.fail() ? 1 : 0;

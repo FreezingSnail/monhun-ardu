@@ -121,6 +121,10 @@ MH_NOINLINE void initGame(Game &g, int8_t weapon) {
     // Carve (prg.3): a fresh hunt has three carves and no live carcass interact.
     g.carvesDone = 0;
     g.carveHold = false;
+    // Armor cache (arm.2): empty until the sketch arms it from the save
+    // (armorApplyToGame); a default Game therefore keeps the base head/body.
+    g.armor = ArmorAgg{};
+    g.armorHead = 0;
 }
 
 static Rect meleeHitbox(const Player &p, const Attack *a) {

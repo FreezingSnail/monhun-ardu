@@ -34,6 +34,8 @@
 #include "quest_state.hpp"
 #include "upgrade_state.hpp"
 #include "generated/screen_meta.hpp"
+#include "generated/armor_meta.hpp"   // armor::PIECE_COUNT for the armor rows (arm.2)
+#include "armor_state.hpp"            // armorEquipToggle (arm.2)
 
 namespace mh {
 
@@ -126,6 +128,14 @@ inline uint8_t screenUpgradeUnlock(uint8_t param) {
     return static_cast<uint8_t>((param >> 4) & 15);
 }
 
+// COND_ARMOR / ACTION_CRAFT_ARMOR param decoders: (slot << 5) | pieceIdx.
+inline uint8_t screenArmorPiece(uint8_t param) {
+    return static_cast<uint8_t>(param & 31);
+}
+inline uint8_t screenArmorSlot(uint8_t param) {
+    return static_cast<uint8_t>((param >> 5) & 3);
+}
+
 // Row condition: 0 = always, zenny >= cost, save flag set, tier < max, quest
 // state query, or the smith upgrade availability check (see header note).
 inline bool screenCondOk(const SaveBlock &save, const ScreenRow &row) {
@@ -160,6 +170,18 @@ inline bool screenCondOk(const SaveBlock &save, const ScreenRow &row) {
         if (!screenRecipeOk(save, row.recipe))
             return false;
         return true;
+    }
+    case screens::COND_ARMOR: {
+        // arm.2: a crafted piece is always live (A toggles equip); an uncrafted
+        // one needs the zenny + material bill. The caller fills row.recipe from
+        // the mhSmith armor record (screens.hpp) so this stays cart-free.
+        const uint8_t piece = screenArmorPiece(row.param);
+        const uint8_t slot = screenArmorSlot(row.param);
+        if (piece >= armor::PIECE_COUNT || slot >= SAVE_EQUIP_COUNT)
+            return false;
+        if (saveCrafted(save, piece))
+            return true;
+        return save.zenny >= row.cost && screenRecipeOk(save, row.recipe);
     }
     default:
         return true;
@@ -259,6 +281,27 @@ inline bool screenApplyAction(SaveBlock &save, const ScreenRow &row) {
         screenRecipeDebit(save, row.recipe);
         save.zenny = static_cast<uint16_t>(save.zenny - row.cost);
         save.tier[weapon] = target;
+        return true;
+    }
+    case screens::ACTION_CRAFT_ARMOR: {
+        // arm.2: craft (if needed) then toggle the piece into its slot. Craft
+        // debits the material bill + zenny and sets the crafted bit; a second A
+        // on a crafted piece unequips it. Re-checks the bill so a stale row
+        // cannot debit more than the hunter owns.
+        const uint8_t piece = screenArmorPiece(row.param);
+        const uint8_t slot = screenArmorSlot(row.param);
+        if (piece >= armor::PIECE_COUNT || slot >= SAVE_EQUIP_COUNT)
+            return false;
+        if (!saveCrafted(save, piece)) {
+            if (save.zenny < row.cost)
+                return false;
+            if (!screenRecipeOk(save, row.recipe))
+                return false;
+            screenRecipeDebit(save, row.recipe);
+            save.zenny = static_cast<uint16_t>(save.zenny - row.cost);
+            saveSetCrafted(save, piece);
+        }
+        armorEquipToggle(save, piece, slot);
         return true;
     }
     case screens::ACTION_TAKE_QUEST:

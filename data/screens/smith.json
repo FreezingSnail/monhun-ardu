@@ -8,6 +8,11 @@
     { "label": "FLAIL T2", "cost": 280, "action": "buy_upgrade", "condition": "upgrade", "param": 6 },
     { "label": "GUN T1", "cost": 90, "action": "buy_upgrade", "condition": "upgrade", "param": 9 },
     { "label": "GUN T2", "cost": 220, "action": "buy_upgrade", "condition": "upgrade", "param": 10 },
+    { "label": "HUNTER HELM", "cost": 300, "action": "craft_armor", "condition": "armor", "param": 0 },
+    { "label": "BONE CAP", "cost": 200, "action": "craft_armor", "condition": "armor", "param": 1 },
+    { "label": "HUNTER MAIL", "cost": 400, "action": "craft_armor", "condition": "armor", "param": 34 },
+    { "label": "BONE MAIL", "cost": 250, "action": "craft_armor", "condition": "armor", "param": 35 },
+    { "label": "EVADE CHARM", "cost": 600, "action": "craft_armor", "condition": "armor", "param": 68 },
     { "label": "LEAVE", "cost": 0, "action": "leave", "condition": "always", "param": 0 }
   ]
 }

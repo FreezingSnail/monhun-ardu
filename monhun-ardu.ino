@@ -96,6 +96,7 @@ void setup() {
     mh::questApplyToGame(g, s_save);
     mh::upgradeApplyToGame(g, s_save);
     mh::itemsApplyToGame(g, s_save);   // restore the persisted inventory
+    mh::armorApplyToGame(g, s_save);   // cache equipped armor stats (arm.2)
 }
 
 // One input sample per logic tick, shared by the menu and the sim. The menu
@@ -133,6 +134,7 @@ void run() {
                 mh::questApplyToGame(g, s_save);
                 mh::upgradeApplyToGame(g, s_save);
                 mh::itemsApplyToGame(g, s_save);
+                mh::armorApplyToGame(g, s_save);
                 s_huntOver = false;
             }
         }
@@ -148,6 +150,8 @@ void run() {
             if (s_smithyFromCamp && s_screen.screen == screens::SCREEN_SMITH) {
                 s_smithyFromCamp = false;
                 mh::appNavApply(mh::APP_NAV_CAMP, s_menu, s_screen, s_save, g, in);
+                // A camp-smith equip/unequip changes the live hunt's armor cache.
+                mh::armorApplyToGame(g, s_save);
             } else {
                 mh::appNavApply(mh::appScreenBack(s_screen.screen), s_menu, s_screen, s_save, g, in);
             }
@@ -169,6 +173,7 @@ void run() {
                 mh::questApplyToGame(g, s_save);
                 mh::upgradeApplyToGame(g, s_save);
                 mh::itemsApplyToGame(g, s_save);
+                mh::armorApplyToGame(g, s_save);
                 s_huntOver = false;
             }
             return;

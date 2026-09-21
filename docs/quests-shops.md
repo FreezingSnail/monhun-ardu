@@ -63,9 +63,12 @@ weapon records in `mhSmith` (blob header byte 5 = armor count, then
 The packed material slots use the identical `(itemIdx+1, count)` convention and
 the host debit is the same `screenRecipeOk` / `screenRecipeDebit` pair, so
 armor spends zenny and materials exactly like a weapon tier. The armor piece
-index matches `armor::ARMOR_<ID>`. This bead packs the data only; `arm.2` adds
-the smith action/condition and the equip UI. See
-`docs/equipment-framework.md` ("Armor data") for the piece/skill schema.
+index matches `armor::ARMOR_<ID>`. `arm.2` wires the smith action/condition:
+the smith screen gains one `COND_ARMOR` / `ACTION_CRAFT_ARMOR` row per piece
+(`param = (slot << 5) | pieceIdx`), the row's cost/bill come from the recipe
+record, and A crafts (debits + sets the crafted bit + equips) or toggles
+equip/unequip. See `docs/equipment-framework.md` ("Armor data" and "Armor
+engine") for the piece/skill schema and the aggregation contract.
 
 ## Beads
 

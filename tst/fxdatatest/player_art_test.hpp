@@ -65,6 +65,9 @@ struct Case {
     uint8_t reload;
     uint8_t iT;
     uint8_t riposte;
+    // Equipped head piece + 1 (arm.2 armorHeadPart); 0 = base head. Left off the
+    // pre-arm.2 rows, so they value-initialize to 0 and keep their goldens.
+    uint8_t armorHead;
 };
 
 // State matrix. Facings are 8-way fp vectors (E = 16,0; W = -16,0; SE = 11,11).
@@ -109,25 +112,62 @@ static const Case CASES[] = {
     {W_GUN, PS_DODGE, ST_NONE, 0, 0, 16, 0, 0, 0, 0, 0},
     {W_GUN, PS_STUN, ST_NONE, 0, 0, 16, 0, 5, 0, 0, 0},
     {W_GUN, PS_IDLE, ST_NONE, 0, 0, 16, 0, 3, 0, 10, 0},
+    // arm.2 armor head layer: the equipped head piece selects a different head
+    // sheet (hunter helm -> mh_head_helm, bone cap -> mh_head_bandana). The
+    // base rows above keep armorHead 0 and their pre-arm.2 goldens.
+    {W_SWORD, PS_IDLE, ST_NONE, 0, 0, 16, 0, 0, 0, 0, 0, armor::ARMOR_HUNTER_HELM + 1},
+    {W_SWORD, PS_IDLE, ST_NONE, 0, 0, -16, 0, 0, 0, 0, 0, armor::ARMOR_HUNTER_HELM + 1},
+    {W_FLAIL, PS_IDLE, ST_NONE, 0, 0, 11, 11, 0, 0, 0, 0, armor::ARMOR_BONE_CAP + 1},
 };
 constexpr uint8_t CASE_COUNT = static_cast<uint8_t>(sizeof(CASES) / sizeof(CASES[0]));
 // Changing the matrix invalidates GOLDEN: extend both in the same change and
 // capture the new hashes with the regen command above.
-static_assert(CASE_COUNT == 37, "golden matrix changed; regenerate GOLDEN");
+static_assert(CASE_COUNT == 40, "golden matrix changed; regenerate GOLDEN");
 
 // Golden framebuffer hashes [case][plane], captured pre-refactor. See the regen
 // note above; PROGMEM so the 3 x CASE_COUNT words stay in flash.
 static const uint32_t MH_PROGMEM GOLDEN[CASE_COUNT][3] = {
-    {0xe490e488u, 0xccac0388u, 0xccac0388u}, {0xa38365c0u, 0x46b905c0u, 0x46b905c0u}, {0x9e96c62au, 0xc998692au, 0x17645e42u}, {0x90d9bf11u, 0x7d2df311u, 0xd7728e01u},
-    {0x9e96c62au, 0xc998692au, 0x17645e42u}, {0x4fae7d31u, 0xd2f41731u, 0x34651e11u}, {0x3e136117u, 0x55f84217u, 0xf05c2259u}, {0x9861d60du, 0xb2e8700du, 0xf75a8eb9u},
-    {0x8d024a25u, 0x19543b25u, 0xb76fbb91u}, {0xe739e1abu, 0x8f6871abu, 0xf75a8eb9u}, {0xfc85c4cdu, 0x13a869cdu, 0x356d8145u}, {0x6d4eb357u, 0xa7c60857u, 0x3a895d57u},
-    {0xa38365c0u, 0x46b905c0u, 0x37e7b108u}, {0x3ec19436u, 0x3ab58236u, 0x3ab58236u}, {0x82915ce0u, 0x411204e0u, 0x411204e0u}, {0x93745722u, 0x7b8f7622u, 0x7b8f7622u},
-    {0x69a0e3f8u, 0xd2289bf8u, 0xd2289bf8u}, {0x8d8428d4u, 0x759f47d4u, 0x759f47d4u}, {0x5957643fu, 0x4172833fu, 0x4172833fu}, {0x8d8428d4u, 0x759f47d4u, 0x759f47d4u},
-    {0xaf464173u, 0x3aa3ee73u, 0x3aa3ee73u}, {0xbdcdefbdu, 0x58a536bdu, 0x83571f35u}, {0x4649f76du, 0xd1a7a46du, 0xd12b30a5u}, {0x9a8287e1u, 0x1f0c3be1u, 0x1e747583u},
-    {0x93745722u, 0x7b8f7622u, 0x3ce8cb2au}, {0x10a28740u, 0xf618c040u, 0xf618c040u}, {0x93745722u, 0x7b8f7622u, 0x7b8f7622u}, {0xe56a836fu, 0x1d4a306fu, 0xb373bcd7u},
-    {0xd9c2ad2fu, 0xedb3832fu, 0xcacdbe57u}, {0x30469935u, 0x51a89135u, 0x51a89135u}, {0xe56a836fu, 0x1d4a306fu, 0xb373bcd7u}, {0xe56a836fu, 0x1d4a306fu, 0xb373bcd7u},
-    {0x46724db1u, 0x67d445b1u, 0xf8c93455u}, {0xc19b9b2fu, 0x1fb93e2fu, 0xb373bcd7u}, {0xe56a836fu, 0x1d4a306fu, 0xb845c6bbu}, {0x474a642du, 0xc098f32du, 0x606e0819u},
+    {0xe490e488u, 0xccac0388u, 0xccac0388u},
+    {0xa38365c0u, 0x46b905c0u, 0x46b905c0u},
+    {0x9e96c62au, 0xc998692au, 0x17645e42u},
+    {0x90d9bf11u, 0x7d2df311u, 0xd7728e01u},
+    {0x9e96c62au, 0xc998692au, 0x17645e42u},
+    {0x4fae7d31u, 0xd2f41731u, 0x34651e11u},
+    {0x3e136117u, 0x55f84217u, 0xf05c2259u},
+    {0x9861d60du, 0xb2e8700du, 0xf75a8eb9u},
+    {0x8d024a25u, 0x19543b25u, 0xb76fbb91u},
+    {0xe739e1abu, 0x8f6871abu, 0xf75a8eb9u},
+    {0xfc85c4cdu, 0x13a869cdu, 0x356d8145u},
+    {0x6d4eb357u, 0xa7c60857u, 0x3a895d57u},
+    {0xa38365c0u, 0x46b905c0u, 0x37e7b108u},
+    {0x3ec19436u, 0x3ab58236u, 0x3ab58236u},
+    {0x82915ce0u, 0x411204e0u, 0x411204e0u},
+    {0x93745722u, 0x7b8f7622u, 0x7b8f7622u},
+    {0x69a0e3f8u, 0xd2289bf8u, 0xd2289bf8u},
+    {0x8d8428d4u, 0x759f47d4u, 0x759f47d4u},
+    {0x5957643fu, 0x4172833fu, 0x4172833fu},
+    {0x8d8428d4u, 0x759f47d4u, 0x759f47d4u},
+    {0xaf464173u, 0x3aa3ee73u, 0x3aa3ee73u},
+    {0xbdcdefbdu, 0x58a536bdu, 0x83571f35u},
+    {0x4649f76du, 0xd1a7a46du, 0xd12b30a5u},
+    {0x9a8287e1u, 0x1f0c3be1u, 0x1e747583u},
+    {0x93745722u, 0x7b8f7622u, 0x3ce8cb2au},
+    {0x10a28740u, 0xf618c040u, 0xf618c040u},
+    {0x93745722u, 0x7b8f7622u, 0x7b8f7622u},
     {0xe56a836fu, 0x1d4a306fu, 0xb373bcd7u},
+    {0xd9c2ad2fu, 0xedb3832fu, 0xcacdbe57u},
+    {0x30469935u, 0x51a89135u, 0x51a89135u},
+    {0xe56a836fu, 0x1d4a306fu, 0xb373bcd7u},
+    {0xe56a836fu, 0x1d4a306fu, 0xb373bcd7u},
+    {0x46724db1u, 0x67d445b1u, 0xf8c93455u},
+    {0xc19b9b2fu, 0x1fb93e2fu, 0xb373bcd7u},
+    {0xe56a836fu, 0x1d4a306fu, 0xb845c6bbu},
+    {0x474a642du, 0xc098f32du, 0x606e0819u},
+    {0xe56a836fu, 0x1d4a306fu, 0xb373bcd7u},
+    // arm.2 armor head layer (cases 37..39); captured after the head-part select.
+    {0xf1a29388u, 0x8d116188u, 0xf5eff250u},
+    {0xe79144c0u, 0xc3e95cc0u, 0x4d851fd8u},
+    {0x18bc869du, 0x00bc5c25u, 0x00bc5c25u},
 };
 static_assert(sizeof(GOLDEN) / sizeof(GOLDEN[0]) == CASE_COUNT, "goldens must cover every case");
 
@@ -167,6 +207,7 @@ static void setupCase(Game &g, const Case &c) {
     p.riposteT = c.riposte;
     p.whirlTick = 3;   // deterministic ring/ball angle
     g.tick = c.tick;
+    g.armorHead = c.armorHead;
 
     const WeaponDef *def = &WEAPON_DEFS[c.weapon];
     const Attack *a = nullptr;

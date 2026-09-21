@@ -1,0 +1,266 @@
+#pragma once
+// Host unit tests for the armor engine (bead monhun-ardu-arm.2):
+// src/armor_state.hpp (equip toggle, crafted bits, stat/skill aggregation with
+// thresholds) and the COND_ARMOR / ACTION_CRAFT_ARMOR rows in
+// src/screen_state.hpp (craft gate + material/zenny debit + equip toggle).
+// The cart read side (src/armor.hpp) is device-only and is pinned by
+// tst/fxdatatest/armor_test.hpp.
+//
+// The shipped data mirror (armor_data.hpp) is the source of truth for the
+// table-wide pins; the threshold/aggregation math also uses synthetic pieces so
+// totals above the shipped per-skill 3 can cross S=10 / M=15.
+#include "test.hpp"
+#include "../src/armor_state.hpp"
+#include "../src/screen_state.hpp"
+#include "../src/core/save.hpp"
+#include "../src/generated/armor_data.hpp"
+#include "../src/generated/armor_meta.hpp"
+
+using namespace mh;
+
+namespace armorenginetest {
+
+// armor_data::Piece (host mirror) -> the engine's plain ArmorPiece view.
+inline ArmorPiece toPiece(const armor_data::Piece &p) {
+    ArmorPiece out;
+    out.slot = p.slot;
+    out.defense = p.defense;
+    for (uint8_t i = 0; i < ARMOR_RESIST_COUNT; i++)
+        out.resist[i] = p.resist[i];
+    out.skillCount = p.skillCount;
+    for (uint8_t i = 0; i < ARMOR_SKILL_SLOTS; i++) {
+        out.skill[i] = p.skills[i].skill;
+        out.points[i] = p.skills[i].points;
+    }
+    return out;
+}
+
+inline void shippedTable(ArmorPiece *out) {
+    for (uint8_t i = 0; i < armor::PIECE_COUNT; i++)
+        out[i] = toPiece(armor_data::PIECES[i]);
+}
+
+// COND_ARMOR / ACTION_CRAFT_ARMOR row: param = (slot << 5) | piece.
+inline ScreenRow armorRow(uint16_t cost, uint8_t piece, uint8_t slot) {
+    ScreenRow r;
+    r.cost = cost;
+    r.action = screens::ACTION_CRAFT_ARMOR;
+    r.flags = 0;
+    r.cond = screens::COND_ARMOR;
+    r.param = static_cast<uint8_t>((slot << 5) | piece);
+    r.recipe[0].item = 0;
+    r.recipe[0].count = 0;
+    r.recipe[1].item = 0;
+    r.recipe[1].count = 0;
+    return r;
+}
+
+// Synthetic high-point piece so aggregation can cross the thresholds.
+inline ArmorPiece skillPiece(uint8_t slot, uint8_t skill, uint8_t points, uint8_t defense = 0) {
+    ArmorPiece p;
+    p.slot = slot;
+    p.defense = defense;
+    for (uint8_t i = 0; i < ARMOR_RESIST_COUNT; i++)
+        p.resist[i] = 0;
+    p.skillCount = 1;
+    p.skill[0] = static_cast<uint8_t>(skill + 1);
+    p.points[0] = points;
+    p.skill[1] = 0;
+    p.points[1] = 0;
+    return p;
+}
+
+}   // namespace armorenginetest
+
+using namespace armorenginetest;
+
+void ArmorEngineSuite(TestRunner &runner) {
+    TestSuite suite("Armor engine: slots, aggregation, craft/equip (monhun-ardu-arm.2)");
+
+    // -------------------------------------------------------- equip toggle
+    {
+        Test t("armorEquipToggle: equip -> unequip, and a second piece replaces the first");
+        SaveBlock s;
+        saveDefaults(s);
+        t.assert(s.equip[armor::SLOT_HEAD], SAVE_EQUIP_NONE, "empty to start");
+        // Uncrafted pieces are refused (craft gate at the lowest level).
+        armorEquipToggle(s, armor::ARMOR_HUNTER_HELM, armor::SLOT_HEAD);
+        t.assert(s.equip[armor::SLOT_HEAD], SAVE_EQUIP_NONE, "uncrafted refused");
+        saveSetCrafted(s, armor::ARMOR_HUNTER_HELM);
+        saveSetCrafted(s, armor::ARMOR_BONE_CAP);
+        armorEquipToggle(s, armor::ARMOR_HUNTER_HELM, armor::SLOT_HEAD);
+        t.assert(s.equip[armor::SLOT_HEAD], armor::ARMOR_HUNTER_HELM + 1, "helm equipped");
+        armorEquipToggle(s, armor::ARMOR_HUNTER_HELM, armor::SLOT_HEAD);
+        t.assert(s.equip[armor::SLOT_HEAD], SAVE_EQUIP_NONE, "same piece unequips");
+        armorEquipToggle(s, armor::ARMOR_BONE_CAP, armor::SLOT_HEAD);
+        t.assert(s.equip[armor::SLOT_HEAD], armor::ARMOR_BONE_CAP + 1, "cap equipped");
+        armorEquipToggle(s, armor::ARMOR_HUNTER_HELM, armor::SLOT_HEAD);
+        t.assert(s.equip[armor::SLOT_HEAD], armor::ARMOR_HUNTER_HELM + 1, "helm replaces cap");
+        // Out-of-range ids are inert.
+        armorEquipToggle(s, armor::PIECE_COUNT, armor::SLOT_HEAD);
+        armorEquipToggle(s, armor::ARMOR_HUNTER_MAIL, 9);
+        t.assert(s.equip[armor::SLOT_HEAD], armor::ARMOR_HUNTER_HELM + 1, "bad toggle leaves slot");
+        t.assert(s.equip[armor::SLOT_BODY], SAVE_EQUIP_NONE, "bad slot untouched");
+        suite.addTest(t);
+    }
+
+    // ----------------------------------------------------- crafted bitmask
+    {
+        Test t("crafted bits live in the save flags byte and round-trip");
+        SaveBlock s;
+        saveDefaults(s);
+        t.assert(saveCrafted(s, armor::ARMOR_HUNTER_HELM), false, "default not crafted");
+        saveSetCrafted(s, armor::ARMOR_HUNTER_HELM);
+        saveSetCrafted(s, armor::ARMOR_EVADE_CHARM);
+        t.assert(saveCrafted(s, armor::ARMOR_HUNTER_HELM), true, "helm crafted");
+        t.assert(saveCrafted(s, armor::ARMOR_EVADE_CHARM), true, "charm crafted");
+        t.assert(saveCrafted(s, armor::ARMOR_BONE_CAP), false, "cap not crafted");
+        t.assert(s.flags & SAVE_FLAG_SMITHY_SEEN, 0, "crafted bits do not set smithy-seen");
+        // An old record with only the smithy bit migrates with no crafted gear.
+        s.flags = SAVE_FLAG_SMITHY_SEEN;
+        t.assert(saveCrafted(s, armor::ARMOR_HUNTER_HELM), false, "old flags -> none crafted");
+        // Round-trip through the wire record.
+        SaveBlock enc;
+        saveDefaults(enc);
+        saveSetCrafted(enc, armor::ARMOR_BONE_MAIL);
+        enc.zenny = 7;
+        uint8_t bytes[SAVE_BYTES];
+        saveEncode(enc, bytes);
+        SaveBlock out;
+        t.assert(saveDecode(bytes, out), true, "decode succeeds");
+        t.assert(saveCrafted(out, armor::ARMOR_BONE_MAIL), true, "crafted bit round-trips");
+        t.assert(out.zenny, 7, "other fields intact");
+        suite.addTest(t);
+    }
+
+    // -------------------------------------------------- aggregation (shipped)
+    {
+        Test t("armorAggregate: defense/resist/skill sums across equipped pieces");
+        ArmorPiece table[armor::PIECE_COUNT];
+        shippedTable(table);
+        SaveBlock s;
+        saveDefaults(s);
+        ArmorAgg agg;
+        armorAggregate(s, table, armor::PIECE_COUNT, agg);
+        t.assert(agg.defense, 0, "empty slots -> 0 defense");
+        for (uint8_t i = 0; i < armor::SKILL_COUNT; i++)
+            t.assert(agg.tier[i], 0, "empty slots -> inert skills");
+
+        // helm + mail + charm (indices 0, 2, 4).
+        saveSetCrafted(s, armor::ARMOR_HUNTER_HELM);
+        saveSetCrafted(s, armor::ARMOR_HUNTER_MAIL);
+        saveSetCrafted(s, armor::ARMOR_EVADE_CHARM);
+        armorEquipToggle(s, armor::ARMOR_HUNTER_HELM, armor::SLOT_HEAD);
+        armorEquipToggle(s, armor::ARMOR_HUNTER_MAIL, armor::SLOT_BODY);
+        armorEquipToggle(s, armor::ARMOR_EVADE_CHARM, armor::SLOT_CHARM);
+        armorAggregate(s, table, armor::PIECE_COUNT, agg);
+        t.assert(agg.defense, 10 + 14 + 0, "defense summed");
+        t.assert(agg.resist[0], 1 + 1 + 0, "fire summed");
+        t.assert(agg.resist[1], 0 + 0 + 0, "water summed");
+        t.assert(agg.resist[2], 0 + 0 + 0, "ice summed");
+        t.assert(agg.resist[3], -1 + -1 + 0, "thunder signed sum");
+        t.assert(agg.points[armor::SKILL_ATTACK_UP], 3, "attack_up points (helm)");
+        t.assert(agg.points[armor::SKILL_DEFENSE_UP], 3, "defense_up points (mail)");
+        t.assert(agg.points[armor::SKILL_HEALTH_UP], 0, "health_up untouched");
+        t.assert(agg.points[armor::SKILL_STAMINA_UP], 0, "stamina_up untouched");
+        t.assert(agg.points[armor::SKILL_EVADE_WINDOW], 2, "evade_window points (charm)");
+        t.assert(agg.tier[armor::SKILL_ATTACK_UP], 0, "3 points below S -> inert");
+        t.assert(agg.tier[armor::SKILL_EVADE_WINDOW], 0, "2 points below S -> inert");
+        // Wrong-slot ids (hand-edited save) are ignored.
+        s.equip[armor::SLOT_HEAD] = armor::ARMOR_HUNTER_MAIL + 1;
+        armorAggregate(s, table, armor::PIECE_COUNT, agg);
+        t.assert(agg.defense, 14 + 0, "wrong-slot head ignored (mail stays in body)");
+        suite.addTest(t);
+    }
+
+    // --------------------------------------------------- thresholds (synthetic)
+    {
+        Test t("thresholds: S at 10 activates, M at 15 clamps; empty stays inert");
+        ArmorPiece table[2];
+        table[0] = skillPiece(armor::SLOT_HEAD, armor::SKILL_ATTACK_UP, 9, 5);
+        table[1] = skillPiece(armor::SLOT_BODY, armor::SKILL_ATTACK_UP, 6, 7);
+        SaveBlock s;
+        saveDefaults(s);
+        ArmorAgg agg;
+        armorAggregate(s, table, 2, agg);
+        t.assert(agg.tier[armor::SKILL_ATTACK_UP], 0, "no pieces -> inert");
+
+        saveSetCrafted(s, 0);
+        saveSetCrafted(s, 1);
+        armorEquipToggle(s, 0, armor::SLOT_HEAD);
+        armorAggregate(s, table, 2, agg);
+        t.assert(agg.points[armor::SKILL_ATTACK_UP], 9, "single piece 9 points");
+        t.assert(agg.tier[armor::SKILL_ATTACK_UP], 0, "9 < S -> inert");
+
+        armorEquipToggle(s, 1, armor::SLOT_BODY);
+        armorAggregate(s, table, 2, agg);
+        t.assert(agg.points[armor::SKILL_ATTACK_UP], 15, "9 + 6 = 15 points");
+        t.assert(agg.tier[armor::SKILL_ATTACK_UP], 2, "15 >= M -> M tier");
+        t.assert(agg.defense, 12, "defense still summed");
+
+        // Clamp above M.
+        ArmorAgg big;
+        armorClear(big);
+        ArmorPiece huge = skillPiece(armor::SLOT_CHARM, armor::SKILL_ATTACK_UP, 20);
+        armorAdd(big, huge);
+        armorFinalize(big);
+        t.assert(big.points[armor::SKILL_ATTACK_UP], armor::THRESHOLD_M, "points clamp to M");
+        t.assert(big.tier[armor::SKILL_ATTACK_UP], 2, "clamped total is M");
+        suite.addTest(t);
+    }
+
+    // ---------------------------------------------------- craft/equip rows
+    {
+        Test t("COND_ARMOR / ACTION_CRAFT_ARMOR: gate, debit, craft, equip toggle");
+        SaveBlock s;
+        saveDefaults(s);
+        s.zenny = 500;
+        s.items[ITEM_ORE] = 3;
+        s.items[ITEM_SCALE] = 2;
+        ScreenRow helm = armorRow(300, armor::ARMOR_HUNTER_HELM, armor::SLOT_HEAD);
+        helm.recipe[0].item = ITEM_ORE + 1;
+        helm.recipe[0].count = 3;
+        helm.recipe[1].item = ITEM_SCALE + 1;
+        helm.recipe[1].count = 2;
+
+        t.assert(screenCondOk(s, helm), true, "affordable + materials -> live");
+        SaveBlock poor;
+        saveDefaults(poor);
+        poor.zenny = 299;
+        poor.items[ITEM_ORE] = 3;
+        poor.items[ITEM_SCALE] = 2;
+        t.assert(screenCondOk(poor, helm), false, "short zenny dead");
+        t.assert(screenApplyAction(poor, helm), false, "short zenny rejected");
+        t.assert(saveCrafted(poor, armor::ARMOR_HUNTER_HELM), false, "not crafted");
+        SaveBlock nomat;
+        saveDefaults(nomat);
+        nomat.zenny = 500;
+        nomat.items[ITEM_ORE] = 2;   // need 3
+        t.assert(screenCondOk(nomat, helm), false, "missing material dead");
+        t.assert(screenApplyAction(nomat, helm), false, "missing material rejected");
+
+        // Craft + auto-equip debits once.
+        t.assert(screenApplyAction(s, helm), true, "craft applies");
+        t.assert(saveCrafted(s, armor::ARMOR_HUNTER_HELM), true, "crafted bit set");
+        t.assert(s.zenny, 200, "zenny debited");
+        t.assert(s.items[ITEM_ORE], 0, "ore debited");
+        t.assert(s.items[ITEM_SCALE], 0, "scale debited");
+        t.assert(s.equip[armor::SLOT_HEAD], armor::ARMOR_HUNTER_HELM + 1, "craft auto-equips");
+        t.assert(screenCondOk(s, helm), true, "crafted row stays live to toggle");
+        t.assert(screenApplyAction(s, helm), true, "second A unequips");
+        t.assert(s.equip[armor::SLOT_HEAD], SAVE_EQUIP_NONE, "unequipped");
+        t.assert(s.zenny, 200, "no second debit");
+        t.assert(screenApplyAction(s, helm), true, "third A re-equips");
+        t.assert(s.equip[armor::SLOT_HEAD], armor::ARMOR_HUNTER_HELM + 1, "re-equipped");
+
+        // Out-of-range piece/slot rows are dead and inert.
+        const ScreenRow bad = armorRow(0, armor::PIECE_COUNT, armor::SLOT_HEAD);
+        t.assert(screenCondOk(s, bad), false, "bad piece dead");
+        t.assert(screenApplyAction(s, bad), false, "bad piece rejected");
+        const ScreenRow badslot = armorRow(0, armor::ARMOR_HUNTER_HELM, 3);
+        t.assert(screenCondOk(s, badslot), false, "bad slot dead");
+        suite.addTest(t);
+    }
+
+    runner.addTestSuite(suite);
+}

@@ -188,6 +188,52 @@ crafting reuses the identical `{itemIdx+1, count}` + zenny debit rule
 `arm.2` wires the action/condition. A tree without `data/armor.json` packs
 zero armor recipes (the previous weapon-only behaviour).
 
+### Armor engine — slots, aggregation, craft/equip (monhun-ardu-arm.2)
+
+The engine lives in two headers:
+
+- `src/armor_state.hpp` (host-testable, no cart): the plain `ArmorPiece` view,
+  the crafted/equip save helpers, and `armorAggregate(save, pieces, count, out)`.
+- `src/armor.hpp` (device-only): reads the packed `mhArmor` records through
+  `core/fxmem.hpp` into `ArmorPiece` and caches the equipped set into the `Game`
+  (`Game::armor`, plus `Game::armorHead` for the render).
+
+**Equip state.** `SaveBlock::equip[3]` (head/body/charm, `0` = none) holds the
+piece index + 1 in that piece's own slot. A piece can only be equipped if it is
+crafted: the crafted bitmask reuses the existing save `flags` byte
+(`core/save.hpp` `saveCrafted`/`saveSetCrafted`, bits 1..7 = pieces 0..6, bit 0
+stays `SAVE_FLAG_SMITHY_SEEN`). This is a deliberate no-layout-change choice: an
+older record loads with no crafted bits (the v3 equip slots were never written
+by a shipping build before this bead). `armorEquipToggle()` equips an uncrafted
+id only when the craft path just set the bit.
+
+**Aggregation.** At hunt start and on every equip change the device caches
+`ArmorAgg { defense u16, resist[4] i16, points[SKILL_COUNT], tier[SKILL_COUNT] }`
+into `Game::armor`. Defense is the sum of the equipped pieces' defense;
+resistance is the signed sum of the i8 resists; each skill's points are summed
+across the equipped pieces and clamped to `armor::THRESHOLD_M`. `tier` is
+`0` (inert, below `THRESHOLD_S` = 10), `1` (S active) or `2` (M, at/above 15).
+arm.3 applies `min(points, maxPoints) * perPoint` once the tier is nonzero.
+`armorAggregate` is pure: it ignores a slot whose id is out of range or whose
+piece slot does not match, so a hand-edited save cannot read past the table.
+
+**Craft/equip UI.** The smith screen gains five `COND_ARMOR` /
+`ACTION_CRAFT_ARMOR` rows, one per `data/armor.json` piece. `param` packs
+`(slot << 5) | pieceIdx`; the row's cost and material bill are resolved from the
+`mhSmith` armor recipe record (`src/screens.hpp screenRowArmorRecipe`), so the
+data stays the single source of truth. A is one combined verb: an uncrafted piece
+is crafted (debits the bill + zenny, sets the crafted bit, auto-equips); a
+crafted piece toggles equip/unequip. The whole action is one `screenApplyAction`
+return, so the sketch commits the EEPROM save once (`saveStore`).
+
+**Render (placeholder).** Per-piece armor sheets are not in the equip blob yet
+(the 05x art epic owns them), so the render maps the equipped head piece to the
+closest existing layered head sheet (`src/render.hpp armorHeadPart`):
+`hunter_helm -> mh_head_helm`, `bone_cap -> mh_head_bandana`, everything else
+(base head, body pieces, charm) falls back to the base sheets. The device pixel
+oracle (`tst/fxdatatest/player_art_test.hpp`, cases 37..39) pins the two head
+layers; when the real sheets land this is a data/art change, not a render edit.
+
 ## Pipeline
 
 1. `tools/gen-equipment.py` (new) reads `data/equipment/**`, validates schema,
@@ -245,7 +291,9 @@ of this sprite framework:
    unchanged.
 2. `arm.2` armor engine: head/body/charm save slots (save v3 `equip[3]`
    already exists), per-piece aggregation, equip UI, paper-doll render through
-   the slot loop above.
+   the slot loop above. Landed: crafted bitmask in the save flags byte,
+   `armor_state.hpp` aggregation + `armor.hpp` cart cache, smith armor
+   craft/equip rows, placeholder head-layer render (see the section above).
 3. `arm.3` armor effects in combat: defense, hpMax/stamMax, attack/evade/
    stamina modifiers from the aggregated skill points + thresholds.
 

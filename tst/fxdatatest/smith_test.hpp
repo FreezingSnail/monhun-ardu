@@ -11,6 +11,7 @@
 #include "harness/fxtest.hpp"
 #include "src/screens.hpp"
 #include "src/smith.hpp"
+#include "src/armor.hpp"
 #include "src/core/world.hpp"
 
 #include <stdint.h>
@@ -97,11 +98,11 @@ inline void test_smith(FxTest &test) {
     // ------------------------------------------------- smith screen rows
     test.expectEq(screens::SCREEN_COUNT, 3, F("screen count"));
     test.expectEq(screens::SCREEN_SMITH, 2, F("smith screen index"));
-    test.expectEq(screenRowCount(screens::SCREEN_SMITH), 7, F("smith row count"));
+    test.expectEq(screenRowCount(screens::SCREEN_SMITH), 12, F("smith row count"));
     ScreenRow t1, t2, leave;
     screenReadRow(screenRowOffsetAt(screens::SCREEN_SMITH, 0), t1);
     screenReadRow(screenRowOffsetAt(screens::SCREEN_SMITH, 1), t2);
-    screenReadRow(screenRowOffsetAt(screens::SCREEN_SMITH, 6), leave);
+    screenReadRow(screenRowOffsetAt(screens::SCREEN_SMITH, 11), leave);
     test.expectEq(t1.cost, 100, F("t1 row cost"));
     test.expectEq(t1.action, screens::ACTION_BUY_UPGRADE, F("t1 row action"));
     test.expectEq(t1.cond, screens::COND_UPGRADE, F("t1 row cond"));
@@ -115,23 +116,47 @@ inline void test_smith(FxTest &test) {
     test.expectEq(gun2.param, 10, F("gun t2 row param"));
     test.expectEq(gun2.cost, 220, F("gun t2 row cost"));
 
+    // Armor rows (arm.2): rows 6..10, param = (slot << 5) | piece, cost + bill
+    // resolved from the mhSmith armor recipe record.
+    ScreenRow helm, mail, charm;
+    screenReadRow(screenRowOffsetAt(screens::SCREEN_SMITH, 6), helm);
+    screenReadRow(screenRowOffsetAt(screens::SCREEN_SMITH, 8), mail);
+    screenReadRow(screenRowOffsetAt(screens::SCREEN_SMITH, 10), charm);
+    test.expectEq(helm.action, screens::ACTION_CRAFT_ARMOR, F("helm row action"));
+    test.expectEq(helm.cond, screens::COND_ARMOR, F("helm row cond"));
+    test.expectEq(helm.param, 0, F("helm row param (head piece 0)"));
+    test.expectEq(helm.cost, 300, F("helm row cost from recipe"));
+    test.expectEq(helm.recipe[0].item, armor::mat::ORE + 1, F("helm ore code"));
+    test.expectEq(helm.recipe[0].count, 3, F("helm ore count"));
+    test.expectEq(helm.recipe[1].item, armor::mat::SCALE + 1, F("helm scale code"));
+    test.expectEq(helm.recipe[1].count, 2, F("helm scale count"));
+    test.expectEq(mail.param, 34, F("mail row param (body piece 2)"));
+    test.expectEq(mail.cost, 400, F("mail row cost from recipe"));
+    test.expectEq(mail.recipe[0].item, armor::mat::SCALE + 1, F("mail scale code"));
+    test.expectEq(mail.recipe[0].count, 3, F("mail scale count"));
+    test.expectEq(mail.recipe[1].item, armor::mat::SHELL + 1, F("mail shell code"));
+    test.expectEq(charm.param, 68, F("charm row param (charm piece 4)"));
+    test.expectEq(charm.cost, 600, F("charm row cost from recipe"));
+    test.expectEq(charm.recipe[0].item, armor::mat::TAIL + 1, F("charm tail code"));
+    test.expectEq(charm.recipe[1].item, armor::mat::ORE + 1, F("charm ore code"));
+
     // ------------------------------------------------ smith screen nav
     SaveBlock navSave;
     saveDefaults(navSave);
     ScreenState nav;
     screenEnter(nav, screens::SCREEN_SMITH, navSave);
-    test.expectEq(nav.rowCount, 7, F("enter smith row count"));
+    test.expectEq(nav.rowCount, 12, F("enter smith row count"));
     test.expectEq(nav.cursor, 0, F("enter smith cursor"));
     const Input down = {0, 1, false, false};
     const Input idle = {0, 0, false, false};
     screenStep(nav, down);
     screenStep(nav, idle);
     test.expectEq(nav.cursor, 1, F("smith nav down 1"));
-    for (uint8_t i = 0; i < 5; i++) {
+    for (uint8_t i = 0; i < 10; i++) {
         screenStep(nav, down);
         screenStep(nav, idle);
     }
-    test.expectEq(nav.cursor, 6, F("smith nav to last row"));
+    test.expectEq(nav.cursor, 11, F("smith nav to last row"));
     test.expectEq(nav.scroll, 6, F("smith second page"));
 
     // ------------------------------------------------ purchase E2E + EEPROM
@@ -189,6 +214,41 @@ inline void test_smith(FxTest &test) {
     test.expectEq(screenCondOk(lockedSave, locked), 0, F("locked until quest done"));
     saveQuestSet(lockedSave, 0, 1);
     test.expectEq(screenCondOk(lockedSave, locked), 1, F("quest done unlocks"));
+
+    // --------------------------------------- armor craft/equip + EEPROM (arm.2)
+    SaveBlock asave;
+    saveDefaults(asave);
+    asave.zenny = 1000;
+    asave.items[ITEM_ORE] = 3;
+    asave.items[ITEM_SCALE] = 2;
+    saveStore(asave, REAL_BACKEND);
+    test.expectEq(screenCondOk(asave, helm), 1, F("helm craftable"));
+    test.expectEq(screenApplyAction(asave, helm), 1, F("helm craft+equip applies"));
+    test.expectEq(saveCrafted(asave, armor::ARMOR_HUNTER_HELM), 1, F("helm crafted bit"));
+    test.expectEq(asave.equip[armor::SLOT_HEAD], armor::ARMOR_HUNTER_HELM + 1, F("helm equipped"));
+    test.expectEq(asave.zenny, 700, F("helm zenny debited"));
+    test.expectEq(static_cast<uint32_t>(asave.items[ITEM_ORE]), 0, F("helm ore debited"));
+    test.expectEq(static_cast<uint32_t>(asave.items[ITEM_SCALE]), 0, F("helm scale debited"));
+    saveStore(asave, REAL_BACKEND);
+
+    SaveBlock aloaded;
+    test.expectEq(saveLoad(aloaded, REAL_BACKEND), 1, F("armor save loads"));
+    test.expectEq(saveCrafted(aloaded, armor::ARMOR_HUNTER_HELM), 1, F("crafted reloaded"));
+    test.expectEq(aloaded.equip[armor::SLOT_HEAD], armor::ARMOR_HUNTER_HELM + 1, F("equipped id reloaded"));
+
+    // Cart aggregation: helm defense 10, attack_up 3 points (below S -> inert).
+    Game ag;
+    newGame(ag, W_SWORD, MODE_HUNT);
+    armorApplyToGame(ag, aloaded);
+    test.expectEq(ag.armor.defense, 10, F("cart armor defense"));
+    test.expectEq(ag.armor.points[armor::SKILL_ATTACK_UP], 3, F("cart attack_up points"));
+    test.expectEq(ag.armor.tier[armor::SKILL_ATTACK_UP], 0, F("3 points inert"));
+    test.expectEq(ag.armorHead, armor::ARMOR_HUNTER_HELM + 1, F("armorHead set"));
+    test.expectEq(screenApplyAction(aloaded, helm), 1, F("second A unequips"));
+    test.expectEq(aloaded.equip[armor::SLOT_HEAD], SAVE_EQUIP_NONE, F("unequipped"));
+    armorApplyToGame(ag, aloaded);
+    test.expectEq(ag.armor.defense, 0, F("unequipped defense 0"));
+    test.expectEq(ag.armorHead, 0, F("armorHead cleared"));
 
     // ----------------------------------------- buy -> damage/speed change
     test.expectEq(meleeHit(100), 9, F("baseline sword hit 9"));

@@ -9,6 +9,7 @@
 #include "core/world.hpp"
 #include "quest.hpp"
 #include "smith.hpp"
+#include "armor.hpp"   // armorApplyToGame: cache equipped stats at hunt start (arm.2)
 
 namespace mh {
 

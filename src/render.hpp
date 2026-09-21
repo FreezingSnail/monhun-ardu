@@ -14,6 +14,7 @@
 #include "core/sin256.hpp"            // 256 B sine LUT -> 65 B quarter wave + sign folding (42n.7)
 #include "generated/art_dims.hpp"     // frame layout + core dims for the FX sheets
 #include "generated/equip_meta.hpp"   // gen-art part tables (sheet/frame/anchor) for drawPlayer
+#include "generated/armor_meta.hpp"   // ARMOR_* piece ids for the armor head layer (arm.2)
 
 #if defined(__AVR__)
 #include <avr/io.h>   // SPDR / SPSR for the fused room-image reader
@@ -838,6 +839,20 @@ static inline void partVariantDraw(uint8_t part, uint8_t variant, int16_t rx, in
 // shadow blit. The position math that must stay mock-exact (rndPx, reach
 // scaling, whirl orbit, tick-driven offsets) is still computed here; the trig
 // bake is eqf.4.
+// Placeholder armor paper-doll (bead monhun-ardu-arm.2): the per-piece armor
+// sheets are not in the equip blob yet (the 05x art epic owns them), so an
+// equipped head piece maps to the closest existing layered head sheet -- hunter
+// helm -> mh_head_helm, bone cap -> mh_head_bandana -- and everything else
+// (body, charm, unknown ids) falls back to the base head. Re-skinning later is
+// a data/art change, not a render edit. See docs/equipment-framework.md.
+static inline uint8_t armorHeadPart(uint8_t headId) {
+    if (headId == static_cast<uint8_t>(armor::ARMOR_HUNTER_HELM + 1))
+        return equip::PART_HEAD_HELM;
+    if (headId == static_cast<uint8_t>(armor::ARMOR_BONE_CAP + 1))
+        return equip::PART_HEAD_BANDANA;
+    return equip::DEFAULT_HEAD;
+}
+
 static void drawPlayer(const mh::Game &g, int16_t camX, int16_t camY) {
     const mh::Player &p = g.player;
     const int16_t x = static_cast<int16_t>(rndPx(p.x, p.subX) - camX);
@@ -850,9 +865,10 @@ static void drawPlayer(const mh::Game &g, int16_t camX, int16_t camY) {
     const uint8_t face = static_cast<uint8_t>(fp::dirIndexFromDelta(p.fx, p.fy));
 
     // Paper-doll slots in draw order: body (with the baked shadow) -> head.
-    // Both are the default draw set; the body picks the dodge pose row.
+    // The body is the default draw set and picks the dodge pose row; the head
+    // comes from the equipped head piece (arm.2 armorHeadPart), base otherwise.
     partDraw(equip::DEFAULT_BODY, p.state == mh::PS_DODGE ? equip::POSE_DODGE : equip::POSE_IDLE, face, cx, cy);
-    partDraw(equip::DEFAULT_HEAD, equip::POSE_IDLE, face, cx, cy);
+    partDraw(armorHeadPart(g.armorHead), equip::POSE_IDLE, face, cx, cy);
 
     // Charge meter above the hunter (mock drawPlayer): 16 px bar at cx-8, y-4,
     // 2 px tall; fill fraction min(1, chargeT/CHARGE_MIN), shade 2. Charge-lite

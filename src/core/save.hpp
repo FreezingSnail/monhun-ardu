@@ -61,8 +61,15 @@ constexpr uint8_t SAVE_EQUIP_NONE = 0;   // empty equipment slot
 // Arduboy2 reserves EEPROM 0..15 for system settings (EEPROM_STORAGE_SPACE_START).
 constexpr uint16_t SAVE_EEPROM_ADDR = 16;
 
-// Progression flag bits (SAVE_FLAGS_OFF); reserved for prg.7.
+// Progression flag bits (SAVE_FLAGS_OFF). Bit 0 is the prg.7 smithy-seen
+// marker; bits 1..7 are the crafted-armor bitmask (bead monhun-ardu-arm.2):
+// piece i is crafted when bit (SAVE_CRAFTED_BIT_BASE + i) is set. This reuses
+// the already-persisted flags byte (no save layout/version change), so an old
+// record migrates with no crafted bits -- the v3 equipment slots were never
+// written by a shipping build before arm.2's equip UI, so nothing is lost.
 constexpr uint8_t SAVE_FLAG_SMITHY_SEEN = 0x01;
+constexpr uint8_t SAVE_CRAFTED_BIT_BASE = 1;   // first crafted bit
+constexpr uint8_t SAVE_CRAFTED_MAX = 7;        // pieces 0..6 fit the flags byte
 
 struct SaveBlock {
     uint16_t zenny;
@@ -74,6 +81,17 @@ struct SaveBlock {
     uint8_t flags;                     // SAVE_FLAG_* bits
     uint8_t items[item::ITEM_COUNT];   // inventory counts, cap 255
 };
+
+// Crafted-armor bit helpers on the flags byte (bead monhun-ardu-arm.2). The
+// bitmask shares the byte with SAVE_FLAG_SMITHY_SEEN; an older record loads
+// with no crafted bits set (migration default).
+inline bool saveCrafted(const SaveBlock &s, uint8_t piece) {
+    return piece < SAVE_CRAFTED_MAX && (s.flags & static_cast<uint8_t>(0x01u << (SAVE_CRAFTED_BIT_BASE + piece))) != 0;
+}
+inline void saveSetCrafted(SaveBlock &s, uint8_t piece) {
+    if (piece < SAVE_CRAFTED_MAX)
+        s.flags |= static_cast<uint8_t>(0x01u << (SAVE_CRAFTED_BIT_BASE + piece));
+}
 
 // Sum of the payload bytes (everything before the checksum).
 inline uint8_t saveChecksum(const uint8_t *bytes) {

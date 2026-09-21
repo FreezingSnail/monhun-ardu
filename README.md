@@ -28,12 +28,12 @@ flashing. Controls are below; no USB serial device comes up while the game runs
 |---|---|
 | Vertical-slice sim | Ported + parity-verified (20 scenes / 1269 ticks / 660 device asserts) |
 | Device render + HUD + audio | Working (block/FX-sprite art, cue tones; HUD text/FX glyphs + bars — `7y3` clamp fixed) |
-| Host unit tests | `make test` — **5277 passed / 0 failed** |
-| Device tests (Ardens) | 16 suites / 2266 asserts — boot 4, assets 270, audio 17, menu 78, menu_art 81, hud 17, parity 660, data 368, combat 293, hub 57, monster_art 111, player_art 111, quests 50, screens 78, smith 66, perf 5 — all PASS |
-| Perf gate (`monhun-ardu-8v7`, re-verified through `kt7.7`) | **PASS.** plane 156 Hz (≥135), logic 52 Hz (≥45), render max 4868 µs (≤7407), tick 540 µs, RAM free 572 B (bench) |
+| Host unit tests | `make test` — **6190 passed / 0 failed** |
+| Device tests (Ardens) | 18 suites / 1670 asserts — boot 4, assets 270, audio 10, menu 60, menu_art 53, hud 25, data 343, combat 237, hub 63, monster_art 111, player_art 120, quests 50, screens 85, smith 105, tell 14, zones 80, items 35, perf 5 — all PASS (the frozen `test_parity` diagnostics image is not a gate) |
+| Perf gate (`monhun-ardu-8v7`, re-verified through `kt7.7`) | **PASS.** plane 157 Hz (≥135), logic 52 Hz (≥45), render max 3348 µs (≤7407), tick 480 µs, RAM free 689 B (bench) |
 | Perf tooling | Headless Ardens profiler dump (`profiledump=<path>`, local patch) + on-device cycle bench (`test_perf`) |
-| Shipping build | flash **28274 / 29696 B** (95%, 1422 free), RAM **1610 / 2560 B** (950 free); USB-free, see below |
-| FX data image | **199971 B** of 16 MB used |
+| Shipping build | flash **29170 / 29696 B** (98%, 526 free), RAM **1631 / 2560 B** (929 free); USB-free, see below |
+| FX data image | **200418 B** of 16 MB used |
 
 Speculative gameplay status: combat (sword / flail / gunshield), monster FSM,
 camera/world clamps, HUD, audio cues all in place. The prg.8 trim removed
@@ -101,6 +101,10 @@ directly in 1/16-px units and integrated by straight addition.
   the held-button guards and the once-per-hunt progress commit.
 - `src/app_setup.hpp` — device cart glue for a hunt start: arm the quest kill
   counter from the active `QuestDef` and resolve the smith tier multipliers.
+- `src/armor_state.hpp` — host-testable armor engine (arm.2): crafted/equip save
+  helpers and `armorAggregate()` (defense/resist/skill-point sums + S/M tiers).
+- `src/armor.hpp` — device cart glue: reads `mhArmor` and caches the equipped
+  stats into `Game::armor`/`Game::armorHead` at hunt start and on equip change.
 - `src/render.hpp` — whole render path (also compiled into the perf bench so
   measured numbers describe the real loop). Arena, target, player, shells,
   effects, HUD.
@@ -273,7 +277,11 @@ and unit/device-tested, but the shipped demo loop is menu → hunt → menu
 
 The hub shows HUNT / QUESTS / SMITH plus a ZENNY row that renders the live
 `save.zenny` balance (dynamic value token). The quests board takes a kill quest
-and turns it in for its reward; the smith sells weapon upgrade tiers. Every
+and turns it in for its reward; the smith sells weapon upgrade tiers and armor
+pieces (`COND_ARMOR`/`ACTION_CRAFT_ARMOR` rows: A crafts the piece — debiting
+its materials + zenny and marking it crafted — then toggles equip/unequip; the
+crafted bitmask and the equipped ids persist in the save, and the equipped stats
+cache at hunt start, arm.2). Every
 state-changing action commits the 15-byte EEPROM save block once (write-on-
 change + verify read). If a save already carries an active quest/tier it still
 applies at hunt start and the hunt-end quest-progress commit still runs exactly
@@ -309,8 +317,8 @@ hunt exit.
 ## Commands
 
 ```sh
-make test               # host unit tests (5277 asserts)
-make fxtest-headless    # Ardens device tests (16 suites; FXTEST_ONLY=test_combat for one)
+make test               # host unit tests (6190 asserts)
+make fxtest-headless    # Ardens device tests (18 suites; FXTEST_ONLY=test_combat for one)
 make size               # whole-image flash/RAM report + compile-time data facts
 make gen-check          # regen determinism + generated header sync
 make build              # compile shipping sketch (output in dist/)

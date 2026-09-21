@@ -13,6 +13,7 @@
 #include "fxmem.hpp"                      // FX cart offsets + mhFxRead* field readers (identity on host)
 #include "../generated/combat_meta.hpp"   // data facts (HAS_ZONES) gate the zone caches
 #include "../generated/items_meta.hpp"    // item ids/kinds + inventory cap (prg.2)
+#include "../armor_state.hpp"             // ArmorAgg: equipped-piece stat cache (arm.2)
 
 // Per-image zones carve (mirrors MH_AUDIO in src/audio.hpp): the on-device
 // perf bench and parity scenes run only MON_LUNGE/SWEEP/HEAVY, which never run a
@@ -911,6 +912,12 @@ struct Game {
     // field offset holds.
     uint8_t carvesDone;
     bool carveHold;
+    // Armor engine cache (bead monhun-ardu-arm.2): resolved from the save's
+    // equipped pieces at hunt start / equip change (src/armor.hpp). armorHead is
+    // the equipped head piece + 1 for the render slot loop (0 = base head).
+    // Appended last so every existing field offset holds.
+    ArmorAgg armor;
+    uint8_t armorHead;
 };
 
 // Active-room extents for the bound expressions. With ROOM_BOUNDS_ENABLED

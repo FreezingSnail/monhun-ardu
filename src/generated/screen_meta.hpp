@@ -13,12 +13,12 @@ namespace screens {
 constexpr uint16_t MAGIC = 0x5343;
 constexpr uint8_t VERSION = 1;
 constexpr uint8_t FLAGS = 0x00;
-constexpr uint16_t SIZE = 284;
+constexpr uint16_t SIZE = 369;
 constexpr uint8_t HEADER_SIZE = 8;
 constexpr uint8_t DEF_OFF_OFF = 8;
 constexpr uint16_t ROWS_OFF = 43;
 constexpr uint8_t SCREEN_COUNT = 3;
-constexpr uint16_t ROW_COUNT = 16;
+constexpr uint16_t ROW_COUNT = 21;
 constexpr uint8_t TIER_COUNT = 3;   // must match core/save.hpp SAVE_TIER_COUNT
 
 // Row action ids; src/screen_state.hpp switches on these.
@@ -30,6 +30,7 @@ constexpr uint8_t ACTION_NONE = 4;
 constexpr uint8_t ACTION_HUNT = 5;
 constexpr uint8_t ACTION_OPEN_QUESTS = 6;
 constexpr uint8_t ACTION_OPEN_SMITH = 7;
+constexpr uint8_t ACTION_CRAFT_ARMOR = 8;
 
 // Row condition ids; 0 = always, else the save query in screenCondOk().
 constexpr uint8_t COND_ALWAYS = 0;
@@ -38,6 +39,7 @@ constexpr uint8_t COND_FLAG = 2;
 constexpr uint8_t COND_TIER = 3;
 constexpr uint8_t COND_QUEST = 4;
 constexpr uint8_t COND_UPGRADE = 5;
+constexpr uint8_t COND_ARMOR = 6;
 
 // ScreenRow flags.
 constexpr uint8_t ROW_F_HIDE_LOCKED = 0x01;
@@ -56,7 +58,7 @@ constexpr uint8_t SCREEN_QUESTS_TITLE_LEN = 6;
 constexpr uint16_t SCREEN_QUESTS_FIRST_ROW = 78;
 constexpr uint8_t SCREEN_SMITH = 2;
 constexpr uint16_t SCREEN_SMITH_OFF = 33;
-constexpr uint8_t SCREEN_SMITH_ROWS = 7;
+constexpr uint8_t SCREEN_SMITH_ROWS = 12;
 constexpr uint8_t SCREEN_SMITH_TITLE_LEN = 5;
 constexpr uint16_t SCREEN_SMITH_FIRST_ROW = 186;
 

@@ -55,8 +55,8 @@ SCREEN_MAX = 255
 TIER_COUNT = 3   # N_WEAPONS (W_SWORD/W_FLAIL/W_GUN); must match core/save.hpp
 
 ACTION_NAMES = ("leave", "buy_upgrade", "take_quest", "turn_in_quest",
-                "none", "hunt", "open_quests", "open_smith")
-COND_NAMES = ("always", "zenny", "flag", "tier", "quest", "upgrade")
+                "none", "hunt", "open_quests", "open_smith", "craft_armor")
+COND_NAMES = ("always", "zenny", "flag", "tier", "quest", "upgrade", "armor")
 # hide_locked: reserved. zenny: draw the live save.zenny balance in the cost
 # column instead of the row cost (dynamic value token, qs.4 hub display).
 ROW_FLAGS = {"hide_locked": 0x01, "zenny": 0x02}
@@ -176,6 +176,14 @@ def normalize_row(errors, ctx, obj):
             errors.add(ctx, "param: turn_in_quest need nibble must be 1..15, got %d" % need)
         if action not in (ACTION_NAMES.index("take_quest"), ACTION_NAMES.index("turn_in_quest")):
             errors.add(ctx, "condition 'quest' needs a take_quest/turn_in_quest action")
+    if cond == COND_NAMES.index("armor") and param is not None:
+        # param packs (slot << 5) | pieceIdx (see screen_state.hpp COND_ARMOR):
+        # piece 0..31 into armor::ARMOR_<ID>, slot 0..2 (head/body/charm).
+        slot = (param >> 5) & 3
+        if action != ACTION_NAMES.index("craft_armor"):
+            errors.add(ctx, "condition 'armor' needs a craft_armor action")
+        if slot >= 3:
+            errors.add(ctx, "param: armor slot must be 0..2, got %d" % slot)
     if cond == COND_NAMES.index("upgrade") and param is not None:
         # param packs (unlock << 4) | (weapon << 2) | tier (see screen_state.hpp).
         weapon = (param >> 2) & 3
