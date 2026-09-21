@@ -23,9 +23,9 @@ constexpr int8_t ARMOR_HUNTER_HELM_RESIST_THUNDER = -1;
 constexpr uint16_t ARMOR_HUNTER_HELM_ZENNY = 300;
 constexpr uint8_t ARMOR_HUNTER_HELM_SHEET = 5;
 constexpr uint8_t ARMOR_HUNTER_HELM_SKILL0 = 1;
-constexpr uint8_t ARMOR_HUNTER_HELM_SKILL0_POINTS = 3;
-constexpr uint8_t ARMOR_HUNTER_HELM_SKILL1 = 0;
-constexpr uint8_t ARMOR_HUNTER_HELM_SKILL1_POINTS = 0;
+constexpr uint8_t ARMOR_HUNTER_HELM_SKILL0_POINTS = 6;
+constexpr uint8_t ARMOR_HUNTER_HELM_SKILL1 = 2;
+constexpr uint8_t ARMOR_HUNTER_HELM_SKILL1_POINTS = 6;
 constexpr uint8_t ARMOR_HUNTER_HELM_MAT0 = 3;
 constexpr uint8_t ARMOR_HUNTER_HELM_MAT0_COUNT = 3;
 constexpr uint8_t ARMOR_HUNTER_HELM_MAT1 = 5;
@@ -39,9 +39,9 @@ constexpr int8_t ARMOR_BONE_CAP_RESIST_THUNDER = 1;
 constexpr uint16_t ARMOR_BONE_CAP_ZENNY = 200;
 constexpr uint8_t ARMOR_BONE_CAP_SHEET = 4;
 constexpr uint8_t ARMOR_BONE_CAP_SKILL0 = 3;
-constexpr uint8_t ARMOR_BONE_CAP_SKILL0_POINTS = 3;
-constexpr uint8_t ARMOR_BONE_CAP_SKILL1 = 0;
-constexpr uint8_t ARMOR_BONE_CAP_SKILL1_POINTS = 0;
+constexpr uint8_t ARMOR_BONE_CAP_SKILL0_POINTS = 6;
+constexpr uint8_t ARMOR_BONE_CAP_SKILL1 = 4;
+constexpr uint8_t ARMOR_BONE_CAP_SKILL1_POINTS = 4;
 constexpr uint8_t ARMOR_BONE_CAP_MAT0 = 7;
 constexpr uint8_t ARMOR_BONE_CAP_MAT0_COUNT = 2;
 constexpr uint8_t ARMOR_BONE_CAP_MAT1 = 3;
@@ -54,10 +54,10 @@ constexpr int8_t ARMOR_HUNTER_MAIL_RESIST_ICE = 0;
 constexpr int8_t ARMOR_HUNTER_MAIL_RESIST_THUNDER = -1;
 constexpr uint16_t ARMOR_HUNTER_MAIL_ZENNY = 400;
 constexpr uint8_t ARMOR_HUNTER_MAIL_SHEET = 2;
-constexpr uint8_t ARMOR_HUNTER_MAIL_SKILL0 = 2;
-constexpr uint8_t ARMOR_HUNTER_MAIL_SKILL0_POINTS = 3;
-constexpr uint8_t ARMOR_HUNTER_MAIL_SKILL1 = 0;
-constexpr uint8_t ARMOR_HUNTER_MAIL_SKILL1_POINTS = 0;
+constexpr uint8_t ARMOR_HUNTER_MAIL_SKILL0 = 1;
+constexpr uint8_t ARMOR_HUNTER_MAIL_SKILL0_POINTS = 6;
+constexpr uint8_t ARMOR_HUNTER_MAIL_SKILL1 = 3;
+constexpr uint8_t ARMOR_HUNTER_MAIL_SKILL1_POINTS = 4;
 constexpr uint8_t ARMOR_HUNTER_MAIL_MAT0 = 5;
 constexpr uint8_t ARMOR_HUNTER_MAIL_MAT0_COUNT = 3;
 constexpr uint8_t ARMOR_HUNTER_MAIL_MAT1 = 6;
@@ -71,9 +71,9 @@ constexpr int8_t ARMOR_BONE_MAIL_RESIST_THUNDER = 0;
 constexpr uint16_t ARMOR_BONE_MAIL_ZENNY = 250;
 constexpr uint8_t ARMOR_BONE_MAIL_SHEET = 1;
 constexpr uint8_t ARMOR_BONE_MAIL_SKILL0 = 4;
-constexpr uint8_t ARMOR_BONE_MAIL_SKILL0_POINTS = 3;
-constexpr uint8_t ARMOR_BONE_MAIL_SKILL1 = 0;
-constexpr uint8_t ARMOR_BONE_MAIL_SKILL1_POINTS = 0;
+constexpr uint8_t ARMOR_BONE_MAIL_SKILL0_POINTS = 6;
+constexpr uint8_t ARMOR_BONE_MAIL_SKILL1 = 2;
+constexpr uint8_t ARMOR_BONE_MAIL_SKILL1_POINTS = 4;
 constexpr uint8_t ARMOR_BONE_MAIL_MAT0 = 7;
 constexpr uint8_t ARMOR_BONE_MAIL_MAT0_COUNT = 2;
 constexpr uint8_t ARMOR_BONE_MAIL_MAT1 = 6;
@@ -87,9 +87,9 @@ constexpr int8_t ARMOR_EVADE_CHARM_RESIST_THUNDER = 0;
 constexpr uint16_t ARMOR_EVADE_CHARM_ZENNY = 600;
 constexpr uint8_t ARMOR_EVADE_CHARM_SHEET = 3;
 constexpr uint8_t ARMOR_EVADE_CHARM_SKILL0 = 5;
-constexpr uint8_t ARMOR_EVADE_CHARM_SKILL0_POINTS = 2;
-constexpr uint8_t ARMOR_EVADE_CHARM_SKILL1 = 0;
-constexpr uint8_t ARMOR_EVADE_CHARM_SKILL1_POINTS = 0;
+constexpr uint8_t ARMOR_EVADE_CHARM_SKILL0_POINTS = 10;
+constexpr uint8_t ARMOR_EVADE_CHARM_SKILL1 = 1;
+constexpr uint8_t ARMOR_EVADE_CHARM_SKILL1_POINTS = 4;
 constexpr uint8_t ARMOR_EVADE_CHARM_MAT0 = 8;
 constexpr uint8_t ARMOR_EVADE_CHARM_MAT0_COUNT = 1;
 constexpr uint8_t ARMOR_EVADE_CHARM_MAT1 = 3;
@@ -111,12 +111,12 @@ constexpr uint8_t SKILL_EVADE_WINDOW_KIND = 4;
 constexpr uint8_t SKILL_EVADE_WINDOW_MAX_POINTS = 15;
 constexpr uint8_t SKILL_EVADE_WINDOW_PER_POINT = 1;
 
-// sha256 of fxdata/tables/armor.bin: 0cc22fb2320bfac9851529e1522aaa677256982671d438bd923cac5ea260ca1d
+// sha256 of fxdata/tables/armor.bin: ba3fde94cb3cc352f4e9e70b88e64857fe29f65a8cfbadfebe498856ef435e4d
 constexpr uint8_t BLOB_SHA256[32] = {
-    0x0C, 0xC2, 0x2F, 0xB2, 0x32, 0x0B, 0xFA, 0xC9,
-    0x85, 0x15, 0x29, 0xE1, 0x52, 0x2A, 0xAA, 0x67,
-    0x72, 0x56, 0x98, 0x26, 0x71, 0xD4, 0x38, 0xBD,
-    0x92, 0x3C, 0xAC, 0x5E, 0xA2, 0x60, 0xCA, 0x1D,
+    0xBA, 0x3F, 0xDE, 0x94, 0xCB, 0x3C, 0xC3, 0x52,
+    0xF4, 0xE9, 0xE7, 0x0B, 0x88, 0xE6, 0x48, 0x57,
+    0xFE, 0x29, 0xF6, 0x5A, 0x8C, 0xFB, 0xAD, 0xFE,
+    0xBE, 0x49, 0x88, 0x56, 0xEF, 0x43, 0x5E, 0x4D,
 };
 
 }   // namespace armor_expect

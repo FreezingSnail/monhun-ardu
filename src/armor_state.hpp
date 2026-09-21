@@ -29,6 +29,12 @@ namespace mh {
 constexpr uint8_t ARMOR_RESIST_COUNT = 4;   // fire, water, ice, thunder
 constexpr uint8_t ARMOR_SKILL_SLOTS = 2;    // packed skill slots per piece
 
+// EVADE_WINDOW i-frame cap (bead monhun-ardu-arm.4): the base dodge iT is 14
+// ticks, so the raw M-tier magnitude (+15) would be absurd. The data keeps
+// perPoint 1; this bounds the resolved bonus instead (cheaper than a piecewise
+// per-point curve, and it survives a hand-built skill table).
+constexpr uint8_t ARMOR_EVADE_IT_CAP = 4;
+
 static_assert(armor::PIECE_COUNT <= SAVE_CRAFTED_MAX, "crafted bitmask holds every piece");
 static_assert(armor::SKILL_SLOTS == ARMOR_SKILL_SLOTS, "skill slot count ABI drift");
 
@@ -159,7 +165,7 @@ inline void armorEffects(const ArmorAgg &agg, const ArmorSkill *skills, ArmorEff
             out.stamMax = armorClampStat(static_cast<uint16_t>(100 + bonus));
             break;
         case armor::KIND_EVADE_WINDOW:
-            out.iT = armorClampStat(bonus);
+            out.iT = bonus > ARMOR_EVADE_IT_CAP ? ARMOR_EVADE_IT_CAP : static_cast<uint8_t>(bonus);
             break;
         default:
             break;

@@ -384,17 +384,19 @@ def compile_model(errors, root):
     if errors.items:
         return None
 
-    # Cross-check: the points a skill can reach across all pieces must fit the
-    # authored cap, otherwise the game could grant more than maxPoints.
+    # Cross-check: skill points are summed across the equipped pieces into a u8
+    # before armorFinalize clamps the total to THRESHOLD_M, so a dataset may
+    # exceed a skill's maxPoints (the runtime clamps: maxPoints == THRESHOLD_M,
+    # and armorSkillBonus does min(points, maxPoints)). The only hard limit is
+    # the pre-clamp u8 sum, so a malformed table cannot wrap the accumulator.
     totals = {}
     for piece in pieces:
         for entry in piece["skills"]:
             totals[entry["skill"]] = totals.get(entry["skill"], 0) + entry["points"]
     for idx, total in sorted(totals.items()):
-        cap = skill_model["skills"][idx]["maxPoints"]
-        if total > cap:
-            errors.add(ARMOR_REL, "skill %s: %d total points exceed maxPoints %d"
-                       % (skill_model["skills"][idx]["id"], total, cap))
+        if total > 255:
+            errors.add(ARMOR_REL, "skill %s: %d total points exceed the u8 aggregation cap 255"
+                       % (skill_model["skills"][idx]["id"], total))
     if errors.items:
         return None
 
@@ -705,6 +707,33 @@ def emit_expect_header(model, blob):
     return "\n".join(lines)
 
 
+def best_stacks(model):
+    """Per-skill representative loadout: the highest-point piece in each slot
+    that grants the skill (one piece per slot max). Mirrors the runtime rule so
+    `--dump` shows the resulting total, the THRESHOLD_M clamp and the tier.
+    Returns (skill_id, [(slot, piece_id, points)], total, clamped, tier)."""
+    pieces = model["pieces"]
+    thr_s = model["thresholds"]["s"]
+    thr_m = model["thresholds"]["m"]
+    out = []
+    for si, skill in enumerate(model["skills"]):
+        picked = {}   # slot -> (points, piece_id)
+        for piece in pieces:
+            for entry in piece["skills"]:
+                if entry["skill"] != si:
+                    continue
+                best = picked.get(piece["slot"])
+                if best is None or entry["points"] > best[0]:
+                    picked[piece["slot"]] = (entry["points"], piece["id"])
+        parts = [(slot, picked[slot][1], picked[slot][0]) for slot in sorted(picked)]
+        total = sum(part[2] for part in parts)
+        clamped = min(total, thr_m)
+        points = min(clamped, skill["maxPoints"])
+        tier = 2 if clamped >= thr_m else (1 if clamped >= thr_s else 0)
+        out.append((skill["id"], parts, total, points, tier))
+    return out
+
+
 def dump_model(model, blob):
     for kind_skill in model["skills"]:
         print("skill %s: kind %s maxPoints %d perPoint %d" % (
@@ -717,6 +746,12 @@ def dump_model(model, blob):
         print("piece %s: slot %s defense %d resist %d/%d/%d/%d skills %s recipe %s %d zenny"
               % (piece["id"], SLOTS[piece["slot"]], piece["defense"], r[0], r[1], r[2], r[3],
                  sk, mats if mats else "-", piece["zenny"]))
+    # Representative loadout per skill: best legal stack, the clamp and the tier.
+    tiers = {0: "inert", 1: "S", 2: "M"}
+    for skill_id, parts, total, points, tier in best_stacks(model):
+        stack = " + ".join("%s %d" % (piece_id, pts) for _, piece_id, pts in parts)
+        print("loadout %s: %s = %d -> %d tier %d (%s)"
+              % (skill_id, stack if stack else "-", total, points, tier, tiers[tier]))
     print("gen-armor: thresholds s=%d m=%d, %d pieces, %d skills, %d B blob"
           % (model["thresholds"]["s"], model["thresholds"]["m"],
              len(model["pieces"]), len(model["skills"]), len(blob)))

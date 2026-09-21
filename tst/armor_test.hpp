@@ -47,6 +47,15 @@ const uint8_t EXPECT_SKILL0_POINTS[armor::PIECE_COUNT] = {
     armor_expect::ARMOR_BONE_MAIL_SKILL0_POINTS,   armor_expect::ARMOR_EVADE_CHARM_SKILL0_POINTS,
 };
 
+const uint8_t EXPECT_SKILL1[armor::PIECE_COUNT] = {
+    armor_expect::ARMOR_HUNTER_HELM_SKILL1, armor_expect::ARMOR_BONE_CAP_SKILL1, armor_expect::ARMOR_HUNTER_MAIL_SKILL1, armor_expect::ARMOR_BONE_MAIL_SKILL1, armor_expect::ARMOR_EVADE_CHARM_SKILL1,
+};
+
+const uint8_t EXPECT_SKILL1_POINTS[armor::PIECE_COUNT] = {
+    armor_expect::ARMOR_HUNTER_HELM_SKILL1_POINTS, armor_expect::ARMOR_BONE_CAP_SKILL1_POINTS,    armor_expect::ARMOR_HUNTER_MAIL_SKILL1_POINTS,
+    armor_expect::ARMOR_BONE_MAIL_SKILL1_POINTS,   armor_expect::ARMOR_EVADE_CHARM_SKILL1_POINTS,
+};
+
 const uint8_t SKILL_KIND[armor::SKILL_COUNT] = {
     armor_expect::SKILL_ATTACK_UP_KIND, armor_expect::SKILL_DEFENSE_UP_KIND, armor_expect::SKILL_HEALTH_UP_KIND, armor_expect::SKILL_STAMINA_UP_KIND, armor_expect::SKILL_EVADE_WINDOW_KIND,
 };
@@ -104,11 +113,11 @@ void ArmorSuite(TestRunner &runner) {
             t.assert(p.defense, EXPECT_DEFENSE[i], "defense pin");
             t.assert(p.resist[0], EXPECT_FIRE[i], "fire pin");
             t.assert(p.resist[3], EXPECT_THUNDER[i], "thunder pin");
-            t.assert(p.skillCount, 1, "one skill per starter piece");
-            t.assert(p.skills[0].skill, EXPECT_SKILL0[i], "skill code pin");
-            t.assert(p.skills[0].points, EXPECT_SKILL0_POINTS[i], "skill points pin");
-            t.assert(p.skills[1].skill, 0, "unused skill slot empty");
-            t.assert(p.skills[1].points, 0, "unused skill points zero");
+            t.assert(p.skillCount, 2, "two skills per shipped piece");
+            t.assert(p.skills[0].skill, EXPECT_SKILL0[i], "skill0 code pin");
+            t.assert(p.skills[0].points, EXPECT_SKILL0_POINTS[i], "skill0 points pin");
+            t.assert(p.skills[1].skill, EXPECT_SKILL1[i], "skill1 code pin");
+            t.assert(p.skills[1].points, EXPECT_SKILL1_POINTS[i], "skill1 points pin");
             t.assert(p.mat[0].item > 0, true, "first recipe slot filled");
         }
         suite.addTest(t);
@@ -116,9 +125,14 @@ void ArmorSuite(TestRunner &runner) {
 
     {
         Test t("skill codes are (index + 1) so 0 stays the empty slot");
-        t.assert(armor_data::PIECES[armor::ARMOR_HUNTER_HELM].skills[0].skill, armor::SKILL_ATTACK_UP + 1, "attack_up code");
-        t.assert(armor_data::PIECES[armor::ARMOR_HUNTER_MAIL].skills[0].skill, armor::SKILL_DEFENSE_UP + 1, "defense_up code");
-        t.assert(armor_data::PIECES[armor::ARMOR_EVADE_CHARM].skills[0].skill, armor::SKILL_EVADE_WINDOW + 1, "evade_window code");
+        t.assert(armor_data::PIECES[armor::ARMOR_HUNTER_HELM].skills[0].skill, armor::SKILL_ATTACK_UP + 1, "helm attack_up");
+        t.assert(armor_data::PIECES[armor::ARMOR_HUNTER_HELM].skills[1].skill, armor::SKILL_DEFENSE_UP + 1, "helm defense_up");
+        t.assert(armor_data::PIECES[armor::ARMOR_HUNTER_MAIL].skills[0].skill, armor::SKILL_ATTACK_UP + 1, "mail attack_up");
+        t.assert(armor_data::PIECES[armor::ARMOR_HUNTER_MAIL].skills[1].skill, armor::SKILL_HEALTH_UP + 1, "mail health_up");
+        t.assert(armor_data::PIECES[armor::ARMOR_BONE_MAIL].skills[0].skill, armor::SKILL_STAMINA_UP + 1, "bone_mail stamina_up");
+        t.assert(armor_data::PIECES[armor::ARMOR_BONE_MAIL].skills[1].skill, armor::SKILL_DEFENSE_UP + 1, "bone_mail defense_up");
+        t.assert(armor_data::PIECES[armor::ARMOR_EVADE_CHARM].skills[0].skill, armor::SKILL_EVADE_WINDOW + 1, "charm evade_window");
+        t.assert(armor_data::PIECES[armor::ARMOR_EVADE_CHARM].skills[1].skill, armor::SKILL_ATTACK_UP + 1, "charm attack_up");
         t.assert(armor::SHEET_NONE, 0, "no sheet is 0");
         suite.addTest(t);
     }

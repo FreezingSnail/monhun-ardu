@@ -70,6 +70,17 @@ inline ArmorPiece skillPiece(uint8_t slot, uint8_t skill, uint8_t points, uint8_
     return p;
 }
 
+// Craft + equip every listed piece, then aggregate the shipped table. Used by
+// the representative-loadout tests below (helm+mail, cap+mail, ...).
+inline void equipPieces(const ArmorPiece *table, uint8_t count, const uint8_t *ids, uint8_t n, SaveBlock &s, ArmorAgg &out) {
+    saveDefaults(s);
+    for (uint8_t i = 0; i < n; i++) {
+        saveSetCrafted(s, ids[i]);
+        armorEquipToggle(s, ids[i], table[ids[i]].slot);
+    }
+    armorAggregate(s, table, count, out);
+}
+
 }   // namespace armorenginetest
 
 using namespace armorenginetest;
@@ -146,7 +157,7 @@ void ArmorEngineSuite(TestRunner &runner) {
         for (uint8_t i = 0; i < armor::SKILL_COUNT; i++)
             t.assert(agg.tier[i], 0, "empty slots -> inert skills");
 
-        // helm + mail + charm (indices 0, 2, 4).
+        // helm + mail + charm (indices 0, 2, 4): both skills on every piece.
         saveSetCrafted(s, armor::ARMOR_HUNTER_HELM);
         saveSetCrafted(s, armor::ARMOR_HUNTER_MAIL);
         saveSetCrafted(s, armor::ARMOR_EVADE_CHARM);
@@ -159,17 +170,82 @@ void ArmorEngineSuite(TestRunner &runner) {
         t.assert(agg.resist[1], 0 + 0 + 0, "water summed");
         t.assert(agg.resist[2], 0 + 0 + 0, "ice summed");
         t.assert(agg.resist[3], -1 + -1 + 0, "thunder signed sum");
-        t.assert(agg.points[armor::SKILL_ATTACK_UP], 3, "attack_up points (helm)");
-        t.assert(agg.points[armor::SKILL_DEFENSE_UP], 3, "defense_up points (mail)");
-        t.assert(agg.points[armor::SKILL_HEALTH_UP], 0, "health_up untouched");
+        t.assert(agg.points[armor::SKILL_ATTACK_UP], 15, "attack_up 6+6+4 clamps to M");
+        t.assert(agg.points[armor::SKILL_DEFENSE_UP], 6, "defense_up 6 on helm");
+        t.assert(agg.points[armor::SKILL_HEALTH_UP], 4, "health_up only on mail");
         t.assert(agg.points[armor::SKILL_STAMINA_UP], 0, "stamina_up untouched");
-        t.assert(agg.points[armor::SKILL_EVADE_WINDOW], 2, "evade_window points (charm)");
-        t.assert(agg.tier[armor::SKILL_ATTACK_UP], 0, "3 points below S -> inert");
-        t.assert(agg.tier[armor::SKILL_EVADE_WINDOW], 0, "2 points below S -> inert");
+        t.assert(agg.points[armor::SKILL_EVADE_WINDOW], 10, "evade_window 10 on charm");
+        t.assert(agg.tier[armor::SKILL_ATTACK_UP], 2, "attack_up 16 -> clamped M");
+        t.assert(agg.tier[armor::SKILL_EVADE_WINDOW], 1, "evade 10 >= S -> S");
         // Wrong-slot ids (hand-edited save) are ignored.
         s.equip[armor::SLOT_HEAD] = armor::ARMOR_HUNTER_MAIL + 1;
         armorAggregate(s, table, armor::PIECE_COUNT, agg);
         t.assert(agg.defense, 14 + 0, "wrong-slot head ignored (mail stays in body)");
+        t.assert(agg.points[armor::SKILL_ATTACK_UP], 10, "mail 6 + charm 4 = 10");
+        t.assert(agg.tier[armor::SKILL_ATTACK_UP], 1, "10 >= S -> S without the helm");
+        suite.addTest(t);
+    }
+
+    // ------------------------------------- representative loadout tiers (shipped)
+    // Every piece carries 2 skills; the shipped stacks cross S=10 (attack_up,
+    // health_up, stamina_up) and clamp at M=15 (attack_up + charm). Keep these
+    // as the data-level balance pins.
+    {
+        Test t("loadout tiers: attack_up S with helm+mail, M with charm added");
+        ArmorPiece table[armor::PIECE_COUNT];
+        shippedTable(table);
+        SaveBlock s;
+        ArmorAgg agg;
+
+        const uint8_t helmMail[] = {armor::ARMOR_HUNTER_HELM, armor::ARMOR_HUNTER_MAIL};
+        equipPieces(table, armor::PIECE_COUNT, helmMail, 2, s, agg);
+        t.assert(agg.points[armor::SKILL_ATTACK_UP], 12, "helm 6 + mail 6");
+        t.assert(agg.tier[armor::SKILL_ATTACK_UP], 1, "12 >= S -> S (attack_up)");
+
+        const uint8_t helmMailCharm[] = {armor::ARMOR_HUNTER_HELM, armor::ARMOR_HUNTER_MAIL, armor::ARMOR_EVADE_CHARM};
+        equipPieces(table, armor::PIECE_COUNT, helmMailCharm, 3, s, agg);
+        t.assert(agg.points[armor::SKILL_ATTACK_UP], armor::THRESHOLD_M, "6+6+4 = 16 clamps to 15");
+        t.assert(agg.tier[armor::SKILL_ATTACK_UP], 2, "clamped total is M (attack_up)");
+        suite.addTest(t);
+    }
+
+    {
+        Test t("loadout tiers: health_up S with bone_cap+hunter_mail, stamina_up S with bone_mail+bone_cap");
+        ArmorPiece table[armor::PIECE_COUNT];
+        shippedTable(table);
+        SaveBlock s;
+        ArmorAgg agg;
+
+        const uint8_t capMail[] = {armor::ARMOR_BONE_CAP, armor::ARMOR_HUNTER_MAIL};
+        equipPieces(table, armor::PIECE_COUNT, capMail, 2, s, agg);
+        t.assert(agg.points[armor::SKILL_HEALTH_UP], 10, "bone_cap 6 + mail 4");
+        t.assert(agg.tier[armor::SKILL_HEALTH_UP], 1, "10 >= S -> S (health_up)");
+
+        const uint8_t mailCap[] = {armor::ARMOR_BONE_MAIL, armor::ARMOR_BONE_CAP};
+        equipPieces(table, armor::PIECE_COUNT, mailCap, 2, s, agg);
+        t.assert(agg.points[armor::SKILL_STAMINA_UP], 10, "bone_mail 6 + cap 4");
+        t.assert(agg.tier[armor::SKILL_STAMINA_UP], 1, "10 >= S -> S (stamina_up)");
+        suite.addTest(t);
+    }
+
+    {
+        Test t("loadout tiers: defense_up S with helm+bone_mail, evade_window S on the charm");
+        // arm.4 balance fix: helm defense_up 4->6 (stack 10 = S) and charm
+        // evade_window 6->10 (S alone; the iT bonus is capped in armorEffects).
+        ArmorPiece table[armor::PIECE_COUNT];
+        shippedTable(table);
+        SaveBlock s;
+        ArmorAgg agg;
+
+        const uint8_t mailHelm[] = {armor::ARMOR_BONE_MAIL, armor::ARMOR_HUNTER_HELM};
+        equipPieces(table, armor::PIECE_COUNT, mailHelm, 2, s, agg);
+        t.assert(agg.points[armor::SKILL_DEFENSE_UP], 10, "helm 6 + bone_mail 4");
+        t.assert(agg.tier[armor::SKILL_DEFENSE_UP], 1, "10 >= S -> S");
+
+        const uint8_t charm[] = {armor::ARMOR_EVADE_CHARM};
+        equipPieces(table, armor::PIECE_COUNT, charm, 1, s, agg);
+        t.assert(agg.points[armor::SKILL_EVADE_WINDOW], 10, "charm alone 10");
+        t.assert(agg.tier[armor::SKILL_EVADE_WINDOW], 1, "10 >= S -> S");
         suite.addTest(t);
     }
 

@@ -158,6 +158,10 @@ class GenArmorTests(unittest.TestCase):
         self.assertIn("constexpr uint16_t BLOB_SIZE = 50;", expect)
         self.assertIn("constexpr uint8_t ARMOR_HELM_A_DEFENSE = 5;", expect)
         self.assertIn("constexpr int8_t ARMOR_HELM_A_RESIST_ICE = -1;", expect)
+        self.assertIn("constexpr uint8_t ARMOR_HELM_A_SKILL0 = 1;", expect)
+        self.assertIn("constexpr uint8_t ARMOR_HELM_A_SKILL0_POINTS = 3;", expect)
+        self.assertIn("constexpr uint8_t ARMOR_HELM_A_SKILL1 = 2;", expect)
+        self.assertIn("constexpr uint8_t ARMOR_HELM_A_SKILL1_POINTS = 2;", expect)
         self.assertIn("constexpr uint8_t SKILL_ATTACK_UP_PER_POINT = 2;", expect)
 
     def test_clean_blob_layout(self):
@@ -169,12 +173,12 @@ class GenArmorTests(unittest.TestCase):
         self.assertEqual(len(blob), 50)
         self.assertEqual(parse_piece(blob, 8),
                          {"slot": 0, "defense": 5, "resist": [1, 0, -1, 0], "zenny": 100,
-                          "mat": [(2, 2), (0, 0)], "sheet": 1, "skillCount": 1,
-                          "skills": [(1, 3), (0, 0)]})
+                          "mat": [(2, 2), (0, 0)], "sheet": 1, "skillCount": 2,
+                          "skills": [(1, 3), (2, 2)]})
         self.assertEqual(parse_piece(blob, 26),
                          {"slot": 2, "defense": 0, "resist": [0, 0, 0, 0], "zenny": 50,
-                          "mat": [(0, 0), (0, 0)], "sheet": 0, "skillCount": 1,
-                          "skills": [(2, 2), (0, 0)]})
+                          "mat": [(0, 0), (0, 0)], "sheet": 0, "skillCount": 2,
+                          "skills": [(2, 2), (1, 1)]})
         self.assertEqual(parse_skill(blob, 44), (0, 15, 2))
         self.assertEqual(parse_skill(blob, 47), (4, 15, 1))
 
@@ -182,10 +186,16 @@ class GenArmorTests(unittest.TestCase):
         result = self.compile("--dump")
         self.assert_succeeds(result)
         self.assertIn("skill attack_up: kind ATTACK_UP maxPoints 15 perPoint 2", result.stdout)
+        self.assertIn("skill evade_window: kind EVADE_WINDOW maxPoints 15 perPoint 1", result.stdout)
         self.assertIn("piece helm_a: slot head defense 5 resist 1/0/-1/0 skills attack_up 3 "
-                      "recipe ore x2 100 zenny", result.stdout)
+                      "evade_window 2 recipe ore x2 100 zenny", result.stdout)
         self.assertIn("piece charm_a: slot charm defense 0 resist 0/0/0/0 skills evade_window 2 "
-                      "recipe - 50 zenny", result.stdout)
+                      "attack_up 1 recipe - 50 zenny", result.stdout)
+        # Representative loadout per skill: best legal stack + clamped total + tier.
+        self.assertIn("loadout attack_up: helm_a 3 + charm_a 1 = 4 -> 4 tier 0 (inert)",
+                      result.stdout)
+        self.assertIn("loadout evade_window: helm_a 2 + charm_a 2 = 4 -> 4 tier 0 (inert)",
+                      result.stdout)
         self.assertIn("gen-armor: thresholds s=10 m=15, 2 pieces, 2 skills, 50 B blob", result.stdout)
         self.assertFalse(os.path.exists(self.path(BLOB_REL)))
         self.assertFalse(os.path.exists(self.path(META_REL)))
@@ -312,13 +322,35 @@ class GenArmorTests(unittest.TestCase):
         self.mutate("data/armor.json", lambda doc: doc["pieces"][0]["skills"][0].__setitem__("points", 16))
         self.assert_fails(self.compile(), "points: out of range 0..15")
 
-    def test_skill_points_over_max_rejected(self):
-        # Two pieces granting attack_up: 14 + 2 = 16 > maxPoints 15.
+    def test_skill_points_over_max_clamp_accepted(self):
+        # The runtime clamps the summed total to THRESHOLD_M (== every shipped
+        # maxPoints), so a total above maxPoints is authored data, not an error:
+        # 14 + 2 = 16 clamps to 15 -> M tier. The dump shows the clamp.
         def bump(doc):
             doc["pieces"][0]["skills"][0]["points"] = 14
             doc["pieces"][1]["skills"] = [{"id": "attack_up", "points": 2}]
         self.mutate("data/armor.json", bump)
-        self.assert_fails(self.compile(), "skill attack_up: 16 total points exceed maxPoints 15")
+        result = self.compile("--dump")
+        self.assert_succeeds(result)
+        self.assertIn("loadout attack_up: helm_a 14 + charm_a 2 = 16 -> 15 tier 2 (M)",
+                      result.stdout)
+
+    def test_skill_points_over_u8_capacity_rejected(self):
+        # armorAdd sums into a u8 before armorFinalize clamps, so a malformed
+        # table that would overflow the accumulator is rejected.
+        def inflate(doc):
+            doc["pieces"][0]["skills"][0]["points"] = 15
+            for i in range(18):
+                doc["pieces"].append({
+                    "id": "pad%02d" % i,
+                    "slot": "head",
+                    "defense": 0,
+                    "resist": {"fire": 0, "water": 0, "ice": 0, "thunder": 0},
+                    "skills": [{"id": "attack_up", "points": 15}],
+                    "recipe": {"materials": [], "zenny": 0},
+                })
+        self.mutate("data/armor.json", inflate)
+        self.assert_fails(self.compile(), "skill attack_up: 286 total points exceed the u8 aggregation cap 255")
 
     def test_bad_sheet_name_rejected(self):
         self.mutate("data/armor.json", lambda doc: doc["pieces"][0].__setitem__("sheet", "MH Head"))

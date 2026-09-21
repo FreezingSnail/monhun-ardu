@@ -1,152 +1,121 @@
-# monhun-ardu-prg.12 — art: per-attack windup frames for animation tells
+# monhun-ardu-arm.4 — data: two skills per armor piece + stackable points
 
-Status: DONE. Bead scope is cart art + the tell-selection wiring at the call site
-(no new MCU machinery beyond the consolidated selector branch). Shipping flash
-went **down** −70 B vs the arm.3 baseline (29590 → 29520/29696, 176 free) because
-the cancelled worker's consolidated `beastAtk` branch replaced the two separate
-chicken/bull branches. Repo left dirty on purpose (orchestrator commits); no
+Status: DONE (with one flagged design deviation, §4). Cart data + pins + tooling;
+the only code change is the EVADE_WINDOW i-frame cap in `armorEffects`. Shipping
+flash is flat within LTO noise: **29520 → 29518/29696 (178 free, −2 B), RAM
+1637/2560 (+0)**. Repo left dirty on purpose (orchestrator commits); no
 commit/push.
-
-Inherited the cancelled worker's dirty tree (HEAD `781692a`), reconciled its four
-failing host probes, registered a dead test, wired/verified the tell->frame
-selector, and re-ran the full gate.
 
 ## What changed
 
-- `tools/gen-art.py` (inherited + reconciled): per-attack windup poses.
-  - `fxchickenatk` 4 → **6 frames** 32x24 `[peck E/W, leap E/W, wing_beat E/W]`
-    (`_chicken_attack_east(mode)`, mode 2 = wing panel + level head).
-  - `fxbullatk` 4 → **8 frames** 32x24
-    `[stomp E/W, gore E/W, rear_kick E/W, stomp_windup E/W]` (tell-slot ordinal
-    order; mode 3 = reared ground-slam windup).
-  - `fxheavyatk` **new** 8 frames 32x24
-    `[bite E/W, bite_windup E/W, spin_windup E/W, slam_windup E/W]` for the
-    longtail's non-locked attacks.
-- `images/blocks/fxbullatk_32x24.png`, `fxchickenatk_32x24.png` updated;
-  `images/blocks/fxheavyatk_32x24.png` new. Generated set regenerated together
-  (`fxdata/*`, `src/fxdata.h`, `src/generated/{art_dims,equip_meta,zone_meta}.hpp`,
-  `fxdata/blocks/Sprites.txt`).
-- `src/render_math.hpp`: `TELL_FRAMES_AUTHORED` 0 → **3** (the selector hook the
-  prg.11 carve left at 0). `tellWindupFrame`/`tellHasAuthoredFrame` unchanged.
-- `src/render.hpp`: `drawMonster` consolidates the chicken/bull branches into one
-  `beastAtk` branch that picks the sheet + first authored attack by roster kind
-  and the ordinal by `tellSlot` (windup) or attack-order offset (attack);
-  `drawAttackMarker` already suppresses the 2x2 core for an authored tell.
-- `tst/art_dims_test.hpp`: reconciled probes; registered `testHeavyAttackSheet`
-  (it was defined but never added to the suite — the heavy sheet was untested).
-- `tst/render_math_test.hpp`, `tst/fxdatatest/tell_test.hpp`: selector shipping
-  count 0 → 3 (authored LINE/ARC/RING, DOT/ZONE fall back).
-- `tst/fxdatatest/monster_art_test.hpp`: setup helpers take a `tell`, reset the
-  cached facing, and pin the authored windup frames per attack.
+- `data/armor.json`: every piece now carries 2 skills (recipes/defense/resist/
+  sheets unchanged):
+  - `hunter_helm` attack_up 6 + defense_up 4
+  - `hunter_mail` attack_up 6 + health_up 4
+  - `bone_cap` health_up 6 + stamina_up 4
+  - `bone_mail` stamina_up 6 + defense_up 4
+  - `evade_charm` evade_window 6 + attack_up 4
+- `src/armor_state.hpp`: new `ARMOR_EVADE_IT_CAP = 4`; `KIND_EVADE_WINDOW`
+  clamps the resolved `iT` bonus to the cap (`bonus > cap ? cap : bonus`). Data
+  keeps `perPoint` 1.
+- `tools/gen-armor.py`:
+  - cross-check relaxed from `total > maxPoints` to `total > 255` (the pre-clamp
+    u8 accumulator capacity). The runtime clamps totals to `THRESHOLD_M`, so
+    `attack_up` 16 is authored data that clamps to 15/M — over-grant impossible.
+  - `--dump` now prints a representative best-stack loadout per skill with the
+    clamped total + tier, e.g.
+    `loadout attack_up: hunter_helm 6 + hunter_mail 6 + evade_charm 4 = 16 -> 15 tier 2 (M)`.
+- Generated set regenerated together: `fxdata/tables/armor.bin` (same 113 B,
+  new content), `src/generated/armor_{data,expect}.hpp`, `fxdata/fxdata{,-data}.bin`,
+  `fxdata/manifest.json`. `src/generated/armor_meta.hpp` unchanged (ABI offsets
+  and ids are stable).
+- `docs/equipment-framework.md`: 2-skill JSON example, threshold-rule text
+  (u8-capacity check + runtime clamp), EVADE_WINDOW cap row, and a new
+  "Skill allocation + activation (arm.4)" table with the loadout tiers.
 
-Interfaces: no new sim/ABI symbols. `mh::TELL_FRAMES_AUTHORED` is now 3;
-`fxheavyatk` + `art_dims::heavyatk_*` are new generated constants; `drawMonster`
-consumes the existing `combat::ATTACK_<CID>_<FIRST>` constants.
+Interfaces: no ABI/sim symbols added. `mh::ARMOR_EVADE_IT_CAP` (uint8 = 4) is
+new; `armorEffects()` signature unchanged; `gen-armor --dump` gains `loadout`
+lines; `armor_expect::ARMOR_*_SKILL1[_POINTS]` now nonzero for every piece.
 
-## 1. Reconciliation of the 4 failing host probes
+## 1. Representative loadouts (`gen-armor --dump` / host pins)
 
-All four were probe coordinates landing on authored art features, not art bugs —
-the assertion names ("head not high", "head low/high white", "foot planted") are
-all satisfied by the intentional silhouettes (eyes are BLACK erasers, the comb is
-white, the feet sit under the body). Corrected the probes:
+| loadout | skill | points | tier |
+|---|---|---|---|
+| hunter_helm + hunter_mail | attack_up | 12 | S (1) |
+| + evade_charm | attack_up | 16 → clamped 15 | M (2) |
+| bone_cap + hunter_mail | health_up | 10 | S (1) |
+| bone_mail + bone_cap | stamina_up | 10 | S (1) |
+| hunter_helm + bone_mail | defense_up | 8 | inert (0) |
+| evade_charm | evade_window | 6 | inert (0) |
 
-- `wing head not high`: sampled (25,2), the white comb horn. → (27,2), clear of
-  the combs at x21..23/x25..26; the level head starts at y3, so it reads 0.
-- `wing foot planted`: sampled (0,21), behind the body. → (12,21), the planted
-  near foot (the peck/leap planted column).
-- `rear_kick head low white`: sampled (25,18), the BLACK eye. → (23,17).
-- `stomp windup head high white`: sampled (25,3), the BLACK eye. → (23,3).
+Host pins in `tst/armor_engine_test.hpp` (new `equipPieces` helper) assert all
+of the above plus the wrong-slot-save guard. `tst/armor_test.hpp` pins both
+skill slots per piece; `tst/armor_effect_test.hpp` pins the evade cap (15→4,
+10→4, 3→3) and `ARMOR_EVADE_IT_CAP == 4`.
 
-No `tools/gen-art.py` pose change was needed: the eyes/comb are deliberate and
-the windup silhouettes already match the assertion names.
+## 2. Evade rescale: cap in `armorEffects` (chosen)
 
-## 2. Selector wiring (verified in code + host + device)
+`perPoint` is a straight multiplier, so lowering it cannot make +15 sublinear
+(`15 * perPoint`). Capping the resolved bonus in `armorEffects` is the only
+change that bounds M on the 14-tick base roll, and it also guards a hand-built
+skill table. Whole-image delta is **−2 B** (flat/noise), so the cap is free.
+Device dodge path is unchanged: `startDodgeRoll` still adds `armorFx.iT`, and
+the existing live test injects `iT = 5` directly (uncapped there), so only the
+`armorEffects` resolver is bounded.
 
-`drawMonster` computes `tellSlot = tellWindupFrame(g.combat.attack.tell, 3)` only
-during `MS_WINDUP`, and uses it as the sheet ordinal when non-NONE; otherwise the
-attack-order offset `m.atkIdx - first` (generated `ATTACK_<CID>_<FIRST>`) for the
-release pose. `drawAttackMarker` draws the legacy 2x2 shade-2 core iff
-`!tellHasAuthoredFrame(...)`; `MS_ATTACK` keeps the 4x4 shade-3 marker. The
-generated attack tells land exactly on their slots:
+## 3. Pins updated (coverage grew, none weakened)
 
-| Beast | Attack | tell | slot selected | sheet |
-|---|---|---|---|---|
-| chicken | peck | dot 0 | none → ordinal 0 (release) | fxchickenatk f0/f1 |
-| chicken | leap | line 1 | 1 (leap) | fxchickenatk f2/f3 |
-| chicken | wing_beat | arc 2 | 2 (wing) | fxchickenatk f4/f5 |
-| bull | stomp | ring 3 | 3 (stomp windup) | fxbullatk f6/f7 |
-| bull | gore | line 1 | 1 (gore) | fxbullatk f2/f3 |
-| bull | rear_kick | arc 2 | 2 (rear_kick) | fxbullatk f4/f5 |
-| heavy | bite | line 1 | 1 (bite windup) | fxheavyatk f2/f3 |
-| heavy | tail_spin | arc 2 | (locked spin branch wins) | fxtailspin |
-| heavy | tail_slam | ring 3 | (locked spin branch wins) | fxtailspin |
+- `tools/tests/test_gen_armor.py`: clean fixture extended to 2 skills/piece
+  (exercises `skillCount = 2` packing); blob-layout + meta pins updated; `--dump`
+  test asserts the loadout/tier lines; the old `> maxPoints` rejection test is
+  replaced by a clamp-accepted test (16 → M) plus a `> 255` u8-capacity
+  rejection test. `make test-tools`: **301 tests, OK** (was 300).
+- Host: `make test` **6369 passed / 0 failed** (was 6347): +6 loadout/threshold
+  pins and +16 table pins.
+- Device: `tst/fxdatatest/smith_test.hpp` helm pins 3 → 6 attack_up points and a
+  new defense_up 4/inert pin (cart read path). `test_smith` **115 PASS** (was 113).
+- `tst/fxdatatest/parity_fixtures.hpp` and `mock/` untouched; parity remained
+  excluded from the gate.
 
-Host pin (`tst/render_math_test.hpp`): `TELL_FRAMES_AUTHORED == 3`,
-DOT/ZONE unauthored, LINE/ARC/RING authored, slot == tell, zone falls back.
-Device pins (`tst/fxdatatest/tell_test.hpp`): authored LINE/ARC/RING draw no core
-marker; DOT/ZONE fall back to the 0x18 core; MS_ATTACK keeps the 0x3C 4x4 marker.
-Device pose pins (`tst/fxdatatest/monster_art_test.hpp`): wing/leap chicken,
-stomp-windup/rear_kick/gore bull and heavy bite windup select and draw the
-authored slots (127 PASS).
+## 4. FLAGGED DEVIATION — `defense_up` / `evade_window` cannot reach S
 
-Note (pre-existing nch.3/5 trade, not introduced here): heavy `tail_spin` and
-`tail_slam` are both `lock-*`, so the `spinning` branch draws `fxtailspin` and the
-heavy sheet's slots 2/3 are authored for selector completeness but never reached
-at runtime. Their windup read is shared.
+The dispatched task asked the host suite to assert `mail+helm → defense S` and
+`charm → evade S`. Under the authored per-piece points and `thresholds.s = 10`
+those are arithmetically impossible:
 
-## 3. Bull stomp area read (item 3)
+- `defense_up` is granted by exactly two pieces: `hunter_helm 4` + `bone_mail 4`
+  = **8 < 10**. Best legal stack is 8 → tier 0.
+- `evade_window` is granted by exactly one piece: `evade_charm 6` = **6 < 10**.
+  Best stack is 6 → tier 0.
 
-`fxbullatk` slot 3 (reared on the planted hind legs, both front hooves high and
-spread, head high) reads as an imminent upward slam and is clearly distinct from
-the release stomp (hooves tucked low) and the gore (head down). It does **not**
-convey the stomp's `ring` area: the hit window is `(0,0,36,26)` — half-extents
-18×13 body-centred — which is larger than the 32×24 cell and extends behind the
-beast, so a single 2-facing pose cannot encode the AoE extent. The prg.11 ledger
-removed the static window outline to hit the reclaim target.
+The data was implemented exactly as the DESIGN lists (4 and 6), so the host tests
+pin the true totals (8/6, both inert) with comments; no test asserts a false S.
+To make those two criteria hold, the minimum balance-only change (no code) is:
 
-Cheapest fix proposal (not applied, per the bead note): restore the 1-px ring
-outline at the cached `g.combat.attack.win.box` for ring tells during `MS_WINDUP`.
-The prg.11 spike measured that outline at **+144 B**; current headroom is 176 B,
-so it would fit with ~32 B to spare, but per `docs/dev-flow.md` "budget-first /
-split implement from make it fit" it belongs in its own spike'd bead rather than
-being silently re-added here.
+- `hunter_helm` defense_up 4 → **6** (then helm + bone_mail = 10 → S), and
+- `evade_charm` evade_window 6 → **10** (then charm alone = 10 → S; the iT cap
+  still holds it at +4).
 
-## 4. Contact-sheet review (pose class vs window class)
-
-Reviewed per attack against `data/creatures/*.json` and the feel-design tables
-(the tooling contact sheet is exercised by `make test-tools`; the direct
-`python3 tools/contact_sheet.py` entry is not available in this sandbox, so the
-review is by inspection of the generated/resolved numbers).
-
-- chicken `peck` dot → `(14,-6,12,10)` ray: generic coil + core marker (dmg 7, no
-  windup floor, so a generic tell is per contract).
-- chicken `leap` line → `(12,-2,18,16)` ray: leap pose (head lowered, body
-  raised, feet tucked) matches the forward ray.
-- chicken `wing_beat` arc → `(-8,0,26,18)` behind sweep: wing panel swept out
-  behind matches the arc/sweep.
-- bull `stomp` ring → `(0,0,36,26)` AoE: reared slam pose is class-correct but
-  area-incomplete (see item 3).
-- bull `gore` line → `(16,-2,16,10)` ray: head-down horns-forward matches.
-- bull `rear_kick` arc → `(-14,4,22,14)` behind: hind legs kicked back matches.
-- heavy `bite` line → `(14,0,18,14)` ray: drawn-back head/snout-up windup matches.
-- heavy `tail_spin` arc → full rotation: fxtailspin 8-dir sheet matches.
-- heavy `tail_slam` ring → `(-16,0,36,28)` AoE: locked spin sheet (shared read).
+That is a data rebalance, not a code fix, so it was left to the orchestrator
+rather than silently changing the DESIGN's numbers. `attack_up` (16→15 M),
+`health_up` (10 S) and `stamina_up` (10 S) activate as specified.
 
 ## Gate tails
 
-- `make gen` (run twice): `gen exit=0`; `gen.sh: FX data + src/fxdata.h regenerated`.
+- `make gen` (run twice): `gen-armor: 5 pieces, 5 skills, 113 B blob` then all
+  four armor outputs `(unchanged)`; second run deterministic.
 - `make gen-check`: `fxdata_manifest: PASS (91 generated artifacts unchanged)`.
-- `make test` (host): `Total Passed: 6347  Total Failed: 0` (was 6299/4).
-- `make test-tools`: `Ran 300 tests in 19.373s  OK`.
-- `make fxtest-headless` (full): all suites PASS — asset 270, audio 10, boot 4,
-  combat 237, data 343, hub 63, hud 25, items 35, menu_art 53, menu 60,
-  monster_art **127** (was 111), player_art 120, quests 50, screens 85, smith 113,
-  tell **18**, zones 80; parity excluded as frozen.
+- `make test` (host): `Total Passed: 6369  Total Failed: 0`.
+- `make test-tools`: `Ran 301 tests in 17.401s  OK`.
+- `make fxtest-headless` (full, parity excluded): all PASS — asset 270, audio
+  10, boot 4, combat 237, data 343, hub 63, hud 25, items 35, menu_art 53,
+  menu 60, monster_art 127, player_art 120, quests 50, screens 85, smith 115,
+  tell 18, zones 80.
   `test_perf`: `B pUs=6347 pHz=157 lHz=52 lTk=524 rMx=3300 rAv=3027 ram=687`
   `PASSED=5 FAILED=0`.
-- `make size`: `size: flash=29520/29696 (176 free)  ram=1637/2560`;
-  `.text=29500 .data=20 .bss=1617`. Data facts unchanged
-  (`HAS_CARVE/HAS_ENRAGE/HAS_STAGGER/HAS_TURN_RATE/HAS_ZONES/...` same as arm.3).
+- `make size`: `size: flash=29518/29696 (178 free)  ram=1637/2560`;
+  `.text=29498 .data=20 .bss=1617`. Data facts unchanged.
 
-Budget delta vs arm.3 baseline (29590 flash, 1637 RAM): **−70 B flash, +0 B RAM**.
-The cart grew ~8.2 KB (`fxdata.bin` 200448 → 208640 B) — cart, not MCU flash.
+Budget delta vs baseline (29520 flash, 1637 RAM): **−2 B flash, +0 B RAM**
+(LTO noise; the cap folds). Cart image unchanged in size (208640 B); the
+113-byte armor blob content changed in place.

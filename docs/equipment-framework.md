@@ -120,7 +120,10 @@ Stats live in `data/`, not code. Two files feed `tools/gen-armor.py`:
   "slot": "head",                       // head | body | charm
   "defense": 10,                        // 0..255
   "resist": { "fire": 1, "water": 0, "ice": 0, "thunder": -1 },  // i8 each
-  "skills": [{ "id": "attack_up", "points": 3 }],                // <= 2 slots
+  "skills": [                           // <= 2 slots, unique ids
+    { "id": "attack_up", "points": 6 },
+    { "id": "defense_up", "points": 4 }
+  ],
   "recipe": { "materials": [{ "item": "ore", "count": 3 }], "zenny": 300 },
   "sheet": "mh_head_hunter_helm"        // optional placeholder symbol
 }
@@ -128,6 +131,8 @@ Stats live in `data/`, not code. Two files feed `tools/gen-armor.py`:
 
 - `recipe` is the smith bill: up to two `{item, count}` pairs (item ids resolve
   against `data/items.json`, counts 1..255) plus a `zenny` cost (u16).
+- `skills` is 1..2 `{id, points}` pairs; points are 0..15. A piece's score is the
+  sum of its skills across the equipped head/body/charm (see arm.4 below).
 - `sheet` is optional while the sprite epic (`monhun-ardu-05x`) is open: it is
   only a validated symbol packed as a sheet-table index; no PNG is required.
 - Piece ids are `[a-z][a-z0-9_]*` and unique; slot is a fixed enum; points are
@@ -154,8 +159,10 @@ Stats live in `data/`, not code. Two files feed `tools/gen-armor.py`:
   pieces per skill. A total below `thresholds.s` (10) is inert; `>= s`
   activates the skill; `thresholds.m` (15) is the max useful total. The engine
   (`arm.3`) applies `min(points, maxPoints) * perPoint` once active. The
-  compiler rejects a data set whose per-skill total across all pieces exceeds
-  `maxPoints`, so the rule can never over-grant.
+  compiler only rejects a table whose pre-clamp u8 sum would overflow 255, so a
+  stack may exceed `maxPoints`; the runtime clamps the total to `thresholds.m`
+  first (`arm.4`: attack_up reaches 16 across helm+mail+charm and is clamped to
+  15/M). Over-granting is therefore impossible.
 
 ### Packed ABI (`raw_t mhArmor`, little-endian, no padding)
 
@@ -250,7 +257,7 @@ live hp/stam maxes (topping them up — it only runs at hunt start / camp return
 | `DEFENSE_UP` | `defense += points*perPoint` | `armorReduce` in `playerHurt` |
 | `HEALTH_UP` | `hpMax = clamp(100 + bonus, 255)` | `armorRestoreStats` |
 | `STAMINA_UP` | `stamMax = clamp(100 + bonus, 255)` | `armorRestoreStats` |
-| `EVADE_WINDOW` | extra dodge i-frames (`startDodgeRoll`) | `p.iT` |
+| `EVADE_WINDOW` | extra dodge i-frames (`startDodgeRoll`), capped at `ARMOR_EVADE_IT_CAP` (4) | `p.iT` |
 
 - **Defense**: `playerHurt` reduces incoming damage before the guard/parry
   branches: `armorReduce(dmg, def) = dmg * 100 / (100 + def)`, floor 1 for
@@ -259,10 +266,43 @@ live hp/stam maxes (topping them up — it only runs at hunt start / camp return
 - **Resistance** (`resist[]`) stays plumbed but inert: no element damage exists
   yet, so nothing consumes it.
 - **Magnitude rule**: `min(points, maxPoints) * perPoint` once the tier is
-  nonzero (`armorSkillBonus`); inert tiers contribute nothing. Shipped data only
-  reaches 3 points per skill, so every skill is inert in the shipping build —
-  only the flat defense applies. `tst/armor_effect_test.hpp` drives synthetic
-  aggs/skill tables to pin the magnitudes and thresholds.
+  nonzero (`armorSkillBonus`); inert tiers contribute nothing. EVADE_WINDOW is
+  the exception: its resolved `iT` bonus is clamped to `ARMOR_EVADE_IT_CAP` (4)
+  so an M-tier stack cannot add +15 i-frames to the 14-tick dodge roll. `arm.4`
+  makes the shipped attack_up / health_up / stamina_up stacks reach S (and
+  attack_up M); defense_up and evade_window still top out below S=10.
+  `tst/armor_effect_test.hpp` drives synthetic aggs/skill tables to pin the
+  magnitudes, the cap and the thresholds.
+
+### Skill allocation + activation (monhun-ardu-arm.4)
+
+Every shipped piece carries two skills; the points stack across the equipped
+head/body/charm and cross the shared S=10 / M=15 thresholds:
+
+| piece | skill 1 | skill 2 |
+|---|---|---|
+| `hunter_helm` | attack_up 6 | defense_up 4 |
+| `hunter_mail` | attack_up 6 | health_up 4 |
+| `bone_cap` | health_up 6 | stamina_up 4 |
+| `bone_mail` | stamina_up 6 | defense_up 4 |
+| `evade_charm` | evade_window 6 | attack_up 4 |
+
+Representative loadouts (also printed by `python3 tools/gen-armor.py --dump`):
+
+| loadout | skill | points | tier |
+|---|---|---|---|
+| hunter_helm + hunter_mail | attack_up | 12 | S |
+| + evade_charm | attack_up | 16 → clamped 15 | M |
+| bone_cap + hunter_mail | health_up | 10 | S |
+| bone_mail + bone_cap | stamina_up | 10 | S |
+| hunter_helm + bone_mail | defense_up | 8 | inert |
+| evade_charm | evade_window | 6 | inert |
+
+> Note: the arm.4 design text expected defense_up and evade_window to reach S
+> with their pieces, but the authored per-piece points top out at 8 and 6. The
+> host suite pins those exact totals (`tst/armor_engine_test.hpp`); reaching S
+> would need `hunter_helm defense_up 6` (+2) and an evade_window stack of 10
+> (`evade_charm 10`, +4) — a balance change, not a code change.
 
 ## Pipeline
 

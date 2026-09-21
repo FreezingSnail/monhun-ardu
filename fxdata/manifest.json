@@ -369,8 +369,8 @@
   "inputs": [
     {
       "path": "data/armor.json",
-      "sha256": "be8d3422fb7f340dc8f0f22f6982917b1d300a858d4e42d7487e4d98ad3322f3",
-      "size": 2066
+      "sha256": "a7dd07a471f871b67db3d817449c30eae101eee33194033d026f589da56ee366",
+      "size": 3179
     },
     {
       "path": "data/creatures/heavy.json",
@@ -686,7 +686,7 @@
     },
     {
       "path": "fxdata/tables/armor.bin",
-      "sha256": "0cc22fb2320bfac9851529e1522aaa677256982671d438bd923cac5ea260ca1d",
+      "sha256": "ba3fde94cb3cc352f4e9e70b88e64857fe29f65a8cfbadfebe498856ef435e4d",
       "size": 113,
       "symbol": "mhArmor"
     },
@@ -760,12 +760,12 @@
   "outputs": [
     {
       "path": "fxdata/fxdata-data.bin",
-      "sha256": "ad4489ec9f39c9a2c3c5105dc2cf6cf10d12d18dd9fe9d393dc98beb0b445fdf",
+      "sha256": "9763529f12f93048c56d3bea8e13e8d6a54af3276eb752bff6500003d2b8fee0",
       "size": 208484
     },
     {
       "path": "fxdata/fxdata.bin",
-      "sha256": "f7cf059fa9e1a015ea8d8cb39d3fa1ac98fb86f45ed3ca8e627ec29de6962631",
+      "sha256": "8a187f7e2c8a17eebb6e5d8d2ff15aa4cccc19eb040b88a80b8f3a50d05c584c",
       "size": 208640
     },
     {
@@ -775,7 +775,7 @@
     },
     {
       "path": "fxdata/tables/armor.bin",
-      "sha256": "0cc22fb2320bfac9851529e1522aaa677256982671d438bd923cac5ea260ca1d",
+      "sha256": "ba3fde94cb3cc352f4e9e70b88e64857fe29f65a8cfbadfebe498856ef435e4d",
       "size": 113
     },
     {
@@ -815,13 +815,13 @@
     },
     {
       "path": "src/generated/armor_data.hpp",
-      "sha256": "eb2229556e50dc68bb5450dc96a64d3ff67f487a468ca1a2ca5490226dcb7ece",
-      "size": 1931
+      "sha256": "3352c2939418a9e3997098b0ab4f2635ca421f1e1307132a21fb5a879f6a9a6d",
+      "size": 1932
     },
     {
       "path": "src/generated/armor_expect.hpp",
-      "sha256": "64b85385428938ebecbc62e7d0ce74a77a7dccbb76f01684323b28b9862db965",
-      "size": 5498
+      "sha256": "8d0805571fd7da93747be303e65ff7fb847a097484f1b4483eadeee52ccd7090",
+      "size": 5499
     },
     {
       "path": "src/generated/armor_meta.hpp",

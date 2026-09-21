@@ -6,7 +6,10 @@
       "slot": "head",
       "defense": 5,
       "resist": { "fire": 1, "water": 0, "ice": -1, "thunder": 0 },
-      "skills": [{ "id": "attack_up", "points": 3 }],
+      "skills": [
+        { "id": "attack_up", "points": 3 },
+        { "id": "evade_window", "points": 2 }
+      ],
       "recipe": {
         "materials": [{ "item": "ore", "count": 2 }],
         "zenny": 100
@@ -18,7 +21,10 @@
       "slot": "charm",
       "defense": 0,
       "resist": { "fire": 0, "water": 0, "ice": 0, "thunder": 0 },
-      "skills": [{ "id": "evade_window", "points": 2 }],
+      "skills": [
+        { "id": "evade_window", "points": 2 },
+        { "id": "attack_up", "points": 1 }
+      ],
       "recipe": {
         "materials": [],
         "zenny": 50

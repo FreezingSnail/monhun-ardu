@@ -236,16 +236,20 @@ inline void test_smith(FxTest &test) {
     test.expectEq(saveCrafted(aloaded, armor::ARMOR_HUNTER_HELM), 1, F("crafted reloaded"));
     test.expectEq(aloaded.equip[armor::SLOT_HEAD], armor::ARMOR_HUNTER_HELM + 1, F("equipped id reloaded"));
 
-    // Cart aggregation: helm defense 10, attack_up 3 points (below S -> inert).
+    // Cart aggregation: helm defense 10, attack_up 6 + defense_up 4 (arm.4
+    // two-skills-per-piece); both stay below S=10 alone -> inert, so the flat
+    // helm defense is the only active effect.
     Game ag;
     newGame(ag, W_SWORD, MODE_HUNT);
     armorApplyToGame(ag, aloaded);
     test.expectEq(ag.armor.defense, 10, F("cart armor defense"));
-    test.expectEq(ag.armor.points[armor::SKILL_ATTACK_UP], 3, F("cart attack_up points"));
-    test.expectEq(ag.armor.tier[armor::SKILL_ATTACK_UP], 0, F("3 points inert"));
+    test.expectEq(ag.armor.points[armor::SKILL_ATTACK_UP], 6, F("cart attack_up points"));
+    test.expectEq(ag.armor.tier[armor::SKILL_ATTACK_UP], 0, F("6 points inert"));
+    test.expectEq(ag.armor.points[armor::SKILL_DEFENSE_UP], 6, F("cart defense_up points"));
+    test.expectEq(ag.armor.tier[armor::SKILL_DEFENSE_UP], 0, F("4 points inert"));
     test.expectEq(ag.armorHead, armor::ARMOR_HUNTER_HELM + 1, F("armorHead set"));
     // arm.3: the resolved effect cache comes off the same cart read. The shipped
-    // 3 attack_up points are below S, so the damage fold stays identity (100)
+    // attack_up points are below S alone, so the damage fold stays identity (100)
     // while the 10 helm defense lands in the combat reduction.
     test.expectEq(ag.armorFx.defense, 10, F("cart effect defense"));
     test.expectEq(ag.armorFx.dmgMul, 100, F("inert attack_up identity mul"));

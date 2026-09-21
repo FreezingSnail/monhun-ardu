@@ -4,10 +4,11 @@
 // smith+armor damage fold (upgrade_state.hpp attackMulFold), and the live
 // playerHurt / dodge paths in src/core/player.hpp.
 //
-// The shipped data has no active skill (per-skill total 3 < THRESHOLD_S 10), so
-// the magnitude tests drive synthetic ArmorAgg blocks and synthetic ArmorSkill
-// tables; the shipped skill table (armor_data::SKILLS) pins the real perPoint
-// values.
+// The shipped data now activates attack_up / health_up / stamina_up at S/M
+// (arm.4), while defense_up (best stack 8) and evade_window (6) stay below
+// THRESHOLD_S. The magnitude tests drive synthetic ArmorAgg blocks and synthetic
+// ArmorSkill tables so every branch (including the evade iT cap) is exercised;
+// the shipped skill table (armor_data::SKILLS) pins the real perPoint values.
 #include "test.hpp"
 #include "../src/armor_state.hpp"
 #include "../src/upgrade_state.hpp"
@@ -180,14 +181,21 @@ void ArmorEffectSuite(TestRunner &runner) {
 
     // ---------------------------------------------------- DEFENSE/EVADE skills
     {
-        Test t("DEFENSE_UP -> defense, EVADE_WINDOW -> iT bonus");
+        Test t("DEFENSE_UP -> defense, EVADE_WINDOW -> capped iT bonus");
         ArmorAgg agg = aggWith(armor::SKILL_DEFENSE_UP, 15, 2);
         agg.defense = 10;
         ArmorEffects fx;
         armorEffects(agg, skills, fx);
         t.assert(fx.defense, 10 + 30, "base defense + +30");
+        // The raw M magnitude would be +15 i-frames on a 14-tick dodge roll;
+        // armorEffects caps EVADE_WINDOW iT at ARMOR_EVADE_IT_CAP (4).
+        t.assert(ARMOR_EVADE_IT_CAP, 4, "evade iT cap is 4");
         armorEffects(aggWith(armor::SKILL_EVADE_WINDOW, 15, 2), skills, fx);
-        t.assert(fx.iT, 15, "evade +15 frames");
+        t.assert(fx.iT, ARMOR_EVADE_IT_CAP, "15-point evade clamps to +4");
+        armorEffects(aggWith(armor::SKILL_EVADE_WINDOW, 10, 1), skills, fx);
+        t.assert(fx.iT, ARMOR_EVADE_IT_CAP, "S-tier 10-point evade clamps to +4");
+        armorEffects(aggWith(armor::SKILL_EVADE_WINDOW, 3, 1), skills, fx);
+        t.assert(fx.iT, 3, "sub-cap bonus passes through");
         armorEffects(aggWith(armor::SKILL_EVADE_WINDOW, 9, 0), skills, fx);
         t.assert(fx.iT, 0, "inert evade leaves 0");
         suite.addTest(t);

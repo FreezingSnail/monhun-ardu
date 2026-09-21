@@ -5,12 +5,32 @@
       "id": "hunter_helm",
       "slot": "head",
       "defense": 10,
-      "resist": { "fire": 1, "water": 0, "ice": 0, "thunder": -1 },
-      "skills": [{ "id": "attack_up", "points": 3 }],
+      "resist": {
+        "fire": 1,
+        "water": 0,
+        "ice": 0,
+        "thunder": -1
+      },
+      "skills": [
+        {
+          "id": "attack_up",
+          "points": 6
+        },
+        {
+          "id": "defense_up",
+          "points": 6
+        }
+      ],
       "recipe": {
         "materials": [
-          { "item": "ore", "count": 3 },
-          { "item": "scale", "count": 2 }
+          {
+            "item": "ore",
+            "count": 3
+          },
+          {
+            "item": "scale",
+            "count": 2
+          }
         ],
         "zenny": 300
       },
@@ -20,12 +40,32 @@
       "id": "bone_cap",
       "slot": "head",
       "defense": 6,
-      "resist": { "fire": 0, "water": 0, "ice": -1, "thunder": 1 },
-      "skills": [{ "id": "health_up", "points": 3 }],
+      "resist": {
+        "fire": 0,
+        "water": 0,
+        "ice": -1,
+        "thunder": 1
+      },
+      "skills": [
+        {
+          "id": "health_up",
+          "points": 6
+        },
+        {
+          "id": "stamina_up",
+          "points": 4
+        }
+      ],
       "recipe": {
         "materials": [
-          { "item": "fang", "count": 2 },
-          { "item": "ore", "count": 1 }
+          {
+            "item": "fang",
+            "count": 2
+          },
+          {
+            "item": "ore",
+            "count": 1
+          }
         ],
         "zenny": 200
       },
@@ -35,12 +75,32 @@
       "id": "hunter_mail",
       "slot": "body",
       "defense": 14,
-      "resist": { "fire": 1, "water": 0, "ice": 0, "thunder": -1 },
-      "skills": [{ "id": "defense_up", "points": 3 }],
+      "resist": {
+        "fire": 1,
+        "water": 0,
+        "ice": 0,
+        "thunder": -1
+      },
+      "skills": [
+        {
+          "id": "attack_up",
+          "points": 6
+        },
+        {
+          "id": "health_up",
+          "points": 4
+        }
+      ],
       "recipe": {
         "materials": [
-          { "item": "scale", "count": 3 },
-          { "item": "shell", "count": 2 }
+          {
+            "item": "scale",
+            "count": 3
+          },
+          {
+            "item": "shell",
+            "count": 2
+          }
         ],
         "zenny": 400
       },
@@ -50,12 +110,32 @@
       "id": "bone_mail",
       "slot": "body",
       "defense": 8,
-      "resist": { "fire": 0, "water": -1, "ice": 1, "thunder": 0 },
-      "skills": [{ "id": "stamina_up", "points": 3 }],
+      "resist": {
+        "fire": 0,
+        "water": -1,
+        "ice": 1,
+        "thunder": 0
+      },
+      "skills": [
+        {
+          "id": "stamina_up",
+          "points": 6
+        },
+        {
+          "id": "defense_up",
+          "points": 4
+        }
+      ],
       "recipe": {
         "materials": [
-          { "item": "fang", "count": 2 },
-          { "item": "shell", "count": 1 }
+          {
+            "item": "fang",
+            "count": 2
+          },
+          {
+            "item": "shell",
+            "count": 1
+          }
         ],
         "zenny": 250
       },
@@ -65,12 +145,32 @@
       "id": "evade_charm",
       "slot": "charm",
       "defense": 0,
-      "resist": { "fire": 0, "water": 0, "ice": 0, "thunder": 0 },
-      "skills": [{ "id": "evade_window", "points": 2 }],
+      "resist": {
+        "fire": 0,
+        "water": 0,
+        "ice": 0,
+        "thunder": 0
+      },
+      "skills": [
+        {
+          "id": "evade_window",
+          "points": 10
+        },
+        {
+          "id": "attack_up",
+          "points": 4
+        }
+      ],
       "recipe": {
         "materials": [
-          { "item": "tail", "count": 1 },
-          { "item": "ore", "count": 2 }
+          {
+            "item": "tail",
+            "count": 1
+          },
+          {
+            "item": "ore",
+            "count": 2
+          }
         ],
         "zenny": 600
       },
