@@ -18,10 +18,11 @@
 // both through upgradeAffordable() / upgradeDebitRecipe() + the zenny spend;
 // `matIdx` 0 is never a real item (ids are 0-based) so slot 0 means empty.
 //
-// Armor recipes stay reserved: the packed `kind` byte that would separate
-// weapon from armor tiers is not in the blob yet. When armor is authored it
-// gains a `kind` field (a second record array or a kind byte in the header);
-// nothing here assumes the weapon path is the only one forever.
+// Armor recipes (arm.1) are a second fixed record array packed after the
+// weapon tiers in the same mhSmith blob (smith::ARMOR_RECIPES_OFF,
+// smith::AREC_*). They carry `armorIdx` (armor::ARMOR_<ID>) + cost + the same
+// mat[2] binder, but this header stays weapon-only until the arm.2 craft UI
+// resolves them; nothing here assumes the weapon path is the only one forever.
 
 #include <stdint.h>
 #include "core/game.hpp"      // ITEM_COUNT / Game::items[] for the recipe checks

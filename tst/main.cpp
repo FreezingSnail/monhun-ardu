@@ -19,6 +19,7 @@
 #include "zone_test.hpp"
 #include "gather_test.hpp"
 #include "items_test.hpp"
+#include "armor_test.hpp"
 #include "carve_test.hpp"
 
 int main() {
@@ -42,6 +43,7 @@ int main() {
     ZoneSuite(runner);
     GatherSuite(runner);
     ItemsSuite(runner);
+    ArmorSuite(runner);
     CarveSuite(runner);
     runner.printSummary();
     return runner.fail() ? 1 : 0;

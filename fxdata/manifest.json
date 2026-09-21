@@ -361,6 +361,11 @@
   ],
   "inputs": [
     {
+      "path": "data/armor.json",
+      "sha256": "be8d3422fb7f340dc8f0f22f6982917b1d300a858d4e42d7487e4d98ad3322f3",
+      "size": 2066
+    },
+    {
       "path": "data/creatures/heavy.json",
       "sha256": "1b0ad35e07747539ce992892e2b321936138704fbf07fe46ce9bb9007bb5337b",
       "size": 3535
@@ -546,6 +551,11 @@
       "size": 803
     },
     {
+      "path": "data/skills.json",
+      "sha256": "56ef0a0f60df3a0992511bcba38e3297b3a4d20197ecc8e60bb0d2f98b56a3d2",
+      "size": 485
+    },
+    {
       "path": "data/smith/flail_t1.json",
       "sha256": "86ded4c3d37900fbbea2c756a9420943ad169419380d1a3f9a16c83c6c11bc84",
       "size": 196
@@ -644,8 +654,8 @@
     },
     {
       "path": "fxdata/fxdata.txt",
-      "sha256": "8e8759190924d216e943de9a745dbc7fe008ecd45079ef08af21df4fc5d0dd1a",
-      "size": 4530
+      "sha256": "98c338194264a1b491a24f4f8606f6b32639ba56e41b36f5ef0ad2011b77da90",
+      "size": 4985
     },
     {
       "path": "fxdata/maps/Sprites.txt",
@@ -667,6 +677,12 @@
       ]
     },
     {
+      "path": "fxdata/tables/armor.bin",
+      "sha256": "0cc22fb2320bfac9851529e1522aaa677256982671d438bd923cac5ea260ca1d",
+      "size": 113,
+      "symbol": "mhArmor"
+    },
+    {
       "path": "fxdata/tables/combat.bin",
       "sha256": "28d58d10cfaae82ec6c240067012cdc8ba17d507f686010171e9857d1889f49e",
       "size": 1093,
@@ -674,7 +690,7 @@
     },
     {
       "path": "fxdata/tables/equip.bin",
-      "sha256": "56c093ad94bf8f76568f1abaa33872f525173db3b2d55eaa7e7f17479f57d573",
+      "sha256": "8b712e7bbd73f91eff68f2ce7e111a8ad9b90b4b18ff85a7cbaddb47ec734cd7",
       "size": 876,
       "symbol": "mhEquip"
     },
@@ -716,8 +732,8 @@
     },
     {
       "path": "fxdata/tables/smith.bin",
-      "sha256": "774853e01ae7bc5af51b40f8be7101f6ce38095192a3d02ebe8325f1c03ee444",
-      "size": 74,
+      "sha256": "73d7f0530cff21071c4f8c4ff273d46285452340cbe9a7fc01ab9ff3151fb250",
+      "size": 114,
       "symbol": "mhSmith"
     },
     {
@@ -736,18 +752,23 @@
   "outputs": [
     {
       "path": "fxdata/fxdata-data.bin",
-      "sha256": "d9a4c645d237b8fd412981540b9d9b9a6b6dccc4dc4cc7bce6cfe2bfe512a67d",
-      "size": 200180
+      "sha256": "8a6a4e7fd03b2ce7ce1c7212cca04b1bedd785c8f15eee1dd77247fdb52008f6",
+      "size": 200333
     },
     {
       "path": "fxdata/fxdata.bin",
-      "sha256": "dc31c30881cdf246725fd11c4745141ad1d045e404c71de46d528c911f16e313",
-      "size": 200192
+      "sha256": "69312ef45376768878b636f35bd5e0e6d999103b9830445c5fbd645ee09721f5",
+      "size": 200448
     },
     {
       "path": "fxdata/fxdata.h",
-      "sha256": "68dd59827125318fced104f9a8e931b7cdc4e2136f50d7b8d80b1d02c1aedcea",
-      "size": 2907
+      "sha256": "8a1179b434a549132794e3e909e0279363207628385f84b5244fe8d07b53c558",
+      "size": 2946
+    },
+    {
+      "path": "fxdata/tables/armor.bin",
+      "sha256": "0cc22fb2320bfac9851529e1522aaa677256982671d438bd923cac5ea260ca1d",
+      "size": 113
     },
     {
       "path": "fxdata/tables/combat.bin",
@@ -756,7 +777,7 @@
     },
     {
       "path": "fxdata/tables/equip.bin",
-      "sha256": "56c093ad94bf8f76568f1abaa33872f525173db3b2d55eaa7e7f17479f57d573",
+      "sha256": "8b712e7bbd73f91eff68f2ce7e111a8ad9b90b4b18ff85a7cbaddb47ec734cd7",
       "size": 876
     },
     {
@@ -776,13 +797,28 @@
     },
     {
       "path": "fxdata/tables/smith.bin",
-      "sha256": "774853e01ae7bc5af51b40f8be7101f6ce38095192a3d02ebe8325f1c03ee444",
-      "size": 74
+      "sha256": "73d7f0530cff21071c4f8c4ff273d46285452340cbe9a7fc01ab9ff3151fb250",
+      "size": 114
     },
     {
       "path": "src/fxdata.h",
-      "sha256": "68dd59827125318fced104f9a8e931b7cdc4e2136f50d7b8d80b1d02c1aedcea",
-      "size": 2907
+      "sha256": "8a1179b434a549132794e3e909e0279363207628385f84b5244fe8d07b53c558",
+      "size": 2946
+    },
+    {
+      "path": "src/generated/armor_data.hpp",
+      "sha256": "eb2229556e50dc68bb5450dc96a64d3ff67f487a468ca1a2ca5490226dcb7ece",
+      "size": 1931
+    },
+    {
+      "path": "src/generated/armor_expect.hpp",
+      "sha256": "64b85385428938ebecbc62e7d0ce74a77a7dccbb76f01684323b28b9862db965",
+      "size": 5498
+    },
+    {
+      "path": "src/generated/armor_meta.hpp",
+      "sha256": "cca0b650cfb6f92cbb4bf3bcc1b57d4537a52cb5c8151d882eaf88170758207b",
+      "size": 4472
     },
     {
       "path": "src/generated/art_dims.hpp",
@@ -806,7 +842,7 @@
     },
     {
       "path": "src/generated/equip_meta.hpp",
-      "sha256": "60a38481cacde92f7000fc20e708b4bfe1fb27447c03e39bbd663a3cc5a872f9",
+      "sha256": "876af74e1eecdccd8eeda884fb3df1ad73b1142121d89c5f3b3f83b4f3390cb9",
       "size": 22331
     },
     {
@@ -841,8 +877,8 @@
     },
     {
       "path": "src/generated/smith_meta.hpp",
-      "sha256": "481eaf54cd9986eaeb73b772c620e5c705b8439fadbbdfed8daaaec4b61f649a",
-      "size": 2386
+      "sha256": "1b21770781daba970d8355f88197e2c194a7c616aa6f33da0812262bb9161849",
+      "size": 3605
     },
     {
       "path": "src/generated/zone_data.hpp",
@@ -851,7 +887,7 @@
     },
     {
       "path": "src/generated/zone_meta.hpp",
-      "sha256": "1e7b6e16ad8ee9547eaaa1b1d430246fc663375ce53366071f4306a5a135e5de",
+      "sha256": "f8650b529a20bb9eb5b3bc74a7522de9f66acb375fe4c77a08d39a558c62cde9",
       "size": 8388
     }
   ],

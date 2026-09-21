@@ -108,6 +108,86 @@ the split bead lands.
   active set is game state (weapon pick already exists; head/body picks land
   with the menu epic).
 
+## Armor data — pieces, stats, skills, crafting (monhun-ardu-arm.1)
+
+Stats live in `data/`, not code. Two files feed `tools/gen-armor.py`:
+
+`data/armor.json` — one record per **piece**:
+
+```json
+{
+  "id": "hunter_helm",
+  "slot": "head",                       // head | body | charm
+  "defense": 10,                        // 0..255
+  "resist": { "fire": 1, "water": 0, "ice": 0, "thunder": -1 },  // i8 each
+  "skills": [{ "id": "attack_up", "points": 3 }],                // <= 2 slots
+  "recipe": { "materials": [{ "item": "ore", "count": 3 }], "zenny": 300 },
+  "sheet": "mh_head_hunter_helm"        // optional placeholder symbol
+}
+```
+
+- `recipe` is the smith bill: up to two `{item, count}` pairs (item ids resolve
+  against `data/items.json`, counts 1..255) plus a `zenny` cost (u16).
+- `sheet` is optional while the sprite epic (`monhun-ardu-05x`) is open: it is
+  only a validated symbol packed as a sheet-table index; no PNG is required.
+- Piece ids are `[a-z][a-z0-9_]*` and unique; slot is a fixed enum; points are
+  0..15; defense is 0..255; resists are signed i8 (-128..127).
+
+`data/skills.json` — the skill vocabulary + the activation rule:
+
+```json
+{
+  "version": 1,
+  "thresholds": { "s": 10, "m": 15 },
+  "skills": [
+    { "id": "attack_up", "kind": "ATTACK_UP", "maxPoints": 15, "perPoint": 2 }
+  ]
+}
+```
+
+- `kind` is a **fixed enum**: `ATTACK_UP`, `DEFENSE_UP`, `HEALTH_UP`,
+  `STAMINA_UP`, `EVADE_WINDOW` (sharpness later). Values mirror the packed kind
+  byte (`armor::KIND_*`).
+- `perPoint` is the effect magnitude contributed per skill point; `maxPoints`
+  is the cap (1..15).
+- **Threshold rule (authored in data):** points are summed across the equipped
+  pieces per skill. A total below `thresholds.s` (10) is inert; `>= s`
+  activates the skill; `thresholds.m` (15) is the max useful total. The engine
+  (`arm.3`) applies `min(points, maxPoints) * perPoint` once active. The
+  compiler rejects a data set whose per-skill total across all pieces exceeds
+  `maxPoints`, so the rule can never over-grant.
+
+### Packed ABI (`raw_t mhArmor`, little-endian, no padding)
+
+```
+header   8 B  magic u16 0x5241, version u8, flags u8, pieceCount u8,
+               skillCount u8, reserved u16
+piece   18 B  slot u8, defense u8, resist[4] i8 (fire,water,ice,thunder),
+               zenny u16, mat[2] x (itemIdx+1 u8, count u8),
+               sheet u8 (index+1, 0 = none), skillCount u8,
+               skills[2] x (skillIdx+1 u8, points u8)
+skill    3 B  kind u8, maxPoints u8, perPoint u8
+```
+
+`tools/gen-armor.py` validates and packs this, emitting
+`src/generated/armor_{data,meta,expect}.hpp`: the host mirror
+(`armor_data::PIECES` / `SKILLS`), the ABI/ids
+(`armor::ARMOR_*` / `SKILL_*` / `SLOT_*` / `KIND_*` / `sheet::*` / `mat::*` /
+`THRESHOLD_S` / `THRESHOLD_M`), and the spot values + sha256. `make gen-check`
+gates it like every other table. `tst/armor_test.hpp` pins the mirror against
+the meta/expect headers.
+
+### Crafting path
+
+The smith data path already owns recipes. `tools/gen-smith.py` reads the same
+`data/armor.json` and appends one fixed **armor recipe** record per piece after
+the weapon records in the `mhSmith` blob (header byte 5 = armor count, then
+`armorIdx u8, cost u16, unlockFlag u8, mat[2] x (itemIdx+1, count)`), so
+crafting reuses the identical `{itemIdx+1, count}` + zenny debit rule
+(`smith::AREC_*`, `smith::ARMOR_RECIPES_OFF`). No craft UI is added in `arm.1`;
+`arm.2` wires the action/condition. A tree without `data/armor.json` packs
+zero armor recipes (the previous weapon-only behaviour).
+
 ## Pipeline
 
 1. `tools/gen-equipment.py` (new) reads `data/equipment/**`, validates schema,
@@ -156,6 +236,18 @@ per-facing arc frames and delete `mulQ4`/`cos256` from the player path.
 3. `eqf.3` split body/head sheets, 8-facing body, two example heads as data.
 4. `eqf.4` (optional) bake per-facing weapon arcs, drop trig from the player
    path.
+
+The **armor** epic (`monhun-ardu-arm`) layers the stats/skills/crafting on top
+of this sprite framework:
+
+1. `arm.1` (this section) armor piece + skill data, `tools/gen-armor.py`, cart
+   blob, smith armor recipes, docs. Data + tooling only; shipping image
+   unchanged.
+2. `arm.2` armor engine: head/body/charm save slots (save v3 `equip[3]`
+   already exists), per-piece aggregation, equip UI, paper-doll render through
+   the slot loop above.
+3. `arm.3` armor effects in combat: defense, hpMax/stamMax, attack/evade/
+   stamina modifiers from the aggregated skill points + thresholds.
 
 Art review per `docs/dev-flow.md`: shades exact, anchors vs sim dims, shade-0
 erase, telegraph window == hit-test window.

@@ -51,9 +51,21 @@ QuestDef: id, targetKind u8, need u8, reward u16, unlockFlag
 ## Smith (content model)
 
 ```
-UpgradeDef: weaponIdx u8, tier u8, cost u16, dmgMul u8, spdMul u8, unlockFlag
+UpgradeDef: weaponIdx u8, tier u8, cost u16, dmgMul u8, spdMul u8, unlockFlag u8
 ```
 - Applied as a multiplier in the player damage/velocity path; tier persisted.
+
+**Armor recipes (monhun-ardu-arm.1).** The same recipe path also crafts armor.
+`tools/gen-smith.py` derives one armor recipe record per `data/armor.json`
+piece from that piece's `{materials, zenny}` bill and appends it after the
+weapon records in `mhSmith` (blob header byte 5 = armor count, then
+`armorIdx u8, cost u16, unlockFlag u8, mat[2] x (itemIdx+1 u8, count u8)`).
+The packed material slots use the identical `(itemIdx+1, count)` convention and
+the host debit is the same `screenRecipeOk` / `screenRecipeDebit` pair, so
+armor spends zenny and materials exactly like a weapon tier. The armor piece
+index matches `armor::ARMOR_<ID>`. This bead packs the data only; `arm.2` adds
+the smith action/condition and the equip UI. See
+`docs/equipment-framework.md` ("Armor data") for the piece/skill schema.
 
 ## Beads
 

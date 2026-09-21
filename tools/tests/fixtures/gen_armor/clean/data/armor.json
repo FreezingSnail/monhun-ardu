@@ -1,0 +1,28 @@
+{
+  "version": 1,
+  "pieces": [
+    {
+      "id": "helm_a",
+      "slot": "head",
+      "defense": 5,
+      "resist": { "fire": 1, "water": 0, "ice": -1, "thunder": 0 },
+      "skills": [{ "id": "attack_up", "points": 3 }],
+      "recipe": {
+        "materials": [{ "item": "ore", "count": 2 }],
+        "zenny": 100
+      },
+      "sheet": "mh_head_a"
+    },
+    {
+      "id": "charm_a",
+      "slot": "charm",
+      "defense": 0,
+      "resist": { "fire": 0, "water": 0, "ice": 0, "thunder": 0 },
+      "skills": [{ "id": "evade_window", "points": 2 }],
+      "recipe": {
+        "materials": [],
+        "zenny": 50
+      }
+    }
+  ]
+}

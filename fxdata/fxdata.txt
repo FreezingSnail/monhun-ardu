@@ -71,6 +71,14 @@ raw_t mhZones = "tables/zones.bin"
 // only shifts the sprite sections that follow.
 raw_t mhItems = "tables/items.bin"
 
+// Armor + skill table (bead monhun-ardu-arm.1): data/skills.json +
+// data/armor.json compiled by tools/gen-armor.py into the 8 B header + 18 B
+// piece records + 3 B skill records from the armor_meta.hpp ABI
+// (little-endian, no padding). Offsets land in armor_meta.hpp; read on device
+// through fxmem.hpp by the arm.2/arm.3 engine. Packed after mhItems so adding
+// it only shifts the sprite sections that follow.
+raw_t mhArmor = "tables/armor.bin"
+
 // Sprite sections: blocks/fonts/menu/equip sheets, addressed with 24-bit
 // SpritesU seeks so they may grow past the tables' 64 KiB window. Equipment
 // sheets stay after the base sheets; room layer arrays (maps/Sprites.txt, fie.5)

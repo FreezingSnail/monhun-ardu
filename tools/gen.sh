@@ -60,10 +60,19 @@ python3 tools/gen-screens.py
 # before fxdata-build.py so the raw_t mhQuests payload exists.
 python3 tools/gen-quests.py
 
+# Armor + skills (bead monhun-ardu-arm.1): compile data/skills.json +
+# data/armor.json into the packed fxdata/tables/armor.bin blob +
+# src/generated/armor_{data,meta,expect}.hpp (piece/skill ids, offsets, spot
+# values). Schema-validated, deterministic; runs before fxdata-build.py so the
+# raw_t mhArmor payload exists and before gen-smith.py, which derives each
+# piece's smith armor recipe from the same JSON.
+python3 tools/gen-armor.py
+
 # Smith upgrade tiers (bead monhun-ardu-4ug): compile data/smith/*.json into the
 # packed fxdata/tables/smith.bin blob + src/generated/smith_meta.hpp (upgrade
 # indices/offsets + weapon enums). Schema-validated, deterministic; runs before
-# fxdata-build.py so the raw_t mhSmith payload exists.
+# fxdata-build.py so the raw_t mhSmith payload exists. arm.1 also derives the
+# armor recipe records from data/armor.json into the same blob.
 python3 tools/gen-smith.py
 
 # Room-graph data (bead monhun-ardu-fie.3): data/map.json compiled by

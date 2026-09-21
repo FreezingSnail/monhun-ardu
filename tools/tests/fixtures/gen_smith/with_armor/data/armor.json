@@ -1,0 +1,32 @@
+{
+  "version": 1,
+  "pieces": [
+    {
+      "id": "helm_a",
+      "slot": "head",
+      "defense": 4,
+      "resist": { "fire": 0, "water": 0, "ice": 0, "thunder": 0 },
+      "skills": [{ "id": "attack_up", "points": 2 }],
+      "recipe": {
+        "materials": [
+          { "item": "ore", "count": 2 },
+          { "item": "scale", "count": 1 }
+        ],
+        "zenny": 100
+      }
+    },
+    {
+      "id": "mail_a",
+      "slot": "body",
+      "defense": 6,
+      "resist": { "fire": 0, "water": 0, "ice": 0, "thunder": 0 },
+      "skills": [{ "id": "defense_up", "points": 2 }],
+      "recipe": {
+        "materials": [
+          { "item": "fang", "count": 1 }
+        ],
+        "zenny": 200
+      }
+    }
+  ]
+}

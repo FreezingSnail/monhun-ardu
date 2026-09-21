@@ -26,6 +26,7 @@ META_REL = "src/generated/smith_meta.hpp"
 
 HEADER = struct.Struct("<HBBBBH")
 RECORD = struct.Struct("<BBHBBBBBBB")
+ARMOR_RECIPE = struct.Struct("<BHBBBBB")
 MAT_SLOTS = 2
 
 
@@ -33,6 +34,12 @@ def parse_record(blob, off):
     weapon, tier, cost, dmg, spd, unlock, m0item, m0count, m1item, m1count = RECORD.unpack_from(blob, off)
     return {"weapon": weapon, "tier": tier, "cost": cost,
             "dmg": dmg, "spd": spd, "unlock": unlock,
+            "mat": [(m0item, m0count), (m1item, m1count)]}
+
+
+def parse_armor_recipe(blob, off):
+    armor, cost, unlock, m0item, m0count, m1item, m1count = ARMOR_RECIPE.unpack_from(blob, off)
+    return {"armor": armor, "cost": cost, "unlock": unlock,
             "mat": [(m0item, m0count), (m1item, m1count)]}
 
 
@@ -99,13 +106,21 @@ class GenSmithTests(unittest.TestCase):
         text = self.read(META_REL)
         for needle in (
             "constexpr uint16_t MAGIC = 0x534D;",
-            "constexpr uint8_t VERSION = 2;",
+            "constexpr uint8_t VERSION = 3;",
             "constexpr uint8_t HEADER_SIZE = 8;",
             "constexpr uint8_t RECORD_SIZE = 11;",
             "constexpr uint8_t MAT_SLOTS = 2;",
             "constexpr uint8_t UPGRADE_COUNT = 2;",
             "constexpr uint8_t TIER_COUNT = 2;",
             "constexpr uint8_t WEAPON_COUNT = 3;",
+            "constexpr uint8_t ARMOR_RECIPE_SIZE = 8;",
+            "constexpr uint8_t ARMOR_RECIPE_COUNT = 0;",
+            "constexpr uint16_t ARMOR_RECIPES_OFF = 30;",
+            "constexpr uint8_t AREC_ARMOR_OFF = 0;",
+            "constexpr uint8_t AREC_COST_OFF = 1;",
+            "constexpr uint8_t AREC_UNLOCK_OFF = 3;",
+            "constexpr uint8_t AREC_MAT_OFF = 4;",
+            "constexpr uint8_t AREC_MAT_STRIDE = 2;",
             "constexpr uint8_t UPG_WEAPON_OFF = 0;",
             "constexpr uint8_t UPG_TIER_OFF = 1;",
             "constexpr uint8_t UPG_COST_OFF = 2;",
@@ -129,9 +144,9 @@ class GenSmithTests(unittest.TestCase):
     def test_clean_blob_layout(self):
         self.assert_succeeds(self.compile())
         blob = self.read_bytes(BLOB_REL)
-        magic, version, flags, count, reserved, reserved2 = HEADER.unpack_from(blob, 0)
-        self.assertEqual((magic, version, flags, count, reserved, reserved2),
-                         (0x534D, 2, 0, 2, 0, 0))
+        magic, version, flags, count, armor_count, reserved = HEADER.unpack_from(blob, 0)
+        self.assertEqual((magic, version, flags, count, armor_count, reserved),
+                         (0x534D, 3, 0, 2, 0, 0))
         self.assertEqual(len(blob), 30)
         self.assertEqual(parse_record(blob, 8),
                          {"weapon": 0, "tier": 1, "cost": 100, "dmg": 110, "spd": 105, "unlock": 0,
@@ -147,7 +162,7 @@ class GenSmithTests(unittest.TestCase):
                       result.stdout)
         self.assertIn("upgrade sword_t2: weapon sword tier 2 cost 250 dmg 125 spd 115 unlock 0 materials -",
                       result.stdout)
-        self.assertIn("gen-smith: 2 upgrades, 30 B blob", result.stdout)
+        self.assertIn("gen-smith: 2 upgrades, 0 armor recipes, 30 B blob", result.stdout)
         self.assertFalse(os.path.exists(self.path(BLOB_REL)))
         self.assertFalse(os.path.exists(self.path(META_REL)))
 
@@ -234,6 +249,132 @@ class GenSmithTests(unittest.TestCase):
         self.assert_succeeds(self.compile())
         blob = self.read_bytes(BLOB_REL)
         self.assertEqual(parse_record(blob, 19)["mat"], [(0, 0), (0, 0)])
+
+
+class GenSmithArmorTests(unittest.TestCase):
+    """Armor recipes (bead monhun-ardu-arm.1): data/armor.json pieces are packed
+    after the weapon records through the same {itemIdx+1, count} + zenny path."""
+
+    maxDiff = None
+
+    def setUp(self):
+        case = os.path.join(SCRATCH, "armor_" + self._testMethodName)
+        shutil.rmtree(case, ignore_errors=True)
+        shutil.copytree(os.path.join(HERE, "fixtures", "gen_smith", "with_armor"), case)
+        self.case = case
+
+    def path(self, *parts):
+        return os.path.join(self.case, *parts)
+
+    def read(self, *parts):
+        with open(self.path(*parts), encoding="utf-8") as handle:
+            return handle.read()
+
+    def read_bytes(self, *parts):
+        with open(self.path(*parts), "rb") as handle:
+            return handle.read()
+
+    def compile(self, *extra):
+        return run_tool("--root", self.case, *extra)
+
+    def assert_succeeds(self, result):
+        self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+
+    def assert_fails(self, result, *needles):
+        self.assertEqual(result.returncode, 1, result.stdout + result.stderr)
+        for needle in needles:
+            self.assertIn(needle, result.stderr)
+
+    def mutate_armor(self, fn):
+        with open(self.path("data", "armor.json"), encoding="utf-8") as handle:
+            doc = json.load(handle)
+        fn(doc)
+        with open(self.path("data", "armor.json"), "w", encoding="utf-8", newline="\n") as handle:
+            json.dump(doc, handle, indent=2)
+            handle.write("\n")
+
+    def test_clean_compile_is_deterministic(self):
+        self.assert_succeeds(self.compile())
+        first_blob = self.read_bytes(BLOB_REL)
+        first_meta = self.read(META_REL)
+        second = self.compile()
+        self.assert_succeeds(second)
+        self.assertIn("%s (unchanged)" % BLOB_REL, second.stdout)
+        self.assertIn("%s (unchanged)" % META_REL, second.stdout)
+        self.assertEqual(first_blob, self.read_bytes(BLOB_REL))
+        self.assertEqual(first_meta, self.read(META_REL))
+
+    def test_armor_recipes_pack_after_the_weapon_records(self):
+        self.assert_succeeds(self.compile())
+        blob = self.read_bytes(BLOB_REL)
+        magic, version, flags, count, armor_count, reserved = HEADER.unpack_from(blob, 0)
+        self.assertEqual((magic, version, flags, count, armor_count, reserved),
+                         (0x534D, 3, 0, 2, 2, 0))
+        self.assertEqual(len(blob), 8 + 2 * 11 + 2 * 8)
+        # 2 weapon upgrades (sword t1): ore x1.
+        self.assertEqual(parse_record(blob, 8),
+                         {"weapon": 0, "tier": 1, "cost": 100, "dmg": 110, "spd": 105, "unlock": 0,
+                          "mat": [(2, 1), (0, 0)]})
+        self.assertEqual(parse_record(blob, 19)["tier"], 2, "tier 2 second")
+        # Armor source order: helm_a (ore x2, scale x1) then mail_a (fang x1).
+        self.assertEqual(parse_armor_recipe(blob, 30),
+                         {"armor": 0, "cost": 100, "unlock": 0, "mat": [(2, 2), (3, 1)]})
+        self.assertEqual(parse_armor_recipe(blob, 38),
+                         {"armor": 1, "cost": 200, "unlock": 0, "mat": [(4, 1), (0, 0)]})
+
+    def test_armor_meta_header_constants(self):
+        self.assert_succeeds(self.compile())
+        text = self.read(META_REL)
+        for needle in (
+            "constexpr uint8_t VERSION = 3;",
+            "constexpr uint16_t SIZE = 46;",
+            "constexpr uint8_t ARMOR_RECIPE_SIZE = 8;",
+            "constexpr uint8_t ARMOR_RECIPE_COUNT = 2;",
+            "constexpr uint16_t ARMOR_RECIPES_OFF = 30;",
+            "constexpr uint8_t AREC_ARMOR_OFF = 0;",
+            "constexpr uint8_t AREC_COST_OFF = 1;",
+            "constexpr uint8_t AREC_UNLOCK_OFF = 3;",
+            "constexpr uint8_t AREC_MAT_OFF = 4;",
+            "constexpr uint8_t AREC_MAT_STRIDE = 2;",
+            "constexpr uint8_t AREC_HELM_A = 0;",
+            "constexpr uint16_t AREC_HELM_A_OFF = 30;",
+            "constexpr uint8_t AREC_MAIL_A = 1;",
+            "constexpr uint16_t AREC_MAIL_A_OFF = 38;",
+            "constexpr uint8_t FANG = 3;",
+        ):
+            self.assertIn(needle, text)
+
+    def test_dump_lists_armor_recipes(self):
+        result = self.compile("--dump")
+        self.assert_succeeds(result)
+        self.assertIn("armor recipe helm_a: cost 100 unlock 0 materials ore x2 scale x1", result.stdout)
+        self.assertIn("armor recipe mail_a: cost 200 unlock 0 materials fang x1", result.stdout)
+        self.assertIn("gen-smith: 2 upgrades, 2 armor recipes, 46 B blob", result.stdout)
+
+    def test_unknown_armor_material_rejected(self):
+        self.mutate_armor(lambda doc: doc["pieces"][0]["recipe"]["materials"].__setitem__(
+            0, {"item": "dragonite", "count": 1}))
+        self.assert_fails(self.compile(), "item: unknown item 'dragonite'")
+
+    def test_too_many_armor_materials_rejected(self):
+        self.mutate_armor(lambda doc: doc["pieces"][0]["recipe"].__setitem__("materials", [
+            {"item": "ore", "count": 1}, {"item": "scale", "count": 1}, {"item": "fang", "count": 1}]))
+        self.assert_fails(self.compile(), "materials: 3 pairs exceed the 2 packed slots")
+
+    def test_missing_armor_recipe_rejected(self):
+        self.mutate_armor(lambda doc: doc["pieces"][0].pop("recipe"))
+        self.assert_fails(self.compile(), "recipe: expected an object")
+
+    def test_empty_armor_pieces_rejected(self):
+        self.mutate_armor(lambda doc: doc.__setitem__("pieces", []))
+        self.assert_fails(self.compile(), "pieces: expected a non-empty array")
+
+    def test_missing_armor_file_packs_zero_recipes(self):
+        os.remove(self.path("data", "armor.json"))
+        self.assert_succeeds(self.compile())
+        blob = self.read_bytes(BLOB_REL)
+        self.assertEqual(HEADER.unpack_from(blob, 0)[4], 0, "armor count 0")
+        self.assertIn("ARMOR_RECIPE_COUNT = 0;", self.read(META_REL))
 
 
 if __name__ == "__main__":

@@ -1,9 +1,9 @@
 #!/usr/bin/env python3
-"""Compile smith upgrade-def JSON into the packed FX blob + generated header.
+"""Compile smith recipe JSON into the packed FX blob + generated header.
 
-    data/smith/*.json
+    data/smith/*.json + data/armor.json (weapon tiers + armor recipes)
         -> fxdata/tables/smith.bin        (packed blob; build intermediate)
-        -> src/generated/smith_meta.hpp   (def indices, offsets, enums)
+        -> src/generated/smith_meta.hpp   (indices, offsets, enums)
 
 Design: docs/quests-shops.md "Smith (content model)" (bead monhun-ardu-4ug,
 qs.3). One UpgradeDef record per tier is read on device through
@@ -18,23 +18,31 @@ list, source order == item index), and the packed material slots hold
 (itemIdx + 1, count) so 0 means "empty slot". The names are emitted as
 `item_ids::ID_<NAME>` constants and the host `UpgradeDef` struct carries a
 `mat[SMITH_MAT_SLOTS]` binder (`{item, count}`), so `screenApplyAction` debits
-the save inventory, not raw ids. Armor recipes stay reserved: an armor list
-would live in a second JSON root (`data/smith/armor_*.json`) with a *kind*
-field; none is authored yet, so the weapon path stays the only smith path.
+the save inventory, not raw ids.
+
+Armor recipes (bead monhun-ardu-arm.1): the same recipe path now also drives
+armor. Each piece in data/armor.json carries a {materials, zenny} bill; this
+tool derives one armor recipe record per piece so the smith blob knows how to
+craft armor through the identical {itemIdx+1, count} + zenny debit. No craft
+UI is added here (arm.2). The armor list is packed after the weapon records in
+its own fixed-size array, so the weapon record offsets stay put.
 
 Blob layout (little-endian, explicit u8/u16, no padding, fixed order):
 
     header     8 B  magic u16 0x534D, version u8, flags u8, defCount u8,
-                    reserved u8, reserved u16
+                    armorCount u8, reserved u16
     records   11 B each, ordered by (weaponIdx, tier): weaponIdx u8, tier u8,
                     cost u16, dmgMul u8, spdMul u8, unlockFlag u8,
+                    mat[2] x (itemIdx+1 u8, count u8)
+    armor      8 B each, in data/armor.json source order: armorIdx u8,
+                    cost u16 (zenny), unlockFlag u8,
                     mat[2] x (itemIdx+1 u8, count u8)
 
 Usage:
     python3 tools/gen-smith.py [--root DIR] [--dump]
 
     --root DIR  pipeline root holding data/ and src/generated (default: repo)
-    --dump      validate + list the compiled upgrades on stdout; writes nothing
+    --dump      validate + list the compiled upgrades + armor recipes; writes nothing
 """
 import argparse
 import json
@@ -46,17 +54,26 @@ import sys
 REPO_ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 DATA_DIR = "data/smith"
 ITEMS_REL = "data/items.json"
+ARMOR_REL = "data/armor.json"
 BLOB_REL = "fxdata/tables/smith.bin"
 META_REL = "src/generated/smith_meta.hpp"
 
 MAGIC = 0x534D   # 'M','S' little-endian
-VERSION = 2
+VERSION = 3
 FLAGS = 0
 HEADER_SIZE = 8
 RECORD_SIZE = 11
 UPGRADE_MAX = 32
-TIER_MAX = 2   # two tiers per weapon (docs/quests-shops.md)
-MAT_SLOTS = 2  # packed recipe material pairs per tier
+TIER_MAX = 2          # two tiers per weapon (docs/quests-shops.md)
+MAT_SLOTS = 2         # packed recipe material pairs per tier/piece
+ARMOR_RECIPE_SIZE = 8
+ARMOR_RECIPE_MAX = 32  # must hold every piece in data/armor.json
+# Armor recipe field offsets (armorIdx u8, cost u16, unlockFlag u8, mat[2]).
+AREC_ARMOR_OFF = 0
+AREC_COST_OFF = 1
+AREC_UNLOCK_OFF = 3
+AREC_MAT_OFF = 4
+AREC_MAT_STRIDE = 2
 
 # Weapon indices, index == WeaponId in src/core/game.hpp. Keep in sync.
 WEAPON_NAMES = ("sword", "flail", "gun")
@@ -182,6 +199,49 @@ def normalize_materials(errors, ctx, obj, item_ids):
     return mats
 
 
+def load_armor_recipes(errors, root, item_ids):
+    """Derive one armor recipe per data/armor.json piece (source order == the
+    armor::ARMOR_<ID> index). data/armor.json is optional: a tree without it
+    (or without any pieces) packs zero armor recipes. This reader only owns the
+    recipe subset it packs; tools/gen-armor.py owns full armor validation."""
+    path = os.path.join(root, ARMOR_REL)
+    if not os.path.isfile(path):
+        return []
+    doc = load_json(errors, path, ARMOR_REL)
+    if doc is None:
+        return None
+    raw = doc.get("pieces")
+    if not isinstance(raw, list) or not raw:
+        errors.add(ARMOR_REL, "pieces: expected a non-empty array")
+        return None
+    recipes = []
+    for i, obj in enumerate(raw):
+        ctx = "%s: pieces[%d]" % (ARMOR_REL, i)
+        if not isinstance(obj, dict):
+            errors.add(ctx, "expected an object")
+            return None
+        armor_id = obj.get("id")
+        if not isinstance(armor_id, str) or not NAME_RE.match(armor_id):
+            errors.add(ctx, "id must match [a-z][a-z0-9_]*")
+            return None
+        recipe = obj.get("recipe")
+        if not isinstance(recipe, dict):
+            errors.add(ctx, "recipe: expected an object")
+            return None
+        cost = read_int(errors, "%s.recipe" % ctx, recipe, "zenny", 0, 65535)
+        mats = normalize_materials(errors, "%s.recipe" % ctx, recipe, item_ids)
+        if cost is None or mats is None:
+            return None
+        recipes.append({"armor": armor_id, "cost": cost, "materials": mats})
+    if errors.items:
+        return None
+    if len(recipes) > ARMOR_RECIPE_MAX:
+        errors.add(ARMOR_REL, "size limit: %d armor recipes exceed the %d recipe cap"
+                   % (len(recipes), ARMOR_RECIPE_MAX))
+        return None
+    return recipes
+
+
 def normalize_upgrade(errors, rel, name, obj, seen_keys, item_ids):
     ctx = rel
     check_keys(errors, ctx, obj, {"weapon", "tier", "cost", "dmgMul", "spdMul", "unlockFlag"},
@@ -245,45 +305,62 @@ def compile_model(errors, root):
     if errors.items:
         return None
     upgrades.sort(key=lambda up: (up["weapon"], up["tier"], up["name"]))
-    return {"upgrades": upgrades, "itemIds": item_ids}
+
+    armor_recipes = load_armor_recipes(errors, root, item_ids)
+    if armor_recipes is None or errors.items:
+        return None
+    return {"upgrades": upgrades, "armorRecipes": armor_recipes, "itemIds": item_ids}
 
 
-def pack_blob(errors, upgrades):
+def _mat_slots(mats):
+    slots = []
+    for i in range(MAT_SLOTS):
+        if i < len(mats):
+            slots += [mats[i]["itemIdx"] + 1, mats[i]["count"]]
+        else:
+            slots += [0, 0]
+    return slots
+
+
+def pack_blob(errors, upgrades, armor_recipes):
     count = len(upgrades)
     if count == 0 or count > UPGRADE_MAX:
         errors.add("data", "upgrade count %d outside 1..%d" % (count, UPGRADE_MAX))
         return None
-    blob = bytearray(struct.pack("<HBBBBH", MAGIC, VERSION, FLAGS, count, 0, 0))
+    if len(armor_recipes) > ARMOR_RECIPE_MAX:
+        errors.add("data", "armor recipe count %d exceeds %d" % (len(armor_recipes), ARMOR_RECIPE_MAX))
+        return None
+    blob = bytearray(struct.pack("<HBBBBH", MAGIC, VERSION, FLAGS, count, len(armor_recipes), 0))
     for up in upgrades:
-        mats = up["materials"]
-        slots = []
-        for i in range(MAT_SLOTS):
-            if i < len(mats):
-                slots += [mats[i]["itemIdx"] + 1, mats[i]["count"]]
-            else:
-                slots += [0, 0]
+        slots = _mat_slots(up["materials"])
         blob += struct.pack("<BBHBBBBBBB", up["weapon"], up["tier"], up["cost"],
                             up["dmgMul"], up["spdMul"], up["unlockFlag"],
                             slots[0], slots[1], slots[2], slots[3])
-    expected = HEADER_SIZE + RECORD_SIZE * count
+    for recipe in armor_recipes:
+        slots = _mat_slots(recipe["materials"])
+        blob += struct.pack("<BHBBBBB", recipe["armorIdx"], recipe["cost"], recipe["unlockFlag"],
+                            slots[0], slots[1], slots[2], slots[3])
+    expected = HEADER_SIZE + RECORD_SIZE * count + ARMOR_RECIPE_SIZE * len(armor_recipes)
     if len(blob) != expected:
         errors.add("data", "internal: blob is %d B, want %d" % (len(blob), expected))
         return None
     return bytes(blob)
 
 
-def emit_meta_header(upgrades, blob):
+def emit_meta_header(upgrades, armor_recipes, item_ids, blob):
     lines = []
     app = lines.append
     app("#pragma once")
     app("// Generated by tools/gen-smith.py -- do not edit.")
     app("//")
-    app("// Smith upgrade data ABI (docs/quests-shops.md): header then one fixed")
-    app("// 11 B UpgradeDef record per tier, ordered by (weaponIdx, tier).")
-    app("// src/smith.hpp reads this blob through core/fxmem.hpp during the")
-    app("// screen scan/render window; src/upgrade_state.hpp holds the")
-    app("// host-testable struct + integer-percent multiplier math + the recipe")
-    app("// debits (prg.7 materials).")
+    app("// Smith data ABI (docs/quests-shops.md): header, then one fixed 11 B")
+    app("// UpgradeDef record per weapon tier ordered by (weaponIdx, tier), then one")
+    app("// fixed 8 B armor recipe record per data/armor.json piece in source order.")
+    app("// src/smith.hpp reads the weapon records through core/fxmem.hpp during the")
+    app("// screen scan/render window; src/upgrade_state.hpp holds the host-testable")
+    app("// struct + integer-percent multiplier math + the recipe debits (prg.7")
+    app("// materials). The armor recipe array is data for the arm.2 craft UI, which")
+    app("// will debit it with the same {itemIdx+1, count} + zenny rule.")
     app("")
     app("#include <stdint.h>")
     app("")
@@ -299,6 +376,10 @@ def emit_meta_header(upgrades, blob):
     app("constexpr uint8_t TIER_COUNT = %d;" % TIER_MAX)
     app("constexpr uint8_t WEAPON_COUNT = %d;" % len(WEAPON_NAMES))
     app("constexpr uint8_t MAT_SLOTS = %d;   // packed {item,count} pairs per record" % MAT_SLOTS)
+    app("constexpr uint8_t ARMOR_RECIPE_SIZE = %d;" % ARMOR_RECIPE_SIZE)
+    app("constexpr uint8_t ARMOR_RECIPE_COUNT = %d;" % len(armor_recipes))
+    app("constexpr uint16_t ARMOR_RECIPES_OFF = %d;"
+        % (HEADER_SIZE + RECORD_SIZE * len(upgrades)))
     app("")
     app("// Record field offsets (UpgradeDef: weaponIdx, tier, cost, dmgMul, spdMul,")
     app("// unlockFlag, mat[MAT_SLOTS]).")
@@ -311,6 +392,13 @@ def emit_meta_header(upgrades, blob):
     app("constexpr uint8_t UPG_MAT_OFF = 7;    // MAT_SLOTS x (itemIdx+1 u8, count u8)")
     app("constexpr uint8_t UPG_MAT_STRIDE = 2;")
     app("")
+    app("// Armor recipe field offsets (armorIdx u8, cost u16, unlockFlag u8, mat[2]).")
+    app("constexpr uint8_t AREC_ARMOR_OFF = %d;" % AREC_ARMOR_OFF)
+    app("constexpr uint8_t AREC_COST_OFF = %d;    // u16" % AREC_COST_OFF)
+    app("constexpr uint8_t AREC_UNLOCK_OFF = %d;" % AREC_UNLOCK_OFF)
+    app("constexpr uint8_t AREC_MAT_OFF = %d;     // MAT_SLOTS x (itemIdx+1 u8, count u8)" % AREC_MAT_OFF)
+    app("constexpr uint8_t AREC_MAT_STRIDE = %d;" % AREC_MAT_STRIDE)
+    app("")
     app("// Weapon indices; values mirror WeaponId in src/core/game.hpp.")
     for i, name in enumerate(WEAPON_NAMES):
         app("constexpr uint8_t WEAPON_%s = %d;" % (name.upper(), i))
@@ -321,14 +409,21 @@ def emit_meta_header(upgrades, blob):
         app("constexpr uint8_t UPG_%s = %d;" % (name, i))
         app("constexpr uint16_t UPG_%s_OFF = %d;" % (name, HEADER_SIZE + i * RECORD_SIZE))
     app("")
-    if upgrades and upgrades[0].get("itemIds"):
-        item_ids = upgrades[0]["itemIds"]
-        app("// Recipe material item ids (index into Game::items[] / the mhItems table).")
-        app("namespace mat {")
-        for i, name in enumerate(item_ids):
-            app("constexpr uint8_t %s = %d;" % (name.upper(), i))
-        app("}   // namespace mat")
+    if armor_recipes:
+        app("// Armor recipe indices, in data/armor.json source order (== the")
+        app("// armor::ARMOR_<ID> piece index), with the cart record offsets.")
+        for i, recipe in enumerate(armor_recipes):
+            name = recipe["armor"].upper()
+            app("constexpr uint8_t AREC_%s = %d;" % (name, i))
+            app("constexpr uint16_t AREC_%s_OFF = %d;"
+                % (name, HEADER_SIZE + RECORD_SIZE * len(upgrades) + i * ARMOR_RECIPE_SIZE))
         app("")
+    app("// Recipe material item ids (index into Game::items[] / the mhItems table).")
+    app("namespace mat {")
+    for i, name in enumerate(item_ids):
+        app("constexpr uint8_t %s = %d;" % (name.upper(), i))
+    app("}   // namespace mat")
+    app("")
     app("}   // namespace smith")
     app("")
     return "\n".join(lines)
@@ -363,7 +458,13 @@ def run(root, dump):
     for up in upgrades:
         for mat in up["materials"]:
             mat["itemIdx"] = item_ids.index(mat["item"])
-    blob = pack_blob(errors, upgrades)
+    armor_recipes = model["armorRecipes"]
+    for i, recipe in enumerate(armor_recipes):
+        recipe["armorIdx"] = i
+        recipe["unlockFlag"] = 0   # armor.json carries no unlock gate yet
+        for mat in recipe["materials"]:
+            mat["itemIdx"] = item_ids.index(mat["item"])
+    blob = pack_blob(errors, upgrades, armor_recipes)
     if blob is None or errors.items:
         for item in errors.items:
             print("gen-smith: error: %s" % item, file=sys.stderr)
@@ -376,16 +477,21 @@ def run(root, dump):
             print("upgrade %s: weapon %s tier %d cost %d dmg %d spd %d unlock %d materials %s"
                   % (up["name"], WEAPON_NAMES[up["weapon"]], up["tier"], up["cost"],
                      up["dmgMul"], up["spdMul"], up["unlockFlag"], mats if mats else "-"))
-        print("gen-smith: %d upgrades, %d B blob" % (len(upgrades), len(blob)))
+        for recipe in armor_recipes:
+            mats = " ".join("%s x%d" % (m["item"], m["count"]) for m in recipe["materials"])
+            print("armor recipe %s: cost %d unlock %d materials %s"
+                  % (recipe["armor"], recipe["cost"], recipe["unlockFlag"], mats if mats else "-"))
+        print("gen-smith: %d upgrades, %d armor recipes, %d B blob"
+              % (len(upgrades), len(armor_recipes), len(blob)))
         return 0
 
     wrote = set()
     if write_if_changed(os.path.join(root, BLOB_REL), blob):
         wrote.add(BLOB_REL)
-    if write_if_changed(os.path.join(root, META_REL), emit_meta_header(upgrades, blob)):
+    if write_if_changed(os.path.join(root, META_REL), emit_meta_header(upgrades, armor_recipes, item_ids, blob)):
         wrote.add(META_REL)
-    print("gen-smith: %d upgrades, %d B blob (magic 0x%04X version %d)"
-          % (len(upgrades), len(blob), MAGIC, VERSION))
+    print("gen-smith: %d upgrades, %d armor recipes, %d B blob (magic 0x%04X version %d)"
+          % (len(upgrades), len(armor_recipes), len(blob), MAGIC, VERSION))
     for rel in (BLOB_REL, META_REL):
         print("gen-smith: %s%s" % (rel, "" if rel in wrote else " (unchanged)"))
     return 0
