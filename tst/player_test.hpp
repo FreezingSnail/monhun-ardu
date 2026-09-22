@@ -4,7 +4,7 @@
 // source of truth for numbers).
 #include "test.hpp"
 #include "../src/core/player.hpp"
-#include "../src/core/projectiles.hpp"   // spawnShot: shot-code host assertions
+#include "../src/core/projectiles.hpp"   // initWorld / stepWorld (charge-case world ticks)
 
 using namespace mh;
 
@@ -103,15 +103,13 @@ void holdToStance(Game &g) {
     stepN(g, 13, Input{0, 0, false, true});
 }
 
-// stow via the device input (feel.17): hold B, then double-tap Down. The
-// feel.16 double-tap detector sees the second Down edge with B down and stows
-// instead of rolling. Leaves B held so callers can assert the latch, then
-// release with a bare step.
+// S2 stow: hold A on an armed press -- the swing plays out, then the weapon
+// goes away at STOW_HOLD_TICKS (flail first enters PS_CHARGE and stows at
+// CHARGE_MIN + STOW_HOLD_TICKS). Leaves A released, idle, and stowed.
 void stowWeapon(Game &g) {
-    stepN(g, 1, Input{0, 0, false, true});   // B down (under HOLD_TICKS: no stance)
-    stepN(g, 1, Input{0, 1, false, true});   // tap 1 Down
-    stepN(g, 1, Input{0, 0, false, true});   // release
-    stepN(g, 1, Input{0, 1, false, true});   // tap 2: stow (no roll)
+    stepN(g, 1, Input{0, 0, true, false});                                  // press A: swing starts
+    stepN(g, CHARGE_MIN + STOW_HOLD_TICKS + 4, Input{0, 0, true, false});   // hold past the stow window
+    stepN(g, 1, Input{0, 0, false, false});                                 // release A
 }
 
 // double-tap a d-pad direction (press, release, press) -- feel.16 roll input
@@ -257,7 +255,7 @@ void PlayerSuite(TestRunner &runner) {
     }
 
     {
-        Test t("gunshield A then B = pointblank shell branch");
+        Test t("gunshield A then B = pointblank branch (shell gate retired)");
         Game g;
         initGame(g, W_GUN);
         armTarget(g, g.player.x + 20, g.player.y);   // within reach 15
@@ -266,8 +264,7 @@ void PlayerSuite(TestRunner &runner) {
         stepN(g, CHAIN_GAP);
         tapB(g);
         t.assert(g.player.atk->id, ATK_POINTBLANK, "pointblank id");
-        t.assert(g.player.shells[0], 2, "demo: ammo unlimited (stays 2)");
-        t.assert(g.player.reload, 45, "branch reload set");
+        t.assert(g.player.reload, 0, "no reload timer (shells retired)");
         stepN(g, 8);
         t.assert(rec.hits, 1, "pointblank connects");
         t.assert(rec.lastDmg, 22, "pointblank dmg");
@@ -289,14 +286,14 @@ void PlayerSuite(TestRunner &runner) {
     }
 
     {
-        Test t("pointblank without shells falls back to shove");
+        Test t("pointblank branch fires with the shell gate retired");
         Game g;
         initGame(g, W_GUN);
-        g.player.shells[0] = 0;
         attackOnce(g);
         stepN(g, CHAIN_GAP);
         tapB(g);
-        t.assert(g.player.state, PS_SHOVE, "shove when out of shells");
+        t.assert(g.player.atk->id, ATK_POINTBLANK, "pointblank branch still fires");
+        t.assert(g.player.state, PS_ATTACK, "pointblank enters the attack state");
         suite.addTest(t);
     }
 
@@ -458,17 +455,17 @@ void PlayerSuite(TestRunner &runner) {
     }
 
     {
-        Test t("gunshield stance+A consumes shell and starts reload");
+        Test t("gunshield stance+A = hitscan arrowshot (stam cost, no projectile)");
         Game g;
         initGame(g, W_GUN);
         holdToStance(g);
+        const uint8_t stam0 = g.player.stam;
         stepN(g, 1, Input{0, 0, true, true});   // A press while holding B
-        t.assert(g.player.shells[0], 2, "demo: ammo unlimited (no consume)");
-        t.assert(g.player.reload, 70, "ball reload started");
-        t.assert(g.lastShot, 1, "shot recorded for hrd");
-        stepN(g, 1, Input{0, 0, false, true});   // release A, reload ticks to 69
-        stepN(g, 1, Input{0, 0, true, true});    // A again during reload
-        t.assert(g.player.shells[0], 2, "no consume while reloading");
+        t.assert(g.player.state, PS_SPECIAL, "arrowshot enters PS_SPECIAL");
+        t.assert(g.player.atk == weaponSpecial(&WEAPON_DEFS[W_GUN]) ? 1 : 0, 1, "arrowshot attack data");
+        t.assert(g.player.stam < stam0, 1, "stam spent on the shot");
+        t.assert(g.projN, 0, "no projectile spawned (hitscan)");
+        t.assertGreaterThan(g.fxN, 0, "muzzle spark spawned");
         suite.addTest(t);
     }
 
@@ -516,50 +513,64 @@ void PlayerSuite(TestRunner &runner) {
 
     // ------------------------------------------------- sheathe + debounce (udb)
     {
-        Test t("sheathe feel.17: hold B + double-tap Down stows, A draws hit 1");
+        Test t("sheathe S2: hold A after the swing stows, A draws hit 1");
         Game g;
         initGame(g, W_SWORD);
         stowWeapon(g);
-        t.assert(g.player.sheathed, true, "hold B + double-tap Down stows");
-        t.assert(g.player.state, PS_IDLE, "stow consumed: no attack");
-        t.assert(g.player.atk == nullptr ? 1 : 0, 1, "no swing");
-        stepN(g, 1);                             // release B, clears the latch
+        t.assert(g.player.sheathed, true, "hold A stows");
+        t.assert(g.player.state, PS_IDLE, "stow settles at idle");
         stepN(g, 1, Input{0, 0, true, false});   // A draws
         t.assert(g.player.sheathed, false, "A draws the weapon");
         t.assert(g.player.state, PS_ATTACK, "draw swings immediately");
         t.assert(g.player.atk != nullptr ? 1 : 0, 1, "draw attack runs");
+
+        // Draw-and-keep-holding must not bounce straight back into the sheath.
+        Game h;
+        initGame(h, W_SWORD);
+        stowWeapon(h);
+        stepN(h, 1, Input{0, 0, true, false});                     // draw press
+        stepN(h, STOW_HOLD_TICKS + 8, Input{0, 0, true, false});   // keep holding
+        t.assert(h.player.sheathed, false, "draw hold does not re-stow");
         suite.addTest(t);
     }
 
     {
-        Test t("sheathe feel.17: B-held double-tap Down stows from a stance");
+        Test t("sheathe S2: hold A through a stance special stows from the stance");
         Game g;
         initGame(g, W_SWORD);
         holdToStance(g);   // B held -> parry
         t.assert(g.player.stance, ST_PARRY, "stance up before the stow");
-        stepN(g, 1, Input{0, 1, false, true});   // tap 1 Down
-        stepN(g, 1, Input{0, 0, false, true});
-        stepN(g, 1, Input{0, 1, false, true});   // tap 2: stow drops the stance
+        stepN(g, 1, Input{0, 0, true, true});                     // A in stance -> riposte special
+        stepN(g, STOW_HOLD_TICKS + 4, Input{0, 0, true, true});   // keep holding
         t.assert(g.player.sheathed, true, "stowed from stance");
         t.assert(g.player.stance, ST_NONE, "stance dropped");
-        t.assert(g.player.sheatheLatch, true, "latch set until B release");
+        t.assert(g.player.sheatheLatch, false, "no stale latch (S2)");
         t.assert(g.player.state, PS_IDLE, "idle, no roll");
         suite.addTest(t);
     }
 
     {
-        Test t("sheathe feel.17: double-tap Down without B still rolls");
+        Test t("S2: d-pad double-tap rolls down without B and in stance");
         Game g;
         initGame(g, W_SWORD);
         doubleTap(g, 0, 1);
         t.assert(g.player.sheathed, false, "not stowed");
         t.assert(g.player.state, PS_DODGE, "rolls down");
         t.assertGreaterThan(g.player.vy, 0, "rolls south");
+
+        Game h;
+        initGame(h, W_SWORD);
+        holdToStance(h);                         // B held -> parry; Down now rolls instead of stowing
+        stepN(h, 1, Input{0, 1, false, true});   // tap 1 Down
+        stepN(h, 1, Input{0, 0, false, true});
+        stepN(h, 1, Input{0, 1, false, true});   // tap 2: roll out of the stance
+        t.assert(h.player.sheathed, false, "stance down-tap does not stow");
+        t.assert(h.player.state, PS_DODGE, "rolls down out of the stance");
         suite.addTest(t);
     }
 
     {
-        Test t("sheathe feel.17: B-held double-tap of another direction does not stow");
+        Test t("S2: B-held double-tap of any direction rolls, never stows");
         Game g;
         initGame(g, W_SWORD);
         stepN(g, 1, Input{0, 0, false, true});   // B down
@@ -581,15 +592,15 @@ void PlayerSuite(TestRunner &runner) {
     }
 
     {
-        Test t("sheathe feel.17: B release after stow does not re-enter stance or roll");
+        Test t("S2: A-stow leaves the B verbs live (no stale latch)");
         Game g;
         initGame(g, W_SWORD);
-        stowWeapon(g);   // B still held at the end
-        stepN(g, 1);     // release B: clears the latch
-        t.assert(g.player.sheatheLatch, false, "latch cleared on release");
+        g.items[ITEM_HERB] = 1;
+        stowWeapon(g);
+        t.assert(g.player.sheatheLatch, false, "no latch at the stow");
+        stepN(g, HOLD_TICKS + 2, Input{0, 0, false, true});
+        t.assert(g.player.state, PS_ITEM, "stowed B hold still uses a herb");
         t.assert(g.player.sheathed, true, "still stowed");
-        t.assert(g.player.stance, ST_NONE, "release does not enter a stance");
-        t.assert(g.player.state, PS_IDLE, "release does not roll");
         suite.addTest(t);
     }
 
@@ -627,6 +638,13 @@ void PlayerSuite(TestRunner &runner) {
         stepN(g, 16, Input{-1, 0, false, true});   // strafe west, shield still east
         t.assert(g.player.fx, 16, "facing locked while strafing");
         t.assertLessThan(g.player.x, x0, "strafed west");
+        // Diagonal strafe keeps the sub-pixel fraction: guard sp 2, axis step
+        // 11*2 = 22/256 px/tick, so 8 ticks carry 176/256 = 11/16 px per axis
+        // (the pre-fix truncating move dropped it to 8/16).
+        const int16_t dx0 = g.player.x;
+        const int8_t dsx0 = g.player.subX;
+        stepN(g, 8, Input{1, 1, false, true});   // strafe SE
+        t.assert(static_cast<int16_t>((g.player.x - dx0) * 16 + (g.player.subX - dsx0)), 11, "diagonal strafe carries 11/16 px per axis in 8t");
         suite.addTest(t);
     }
 
@@ -885,18 +903,29 @@ void PlayerSuite(TestRunner &runner) {
         t.assert(g.player.atk->hh, 18, "chargeslam1 hh");
         t.assert(g.player.atk->stam, 14, "chargeslam1 stam");
 
-        // A long hold still fires the single level: no chargeslam2 tier.
+        // Holding into the charge window then releasing still fires the single
+        // level: no chargeslam2 tier.
         Game g2;
         initGame(g2, W_FLAIL);
         for (int i = 0; i < 80 && g2.player.state != PS_CHARGE; i++)
             stepPlayer(g2, Input{0, 0, true, false});
-        for (int i = 0; i < 40; i++)
+        for (int i = 0; i < 10; i++)
             stepPlayer(g2, Input{0, 0, true, false});
-        t.assertGreaterThan(g2.player.chargeT, 20, "held well past the old L2");
+        t.assertGreaterThan(g2.player.chargeT, 5, "held inside the charge window");
         stepPlayer(g2, Input{0, 0, false, false});
-        t.assert(g2.player.state, PS_ATTACK, "long-hold swing runs");
-        t.assert(g2.player.atk->dmg, 24, "long hold still chargeslam1");
-        t.assert(g2.player.atk->stam, 14, "long hold still chargeslam1 stam");
+        t.assert(g2.player.state, PS_ATTACK, "charged swing runs");
+        t.assert(g2.player.atk->dmg, 24, "hold still chargeslam1");
+        t.assert(g2.player.atk->stam, 14, "hold still chargeslam1 stam");
+
+        // S2: holding past CHARGE_MIN + STOW_HOLD stows instead.
+        Game g3;
+        initGame(g3, W_FLAIL);
+        for (int i = 0; i < 80 && g3.player.state != PS_CHARGE; i++)
+            stepPlayer(g3, Input{0, 0, true, false});
+        for (int i = 0; i < STOW_HOLD_TICKS + 4; i++)
+            stepPlayer(g3, Input{0, 0, true, false});
+        t.assert(g3.player.sheathed, 1, "flail long hold stows");
+        t.assert(g3.player.state, PS_IDLE, "flail stow settles at idle");
         suite.addTest(t);
     }
 
@@ -912,6 +941,7 @@ void PlayerSuite(TestRunner &runner) {
         }
         t.assert(g.player.state != PS_CHARGE ? 1 : 0, 1, "gun has no charge stance");
         t.assert(weaponHasCharge(&WEAPON_DEFS[W_GUN]), 0, "gun has no melee charge");
+        t.assert(g.player.sheathed, 1, "gun long hold stows (S2)");
         // A long hold + release fires no charged ball; the shot record stays clear.
         stepWorld(g, Input{0, 0, false, false});
         t.assert(g.projN, 0, "no charged ball spawned");
@@ -930,6 +960,7 @@ void PlayerSuite(TestRunner &runner) {
         }
         t.assert(g.player.state != PS_CHARGE ? 1 : 0, 1, "sword has no charge");
         t.assert(weaponHasCharge(&WEAPON_DEFS[W_SWORD]), 0, "no melee charge");
+        t.assert(g.player.sheathed, 1, "sword long hold stows (S2)");
         suite.addTest(t);
     }
 

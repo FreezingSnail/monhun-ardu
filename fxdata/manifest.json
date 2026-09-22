@@ -746,7 +746,7 @@
     },
     {
       "path": "fxdata/tables/weapondefs.bin",
-      "sha256": "c62d5a2def154d05105cade59130a8091cce41d628c1f113cb528cbe753b2cb8",
+      "sha256": "7903c03f811ea9b0fb0eb0127c99a1426f23b39608342aa98b5bc3483db75e16",
       "size": 987,
       "symbol": "mhWeaponDefs"
     },
@@ -760,12 +760,12 @@
   "outputs": [
     {
       "path": "fxdata/fxdata-data.bin",
-      "sha256": "9763529f12f93048c56d3bea8e13e8d6a54af3276eb752bff6500003d2b8fee0",
+      "sha256": "968de4f26665a05a90372565b0744c1571bee0e4a7afa4a7c3ce3ce0b91b4e86",
       "size": 208484
     },
     {
       "path": "fxdata/fxdata.bin",
-      "sha256": "8a187f7e2c8a17eebb6e5d8d2ff15aa4cccc19eb040b88a80b8f3a50d05c584c",
+      "sha256": "d6724a43f5f4f19820a25aca8fedda8fcf1c1cc809f4160ecb9e8cb7e40dcbb3",
       "size": 208640
     },
     {
@@ -830,8 +830,8 @@
     },
     {
       "path": "src/generated/art_dims.hpp",
-      "sha256": "726f62ab61fd3a47ea2e592c6ff4d75dfef93f595c9a0bfef04b0d7b39642d34",
-      "size": 7387
+      "sha256": "a35ed4972ee150a8a78a9299a1bab3a772ab6d3fcf62fd287d131ff4df6a2959",
+      "size": 7388
     },
     {
       "path": "src/generated/combat_data.hpp",

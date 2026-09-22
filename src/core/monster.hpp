@@ -762,11 +762,6 @@ static void updateMonster(Game &g) {
     pushApart(g);
 }
 
-// Raw beast update (mock updateMonster).
-static void stepMonster(Game &g) {
-    updateMonster(g);
-}
-
 // One full hunt tick in mock step() order: player, then monster. The target
 // rect is synced first so melee sees the beast's current position.
 static void stepHunt(Game &g, const Input &inp) {

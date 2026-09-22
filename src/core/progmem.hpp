@@ -62,12 +62,6 @@ inline int16_t mhPgmReadI16(const int16_t *p) {
 inline uint32_t mhPgmReadU32(const uint32_t *p) {
     return pgm_read_dword(p);
 }
-inline int32_t mhPgmReadI32(const int32_t *p) {
-    return static_cast<int32_t>(pgm_read_dword(reinterpret_cast<const uint32_t *>(p)));
-}
-inline bool mhPgmReadBool(const bool *p) {
-    return pgm_read_byte(reinterpret_cast<const uint8_t *>(p)) != 0;
-}
 #else
 inline uint8_t mhPgmReadU8(const uint8_t *p) {
     return *p;
@@ -82,12 +76,6 @@ inline int16_t mhPgmReadI16(const int16_t *p) {
     return *p;
 }
 inline uint32_t mhPgmReadU32(const uint32_t *p) {
-    return *p;
-}
-inline int32_t mhPgmReadI32(const int32_t *p) {
-    return *p;
-}
-inline bool mhPgmReadBool(const bool *p) {
     return *p;
 }
 #endif

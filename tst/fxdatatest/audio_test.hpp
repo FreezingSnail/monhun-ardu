@@ -61,11 +61,7 @@ static void evGuard(Game &g) {
 }
 
 static void evShot(Game &g) {
-    g.projN++;
-}
-
-static void evReload(Game &g) {
-    g.player.reload = 0;
+    g.player.state = PS_SPECIAL;   // gun hitscan edge (shells retired)
 }
 
 inline void test_audio(FxTest &test) {
@@ -107,20 +103,12 @@ inline void test_audio(FxTest &test) {
         const uint16_t m = cueFor(s, g, evGuard);
         test.expectEq(cueBit(m, CUE_GUARD), 1, F("guard block"));
     }
-    {   // gun fired a shell -> CUE_SHOT
+    {   // gun fired the hitscan arrowshot -> CUE_SHOT
         Game g;
         newGame(g, W_GUN, MODE_HUNT);
         AudioState s{};
         const uint16_t m = cueFor(s, g, evShot);
         test.expectEq(cueBit(m, CUE_SHOT), 1, F("shot fired"));
-    }
-    {   // reload reached zero -> CUE_RELOAD
-        Game g;
-        newGame(g, W_GUN, MODE_HUNT);
-        g.player.reload = 5;   // mid-reload across the latch
-        AudioState s{};
-        const uint16_t m = cueFor(s, g, evReload);
-        test.expectEq(cueBit(m, CUE_RELOAD), 1, F("reload complete"));
     }
     {   // no edge -> no cue
         Game g;

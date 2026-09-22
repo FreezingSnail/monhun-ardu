@@ -70,13 +70,12 @@ static uint16_t countBoxBits(uint8_t y0, uint8_t y1, uint8_t x0, uint8_t x1) {
 inline void test_hud(FxTest &test) {
     arduboy.startGray();   // plane ISR drives waitForNextPlane (as in test_perf)
 
-    // Deterministic scene: hunt + gun, full HP/stamina/monster HP, mid-reload.
-    // Ball shell reload is 70, so reload=35 -> bar width (12*35 + 35)/70 == 6.
+    // Deterministic scene: hunt + gun, full HP/stamina/monster HP. The gun's
+    // reload lane was retired with the hitscan rework (no shells).
     static Game g;
     newGame(g, W_GUN, MODE_HUNT);
     g.player.hp = g.player.hpMax;
     g.player.stam = g.player.stamMax;
-    g.player.reload = 35;
     g.monster.hp = g.monster.hpMax;
 
     // Land on plane 0 from a black framebuffer. Plane 0 lights every shade
@@ -99,8 +98,8 @@ inline void test_hud(FxTest &test) {
     // Monster bar (hunt): hudBar(82, 2, 44, 3) -> rows 2..4 (0x1C) + divider
     // (0x80) -> 0x9C for x=82..125.
     test.expectEq(countPage(0, 82, 125, 0x9C), 44, F("hud mon bar plane0"));
-    // Gun reload bar: blk(67, 6, 6, 1, 2) -> row 6 lit for x=67..72.
-    test.expectEq(countRowBit(6, 67, 72), 6, F("hud reload bar plane0"));
+    // Retired gun reload lane: row 6 x=67..72 stays clear (no reload bar).
+    test.expectEq(countRowBit(6, 67, 72), 0, F("no reload bar plane0"));
 
     // Plane 1: shade 1 clears, shades 2/3 set. The bar BACKS (shade 1) now
     // clear their area and only the FILLS light pixels, proving the fill blk()
@@ -121,8 +120,8 @@ inline void test_hud(FxTest &test) {
     test.expectEq(bitAt(1, 3), 0, F("hud hp back edge plane1"));
     test.expectEq(bitAt(28, 3), 0, F("hud hp back edge2 plane1"));
     test.expectEq(countRowBit(7, 0, 127), 0, F("hud divider plane1"));
-    // Reload bar is shade 2: still lit on plane 1.
-    test.expectEq(countRowBit(6, 67, 72), 6, F("hud reload plane1"));
+    // Retired reload lane: clear on plane 1 too.
+    test.expectEq(countRowBit(6, 67, 72), 0, F("no reload plane1"));
 
     // Negative control: the world path (blk) still clips at y >= HUD_H. A
     // 20x16 rect anchored at y=0 leaves page 0 (rows 0..7) untouched and paints
@@ -172,6 +171,22 @@ inline void test_hud(FxTest &test) {
     test.expectEq(countRowBit(13, 49, 78), 30, F("item bar fill plane1"));
     g.player.state = PS_IDLE;
     g.items[ITEM_HERB] = 0;
+
+    // ---- gun rework: arrowshot nock hint in the retired shell lane ----
+    // Ready draws "RDY" (rows 1..5) with no row-6 fill; mid-nock draws "LOD"
+    // plus a 1 px fill bar. reload 12 -> w = (8*12 + 12)/24 = 4.
+    g.player.reload = 0;
+    clearFb();
+    renderScene(g, false);
+    test.expectEq(countBoxBits(1, 5, 67, 78) > 0 ? 1 : 0, 1, F("nock RDY text plane1"));
+    test.expectEq(countRowBit(6, 67, 78), 0, F("nock ready no fill"));
+
+    g.player.reload = ARROW_NOCK_TICKS / 2;
+    clearFb();
+    renderScene(g, false);
+    test.expectEq(countRowBit(6, 67, 70), 4, F("nock LOD fill plane1"));
+    test.expectEq(countBoxBits(1, 5, 67, 78) > 0 ? 1 : 0, 1, F("nock LOD text plane1"));
+    g.player.reload = 0;
 }
 
 }   // namespace hud

@@ -122,6 +122,8 @@ MH_NOINLINE inline void addVel(FpBody &o, int8_t vx, int8_t vy) {
 
 // accumulate fixed sub-pixel movement, keep x/y int pixels.
 // signed % 16 (NOT & 15): mask bug caused up/left stutter in the prototype.
+// Truncating per tick; the player's movePlayer() uses its own lossless variant
+// (p.remX/remY) so diagonal walk/strafe keeps the 11/16 fraction.
 inline void addMove(FpBody &o, int8_t dx, int8_t dy, uint8_t spd) {
     o.subX += tdiv(dx * spd, FP);
     o.subY += tdiv(dy * spd, FP);

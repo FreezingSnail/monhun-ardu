@@ -90,20 +90,4 @@ inline void upgradeResolve(const UpgradeDef *defs, uint8_t count, uint8_t weapon
     }
 }
 
-// Is the recipe bill in `mats` satisfied by the save inventory? `owned` is the
-// inventory accessor (SaveBlock::items on device, a plain array on host); the
-// two-arg form keeps this header free of core/save.hpp. Empty slots (item 0)
-// are skipped.
-inline bool upgradeRecipeOk(const UpgradeDef &def, const uint8_t *owned, uint8_t ownedCount) {
-    for (uint8_t i = 0; i < UPGRADE_MAT_SLOTS; i++) {
-        const uint8_t code = def.mat[i].item;
-        if (code == 0)
-            continue;
-        const uint8_t slot = static_cast<uint8_t>(code - 1);
-        if (slot >= ownedCount || owned[slot] < def.mat[i].count)
-            return false;
-    }
-    return true;
-}
-
 }   // namespace mh

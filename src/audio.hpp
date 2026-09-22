@@ -22,8 +22,8 @@
 // Edge detection is freeze-safe: stepGame() skips updateEffects()/sim while
 // Game::freeze > 0, so an effect can sit at t==1 for several ticks and a
 // transient state (deflect, riposteT) holds its value. Every cue below is gated
-// on an edge that only advances on a non-frozen tick (hp drop, stun set,
-// projectile spawn, reload reach 0, riposte armed), so nothing refires.
+// on an edge that only advances on a non-frozen tick (hp drop, stun set, gun
+// special start, riposte armed), so nothing refires.
 
 #include <stdint.h>
 #include "core/world.hpp"
@@ -48,8 +48,7 @@ enum AudioCue : uint8_t {
     CUE_PARRY,     // sword riposte landed
     CUE_DEFLECT,   // flail deflect absorbed a hit
     CUE_GUARD,     // gunshield guard block (chip damage)
-    CUE_SHOT,      // gun fired a shell
-    CUE_RELOAD,    // gun reload finished
+    CUE_SHOT,      // gun fired the hitscan arrowshot
 };
 
 // Previous-tick snapshot + one-slot retrigger guard.
@@ -57,9 +56,7 @@ struct AudioState {
     int16_t tick;
     int16_t monsterHp;
     uint8_t playerHp;
-    uint8_t reload;
     uint8_t monsterStun;
-    uint8_t projN;
     uint8_t riposteT;
     int8_t monsterState;
     int8_t playerStance;
@@ -82,7 +79,7 @@ static volatile uint16_t mhToggles2;   // queued segment-2 toggles (0 = none)
 // Cue table: {OCR3A, toggles, OCR3A2, toggles2}, precomputed for the exact
 // ArduboyTones math (OCR = F_CPU/8/freq/2 - 1, toggles = (ms*freq)>>9).
 // Index 0 is CUE_NONE (all zero); every queue has toggle counts >= 1.
-static const uint16_t mhCueTable[9][4] PROGMEM = {
+static const uint16_t mhCueTable[8][4] PROGMEM = {
     {0, 0, 0, 0},           // CUE_NONE
     {2023, 21, 0, 0},       // CUE_HIT     494,22
     {1516, 20, 954, 81},    // CUE_CRIT    659,16 1047,40
@@ -91,7 +88,6 @@ static const uint16_t mhCueTable[9][4] PROGMEM = {
     {1431, 24, 1135, 58},   // CUE_DEFLECT 698,18 880,34
     {5101, 11, 3815, 23},   // CUE_GUARD   196,30 262,45
     {636, 42, 954, 49},     // CUE_SHOT    1568,14 1047,24
-    {954, 24, 636, 85},     // CUE_RELOAD  1047,12 1568,28
 };
 
 // Arm one cue. Pins are only set to output/low here (the old constructor did it
@@ -139,9 +135,7 @@ static void audioSnapshot(AudioState &s, const Game &g) {
     s.tick = g.tick;
     s.monsterHp = g.monster.hp;
     s.playerHp = g.player.hp;
-    s.reload = g.player.reload;
     s.monsterStun = g.monster.stun;
-    s.projN = g.projN;
     s.riposteT = g.player.riposteT;
     s.monsterState = g.monster.state;
     s.playerStance = g.player.stance;
@@ -191,10 +185,10 @@ static void audioUpdate(AudioState &s, const Game &g) {
     const bool guarding = playerDrop && (p.stance == ST_GUARD || s.playerStance == ST_GUARD);
 
     // Utility cues first, so a same-tick combat reaction can overwrite them.
-    if (g.projN > s.projN)
+    // The gun's hitscan arrowshot reads as a PS_SPECIAL edge (shells/projectiles
+    // retired with the hitscan rework).
+    if (g.weapon == W_GUN && p.state == PS_SPECIAL && s.playerState != PS_SPECIAL)
         audioCue(s, CUE_SHOT);
-    if (s.reload > 0 && p.reload == 0)
-        audioCue(s, CUE_RELOAD);
 
     // Combat reactions (defense > crit > hit > hurt).
     if (p.riposteT > s.riposteT) {

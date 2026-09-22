@@ -1,5 +1,7 @@
 #pragma once
-// Host unit tests for src/core/world.hpp — world bounds / projectile cull
+// Host unit tests for src/core/world.hpp — world bounds / room clamp /
+// reset semantics. The projectile cull suite was retired with the hitscan
+// rework (no in-flight shots exist).
 // margin, camera follow + clamp (both axes, mock order), hunt/train mode
 // toggles and the active-target indirection. mock/game.js is the source of
 // truth (mock/game.test.js covers the same feel via the browser harness).
@@ -30,23 +32,6 @@ void wparkBeast(Game &g, int16_t x, int16_t y) {
 void wticks(Game &g, int n, const Input &in) {
     for (int i = 0; i < n; i++)
         stepGame(g, in);
-}
-
-// One stationary projectile at an integer pixel position (sub-pixel zeroed).
-void wsetProj(Game &g, int16_t x, int16_t y) {
-    g.projN = 1;
-    Projectile &pr = g.proj[0];
-    pr.x = x;
-    pr.y = y;
-    pr.subX = 0;
-    pr.subY = 0;
-    pr.vx = 0;
-    pr.vy = 0;
-    pr.w = 7;
-    pr.h = 6;
-    pr.dmg = 28;
-    pr.life = PROJ_LIFE;
-    pr.heavy = true;
 }
 
 }   // namespace worldtest
@@ -183,26 +168,6 @@ void WorldSuite(TestRunner &runner) {
         resetHunt(g);
         t.assert(g.mode, MODE_HUNT, "hunt stays hunt on reset");
         t.assert(g.weapon, W_FLAIL, "reset keeps the swapped weapon");
-        suite.addTest(t);
-    }
-
-    {
-        Test t("projectile cull bounds carry the mock world+8 px margin");
-        Game g;
-        newGame(g, W_GUN, MODE_HUNT);
-        wparkBeast(g, 20, 0);   // far from the probe row (y 60)
-        wsetProj(g, WORLD_W + 8, 60);
-        updateProjectiles(g);
-        t.assert(g.projN, 1, "x == world+8 still in bounds");
-        wsetProj(g, WORLD_W + 9, 60);
-        updateProjectiles(g);
-        t.assert(g.projN, 0, "x == world+9 culled");
-        wsetProj(g, -8, 60);
-        updateProjectiles(g);
-        t.assert(g.projN, 1, "x == -8 still in bounds");
-        wsetProj(g, -9, 60);
-        updateProjectiles(g);
-        t.assert(g.projN, 0, "x == -9 culled");
         suite.addTest(t);
     }
 

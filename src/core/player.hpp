@@ -26,6 +26,8 @@ void Player::init(int8_t weapon) {
     h = 16;
     subX = 0;
     subY = 0;
+    remX = 0;
+    remY = 0;
     vx = 0;
     vy = 0;
     fx = fp::FP;
@@ -59,12 +61,11 @@ void Player::init(int8_t weapon) {
     iT = 0;
     shell = 0;
     reload = 0;
-    shells[0] = shellCount(weaponShell(&WEAPON_DEFS[W_GUN], 0));
-    shells[1] = shellCount(weaponShell(&WEAPON_DEFS[W_GUN], 1));
     pA = false;
     aHold = 0;
     chargeT = 0;
     chargeArmed = false;
+    aStowOk = false;
     dTapDir = -1;
     dTapT = 0;
     pDir = -1;
@@ -167,7 +168,20 @@ static void movePlayer(Player &p, int8_t mx, int8_t my, uint8_t spd, bool lockFa
         p.fx = dx;
         p.fy = dy;
     }
-    fp::addMove(p, dx, dy, spd);
+    // Lossless sub-pixel move (gun rework): the truncating fp::addMove dropped
+    // each tick's dx*spd fraction, so diagonals ran slower than cardinals --
+    // gun spd 7 lost 19%, guard strafe sp 2 lost 30%. The 1/256 px remainder
+    // (remX/remY) carries across ticks, so 11/16 stays 11/16 on average.
+    const int16_t ax = static_cast<int16_t>(p.remX) + static_cast<int16_t>(dx) * static_cast<int16_t>(spd);
+    const int16_t ay = static_cast<int16_t>(p.remY) + static_cast<int16_t>(dy) * static_cast<int16_t>(spd);
+    const int8_t qx = ax < 0 ? static_cast<int8_t>(-static_cast<int8_t>((-ax) >> 4)) : static_cast<int8_t>(ax >> 4);
+    const int8_t qy = ay < 0 ? static_cast<int8_t>(-static_cast<int8_t>((-ay) >> 4)) : static_cast<int8_t>(ay >> 4);
+    p.subX = static_cast<int8_t>(p.subX + qx);
+    p.subY = static_cast<int8_t>(p.subY + qy);
+    fp::fpCarry(p.subX, p.x);
+    fp::fpCarry(p.subY, p.y);
+    p.remX = static_cast<int8_t>(ax - static_cast<int16_t>(qx * fp::FP));
+    p.remY = static_cast<int8_t>(ay - static_cast<int16_t>(qy * fp::FP));
 }
 
 // fixed-velocity decay; 13/16 per tick default, 14/16 for dodge/deflect
@@ -402,12 +416,6 @@ static bool tryBranch(Game &g, const WeaponDef *def, const Input &inp) {
     const int16_t atkStam = attackStam(atk);
     if (p.stam < atkStam)
         return false;
-    if (attackShell(atk)) {
-        if (p.shells[0] <= 0)
-            return false;
-        // Demo: ammo unlimited (no decrement here either); reload still arms.
-        p.reload = 45;
-    }
     beginAttack(g, atk);
     p.chain = 0;
     p.chainWin = 0;
@@ -507,17 +515,6 @@ static void tapDefense(Game &g, const WeaponDef *def, const Input &inp) {
     }
 }
 
-static void fireShell(Game &g, const Player &p, const ShellDef *sh) {
-    (void)sh;
-    // Projectiles + muzzle effects are owned by hrd; record the shot so hrd can
-    // spawn them from the same facing / spawn point the mock used.
-    g.lastShot = p.shell + 1;   // 1 ball, 2 scatter
-    g.lastShotX = p.x + (p.w >> 1);
-    g.lastShotY = p.y + (p.h >> 1);
-    g.lastShotFx = p.fx;   // facing at fire time (hrd spawns before post-fire drift)
-    g.lastShotFy = p.fy;
-}
-
 static void stanceSpecial(Game &g, const WeaponDef *def) {
     Player &p = g.player;
 
@@ -549,18 +546,25 @@ static void stanceSpecial(Game &g, const WeaponDef *def) {
         p.t = 0;
         p.hitDone = false;
     } else {
+        // Hitscan special: the long-reach `special` attack lands instantly at
+        // reach (no projectile system); the tracer draw sells the flight. The
+        // nock timer (p.reload) paces the shot and drives the HUD hint.
         if (p.reload > 0)
             return;
-        const ShellDef *sh = weaponShell(def, p.shell);
-        const int16_t stam = shellStam(sh);
-        if (p.shells[p.shell] <= 0 || p.stam < stam)
+        const int16_t stam = attackStam(special);
+        if (p.state != PS_IDLE)
+            return;
+        if (p.stam < stam)
             return;
         p.stam -= stam;
-        // Demo: ammo is unlimited (the magazine count stays at max); the
-        // per-shot reload timer still paces the gun. The shell-count check
-        // above stays as a safety gate for manually emptied mags.
-        p.reload = shellReload(sh);
-        fireShell(g, p, sh);
+        p.reload = ARROW_NOCK_TICKS;
+        p.state = PS_SPECIAL;
+        p.atk = special;
+        p.t = 0;
+        p.hitDone = false;
+        exitStance(p);
+        p.bLocked = true;
+        addEffect(g, static_cast<int16_t>(p.x + (p.w >> 1) + ((p.fx * 10) >> 4)), static_cast<int16_t>(p.y + (p.h >> 1) + ((p.fy * 10) >> 4)), 5, true);
     }
 }
 
@@ -635,7 +639,9 @@ static bool trySheathe(Player &p) {
     p.chainWin = 0;
     p.chainLock = 0;   // stowing drops the pending combo recovery
     p.aBuffer = 0;
-    p.sheatheLatch = true;   // suppress roll/stance until B is released
+    // S2: the stow no longer rides a B press, so no sheathe latch is armed --
+    // the stowed B verbs (herb hold, inert tap) stay live on the next press.
+    p.sheatheLatch = false;
     return true;
 }
 
@@ -696,23 +702,19 @@ static void updatePlayer(Game &g, const Input &inp, bool aP, bool bP, bool bR) {
     }
 
     // Double-tap d-pad -> universal dodge roll toward the tapped direction
-    // (feel.16, universal from feel.18): every weapon, and sheathed, uses the
-    // sword dodge numbers. Hold B + double-tap Down still stows instead
-    // (feel.17): B is the stance modifier, so the sheathe rides this detector
-    // instead of an A+B chord. startDodgeRoll re-checks the stamina gate;
-    // tapDefenseReady keeps the same state gates the B tap has. A press edge is
-    // a dir8 the pad did not carry last tick: held directions never fire, and
-    // A/B are untouched. SHEATHE_ENABLED folds the stow call out of the parity
-    // image, whose scenes never stow (host suite covers it).
+    // (feel.16, universal from feel.18): every weapon, sheathed, and in stance.
+    // S2 moved the stow off the d-pad (hold A instead), so no direction is
+    // stolen and a guard/parry/whirl can always roll out. startDodgeRoll
+    // re-checks the stamina gate; tapDefenseReady keeps the same state gates
+    // the B tap has. A press edge is a dir8 the pad did not carry last tick:
+    // held directions never fire, and A/B are untouched.
     if (p.dTapT > 0)
         p.dTapT--;
     const int8_t dNow = fp::dirIndexFromInput(inp.mx, inp.my);
     if (dNow >= 0 && dNow != p.pDir) {
         if (p.dTapT > 0 && dNow == p.dTapDir) {
-            p.dTapT = 0;                    // second edge inside the window: fire and disarm
-            const bool dDown = dNow == 2;   // DIR8 index 2 = Down
-            const bool stowed = SHEATHE_ENABLED && inp.b && dDown && trySheathe(p);
-            if (!stowed && tapDefenseReady(p, def))
+            p.dTapT = 0;   // second edge inside the window: fire and disarm
+            if (tapDefenseReady(p, def))
                 startDodgeRoll(g, fp::dir8X(dNow), fp::dir8Y(dNow));
         } else {
             p.dTapDir = dNow;
@@ -783,6 +785,10 @@ static void updatePlayer(Game &g, const Input &inp, bool aP, bool bP, bool bR) {
     // canAttackNow: the debounce profile attacks only from idle with no lock.
     const bool canAttackNow = p.chainLock == 0 && p.state == PS_IDLE;
     const bool altInput = ROLL_ALT_ENABLED && (inp.mx != 0 || inp.my != 0);
+    // S2 stow latch: an armed press may hold-to-stow; the stowed draw press may
+    // not (draw-and-keep-holding must not bounce straight back into the sheath).
+    if (SHEATHE_ENABLED && aP)
+        p.aStowOk = !p.sheathed;
     if (aP) {
         if (p.sheathed) {
             if (p.state == PS_IDLE) {
@@ -899,6 +905,13 @@ static void updatePlayer(Game &g, const Input &inp, bool aP, bool bP, bool bR) {
         // which never enters the state.
         if (CHARGE_ENABLED) {
             p.chargeT = static_cast<uint8_t>(p.chargeT + 1 > 255 ? 255 : p.chargeT + 1);
+            // S2: hold past the charge window and the weapon goes away instead
+            // (the flail's only stow path; the d-pad is roll-only now).
+            if (inp.a && p.aHold >= CHARGE_MIN + STOW_HOLD_TICKS) {
+                p.state = PS_IDLE;
+                trySheathe(p);
+                break;
+            }
             if (aR) {
                 const bool fired = weaponHasCharge(def) ? startChargeAttack(g, def) : false;
                 if (!fired)
@@ -936,9 +949,17 @@ static void updatePlayer(Game &g, const Input &inp, bool aP, bool bP, bool bR) {
     }
 
     // held A past the swing -> charge stance (weapons with melee charge data only)
-    if (CHARGE_ENABLED && p.state == PS_IDLE && p.chargeArmed && inp.a && p.aHold >= CHARGE_MIN && weaponHasCharge(def)) {
+    if (CHARGE_ENABLED && !p.sheathed && p.state == PS_IDLE && p.chargeArmed && inp.a && p.aHold >= CHARGE_MIN && weaponHasCharge(def)) {
         p.state = PS_CHARGE;
         p.chargeT = 0;
+    }
+
+    // S2 stow: hold A past STOW_HOLD_TICKS on an armed press puts the weapon
+    // away (sword/gun: after the swing; flail's charge hold wins above and its
+    // long hold stows from PS_CHARGE). Runs only from idle, so a running swing
+    // or rooted verb is never interrupted.
+    if (SHEATHE_ENABLED && !p.sheathed && p.aStowOk && p.state == PS_IDLE && inp.a && p.aHold >= STOW_HOLD_TICKS && !(CHARGE_ENABLED && p.chargeArmed && weaponHasCharge(def))) {
+        trySheathe(p);
     }
 
     if (p.stance != ST_NONE)

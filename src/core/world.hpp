@@ -132,6 +132,8 @@ static void loadRoom(Game &g, uint8_t roomId, uint8_t spawn) {
     gp->player.y = static_cast<int16_t>(sp.y);
     gp->player.subX = 0;
     gp->player.subY = 0;
+    gp->player.remX = 0;
+    gp->player.remY = 0;
     gp->player.vx = 0;
     gp->player.vy = 0;
 

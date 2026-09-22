@@ -38,6 +38,10 @@ constexpr bool GUARD_ZONES_ENABLED = combat::HAS_GUARD_ZONES && MH_COMBAT_PARTS;
 constexpr bool SIMPLE_GUARDS = combat::HAS_SIMPLE_GUARDS || !MH_COMBAT_PARTS;
 
 constexpr int16_t HOLD_TICKS = 11;   // B held this long -> stance (~180ms)
+// S2 stow: A held this long on an armed press puts the weapon away (sword/gun
+// after the swing; flail at CHARGE_MIN + this in PS_CHARGE). The d-pad stays
+// free for rolls in every direction, stance included.
+constexpr uint8_t STOW_HOLD_TICKS = 24;
 // Items + gathering (bead monhun-ardu-feel.22; item table prg.2): sheathed A
 // inside a gather node runs PS_GATHER, sheathed B-hold runs PS_ITEM (herb use).
 // The inventory is a per-hunt u8 array indexed by the generated item ids
@@ -63,6 +67,9 @@ constexpr uint8_t ITEM_USE_TICKS = 40;     // rooted herb-use window (ticks)
 // packed drop table has combat::CARVE_SLOTS fixed slots.
 constexpr uint8_t CARVE_TICKS = 40;
 constexpr uint8_t CARVE_MAX = 3;
+// Hitscan gun (gun rework): ticks to nock the next arrowshot. Player::reload
+// doubles as the nock timer (0 = ready); the HUD lane at x=67 shows the state.
+constexpr uint8_t ARROW_NOCK_TICKS = 24;
 // Fixed packed drop-table slot count. Kept literal so the toolchain bootstrap
 // (gen.sh compiles fxdump, which includes this header, before gen-combat.py
 // rewrites the generated headers) never depends on the fresh symbol;
@@ -321,7 +328,7 @@ MH_PROGMEM const WeaponDef WEAPON_DEFS[3] = {
         W_GUN,
         7,
         {{5, 4, 11, 6, 11, 14, 12, 8, 0, 0, 0, false, ATK_NONE}, {5, 4, 11, 7, 11, 14, 12, 8, 0, 0, 0, false, ATK_NONE}, {7, 5, 15, 11, 13, 16, 14, 13, 0, 0, 0, false, ATK_NONE}},
-        {0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, false, ATK_NONE},   // gunshield fires shells, no melee special
+        {6, 4, 16, 12, 44, 8, 6, 14, 0, 0, 0, false, ATK_NONE},   // arrowshot: hitscan special (reach 44)
         {{1, ST_NONE, 0, {4, 5, 16, 22, 15, 18, 16, 6, 0, 0, 0, true, ATK_POINTBLANK}},
          {2, ST_NONE, 0, {4, 4, 12, 9, 14, 16, 14, 8, 0, 12, 0, false, ATK_GUARDBASH}},
          {3, ST_NONE, 0, {6, 3, 20, 30, 16, 24, 18, 16, 0, 16, 0, false, ATK_NONE}}},
@@ -540,6 +547,13 @@ struct Player : fp::FpBody, fp::FpStam {
     // PS_GATHER will deplete, ITEM_NODE_NONE when no gather is bound. Appended
     // last so existing fields/sizes do not move.
     uint8_t itemNode;
+    // Move remainder (gun rework): 1/256 px fraction of dx*spd that movePlayer
+    // carries across ticks, so a diagonal keeps the authored 11/16 instead of
+    // truncating per tick (worst in guard strafe). Appended last.
+    int8_t remX, remY;
+    // S2 stow latch: true when the current A hold began on an armed press (not
+    // the stowed draw), so draw-and-keep-holding never re-stows. Appended last.
+    bool aStowOk;
 
     void init(int8_t weapon);
 };

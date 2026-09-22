@@ -77,23 +77,10 @@ static Input scriptedInput(int16_t tick) {
     return in;
 }
 
-// 3 shells + 12 live effects (6 sparks, 6 damage numbers): the transient
-// pressure both worst-case scenes share.
+// 12 live effects (6 sparks, 6 damage numbers): the transient pressure the
+// worst-case scene carries. The 3 shell/projectile entries were retired with
+// the gun hitscan rework; the parked proj slots stay zeroed.
 MH_NI static void addPressure(Game &g) {
-    for (uint8_t i = 0; i < 3; i++) {
-        Projectile &pr = g.proj[g.projN++];
-        pr.x = 60 + i * 14;
-        pr.y = 30 + i * 6;
-        pr.subX = 0;
-        pr.subY = 0;
-        pr.vx = 40;
-        pr.vy = -8;
-        pr.w = 7;
-        pr.h = 8;
-        pr.dmg = 28;
-        pr.life = 60;
-        pr.heavy = true;
-    }
     for (uint8_t i = 0; i < 12; i++) {
         Effect &e = g.fx[g.fxN++];
         e.x = 40 + i * 6;

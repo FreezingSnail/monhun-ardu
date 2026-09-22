@@ -40,6 +40,11 @@
 // W_FLAIL + ST_WHIRL, E/W facing at whirlTick 3) -- the ring dot positions move
 // by up to the 256/(2*24) angular quantization. Every other case is
 // byte-identical (the ball blit and all non-whirl draws are untouched).
+//
+// Gun hitscan rework: the shells/projectiles and the reload lane were retired;
+// the gun's A-special is now a long-reach arrowshot with a tracer slug. Changed
+// cases: 109 (gun special active, E) and 111 (gun special active, W -- the
+// retired reload-bar row, repurposed). Every other case is byte-identical.
 
 #include "harness/fxtest.hpp"
 #include "src/core/world.hpp"
@@ -101,14 +106,14 @@ static const Case CASES[] = {
     {W_FLAIL, PS_DODGE, ST_NONE, 0, 0, 16, 0, 0, 0, 0, 0},
     {W_FLAIL, PS_STUN, ST_NONE, 0, 0, 16, 0, 5, 0, 0, 0},
     {W_FLAIL, PS_IDLE, ST_NONE, 0, 0, 16, 0, 2, 0, 10, 0},
-    // gun: plate/white guard, shove, reload bar, body
+    // gun: plate/white guard, shove, arrowshot tracer, body
     {W_GUN, PS_IDLE, ST_NONE, 0, 0, 16, 0, 0, 0, 0, 0},
     {W_GUN, PS_IDLE, ST_NONE, 0, 0, -16, 0, 0, 0, 0, 0},
     {W_GUN, PS_IDLE, ST_GUARD, 0, 0, 16, 0, 0, 0, 0, 0},
     {W_GUN, PS_ATTACK, ST_NONE, 1, 1, 16, 0, 0, 0, 0, 0},
     {W_GUN, PS_SPECIAL, ST_NONE, 4, 1, 16, 0, 0, 0, 0, 0},
     {W_GUN, PS_SHOVE, ST_NONE, 0, 0, 16, 0, 0, 0, 0, 0},
-    {W_GUN, PS_IDLE, ST_NONE, 0, 0, 16, 0, 0, 35, 0, 0},   // reload bar
+    {W_GUN, PS_SPECIAL, ST_NONE, 4, 1, -16, 0, 0, 0, 0, 0},   // arrowshot tracer (W)
     {W_GUN, PS_DODGE, ST_NONE, 0, 0, 16, 0, 0, 0, 0, 0},
     {W_GUN, PS_STUN, ST_NONE, 0, 0, 16, 0, 5, 0, 0, 0},
     {W_GUN, PS_IDLE, ST_NONE, 0, 0, 16, 0, 3, 0, 10, 0},
@@ -158,9 +163,9 @@ static const uint32_t MH_PROGMEM GOLDEN[CASE_COUNT][3] = {
     {0xd9c2ad2fu, 0xedb3832fu, 0xcacdbe57u},
     {0x30469935u, 0x51a89135u, 0x51a89135u},
     {0xe56a836fu, 0x1d4a306fu, 0xb373bcd7u},
-    {0xe56a836fu, 0x1d4a306fu, 0xb373bcd7u},
+    {0xda3dbf1du, 0x61f4b31du, 0xd3ec5e37u},
     {0x46724db1u, 0x67d445b1u, 0xf8c93455u},
-    {0xc19b9b2fu, 0x1fb93e2fu, 0xb373bcd7u},
+    {0xa3cb7b5du, 0x4bf3105du, 0xa45602f7u},
     {0xe56a836fu, 0x1d4a306fu, 0xb845c6bbu},
     {0x474a642du, 0xc098f32du, 0x606e0819u},
     {0xe56a836fu, 0x1d4a306fu, 0xb373bcd7u},

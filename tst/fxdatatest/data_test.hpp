@@ -255,8 +255,13 @@ inline void test_data(FxTest &test) {
     test.expectEq(attackStam(g0), 8, F("g0 stam"));
 
     const Attack *gs = weaponSpecial(w2);
-    test.expectEq(attackStartup(gs), 0, F("gun special startup"));
-    test.expectEq(attackDmg(gs), 0, F("gun special dmg"));
+    test.expectEq(attackStartup(gs), 6, F("gun special startup"));
+    test.expectEq(attackActive(gs), 4, F("gun special active"));
+    test.expectEq(attackReach(gs), 44, F("gun special reach"));
+    test.expectEq(attackHw(gs), 8, F("gun special hw"));
+    test.expectEq(attackHh(gs), 6, F("gun special hh"));
+    test.expectEq(attackDmg(gs), 12, F("gun special dmg"));
+    test.expectEq(attackStam(gs), 14, F("gun special stam"));
     test.expectEq(attackId(gs), ATK_NONE, F("gun special id"));
 
     const Branch *gb0 = weaponBranch(w2, 0);

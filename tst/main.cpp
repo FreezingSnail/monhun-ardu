@@ -4,7 +4,7 @@
 #include "input_test.hpp"
 #include "player_test.hpp"
 #include "monster_test.hpp"
-#include "shells_test.hpp"
+#include "hitscan_test.hpp"
 #include "world_test.hpp"
 #include "art_dims_test.hpp"
 #include "sin_test.hpp"
@@ -30,7 +30,7 @@ int main() {
     InputSuite(runner);
     PlayerSuite(runner);
     MonsterSuite(runner);
-    ShellSuite(runner);
+    HitscanSuite(runner);
     WorldSuite(runner);
     artdimstest::ArtDimsSuite(runner);
     SinSuite(runner);

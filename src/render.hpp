@@ -963,8 +963,12 @@ static void drawPlayer(const mh::Game &g, int16_t camX, int16_t camY) {
                 const int16_t shy2 = static_cast<int16_t>(shy + ((p.fy * 4) >> 4));
                 partDraw(equip::PART_GUN_GUARD, equip::POSE_SHOVE, face, shx2, shy2);
             }
-            if (p.reload > 0)
-                partDraw(equip::PART_GUN_RELOAD, equip::POSE_IDLE, face, cx, cy);
+            if (p.state == mh::PS_SPECIAL && phase == 1 && a) {
+                // Hitscan arrowshot: slug tracer at the hit reach -- the exact
+                // point meleeHitbox resolves against, so the read never lies.
+                const int16_t reach = mh::attackReach(a);
+                sprDraw(fxball, static_cast<int16_t>(cx + ((p.fx * reach) >> 4) - 3), static_cast<int16_t>(cy + ((p.fy * reach) >> 4) - 4), FRAME(0));
+            }
         }
     }   // !p.sheathed
 
@@ -973,24 +977,6 @@ static void drawPlayer(const mh::Game &g, int16_t camX, int16_t camY) {
     if (p.state == mh::PS_STUN) {
         const uint8_t ang = static_cast<uint8_t>(static_cast<uint32_t>(g.tick) * ANG_PLAYER_STUN);
         partDraw(equip::PART_FLAIL_STUN, equip::POSE_STUN, face, cx + mulQ4(cos256(ang), 7), cy - 10 + mulQ4(sin256(ang), 2));
-    }
-}
-
-// Mock drawProjectiles(): ball (rim/core/base) or pellet. prg.8 removed the
-// 3-puff trail (cosmetic; the shot sprite alone reads at 4x8).
-static void drawProjectiles(const mh::Game &g, int16_t camX, int16_t camY) {
-    for (int16_t i = 0; i < g.projN; i++) {
-        const mh::Projectile &pr = g.proj[i];
-        const int16_t x = static_cast<int16_t>(pr.x - camX);
-        const int16_t y = static_cast<int16_t>(pr.y - camY + mh::HUD_H);
-
-        const int16_t hw = static_cast<int16_t>(pr.w >> 1);
-        const int16_t hh = static_cast<int16_t>(pr.h >> 1);
-        // Ball (7x8) / scatter (4x8) sheets; art occupies the top 7x6 / 4x4.
-        if (pr.heavy)
-            sprDraw(fxball, x - hw, y - hh, FRAME(0));
-        else
-            sprDraw(fxscatter, x - hw, y - hh, FRAME(0));
     }
 }
 
@@ -1085,12 +1071,6 @@ static void drawDebug(const mh::Game &g, int16_t camX, int16_t camY) {
         wireDot(hx - (hw >> 1) + ox, hy - (hh >> 1) + oy, hw, hh);
     }
 
-    // Live shell/projectile hit rects (dotted), exact pr.w x pr.h collision box.
-    for (int16_t i = 0; i < g.projN; i++) {
-        const mh::Projectile &pr = g.proj[i];
-        wireDot(pr.x - (pr.w >> 1) + ox, pr.y - (pr.h >> 1) + oy, pr.w, pr.h);
-    }
-
     // Flail whirl radius (dotted 48x48 box) while the whirl stance is held.
     if (p.stance == mh::ST_WHIRL) {
         const int32_t cx = p.x + (p.w >> 1);
@@ -1113,7 +1093,7 @@ static void drawDebug(const mh::Game &g, int16_t camX, int16_t camY) {
 
 /* ------------------------------------------------------------------- hud */
 
-// Mock drawHud(): HP + stamina bars, weapon name, gun shell/reload, then the
+// Mock drawHud(): HP + stamina bars, weapon name, gun nock state, then the
 // monster HP bar (hunt; train has no bar since the plain pole has no pool). The
 // mock drew this as the bottom 8 px strip; the device reserves the top 8 px, so the strip is mirrored: the
 // divider sits at the arena edge (y = HUD_H-1) and the bars/text fill rows
@@ -1179,6 +1159,24 @@ static void drawItemCount(int16_t x, int16_t y, uint8_t count) {
     drawNumber(static_cast<int16_t>(x + 1), static_cast<int16_t>(y - 1), count, 3);
 }
 
+// Gun nock hint (gun rework): the hitscan arrowshot has a short nock after each
+// shot, so the old shell lane at x=67 now reads the load state -- "RDY" (ready)
+// or "LOD" plus a 1 px fill bar on row 6 while the nock runs. Only drawn for
+// the gun; sword/flail leave the lane clear.
+static void drawGunNock(const mh::Player &p) {
+    if (p.reload > 0) {
+        int16_t x = hudPut(67, 'L');
+        x = hudPut(x, 'O');
+        hudPut(x, 'D');
+        const int16_t w = static_cast<int16_t>((8 * (mh::ARROW_NOCK_TICKS - p.reload) + (mh::ARROW_NOCK_TICKS >> 1)) / mh::ARROW_NOCK_TICKS);
+        hudBlk(67, 6, w < 1 ? 1 : w, 1, 2);
+        return;
+    }
+    int16_t x = hudPut(67, 'R');
+    x = hudPut(x, 'D');
+    hudPut(x, 'Y');
+}
+
 static void drawHud(const mh::Game &g) {
     const mh::Player &p = g.player;
 
@@ -1202,36 +1200,15 @@ static void drawHud(const mh::Game &g) {
     const uint8_t wf = static_cast<uint8_t>(g.weapon == mh::W_SWORD ? 0 : (g.weapon == mh::W_FLAIL ? 1 : 2));
     sprDraw(fxhud, 46, 1, FRAME(static_cast<uint8_t>(wf * 2)));
 
-    if (g.weapon == mh::W_GUN) {   // shell count + reload
-        int16_t x = 67;
-        if (p.reload > 0) {
-            hudPut(x, 'R');
-            hudPut(x, 'L');
-            hudPut(x, 'D');
-            const mh::ShellDef *sh = mh::weaponShell(&mh::WEAPON_DEFS[g.weapon], p.shell);
-            const int16_t rmax = mh::shellReload(sh);
-            if (rmax > 0) {
-                // uint16 narrowing: rmax <= 70 (generated shell data).
-                const uint16_t u16rmax = static_cast<uint16_t>(rmax);
-                uint16_t bw = static_cast<uint16_t>((12 * (u16rmax - static_cast<uint16_t>(p.reload)) + u16rmax / 2) / u16rmax);
-                if (bw < 1)
-                    bw = 1;
-                else if (bw > 12)
-                    bw = 12;
-                hudBlk(67, 6, bw, 1, 2);
-            }
-        } else {
-            x = hudPut(x, p.shell == 0 ? 'B' : 'S');
-            hudNum(x, p.shells[p.shell], hudDigits(p.shells[p.shell]));
-        }
-    }
+    if (g.weapon == mh::W_GUN)
+        drawGunNock(p);   // arrowshot load state (RDY / LOD + fill)
 
     hudBar(82, 2, 44, 3, g.monster.hp, g.monster.hpMax, 3);   // monster HP (hunt only)
 
     // Herb count (feel.22): a tiny 1 px plant glyph + one digit in the free
     // 5 px lane x=62..66 (after the 16-wide weapon marker at 46..61, before the
-    // gun text at 67). Only drawn when a herb is held; total available in the
-    // demo is 9 (camp 1+2, area 1+2+3), so one digit always fits. prg.2 moved
+    // gun nock lane at 67). Only drawn when a herb is held; total available in
+    // the demo is 9 (camp 1+2, area 1+2+3), so one digit always fits. prg.2 moved
     // the shape into the generic drawItemCount helper.
     drawItemCount(62, 2, g.items[mh::ITEM_HERB]);
 }
@@ -1301,7 +1278,6 @@ static void renderScene(const mh::Game &g, bool wire) {
 #endif
     drawMonster(g, ecX, ecY);
     drawPlayer(g, ecX, ecY);
-    drawProjectiles(g, ecX, ecY);
     drawEffects(g, ecX, ecY);
 #if MH_ROOM_BOUNDS
     drawUseBar(g);   // rooted gather/item progress (feel.22), under the wipe

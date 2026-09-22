@@ -120,14 +120,18 @@ The procedural shapes and their geometry helpers (`drawMonsterTell`,
 were removed by prg.11; the prg.10 spike measured the set at −370 B.
 
 Player input verb (feel.16, universal feel.18): a d-pad double-tap fires the
-dodge roll toward the tapped direction for every weapon (and sheathed) — the
-same sword numbers, so the positional answer is available without reaching for
-B. The B tap keeps its weapon-specific tap-defense (sword dodge, flail deflect,
-gun shove).
+dodge roll toward the tapped direction for every weapon (and sheathed), stance
+included — the same sword numbers, so the positional answer is available without
+reaching for B. The B tap keeps its weapon-specific tap-defense (sword dodge,
+flail deflect, gun shove).
 
-Sheathe (feel.17): hold B and double-tap Down stows the weapon; A draws back
-into combo hit 1. B is the stance modifier for every weapon, so the stow rides
-the feel.16 double-tap detector instead of the old A+B chord.
+Sheathe (S2, replaces the feel.17 B+double-Down stow): hold A on an armed press
+puts the weapon away — sword/gun at `STOW_HOLD_TICKS` (the swing plays out
+first), flail at `CHARGE_MIN + STOW_HOLD_TICKS` (its charge hold wins, the long
+hold stows from `PS_CHARGE`). A draws back into combo hit 1. Moving the stow off
+the d-pad frees every direction for the roll, so a guard/parry/whirl can always
+roll out; the draw press latches `aStowOk` so draw-and-keep-holding never
+re-stows.
 
 Items + gathering (feel.22): a map prop with a `gather` record
 (`gatherItem`/`gatherYield`, see `docs/map-zones.md`) is a node. While stowed, a

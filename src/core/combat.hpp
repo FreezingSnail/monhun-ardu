@@ -414,14 +414,6 @@ inline uint8_t combatCreatureFirstAttack(uint8_t i) {
     return combatReadU8(static_cast<uint16_t>(combat::CREATURES_OFF + i * combat::CREATURE_SIZE + MH_COMBAT_FIELD(detail::PkCreature, firstAttack)));
 }
 
-inline uint8_t combatCreatureFirstPattern(uint8_t i) {
-    return combatReadU8(static_cast<uint16_t>(combat::CREATURES_OFF + i * combat::CREATURE_SIZE + MH_COMBAT_FIELD(detail::PkCreature, firstPattern)));
-}
-
-inline uint8_t combatCreaturePatternCount(uint8_t i) {
-    return combatReadU8(static_cast<uint16_t>(combat::CREATURES_OFF + i * combat::CREATURE_SIZE + MH_COMBAT_FIELD(detail::PkCreature, patternCount)));
-}
-
 // Packed firstPattern | patternCount<<8: the two adjacent bytes in one cart
 // access (chooseAttack's decision head).
 inline uint16_t combatCreaturePatternHeadRead(uint8_t i) {
@@ -679,14 +671,6 @@ inline uint8_t combatCreatureAppendZone(uint8_t i) {
 
 inline uint8_t combatCreatureFirstAttack(uint8_t i) {
     return combat_data::CREATURES[i].firstAttack;
-}
-
-inline uint8_t combatCreatureFirstPattern(uint8_t i) {
-    return combat_data::CREATURES[i].firstPattern;
-}
-
-inline uint8_t combatCreaturePatternCount(uint8_t i) {
-    return combat_data::CREATURES[i].patternCount;
 }
 
 inline uint16_t combatCreaturePatternHeadRead(uint8_t i) {
