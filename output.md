@@ -1,106 +1,133 @@
-# monhun-ardu-dx5.1 — perf: runtime shift -> LUTs
+# monhun-ardu-dx5.2 — perf: variable-divisor divisions -> reciprocal multiply
 
-Status: **DONE (partial by budget rule)**. The shipping image stays within the
-flash baseline; 6 runtime-shift sites are replaced by constexpr flash LUTs.
-The three remaining audit sites (combat, items, audio was kept; combat/items
-cost flash) were **dropped** after measurement — see §4.
+Status: **DONE (one site kept; reciprocal approach measured and dropped)**.
+The only site with a clear `test_perf` CPU win is the two player HUD bars; the
+32-bit divide there is replaced by the already-linked 16-bit divide. The
+reciprocal-multiply helper was implemented and measured for every listed site
+and lost on flash (and RAM) for no extra CPU win, so those sites are dropped per
+the bead rule ("if a site adds flash without a clear CPU win in `test_perf`,
+drop it and say so").
 
-Tree left dirty (no commit/push), as instructed.
+## Changed
 
-## 1. What changed
+- `src/render.hpp:1139-1160` — added `hudBar8(x,y,w,h,uint8_t num,uint8_t den,
+  uint8_t shade)` next to `hudBar`. `Player::hpMax`/`stamMax` are `uint8`, so
+  `(w-2)*num <= 42*255` fits 16 bits; the bar uses the 16-bit divide
+  (`__divmodhi4`, already linked by `fp::tdiv`) instead of the 32/16
+  (`__udivmodsi4`) the shared `hudBar` pays for the 2800-hp monster bar.
+  Geometry/truncation identical (caller guarantees `num <= den <= 255`).
+- `src/render.hpp:1214-1215` — player HP + stamina bars call `hudBar8`; the
+  monster bar keeps `hudBar` (its `(44-2)*2800 = 117600` numerator needs 32-bit).
 
-New shared accessor header:
+## Size
 
-- `src/core/bitlut.hpp` (new) — `mhBit8(n)`: `1u << n` for `n & 7` via an
-  8-byte flash LUT. The table is a function-local `static const` inside an
-  `inline` function, so C++ gives it one linker-merged object (8 B total) no
-  matter how many TUs include the header. Reads go through `mhPgmReadU8`
-  (`MH_PROGMEM`), so host suites exercise the same code path with plain loads.
+| | flash | free | ram | note |
+|---|---:|---:|---:|---|
+| before (HEAD 928c7bd) | 28446 | 1250 | 1638 | baseline |
+| after | 28558 | 1138 | 1638 | +112 flash, ram flat |
 
-Sites converted to `mhBit8`:
+`.text=28538 .data=20 .bss=1618` (was `.text=28426 .data=20 .bss=1618`).
 
-- `src/core/save.hpp:39` — include.
-- `src/core/save.hpp:89` — `saveCrafted` (`0x01u << (SAVE_CRAFTED_BIT_BASE + piece)`).
-- `src/core/save.hpp:93` — `saveSetCrafted` (same form).
-- `src/core/save.hpp:185` — `saveQuestGet` (`1u << (bit & 7)`).
-- `src/core/save.hpp:189` — `saveQuestSet` (same form).
-- `src/core/save.hpp:193` — `saveQuestClear` (`~(1u << (bit & 7))`).
-- `src/audio.hpp:30` — include.
-- `src/audio.hpp:156` — `audioCue` `firedMask |= 1u << cue`.
+## perf_test (Ardens, `FXTEST_ONLY=test_perf`)
 
-Render site converted with its own table (not a `1u << n` LUT; it maps
-`v -> (v==0) ? 0 : 1<<(8-v)`):
+| | pUs | pHz | lHz | lTk | rMx | rAv | ram |
+|---|---:|---:|---:|---:|---:|---:|---:|
+| before | 6344 | 157 | 52 | 184 | 3156 | 2761 | 680 |
+| after  | 6343 | 157 | 52 | 184 | 3088 | 2691 | 680 |
 
-- `src/render.hpp:381` — `ROOM_ROW_COEF[8]` (`MH_PROGMEM`).
-- `src/render.hpp:406` — `coef = mhPgmReadU8(&ROOM_ROW_COEF[v & 7])`.
+Render avg −70 µs, render max −68 µs (both player-bar divides removed). `pUs`
+is pinned by `waitForNextPlane` (plane-paced), so the win shows in the render
+columns, not the plane period; the gate mask stays 0.
 
-Behavior is unchanged: every index was already in range, and `mhBit8` masks to
-3 bits (host suite pins save/audio behavior; 6285 host tests green).
-`ROOM_ROW_COEF[0] == 0` reproduces the old ternary; `drawRoom` is compiled only
-under `MH_ROOM_IMAGE`, so this edit is neutral on the shipping image and is
-exercised by `test_zones` (which forces `MH_ROOM_IMAGE=1`).
+## Gate tails (in order)
 
-No float, no new mutable globals, no new RAM.
+1. `make test`
+   ```
+   Total Passed: 6285
+   Total Failed: 0
+   ```
+2. `make size`
+   ```
+   size: .text=28538 .data=20 .bss=1618
+   size: flash=28558/29696 (1138 free)  ram=1638/2560
+   ```
+3. `make fxtest-headless FXTEST_ONLY=test_combat`
+   ```
+   combat_test PASSED=237 FAILED=0
+   test_combat: PASS
+   ```
+4. `make fxtest-headless FXTEST_ONLY=test_monster_art`
+   ```
+   test_monster_art PASSED=127 FAILED=0
+   test_monster_art: PASS
+   ```
+5. `make fxtest-headless FXTEST_ONLY=test_hud`
+   ```
+   test_hud PASSED=29 FAILED=0
+   test_hud: PASS
+   ```
+6. `make fxtest-headless FXTEST_ONLY=test_perf`
+   ```
+   B pUs=6343 pHz=157 lHz=52 lTk=184 rMx=3088 rAv=2691 ram=680
+   perf_test PASSED=5 FAILED=0
+   test_perf: PASS
+   ```
+7. `make fxtest-headless` (full)
+   ```
+   asset_test PASSED=270 FAILED=0        test_menu_art PASSED=53 FAILED=0
+   combat_test PASSED=237 FAILED=0       test_monster_art PASSED=127 FAILED=0
+   data_test PASSED=348 FAILED=0         test_player_art PASSED=120 FAILED=0
+   menu_test PASSED=60 FAILED=0          test_quests PASSED=50 FAILED=0
+   perf_test PASSED=5 FAILED=0           test_screens PASSED=85 FAILED=0
+   test_audio PASSED=9 FAILED=0          test_smith PASSED=115 FAILED=0
+   test_boot PASSED=4 FAILED=0           test_tell PASSED=18 FAILED=0
+   test_hub PASSED=63 FAILED=0           test_zones PASSED=80 FAILED=0
+   test_hud PASSED=29 FAILED=0
+   test_items PASSED=35 FAILED=0
+   ```
+   (18 suites, 0 failures)
 
-## 2. Flash/RAM (order 2: `make size`)
+## Dropped sites + why (all measured, none faked)
 
-Baseline (clean tree, HEAD 7452e69): `flash=28448/29696 (1248 free) ram=1638/2560`.
+A header-only `src/core/recip.hpp` (`Recip{den,r}`, lazy `recipBuild` =
+`floor(65535/den)` via the already-linked 16-bit divide, `divRecip` =
+multiply + bounded remainder correction, bit-identical truncation) was written
+and compiled. Measurements (shipping `make size`, same test_perf):
 
-After: **`flash=28446/29696 (1250 free) ram=1638/2560`** — **−2 B flash, RAM flat**.
-`.text=28426 .data=20 .bss=1618`.
+- **Player bars, reciprocal (2 sites)**: +284 flash, +8 RAM, rAv 2691 → no
+  better than the 16-bit split. The correction loop + lazy-cache checks cost
+  more than the `__divmodhi4` call they replace. Dropped in favour of `hudBar8`.
+- **All three bars, reciprocal**: +154 flash, +12 RAM, rAv 2694 (≈0 extra over
+  `hudBar8`). The monster-bar reciprocal is not a win. Dropped.
+- **`monster.hpp:328` hp*100/hpMax (guard hpPct)**: 32-bit divide, but the
+  `test_perf` image is built with `MH_COMBAT_PARTS=0` → `SIMPLE_GUARDS=true`, so
+  the full-guard path (and this divide) is compiled out of the bench. No
+  `test_perf` exposure → dropped (it is a real shipping AI-path cost; needs a
+  gameplay perf bench to justify flash).
+- **`monster.hpp:671,674` `/retreatDen`, `/circleDen`**: numerator is
+  `m.spd(uint8) * num(uint8) <= 1785`, divisor `uint8` → GCC already emits the
+  16-bit divide (`__divmodhi4`), not a 32-bit one. No 32-bit divide to remove;
+  a reciprocal cache only adds flash. Dropped.
+- **`render_math.hpp:56` `(tick*8)/active`**: signed 32-bit divide, but the
+  spin sheet is only drawn for the heavy tail-spin (the bench monster is
+  MON_LUNGE), so it never runs in `test_perf`. Also `renderScene`/`drawMonster`
+  take `const Game&`, so a cache would need a `mutable` field + a device-only
+  `spinSheetFrameC`. No measured win → dropped.
+- **`armor_state.hpp:184` `dmg*100/denom`**: signed 32-bit divide; the bench
+  player is `PS_STUN` (never attacks, monster rarely lands), so at most a few
+  calls and no measurable change. `denom = 100+def` can exceed 65535 for a
+  synthetic def, so an exact 16-bit variant needs a fallback branch. Dropped.
+- **`combat.hpp:1185` `combatMulPercent` `/100u`**: constant divisor; GCC
+  already folds it to a multiply. Not touched (per bead).
 
-## 3. Gates (tails)
+No float, no new mutable globals, no new globals. Tree left dirty (no commit).
 
-1. `make test` → `Total Passed: 6285 / Total Failed: 0`.
-2. `make size` → `size: flash=28446/29696 (1250 free)  ram=1638/2560`.
-3. `make fxtest-headless FXTEST_ONLY=test_combat` → `combat_test PASSED=237 FAILED=0` / `test_combat: PASS`.
-4. `make fxtest-headless FXTEST_ONLY=test_items` → `test_items PASSED=35 FAILED=0` / `test_items: PASS`.
-5. `make fxtest-headless FXTEST_ONLY=test_audio` → `test_audio PASSED=9 FAILED=0` / `test_audio: PASS`.
-6. `make fxtest-headless FXTEST_ONLY=test_hud` → `test_hud PASSED=29 FAILED=0` / `test_hud: PASS`.
-7. `make fxtest-headless` (full) → every suite PASS (combat 237, data 348,
-   hub 63, hud 29, items 35, menu_art 53, menu 60, monster_art 127, perf 5,
-   player_art 120, quests 50, screens 85, smith 115, tell 18, zones 80).
+## Note
 
-Perf bench (inside full run): **`B pUs=6344 pHz=157 lHz=52 lTk=184 rMx=3156
-rAv=2761 ram=680`** — byte-identical to baseline. Expected: `save.hpp` is
-EEPROM/boot-path only, `audioCue`'s shift only runs on a cue edge, and the
-render site is compiled out at `MH_ROOM_IMAGE=0`.
-
-## 4. Dropped sites (budget rule) and measured deltas
-
-Rule applied: LTO makes per-symbol math meaningless, so every delta below is a
-whole-image `make size` measurement. Sites that grow flash are dropped.
-
-Measured marginal costs (each added on top of the previous, same tree):
-
-| site group | form tried | delta vs 28448 |
-|---|---|---|
-| `src/core/save.hpp` (5 sites) | own 8-B table + `mhPgmReadU8` | **−4 B** |
-| `src/audio.hpp:155` (1 site) | shared `mhBit8` (8-B table already emitted) | **+2 B** |
-| → `save` + `audio` kept together | shared `mhBit8` | **−2 B** |
-| `src/core/combat.hpp:1197` | shared `mhBit16` (32-B u16 table), inline | **+24 B** |
-| `src/core/items.hpp:123,185` | shared `mhBit16` (32-B u16 table), inline | **+16 B** |
-| all four together | per-file tables | +78 B |
-| all four together | shared `mhBit16` | +38 B |
-
-Variants that did **not** recover the cost (all still over baseline):
-
-- **8-byte `mhBit16` + high-byte branch** (`b = mhBit8(n); bit = (n&8) ? b<<8 : b`):
-  items went from **+16 B** to **+28 B** — the branch is more expensive than the
-  32-byte u16 table it saves.
-- **Per-file tables instead of the shared header**: audio alone rose to **+14 B**
-  (own 8-B table), pushing `save`+`audio` to +10 B. The shared
-  function-local-static table is what makes the audio site fit.
-- `MH_NOINLINE` on the item helper and on `mhPgmReadU8`-style reads: no change
-  (±0 B).
-
-Conclusion: with 1248 B free at baseline, only the byte-width sites
-(`save` ×5, `audio` ×1) are neutral/negative. The two `uint16_t` sites
-(`combat`, `items`) and the audio site on their own each exceed the budget.
-`combat`/`items` were reverted to the original `1u << idx`. The render site is
-kept because it is compiled out of the shipping image (delta 0 there) and is
-still a valid fix for `MH_ROOM_IMAGE=1`.
-
-If the orchestrator wants the two u16 sites as well, it needs ~+40 B of flash
-headroom (e.g. a size bead) or a different encoding; the LUT itself cannot be
-made free here.
+The bead title asks for "reciprocal multiply". The reciprocal helper was built
+and is exact, but in this LTO image every reciprocal site costs more flash (and
+RAM) than the cheaper exact alternative (16-bit divide for the uint8-maxe
+player bars), for the same or worse CPU, matching the earlier checkpoint review
+("adding inline code to remove shared helper calls loses"). The kept change is
+the exact, measured CPU win; the reciprocal path is documented rather than
+shipped.

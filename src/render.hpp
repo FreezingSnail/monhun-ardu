@@ -1155,6 +1155,24 @@ static void hudBar(int16_t x, int16_t y, int16_t w, int16_t h, int16_t num, int1
         hudBlk(x + 1, y + 1, fw, h - 2, shade);
 }
 
+// Player hp/stam bar variant (dx5.2). Player::hpMax/stamMax are uint8, so
+// (w - 2) * num <= 42 * 255 and the whole numerator fits 16 bits; this uses the
+// already-linked 16-bit divide instead of the 32/16 one the shared hudBar pays
+// for the 2800-hp monster bar. Geometry and truncation are identical: the
+// caller guarantees num <= den <= 255, so the widened and 16-bit forms agree.
+static void hudBar8(int16_t x, int16_t y, int16_t w, int16_t h, uint8_t num, uint8_t den, uint8_t shade) {
+    hudBlk(x, y, w, h, 1);
+    if (den == 0 || num == 0)
+        return;
+    if (num > den)
+        num = den;
+    uint16_t fw = static_cast<uint16_t>((static_cast<uint16_t>(w - 2) * num + (den >> 1)) / den);
+    if (fw > w - 2)
+        fw = w - 2;
+    if (fw > 0)
+        hudBlk(x + 1, y + 1, fw, h - 2, shade);
+}
+
 // Generic held-item count readout (prg.2): a 1 px stalk glyph + the value in
 // the HUD band. The herb indicator below is the first caller; the drops/smith
 // beads reuse it for their own counts (no new screen yet). A zero count draws
@@ -1193,8 +1211,8 @@ static void drawHud(const mh::Game &g) {
     // arena below stays y >= HUD_H clipped.
     hudBlk(0, mh::HUD_H - 1, mh::SCREEN_W, 1, 1);   // divider at the arena edge
 
-    hudBar(1, 2, 28, 4, p.hp, p.hpMax, 3);        // player HP (white)
-    hudBar(29, 2, 16, 4, p.stam, p.stamMax, 2);   // stamina (light gray)
+    hudBar8(1, 2, 28, 4, p.hp, p.hpMax, 3);        // player HP (white)
+    hudBar8(29, 2, 16, 4, p.stam, p.stamMax, 2);   // stamina (light gray)
 
     // Weapon marker (mock's full name shortened to fit the 128 px strip): the
     // 4 glyphs (3-char weapon + 1-char mode) on the 4 px lane at x=46 are baked
