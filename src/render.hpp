@@ -262,12 +262,24 @@ static void drawArena(int16_t camX, int16_t camY, int16_t roomW, int16_t roomH) 
     uint8_t phase = 0;   // i % 3
     int16_t wx = 0;      // (i * 53) % roomW
     int16_t wy = 0;      // (i * 29) % roomH
+    // dx5.7: hoist the plane/color mapping for the dot shade once. The dots are
+    // color 1 (dark gray), which lights only on the planes where
+    // planeColor(plane, 1) != 0 -- so a single `color(1)` read replaces the
+    // per-dot map/inline-drawPixel overhead (~173 dots/plane). Lit dots OR
+    // their one-hot page bit straight into the framebuffer; frame layout is
+    // page-major (byte = page*128 + x), same as drawPixel. The bit is written
+    // as `1u << (sy & 7)` (GCC emits the same inline branch chain drawPixel's
+    // asm uses) rather than mhBit8: mhPgmReadU8 is deliberately noinline
+    // (progmem.hpp), and that call per dot measured +90 us/render vs the old
+    // drawPixel path -- a regression. The inline shift measured -84 us rAv.
+    const bool dotLit = arduboy.color(1) != 0;
+    uint8_t *const fb = arduboy.getBuffer();
     for (int16_t i = 0; i < 260; i++) {
         if (phase != 0) {
             const int16_t sx = static_cast<int16_t>(wx - camX);
             const int16_t sy = static_cast<int16_t>(wy - camY + mh::HUD_H);
-            if (sx >= 0 && sx < mh::SCREEN_W && sy >= mh::HUD_H && sy < mh::SCREEN_H)
-                arduboy.drawPixel(sx, sy, 1);   // single dark-gray dot, no blk clip
+            if (dotLit && sx >= 0 && sx < mh::SCREEN_W && sy >= mh::HUD_H && sy < mh::SCREEN_H)
+                fb[((static_cast<uint16_t>(sy) >> 3) << 7) | static_cast<uint16_t>(sx)] |= static_cast<uint8_t>(1u << (sy & 7));
         }
         if (++phase >= 3)
             phase = 0;

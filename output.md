@@ -1,110 +1,67 @@
-# monhun-ardu-dx5.3 — perf: cut FX seeks (sin256 RAM copy + glyph batching)
+# monhun-ardu-dx5.7 — perf: drawArena dots -> direct framebuffer writes
 
 Status: DONE. All gates green, budget fits. Tree left dirty (no commit/push).
+HEAD: cafe2af (baseline for all deltas below).
 
 ## Files / lines
 
-- `src/core/sin256.hpp` (site 1) — AVR-only `sin65Ram()`: one-time 65 B bulk
-  copy of the cart table into a function-local static, then plain RAM loads.
-  `sin256()` now reads `sin65Ram()[i]` on AVR; host path unchanged (plain
-  `SIN65` array, `tst/sin_test.hpp` still walks all 256 inputs).
-- `src/screens.hpp` (site 2) — `screenReadText()` bulk-reads a title/label
-  string into a 16 B stack buffer (`mhFxReadBytes`, one cart transaction per
-  string); `drawScreen()` draws from RAM. Titles/labels longer than 16 chars
-  fall back to the old per-char `mhFxReadU8` tail, so the character mapping is
-  byte-identical for any input. Longest shipped label is 11 ("HUNTER HELM").
-- `src/render.hpp` (site 3) — `textPut()` now calls the explicit-dimension
-  `SpritesU::drawPlusMaskFX(x, y, 4, 8, sheet, FRAME(code))` overload instead
-  of the one-arg form, dropping the per-glyph `seekData()` that only read the
-  sheet's 4x8 w/h header. Same w/h reaches the blitter -> pixels unchanged.
+- `src/render.hpp`, `drawArena()` only (dot loop, now lines 262-289). Single change:
+  - Hoist the dot shade's plane/color mapping once per call:
+    `const bool dotLit = arduboy.color(1) != 0;` (== `planeColor(current_plane, 1)`),
+    plus one `uint8_t *const fb = arduboy.getBuffer();`.
+  - Replace the ~173/plane `arduboy.drawPixel(sx, sy, 1)` calls with a direct
+    page-major OR: `fb[((sy>>3)<<7) | sx] |= (uint8_t)(1u << (sy & 7));`.
+  - Existing bounds checks (`sx>=0 && sx<SCREEN_W && sy>=HUD_H && sy<SCREEN_H`) and
+    the incremental phase/wx/wy counter math are unchanged. `blk()` borders and all
+    other drawing untouched. No `drawPixel` calls changed elsewhere.
 
-## Size (HEAD e3c0129 -> after)
+## Deviation from the bead's prescribed code (measured, deliberate)
 
-- before: `flash=28558/29696 (1138 free)  ram=1638/2560`
-- after:  `flash=28792/29696 (904 free)  ram=1704/2560`
-- delta:  **+234 B flash, +66 B RAM** (RAM = 65 B table + 1 B `ready` flag, .bss)
+The bead prescribed `mh::mhBit8(sy)` for the one-hot bit (core/bitlut.hpp). That
+variant was implemented first and measured a **regression**, because `mhBit8`
+reads through `mhPgmReadU8`, which is deliberately `__attribute__((noinline))` on
+AVR (progmem.hpp: -4 B whole-image). One out-of-line `rcall`+`lpm` per dot costs
+more than the inline bit chain in `Arduboy2Base::drawPixel`'s asm.
 
-Per-site flash/RAM (measured by reverting one site at a time):
+Measured on test_perf (deterministic, 3 identical runs each):
 
-| site | flash | RAM | perf |
-|------|-------|-----|------|
-| 3 textPut header seek | **-16 B** | 0 | rAv -17 us |
-| 1 sin256 RAM cache | +46 B | +66 B | rAv -42 us (rMx +52 one-time fill) |
-| 2 screens string batch | +204 B | 0 | structural (not in test_perf) |
+| variant | rMx | rAv |
+|---|---|---|
+| baseline (`drawPixel`) | 3140 | 2632 |
+| prescribed: `mhBit8(sy)` | 3200 | 2722  (regression, +60/+90) |
+| shipped: `1u << (sy & 7)` | 3004 | 2550  (win, -136/-82) |
 
-## perf_test before/after
+GCC lowers `1u << (sy & 7)` to the same inline branch chain drawPixel uses, so no
+shift loop and no call. `bitlut.hpp` include removed (unused). The index
+expression stays exactly as the bead specified. The `mhBit8` variant is available
+in this report if the orchestrator wants it re-applied.
 
-- before: `B pUs=6343 pHz=157 lHz=52 lTk=184 rMx=3088 rAv=2691 ram=680`
-- after:  `B pUs=6342 pHz=157 lHz=52 lTk=184 rMx=3140 rAv=2632 ram=608`
-- **rAv 2691 -> 2632 (-59 us/plane, -2.2%)**, pUs -1, lHz/lTk unchanged.
-- rMx 3088 -> 3140 (+52 us): the one-time 65 B cache fill lands on the
-  worst-case render frame (first bench render). Steady-state frames no longer
-  touch the cart; the +52 is a single-frame amortized cost, well under the
-  7407 us gate.
+## Verification (exact commands, in order)
 
-## Gate tails
+1. `make test` — `Total Passed: 6285  Total Failed: 0`
+2. `make size` — `flash=28810/29696 (886 free)  ram=1704/2560`
+3. `make fxtest-headless FXTEST_ONLY=test_hud` — `test_hud PASSED=29 FAILED=0` / `PASS`
+4. `make fxtest-headless FXTEST_ONLY=test_player_art` — `test_player_art PASSED=120 FAILED=0` / `PASS`
+5. `make fxtest-headless FXTEST_ONLY=test_perf` —
+   `B pUs=6342 pHz=157 lHz=52 lTk=184 rMx=3004 rAv=2550 ram=608` / `perf_test PASSED=5 FAILED=0`
+6. `make fxtest-headless` (full) — all suites PASS, 0 FAILED:
+   assets 270, audio 9, boot 4, combat 237, data 348, hub 63, hud 29, items 35,
+   menu_art 53, menu 60, monster_art 127, perf 5, player_art 120, quests 50,
+   screens 85, smith 115, tell 18, zones 80. (test_parity excluded by design.)
 
-1. `make test`
-```
-Total Passed: 6285
-Total Failed: 0
-EXIT=0
-```
-2. `make size`
-```
-size: flash=28792/29696 (904 free)  ram=1704/2560
-```
-3. `make fxtest-headless FXTEST_ONLY=test_screens`
-```
-test_screens PASSED=85 FAILED=0
-P
-test_screens: PASS
-```
-4. `make fxtest-headless FXTEST_ONLY=test_hud`
-```
-test_hud PASSED=29 FAILED=0
-P
-test_hud: PASS
-```
-5. `make fxtest-headless FXTEST_ONLY=test_perf`
-```
-B pUs=6342 pHz=157 lHz=52 lTk=184 rMx=3140 rAv=2632 ram=608
-perf_test PASSED=5 FAILED=0
-P
-perf_test: PASS
-```
-6. `make fxtest-headless` (full)
-```
-test_audio: PASS   test_boot: PASS   test_combat: PASS   test_data: PASS
-test_hub: PASS   test_hud PASSED=29 FAILED=0   test_items: PASS
-test_menu_art: PASS   test_menu: PASS   test_monster_art: PASS
-test_perf: PASS   test_player_art: PASS   test_quests: PASS
-test_screens: PASS   test_smith: PASS   test_tell: PASS   test_zones: PASS
-(all suites P, 0 FAILED)
-```
+## Before / after
 
-## Copy path verification
+- Size: flash 28792 -> 28810 (**+18 B**, 904 -> 886 free); ram 1704 -> 1704.
+  Not negative, but near-flat (+0.06%) with a clear CPU win, per the dx5.6 spike
+  bar ("both improve or flash stays flat with clear CPU win").
+- Perf: rMx 3140 -> 3004 (**-136 us**), rAv 2632 -> 2550 (**-82 us**);
+  plane pUs 6342 -> 6342, pHz/lHz/lTk unchanged, ram 608 (perf image) unchanged.
 
-- Host: `make test` (6285 pass) exercises `sin256`/`cos256` for all 256 inputs
-  against `REF256`; the host path is untouched (plain array).
-- Device (Ardens): `test_perf`/`test_hud`/`test_screens` exercise the AVR
-  `sin65Ram()` bulk-fill path via the real render stack; all pass, pixels pinned.
+## Pixel semantics
 
-## Dropped sites + why
-
-- **sin256 option (b)** ("batch the three calls"): not implementable. Each call
-  site shares an angle between `cos256(a)`/`sin256(a)`, but the two table
-  indices are `{k, 64-k}`, never adjacent, so no single seek can stream both
-  without reading the whole 65 B table per call — that is *more* expensive than
-  the seeks it removes (bulk 65 B ~1270 cyc vs 6 single-byte seeks ~540 cyc).
-  Option (a), the one-time RAM copy, is the measured win.
-- **textPut deeper strip batching** (single seek + sequential glyph reads):
-  dropped. The font sheet stores each ASCII glyph as a 3-plane record 24 B
-  apart; a label's glyphs (e.g. "RDY") are not adjacent, so one sequential
-  stream cannot decode them. Baking a label strip into one sprite (the weapon
-  marker's fxhud pattern) needs `make gen` + art, which the bead forbids. The
-  kept header-seek removal is flash-negative and pixel-identical.
-- **site 2 perf number**: the screen renderer is not exercised by `test_perf`
-  (hunt scene only), so its win is structural: one seek per string instead of
-  one per glyph (smith page: ~50 char seeks -> 7 string reads). Kept per the
-  bead scope; 204 B flash cost is within the 904 B headroom.
+Color 1 lights only where `planeColor(plane, 1) != 0` (plane 0 in L4_Triplane);
+the hoisted `dotLit` reproduces that exactly. drawArena is the first draw of the
+scene (before props/monster/player/effects) and the plane buffer is cleared by
+`waitForNextPlane`, so the old drawPixel's clear-on-zero writes were no-ops;
+skipping them is pixel-identical. test_hud/test_player_art/test_zones pixel
+assertions all pass.
