@@ -30,6 +30,20 @@ inline const uint8_t *screenCart(uint16_t off) {
     return reinterpret_cast<const uint8_t *>(static_cast<uint16_t>(static_cast<uint16_t>(mhScreens) + off));
 }
 
+// Batched string fetch (monhun-ardu-dx5.3): one cart transaction per title/label
+// instead of one mhFxReadU8 seek per glyph. The longest shipped label is 11
+// chars ("HUNTER HELM"), so the 16-byte stack buffer covers every authored
+// row; longer strings return only the buffered prefix and drawScreen finishes
+// the tail per-char, keeping the character mapping byte-identical either way.
+constexpr uint8_t SCREEN_TEXT_BUF = 16;
+
+inline uint8_t screenReadText(uint16_t off, uint8_t len, char *buf) {
+    const uint8_t n = len < SCREEN_TEXT_BUF ? len : SCREEN_TEXT_BUF;
+    if (n != 0)
+        mhFxReadBytes(screenCart(off), reinterpret_cast<uint8_t *>(buf), n);
+    return n;
+}
+
 // u16 ScreenDef offset for a screen index from the header's defOff table.
 MH_NOINLINE inline uint16_t screenDefOff(uint8_t screen) {
     return mhFxReadU16(reinterpret_cast<const uint16_t *>(screenCart(static_cast<uint16_t>(screens::DEF_OFF_OFF + screen * 2))));
@@ -144,8 +158,12 @@ inline void drawScreen(const ScreenState &s, const SaveBlock &save) {
     (void)save;
     const uint16_t defOff = screenDefOff(s.screen);
     const uint8_t titleLen = mhFxReadU8(screenCart(static_cast<uint16_t>(defOff + 1)));
+    char text[SCREEN_TEXT_BUF];
+    uint8_t tn = screenReadText(static_cast<uint16_t>(defOff + 2), titleLen, text);
     int16_t x = 2;
-    for (uint8_t i = 0; i < titleLen; i++)
+    for (uint8_t i = 0; i < tn; i++)
+        x = textPut(fxfontw, x, SCREEN_TITLE_Y, text[i]);
+    for (uint8_t i = tn; i < titleLen; i++)
         x = textPut(fxfontw, x, SCREEN_TITLE_Y, static_cast<char>(mhFxReadU8(screenCart(static_cast<uint16_t>(defOff + 2 + i)))));
 
     const uint8_t last = static_cast<uint8_t>(s.scroll + SCREEN_ROWS);
@@ -160,8 +178,11 @@ inline void drawScreen(const ScreenState &s, const SaveBlock &save) {
 
         const uint8_t labelLen = mhFxReadU8(screenCart(rowOff));
         const uint24_t sheet = selected ? fxfontw : fxfontg;
+        const uint8_t ln = screenReadText(static_cast<uint16_t>(rowOff + 1), labelLen, text);
         int16_t lx = SCREEN_LABEL_X;
-        for (uint8_t j = 0; j < labelLen; j++)
+        for (uint8_t j = 0; j < ln; j++)
+            lx = textPut(sheet, lx, y, text[j]);
+        for (uint8_t j = ln; j < labelLen; j++)
             lx = textPut(sheet, lx, y, static_cast<char>(mhFxReadU8(screenCart(static_cast<uint16_t>(rowOff + 1 + j)))));
 
         const uint16_t fields = static_cast<uint16_t>(rowOff + 1 + labelLen);

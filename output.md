@@ -1,133 +1,110 @@
-# monhun-ardu-dx5.2 — perf: variable-divisor divisions -> reciprocal multiply
+# monhun-ardu-dx5.3 — perf: cut FX seeks (sin256 RAM copy + glyph batching)
 
-Status: **DONE (one site kept; reciprocal approach measured and dropped)**.
-The only site with a clear `test_perf` CPU win is the two player HUD bars; the
-32-bit divide there is replaced by the already-linked 16-bit divide. The
-reciprocal-multiply helper was implemented and measured for every listed site
-and lost on flash (and RAM) for no extra CPU win, so those sites are dropped per
-the bead rule ("if a site adds flash without a clear CPU win in `test_perf`,
-drop it and say so").
+Status: DONE. All gates green, budget fits. Tree left dirty (no commit/push).
 
-## Changed
+## Files / lines
 
-- `src/render.hpp:1139-1160` — added `hudBar8(x,y,w,h,uint8_t num,uint8_t den,
-  uint8_t shade)` next to `hudBar`. `Player::hpMax`/`stamMax` are `uint8`, so
-  `(w-2)*num <= 42*255` fits 16 bits; the bar uses the 16-bit divide
-  (`__divmodhi4`, already linked by `fp::tdiv`) instead of the 32/16
-  (`__udivmodsi4`) the shared `hudBar` pays for the 2800-hp monster bar.
-  Geometry/truncation identical (caller guarantees `num <= den <= 255`).
-- `src/render.hpp:1214-1215` — player HP + stamina bars call `hudBar8`; the
-  monster bar keeps `hudBar` (its `(44-2)*2800 = 117600` numerator needs 32-bit).
+- `src/core/sin256.hpp` (site 1) — AVR-only `sin65Ram()`: one-time 65 B bulk
+  copy of the cart table into a function-local static, then plain RAM loads.
+  `sin256()` now reads `sin65Ram()[i]` on AVR; host path unchanged (plain
+  `SIN65` array, `tst/sin_test.hpp` still walks all 256 inputs).
+- `src/screens.hpp` (site 2) — `screenReadText()` bulk-reads a title/label
+  string into a 16 B stack buffer (`mhFxReadBytes`, one cart transaction per
+  string); `drawScreen()` draws from RAM. Titles/labels longer than 16 chars
+  fall back to the old per-char `mhFxReadU8` tail, so the character mapping is
+  byte-identical for any input. Longest shipped label is 11 ("HUNTER HELM").
+- `src/render.hpp` (site 3) — `textPut()` now calls the explicit-dimension
+  `SpritesU::drawPlusMaskFX(x, y, 4, 8, sheet, FRAME(code))` overload instead
+  of the one-arg form, dropping the per-glyph `seekData()` that only read the
+  sheet's 4x8 w/h header. Same w/h reaches the blitter -> pixels unchanged.
 
-## Size
+## Size (HEAD e3c0129 -> after)
 
-| | flash | free | ram | note |
-|---|---:|---:|---:|---|
-| before (HEAD 928c7bd) | 28446 | 1250 | 1638 | baseline |
-| after | 28558 | 1138 | 1638 | +112 flash, ram flat |
+- before: `flash=28558/29696 (1138 free)  ram=1638/2560`
+- after:  `flash=28792/29696 (904 free)  ram=1704/2560`
+- delta:  **+234 B flash, +66 B RAM** (RAM = 65 B table + 1 B `ready` flag, .bss)
 
-`.text=28538 .data=20 .bss=1618` (was `.text=28426 .data=20 .bss=1618`).
+Per-site flash/RAM (measured by reverting one site at a time):
 
-## perf_test (Ardens, `FXTEST_ONLY=test_perf`)
+| site | flash | RAM | perf |
+|------|-------|-----|------|
+| 3 textPut header seek | **-16 B** | 0 | rAv -17 us |
+| 1 sin256 RAM cache | +46 B | +66 B | rAv -42 us (rMx +52 one-time fill) |
+| 2 screens string batch | +204 B | 0 | structural (not in test_perf) |
 
-| | pUs | pHz | lHz | lTk | rMx | rAv | ram |
-|---|---:|---:|---:|---:|---:|---:|---:|
-| before | 6344 | 157 | 52 | 184 | 3156 | 2761 | 680 |
-| after  | 6343 | 157 | 52 | 184 | 3088 | 2691 | 680 |
+## perf_test before/after
 
-Render avg −70 µs, render max −68 µs (both player-bar divides removed). `pUs`
-is pinned by `waitForNextPlane` (plane-paced), so the win shows in the render
-columns, not the plane period; the gate mask stays 0.
+- before: `B pUs=6343 pHz=157 lHz=52 lTk=184 rMx=3088 rAv=2691 ram=680`
+- after:  `B pUs=6342 pHz=157 lHz=52 lTk=184 rMx=3140 rAv=2632 ram=608`
+- **rAv 2691 -> 2632 (-59 us/plane, -2.2%)**, pUs -1, lHz/lTk unchanged.
+- rMx 3088 -> 3140 (+52 us): the one-time 65 B cache fill lands on the
+  worst-case render frame (first bench render). Steady-state frames no longer
+  touch the cart; the +52 is a single-frame amortized cost, well under the
+  7407 us gate.
 
-## Gate tails (in order)
+## Gate tails
 
 1. `make test`
-   ```
-   Total Passed: 6285
-   Total Failed: 0
-   ```
+```
+Total Passed: 6285
+Total Failed: 0
+EXIT=0
+```
 2. `make size`
-   ```
-   size: .text=28538 .data=20 .bss=1618
-   size: flash=28558/29696 (1138 free)  ram=1638/2560
-   ```
-3. `make fxtest-headless FXTEST_ONLY=test_combat`
-   ```
-   combat_test PASSED=237 FAILED=0
-   test_combat: PASS
-   ```
-4. `make fxtest-headless FXTEST_ONLY=test_monster_art`
-   ```
-   test_monster_art PASSED=127 FAILED=0
-   test_monster_art: PASS
-   ```
-5. `make fxtest-headless FXTEST_ONLY=test_hud`
-   ```
-   test_hud PASSED=29 FAILED=0
-   test_hud: PASS
-   ```
-6. `make fxtest-headless FXTEST_ONLY=test_perf`
-   ```
-   B pUs=6343 pHz=157 lHz=52 lTk=184 rMx=3088 rAv=2691 ram=680
-   perf_test PASSED=5 FAILED=0
-   test_perf: PASS
-   ```
-7. `make fxtest-headless` (full)
-   ```
-   asset_test PASSED=270 FAILED=0        test_menu_art PASSED=53 FAILED=0
-   combat_test PASSED=237 FAILED=0       test_monster_art PASSED=127 FAILED=0
-   data_test PASSED=348 FAILED=0         test_player_art PASSED=120 FAILED=0
-   menu_test PASSED=60 FAILED=0          test_quests PASSED=50 FAILED=0
-   perf_test PASSED=5 FAILED=0           test_screens PASSED=85 FAILED=0
-   test_audio PASSED=9 FAILED=0          test_smith PASSED=115 FAILED=0
-   test_boot PASSED=4 FAILED=0           test_tell PASSED=18 FAILED=0
-   test_hub PASSED=63 FAILED=0           test_zones PASSED=80 FAILED=0
-   test_hud PASSED=29 FAILED=0
-   test_items PASSED=35 FAILED=0
-   ```
-   (18 suites, 0 failures)
+```
+size: flash=28792/29696 (904 free)  ram=1704/2560
+```
+3. `make fxtest-headless FXTEST_ONLY=test_screens`
+```
+test_screens PASSED=85 FAILED=0
+P
+test_screens: PASS
+```
+4. `make fxtest-headless FXTEST_ONLY=test_hud`
+```
+test_hud PASSED=29 FAILED=0
+P
+test_hud: PASS
+```
+5. `make fxtest-headless FXTEST_ONLY=test_perf`
+```
+B pUs=6342 pHz=157 lHz=52 lTk=184 rMx=3140 rAv=2632 ram=608
+perf_test PASSED=5 FAILED=0
+P
+perf_test: PASS
+```
+6. `make fxtest-headless` (full)
+```
+test_audio: PASS   test_boot: PASS   test_combat: PASS   test_data: PASS
+test_hub: PASS   test_hud PASSED=29 FAILED=0   test_items: PASS
+test_menu_art: PASS   test_menu: PASS   test_monster_art: PASS
+test_perf: PASS   test_player_art: PASS   test_quests: PASS
+test_screens: PASS   test_smith: PASS   test_tell: PASS   test_zones: PASS
+(all suites P, 0 FAILED)
+```
 
-## Dropped sites + why (all measured, none faked)
+## Copy path verification
 
-A header-only `src/core/recip.hpp` (`Recip{den,r}`, lazy `recipBuild` =
-`floor(65535/den)` via the already-linked 16-bit divide, `divRecip` =
-multiply + bounded remainder correction, bit-identical truncation) was written
-and compiled. Measurements (shipping `make size`, same test_perf):
+- Host: `make test` (6285 pass) exercises `sin256`/`cos256` for all 256 inputs
+  against `REF256`; the host path is untouched (plain array).
+- Device (Ardens): `test_perf`/`test_hud`/`test_screens` exercise the AVR
+  `sin65Ram()` bulk-fill path via the real render stack; all pass, pixels pinned.
 
-- **Player bars, reciprocal (2 sites)**: +284 flash, +8 RAM, rAv 2691 → no
-  better than the 16-bit split. The correction loop + lazy-cache checks cost
-  more than the `__divmodhi4` call they replace. Dropped in favour of `hudBar8`.
-- **All three bars, reciprocal**: +154 flash, +12 RAM, rAv 2694 (≈0 extra over
-  `hudBar8`). The monster-bar reciprocal is not a win. Dropped.
-- **`monster.hpp:328` hp*100/hpMax (guard hpPct)**: 32-bit divide, but the
-  `test_perf` image is built with `MH_COMBAT_PARTS=0` → `SIMPLE_GUARDS=true`, so
-  the full-guard path (and this divide) is compiled out of the bench. No
-  `test_perf` exposure → dropped (it is a real shipping AI-path cost; needs a
-  gameplay perf bench to justify flash).
-- **`monster.hpp:671,674` `/retreatDen`, `/circleDen`**: numerator is
-  `m.spd(uint8) * num(uint8) <= 1785`, divisor `uint8` → GCC already emits the
-  16-bit divide (`__divmodhi4`), not a 32-bit one. No 32-bit divide to remove;
-  a reciprocal cache only adds flash. Dropped.
-- **`render_math.hpp:56` `(tick*8)/active`**: signed 32-bit divide, but the
-  spin sheet is only drawn for the heavy tail-spin (the bench monster is
-  MON_LUNGE), so it never runs in `test_perf`. Also `renderScene`/`drawMonster`
-  take `const Game&`, so a cache would need a `mutable` field + a device-only
-  `spinSheetFrameC`. No measured win → dropped.
-- **`armor_state.hpp:184` `dmg*100/denom`**: signed 32-bit divide; the bench
-  player is `PS_STUN` (never attacks, monster rarely lands), so at most a few
-  calls and no measurable change. `denom = 100+def` can exceed 65535 for a
-  synthetic def, so an exact 16-bit variant needs a fallback branch. Dropped.
-- **`combat.hpp:1185` `combatMulPercent` `/100u`**: constant divisor; GCC
-  already folds it to a multiply. Not touched (per bead).
+## Dropped sites + why
 
-No float, no new mutable globals, no new globals. Tree left dirty (no commit).
-
-## Note
-
-The bead title asks for "reciprocal multiply". The reciprocal helper was built
-and is exact, but in this LTO image every reciprocal site costs more flash (and
-RAM) than the cheaper exact alternative (16-bit divide for the uint8-maxe
-player bars), for the same or worse CPU, matching the earlier checkpoint review
-("adding inline code to remove shared helper calls loses"). The kept change is
-the exact, measured CPU win; the reciprocal path is documented rather than
-shipped.
+- **sin256 option (b)** ("batch the three calls"): not implementable. Each call
+  site shares an angle between `cos256(a)`/`sin256(a)`, but the two table
+  indices are `{k, 64-k}`, never adjacent, so no single seek can stream both
+  without reading the whole 65 B table per call — that is *more* expensive than
+  the seeks it removes (bulk 65 B ~1270 cyc vs 6 single-byte seeks ~540 cyc).
+  Option (a), the one-time RAM copy, is the measured win.
+- **textPut deeper strip batching** (single seek + sequential glyph reads):
+  dropped. The font sheet stores each ASCII glyph as a 3-plane record 24 B
+  apart; a label's glyphs (e.g. "RDY") are not adjacent, so one sequential
+  stream cannot decode them. Baking a label strip into one sprite (the weapon
+  marker's fxhud pattern) needs `make gen` + art, which the bead forbids. The
+  kept header-seek removal is flash-negative and pixel-identical.
+- **site 2 perf number**: the screen renderer is not exercised by `test_perf`
+  (hunt scene only), so its win is structural: one seek per string instead of
+  one per glyph (smith page: ~50 char seeks -> 7 string reads). Kept per the
+  bead scope; 204 B flash cost is within the 904 B headroom.

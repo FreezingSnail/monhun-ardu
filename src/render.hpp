@@ -216,10 +216,16 @@ static inline void hudBlk(int16_t x, int16_t y, int16_t w, int16_t h, uint8_t sh
 // byte lives on the light-gray (fxfontg) or white (fxfontw) plane, so FRAME(c)
 // makes glyph c render on its own plane. Advance 4 px == mock drawText scale 1
 // (3 px glyph + 1 px gap). No glyph bitmap lives in MCU flash or RAM.
+//
+// The 4x8 dimensions are fixed for every font tile, so textPut passes them to
+// the explicit-dimension drawPlusMaskFX overload (monhun-ardu-dx5.3): the
+// one-arg form seekData()s the sheet just to read its w/h header, a wasted
+// cart transaction per glyph. Pixels are unchanged -- the blitter receives the
+// same w/h it would have read.
 static inline int16_t textPut(uint24_t sheet, int16_t x, int16_t y, char c) {
     const uint8_t code = static_cast<uint8_t>(c);
     if (code < 128 && x > -4 && x < mh::SCREEN_W)
-        SpritesU::drawPlusMaskFX(x, y, sheet, FRAME(code));
+        SpritesU::drawPlusMaskFX(x, y, 4, 8, sheet, FRAME(code));
     return static_cast<int16_t>(x + 4);
 }
 
