@@ -375,6 +375,13 @@ static void roomAsmCopy(uint8_t *dst, uint8_t n) {
 // integer column offset; `camY&7` splits across the two source pages. The
 // source page index q0+j+b must stay inside the image (camY clamp guarantees
 // it: v != 0 implies camY <= h - ARENA_H - 1, so q0+7 < h/8).
+// Vertical page-shift coefficient for the split reader: row-coef[v] ==
+// (v == 0) ? 0 : (1u << (8 - v)) for v = camY & 7. AVR has no barrel shifter,
+// so the shift -> 8-entry flash LUT (techniques.md §3). Index is already v&7.
+static const uint8_t MH_PROGMEM ROOM_ROW_COEF[8] = {
+    0, 128, 64, 32, 16, 8, 4, 2,
+};
+
 __attribute__((noinline)) static void drawRoom(const Game &g, int16_t camX, int16_t camY) {
     uint24_t img;
     int16_t rw, rh;
@@ -396,7 +403,7 @@ __attribute__((noinline)) static void drawRoom(const Game &g, int16_t camX, int1
     const uint16_t layerBytes = static_cast<uint16_t>(rw16 * static_cast<uint16_t>(rh >> 3));
     const uint24_t layer = img + static_cast<uint24_t>(arduboy.currentPlane()) * static_cast<uint24_t>(layerBytes);
     const uint8_t pages = (v == 0) ? 7 : 8;
-    const uint8_t coef = (v == 0) ? 0 : static_cast<uint8_t>(1u << (8 - v));
+    const uint8_t coef = mhPgmReadU8(&ROOM_ROW_COEF[v & 7]);
     uint8_t *fb = arduboy.getBuffer();
     uint8_t dummy[128];   // unused half at the window's first/last page
 

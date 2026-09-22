@@ -36,6 +36,7 @@
 
 #include <stdint.h>
 #include "progmem.hpp"                   // MH_NOINLINE
+#include "bitlut.hpp"                    // mhBit8 (flash one-hot LUT)
 #include "../generated/items_meta.hpp"   // item::ITEM_COUNT (inventory slot count)
 
 namespace mh {
@@ -81,15 +82,15 @@ struct SaveBlock {
     uint8_t items[item::ITEM_COUNT];   // inventory counts, cap 255
 };
 
-// Crafted-armor bit helpers on the flags byte (bead monhun-ardu-arm.2). The
-// bitmask shares the byte with SAVE_FLAG_SMITHY_SEEN; an older record loads
-// with no crafted bits set (migration default).
+// 1u << n for the crafted-flag bits and the quest bitmap byte bits. The AVR
+// shift-by-one loop is replaced by the shared flash LUT (core/bitlut.hpp);
+// every index below is masked to 3 bits so the access stays in range.
 inline bool saveCrafted(const SaveBlock &s, uint8_t piece) {
-    return piece < SAVE_CRAFTED_MAX && (s.flags & static_cast<uint8_t>(0x01u << (SAVE_CRAFTED_BIT_BASE + piece))) != 0;
+    return piece < SAVE_CRAFTED_MAX && (s.flags & mhBit8(static_cast<uint8_t>(SAVE_CRAFTED_BIT_BASE + piece))) != 0;
 }
 inline void saveSetCrafted(SaveBlock &s, uint8_t piece) {
     if (piece < SAVE_CRAFTED_MAX)
-        s.flags |= static_cast<uint8_t>(0x01u << (SAVE_CRAFTED_BIT_BASE + piece));
+        s.flags |= mhBit8(static_cast<uint8_t>(SAVE_CRAFTED_BIT_BASE + piece));
 }
 
 // Sum of the payload bytes (everything before the checksum).
@@ -181,15 +182,15 @@ inline uint8_t saveQuestBit(uint8_t quest, uint8_t which) {
 }
 inline bool saveQuestGet(const SaveBlock &s, uint8_t quest, uint8_t which) {
     const uint8_t bit = saveQuestBit(quest, which);
-    return (s.quest[(bit >> 3) & 3] & static_cast<uint8_t>(1u << (bit & 7))) != 0;
+    return (s.quest[(bit >> 3) & 3] & mhBit8(bit)) != 0;
 }
 MH_NOINLINE inline void saveQuestSet(SaveBlock &s, uint8_t quest, uint8_t which) {
     const uint8_t bit = saveQuestBit(quest, which);
-    s.quest[(bit >> 3) & 3] |= static_cast<uint8_t>(1u << (bit & 7));
+    s.quest[(bit >> 3) & 3] |= mhBit8(bit);
 }
 inline void saveQuestClear(SaveBlock &s, uint8_t quest, uint8_t which) {
     const uint8_t bit = saveQuestBit(quest, which);
-    s.quest[(bit >> 3) & 3] &= static_cast<uint8_t>(~(1u << (bit & 7)));
+    s.quest[(bit >> 3) & 3] &= static_cast<uint8_t>(~mhBit8(bit));
 }
 
 // Inventory helpers on the save block (host + device, same rules as

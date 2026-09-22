@@ -27,6 +27,7 @@
 
 #include <stdint.h>
 #include "core/world.hpp"
+#include "core/bitlut.hpp"   // mhBit8: shared flash one-hot LUT for firedMask
 
 #ifndef MH_AUDIO
 #define MH_AUDIO 1
@@ -152,7 +153,7 @@ static void audioCue(AudioState &s, uint8_t cue) {
         return;
     s.lastCue = cue;
     s.lastCueTick = s.tick;
-    s.firedMask |= static_cast<uint16_t>(1u << cue);
+    s.firedMask |= static_cast<uint16_t>(mhBit8(cue));
     audioPlay(cue);
 }
 
