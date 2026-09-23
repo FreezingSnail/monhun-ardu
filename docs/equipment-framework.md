@@ -129,8 +129,10 @@ Stats live in `data/`, not code. Two files feed `tools/gen-armor.py`:
 }
 ```
 
-- `recipe` is the smith bill: up to two `{item, count}` pairs (item ids resolve
-  against `data/items.json`, counts 1..255) plus a `zenny` cost (u16).
+- `recipe` is the craft bill: up to two `{item, count}` pairs (item ids resolve
+  against `data/items.json`, counts 1..255) plus a `zenny` cost (u16). Since
+  ui.3.1 it is baked into the armor detail card (`mhCards`), so the card gates +
+  debits the craft.
 - `skills` is 1..2 `{id, points}` pairs; points are 0..15. A piece's score is the
   sum of its skills across the equipped head/body/charm (see arm.4 below).
 - `sheet` is optional while the sprite epic (`monhun-ardu-05x`) is open: it is
@@ -186,14 +188,17 @@ the meta/expect headers.
 
 ### Crafting path
 
-The smith data path already owns recipes. `tools/gen-smith.py` reads the same
-`data/armor.json` and appends one fixed **armor recipe** record per piece after
-the weapon records in the `mhSmith` blob (header byte 5 = armor count, then
-`armorIdx u8, cost u16, unlockFlag u8, mat[2] x (itemIdx+1, count)`), so
-crafting reuses the identical `{itemIdx+1, count}` + zenny debit rule
-(`smith::AREC_*`, `smith::ARMOR_RECIPES_OFF`). No craft UI is added in `arm.1`;
-`arm.2` wires the action/condition. A tree without `data/armor.json` packs
-zero armor recipes (the previous weapon-only behaviour).
+The craft bill now travels on the detail card (ui.3.1, 5co.6):
+`tools/gen-cards.py` bakes the same `data/armor.json` `{materials, zenny}` bill
+into the `mhCards` record (u16 zenny + up to two `(itemIdx+1, count)` pairs), and
+`src/card_state.hpp cardArmorApply` gates + debits it with the identical
+`{itemIdx+1, count}` + zenny rule. `tools/gen-smith.py` still appends one fixed
+**armor recipe** record per piece after the weapon records in the `mhSmith` blob
+(header byte 5 = armor count, then `armorIdx u8, cost u16, unlockFlag u8,
+mat[2] x (itemIdx+1, count)`; `smith::AREC_*`, `smith::ARMOR_RECIPES_OFF`), but
+the runtime no longer reads it — `screenRowArmorRecipe`, `COND_ARMOR` and
+`ACTION_CRAFT_ARMOR` were removed with the SMITH screen. A tree without
+`data/armor.json` packs zero armor recipes (the previous weapon-only behaviour).
 
 ### Armor engine — slots, aggregation, craft/equip (monhun-ardu-arm.2)
 
@@ -224,24 +229,18 @@ arm.3 applies `min(points, maxPoints) * perPoint` once the tier is nonzero.
 `armorAggregate` is pure: it ignores a slot whose id is out of range or whose
 piece slot does not match, so a hand-edited save cannot read past the table.
 
-**Craft/equip UI.** The smith screen gains five `COND_ARMOR` /
-`ACTION_CRAFT_ARMOR` rows, one per `data/armor.json` piece. `param` packs
-`(slot << 5) | pieceIdx`; the row's cost and material bill are resolved from the
-`mhSmith` armor recipe record (`src/screens.hpp screenRowArmorRecipe`), so the
-data stays the single source of truth. A is one combined verb: an uncrafted piece
-is crafted (debits the bill + zenny, sets the crafted bit, auto-equips); a
-crafted piece toggles equip/unequip. The whole action is one `screenApplyAction`
-return, so the sketch commits the EEPROM save once (`saveStore`).
-
-**Gear equip UI (monhun-ardu-mn6.1).** The hub GEAR screen owns equip/unequip
-once a piece exists: `data/screens/gear.json` appends one `COND_CRAFTED` /
-`ACTION_EQUIP_ARMOR` row per piece after the weapon rows (same
-`(slot << 5) | pieceIdx` packing). `COND_CRAFTED` reads the crafted bit, so an
-uncrafted row is drawn but dead; `ACTION_EQUIP_ARMOR` calls
-`armorEquipToggle()`, which re-checks the crafted bit + range and returns true
-only when the slot actually changed — a dead row or same-piece re-press writes
-nothing. SMITH therefore owns craft (debit + set bit) and GEAR owns the equipped
-set, both persisting in the same save block.
+**Craft/equip UI (ui.3.1, 5co.6).** `data/screens/gear.json` carries one
+`ACTION_EQUIP_ARMOR` row per `data/armor.json` piece (`param` packs
+`(slot << 5) | pieceIdx`); the row is always live and A opens the armor detail
+card. The card's bill is baked into its `mhCards` record, so
+`src/card_state.hpp cardArmorApply` is one combined verb: an uncrafted piece is
+crafted (debits the bill + zenny, sets the crafted bit, auto-equips); a crafted
+piece toggles equip/unequip via `armorEquipToggle()`. It returns a single bool,
+so the sketch commits the EEPROM save once (`saveStore`). The old SMITH
+`COND_ARMOR`/`ACTION_CRAFT_ARMOR` rows and the `screenRowArmorRecipe` cart read
+are gone; `armorEquipToggle` re-checks the crafted bit + range and returns true
+only when the slot actually changed. Craft (debit + set bit) and the equipped
+set both persist in the same save block.
 
 **Gear skill readout (monhun-ardu-mn6.2).** GEAR also displays the live skill
 totals. Five `ROW_F_SKILL` rows (`flags: ["skill"]`, `param` = `armor::SKILL_*`
@@ -388,8 +387,9 @@ of this sprite framework:
 2. `arm.2` armor engine: head/body/charm save slots (save v3 `equip[3]`
    already exists), per-piece aggregation, equip UI, paper-doll render through
    the slot loop above. Landed: crafted bitmask in the save flags byte,
-   `armor_state.hpp` aggregation + `armor.hpp` cart cache, smith armor
-   craft/equip rows, placeholder head-layer render (see the section above).
+    `armor_state.hpp` aggregation + `armor.hpp` cart cache, armor craft/equip
+    rows (ui.3.1 moved the craft onto the GEAR armor card), placeholder
+    head-layer render (see the section above).
 3. `arm.3` armor effects in combat: defense, hpMax/stamMax, attack/evade/
    stamina modifiers from the aggregated skill points + thresholds. Landed:
    `ArmorEffects` cache in `Game::armorFx`, `armorReduce` in `playerHurt`,

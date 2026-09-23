@@ -440,31 +440,10 @@ void ScreenSuite(TestRunner &runner) {
         suite.addTest(t);
     }
 
-    {
-        Test t("COND_CRAFTED gear rows: crafted gate, toggle equip/unequip, bad ids inert");
-        SaveBlock s;
-        saveDefaults(s);
-        // param packs (slot << 5) | pieceIdx, exactly like COND_ARMOR.
-        const uint8_t helmParam = static_cast<uint8_t>((armor::SLOT_HEAD << 5) | armor::ARMOR_HUNTER_HELM);
-        const ScreenRow helm = row(0, screens::ACTION_EQUIP_ARMOR, screens::COND_CRAFTED, helmParam);
-        t.assert(screenCondOk(s, helm), false, "uncrafted helm row dead");
-        t.assert(screenApplyAction(s, helm), false, "uncrafted equip no-op");
-        t.assert(s.equip[armor::SLOT_HEAD], SAVE_EQUIP_NONE, "slot stays empty");
-        saveSetCrafted(s, armor::ARMOR_HUNTER_HELM);
-        t.assert(screenCondOk(s, helm), true, "crafted helm row live");
-        t.assert(screenApplyAction(s, helm), true, "equip changes save");
-        t.assert(s.equip[armor::SLOT_HEAD], armor::ARMOR_HUNTER_HELM + 1, "helm equipped");
-        t.assert(screenApplyAction(s, helm), true, "second toggle unequips");
-        t.assert(s.equip[armor::SLOT_HEAD], SAVE_EQUIP_NONE, "helm unequipped");
-        // A piece id past the table / a slot past the equip array is inert; the
-        // condition also treats an out-of-range piece as uncrafted.
-        const ScreenRow badPiece = row(0, screens::ACTION_EQUIP_ARMOR, screens::COND_CRAFTED, static_cast<uint8_t>((armor::SLOT_HEAD << 5) | armor::PIECE_COUNT));
-        const ScreenRow badSlot = row(0, screens::ACTION_EQUIP_ARMOR, screens::COND_CRAFTED, static_cast<uint8_t>((3 << 5) | armor::ARMOR_HUNTER_HELM));
-        t.assert(screenApplyAction(s, badPiece), false, "piece past the table rejected");
-        t.assert(screenApplyAction(s, badSlot), false, "slot past the equip array rejected");
-        t.assert(screenCondOk(s, badPiece), false, "out-of-range crafted row dead");
-        suite.addTest(t);
-    }
+    // Armor craft/equip moved onto the detail card (ui.3.1, 5co.6): the
+    // screenApplyAction switch no longer carries an armor case. The card path is
+    // pinned by tst/card_state_test.hpp; armorEquipToggle itself by
+    // tst/armor_engine_test.hpp.
 
     // -------------------------------------- gear skill readout cache (gs.2)
     {

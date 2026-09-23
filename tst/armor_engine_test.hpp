@@ -1,8 +1,8 @@
 #pragma once
 // Host unit tests for the armor engine (bead monhun-ardu-arm.2):
 // src/armor_state.hpp (equip toggle, crafted bits, stat/skill aggregation with
-// thresholds) and the COND_ARMOR / ACTION_CRAFT_ARMOR rows in
-// src/screen_state.hpp (craft gate + material/zenny debit + equip toggle).
+// thresholds). The armor craft gate + material/zenny debit moved onto the
+// detail card (ui.3.1, 5co.6) and is covered by tst/card_state_test.hpp.
 // The cart read side (src/armor.hpp) is device-only and is pinned by
 // tst/fxdatatest/armor_test.hpp.
 //
@@ -11,7 +11,6 @@
 // totals above the shipped per-skill 3 can cross S=10 / M=15.
 #include "test.hpp"
 #include "../src/armor_state.hpp"
-#include "../src/screen_state.hpp"
 #include "../src/core/save.hpp"
 #include "../src/generated/armor_data.hpp"
 #include "../src/generated/armor_meta.hpp"
@@ -38,21 +37,6 @@ inline ArmorPiece toPiece(const armor_data::Piece &p) {
 inline void shippedTable(ArmorPiece *out) {
     for (uint8_t i = 0; i < armor::PIECE_COUNT; i++)
         out[i] = toPiece(armor_data::PIECES[i]);
-}
-
-// COND_ARMOR / ACTION_CRAFT_ARMOR row: param = (slot << 5) | piece.
-inline ScreenRow armorRow(uint16_t cost, uint8_t piece, uint8_t slot) {
-    ScreenRow r;
-    r.cost = cost;
-    r.action = screens::ACTION_CRAFT_ARMOR;
-    r.flags = 0;
-    r.cond = screens::COND_ARMOR;
-    r.param = static_cast<uint8_t>((slot << 5) | piece);
-    r.recipe[0].item = 0;
-    r.recipe[0].count = 0;
-    r.recipe[1].item = 0;
-    r.recipe[1].count = 0;
-    return r;
 }
 
 // Synthetic high-point piece so aggregation can cross the thresholds.
@@ -282,59 +266,6 @@ void ArmorEngineSuite(TestRunner &runner) {
         armorFinalize(big);
         t.assert(big.points[armor::SKILL_ATTACK_UP], armor::THRESHOLD_M, "points clamp to M");
         t.assert(big.tier[armor::SKILL_ATTACK_UP], 2, "clamped total is M");
-        suite.addTest(t);
-    }
-
-    // ---------------------------------------------------- craft/equip rows
-    {
-        Test t("COND_ARMOR / ACTION_CRAFT_ARMOR: gate, debit, craft, equip toggle");
-        SaveBlock s;
-        saveDefaults(s);
-        s.zenny = 500;
-        s.items[ITEM_ORE] = 3;
-        s.items[ITEM_SCALE] = 2;
-        ScreenRow helm = armorRow(300, armor::ARMOR_HUNTER_HELM, armor::SLOT_HEAD);
-        helm.recipe[0].item = ITEM_ORE + 1;
-        helm.recipe[0].count = 3;
-        helm.recipe[1].item = ITEM_SCALE + 1;
-        helm.recipe[1].count = 2;
-
-        t.assert(screenCondOk(s, helm), true, "affordable + materials -> live");
-        SaveBlock poor;
-        saveDefaults(poor);
-        poor.zenny = 299;
-        poor.items[ITEM_ORE] = 3;
-        poor.items[ITEM_SCALE] = 2;
-        t.assert(screenCondOk(poor, helm), false, "short zenny dead");
-        t.assert(screenApplyAction(poor, helm), false, "short zenny rejected");
-        t.assert(saveCrafted(poor, armor::ARMOR_HUNTER_HELM), false, "not crafted");
-        SaveBlock nomat;
-        saveDefaults(nomat);
-        nomat.zenny = 500;
-        nomat.items[ITEM_ORE] = 2;   // need 3
-        t.assert(screenCondOk(nomat, helm), false, "missing material dead");
-        t.assert(screenApplyAction(nomat, helm), false, "missing material rejected");
-
-        // Craft + auto-equip debits once.
-        t.assert(screenApplyAction(s, helm), true, "craft applies");
-        t.assert(saveCrafted(s, armor::ARMOR_HUNTER_HELM), true, "crafted bit set");
-        t.assert(s.zenny, 200, "zenny debited");
-        t.assert(s.items[ITEM_ORE], 0, "ore debited");
-        t.assert(s.items[ITEM_SCALE], 0, "scale debited");
-        t.assert(s.equip[armor::SLOT_HEAD], armor::ARMOR_HUNTER_HELM + 1, "craft auto-equips");
-        t.assert(screenCondOk(s, helm), true, "crafted row stays live to toggle");
-        t.assert(screenApplyAction(s, helm), true, "second A unequips");
-        t.assert(s.equip[armor::SLOT_HEAD], SAVE_EQUIP_NONE, "unequipped");
-        t.assert(s.zenny, 200, "no second debit");
-        t.assert(screenApplyAction(s, helm), true, "third A re-equips");
-        t.assert(s.equip[armor::SLOT_HEAD], armor::ARMOR_HUNTER_HELM + 1, "re-equipped");
-
-        // Out-of-range piece/slot rows are dead and inert.
-        const ScreenRow bad = armorRow(0, armor::PIECE_COUNT, armor::SLOT_HEAD);
-        t.assert(screenCondOk(s, bad), false, "bad piece dead");
-        t.assert(screenApplyAction(s, bad), false, "bad piece rejected");
-        const ScreenRow badslot = armorRow(0, armor::ARMOR_HUNTER_HELM, 3);
-        t.assert(screenCondOk(s, badslot), false, "bad slot dead");
         suite.addTest(t);
     }
 

@@ -59,12 +59,12 @@ static uint16_t countBits(uint8_t xa, uint8_t xb, uint8_t ya, uint8_t yb) {
 
 inline void test_screens(FxTest &test) {
     // ------------------------------------------------- generated cart rows
-    test.expectEq(screens::SCREEN_COUNT, 4, F("screen count"));
+    // ui.3.1 (5co.6): the SMITH screen is gone; hub/quests/gear remain.
+    test.expectEq(screens::SCREEN_COUNT, 3, F("screen count"));
     test.expectEq(screens::SCREEN_HUB, 0, F("hub index"));
     test.expectEq(screens::SCREEN_QUESTS, 1, F("quests index"));
-    test.expectEq(screens::SCREEN_SMITH, 2, F("smith index"));
-    test.expectEq(screens::SCREEN_GEAR, 3, F("gear index"));
-    test.expectEq(screenRowCount(screens::SCREEN_HUB), 5, F("hub row count"));
+    test.expectEq(screens::SCREEN_GEAR, 2, F("gear index"));
+    test.expectEq(screenRowCount(screens::SCREEN_HUB), 4, F("hub row count"));
 
     // Title bytes come from the cart def (id u8, titleLen u8, title chars).
     const uint16_t hubDef = screenDefOff(screens::SCREEN_HUB);
@@ -74,24 +74,21 @@ inline void test_screens(FxTest &test) {
     test.expectEq(mhFxReadU8(screenCart(hubDef + 3)), 'U', F("hub title U"));
     test.expectEq(mhFxReadU8(screenCart(hubDef + 4)), 'B', F("hub title B"));
 
-    ScreenRow r0, r1, r2, r3, r4;
+    ScreenRow r0, r1, r2, r3;
     screenReadRow(screenRowOffsetAt(screens::SCREEN_HUB, 0), r0);
     screenReadRow(screenRowOffsetAt(screens::SCREEN_HUB, 1), r1);
     screenReadRow(screenRowOffsetAt(screens::SCREEN_HUB, 2), r2);
     screenReadRow(screenRowOffsetAt(screens::SCREEN_HUB, 3), r3);
-    screenReadRow(screenRowOffsetAt(screens::SCREEN_HUB, 4), r4);
     test.expectEq(r0.cost, 0, F("row0 cost"));
     test.expectEq(r0.action, screens::ACTION_HUNT, F("row0 action hunt"));
     test.expectEq(r0.cond, screens::COND_ALWAYS, F("row0 cond"));
     test.expectEq(r0.param, 0, F("row0 param"));
     test.expectEq(r1.action, screens::ACTION_OPEN_QUESTS, F("row1 action open quests"));
     test.expectEq(r1.cond, screens::COND_ALWAYS, F("row1 cond"));
-    test.expectEq(r2.action, screens::ACTION_OPEN_SMITH, F("row2 action open smith"));
+    test.expectEq(r2.action, screens::ACTION_OPEN_GEAR, F("row2 action open gear"));
     test.expectEq(r2.cond, screens::COND_ALWAYS, F("row2 cond"));
-    test.expectEq(r3.action, screens::ACTION_OPEN_GEAR, F("row3 action open gear"));
-    test.expectEq(r3.cond, screens::COND_ALWAYS, F("row3 cond"));
-    test.expectEq(r4.action, screens::ACTION_NONE, F("row4 action none"));
-    test.expectEq(r4.flags, screens::ROW_F_ZENNY, F("row4 zenny dynamic-value flag"));
+    test.expectEq(r3.action, screens::ACTION_NONE, F("row3 action none"));
+    test.expectEq(r3.flags, screens::ROW_F_ZENNY, F("row3 zenny dynamic-value flag"));
 
     // ----------------------------------------------------- nav/scroll
     SaveBlock save;
@@ -99,7 +96,7 @@ inline void test_screens(FxTest &test) {
 
     ScreenState st;
     screenEnter(st, screens::SCREEN_HUB, save);
-    test.expectEq(st.rowCount, 5, F("enter rowCount"));
+    test.expectEq(st.rowCount, 4, F("enter rowCount"));
     test.expectEq(st.cursor, 0, F("enter cursor"));
     test.expectEq(st.scroll, 0, F("enter scroll"));
     test.expectEq(st.active, 1, F("enter active"));
@@ -118,7 +115,7 @@ inline void test_screens(FxTest &test) {
     screenStep(st, idle);
     screenStep(st, up);   // wrap to the last row
     screenStep(st, idle);
-    test.expectEq(st.cursor, 4, F("nav up wraps"));
+    test.expectEq(st.cursor, 3, F("nav up wraps"));
     test.expectEq(screenStep(st, a), SCREEN_ACCEPT, F("A accepts"));
     test.expectEq(screenStep(st, a), SCREEN_NONE, F("held A silent"));
     screenStep(st, idle);
@@ -138,31 +135,23 @@ inline void test_screens(FxTest &test) {
 
     // --------------------------------------------------- action dispatch
     // Hub rows are navigation (app_state.hpp); the save actions are exercised
-    // through the smith (armor craft) and quests (take) rows.
-    ScreenRow s0, q0;
-    screenReadRow(screenRowOffsetAt(screens::SCREEN_SMITH, 0), s0);
+    // through the quests (take) and gear (weapon equip) rows. Armor craft/equip
+    // moved onto the card (ui.3.1, 5co.6), pinned by tst/fxdatatest/cards_test.
+    ScreenRow q0, gw1;
     screenReadRow(screenRowOffsetAt(screens::SCREEN_QUESTS, 0), q0);
+    screenReadRow(screenRowOffsetAt(screens::SCREEN_GEAR, 1), gw1);
     SaveBlock act;
     saveDefaults(act);
-    act.zenny = 300;
-    act.items[ITEM_ORE] = 3;   // HUNTER HELM recipe (arm.2)
-    act.items[ITEM_SCALE] = 2;
-    test.expectEq(screenCondOk(act, s0), 1, F("helm craftable"));
-    test.expectEq(screenApplyAction(act, s0), 1, F("craft applies"));
-    test.expectEq(act.zenny, 0, F("craft debits zenny"));
-    test.expectEq(saveCrafted(act, armor::ARMOR_HUNTER_HELM), 1, F("craft sets the crafted bit"));
-    test.expectEq(act.equip[armor::SLOT_HEAD], armor::ARMOR_HUNTER_HELM + 1, F("craft equips the helm"));
-    test.expectEq(static_cast<uint32_t>(act.items[ITEM_ORE]), 0, F("craft debits ore"));
-    test.expectEq(static_cast<uint32_t>(act.items[ITEM_SCALE]), 0, F("craft debits scale"));
     test.expectEq(screenCondOk(act, q0), 1, F("take always allowed"));
     test.expectEq(screenApplyAction(act, q0), 1, F("take applies"));
     test.expectEq(saveQuestGet(act, 0, 0), 1, F("quest0 taken"));
+    test.expectEq(screenApplyAction(act, gw1), 1, F("gear weapon equip applies"));
+    test.expectEq(act.weapon, W_FLAIL, F("gear row1 equips the flail"));
     test.expectEq(screenApplyAction(act, r3), 0, F("none row changes nothing"));
     test.expectEq(appScreenAccept(screens::SCREEN_HUB, r0), APP_NAV_HUNT, F("hub HUNT routes to hunt"));
     test.expectEq(appScreenAccept(screens::SCREEN_HUB, r1), APP_NAV_QUESTS, F("hub QUESTS route"));
-    test.expectEq(appScreenAccept(screens::SCREEN_HUB, r2), APP_NAV_SMITH, F("hub SMITH route"));
-    test.expectEq(appScreenAccept(screens::SCREEN_HUB, r3), APP_NAV_GEAR, F("hub GEAR route"));
-    test.expectEq(appScreenAccept(screens::SCREEN_HUB, r4), APP_NAV_NONE, F("hub zenny row is a no-op"));
+    test.expectEq(appScreenAccept(screens::SCREEN_HUB, r2), APP_NAV_GEAR, F("hub GEAR route"));
+    test.expectEq(appScreenAccept(screens::SCREEN_HUB, r3), APP_NAV_NONE, F("hub zenny row is a no-op"));
     test.expectEq(appScreenBack(screens::SCREEN_QUESTS), APP_NAV_HUB, F("quests B -> hub"));
     test.expectEq(appScreenBack(screens::SCREEN_HUB), APP_NAV_NONE, F("hub B is a root no-op"));
 
@@ -242,20 +231,18 @@ inline void test_screens(FxTest &test) {
     test.expectEq(countBits(10, 50, 20, 27) > 0 ? 1 : 0, 1, F("row1 QUESTS label ink"));
     // The cursor sits on row 0, so row 1's cursor cell stays empty.
     test.expectEq(countBits(2, 5, 22, 25), 0, F("row1 no cursor"));
-    // Row 2 label (SMITH) at y = 11 + 2*9 = 29.
-    test.expectEq(countBits(10, 50, 29, 36) > 0 ? 1 : 0, 1, F("row2 SMITH label ink"));
-    // Row 3 label (GEAR) at y = 11 + 3*9 = 38.
-    test.expectEq(countBits(10, 50, 38, 45) > 0 ? 1 : 0, 1, F("row3 GEAR label ink"));
-    // Row 4 is the dynamic ZENNY row: the live balance (1234, 4 digits) is
-    // drawn in the cost column at y = 11 + 4*9 = 47, not the packed cost.
-    test.expectEq(countBits(10, 32, 47, 54) > 0 ? 1 : 0, 1, F("zenny row label ink"));
-    test.expectEq(countBits(108, 123, 47, 54) > 0 ? 1 : 0, 1, F("zenny balance drawn"));
+    // Row 2 label (GEAR) at y = 11 + 2*9 = 29.
+    test.expectEq(countBits(10, 50, 29, 36) > 0 ? 1 : 0, 1, F("row2 GEAR label ink"));
+    // Row 3 is the dynamic ZENNY row: the live balance (1234, 4 digits) is
+    // drawn in the cost column at y = 11 + 3*9 = 38, not the packed cost.
+    test.expectEq(countBits(10, 32, 38, 45) > 0 ? 1 : 0, 1, F("zenny row label ink"));
+    test.expectEq(countBits(108, 123, 38, 45) > 0 ? 1 : 0, 1, F("zenny balance drawn"));
     // Control: an empty balance draws one digit at the right edge only.
     clearFb();
     saveDefaults(ps);
     drawScreen(draw, ps);
-    test.expectEq(countBits(108, 119, 47, 54), 0, F("zenny 0 leaves the 4-digit span empty"));
-    test.expectEq(countBits(120, 123, 47, 54) > 0 ? 1 : 0, 1, F("zenny 0 digit drawn"));
+    test.expectEq(countBits(108, 119, 38, 45), 0, F("zenny 0 leaves the 4-digit span empty"));
+    test.expectEq(countBits(120, 123, 38, 45) > 0 ? 1 : 0, 1, F("zenny 0 digit drawn"));
 
     // -------------------------------------------------- quests board screen
     test.expectEq(screenRowCount(screens::SCREEN_QUESTS), 8, F("quests row count"));
@@ -302,9 +289,10 @@ inline void test_screens(FxTest &test) {
     test.expectEq(g1.param, W_FLAIL, F("gear row1 param flail"));
     test.expectEq(g2.action, screens::ACTION_EQUIP_WEAPON, F("gear row2 action equip"));
     test.expectEq(g2.param, W_GUN, F("gear row2 param gun"));
-    // Armor rows pack (slot << 5) | pieceIdx like the smith rows (gs.1).
+    // Armor rows pack (slot << 5) | pieceIdx; ui.3.1: the card gates craft/equip,
+    // so the row itself is always live.
     test.expectEq(g3.action, screens::ACTION_EQUIP_ARMOR, F("gear row3 action equip armor"));
-    test.expectEq(g3.cond, screens::COND_CRAFTED, F("gear row3 cond crafted"));
+    test.expectEq(g3.cond, screens::COND_ALWAYS, F("gear row3 cond always"));
     test.expectEq(g3.param, armor::ARMOR_HUNTER_HELM, F("gear row3 param helm"));
     test.expectEq(g4.param, armor::ARMOR_BONE_CAP, F("gear row4 param cap"));
     test.expectEq(g5.param, static_cast<uint8_t>((armor::SLOT_BODY << 5) | armor::ARMOR_HUNTER_MAIL), F("gear row5 param mail"));
@@ -329,22 +317,11 @@ inline void test_screens(FxTest &test) {
     test.expectEq(screenApplyAction(gear, g2), 1, F("cart gear row equips"));
     test.expectEq(gear.weapon, W_GUN, F("cart gear row wrote the weapon byte"));
     test.expectEq(screenApplyAction(gear, g2), 0, F("re-equip same weapon is a no-op"));
-    // E2E armor equip off the cart: uncrafted is dead + inert, crafted toggles
-    // the piece's slot and the change persists.
-    test.expectEq(screenCondOk(gear, g3), 0, F("uncrafted helm row dead"));
-    test.expectEq(screenApplyAction(gear, g3), 0, F("uncrafted equip no-op"));
-    test.expectEq(gear.equip[armor::SLOT_HEAD], SAVE_EQUIP_NONE, F("head slot empty"));
-    saveSetCrafted(gear, armor::ARMOR_HUNTER_HELM);
-    test.expectEq(screenCondOk(gear, g3), 1, F("crafted helm row live"));
-    test.expectEq(screenApplyAction(gear, g3), 1, F("crafted equip applies"));
-    test.expectEq(gear.equip[armor::SLOT_HEAD], armor::ARMOR_HUNTER_HELM + 1, F("helm equipped"));
-    saveStore(gear, REAL_BACKEND);
-    SaveBlock geararmor;
-    test.expectEq(saveLoad(geararmor, REAL_BACKEND), 1, F("armor save reloads"));
-    test.expectEq(geararmor.equip[armor::SLOT_HEAD], armor::ARMOR_HUNTER_HELM + 1, F("helm equip persisted"));
-    test.expectEq(saveCrafted(geararmor, armor::ARMOR_HUNTER_HELM), 1, F("crafted bit persisted"));
-    test.expectEq(screenApplyAction(gear, g3), 1, F("second A unequips"));
-    test.expectEq(gear.equip[armor::SLOT_HEAD], SAVE_EQUIP_NONE, F("helm unequipped"));
+    // Armor craft/equip moved onto the card (ui.3.1, 5co.6): the armor row is
+    // always live and A opens the card, so screenApplyAction has no armor case.
+    // The card E2E (craft/debit/equip + EEPROM) is pinned by cards_test.
+    test.expectEq(screenCondOk(gear, g3), 1, F("armor row is always live"));
+    test.expectEq(screenApplyAction(gear, g3), 0, F("armor is a card action, not a screen action"));
 
     // -------------------------------------- gear skill readout cache (gs.2)
     // Cart armor records -> ScreenState cache: helm (attack_up 6, defense_up 4)
@@ -378,7 +355,7 @@ inline void test_screens(FxTest &test) {
     screenGearCache(moveRead, g_gear.armor);
     test.expectEq(moveRead.skillPoints[armor::SKILL_ATTACK_UP], 6, F("helm-only attack 6"));
     test.expectEq(moveRead.skillTier[armor::SKILL_ATTACK_UP], 0, F("helm-only attack inert"));
-    test.expectEq(screenApplyAction(moveSave, g5), 1, F("equip mail via gear row"));
+    test.expectEq(armorEquipToggle(moveSave, armor::ARMOR_HUNTER_MAIL, armor::SLOT_BODY), 1, F("equip mail toggles"));
     armorApplyToGame(g_gear, moveSave);
     screenGearCache(moveRead, g_gear.armor);
     test.expectEq(moveRead.skillPoints[armor::SKILL_ATTACK_UP], 12, F("equip raises attack to 12"));

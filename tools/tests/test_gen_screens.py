@@ -131,10 +131,9 @@ class GenScreensTests(unittest.TestCase):
             "constexpr uint8_t ACTION_NONE = 4;",
             "constexpr uint8_t ACTION_HUNT = 5;",
             "constexpr uint8_t ACTION_OPEN_QUESTS = 6;",
-            "constexpr uint8_t ACTION_OPEN_SMITH = 7;",
-            "constexpr uint8_t ACTION_CRAFT_ARMOR = 8;",
-            "constexpr uint8_t ACTION_EQUIP_WEAPON = 9;",
-            "constexpr uint8_t ACTION_OPEN_GEAR = 10;",
+            "constexpr uint8_t ACTION_EQUIP_WEAPON = 7;",
+            "constexpr uint8_t ACTION_OPEN_GEAR = 8;",
+            "constexpr uint8_t ACTION_EQUIP_ARMOR = 9;",
             "constexpr uint8_t COND_ALWAYS = 0;",
             "constexpr uint8_t COND_ZENNY = 1;",
             "constexpr uint8_t COND_FLAG = 2;",
@@ -251,7 +250,7 @@ class GenScreensTests(unittest.TestCase):
         blob = self.read_bytes(BLOB_REL)
         hub = parse_def(blob, struct.unpack_from("<H", blob, DEF_OFF)[0])
         row = parse_row(blob, hub["firstRow"])
-        self.assertEqual(row["action"], 9, "equip_weapon action id")
+        self.assertEqual(row["action"], 7, "equip_weapon action id")
         self.assertEqual(row["param"], 2, "weapon index param")
 
     def test_open_gear_action_compiles(self):
@@ -261,7 +260,24 @@ class GenScreensTests(unittest.TestCase):
         blob = self.read_bytes(BLOB_REL)
         hub = parse_def(blob, struct.unpack_from("<H", blob, DEF_OFF)[0])
         row = parse_row(blob, hub["firstRow"])
-        self.assertEqual(row["action"], 10, "open_gear action id")
+        self.assertEqual(row["action"], 8, "open_gear action id")
+
+    def test_equip_armor_action_compiles_and_slot_checked(self):
+        # ui.3.1: the GEAR armor row opens the card; param packs (slot << 5) | piece.
+        self.mutate("data/screens/hub.json",
+                    lambda doc: doc["rows"][0].update({"action": "equip_armor", "condition": "always",
+                                                       "param": (1 << 5) | 2}))
+        self.assert_succeeds(self.compile())
+        blob = self.read_bytes(BLOB_REL)
+        hub = parse_def(blob, struct.unpack_from("<H", blob, DEF_OFF)[0])
+        row = parse_row(blob, hub["firstRow"])
+        self.assertEqual(row["action"], 9, "equip_armor action id")
+        self.assertEqual(row["param"], (1 << 5) | 2, "slot/piece param")
+
+        self.mutate("data/screens/hub.json",
+                    lambda doc: doc["rows"][0].update({"action": "equip_armor", "condition": "always",
+                                                       "param": (3 << 5) | 2}))
+        self.assert_fails(self.compile(), "armor slot must be 0..2")
 
     def test_zenny_dynamic_value_flag_compiles(self):
         self.mutate("data/screens/hub.json",

@@ -1,16 +1,13 @@
 #pragma once
-// On-device end-to-end suite for the smith (bead monhun-ardu-4ug, qs.3; armor
-// craft arm.2; ui.2 trimmed the weapon-tier purchase rows).
-//
-// Covers the shipped cart path the host suite cannot: reading the UpgradeDef
-// records out of the mhSmith blob, resolving tier multipliers, the smith armor
-// rows (craftability / crafted conditions + recipe bill), the full craft/equip
-// flow, and the EEPROM persistence of the crafted bit + equipped slot. The
-// weapon-tier rows were removed in ui.2 (weapon progression returns as ui.4
-// FORGE trees); the tier table itself still feeds the multiplier path.
+// On-device end-to-end suite for the smith upgrade table (bead monhun-ardu-4ug,
+// qs.3). ui.2 trimmed the weapon-tier purchase rows and ui.3.1 (5co.6) removed
+// the SMITH screen entirely (FORGE replaces it in ui.4), so this suite now
+// covers only the surviving cart path: reading the UpgradeDef records out of
+// the mhSmith blob, resolving tier multipliers, and the cart armor records'
+// stat/skill aggregation (armorApplyToGame). The armor craft/equip card E2E is
+// pinned by tst/fxdatatest/cards_test.hpp.
 
 #include "harness/fxtest.hpp"
-#include "src/screens.hpp"
 #include "src/smith.hpp"
 #include "src/armor.hpp"
 #include "src/core/world.hpp"
@@ -96,74 +93,12 @@ inline void test_smith(FxTest &test) {
     test.expectEq(upgradeMul(9, 110), 9, F("upgradeMul truncates"));
     test.expectEq(upgradeMul(18, 115), 20, F("upgradeMul rounds down"));
 
-    // ------------------------------------------------- smith screen rows
-    test.expectEq(screens::SCREEN_COUNT, 4, F("screen count"));
-    test.expectEq(screens::SCREEN_SMITH, 2, F("smith screen index"));
-    // ui.2: the weapon-tier rows are gone; 5 armor rows + LEAVE remain.
-    test.expectEq(screenRowCount(screens::SCREEN_SMITH), 6, F("smith row count"));
-    ScreenRow helm, cap, mail, boneMail, charm, leave;
-    screenReadRow(screenRowOffsetAt(screens::SCREEN_SMITH, 0), helm);
-    screenReadRow(screenRowOffsetAt(screens::SCREEN_SMITH, 1), cap);
-    screenReadRow(screenRowOffsetAt(screens::SCREEN_SMITH, 2), mail);
-    screenReadRow(screenRowOffsetAt(screens::SCREEN_SMITH, 3), boneMail);
-    screenReadRow(screenRowOffsetAt(screens::SCREEN_SMITH, 4), charm);
-    screenReadRow(screenRowOffsetAt(screens::SCREEN_SMITH, 5), leave);
-    test.expectEq(leave.action, screens::ACTION_LEAVE, F("leave row"));
-    // Armor rows (arm.2): param = (slot << 5) | piece, cost + bill resolved
-    // from the mhSmith armor recipe record.
-    test.expectEq(helm.action, screens::ACTION_CRAFT_ARMOR, F("helm row action"));
-    test.expectEq(helm.cond, screens::COND_ARMOR, F("helm row cond"));
-    test.expectEq(helm.param, 0, F("helm row param (head piece 0)"));
-    test.expectEq(helm.cost, 300, F("helm row cost from recipe"));
-    test.expectEq(helm.recipe[0].item, armor::mat::ORE + 1, F("helm ore code"));
-    test.expectEq(helm.recipe[0].count, 3, F("helm ore count"));
-    test.expectEq(helm.recipe[1].item, armor::mat::SCALE + 1, F("helm scale code"));
-    test.expectEq(helm.recipe[1].count, 2, F("helm scale count"));
-    test.expectEq(cap.param, 1, F("bone cap row param (head piece 1)"));
-    test.expectEq(mail.param, 34, F("mail row param (body piece 2)"));
-    test.expectEq(mail.cost, 400, F("mail row cost from recipe"));
-    test.expectEq(mail.recipe[0].item, armor::mat::SCALE + 1, F("mail scale code"));
-    test.expectEq(mail.recipe[0].count, 3, F("mail scale count"));
-    test.expectEq(mail.recipe[1].item, armor::mat::SHELL + 1, F("mail shell code"));
-    test.expectEq(boneMail.param, 35, F("bone mail row param (body piece 3)"));
-    test.expectEq(charm.param, 68, F("charm row param (charm piece 4)"));
-    test.expectEq(charm.cost, 600, F("charm row cost from recipe"));
-    test.expectEq(charm.recipe[0].item, armor::mat::TAIL + 1, F("charm tail code"));
-    test.expectEq(charm.recipe[1].item, armor::mat::ORE + 1, F("charm ore code"));
-
-    // ------------------------------------------------ smith screen nav
-    SaveBlock navSave;
-    saveDefaults(navSave);
-    ScreenState nav;
-    screenEnter(nav, screens::SCREEN_SMITH, navSave);
-    test.expectEq(nav.rowCount, 6, F("enter smith row count"));
-    test.expectEq(nav.cursor, 0, F("enter smith cursor"));
-    const Input down = {0, 1, false, false};
-    const Input idle = {0, 0, false, false};
-    screenStep(nav, down);
-    screenStep(nav, idle);
-    test.expectEq(nav.cursor, 1, F("smith nav down 1"));
-    for (uint8_t i = 0; i < 4; i++) {
-        screenStep(nav, down);
-        screenStep(nav, idle);
-    }
-    test.expectEq(nav.cursor, 5, F("smith nav to last row"));
-    test.expectEq(nav.scroll, 0, F("smith single page"));
-
-    // --------------------------------------- armor craft/equip + EEPROM (arm.2)
+    // ------------------------------- armor cart aggregation + EEPROM (arm.2)
     SaveBlock asave;
     saveDefaults(asave);
-    asave.zenny = 1000;
-    asave.items[ITEM_ORE] = 3;
-    asave.items[ITEM_SCALE] = 2;
-    saveStore(asave, REAL_BACKEND);
-    test.expectEq(screenCondOk(asave, helm), 1, F("helm craftable"));
-    test.expectEq(screenApplyAction(asave, helm), 1, F("helm craft+equip applies"));
-    test.expectEq(saveCrafted(asave, armor::ARMOR_HUNTER_HELM), 1, F("helm crafted bit"));
+    saveSetCrafted(asave, armor::ARMOR_HUNTER_HELM);
+    test.expectEq(armorEquipToggle(asave, armor::ARMOR_HUNTER_HELM, armor::SLOT_HEAD), 1, F("helm equip toggles"));
     test.expectEq(asave.equip[armor::SLOT_HEAD], armor::ARMOR_HUNTER_HELM + 1, F("helm equipped"));
-    test.expectEq(asave.zenny, 700, F("helm zenny debited"));
-    test.expectEq(static_cast<uint32_t>(asave.items[ITEM_ORE]), 0, F("helm ore debited"));
-    test.expectEq(static_cast<uint32_t>(asave.items[ITEM_SCALE]), 0, F("helm scale debited"));
     saveStore(asave, REAL_BACKEND);
 
     SaveBlock aloaded;
@@ -198,7 +133,7 @@ inline void test_smith(FxTest &test) {
     test.expectEq(ag.armorFx.iT, 0, F("no evade_window -> no iT bonus"));
     test.expectEq(ag.player.hpMax, 100, F("live hpMax armed"));
     test.expectEq(ag.player.hp, 100, F("live hp topped to max"));
-    test.expectEq(screenApplyAction(aloaded, helm), 1, F("second A unequips"));
+    test.expectEq(armorEquipToggle(aloaded, armor::ARMOR_HUNTER_HELM, armor::SLOT_HEAD), 1, F("toggle unequips"));
     test.expectEq(aloaded.equip[armor::SLOT_HEAD], SAVE_EQUIP_NONE, F("unequipped"));
     armorApplyToGame(ag, aloaded);
     test.expectEq(ag.armor.defense, 0, F("unequipped defense 0"));

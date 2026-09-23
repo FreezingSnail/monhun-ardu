@@ -72,8 +72,10 @@ static const char MH_PROGMEM CARD_HINTS[] = "A CRAFT\0"
                                             "A TURN IN\0"
                                             "NEED PARTS\0"
                                             "NEED ZENNY\0";
+// Indexed by CardHint (src/card_state.hpp): NONE, CRAFT, EQUIP, UNEQUIP,
+// NEED_PARTS, NEED_ZENNY, ACCEPT, TURN_IN.
 static const uint8_t MH_PROGMEM CARD_HINT_OFF[8] = {
-    67, 0, 8, 16, 26, 35, 45, 56,   // NONE, CRAFT, EQUIP, UNEQUIP, ACCEPT, TURN_IN, PARTS, ZENNY
+    67, 0, 8, 16, 45, 56, 26, 35,
 };
 
 // Draw the hint line at y=56 (white). Null-terminated; at most 11 chars.
@@ -107,7 +109,7 @@ MH_NOINLINE inline void drawCard(const DetailState &s, const CardItem &it, const
                 hudBlk(ov.x, ov.y, static_cast<int16_t>(w), 6, 2);
         }
     }
-    drawCardHint(cardHint(save, row));
+    drawCardHint(cardHint(save, row, it));
 }
 
 }   // namespace mh

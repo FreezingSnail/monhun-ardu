@@ -2,8 +2,9 @@
 // Host unit tests for the app-level routing (bead monhun-ardu-mgn qs.4; hub as
 // the root screen monhun-ardu-isp.1, which deleted the opening menu):
 // src/app_state.hpp. Pins the shipped loop (boot -> hub -> hunt -> hub) plus the
-// hub graph (hub/quests/smith), the held-button guards, the hunt-end return
-// edge (appOverReturnStep) and the once-per-hunt progress commit. The device E2E
+// hub graph (hub/quests/gear; ui.3.1 (5co.6) removed the SMITH screen -- FORGE
+// replaces it in ui.4), the held-button guards, the hunt-end return edge
+// (appOverReturnStep) and the once-per-hunt progress commit. The device E2E
 // counterpart (tst/fxdatatest/hub_test.hpp) drives the same app_state.hpp
 // functions against the real cart + EEPROM and covers huntStart().
 #include "test.hpp"
@@ -53,10 +54,9 @@ void AppSuite(TestRunner &runner) {
     }
 
     {
-        Test t("hub A routing: HUNT / QUESTS / SMITH; LEAVE and status rows are no-ops");
+        Test t("hub A routing: HUNT / QUESTS / GEAR; LEAVE and status rows are no-ops");
         t.assert(appScreenAccept(screens::SCREEN_HUB, arow(screens::ACTION_HUNT)), APP_NAV_HUNT, "HUNT row");
         t.assert(appScreenAccept(screens::SCREEN_HUB, arow(screens::ACTION_OPEN_QUESTS)), APP_NAV_QUESTS, "QUESTS row");
-        t.assert(appScreenAccept(screens::SCREEN_HUB, arow(screens::ACTION_OPEN_SMITH)), APP_NAV_SMITH, "SMITH row");
         t.assert(appScreenAccept(screens::SCREEN_HUB, arow(screens::ACTION_OPEN_GEAR)), APP_NAV_GEAR, "GEAR row");
         t.assert(appScreenAccept(screens::SCREEN_HUB, arow(screens::ACTION_LEAVE)), APP_NAV_NONE, "LEAVE row is root no-op");
         t.assert(appScreenAccept(screens::SCREEN_HUB, arow(screens::ACTION_NONE, screens::COND_ALWAYS)), APP_NAV_NONE, "status row");
@@ -67,10 +67,8 @@ void AppSuite(TestRunner &runner) {
     {
         Test t("sub-screen A: LEAVE returns to the hub, save actions stay with the caller");
         t.assert(appScreenAccept(screens::SCREEN_QUESTS, arow(screens::ACTION_LEAVE)), APP_NAV_HUB, "quests LEAVE");
-        t.assert(appScreenAccept(screens::SCREEN_SMITH, arow(screens::ACTION_LEAVE)), APP_NAV_HUB, "smith LEAVE");
         t.assert(appScreenAccept(screens::SCREEN_GEAR, arow(screens::ACTION_LEAVE)), APP_NAV_HUB, "gear LEAVE");
         t.assert(appScreenAccept(screens::SCREEN_QUESTS, arow(screens::ACTION_TAKE_QUEST, screens::COND_QUEST)), APP_NAV_NONE, "take is a save action");
-        t.assert(appScreenAccept(screens::SCREEN_SMITH, arow(screens::ACTION_CRAFT_ARMOR, screens::COND_ARMOR, 0)), APP_NAV_NONE, "craft is a save action");
         t.assert(appScreenAccept(screens::SCREEN_GEAR, arow(screens::ACTION_EQUIP_WEAPON, screens::COND_ALWAYS, 1)), APP_NAV_NONE, "equip is a save action");
         suite.addTest(t);
     }
@@ -92,10 +90,10 @@ void AppSuite(TestRunner &runner) {
     }
 
     {
-        Test t("B backs out one level: hub is the root (none), quests/smith -> hub");
+        Test t("B backs out one level: hub is the root (none), quests/gear -> hub");
         t.assert(appScreenBack(screens::SCREEN_HUB), APP_NAV_NONE, "hub B is a root no-op");
         t.assert(appScreenBack(screens::SCREEN_QUESTS), APP_NAV_HUB, "quests backs to hub");
-        t.assert(appScreenBack(screens::SCREEN_SMITH), APP_NAV_HUB, "smith backs to hub");
+        t.assert(appScreenBack(screens::SCREEN_GEAR), APP_NAV_HUB, "gear backs to hub");
         suite.addTest(t);
     }
 
@@ -111,24 +109,9 @@ void AppSuite(TestRunner &runner) {
         suite.addTest(t);
     }
 
-    {
-        Test t("camp smithy request opens the smith and closes back into the camp (prg.7)");
-        Game g;
-        g.smithyRequest = false;
-        t.assert(appSmithyRequest(g), APP_NAV_NONE, "no request -> none");
-        g.smithyRequest = true;
-        t.assert(appSmithyRequest(g), APP_NAV_SMITH, "request -> smith");
-        t.assert(g.smithyRequest, false, "request consumed");
-        t.assert(appSmithyRequest(g), APP_NAV_NONE, "no re-fire while held");
-
-        ScreenState screen;
-        SaveBlock save{};
-        screenReset(screen, screens::SCREEN_SMITH, screens::SCREEN_SMITH_ROWS);
-        const bool hunted = appNavApply(APP_NAV_CAMP, screen, save, g, AT_IDLE);
-        t.assert(hunted, false, "camp nav is not a hunt start");
-        t.assert(screen.active, false, "smith screen closed");
-        suite.addTest(t);
-    }
+    // Camp smithy routing (prg.7) is gone with the SMITH screen (ui.3.1, 5co.6):
+    // appSmithyRequest/APP_NAV_SMITH/APP_NAV_CAMP were removed and the camp forge
+    // interaction was dropped; the hub FORGE trees replace it in ui.4.
 
     {
         Test t("held A at a screen transition cannot re-fire inside it");
@@ -174,15 +157,15 @@ void AppSuite(TestRunner &runner) {
     }
 
     {
-        Test t("hub graph: quests/smith round trip, then a fresh HUNT request");
+        Test t("hub graph: quests/gear round trip, then a fresh HUNT request");
         ScreenState screen;
         Game g;
         SaveBlock save;
         saveDefaults(save);
         appNavApply(APP_NAV_HUB, screen, save, g, AT_A);
         t.assert(screen.screen, screens::SCREEN_HUB, "on the hub");
-        appNavApply(APP_NAV_SMITH, screen, save, g, AT_A);
-        t.assert(screen.screen, screens::SCREEN_SMITH, "on smith");
+        appNavApply(APP_NAV_GEAR, screen, save, g, AT_A);
+        t.assert(screen.screen, screens::SCREEN_GEAR, "on gear");
         appNavApply(appScreenBack(screen.screen), screen, save, g, AT_B);
         t.assert(screen.screen, screens::SCREEN_HUB, "back on hub");
         t.assert(appNavApply(appScreenAccept(screen.screen, arow(screens::ACTION_HUNT)), screen, save, g, AT_A), true, "hunt requested from the hub");

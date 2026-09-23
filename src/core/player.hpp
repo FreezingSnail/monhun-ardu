@@ -97,7 +97,6 @@ MH_NOINLINE void initGame(Game &g, int8_t weapon) {
         g.roomSmithyCount = 0;
         g.doorLatch = false;
         g.menuRequest = false;
-        g.smithyRequest = false;
     }
     g.fade = 0;   // no transition wipe outside a room load
     g.player.init(weapon);

@@ -1,18 +1,20 @@
 # Quests & shops — data-driven screens (design)
 
-Status: accepted defaults (kill-quests + zenny; smith = armor crafting; weapon
-progression returns as FORGE trees in ui.4).
-Budget: shipping flash 23342/29696 (6354 free) after the trim waves; each new
-screen must cost ~0 flash (cart data) once the framework lands.
+Status: accepted defaults (kill-quests + zenny; armor crafted on the GEAR armor
+card; weapon progression returns as FORGE trees in ui.4, which replaces the
+removed SMITH screen).
+Budget: shipping flash 29172/29696 (524 free) after ui.3.1; each new screen must
+cost ~0 flash (cart data) once the framework lands.
 
 ## Layers
 
 ```
-hub menu (title -> HUNT / QUESTS / SMITH / GEAR)
+hub menu (title -> HUNT / QUESTS / GEAR)
   screen framework: one generic list renderer + input + row actions
     cart data: screen tables (title, rows: label, cost, flags, condition, action)
     state:    save block in EEPROM (zenny, quest flags, upgrade tiers)
-    content:  quest board rows, smith armor recipes, future shop stock
+    content:  quest board rows, armor craft bills (baked into the cards), future
+              shop stock
 ```
 
 ## Screen data (cart, packed little-endian)
@@ -26,12 +28,14 @@ ScreenRow: labelLen u8 + chars, cost u16, actionId u8, flags u8,
 - Render: rows via the existing `textPut` glyph lane + the baked cursor/tile
   sprites; 6 rows per page, scroll by 6; cost right-aligned.
 - Input: up/down move, A = accept (fires action), B = back.
-- Conditions (runtime): quest state, armor craftability (`COND_ARMOR`),
-  `crafted` (gs.1). The generated `zenny`/`flag`/`tier`/`upgrade` ids remain in
-  the ABI (append-only enum) but have no runtime case since ui.2.
+- Conditions (runtime): quest state (`COND_QUEST`) only; every other row is
+  always live. The generated `zenny`/`flag`/`tier`/`upgrade` ids remain in the
+  ABI but have no runtime case since ui.2.
 - Actions (fixed enum, one switch): TAKE_QUEST(id), TURN_IN_QUEST(id),
-  CRAFT_ARMOR(slot|piece), EQUIP_WEAPON(weaponIdx), EQUIP_ARMOR(slot|piece),
-  OPEN_GEAR, LEAVE. `BUY_UPGRADE` is trimmed (ui.2; FORGE trees in ui.4).
+  EQUIP_WEAPON(weaponIdx), OPEN_GEAR, LEAVE. Armor rows
+  (`ACTION_EQUIP_ARMOR`) open the card, whose `cardArmorApply` crafts/equips;
+  `BUY_UPGRADE` is trimmed (ui.2; FORGE trees in ui.4) and ui.3.1 removed
+  `CRAFT_ARMOR` + `OPEN_SMITH` with the SMITH screen.
 
 ## Detail cards (ui.3)
 
@@ -39,11 +43,12 @@ ScreenRow: labelLen u8 + chars, cost u16, actionId u8, flags u8,
 list screen --A--> detail card --LEFT/RIGHT--> pages --A--> action --B--> list
 ```
 
-- Armor rows (`ACTION_CRAFT_ARMOR` / `ACTION_EQUIP_ARMOR`) and quest rows
-  (`ACTION_TAKE_QUEST` / `ACTION_TURN_IN_QUEST`) open a prebaked 128x64 card
-  instead of firing the action on the list. The card A runs the same
-  `screenApplyAction` switch with the row that opened it, so the list and the
-  card cannot diverge (a gated row stays inert on both).
+- Armor rows (`ACTION_EQUIP_ARMOR`) and quest rows (`ACTION_TAKE_QUEST` /
+  `ACTION_TURN_IN_QUEST`) open a prebaked 128x64 card instead of firing the
+  action on the list. Quest cards run the `screenApplyAction` switch with the
+  row that opened them; armor cards run `cardArmorApply`, which crafts an
+  uncrafted piece from the baked bill (zenny + materials, sets the crafted bit)
+  and then toggles equip (ui.3.1, 5co.6). A gated action stays inert.
 - Pages are per-item data: armor `DESC / PARTS (uncrafted only) / STATS /
   SKILL`; quests `GOAL / PROG / REWARD`. A page with no data is not generated.
   LEFT/RIGHT cycles only pages present in the mask; B backs to the list.
@@ -54,12 +59,14 @@ list screen --A--> detail card --LEFT/RIGHT--> pages --A--> action --B--> list
   `NEED PARTS` / `NEED ZENNY`) and the meta overlay slots: live PARTS
   have-counts and the quest PROG bar. After an action the card refreshes, so a
   crafted piece loses its PARTS page and cannot be crafted twice.
-- `mhCards` record per item: kind, page mask, the four page image addresses and
-  up to two overlay slots (page + x/y + kind + args). The cart-free page machine
-  is `src/card_state.hpp`; the cart reader + renderer is `src/cards.hpp`.
+- `mhCards` record per item: kind, page mask, the four page image addresses,
+  up to two overlay slots (page + x/y + kind + args) and the armor craft bill
+  (u16 zenny + up to two `{itemIdx+1, count}` pairs; zero for quests). The
+  cart-free page machine is `src/card_state.hpp`; the cart reader + renderer is
+  `src/cards.hpp`.
 - Temporary scope split (ui.4 owns the rest): GEAR **weapon** rows keep their
   direct-equip action because weapon cards land with the FORGE trees. Every
-  armor row (smith craft + gear equip) and every quest row opens a card.
+  armor row (gear craft/equip) and every quest row opens a card.
 
 ## Save block (EEPROM)
 
@@ -109,23 +116,23 @@ QuestDef (v2): id, goalKind u8 (0 kill / 1 gather), target u8
   Hub B is a root no-op; camp hold-B leaves the hunt back to the hub. The loadout
   is the save's v4 `weapon` byte (hml.1) and the HUNT row's beast comes from the
   active quest's `goalKind`/`target` (`huntStart`, src/app_setup.hpp).
-- Gear screen (hml.3, armor rows gs.1): the hub's GEAR row (`ACTION_OPEN_GEAR`)
-  opens the `data/screens/gear.json` list (SWORD / FLAIL / GUN + the five armor
-  pieces + LEAVE). A on a weapon equip row (`ACTION_EQUIP_WEAPON`, `param` =
-  weapon index) writes `save.weapon` when it changes (same-weapon press and
-  out-of-range params are no-ops). The armor rows
-  (`COND_CRAFTED`/`ACTION_EQUIP_ARMOR`, `param` = `(slot << 5) | pieceIdx`) are
-  live only once the piece's crafted bit is set on SMITH, and A toggles it into
-  its slot (`armorEquipToggle`, true only on a real slot change; an uncrafted or
-  out-of-range row is inert). A same-piece re-press unequips. The next HUNT
-  starts with the picked weapon + armor, so crafting lives on SMITH and
-  equip/unequip lives on GEAR. An items screen is still a follow-up, and the
-  equipped weapon/armor has no on-screen mark yet.
+- Gear screen (hml.3, armor rows gs.1; ui.3.1 craft): the hub's GEAR row
+  (`ACTION_OPEN_GEAR`) opens the `data/screens/gear.json` list (SWORD / FLAIL /
+  GUN + the five armor pieces + the skill rows + LEAVE). A on a weapon equip row
+  (`ACTION_EQUIP_WEAPON`, `param` = weapon index) writes `save.weapon` when it
+  changes (same-weapon press and out-of-range params are no-ops). The armor rows
+  (`ACTION_EQUIP_ARMOR`, `param` = `(slot << 5) | pieceIdx`) are always live and
+  A opens the armor card: `cardArmorApply` crafts an uncrafted piece from the
+  baked bill (debit + crafted bit) then toggles it into its slot
+  (`armorEquipToggle`, true only on a real slot change); a crafted piece just
+  toggles. A same-piece re-press unequips. The next HUNT starts with the picked
+  weapon + armor. An items screen is still a follow-up, and the equipped
+  weapon/armor has no on-screen mark yet.
 - Scaffold limitations: the board renders every authored row even when its
   `COND_QUEST` condition is dead (locked/not-active) — status graying, progress
   display and nav filtering are a follow-up. There is no inventory screen; the
-  material reward lands silently in the save and is shown only in the smith
-  recipe debits.
+  material reward lands silently in the save and is shown on the card PARTS
+  have-counts.
 - Persisted on quest complete; board shows taken/progress/done and pays out on
   turn-in.
 - Gather targets and material rewards are validated against `data/items.json`
@@ -141,23 +148,21 @@ UpgradeDef: weaponIdx u8, tier u8, cost u16, dmgMul u8, spdMul u8, unlockFlag u8
   `ACTION_BUY_UPGRADE` rows + `screenRowRecipe`, and the dead
   `zenny`/`flag`/`tier` condition cases) for headroom. The `mhSmith` upgrade
   table itself is unchanged and still feeds `upgradeApplyToGame` /
-  `smithResolve`; the smith screen now lists armor recipes only. Weapon
-  progression returns as ui.4 FORGE trees, which will own the upgrade UI.
+  `smithResolve`. ui.3.1 removed the SMITH screen entirely: the hub FORGE row
+  (ui.4) will own the upgrade UI and the FORGE trees.
 
-**Armor recipes (monhun-ardu-arm.1).** The same recipe path also crafts armor.
-`tools/gen-smith.py` derives one armor recipe record per `data/armor.json`
-piece from that piece's `{materials, zenny}` bill and appends it after the
-weapon records in `mhSmith` (blob header byte 5 = armor count, then
-`armorIdx u8, cost u16, unlockFlag u8, mat[2] x (itemIdx+1 u8, count u8)`).
-The packed material slots use the identical `(itemIdx+1, count)` convention and
-the host debit is the same `screenRecipeOk` / `screenRecipeDebit` pair, so
-armor spends zenny and materials exactly like a weapon tier. The armor piece
-index matches `armor::ARMOR_<ID>`. `arm.2` wires the smith action/condition:
-the smith screen gains one `COND_ARMOR` / `ACTION_CRAFT_ARMOR` row per piece
-(`param = (slot << 5) | pieceIdx`), the row's cost/bill come from the recipe
-record, and A crafts (debits + sets the crafted bit + equips) or toggles
-equip/unequip. See `docs/equipment-framework.md` ("Armor data" and "Armor
-engine") for the piece/skill schema and the aggregation contract.
+**Armor craft bill (monhun-ardu-arm.1; moved to the cards in ui.3.1).** The
+piece's `{materials, zenny}` bill from `data/armor.json` is now baked into the
+`mhCards` record by `tools/gen-cards.py` (u16 zenny + up to two
+`(itemIdx+1, count)` pairs), so the armor card gates + debits its own craft
+without a cart recipe read. `tools/gen-smith.py` still packs the matching armor
+recipe array in `mhSmith` (blob header byte 5 = armor count), but the runtime no
+longer reads it: `screenRowArmorRecipe`, `COND_ARMOR` and `ACTION_CRAFT_ARMOR`
+are gone, and the host debit rule is `src/card_state.hpp cardArmorApply`
+(reusing the `screenRecipeOk`/`screenRecipeDebit` pair). The armor piece index
+matches `armor::ARMOR_<ID>`; the row `param` is `(slot << 5) | pieceIdx`. See
+`docs/equipment-framework.md` ("Armor data" and "Armor engine") for the
+piece/skill schema and the aggregation contract.
 
 ## Beads
 

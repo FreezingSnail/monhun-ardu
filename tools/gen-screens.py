@@ -54,13 +54,14 @@ LABEL_MAX = 16
 SCREEN_MAX = 255
 TIER_COUNT = 3   # N_WEAPONS (W_SWORD/W_FLAIL/W_GUN); must match core/save.hpp
 
-# Append-only: new names go on the end so the emitted ACTION_*/COND_* ids keep
-# matching the historical records (gs.1 added equip_armor/crafted).
+# ui.3.1 (5co.6) dropped open_smith/craft_armor and the armor condition: the
+# smith screen is gone (FORGE replaces it in ui.4) and armor crafting moved onto
+# the detail card (the bill bakes into mhCards). Ids are regenerated wholesale,
+# so the runtime reads them from the generated constants, never literals.
 ACTION_NAMES = ("leave", "buy_upgrade", "take_quest", "turn_in_quest",
-                "none", "hunt", "open_quests", "open_smith", "craft_armor",
+                "none", "hunt", "open_quests",
                 "equip_weapon", "open_gear", "equip_armor")
-COND_NAMES = ("always", "zenny", "flag", "tier", "quest", "upgrade", "armor",
-              "crafted")
+COND_NAMES = ("always", "zenny", "flag", "tier", "quest", "upgrade")
 # hide_locked: reserved. zenny: draw the live save.zenny balance in the cost
 # column instead of the row cost (dynamic value token, qs.4 hub display).
 # skill: draw the cached live skill points (ScreenState::skillPoints) in the cost
@@ -183,21 +184,10 @@ def normalize_row(errors, ctx, obj):
             errors.add(ctx, "param: turn_in_quest need nibble must be 1..15, got %d" % need)
         if action not in (ACTION_NAMES.index("take_quest"), ACTION_NAMES.index("turn_in_quest")):
             errors.add(ctx, "condition 'quest' needs a take_quest/turn_in_quest action")
-    if cond == COND_NAMES.index("armor") and param is not None:
-        # param packs (slot << 5) | pieceIdx (see screen_state.hpp COND_ARMOR):
-        # piece 0..31 into armor::ARMOR_<ID>, slot 0..2 (head/body/charm).
+    if action == ACTION_NAMES.index("equip_armor") and param is not None:
+        # param packs (slot << 5) | pieceIdx (see src/card_state.hpp): the GEAR
+        # row opens the armor card, whose A crafts/equips into that slot.
         slot = (param >> 5) & 3
-        if action != ACTION_NAMES.index("craft_armor"):
-            errors.add(ctx, "condition 'armor' needs a craft_armor action")
-        if slot >= 3:
-            errors.add(ctx, "param: armor slot must be 0..2, got %d" % slot)
-    if cond == COND_NAMES.index("crafted") and param is not None:
-        # param packs (slot << 5) | pieceIdx (see screen_state.hpp COND_CRAFTED
-        # / ACTION_EQUIP_ARMOR): the GEAR row is live once the piece's crafted
-        # bit is set, and A toggles it into that slot.
-        slot = (param >> 5) & 3
-        if action != ACTION_NAMES.index("equip_armor"):
-            errors.add(ctx, "condition 'crafted' needs an equip_armor action")
         if slot >= 3:
             errors.add(ctx, "param: armor slot must be 0..2, got %d" % slot)
     if cond == COND_NAMES.index("upgrade") and param is not None:

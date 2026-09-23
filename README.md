@@ -28,12 +28,12 @@ flashing. Controls are below; no USB serial device comes up while the game runs
 |---|---|
 | Vertical-slice sim | Ported + parity-verified (20 scenes / 1269 ticks / 660 device asserts) |
 | Device render + HUD + audio | Working (block/FX-sprite art, cue tones; HUD text/FX glyphs + bars — `7y3` clamp fixed) |
-| Host unit tests | `make test` — **6262 passed / 0 failed** |
-| Device tests (Ardens) | 17 suites / 1763 asserts — boot 4, assets 264, audio 9, hud 29, data 348, combat 237, hub 83, monster_art 127, player_art 120, quests 87, screens 155, smith 84, cards 76, tell 18, zones 82, items 35, perf 5 — all PASS (the frozen `test_parity` diagnostics image is not a gate; the opening-menu `test_menu`/`test_menu_art` suites and its `mh_menu_*` sheets were deleted with the menu, `isp.1`/`hml.2`) |
+| Host unit tests | `make test` — **6232 passed / 0 failed** |
+| Device tests (Ardens) | 17 suites / 1712 asserts — boot 4, assets 264, audio 9, hud 29, data 348, combat 237, hub 77, monster_art 127, player_art 120, quests 87, screens 136, smith 51, cards 83, tell 18, zones 82, items 35, perf 5 — all PASS (the frozen `test_parity` diagnostics image is not a gate; the opening-menu `test_menu`/`test_menu_art` suites and its `mh_menu_*` sheets were deleted with the menu, `isp.1`/`hml.2`) |
 | Perf gate (`monhun-ardu-8v7`, re-verified through `kt7.7`) | **PASS.** plane 157 Hz (≥135), logic 52 Hz (≥45), render max 3348 µs (≤7407), tick 480 µs, RAM free 689 B (bench) |
 | Perf tooling | Headless Ardens profiler dump (`profiledump=<path>`, local patch) + on-device cycle bench (`test_perf`) |
-| Shipping build | flash **29680 / 29696 B** (16 free), RAM **1762 / 2560 B** (798 free); USB-free, see below |
-| FX data image | **298992 B** of 16 MB used (96 KB of it is the 32 prebaked detail-card pages) |
+| Shipping build | flash **29172 / 29696 B** (524 free), RAM **1764 / 2560 B** (796 free); USB-free, see below |
+| FX data image | **298925 B** of 16 MB used (96 KB of it is the 32 prebaked detail-card pages) |
 
 Speculative gameplay status: combat (sword / flail / gunshield), monster FSM,
 camera/world clamps, HUD, audio cues all in place. The prg.8 trim removed
@@ -110,12 +110,14 @@ directly in 1/16-px units and integrated by straight addition.
   helpers and `armorAggregate()` (defense/resist/skill-point sums + S/M tiers).
 - `src/armor.hpp` — device cart glue: reads `mhArmor` and caches the equipped
   stats into `Game::armor`/`Game::armorHead` at hunt start and on equip change.
-- `src/card_state.hpp` — host-testable detail-card state machine (5co.3):
-  the `DetailState` page mask/machine (open on the first present page,
-  LEFT/RIGHT cycles only pages in the mask, B backs out), the list-row ->
-  card kind/global-index mapping, the crafted-armor PARTS trim, and the
-  dynamic hint rule (`A CRAFT` / `A EQUIP` / `A UNEQUIP` / `A ACCEPT` /
-  `A TURN IN` / `NEED PARTS` / `NEED ZENNY`).
+- `src/card_state.hpp` — host-testable detail-card state machine (5co.3;
+  ui.3.1 added the armor craft bill): the `DetailState` page mask/machine (open
+  on the first present page, LEFT/RIGHT cycles only pages in the mask, B backs
+  out), the list-row -> card kind/global-index mapping, the crafted-armor
+  PARTS trim, the armor card action (`cardArmorApply`: craft from the baked
+  bill, then equip/unequip), and the dynamic hint rule (`A CRAFT` /
+  `A EQUIP` / `A UNEQUIP` / `A ACCEPT` / `A TURN IN` / `NEED PARTS` /
+  `NEED ZENNY`).
 - `src/cards.hpp` — device cart glue for the cards: reads the `mhCards` record
   with one bulk `mhFxReadBytes` into a byte-identical `CardItem` cache
   (`static_assert`d), blits the baked 128x64 page through `cardBlit`
@@ -189,7 +191,7 @@ data/skeletons.json + data/creatures/*.json ──tools/gen-combat.py──►�
 - Current blobs: `fxmonster`, `fxplayer`, `fxpole`, `fxball`, `fxscatter`,
   `fxspark`, `fxfontw`, `fxfontg`, the overlay/effect sheets and the raw
   content tables (`mhWeaponDefs`, `mhMonsterAttacks`, `mhMonsterDefs`,
-  `mhCombat`, `mhCards`) — 298992 B cart image total. The dead
+  `mhCombat`, `mhCards`) — 298925 B cart image total. The dead
   `mh_menu_bg`/`mh_menu_wsel`/`mh_menu_msel` sheets were dropped with the
   opening menu (`hml.2`).
 - Detail cards (`tools/gen-cards.py`, ui.3): `data/armor.json` +
@@ -197,7 +199,8 @@ data/skeletons.json + data/creatures/*.json ──tools/gen-combat.py──►�
   per item page under `images/cards/` (3x 1bpp page-major layers in
   `fxdata/cards/Sprites.txt`, the same family as the room images), the packed
   `fxdata/tables/cards.bin` record table (mask + page image addresses + overlay
-  slots) and `src/generated/card_meta.hpp`. A page with no data is not
+  slots + the armor craft bill: zenny + up to two `{itemIdx+1, count}` pairs)
+  and `src/generated/card_meta.hpp`. A page with no data is not
   generated. `python3 tools/gen-cards.py --sheet build/cards_contact_sheet.png`
   renders every page into one review grid (never committed); `--dump` lists the
   masks/overlays without writing.
@@ -241,7 +244,7 @@ data/skeletons.json + data/creatures/*.json ──tools/gen-combat.py──►�
    - `test_audio` — cue-map asserts with real tones
     - `test_data` — FX-cart weapon/monster tables match the mock values and packed layout
     - `test_combat` — combat blob loader: header/spot values, cross-refs, guard eval, damage routing, cache read counts
-    - `test_cards` — mhCards cart reads, list-row -> card mapping, card action E2E (craft/take/turn-in + EEPROM), card page blit + overlay pixels across planes
+    - `test_cards` — mhCards cart reads (incl. the baked armor craft bill), list-row -> card mapping, card action E2E (armor craft/equip, take/turn-in + EEPROM), card page blit + overlay pixels across planes
     - `test_parity` — replays mock-generated traces tick-by-tick vs core
    - `test_hud` — pins HUD bar/divider framebuffer bytes + world-clip control
    - `test_perf` — cycle-based bench + budget gates
@@ -273,7 +276,7 @@ so B there is a no-op.
 |---|---|
 | UP / DOWN | move the cursor (6 rows per page, scroll by 6) |
 | A | accept the cursor row (start hunt / open a screen / buy / take quest) |
-| B | back one level (quests/smith/gear → hub; hub B is a root no-op) |
+| B | back one level (quests/gear → hub; hub B is a root no-op) |
 
 D-pad nav is debounced: a tap moves exactly one row (immediate on the direction
 change), while holding waits ~300 ms (16 logic ticks) and then repeats every
@@ -286,21 +289,19 @@ After a win or loss, A returns to the hub so the finished quest can be turned in
 the next HUNT runs `newGame` again, so projectiles/effects/quest counters start
 clean. While a screen is up the sim and audio are not stepped.
 
-The hub shows HUNT / QUESTS / SMITH / GEAR plus a ZENNY row that renders the live
+The hub shows HUNT / QUESTS / GEAR plus a ZENNY row that renders the live
 `save.zenny` balance (dynamic value token). The quests board takes a kill quest
-and turns it in for its reward; the smith crafts armor pieces
-(`COND_ARMOR`/`ACTION_CRAFT_ARMOR` rows: A crafts the piece — debiting its
-materials + zenny and marking it crafted — then toggles equip/unequip; the
-crafted bitmask and the equipped ids persist in the save, and the equipped stats
-cache at hunt start, arm.2). The smith's weapon upgrade tiers were trimmed in
-ui.2 for headroom; weapon progression returns as FORGE trees in ui.4 (the
-`mhSmith` upgrade table still feeds the tier multiplier path until then). The
-GEAR screen equips the loadout: the three
+and turns it in for its reward. ui.3.1 (5co.6) removed the SMITH screen: armor
+crafting moved onto the GEAR armor card (below), and the hub FORGE trees replace
+the smith screen in ui.4 (the `mhSmith` upgrade table still feeds the tier
+multiplier path until then; the camp forge interaction was dropped with it).
+The GEAR screen equips the loadout: the three
 weapons (SWORD / FLAIL / GUN) into the save's v4 `weapon` byte, then the five
-crafted armor pieces (`COND_CRAFTED`/`ACTION_EQUIP_ARMOR` rows, gs.1). A on an
+armor pieces (`ACTION_EQUIP_ARMOR` rows, gs.1) — always live, because the card's
+A crafts an uncrafted piece (debit + crafted bit) before toggling equip. A on an
 equip row toggles it (a same-weapon / same-piece press is a no-op) and the next
-HUNT starts with it; an armor row is dead until the piece is crafted on SMITH,
-so crafting and equipping split cleanly between the two screens. The GEAR page
+HUNT starts with it; the crafted bitmask and the equipped ids persist in the
+save, and the equipped stats cache at hunt start (arm.2). The GEAR page
 also carries a live skill readout (gs.2): five `ROW_F_SKILL` rows (ATTACK UP /
 DEFENSE UP / HEALTH UP / STAMINA UP / EVADE) show each skill's stacked points,
 and an active skill gets an `S` (points >= 10) or `M` (points >= 15) letter just
@@ -318,8 +319,10 @@ Armor and quest rows open a **prebaked detail card** (ui.3) instead of firing
 the action on the list: A on the list opens the card, LEFT/RIGHT cycles its
 pages (DESC/PARTS/STATS/SKILL for armor; GOAL/PROG/REWARD for quests), B backs
 to the list, and A on the card performs the row's context action
-(craft/equip/unequip or take/turn-in) through the same action switch the list
-used. Everything is baked into the 128x64 page image except the hint line and
+(craft/equip/unequip or take/turn-in). The armor craft bill (zenny + up to two
+`{item, count}` pairs) is baked into the `mhCards` record (ui.3.1), so the card
+gates and debits the craft itself; quest cards still run the row action.
+Everything is baked into the 128x64 page image except the hint line and
 the live overlay slots (PARTS have-counts, the quest progress bar); a crafted
 armor piece loses its PARTS page immediately, so the card cannot offer a second
 craft. GEAR **weapon** rows keep their direct-equip action for now: weapon

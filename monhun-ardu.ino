@@ -65,10 +65,6 @@ static bool s_huntPrevA = false;
 // latch so the save is not rewritten on every post-over tick.
 static bool s_huntOver = false;
 
-// Camp smithy origin (prg.7): true while the smith screen was opened from the
-// camp smithy prop, so its B steps back into the camp sim instead of the hub.
-static bool s_smithyFromCamp = false;
-
 // GEAR skill readout (gs.2): refresh Game::armor from the save, then copy the
 // per-skill points/tier into the GEAR screen's cache. Called when GEAR is
 // entered and after every GEAR action, so equipping a piece moves the numbers
@@ -150,7 +146,11 @@ void run() {
             return;
         }
         if (dev == mh::DETAIL_ACTION) {
-            if (mh::screenCondOk(s_save, s_detailRow) && mh::screenApplyAction(s_save, s_detailRow))
+            // Armor cards craft/equip from the baked bill (ui.3.1, 5co.6);
+            // quest cards take/turn in through the row action.
+            const bool changed =
+                s_card.kind == cards::KIND_ARMOR ? mh::cardArmorApply(s_save, s_card, s_detailRow) : (mh::screenCondOk(s_save, s_detailRow) && mh::screenApplyAction(s_save, s_detailRow));
+            if (changed)
                 mh::saveStore(s_save, SAVE_BACKEND);
             mh::cardLoad(s_detail, s_card, s_detail.index, s_save, true);
             if (s_screen.screen == screens::SCREEN_GEAR)
@@ -161,21 +161,12 @@ void run() {
     }
 #endif
     if (s_screen.active) {
-        // Screen tick: nav + A/B. B steps back one level (quests/smith -> hub;
+        // Screen tick: nav + A/B. B steps back one level (quests/gear -> hub;
         // the hub is the root, so its B is a no-op); A routes through the hub
         // map or runs the row action.
         const mh::ScreenEvent ev = mh::screenStep(s_screen, in);
         if (ev == mh::SCREEN_BACK) {
-            // A camp-opened smith closes back into the camp sim; every other
-            // screen keeps the back-step (quests/smith -> hub).
-            if (s_smithyFromCamp && s_screen.screen == screens::SCREEN_SMITH) {
-                s_smithyFromCamp = false;
-                mh::appNavApply(mh::APP_NAV_CAMP, s_screen, s_save, g, in);
-                // A camp-smith equip/unequip changes the live hunt's armor cache.
-                mh::armorApplyToGame(g, s_save);
-            } else {
-                mh::appNavApply(mh::appScreenBack(s_screen.screen), s_screen, s_save, g, in);
-            }
+            mh::appNavApply(mh::appScreenBack(s_screen.screen), s_screen, s_save, g, in);
             return;
         }
         if (ev != mh::SCREEN_ACCEPT)
@@ -199,10 +190,7 @@ void run() {
         if (nav != mh::APP_NAV_NONE) {
             // Hub destination (row, hunt): a hunt start builds the world from
             // the save (huntStart), arms the quest/upgrade/item/armor state and
-            // clears the hunt-end latch. A smith opened from the hub is not a
-            // camp smith (back goes to the hub).
-            if (nav == mh::APP_NAV_SMITH)
-                s_smithyFromCamp = false;
+            // clears the hunt-end latch.
             if (mh::appNavApply(nav, s_screen, s_save, g, in)) {
                 mh::huntStart(g, s_save);
                 mh::questApplyToGame(g, s_save);
@@ -230,16 +218,11 @@ void run() {
     // Consume it once (a held B cannot re-fire) and open the hub (root).
     if (mh::appHubRequest(g) != mh::APP_NAV_NONE) {
         mh::appNavApply(mh::APP_NAV_HUB, s_screen, s_save, g, in);
-        s_smithyFromCamp = false;
         return;
     }
-    // Camp smithy (prg.7): a sheathed B press inside the forge rect opens the
-    // smith screen; its B returns to the camp sim (s_smithyFromCamp).
-    if (mh::appSmithyRequest(g) != mh::APP_NAV_NONE) {
-        mh::appNavApply(mh::APP_NAV_SMITH, s_screen, s_save, g, in);
-        s_smithyFromCamp = true;
-        return;
-    }
+    // Camp smithy (prg.7) note: the SMITH screen is gone (ui.3.1, 5co.6) and the
+    // FORGE trees replace it in ui.4. Game::smithyRequest still latches from the
+    // camp forge rect; the FORGE bead consumes it. Nothing to route here yet.
     // Hunt-end quest commit (qs.2/qs.4): persist the kill progress exactly once
     // per hunt. The save is otherwise untouched during a hunt (write-cycle
     // hygiene); appHuntCommit() owns the latch.

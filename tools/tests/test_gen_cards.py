@@ -27,10 +27,12 @@ spec.loader.exec_module(gen_cards)
 
 HEADER = struct.Struct("<HBBBBH")
 ITEM = struct.Struct("<BBB")
-ITEM_SIZE = 27
+ITEM_SIZE = 33   # +6 B armor craft bill (ui.3.1, 5co.6)
 HEADER_SIZE = 8
 PAGE_MAX = 4
 OVERLAY_MAX = 2
+CRAFT_OFF = 27
+CRAFT_MAT_SLOTS = 2
 
 ITEMS = {
     "version": 1,
@@ -160,8 +162,13 @@ def parse_records(blob):
         for o in range(OVERLAY_MAX):
             base = off + 15 + o * 6
             overlays.append(tuple(blob[base:base + 6]))
+        craft_off = off + CRAFT_OFF
+        craft_cost = blob[craft_off] | (blob[craft_off + 1] << 8)
+        craft_mats = [(blob[craft_off + 2 + m * 2], blob[craft_off + 3 + m * 2])
+                      for m in range(CRAFT_MAT_SLOTS)]
         records.append({"kind": kind, "mask": mask, "overlay_count": overlay_count,
-                        "pages": pages, "overlays": overlays, "off": off})
+                        "pages": pages, "overlays": overlays, "off": off,
+                        "craft_cost": craft_cost, "craft_mats": craft_mats})
     return {"magic": magic, "version": version, "flags": flags, "count": count}, records
 
 
@@ -224,13 +231,35 @@ class GenCardsTests(unittest.TestCase):
     def test_meta_header_matches_blob(self):
         self.run_ok()
         meta = self.read("src", "generated", "card_meta.hpp")
-        self.assertIn("constexpr uint8_t ITEM_SIZE = 27;", meta)
+        self.assertIn("constexpr uint8_t ITEM_SIZE = 33;", meta)
         self.assertIn("constexpr uint8_t ITEM_COUNT = 5;", meta)
         self.assertIn("constexpr uint8_t QUEST_BASE = 3;", meta)
+        self.assertIn("constexpr uint8_t CRAFT_MAT_SLOTS = 2;", meta)
+        self.assertIn("constexpr uint8_t ITEM_CRAFT_OFF = 27;", meta)
         self.assertIn("constexpr uint8_t CARD_ARMOR_ALPHA_HELM = 0;", meta)
         self.assertIn("constexpr uint16_t CARD_ARMOR_ALPHA_HELM_OFF = 8;", meta)
         self.assertIn("constexpr uint8_t CARD_QUEST_GATHER_ORE = 4;", meta)
-        self.assertIn("constexpr uint16_t CARD_QUEST_GATHER_ORE_OFF = 116;", meta)
+        self.assertIn("constexpr uint16_t CARD_QUEST_GATHER_ORE_OFF = 140;", meta)
+
+    def test_armor_craft_bill_baked_into_record(self):
+        self.run_ok()
+        _header, records = self.load()
+        # alpha_helm: ore (idx 1) x2 + scale (idx 2) x1 + 100z, codes are idx+1.
+        alpha = records[0]
+        self.assertEqual(alpha["craft_cost"], 100)
+        self.assertEqual(alpha["craft_mats"], [(2, 2), (3, 1)])
+        # beta_cap: no recipe -> zero bill.
+        beta = records[1]
+        self.assertEqual(beta["craft_cost"], 0)
+        self.assertEqual(beta["craft_mats"], [(0, 0), (0, 0)])
+        # gamma_mail: zenny-only.
+        gamma = records[2]
+        self.assertEqual(gamma["craft_cost"], 50)
+        self.assertEqual(gamma["craft_mats"], [(0, 0), (0, 0)])
+        # Quest records carry a zero bill.
+        for i in (3, 4):
+            self.assertEqual(records[i]["craft_cost"], 0)
+            self.assertEqual(records[i]["craft_mats"], [(0, 0), (0, 0)])
 
     # ---------------------------------------------------- masks/pages/overlays
     def test_masks_and_absent_pages_not_generated(self):

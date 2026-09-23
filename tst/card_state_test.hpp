@@ -5,10 +5,10 @@
 // Covers the cart-free half of the card path: the page mask helpers, the
 // DetailState page machine (open/cycle/back, absent-page skipping), the
 // row -> card mapping (kind + global card index, including the quest
-// QUEST_BASE offset), the crafted-armor PARTS trim, and the dynamic hint rule.
-// The cart read + blit half (src/cards.hpp) is device-only and is pinned by
-// tst/fxdatatest/cards_test.hpp; the action itself is screenApplyAction and is
-// covered by tst/armor_engine_test.hpp / tst/screens_test.hpp.
+// QUEST_BASE offset), the crafted-armor PARTS trim, the armor craft/equip
+// action (ui.3.1, 5co.6: the bill bakes into the card record) and the dynamic
+// hint rule. The cart read + blit half (src/cards.hpp) is device-only and is
+// pinned by tst/fxdatatest/cards_test.hpp.
 #include "test.hpp"
 #include "../src/card_state.hpp"
 #include "../src/core/save.hpp"
@@ -21,22 +21,42 @@ using namespace mh;
 
 namespace cardstatetest {
 
-// COND_ARMOR / ACTION_CRAFT_ARMOR row: param = (slot << 5) | piece. The
-// HUNTER HELM recipe (ore 3 + scale 2 + 300z) mirrors data/armor.json so the
-// hint/action tests share the shipped bill.
-inline ScreenRow armorRow(uint8_t action, uint8_t piece, uint8_t slot, uint16_t cost = 300) {
+// GEAR armor row: param = (slot << 5) | piece. ui.3.1: the craft bill lives on
+// the card, not the row.
+inline ScreenRow armorRow(uint8_t piece, uint8_t slot) {
     ScreenRow r;
-    r.cost = cost;
-    r.action = action;
+    r.cost = 0;
+    r.action = screens::ACTION_EQUIP_ARMOR;
     r.flags = 0;
-    r.cond = (action == screens::ACTION_CRAFT_ARMOR) ? screens::COND_ARMOR : screens::COND_CRAFTED;
+    r.cond = screens::COND_ALWAYS;
     r.param = static_cast<uint8_t>((slot << 5) | piece);
     r.unlock = 0;
-    r.recipe[0].item = ITEM_ORE + 1;
-    r.recipe[0].count = 3;
-    r.recipe[1].item = ITEM_SCALE + 1;
-    r.recipe[1].count = 2;
+    r.recipe[0].item = 0;
+    r.recipe[0].count = 0;
+    r.recipe[1].item = 0;
+    r.recipe[1].count = 0;
     return r;
+}
+
+// A decoded armor card record with the given craft bill. The HUNTER HELM bill
+// (ore 3 + scale 2 + 300z) mirrors data/armor.json so the tests share the
+// shipped numbers.
+inline CardItem armorCard(uint16_t cost, uint8_t mat0 = 0, uint8_t cnt0 = 0, uint8_t mat1 = 0, uint8_t cnt1 = 0) {
+    CardItem it;
+    for (uint8_t i = 0; i < sizeof(CardItem); i++)
+        reinterpret_cast<uint8_t *>(&it)[i] = 0;
+    it.kind = cards::KIND_ARMOR;
+    it.craft[0] = static_cast<uint8_t>(cost & 0xFF);
+    it.craft[1] = static_cast<uint8_t>(cost >> 8);
+    it.craft[2] = mat0;
+    it.craft[3] = cnt0;
+    it.craft[4] = mat1;
+    it.craft[5] = cnt1;
+    return it;
+}
+
+inline CardItem helmCard() {
+    return armorCard(300, static_cast<uint8_t>(ITEM_ORE + 1), 3, static_cast<uint8_t>(ITEM_SCALE + 1), 2);
 }
 
 // COND_QUEST row: param = (need << 4) | quest id.
@@ -142,12 +162,7 @@ inline void CardStateSuite(TestRunner &runner) {
     // ------------------------------------------------------- row -> card map
     {
         Test t("row mapping: kind + global card index (armor prefix, quest base)");
-        const ScreenRow craft = armorRow(screens::ACTION_CRAFT_ARMOR, armor::ARMOR_HUNTER_HELM, armor::SLOT_HEAD);
-        t.assert(cardRowOpens(craft), true, "craft row opens");
-        t.assert(cardRowKind(craft), cards::KIND_ARMOR, "craft row is armor");
-        t.assert(cardRowIndex(craft), cards::CARD_ARMOR_HUNTER_HELM, "craft index is the piece");
-
-        const ScreenRow equip = armorRow(screens::ACTION_EQUIP_ARMOR, armor::ARMOR_BONE_MAIL, armor::SLOT_BODY);
+        const ScreenRow equip = armorRow(armor::ARMOR_BONE_MAIL, armor::SLOT_BODY);
         t.assert(cardRowOpens(equip), true, "equip row opens");
         t.assert(cardRowKind(equip), cards::KIND_ARMOR, "equip row is armor");
         t.assert(cardRowIndex(equip), cards::CARD_ARMOR_BONE_MAIL, "equip index is the piece");
@@ -205,61 +220,103 @@ inline void CardStateSuite(TestRunner &runner) {
         suite.addTest(t);
     }
 
-    // ---------------------------------------------------------- hint rule
+    // ------------------------------------------------- armor card action
     {
-        Test t("cardHint: craft/equip/unequip + blocked reasons + quests");
-        const ScreenRow craft = armorRow(screens::ACTION_CRAFT_ARMOR, armor::ARMOR_HUNTER_HELM, armor::SLOT_HEAD);
-        const ScreenRow gear = armorRow(screens::ACTION_EQUIP_ARMOR, armor::ARMOR_HUNTER_HELM, armor::SLOT_HEAD);
+        Test t("cardArmorApply: craft gate/debit/equip, crafted toggle, bad ids");
+        const ScreenRow helm = armorRow(armor::ARMOR_HUNTER_HELM, armor::SLOT_HEAD);
+        const CardItem card = helmCard();
 
         SaveBlock s;
         saveDefaults(s);
         s.zenny = 500;
         s.items[ITEM_ORE] = 3;
         s.items[ITEM_SCALE] = 2;
-        t.assert(cardHint(s, craft), HINT_CRAFT, "affordable uncrafted -> A CRAFT");
-        t.assert(cardHint(s, gear), HINT_NONE, "uncrafted GEAR row has no action");
+        t.assert(armorCardState(s, card, helm), ARMOR_CRAFT, "affordable uncrafted -> craft");
+        t.assert(cardArmorApply(s, card, helm), true, "craft+equip applies");
+        t.assert(saveCrafted(s, armor::ARMOR_HUNTER_HELM), true, "crafted bit set");
+        t.assert(s.zenny, 200, "zenny debited");
+        t.assert(s.items[ITEM_ORE], 0, "ore debited");
+        t.assert(s.items[ITEM_SCALE], 0, "scale debited");
+        t.assert(s.equip[armor::SLOT_HEAD], armor::ARMOR_HUNTER_HELM + 1, "craft auto-equips");
+        t.assert(cardArmorApply(s, card, helm), true, "second A unequips");
+        t.assert(s.equip[armor::SLOT_HEAD], SAVE_EQUIP_NONE, "unequipped");
+        t.assert(s.zenny, 200, "no second debit");
+        t.assert(cardArmorApply(s, card, helm), true, "third A re-equips");
+        t.assert(s.equip[armor::SLOT_HEAD], armor::ARMOR_HUNTER_HELM + 1, "re-equipped");
+
+        // Blocked: short zenny and a missing material are inert (no debit).
+        SaveBlock poor;
+        saveDefaults(poor);
+        poor.zenny = 299;
+        poor.items[ITEM_ORE] = 3;
+        poor.items[ITEM_SCALE] = 2;
+        t.assert(cardArmorApply(poor, card, helm), false, "short zenny rejected");
+        t.assert(saveCrafted(poor, armor::ARMOR_HUNTER_HELM), false, "short zenny: not crafted");
+        SaveBlock nomat;
+        saveDefaults(nomat);
+        nomat.zenny = 500;
+        nomat.items[ITEM_ORE] = 2;   // need 3
+        t.assert(cardArmorApply(nomat, card, helm), false, "missing material rejected");
+        t.assert(nomat.items[ITEM_ORE], 2, "missing material: no debit");
+
+        // Out-of-range piece/slot rows are inert.
+        t.assert(cardArmorApply(s, card, armorRow(armor::PIECE_COUNT, armor::SLOT_HEAD)), false, "bad piece rejected");
+        t.assert(cardArmorApply(s, card, armorRow(armor::ARMOR_HUNTER_HELM, 3)), false, "bad slot rejected");
+        suite.addTest(t);
+    }
+
+    // ---------------------------------------------------------- hint rule
+    {
+        Test t("cardHint: craft/equip/unequip + blocked reasons + quests");
+        const ScreenRow gear = armorRow(armor::ARMOR_HUNTER_HELM, armor::SLOT_HEAD);
+        const CardItem card = helmCard();
+
+        SaveBlock s;
+        saveDefaults(s);
+        s.zenny = 500;
+        s.items[ITEM_ORE] = 3;
+        s.items[ITEM_SCALE] = 2;
+        t.assert(cardHint(s, gear, card), HINT_CRAFT, "affordable uncrafted -> A CRAFT");
 
         SaveBlock poor = s;
         poor.zenny = 299;
-        t.assert(cardHint(poor, craft), HINT_NEED_ZENNY, "short zenny -> NEED ZENNY");
+        t.assert(cardHint(poor, gear, card), HINT_NEED_ZENNY, "short zenny -> NEED ZENNY");
         SaveBlock nomat = s;
         nomat.items[ITEM_ORE] = 2;
-        t.assert(cardHint(nomat, craft), HINT_NEED_PARTS, "missing parts -> NEED PARTS");
+        t.assert(cardHint(nomat, gear, card), HINT_NEED_PARTS, "missing parts -> NEED PARTS");
 
         saveSetCrafted(s, armor::ARMOR_HUNTER_HELM);
-        t.assert(cardHint(s, craft), HINT_EQUIP, "crafted, unequipped -> A EQUIP");
-        t.assert(cardHint(s, gear), HINT_EQUIP, "crafted GEAR row -> A EQUIP");
+        t.assert(cardHint(s, gear, card), HINT_EQUIP, "crafted, unequipped -> A EQUIP");
         s.equip[armor::SLOT_HEAD] = armor::ARMOR_HUNTER_HELM + 1;
-        t.assert(cardHint(s, craft), HINT_UNEQUIP, "crafted + equipped -> A UNEQUIP");
-        t.assert(cardHint(s, gear), HINT_UNEQUIP, "equipped GEAR row -> A UNEQUIP");
+        t.assert(cardHint(s, gear, card), HINT_UNEQUIP, "crafted + equipped -> A UNEQUIP");
         // A crafted piece ignores the (spent) materials/zenny bill.
-        t.assert(cardHint(poor, gear), HINT_NONE, "dead crafted state is GEAR-dead");
         saveSetCrafted(poor, armor::ARMOR_HUNTER_HELM);
-        t.assert(cardHint(poor, craft), HINT_EQUIP, "crafted row live despite empty wallet");
+        t.assert(cardHint(poor, gear, card), HINT_EQUIP, "crafted row live despite empty wallet");
 
         // Quests: takeable -> ACCEPT; active+ready -> TURN IN; else silent.
+        // The armor bill is ignored for quest rows.
         const ScreenRow take = questRow(screens::ACTION_TAKE_QUEST, quests::QUEST_SLAY_LUNGE, 3);
         const ScreenRow turnIn = questRow(screens::ACTION_TURN_IN_QUEST, quests::QUEST_SLAY_LUNGE, 3);
         SaveBlock q;
         saveDefaults(q);
-        t.assert(cardHint(q, take), HINT_ACCEPT, "fresh take row -> A ACCEPT");
-        t.assert(cardHint(q, turnIn), HINT_NONE, "inactive turn-in row silent");
+        t.assert(cardHint(q, take, card), HINT_ACCEPT, "fresh take row -> A ACCEPT");
+        t.assert(cardHint(q, turnIn, card), HINT_NONE, "inactive turn-in row silent");
         saveQuestSet(q, quests::QUEST_SLAY_LUNGE, 0);
         q.activeQuest = quests::QUEST_SLAY_LUNGE;
         q.progress = 2;
-        t.assert(cardHint(q, turnIn), HINT_NONE, "progress short -> silent");
-        t.assert(cardHint(q, take), HINT_NONE, "already taken -> silent");
+        t.assert(cardHint(q, turnIn, card), HINT_NONE, "progress short -> silent");
+        t.assert(cardHint(q, take, card), HINT_NONE, "already taken -> silent");
         q.progress = 3;
-        t.assert(cardHint(q, turnIn), HINT_TURN_IN, "ready -> A TURN IN");
+        t.assert(cardHint(q, turnIn, card), HINT_TURN_IN, "ready -> A TURN IN");
 
         // Locked chain row: silent until the prior quest is done.
         ScreenRow locked = take;
         locked.unlock = 2;
         SaveBlock chain;
         saveDefaults(chain);
-        t.assert(cardHint(chain, locked), HINT_NONE, "locked chain row silent");
+        t.assert(cardHint(chain, locked, card), HINT_NONE, "locked chain row silent");
         saveQuestSet(chain, 1, 1);
-        t.assert(cardHint(chain, locked), HINT_ACCEPT, "unlocked chain row -> A ACCEPT");
+        t.assert(cardHint(chain, locked, card), HINT_ACCEPT, "unlocked chain row -> A ACCEPT");
         suite.addTest(t);
     }
 

@@ -3,10 +3,11 @@
 // docs/ui-design.md).
 //
 // Covers the shipped cart path the host suite cannot: reading the mhCards
-// record through src/cards.hpp (kind/mask/overlays/page offsets), the
-// list-row -> card mapping against the real smith/quests cart rows, the
-// card -> A action E2E (craft / take / turn-in change the save, EEPROM
-// roundtrip), the crafted-armor PARTS trim on refresh, and framebuffer checks
+// record through src/cards.hpp (kind/mask/overlays/page offsets + the baked
+// armor craft bill), the list-row -> card mapping against the real gear/quests
+// cart rows, the card -> A action E2E (armor craft/equip / take / turn-in
+// change the save, EEPROM roundtrip), the crafted-armor PARTS trim on refresh,
+// and framebuffer checks
 // for the blitted page + the two dynamic overlay kinds (PARTS have-count,
 // quest PROG bar) across the triplane passes.
 #include "harness/fxtest.hpp"
@@ -71,6 +72,12 @@ inline void test_cards(FxTest &test) {
     test.expectEq(it.kind, cards::KIND_ARMOR, F("helm kind"));
     test.expectEq(it.pageMask, 0x0F, F("helm mask"));
     test.expectEq(it.overlayCount, 2, F("helm overlay count"));
+    // Baked armor craft bill (ui.3.1, 5co.6): 300z, ore x3 + scale x2 (idx+1).
+    test.expectEq(armorCardCost(it), 300, F("helm craft cost"));
+    test.expectEq(it.craft[2], static_cast<uint8_t>(item::ITEM_ORE + 1), F("helm ore code"));
+    test.expectEq(it.craft[3], 3, F("helm ore count"));
+    test.expectEq(it.craft[4], static_cast<uint8_t>(item::ITEM_SCALE + 1), F("helm scale code"));
+    test.expectEq(it.craft[5], 2, F("helm scale count"));
     test.expectEq(it.overlays[0].kind, cards::OVERLAY_HAVE, F("helm overlay kind"));
     test.expectEq(it.overlays[0].page, cards::PAGE_PARTS, F("helm overlay page"));
     test.expectEq(it.overlays[0].x, 112, F("helm overlay x"));
@@ -102,7 +109,9 @@ inline void test_cards(FxTest &test) {
     cardReadItem(cards::CARD_QUEST_SLAY_LUNGE, it);
     test.expectEq(cardPageOffset(it, cards::PAGE_PROG), mh_card_quest_slay_lunge_1, F("lunge prog addr"));
 
-    // ----------------------------------- smith list A -> card -> A crafts
+    // ------------------------------ GEAR armor list A -> card -> A crafts
+    // ui.3.1 (5co.6): the GEAR armor row opens the card; the card A crafts from
+    // the baked bill (gate + debit + crafted bit) then equips.
     SaveBlock save;
     saveDefaults(save);
     save.zenny = 300;
@@ -110,11 +119,11 @@ inline void test_cards(FxTest &test) {
     save.items[item::ITEM_SCALE] = 2;
 
     ScreenRow helm;
-    screenReadRow(screenRowOffsetAt(screens::SCREEN_SMITH, 0), helm);
-    test.expectEq(helm.action, screens::ACTION_CRAFT_ARMOR, F("smith row0 action"));
-    test.expectEq(cardRowOpens(helm), 1, F("smith row opens a card"));
-    test.expectEq(cardRowKind(helm), cards::KIND_ARMOR, F("smith row card kind"));
-    test.expectEq(cardRowIndex(helm), cards::CARD_ARMOR_HUNTER_HELM, F("smith row card index"));
+    screenReadRow(screenRowOffsetAt(screens::SCREEN_GEAR, 3), helm);
+    test.expectEq(helm.action, screens::ACTION_EQUIP_ARMOR, F("gear helm row action"));
+    test.expectEq(cardRowOpens(helm), 1, F("gear helm row opens a card"));
+    test.expectEq(cardRowKind(helm), cards::KIND_ARMOR, F("gear helm row card kind"));
+    test.expectEq(cardRowIndex(helm), cards::CARD_ARMOR_HUNTER_HELM, F("gear helm row card index"));
 
     DetailState detail;
     CardItem cache;
@@ -122,21 +131,23 @@ inline void test_cards(FxTest &test) {
     test.expectEq(detail.active, 1, F("card open"));
     test.expectEq(detail.page, cards::PAGE_DESC, F("card first page"));
     test.expectEq(detail.pageCount, 4, F("card page count"));
-    test.expectEq(cardHint(save, helm), HINT_CRAFT, F("craft hint"));
+    test.expectEq(cardHint(save, helm, cache), HINT_CRAFT, F("craft hint"));
 
     const Input idle = {0, 0, false, false};
     const Input a = {0, 0, true, false};
     const Input b = {0, 0, false, true};
     test.expectEq(detailStep(detail, a), DETAIL_ACTION, F("card A is an action"));
-    test.expectEq(screenCondOk(save, helm), 1, F("craft live"));
-    test.expectEq(screenApplyAction(save, helm), 1, F("craft applies"));
+    test.expectEq(cardArmorApply(save, cache, helm), 1, F("card craft applies"));
     test.expectEq(saveCrafted(save, armor::ARMOR_HUNTER_HELM), 1, F("crafted bit set"));
     test.expectEq(save.equip[armor::SLOT_HEAD], armor::ARMOR_HUNTER_HELM + 1, F("craft auto-equips"));
+    test.expectEq(save.zenny, 0, F("craft debits the bill zenny"));
+    test.expectEq(static_cast<uint32_t>(save.items[item::ITEM_ORE]), 0, F("craft debits ore"));
+    test.expectEq(static_cast<uint32_t>(save.items[item::ITEM_SCALE]), 0, F("craft debits scale"));
 
     cardLoad(detail, cache, cardRowIndex(helm), save, true);
     test.expectEq(cardMaskHas(detail.pageMask, cards::PAGE_PARTS), 0, F("crafted drops the PARTS page"));
     test.expectEq(detail.pageCount, 3, F("page count after craft"));
-    test.expectEq(cardHint(save, helm), HINT_UNEQUIP, F("crafted hint is unequip"));
+    test.expectEq(cardHint(save, helm, cache), HINT_UNEQUIP, F("crafted hint is unequip"));
     test.expectEq(detailStep(detail, b), DETAIL_BACK, F("card B backs out"));
 
     test.expectEq(saveStore(save, REAL_BACKEND), 1, F("card action stores"));
@@ -159,19 +170,19 @@ inline void test_cards(FxTest &test) {
     cardLoad(detail, cache, cardRowIndex(take), qsave, false);
     test.expectEq(detail.kind, cards::KIND_QUEST, F("quest card kind"));
     test.expectEq(detail.page, cards::PAGE_GOAL, F("quest first page"));
-    test.expectEq(cardHint(qsave, take), HINT_ACCEPT, F("accept hint"));
+    test.expectEq(cardHint(qsave, take, cache), HINT_ACCEPT, F("accept hint"));
     test.expectEq(detailStep(detail, a), DETAIL_ACTION, F("quest card A"));
     test.expectEq(screenApplyAction(qsave, take), 1, F("take applies"));
     test.expectEq(saveQuestGet(qsave, quests::QUEST_SLAY_LUNGE, 0), 1, F("taken bit set"));
-    test.expectEq(cardHint(qsave, take), HINT_NONE, F("taken row hint clears"));
+    test.expectEq(cardHint(qsave, take, cache), HINT_NONE, F("taken row hint clears"));
 
     qsave.progress = 3;
     cardLoad(detail, cache, cardRowIndex(turnIn), qsave, false);
-    test.expectEq(cardHint(qsave, turnIn), HINT_TURN_IN, F("turn-in hint"));
+    test.expectEq(cardHint(qsave, turnIn, cache), HINT_TURN_IN, F("turn-in hint"));
     test.expectEq(screenApplyAction(qsave, turnIn), 1, F("turn-in applies"));
     test.expectEq(qsave.zenny, 150, F("turn-in pays the row cost"));
     test.expectEq(saveQuestGet(qsave, quests::QUEST_SLAY_LUNGE, 1), 1, F("done bit set"));
-    test.expectEq(cardHint(qsave, turnIn), HINT_NONE, F("turned-in row hint clears"));
+    test.expectEq(cardHint(qsave, turnIn, cache), HINT_NONE, F("turned-in row hint clears"));
 
     // ------------------------------------- pixels: blit + dynamic overlays
     arduboy.startGray();

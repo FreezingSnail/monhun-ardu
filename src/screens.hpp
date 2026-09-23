@@ -14,7 +14,6 @@
 
 #include "render.hpp"
 #include "screen_state.hpp"
-#include "smith.hpp"   // smithCart: cart armor recipe bill for COND_ARMOR rows (arm.2)
 #include "quest.hpp"   // questReadDef: quest unlock + reward for COND_QUEST rows (dlp.2)
 
 namespace mh {
@@ -69,26 +68,6 @@ inline uint16_t screenRowNext(uint16_t off) {
     return static_cast<uint16_t>(off + 7 + mhFxReadU8(screenCart(off)));
 }
 
-// Recipe bill + zenny for a COND_ARMOR row: the mhSmith armor recipe record at
-// the row's piece index (armor::ARMOR_<ID>) is the single source of truth, so
-// the packed row cost is ignored and the row's bill always matches the data.
-inline void screenRowArmorRecipe(uint8_t piece, uint16_t &cost, ScreenRecipe *recipe) {
-    recipe[0].item = 0;
-    recipe[0].count = 0;
-    recipe[1].item = 0;
-    recipe[1].count = 0;
-    cost = 0;
-    if (piece >= smith::ARMOR_RECIPE_COUNT)
-        return;
-    const uint16_t off = static_cast<uint16_t>(smith::ARMOR_RECIPES_OFF + smith::ARMOR_RECIPE_SIZE * piece);
-    cost = mhFxReadU16(reinterpret_cast<const uint16_t *>(smithCart(static_cast<uint16_t>(off + smith::AREC_COST_OFF))));
-    for (uint8_t j = 0; j < smith::MAT_SLOTS; j++) {
-        const uint16_t m = static_cast<uint16_t>(off + smith::AREC_MAT_OFF + j * smith::AREC_MAT_STRIDE);
-        recipe[j].item = mhFxReadU8(smithCart(m));
-        recipe[j].count = mhFxReadU8(smithCart(static_cast<uint16_t>(m + 1)));
-    }
-}
-
 inline void screenReadRow(uint16_t off, ScreenRow &row) {
     const uint8_t labelLen = mhFxReadU8(screenCart(off));
     const uint16_t fields = static_cast<uint16_t>(off + 1 + labelLen);
@@ -102,13 +81,11 @@ inline void screenReadRow(uint16_t off, ScreenRow &row) {
     row.recipe[0].count = 0;
     row.recipe[1].item = 0;
     row.recipe[1].count = 0;
-    if (row.cond == screens::COND_ARMOR) {
-        screenRowArmorRecipe(screenArmorPiece(row.param), row.cost, row.recipe);
-    } else if (row.cond == screens::COND_QUEST) {
+    if (row.cond == screens::COND_QUEST) {
         // dlp.2: the quest def is the source of truth for the chain unlock and
-        // the turn-in payout (reward zenny + optional material), mirroring
-        // screenRowArmorRecipe. Board take rows fill `unlock`; turn-in rows fill
-        // recipe[0] + cost and are ignored by the take path.
+        // the turn-in payout (reward zenny + optional material). Board take rows
+        // fill `unlock`; turn-in rows fill recipe[0] + cost and are ignored by
+        // the take path. Armor craft bills live on the card (ui.3.1, 5co.6).
         const uint8_t quest = static_cast<uint8_t>(row.param & 15);
         if (quest < quests::QUEST_COUNT) {
             QuestDef def;

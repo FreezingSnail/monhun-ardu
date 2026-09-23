@@ -4,9 +4,9 @@
 // Host-testable state machine shared by the device suite and src/screens.hpp:
 //   * ScreenState: current screen index, cursor, page scroll
 //   * debounced up/down nav (tap/hold feel shared with the deleted opening menu)
-//   * row condition evaluation (quest / armor craftability / crafted)
-//   * the fixed action switch (CRAFT_ARMOR / EQUIP_ARMOR / EQUIP_WEAPON /
-//     TAKE_QUEST / TURN_IN_QUEST / LEAVE)
+//   * row condition evaluation (quest / crafted)
+//   * the fixed action switch (EQUIP_ARMOR / EQUIP_WEAPON / TAKE_QUEST /
+//     TURN_IN_QUEST / LEAVE)
 //
 // Conditions gate the action (A on a locked row does nothing), so the state
 // machine needs no per-row visibility mask. The cart side (reading ScreenDef/
@@ -19,18 +19,17 @@
 // quest and progress >= need. `param` packs (need << 4) | quest id; the turn-in
 // payout is the row `cost` (the quest's reward, from data/quests/*.json).
 //
-// Smith armor rows (bead arm.2): COND_ARMOR rows carry a packed `param`
-// -- (slot << 5) | pieceIdx -- and are live when the piece is already crafted
-// (A toggles equip) or when zenny >= cost and the material recipe bill holds.
-// The cart-side row scan (src/screens.hpp screenRowArmorRecipe) resolves the
-// cost + bill from the mhSmith armor record; the pure rule below is
-// screenRecipeOk().
-//
 // Gear rows (bead monhun-ardu-mn6.1): the GEAR screen equips crafted armor
 // alongside the weapon rows. COND_CRAFTED is live only when the row's piece
-// has its crafted bit (COND_ARMOR already decoded the same (slot << 5) | piece
-// packing), and ACTION_EQUIP_ARMOR calls armorEquipToggle -- true only when the
-// slot changed, so a dead/uncrafted row and a same-piece re-press write nothing.
+// has its crafted bit (the (slot << 5) | piece packing), and
+// ACTION_EQUIP_ARMOR calls armorEquipToggle -- true only when the slot changed,
+// so a dead/uncrafted row and a same-piece re-press write nothing.
+//
+// Armor crafting (ui.3.1, 5co.6) moved off the screen rows onto the detail card:
+// the craft bill bakes into the mhCards record and src/card_state.hpp
+// armorCardState()/cardArmorApply() gate + debit it before the same
+// armorEquipToggle. The old COND_ARMOR / ACTION_CRAFT_ARMOR / smith armor-recipe
+// cart read are gone.
 
 #include <stdint.h>
 #include "core/input.hpp"
@@ -73,39 +72,12 @@ struct ScreenRow {
     // quest def by screens.hpp screenReadRow (or supplied by a test); zeroed for
     // every other row.
     uint8_t unlock;
-    // prg.7/arm.2 recipe bill, resolved from the cart armor recipe record for
-    // COND_ARMOR rows by the caller (screens.hpp screenReadRow) or supplied by a
-    // test. Zeroed for every other row / a zenny-only recipe.
+    // Quest turn-in material reward, filled from the quest def by the caller
+    // (screens.hpp screenReadRow) or supplied by a test: recipe[0] is
+    // (rewardItem + 1, rewardCount), zero for every other row. Armor craft bills
+    // live on the detail card (ui.3.1, 5co.6), not the row.
     ScreenRecipe recipe[UPGRADE_MAT_SLOTS];
 };
-
-// Is the row's recipe bill satisfied by the save inventory? Empty slots
-// (item 0) are skipped. Pure: the caller fills row.recipe (cart or test).
-inline bool screenRecipeOk(const SaveBlock &save, const ScreenRecipe *recipe) {
-    for (uint8_t i = 0; i < UPGRADE_MAT_SLOTS; i++) {
-        const uint8_t code = recipe[i].item;
-        if (code == 0)
-            continue;
-        const uint8_t slot = static_cast<uint8_t>(code - 1);
-        if (slot >= item::ITEM_COUNT || save.items[slot] < recipe[i].count)
-            return false;
-    }
-    return true;
-}
-
-// Debit the row's recipe bill from the save inventory. Caller must have
-// checked screenRecipeOk first; a missing slot (should not happen) is a no-op.
-inline void screenRecipeDebit(SaveBlock &save, const ScreenRecipe *recipe) {
-    for (uint8_t i = 0; i < UPGRADE_MAT_SLOTS; i++) {
-        const uint8_t code = recipe[i].item;
-        if (code == 0)
-            continue;
-        const uint8_t slot = static_cast<uint8_t>(code - 1);
-        if (slot >= item::ITEM_COUNT)
-            continue;
-        save.items[slot] = static_cast<uint8_t>(save.items[slot] - recipe[i].count);
-    }
-}
 
 struct ScreenState {
     uint8_t screen = 0;   // screens::SCREEN_* index
@@ -131,7 +103,8 @@ enum ScreenEvent : int8_t {
     SCREEN_BACK      // B rising edge: return to the caller
 };
 
-// COND_ARMOR / ACTION_CRAFT_ARMOR param decoders: (slot << 5) | pieceIdx.
+// ACTION_EQUIP_ARMOR param decoders: (slot << 5) | pieceIdx. Used by the armor
+// card path (src/card_state.hpp cardArmorApply).
 inline uint8_t screenArmorPiece(uint8_t param) {
     return static_cast<uint8_t>(param & 31);
 }
@@ -139,8 +112,8 @@ inline uint8_t screenArmorSlot(uint8_t param) {
     return static_cast<uint8_t>((param >> 5) & 3);
 }
 
-// Row condition: 0 = always, quest state query, armor craftability, or the
-// crafted-bit GEAR gate (see header note).
+// Row condition: 0 = always or a quest state query (see header note). Armor
+// rows are always live on the GEAR list; the card's bill gates the craft.
 inline bool screenCondOk(const SaveBlock &save, const ScreenRow &row) {
     switch (row.cond) {
     case screens::COND_QUEST: {
@@ -149,25 +122,6 @@ inline bool screenCondOk(const SaveBlock &save, const ScreenRow &row) {
             return questReady(save, quest, static_cast<uint8_t>((row.param >> 4) & 15));
         // dlp.2: a take row is live only when the chain unlock holds too.
         return questTakeable(save, quest) && questUnlocked(save, row.unlock);
-    }
-    case screens::COND_ARMOR: {
-        // arm.2: a crafted piece is always live (A toggles equip); an uncrafted
-        // one needs the zenny + material bill. The caller fills row.recipe from
-        // the mhSmith armor record (screens.hpp) so this stays cart-free.
-        const uint8_t piece = screenArmorPiece(row.param);
-        const uint8_t slot = screenArmorSlot(row.param);
-        if (piece >= armor::PIECE_COUNT || slot >= SAVE_EQUIP_COUNT)
-            return false;
-        if (saveCrafted(save, piece))
-            return true;
-        return save.zenny >= row.cost && screenRecipeOk(save, row.recipe);
-    }
-    case screens::COND_CRAFTED: {
-        // gs.1: the GEAR armor row is live once the piece is crafted. `param`
-        // packs (slot << 5) | pieceIdx like ACTION_EQUIP_ARMOR, so decode the
-        // piece with screenArmorPiece; an out-of-range id reads dead.
-        const uint8_t piece = screenArmorPiece(row.param);
-        return piece < armor::PIECE_COUNT && saveCrafted(save, piece);
     }
     default:
         return true;
@@ -243,44 +197,12 @@ inline ScreenEvent screenStep(ScreenState &s, const Input &in) {
 }
 
 // Apply the fixed action switch. Returns true when the save changed and must be
-// committed (the caller then calls saveStore once). Armor crafting is gated by
-// the material recipe bill and zenny (COND_ARMOR rows decode the piece + slot
-// from `param`); quest rows take/turn in through src/quest_state.hpp (turn-in
-// pays the row cost). The recipe bill is re-checked here (not just in the
-// condition) so a stale row cannot debit more than the hunter owns.
+// committed (the caller then calls saveStore once). Armor craft/equip is a card
+// action (src/card_state.hpp cardArmorApply), so this switch no longer carries
+// an armor case; quest rows take/turn in through src/quest_state.hpp (turn-in
+// pays the row cost + the optional recipe[0] material reward).
 inline bool screenApplyAction(SaveBlock &save, const ScreenRow &row) {
     switch (row.action) {
-    case screens::ACTION_CRAFT_ARMOR: {
-        // arm.2: craft (if needed) then toggle the piece into its slot. Craft
-        // debits the material bill + zenny and sets the crafted bit; a second A
-        // on a crafted piece unequips it. Re-checks the bill so a stale row
-        // cannot debit more than the hunter owns.
-        const uint8_t piece = screenArmorPiece(row.param);
-        const uint8_t slot = screenArmorSlot(row.param);
-        if (piece >= armor::PIECE_COUNT || slot >= SAVE_EQUIP_COUNT)
-            return false;
-        bool changed = false;
-        if (!saveCrafted(save, piece)) {
-            if (save.zenny < row.cost)
-                return false;
-            if (!screenRecipeOk(save, row.recipe))
-                return false;
-            screenRecipeDebit(save, row.recipe);
-            save.zenny = static_cast<uint16_t>(save.zenny - row.cost);
-            saveSetCrafted(save, piece);
-            changed = true;
-        }
-        if (armorEquipToggle(save, piece, slot))
-            changed = true;
-        return changed;
-    }
-    case screens::ACTION_EQUIP_ARMOR: {
-        // gs.1: the GEAR screen toggles a crafted piece into its slot. `param`
-        // packs (slot << 5) | pieceIdx; armorEquipToggle re-checks the crafted
-        // bit and range, so an uncrafted / stale row is inert and the EEPROM
-        // write only happens on a real slot change.
-        return armorEquipToggle(save, screenArmorPiece(row.param), screenArmorSlot(row.param));
-    }
     case screens::ACTION_EQUIP_WEAPON: {
         // hml.3: the GEAR screen equips one of the SAVE_TIER_COUNT weapons. A
         // stale row (param past the weapon table) is inert; equipping the

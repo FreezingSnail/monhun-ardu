@@ -1,7 +1,8 @@
 #pragma once
-// App-level routing between the data-driven screens (hub / quests / smith) and a
+// App-level routing between the data-driven screens (hub / quests / gear) and a
 // hunt (bead monhun-ardu-mgn, docs/quests-shops.md qs.4; hub-as-root rework
-// monhun-ardu-isp.1, which deleted the opening menu).
+// monhun-ardu-isp.1, which deleted the opening menu; ui.3.1 (5co.6) removed the
+// SMITH screen -- FORGE replaces it in ui.4).
 //
 // Host- and device-testable: no cart reads, no Arduino.h. The caller resolves
 // the cursor row off the cart (screenCursorRow in src/screens.hpp) and passes
@@ -12,7 +13,7 @@
 // Live flow (monhun-ardu-isp.1; the hub is the root screen, the 5r1/opening
 // menu is gone; prg.8 removed the training-pole room):
 //   boot --> hub --HUNT--> camp --door--> area --door--> camp
-//   hub --QUESTS/SMITH--> screen --B/LEAVE--> hub
+//   hub --QUESTS/GEAR--> screen --B/LEAVE--> hub
 //   hub --B--> nothing (root; appScreenBack(HUB) == APP_NAV_NONE)
 //   camp hold-B --> hub                              (appHubRequest)
 //   hunt end + A --> hub                             (appHuntReturn; turn-ins)
@@ -34,13 +35,11 @@ enum AppNav : int8_t {
     APP_NAV_NONE = 0,
     APP_NAV_HUB,
     APP_NAV_QUESTS,
-    APP_NAV_SMITH,
-    APP_NAV_GEAR,   // hml.3: hub GEAR row (weapon select)
-    APP_NAV_CAMP,   // close a screen opened from the camp smithy (resume the hunt)
+    APP_NAV_GEAR,   // hml.3: hub GEAR row (weapon select + armor craft/equip)
     APP_NAV_HUNT    // the hub HUNT row: the caller starts the hunt (huntStart)
 };
 
-// B: hub is the root (no back destination); quests/smith -> hub.
+// B: hub is the root (no back destination); quests/gear -> hub.
 inline AppNav appScreenBack(uint8_t screen) {
     return screen == screens::SCREEN_HUB ? APP_NAV_NONE : APP_NAV_HUB;
 }
@@ -55,8 +54,6 @@ inline AppNav appScreenAccept(uint8_t screen, const ScreenRow &row) {
             return APP_NAV_HUNT;
         case screens::ACTION_OPEN_QUESTS:
             return APP_NAV_QUESTS;
-        case screens::ACTION_OPEN_SMITH:
-            return APP_NAV_SMITH;
         case screens::ACTION_OPEN_GEAR:
             return APP_NAV_GEAR;
         case screens::ACTION_LEAVE:
@@ -111,16 +108,6 @@ inline AppNav appHubRequest(Game &g) {
     return APP_NAV_HUB;
 }
 
-// Camp smithy (prg.7): a sheathed B press inside a smithy rect raises
-// Game::smithyRequest. Consumed exactly once -> the smith screen; the caller
-// remembers the camp origin so its B steps back into the hunt, not the hub.
-inline AppNav appSmithyRequest(Game &g) {
-    if (!g.smithyRequest)
-        return APP_NAV_NONE;
-    g.smithyRequest = false;
-    return APP_NAV_SMITH;
-}
-
 // Apply a nav destination to the live state. Returns true when the hub HUNT row
 // requested a hunt: the caller then starts it (device glue huntStart(), which
 // runs newGame + loadRoom), arms the quest/upgrade state and clears its
@@ -141,11 +128,6 @@ MH_NOINLINE inline bool appNavApply(AppNav nav, ScreenState &screen, const SaveB
         screen.prevA = in.a;
         screen.prevB = in.b;
         return false;
-    case APP_NAV_SMITH:
-        screenReset(screen, screens::SCREEN_SMITH, screens::SCREEN_SMITH_ROWS);
-        screen.prevA = in.a;
-        screen.prevB = in.b;
-        return false;
     case APP_NAV_GEAR:
         screenReset(screen, screens::SCREEN_GEAR, screens::SCREEN_GEAR_ROWS);
         screen.prevA = in.a;
@@ -157,11 +139,6 @@ MH_NOINLINE inline bool appNavApply(AppNav nav, ScreenState &screen, const SaveB
         // fresh hunt resets projectiles/effects/quest counters.
         screen.active = false;
         return true;
-    case APP_NAV_CAMP:
-        // Close a screen opened from the camp smithy: the camp sim resumes
-        // where it was (no hunt reset).
-        screen.active = false;
-        return false;
     default:
         return false;
     }
