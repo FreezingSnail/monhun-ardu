@@ -1,7 +1,7 @@
 #pragma once
 // On-device end-to-end suite for the app flow (bead monhun-ardu-mgn qs.4; hub as
 // the root screen monhun-ardu-isp.1): boot -> hub -> HUNT -> fight -> win/death
-// -> A -> hub -> QUESTS board, plus the hub -> quests take -> smith buy -> hub
+// -> A -> hub -> QUESTS board, plus the hub -> quests take -> smith craft -> hub
 // detour. Drives the same src/app_state.hpp routing and src/app_setup.hpp hunt
 // start (huntStart + quest/tier/items/armor arming) as the shipping sketch.
 
@@ -103,10 +103,10 @@ inline void test_hub(FxTest &test) {
     saveDefaults(save);
     save.zenny = 500;
     save.items[ITEM_HERB] = 4;
-    // prg.7: the SWORD T1 recipe needs 2 ore + 1 scale; the buy below debits
-    // both alongside the zenny.
-    save.items[ITEM_ORE] = 2;
-    save.items[ITEM_SCALE] = 1;
+    // arm.2: the HUNTER HELM recipe needs 3 ore + 2 scale; the craft below
+    // debits both alongside the 300 zenny.
+    save.items[ITEM_ORE] = 3;
+    save.items[ITEM_SCALE] = 2;
     saveStore(save, REAL_BACKEND);
 
     ScreenState screen;
@@ -128,7 +128,7 @@ inline void test_hub(FxTest &test) {
     test.expectEq(static_cast<uint32_t>(g.projN), 0, F("fresh projectile ring"));
     test.expectEq(static_cast<uint32_t>(g.fxN), 0, F("fresh effect ring"));
 
-    // --------------------- hub -> quests take -> smith buy -> hub
+    // --------------------- hub -> quests take -> smith craft -> hub
     appNavApply(APP_NAV_HUB, screen, save, g, H_A);
     test.expectEq(static_cast<uint32_t>(screen.active), 1, F("hub active again"));
     test.expectEq(static_cast<uint32_t>(screen.rowCount), screens::SCREEN_HUB_ROWS, F("hub row count"));
@@ -143,7 +143,8 @@ inline void test_hub(FxTest &test) {
     test.expectEq(static_cast<uint32_t>(save.activeQuest), 0, F("quest 0 active"));
     test.expectEq(static_cast<uint32_t>(saveQuestGet(save, 0, 0)), 1, F("quest 0 taken bit"));
 
-    // SMITH is hub row 2.
+    // SMITH is hub row 2. ui.2 removed the weapon-tier rows; row 0 is the
+    // HUNTER HELM armor craft (the surviving smith path).
     appNavApply(pressB(screen, save), screen, save, g, H_B);
     test.expectEq(static_cast<uint32_t>(screen.screen), screens::SCREEN_HUB, F("back on hub"));
     test.expectEq(static_cast<uint32_t>(screen.cursor), 0, F("hub cursor reset to HUNT"));
@@ -152,9 +153,11 @@ inline void test_hub(FxTest &test) {
     test.expectEq(static_cast<uint32_t>(screen.cursor), 2, F("cursor on SMITH"));
     appNavApply(pressA(screen, save), screen, save, g, H_A);
     test.expectEq(static_cast<uint32_t>(screen.screen), screens::SCREEN_SMITH, F("smith screen"));
-    appNavApply(pressA(screen, save), screen, save, g, H_A);   // buy SWORD T1
-    test.expectEq(save.zenny, 400, F("zenny after buy"));
-    test.expectEq(static_cast<uint32_t>(save.tier[W_SWORD]), 1, F("sword tier 1 stored"));
+    test.expectEq(static_cast<uint32_t>(screen.rowCount), screens::SCREEN_SMITH_ROWS, F("smith row count"));
+    appNavApply(pressA(screen, save), screen, save, g, H_A);   // craft + equip HUNTER HELM
+    test.expectEq(save.zenny, 200, F("zenny after helm craft"));
+    test.expectEq(static_cast<uint32_t>(saveCrafted(save, armor::ARMOR_HUNTER_HELM)), 1, F("helm crafted bit"));
+    test.expectEq(static_cast<uint32_t>(save.equip[armor::SLOT_HEAD]), armor::ARMOR_HUNTER_HELM + 1, F("helm equipped"));
     test.expectEq(static_cast<uint32_t>(save.items[ITEM_ORE]), 0, F("recipe ore debited"));
     test.expectEq(static_cast<uint32_t>(save.items[ITEM_SCALE]), 0, F("recipe scale debited"));
 
@@ -173,7 +176,7 @@ inline void test_hub(FxTest &test) {
     drawScreen(screen, save);
 
     // HUNT is row 0 with the white chip cursor; QUESTS row 1; SMITH row 2; GEAR
-    // row 3; the ZENNY row (row 4, y = 11 + 4*9 = 47) shows the live 400
+    // row 3; the ZENNY row (row 4, y = 11 + 4*9 = 47) shows the live 200
     // balance in the cost column.
     test.expectEq(countBits(2, 5, 13, 16), 16, F("hub cursor chip 4x4"));
     test.expectEq(countBits(2, 13, 0, 7) > 0 ? 1 : 0, 1, F("hub title ink"));
@@ -182,21 +185,24 @@ inline void test_hub(FxTest &test) {
     test.expectEq(countBits(10, 40, 29, 36) > 0 ? 1 : 0, 1, F("SMITH label ink"));
     test.expectEq(countBits(10, 40, 38, 45) > 0 ? 1 : 0, 1, F("GEAR label ink"));
     test.expectEq(countBits(10, 32, 47, 54) > 0 ? 1 : 0, 1, F("ZENNY label ink"));
-    test.expectEq(countBits(112, 123, 47, 54) > 0 ? 1 : 0, 1, F("live zenny 400 drawn"));
+    test.expectEq(countBits(112, 123, 47, 54) > 0 ? 1 : 0, 1, F("live zenny 200 drawn"));
 
     // hub B is a root no-op: the hub stays up (isp.1 deleted the menu).
     appNavApply(pressB(screen, save), screen, save, g, H_B);
     test.expectEq(static_cast<uint32_t>(screen.active), 1, F("hub B keeps the hub active"));
     test.expectEq(static_cast<uint32_t>(screen.screen), screens::SCREEN_HUB, F("hub B stays on the hub"));
 
-    // ------------- hub HUNT with quest 0 active: kill target + tier armed
+    // ------------- hub HUNT with quest 0 active: kill target armed
     test.expectEq(static_cast<uint32_t>(applyNav(pressA(screen, save), screen, save, g, H_A)), 1, F("second hunt started"));
     test.expectEq(static_cast<uint32_t>(g.weapon), W_SWORD, F("hunt weapon"));
     test.expectEq(static_cast<uint32_t>(g.monsterKind), MON_LUNGE, F("quest kill target beast"));
     test.expectEq(static_cast<uint32_t>(g.questGoalKind), quests::GOAL_KILL, F("quest kill goal armed"));
     test.expectEq(static_cast<uint32_t>(g.questTarget), MON_LUNGE, F("quest target armed"));
     test.expectEq(static_cast<uint32_t>(g.questNeed), 3, F("quest need armed"));
-    test.expectEq(static_cast<uint32_t>(g.dmgMul), 110, F("tier 1 damage multiplier applied"));
+    // ui.2: no purchasable weapon tiers -> save.tier stays 0 -> identity mul.
+    // (The smith tier table still feeds upgradeApplyToGame; the purchase rows
+    // return as ui.4 FORGE trees.)
+    test.expectEq(static_cast<uint32_t>(g.dmgMul), 100, F("tier 0 identity multiplier"));
     test.expectEq(static_cast<uint32_t>(g.items[ITEM_HERB]), 4, F("inventory restored from the save"));
 
     // ------------------------------- fight a few ticks, then win + commit
@@ -219,7 +225,7 @@ inline void test_hub(FxTest &test) {
     SaveBlock reloaded;
     test.expectEq(static_cast<uint32_t>(saveLoad(reloaded, REAL_BACKEND)), 1, F("progress reloads"));
     test.expectEq(static_cast<uint32_t>(reloaded.progress), 1, F("reloaded progress"));
-    test.expectEq(reloaded.zenny, 400, F("reloaded zenny"));
+    test.expectEq(reloaded.zenny, 200, F("reloaded zenny"));
     test.expectEq(static_cast<uint32_t>(reloaded.items[ITEM_HERB]), 4, F("pantry herb persisted"));
     test.expectEq(static_cast<uint32_t>(reloaded.items[ITEM_SCALE]), 2, F("carved scale persisted"));
     test.expectEq(static_cast<uint32_t>(reloaded.items[ITEM_ORE]), 1, F("gathered ore persisted"));
@@ -233,7 +239,7 @@ inline void test_hub(FxTest &test) {
     test.expectEq(static_cast<uint32_t>(appNavApply(appHuntReturn(), screen, save, g, H_A)), 0, F("return is not a hunt start"));
     test.expectEq(static_cast<uint32_t>(screen.active), 1, F("hunt end -> hub"));
     test.expectEq(static_cast<uint32_t>(screen.screen), screens::SCREEN_HUB, F("hub after hunt"));
-    test.expectEq(save.zenny, 400, F("hub zenny updated"));
+    test.expectEq(save.zenny, 200, F("hub zenny updated"));
     test.expectEq(static_cast<uint32_t>(save.progress), 1, F("hub progress updated"));
 
     // The hub QUESTS row (row 1) reaches the 8-row board from the live hub.

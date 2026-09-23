@@ -1,54 +1,18 @@
 #pragma once
 // Host unit tests for the smith upgrade runtime (bead monhun-ardu-4ug, qs.3):
-// src/upgrade_state.hpp (UpgradeDef lookup + integer-percent multiplier math),
-// the COND_UPGRADE row gating / purchase action in src/screen_state.hpp, and
-// the tier multipliers feeding the real player damage + move-speed paths in
+// src/upgrade_state.hpp (UpgradeDef lookup + integer-percent multiplier math)
+// and the tier multipliers feeding the real player damage + move-speed paths in
 // src/core/player.hpp. The cart side (src/smith.hpp) is device-only and is
-// pinned by tst/fxdatatest/smith_test.hpp.
+// pinned by tst/fxdatatest/smith_test.hpp. The weapon-tier purchase UI was
+// trimmed in ui.2 (the tier table survives as the multiplier source until the
+// ui.4 FORGE trees replace it), so the COND_UPGRADE row tests are gone.
 #include "test.hpp"
 #include "../src/upgrade_state.hpp"
-#include "../src/screen_state.hpp"
 #include "../src/core/world.hpp"
 
 using namespace mh;
 
 namespace smithtest {
-
-// COND_UPGRADE param layout: (unlock << 4) | (weapon << 2) | tier.
-inline uint8_t upgradeParam(uint8_t weapon, uint8_t tier, uint8_t unlock = 0) {
-    return static_cast<uint8_t>((unlock << 4) | (weapon << 2) | tier);
-}
-
-inline ScreenRow upgradeRow(uint16_t cost, uint8_t weapon, uint8_t tier, uint8_t unlock = 0) {
-    ScreenRow r;
-    r.cost = cost;
-    r.action = screens::ACTION_BUY_UPGRADE;
-    r.flags = 0;
-    r.cond = screens::COND_UPGRADE;
-    r.param = upgradeParam(weapon, tier, unlock);
-    r.unlock = 0;
-    r.recipe[0].item = 0;
-    r.recipe[0].count = 0;
-    r.recipe[1].item = 0;
-    r.recipe[1].count = 0;
-    return r;
-}
-
-// Legacy hub-stub buy row (param is the bare weapon index, cond gates zenny).
-inline ScreenRow plainBuyRow(uint16_t cost, uint8_t weapon, uint8_t cond = screens::COND_ZENNY) {
-    ScreenRow r;
-    r.cost = cost;
-    r.action = screens::ACTION_BUY_UPGRADE;
-    r.flags = 0;
-    r.cond = cond;
-    r.param = weapon;
-    r.unlock = 0;
-    r.recipe[0].item = 0;
-    r.recipe[0].count = 0;
-    r.recipe[1].item = 0;
-    r.recipe[1].count = 0;
-    return r;
-}
 
 // A target rect that covers the world so the melee hitbox always overlaps.
 inline int16_t meleeHitDmg(uint8_t dmgMul) {
@@ -90,7 +54,7 @@ inline int16_t walkDistance(uint8_t spdMul, uint8_t ticks) {
 using namespace smithtest;
 
 void SmithSuite(TestRunner &runner) {
-    TestSuite suite("Smith: upgrade defs, tier multipliers, purchase (qs.3)");
+    TestSuite suite("Smith: upgrade defs, tier multipliers (qs.3)");
 
     // -------------------------------------------------------- multiplier math
     {
@@ -129,67 +93,6 @@ void SmithSuite(TestRunner &runner) {
         upgradeResolve(defs, 3, W_FLAIL, 2, dmg, spd);
         t.assert(dmg, 100, "missing record -> identity dmg");
         t.assert(spd, 100, "missing record -> identity spd");
-        suite.addTest(t);
-    }
-
-    // ----------------------------------------------------- purchase gating
-    {
-        Test t("COND_UPGRADE: available -> buy, bought/locked/insufficient dead");
-        SaveBlock s;
-        saveDefaults(s);
-        s.zenny = 1000;
-        const ScreenRow t1 = upgradeRow(100, W_SWORD, 1);
-        const ScreenRow t2 = upgradeRow(250, W_SWORD, 2);
-
-        t.assert(screenCondOk(s, t1), true, "t1 available");
-        t.assert(screenCondOk(s, t2), false, "t2 not next tier yet");
-        t.assert(screenApplyAction(s, t2), false, "skipping t1 rejected");
-        t.assert(screenApplyAction(s, t1), true, "t1 purchase applies");
-        t.assert(s.zenny, 900, "zenny debited");
-        t.assert(s.tier[W_SWORD], 1, "tier -> 1");
-        t.assert(screenCondOk(s, t1), false, "t1 bought -> dead");
-        t.assert(screenCondOk(s, t2), true, "t2 now next tier");
-        t.assert(screenApplyAction(s, t2), true, "t2 purchase applies");
-        t.assert(s.tier[W_SWORD], 2, "tier -> 2");
-        t.assert(s.zenny, 650, "zenny debited twice");
-        t.assert(screenCondOk(s, t2), false, "t2 bought -> dead");
-        t.assert(screenApplyAction(s, t2), false, "max tier rejected");
-
-        SaveBlock poor;
-        saveDefaults(poor);
-        poor.zenny = 50;
-        t.assert(screenCondOk(poor, t1), false, "insufficient zenny dead");
-        t.assert(screenApplyAction(poor, t1), false, "insufficient purchase rejected");
-        t.assert(poor.tier[W_SWORD], 0, "tier unchanged when broke");
-
-        // locked: unlockFlag 10 (nibble max) -> 1-based quest 10 done gates it.
-        SaveBlock locked;
-        saveDefaults(locked);
-        locked.zenny = 1000;
-        const ScreenRow gate = upgradeRow(100, W_SWORD, 1, 10);
-        t.assert(screenCondOk(locked, gate), false, "locked until quest done");
-        saveQuestSet(locked, 9, 1);
-        t.assert(screenCondOk(locked, gate), true, "quest done unlocks");
-
-        // out-of-range weapon nibble is never live.
-        const ScreenRow bad = upgradeRow(100, 3, 1);
-        t.assert(screenCondOk(s, bad), false, "weapon 3 rejected");
-        t.assert(screenApplyAction(s, bad), false, "bad weapon purchase rejected");
-        suite.addTest(t);
-    }
-
-    {
-        Test t("legacy BUY_UPGRADE rows keep the incremental hub-stub behaviour");
-        SaveBlock s;
-        saveDefaults(s);
-        s.zenny = 250;
-        ScreenRow r = plainBuyRow(100, 0);
-        t.assert(screenApplyAction(s, r), true, "legacy buy applies");
-        t.assert(s.tier[0], 1, "legacy tier bump");
-        t.assert(screenApplyAction(s, r), true, "legacy second buy");
-        t.assert(s.tier[0], 2, "legacy tier 2");
-        s.tier[1] = SCREEN_MAX_TIER;
-        t.assert(screenApplyAction(s, plainBuyRow(100, 1, screens::COND_ALWAYS)), false, "legacy cap");
         suite.addTest(t);
     }
 

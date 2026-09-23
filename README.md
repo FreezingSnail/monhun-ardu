@@ -28,8 +28,8 @@ flashing. Controls are below; no USB serial device comes up while the game runs
 |---|---|
 | Vertical-slice sim | Ported + parity-verified (20 scenes / 1269 ticks / 660 device asserts) |
 | Device render + HUD + audio | Working (block/FX-sprite art, cue tones; HUD text/FX glyphs + bars — `7y3` clamp fixed) |
-| Host unit tests | `make test` — **6207 passed / 0 failed** |
-| Device tests (Ardens) | 16 suites / 1671 asserts — boot 4, assets 264, audio 9, hud 29, data 348, combat 237, hub 81, monster_art 127, player_art 120, quests 87, screens 110, smith 115, tell 18, zones 82, items 35, perf 5 — all PASS (the frozen `test_parity` diagnostics image is not a gate; the opening-menu `test_menu`/`test_menu_art` suites and its `mh_menu_*` sheets were deleted with the menu, `isp.1`/`hml.2`) |
+| Host unit tests | `make test` — **6183 passed / 0 failed** |
+| Device tests (Ardens) | 16 suites / 1687 asserts — boot 4, assets 264, audio 9, hud 29, data 348, combat 237, hub 83, monster_art 127, player_art 120, quests 87, screens 155, smith 84, tell 18, zones 82, items 35, perf 5 — all PASS (the frozen `test_parity` diagnostics image is not a gate; the opening-menu `test_menu`/`test_menu_art` suites and its `mh_menu_*` sheets were deleted with the menu, `isp.1`/`hml.2`) |
 | Perf gate (`monhun-ardu-8v7`, re-verified through `kt7.7`) | **PASS.** plane 157 Hz (≥135), logic 52 Hz (≥45), render max 3348 µs (≤7407), tick 480 µs, RAM free 689 B (bench) |
 | Perf tooling | Headless Ardens profiler dump (`profiledump=<path>`, local patch) + on-device cycle bench (`test_perf`) |
 | Shipping build | flash **28848 / 29696 B** (97%, 848 free), RAM **1705 / 2560 B** (855 free); USB-free, see below |
@@ -262,11 +262,14 @@ clean. While a screen is up the sim and audio are not stepped.
 
 The hub shows HUNT / QUESTS / SMITH / GEAR plus a ZENNY row that renders the live
 `save.zenny` balance (dynamic value token). The quests board takes a kill quest
-and turns it in for its reward; the smith sells weapon upgrade tiers and armor
-pieces (`COND_ARMOR`/`ACTION_CRAFT_ARMOR` rows: A crafts the piece — debiting
-its materials + zenny and marking it crafted — then toggles equip/unequip; the
+and turns it in for its reward; the smith crafts armor pieces
+(`COND_ARMOR`/`ACTION_CRAFT_ARMOR` rows: A crafts the piece — debiting its
+materials + zenny and marking it crafted — then toggles equip/unequip; the
 crafted bitmask and the equipped ids persist in the save, and the equipped stats
-cache at hunt start, arm.2). The GEAR screen equips the loadout: the three
+cache at hunt start, arm.2). The smith's weapon upgrade tiers were trimmed in
+ui.2 for headroom; weapon progression returns as FORGE trees in ui.4 (the
+`mhSmith` upgrade table still feeds the tier multiplier path until then). The
+GEAR screen equips the loadout: the three
 weapons (SWORD / FLAIL / GUN) into the save's v4 `weapon` byte, then the five
 crafted armor pieces (`COND_CRAFTED`/`ACTION_EQUIP_ARMOR` rows, gs.1). A on an
 equip row toggles it (a same-weapon / same-piece press is a no-op) and the next

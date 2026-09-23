@@ -70,7 +70,7 @@ void AppSuite(TestRunner &runner) {
         t.assert(appScreenAccept(screens::SCREEN_SMITH, arow(screens::ACTION_LEAVE)), APP_NAV_HUB, "smith LEAVE");
         t.assert(appScreenAccept(screens::SCREEN_GEAR, arow(screens::ACTION_LEAVE)), APP_NAV_HUB, "gear LEAVE");
         t.assert(appScreenAccept(screens::SCREEN_QUESTS, arow(screens::ACTION_TAKE_QUEST, screens::COND_QUEST)), APP_NAV_NONE, "take is a save action");
-        t.assert(appScreenAccept(screens::SCREEN_SMITH, arow(screens::ACTION_BUY_UPGRADE, screens::COND_UPGRADE, 1)), APP_NAV_NONE, "buy is a save action");
+        t.assert(appScreenAccept(screens::SCREEN_SMITH, arow(screens::ACTION_CRAFT_ARMOR, screens::COND_ARMOR, 0)), APP_NAV_NONE, "craft is a save action");
         t.assert(appScreenAccept(screens::SCREEN_GEAR, arow(screens::ACTION_EQUIP_WEAPON, screens::COND_ALWAYS, 1)), APP_NAV_NONE, "equip is a save action");
         suite.addTest(t);
     }

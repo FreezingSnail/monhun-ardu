@@ -1,12 +1,13 @@
 #pragma once
-// On-device end-to-end suite for smith upgrades (bead monhun-ardu-4ug, qs.3).
+// On-device end-to-end suite for the smith (bead monhun-ardu-4ug, qs.3; armor
+// craft arm.2; ui.2 trimmed the weapon-tier purchase rows).
 //
 // Covers the shipped cart path the host suite cannot: reading the UpgradeDef
-// records out of the mhSmith blob, resolving tier multipliers, the smith screen
-// rows (availability / bought / locked conditions), the full buy -> stat
-// change flow through the real player damage + move-speed paths, and the
-// EEPROM persistence of the purchased tier (insufficient funds and max tier
-// rejected).
+// records out of the mhSmith blob, resolving tier multipliers, the smith armor
+// rows (craftability / crafted conditions + recipe bill), the full craft/equip
+// flow, and the EEPROM persistence of the crafted bit + equipped slot. The
+// weapon-tier rows were removed in ui.2 (weapon progression returns as ui.4
+// FORGE trees); the tier table itself still feeds the multiplier path.
 
 #include "harness/fxtest.hpp"
 #include "src/screens.hpp"
@@ -98,30 +99,18 @@ inline void test_smith(FxTest &test) {
     // ------------------------------------------------- smith screen rows
     test.expectEq(screens::SCREEN_COUNT, 4, F("screen count"));
     test.expectEq(screens::SCREEN_SMITH, 2, F("smith screen index"));
-    test.expectEq(screenRowCount(screens::SCREEN_SMITH), 12, F("smith row count"));
-    ScreenRow t1, t2, leave;
-    screenReadRow(screenRowOffsetAt(screens::SCREEN_SMITH, 0), t1);
-    screenReadRow(screenRowOffsetAt(screens::SCREEN_SMITH, 1), t2);
-    screenReadRow(screenRowOffsetAt(screens::SCREEN_SMITH, 11), leave);
-    test.expectEq(t1.cost, 100, F("t1 row cost"));
-    test.expectEq(t1.action, screens::ACTION_BUY_UPGRADE, F("t1 row action"));
-    test.expectEq(t1.cond, screens::COND_UPGRADE, F("t1 row cond"));
-    test.expectEq(t1.param, 1, F("t1 row param (sword t1)"));
-    test.expectEq(t2.cost, 250, F("t2 row cost"));
-    test.expectEq(t2.param, 2, F("t2 row param (sword t2)"));
+    // ui.2: the weapon-tier rows are gone; 5 armor rows + LEAVE remain.
+    test.expectEq(screenRowCount(screens::SCREEN_SMITH), 6, F("smith row count"));
+    ScreenRow helm, cap, mail, boneMail, charm, leave;
+    screenReadRow(screenRowOffsetAt(screens::SCREEN_SMITH, 0), helm);
+    screenReadRow(screenRowOffsetAt(screens::SCREEN_SMITH, 1), cap);
+    screenReadRow(screenRowOffsetAt(screens::SCREEN_SMITH, 2), mail);
+    screenReadRow(screenRowOffsetAt(screens::SCREEN_SMITH, 3), boneMail);
+    screenReadRow(screenRowOffsetAt(screens::SCREEN_SMITH, 4), charm);
+    screenReadRow(screenRowOffsetAt(screens::SCREEN_SMITH, 5), leave);
     test.expectEq(leave.action, screens::ACTION_LEAVE, F("leave row"));
-    // Row 5 is gun tier 2: param = (0 << 4) | (W_GUN << 2) | 2 = 10.
-    ScreenRow gun2;
-    screenReadRow(screenRowOffsetAt(screens::SCREEN_SMITH, 5), gun2);
-    test.expectEq(gun2.param, 10, F("gun t2 row param"));
-    test.expectEq(gun2.cost, 220, F("gun t2 row cost"));
-
-    // Armor rows (arm.2): rows 6..10, param = (slot << 5) | piece, cost + bill
-    // resolved from the mhSmith armor recipe record.
-    ScreenRow helm, mail, charm;
-    screenReadRow(screenRowOffsetAt(screens::SCREEN_SMITH, 6), helm);
-    screenReadRow(screenRowOffsetAt(screens::SCREEN_SMITH, 8), mail);
-    screenReadRow(screenRowOffsetAt(screens::SCREEN_SMITH, 10), charm);
+    // Armor rows (arm.2): param = (slot << 5) | piece, cost + bill resolved
+    // from the mhSmith armor recipe record.
     test.expectEq(helm.action, screens::ACTION_CRAFT_ARMOR, F("helm row action"));
     test.expectEq(helm.cond, screens::COND_ARMOR, F("helm row cond"));
     test.expectEq(helm.param, 0, F("helm row param (head piece 0)"));
@@ -130,11 +119,13 @@ inline void test_smith(FxTest &test) {
     test.expectEq(helm.recipe[0].count, 3, F("helm ore count"));
     test.expectEq(helm.recipe[1].item, armor::mat::SCALE + 1, F("helm scale code"));
     test.expectEq(helm.recipe[1].count, 2, F("helm scale count"));
+    test.expectEq(cap.param, 1, F("bone cap row param (head piece 1)"));
     test.expectEq(mail.param, 34, F("mail row param (body piece 2)"));
     test.expectEq(mail.cost, 400, F("mail row cost from recipe"));
     test.expectEq(mail.recipe[0].item, armor::mat::SCALE + 1, F("mail scale code"));
     test.expectEq(mail.recipe[0].count, 3, F("mail scale count"));
     test.expectEq(mail.recipe[1].item, armor::mat::SHELL + 1, F("mail shell code"));
+    test.expectEq(boneMail.param, 35, F("bone mail row param (body piece 3)"));
     test.expectEq(charm.param, 68, F("charm row param (charm piece 4)"));
     test.expectEq(charm.cost, 600, F("charm row cost from recipe"));
     test.expectEq(charm.recipe[0].item, armor::mat::TAIL + 1, F("charm tail code"));
@@ -145,75 +136,19 @@ inline void test_smith(FxTest &test) {
     saveDefaults(navSave);
     ScreenState nav;
     screenEnter(nav, screens::SCREEN_SMITH, navSave);
-    test.expectEq(nav.rowCount, 12, F("enter smith row count"));
+    test.expectEq(nav.rowCount, 6, F("enter smith row count"));
     test.expectEq(nav.cursor, 0, F("enter smith cursor"));
     const Input down = {0, 1, false, false};
     const Input idle = {0, 0, false, false};
     screenStep(nav, down);
     screenStep(nav, idle);
     test.expectEq(nav.cursor, 1, F("smith nav down 1"));
-    for (uint8_t i = 0; i < 10; i++) {
+    for (uint8_t i = 0; i < 4; i++) {
         screenStep(nav, down);
         screenStep(nav, idle);
     }
-    test.expectEq(nav.cursor, 11, F("smith nav to last row"));
-    test.expectEq(nav.scroll, 6, F("smith second page"));
-
-    // ------------------------------------------------ purchase E2E + EEPROM
-    SaveBlock save;
-    saveDefaults(save);
-    save.zenny = 1000;
-    // prg.7 recipes: SWORD T1 = 2 ore + 1 scale, T2 = 3 ore + 1 fang.
-    save.items[ITEM_ORE] = 5;
-    save.items[ITEM_SCALE] = 1;
-    save.items[ITEM_FANG] = 1;
-    saveStore(save, REAL_BACKEND);   // clear any previous device run
-
-    test.expectEq(screenCondOk(save, t1), 1, F("t1 available"));
-    test.expectEq(screenCondOk(save, t2), 0, F("t2 not next tier"));
-    test.expectEq(screenApplyAction(save, t1), 1, F("t1 buy applies"));
-    test.expectEq(save.zenny, 900, F("zenny debited"));
-    test.expectEq(save.tier[W_SWORD], 1, F("tier 1 stored"));
-    test.expectEq(static_cast<uint32_t>(save.items[ITEM_ORE]), 3, F("t1 ore debited"));
-    test.expectEq(static_cast<uint32_t>(save.items[ITEM_SCALE]), 0, F("t1 scale debited"));
-    saveStore(save, REAL_BACKEND);
-
-    SaveBlock loaded;
-    test.expectEq(saveLoad(loaded, REAL_BACKEND), 1, F("tier persisted"));
-    test.expectEq(loaded.tier[W_SWORD], 1, F("tier 1 reloaded"));
-    test.expectEq(loaded.zenny, 900, F("zenny reloaded"));
-
-    test.expectEq(screenCondOk(loaded, t1), 0, F("t1 bought dead"));
-    test.expectEq(screenCondOk(loaded, t2), 1, F("t2 available"));
-    test.expectEq(screenApplyAction(loaded, t2), 1, F("t2 buy applies"));
-    test.expectEq(loaded.tier[W_SWORD], 2, F("tier 2 stored"));
-    test.expectEq(static_cast<uint32_t>(loaded.items[ITEM_ORE]), 0, F("t2 ore debited"));
-    test.expectEq(static_cast<uint32_t>(loaded.items[ITEM_FANG]), 0, F("t2 fang debited"));
-    saveStore(loaded, REAL_BACKEND);
-    test.expectEq(saveLoad(loaded, REAL_BACKEND), 1, F("tier 2 persisted"));
-    test.expectEq(loaded.tier[W_SWORD], 2, F("tier 2 reloaded"));
-    test.expectEq(screenCondOk(loaded, t2), 0, F("max tier dead"));
-    test.expectEq(screenApplyAction(loaded, t2), 0, F("max tier buy rejected"));
-
-    // Insufficient funds.
-    SaveBlock poor;
-    saveDefaults(poor);
-    poor.zenny = 99;
-    test.expectEq(screenCondOk(poor, t1), 0, F("insufficient dead"));
-    test.expectEq(screenApplyAction(poor, t1), 0, F("insufficient rejected"));
-    test.expectEq(poor.tier[W_SWORD], 0, F("tier unchanged when broke"));
-
-    // Locked row: unlockFlag 1 gates on quest 0's done bit.
-    SaveBlock lockedSave;
-    saveDefaults(lockedSave);
-    lockedSave.zenny = 500;
-    lockedSave.items[ITEM_ORE] = 2;
-    lockedSave.items[ITEM_SCALE] = 1;
-    ScreenRow locked = t1;
-    locked.param = static_cast<uint8_t>((1 << 4) | (0 << 2) | 1);
-    test.expectEq(screenCondOk(lockedSave, locked), 0, F("locked until quest done"));
-    saveQuestSet(lockedSave, 0, 1);
-    test.expectEq(screenCondOk(lockedSave, locked), 1, F("quest done unlocks"));
+    test.expectEq(nav.cursor, 5, F("smith nav to last row"));
+    test.expectEq(nav.scroll, 0, F("smith single page"));
 
     // --------------------------------------- armor craft/equip + EEPROM (arm.2)
     SaveBlock asave;
@@ -270,7 +205,8 @@ inline void test_smith(FxTest &test) {
     test.expectEq(ag.armorHead, 0, F("armorHead cleared"));
     test.expectEq(ag.armorFx.defense, 0, F("unequipped effect defense 0"));
 
-    // ----------------------------------------- buy -> damage/speed change
+    // ----------------------------- tier multiplier -> damage/speed change
+    // (the multiplier still resolves off the cart; only the purchase UI is gone)
     test.expectEq(meleeHit(100), 9, F("baseline sword hit 9"));
     test.expectEq(meleeHit(125), 11, F("tier 2 hit 11"));
     const int16_t base = walkDist(100);

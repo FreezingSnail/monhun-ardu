@@ -4,8 +4,9 @@
 // Host-testable state machine shared by the device suite and src/screens.hpp:
 //   * ScreenState: current screen index, cursor, page scroll
 //   * debounced up/down nav (tap/hold feel shared with the deleted opening menu)
-//   * row condition evaluation (zenny >= cost / save flag / tier < max / quest)
-//   * the fixed action switch (BUY_UPGRADE / TAKE_QUEST / TURN_IN_QUEST / LEAVE)
+//   * row condition evaluation (quest / armor craftability / crafted)
+//   * the fixed action switch (CRAFT_ARMOR / EQUIP_ARMOR / EQUIP_WEAPON /
+//     TAKE_QUEST / TURN_IN_QUEST / LEAVE)
 //
 // Conditions gate the action (A on a locked row does nothing), so the state
 // machine needs no per-row visibility mask. The cart side (reading ScreenDef/
@@ -18,15 +19,12 @@
 // quest and progress >= need. `param` packs (need << 4) | quest id; the turn-in
 // payout is the row `cost` (the quest's reward, from data/quests/*.json).
 //
-// Smith rows (bead monhun-ardu-4ug): COND_UPGRADE rows carry a packed `param`
-// -- (unlockFlag << 4) | (weaponIdx << 2) | tier -- and are live only when the
-// tier is the weapon's next unbought tier, its unlockFlag (0 = always, else the
-// 1-based quest whose done bit gates it) holds, and zenny >= cost. "bought"
-// (tier already >= the row tier) and "locked" rows read as dead, so A does
-// nothing. prg.7 adds the recipe bill: a row whose tier needs materials the
-// inventory lacks is dead too, and the cart-side row scan (src/screens.hpp
-// screenCursorRecipeOk) reads the packed UpgradeDef. The host parity of that
-// scan is screenRecipeOk() below, so both paths share the same rule.
+// Smith armor rows (bead arm.2): COND_ARMOR rows carry a packed `param`
+// -- (slot << 5) | pieceIdx -- and are live when the piece is already crafted
+// (A toggles equip) or when zenny >= cost and the material recipe bill holds.
+// The cart-side row scan (src/screens.hpp screenRowArmorRecipe) resolves the
+// cost + bill from the mhSmith armor record; the pure rule below is
+// screenRecipeOk().
 //
 // Gear rows (bead monhun-ardu-mn6.1): the GEAR screen equips crafted armor
 // alongside the weapon rows. COND_CRAFTED is live only when the row's piece
@@ -45,8 +43,7 @@
 
 namespace mh {
 
-constexpr uint8_t SCREEN_ROWS = 6;       // rows per page
-constexpr uint8_t SCREEN_MAX_TIER = 3;   // smith cap; data holds the costs
+constexpr uint8_t SCREEN_ROWS = 6;   // rows per page
 
 // Same d-pad repeat feel as the deleted opening menu: a fresh direction steps
 // at once, a held one waits SCREEN_NAV_DELAY ticks then steps every
@@ -54,10 +51,10 @@ constexpr uint8_t SCREEN_MAX_TIER = 3;   // smith cap; data holds the costs
 constexpr uint8_t SCREEN_NAV_DELAY = 16;
 constexpr uint8_t SCREEN_NAV_REPEAT = 6;
 
-// The recipe bill of the upgrade def a COND_UPGRADE row names, decoded from a
-// caller-supplied upgrade array (the host suite / boot routing) or from the
-// cart by src/screens.hpp. `item` is the item index + 1 (0 = empty slot), so
-// the row scan can gate and debit without this header depending on smith.hpp.
+// The recipe bill of a craftable row (armor piece), decoded from a
+// caller-supplied array or from the cart by src/screens.hpp. `item` is the item
+// index + 1 (0 = empty slot), so the row scan can gate and debit without this
+// header depending on smith.hpp.
 struct ScreenRecipe {
     uint8_t item;
     uint8_t count;
@@ -76,9 +73,9 @@ struct ScreenRow {
     // quest def by screens.hpp screenReadRow (or supplied by a test); zeroed for
     // every other row.
     uint8_t unlock;
-    // prg.7 recipe bill, resolved from the cart upgrade def for COND_UPGRADE
-    // rows by the caller (screens.hpp screenReadRow) or supplied by a test.
-    // Zeroed for every other row / a zenny-only recipe.
+    // prg.7/arm.2 recipe bill, resolved from the cart armor recipe record for
+    // COND_ARMOR rows by the caller (screens.hpp screenReadRow) or supplied by a
+    // test. Zeroed for every other row / a zenny-only recipe.
     ScreenRecipe recipe[UPGRADE_MAT_SLOTS];
 };
 
@@ -134,17 +131,6 @@ enum ScreenEvent : int8_t {
     SCREEN_BACK      // B rising edge: return to the caller
 };
 
-// COND_UPGRADE param decoders: (unlockFlag << 4) | (weaponIdx << 2) | tier.
-MH_NOINLINE inline uint8_t screenUpgradeWeapon(uint8_t param) {
-    return static_cast<uint8_t>((param >> 2) & 3);
-}
-inline uint8_t screenUpgradeTier(uint8_t param) {
-    return static_cast<uint8_t>(param & 3);
-}
-inline uint8_t screenUpgradeUnlock(uint8_t param) {
-    return static_cast<uint8_t>((param >> 4) & 15);
-}
-
 // COND_ARMOR / ACTION_CRAFT_ARMOR param decoders: (slot << 5) | pieceIdx.
 inline uint8_t screenArmorPiece(uint8_t param) {
     return static_cast<uint8_t>(param & 31);
@@ -153,41 +139,16 @@ inline uint8_t screenArmorSlot(uint8_t param) {
     return static_cast<uint8_t>((param >> 5) & 3);
 }
 
-// Row condition: 0 = always, zenny >= cost, save flag set, tier < max, quest
-// state query, or the smith upgrade availability check (see header note).
+// Row condition: 0 = always, quest state query, armor craftability, or the
+// crafted-bit GEAR gate (see header note).
 inline bool screenCondOk(const SaveBlock &save, const ScreenRow &row) {
     switch (row.cond) {
-    case screens::COND_ZENNY:
-        return save.zenny >= row.cost;
-    case screens::COND_FLAG:
-        return saveQuestGet(save, static_cast<uint8_t>(row.param & 15), static_cast<uint8_t>((row.param >> 4) & 1));
-    case screens::COND_TIER:
-        return save.tier[row.param < SAVE_TIER_COUNT ? row.param : 0] < SCREEN_MAX_TIER;
     case screens::COND_QUEST: {
         const uint8_t quest = static_cast<uint8_t>(row.param & 15);
         if (row.action == screens::ACTION_TURN_IN_QUEST)
             return questReady(save, quest, static_cast<uint8_t>((row.param >> 4) & 15));
         // dlp.2: a take row is live only when the chain unlock holds too.
         return questTakeable(save, quest) && questUnlocked(save, row.unlock);
-    }
-    case screens::COND_UPGRADE: {
-        const uint8_t weapon = screenUpgradeWeapon(row.param);
-        const uint8_t tier = screenUpgradeTier(row.param);
-        if (weapon >= SAVE_TIER_COUNT || tier == 0 || tier > SCREEN_MAX_TIER)
-            return false;
-        if (!questUnlocked(save, screenUpgradeUnlock(row.param)))
-            return false;
-        if (save.tier[weapon] + 1 != tier)
-            return false;
-        if (save.zenny < row.cost)
-            return false;
-        // prg.7: the recipe bill. The host/device caller passes the cart def
-        // (screens.hpp) so this pure condition stays cart-free; when omitted
-        // (a hand-built row with no def) the bill is treated as empty, which is
-        // the pre-prg.7 zenny-only content.
-        if (!screenRecipeOk(save, row.recipe))
-            return false;
-        return true;
     }
     case screens::COND_ARMOR: {
         // arm.2: a crafted piece is always live (A toggles equip); an uncrafted
@@ -282,36 +243,13 @@ inline ScreenEvent screenStep(ScreenState &s, const Input &in) {
 }
 
 // Apply the fixed action switch. Returns true when the save changed and must be
-// committed (the caller then calls saveStore once). Buying a tier is gated by
-// the tier cap, the zenny cost and the recipe bill (prg.7); COND_UPGRADE rows
-// decode the (weapon, tier) pair from `param` (see the header note) and land
-// exactly on that tier, while legacy/other rows keep the incremental behaviour
-// for the hub stub. Quest rows take/turn in through src/quest_state.hpp
-// (turn-in pays the row cost). The recipe bill is re-checked here (not just in
-// the condition) so a stale row cannot debit more than the hunter owns.
+// committed (the caller then calls saveStore once). Armor crafting is gated by
+// the material recipe bill and zenny (COND_ARMOR rows decode the piece + slot
+// from `param`); quest rows take/turn in through src/quest_state.hpp (turn-in
+// pays the row cost). The recipe bill is re-checked here (not just in the
+// condition) so a stale row cannot debit more than the hunter owns.
 inline bool screenApplyAction(SaveBlock &save, const ScreenRow &row) {
     switch (row.action) {
-    case screens::ACTION_BUY_UPGRADE: {
-        uint8_t weapon;
-        uint8_t target;
-        if (row.cond == screens::COND_UPGRADE) {
-            weapon = screenUpgradeWeapon(row.param);
-            target = screenUpgradeTier(row.param);
-            if (weapon >= SAVE_TIER_COUNT || save.tier[weapon] + 1 != target)
-                return false;
-        } else {
-            weapon = row.param < SAVE_TIER_COUNT ? row.param : 0;
-            target = static_cast<uint8_t>(save.tier[weapon] + 1);
-        }
-        if (target == 0 || target > SCREEN_MAX_TIER || save.zenny < row.cost)
-            return false;
-        if (!screenRecipeOk(save, row.recipe))
-            return false;
-        screenRecipeDebit(save, row.recipe);
-        save.zenny = static_cast<uint16_t>(save.zenny - row.cost);
-        save.tier[weapon] = target;
-        return true;
-    }
     case screens::ACTION_CRAFT_ARMOR: {
         // arm.2: craft (if needed) then toggle the piece into its slot. Craft
         // debits the material bill + zenny and sets the crafted bit; a second A

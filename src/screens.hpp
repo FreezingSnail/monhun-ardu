@@ -14,7 +14,7 @@
 
 #include "render.hpp"
 #include "screen_state.hpp"
-#include "smith.hpp"   // smithReadDef: cart recipe bill for COND_UPGRADE rows (prg.7)
+#include "smith.hpp"   // smithCart: cart armor recipe bill for COND_ARMOR rows (arm.2)
 #include "quest.hpp"   // questReadDef: quest unlock + reward for COND_QUEST rows (dlp.2)
 
 namespace mh {
@@ -69,30 +69,6 @@ inline uint16_t screenRowNext(uint16_t off) {
     return static_cast<uint16_t>(off + 7 + mhFxReadU8(screenCart(off)));
 }
 
-// Recipe bill for a COND_UPGRADE row: walk the mhSmith cart records looking for
-// the (weapon, tier) the row's packed param names, then copy its material
-// slots. `param` is (unlockFlag << 4) | (weaponIdx << 2) | tier. A missing def
-// leaves the recipe empty (zenny-only), which matches the pre-prg.7 content.
-MH_NOINLINE inline void screenRowRecipe(uint8_t param, ScreenRecipe *recipe) {
-    recipe[0].item = 0;
-    recipe[0].count = 0;
-    recipe[1].item = 0;
-    recipe[1].count = 0;
-    const uint8_t weapon = static_cast<uint8_t>((param >> 2) & 3);
-    const uint8_t tier = static_cast<uint8_t>(param & 3);
-    for (uint8_t i = 0; i < smith::UPGRADE_COUNT; i++) {
-        UpgradeDef def;
-        smithReadDef(i, def);
-        if (def.weaponIdx != weapon || def.tier != tier)
-            continue;
-        for (uint8_t j = 0; j < smith::MAT_SLOTS; j++) {
-            recipe[j].item = def.mat[j].item;
-            recipe[j].count = def.mat[j].count;
-        }
-        return;
-    }
-}
-
 // Recipe bill + zenny for a COND_ARMOR row: the mhSmith armor recipe record at
 // the row's piece index (armor::ARMOR_<ID>) is the single source of truth, so
 // the packed row cost is ignored and the row's bill always matches the data.
@@ -126,9 +102,7 @@ inline void screenReadRow(uint16_t off, ScreenRow &row) {
     row.recipe[0].count = 0;
     row.recipe[1].item = 0;
     row.recipe[1].count = 0;
-    if (row.cond == screens::COND_UPGRADE) {
-        screenRowRecipe(row.param, row.recipe);
-    } else if (row.cond == screens::COND_ARMOR) {
+    if (row.cond == screens::COND_ARMOR) {
         screenRowArmorRecipe(screenArmorPiece(row.param), row.cost, row.recipe);
     } else if (row.cond == screens::COND_QUEST) {
         // dlp.2: the quest def is the source of truth for the chain unlock and
@@ -191,18 +165,18 @@ inline void drawScreen(const ScreenState &s, const SaveBlock &save) {
     const uint8_t titleLen = mhFxReadU8(screenCart(static_cast<uint16_t>(defOff + 1)));
     char text[SCREEN_TEXT_BUF];
     uint8_t tn = screenReadText(static_cast<uint16_t>(defOff + 2), titleLen, text);
-    int16_t x = 2;
+    uint8_t x = 2;
     for (uint8_t i = 0; i < tn; i++)
-        x = textPut(fxfontw, x, SCREEN_TITLE_Y, text[i]);
+        x = static_cast<uint8_t>(textPut(fxfontw, x, SCREEN_TITLE_Y, text[i]));
     for (uint8_t i = tn; i < titleLen; i++)
-        x = textPut(fxfontw, x, SCREEN_TITLE_Y, static_cast<char>(mhFxReadU8(screenCart(static_cast<uint16_t>(defOff + 2 + i)))));
+        x = static_cast<uint8_t>(textPut(fxfontw, x, SCREEN_TITLE_Y, static_cast<char>(mhFxReadU8(screenCart(static_cast<uint16_t>(defOff + 2 + i))))));
 
     const uint8_t last = static_cast<uint8_t>(s.scroll + SCREEN_ROWS);
     uint16_t rowOff = screenFirstRow(s.screen);
     for (uint8_t i = 0; i < s.rowCount; i++, rowOff = screenRowNext(rowOff)) {
         if (i < s.scroll || i >= last)
             continue;
-        const int16_t y = static_cast<int16_t>(SCREEN_ROW_Y0 + (i - s.scroll) * SCREEN_ROW_H);
+        const uint8_t y = static_cast<uint8_t>(SCREEN_ROW_Y0 + (i - s.scroll) * SCREEN_ROW_H);
         const bool selected = i == s.cursor;
         if (selected)
             sprDraw(fxchip, SCREEN_CURSOR_X, static_cast<int16_t>(y + 2), FRAME(1));
@@ -210,11 +184,11 @@ inline void drawScreen(const ScreenState &s, const SaveBlock &save) {
         const uint8_t labelLen = mhFxReadU8(screenCart(rowOff));
         const uint24_t sheet = selected ? fxfontw : fxfontg;
         const uint8_t ln = screenReadText(static_cast<uint16_t>(rowOff + 1), labelLen, text);
-        int16_t lx = SCREEN_LABEL_X;
+        uint8_t lx = SCREEN_LABEL_X;
         for (uint8_t j = 0; j < ln; j++)
-            lx = textPut(sheet, lx, y, text[j]);
+            lx = static_cast<uint8_t>(textPut(sheet, lx, y, text[j]));
         for (uint8_t j = ln; j < labelLen; j++)
-            lx = textPut(sheet, lx, y, static_cast<char>(mhFxReadU8(screenCart(static_cast<uint16_t>(rowOff + 1 + j)))));
+            lx = static_cast<uint8_t>(textPut(sheet, lx, y, static_cast<char>(mhFxReadU8(screenCart(static_cast<uint16_t>(rowOff + 1 + j))))));
 
         const uint16_t fields = static_cast<uint16_t>(rowOff + 1 + labelLen);
         const uint8_t flags = mhFxReadU8(screenCart(static_cast<uint16_t>(fields + 3)));
@@ -234,7 +208,7 @@ inline void drawScreen(const ScreenState &s, const SaveBlock &save) {
             value = (flags & screens::ROW_F_ZENNY) != 0 ? static_cast<int16_t>(save.zenny) : static_cast<int16_t>(mhFxReadU16(reinterpret_cast<const uint16_t *>(screenCart(fields))));
         }
         const uint8_t digits = hudDigits(value);
-        const int16_t costX = static_cast<int16_t>(SCREEN_COST_RIGHT - digits * 4);
+        const uint8_t costX = static_cast<uint8_t>(SCREEN_COST_RIGHT - digits * 4);
         // An active skill (tier 1 = S, 2 = M) marks its points with a letter
         // just left of the number; an inert tier draws the points only.
         if (tier != 0)

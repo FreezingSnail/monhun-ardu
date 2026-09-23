@@ -138,21 +138,22 @@ inline void test_screens(FxTest &test) {
 
     // --------------------------------------------------- action dispatch
     // Hub rows are navigation (app_state.hpp); the save actions are exercised
-    // through the smith (buy) and quests (take) rows.
+    // through the smith (armor craft) and quests (take) rows.
     ScreenRow s0, q0;
     screenReadRow(screenRowOffsetAt(screens::SCREEN_SMITH, 0), s0);
     screenReadRow(screenRowOffsetAt(screens::SCREEN_QUESTS, 0), q0);
     SaveBlock act;
     saveDefaults(act);
-    act.zenny = 250;
-    act.items[ITEM_ORE] = 2;   // SWORD T1 recipe (prg.7)
-    act.items[ITEM_SCALE] = 1;
-    test.expectEq(screenCondOk(act, s0), 1, F("buy affordable"));
-    test.expectEq(screenApplyAction(act, s0), 1, F("buy applies"));
-    test.expectEq(act.zenny, 150, F("buy debits zenny"));
-    test.expectEq(act.tier[0], 1, F("buy bumps tier"));
-    test.expectEq(static_cast<uint32_t>(act.items[ITEM_ORE]), 0, F("buy debits ore"));
-    test.expectEq(static_cast<uint32_t>(act.items[ITEM_SCALE]), 0, F("buy debits scale"));
+    act.zenny = 300;
+    act.items[ITEM_ORE] = 3;   // HUNTER HELM recipe (arm.2)
+    act.items[ITEM_SCALE] = 2;
+    test.expectEq(screenCondOk(act, s0), 1, F("helm craftable"));
+    test.expectEq(screenApplyAction(act, s0), 1, F("craft applies"));
+    test.expectEq(act.zenny, 0, F("craft debits zenny"));
+    test.expectEq(saveCrafted(act, armor::ARMOR_HUNTER_HELM), 1, F("craft sets the crafted bit"));
+    test.expectEq(act.equip[armor::SLOT_HEAD], armor::ARMOR_HUNTER_HELM + 1, F("craft equips the helm"));
+    test.expectEq(static_cast<uint32_t>(act.items[ITEM_ORE]), 0, F("craft debits ore"));
+    test.expectEq(static_cast<uint32_t>(act.items[ITEM_SCALE]), 0, F("craft debits scale"));
     test.expectEq(screenCondOk(act, q0), 1, F("take always allowed"));
     test.expectEq(screenApplyAction(act, q0), 1, F("take applies"));
     test.expectEq(saveQuestGet(act, 0, 0), 1, F("quest0 taken"));

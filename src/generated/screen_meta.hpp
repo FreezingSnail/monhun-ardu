@@ -13,12 +13,12 @@ namespace screens {
 constexpr uint16_t MAGIC = 0x5343;
 constexpr uint8_t VERSION = 1;
 constexpr uint8_t FLAGS = 0x00;
-constexpr uint16_t SIZE = 652;
+constexpr uint16_t SIZE = 566;
 constexpr uint8_t HEADER_SIZE = 8;
 constexpr uint8_t DEF_OFF_OFF = 8;
 constexpr uint16_t ROWS_OFF = 54;
 constexpr uint8_t SCREEN_COUNT = 4;
-constexpr uint16_t ROW_COUNT = 39;
+constexpr uint16_t ROW_COUNT = 33;
 constexpr uint8_t TIER_COUNT = 3;   // must match core/save.hpp SAVE_TIER_COUNT
 
 // Row action ids; src/screen_state.hpp switches on these.
@@ -63,13 +63,13 @@ constexpr uint8_t SCREEN_QUESTS_TITLE_LEN = 6;
 constexpr uint16_t SCREEN_QUESTS_FIRST_ROW = 113;
 constexpr uint8_t SCREEN_SMITH = 2;
 constexpr uint16_t SCREEN_SMITH_OFF = 35;
-constexpr uint8_t SCREEN_SMITH_ROWS = 12;
+constexpr uint8_t SCREEN_SMITH_ROWS = 6;
 constexpr uint8_t SCREEN_SMITH_TITLE_LEN = 5;
 constexpr uint16_t SCREEN_SMITH_FIRST_ROW = 260;
 constexpr uint8_t SCREEN_GEAR = 3;
 constexpr uint16_t SCREEN_GEAR_OFF = 45;
 constexpr uint8_t SCREEN_GEAR_ROWS = 14;
 constexpr uint8_t SCREEN_GEAR_TITLE_LEN = 4;
-constexpr uint16_t SCREEN_GEAR_FIRST_ROW = 443;
+constexpr uint16_t SCREEN_GEAR_FIRST_ROW = 357;
 
 }   // namespace screens

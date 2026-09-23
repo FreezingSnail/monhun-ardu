@@ -1,6 +1,7 @@
 # Quests & shops — data-driven screens (design)
 
-Status: accepted defaults (kill-quests + zenny; smith = weapon upgrade tiers).
+Status: accepted defaults (kill-quests + zenny; smith = armor crafting; weapon
+progression returns as FORGE trees in ui.4).
 Budget: shipping flash 23342/29696 (6354 free) after the trim waves; each new
 screen must cost ~0 flash (cart data) once the framework lands.
 
@@ -11,7 +12,7 @@ hub menu (title -> HUNT / QUESTS / SMITH / GEAR)
   screen framework: one generic list renderer + input + row actions
     cart data: screen tables (title, rows: label, cost, flags, condition, action)
     state:    save block in EEPROM (zenny, quest flags, upgrade tiers)
-    content:  quest board rows, smith tiers, future shop stock
+    content:  quest board rows, smith armor recipes, future shop stock
 ```
 
 ## Screen data (cart, packed little-endian)
@@ -25,11 +26,12 @@ ScreenRow: labelLen u8 + chars, cost u16, actionId u8, flags u8,
 - Render: rows via the existing `textPut` glyph lane + the baked cursor/tile
   sprites; 6 rows per page, scroll by 6; cost right-aligned.
 - Input: up/down move, A = accept (fires action), B = back.
-- Conditions: `zenny >= cost`, `flag set`, `tier < max`, quest state, smith
-  upgrade availability, armor craftability, `crafted` (gs.1) — one switch, no VM.
-- Actions (fixed enum, one switch): BUY_UPGRADE(tier), TAKE_QUEST(id),
-  TURN_IN_QUEST(id), CRAFT_ARMOR(slot|piece), EQUIP_WEAPON(weaponIdx),
-  EQUIP_ARMOR(slot|piece), OPEN_GEAR, LEAVE.
+- Conditions (runtime): quest state, armor craftability (`COND_ARMOR`),
+  `crafted` (gs.1). The generated `zenny`/`flag`/`tier`/`upgrade` ids remain in
+  the ABI (append-only enum) but have no runtime case since ui.2.
+- Actions (fixed enum, one switch): TAKE_QUEST(id), TURN_IN_QUEST(id),
+  CRAFT_ARMOR(slot|piece), EQUIP_WEAPON(weaponIdx), EQUIP_ARMOR(slot|piece),
+  OPEN_GEAR, LEAVE. `BUY_UPGRADE` is trimmed (ui.2; FORGE trees in ui.4).
 
 ## Save block (EEPROM)
 
@@ -107,6 +109,12 @@ QuestDef (v2): id, goalKind u8 (0 kill / 1 gather), target u8
 UpgradeDef: weaponIdx u8, tier u8, cost u16, dmgMul u8, spdMul u8, unlockFlag u8
 ```
 - Applied as a multiplier in the player damage/velocity path; tier persisted.
+- ui.2 trimmed the smith weapon-tier **purchase** path (`COND_UPGRADE` /
+  `ACTION_BUY_UPGRADE` rows + `screenRowRecipe`, and the dead
+  `zenny`/`flag`/`tier` condition cases) for headroom. The `mhSmith` upgrade
+  table itself is unchanged and still feeds `upgradeApplyToGame` /
+  `smithResolve`; the smith screen now lists armor recipes only. Weapon
+  progression returns as ui.4 FORGE trees, which will own the upgrade UI.
 
 **Armor recipes (monhun-ardu-arm.1).** The same recipe path also crafts armor.
 `tools/gen-smith.py` derives one armor recipe record per `data/armor.json`

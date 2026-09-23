@@ -336,20 +336,9 @@ void ScreenSuite(TestRunner &runner) {
 
     // ---------------------------------------------------------- conditions
     {
-        Test t("conditions: zenny >= cost, flag set, tier < max, always");
+        Test t("conditions: always is live; the quest/crafted gates have their own suites");
         SaveBlock s;
         saveDefaults(s);
-        s.zenny = 50;
-        t.assert(screenCondOk(s, row(100, 0, screens::COND_ZENNY, 0)), false, "zenny short");
-        t.assert(screenCondOk(s, row(50, 0, screens::COND_ZENNY, 0)), true, "zenny exact");
-        t.assert(screenCondOk(s, row(0, 0, screens::COND_ZENNY, 0)), true, "zenny free");
-        saveQuestSet(s, 5, 0);
-        t.assert(screenCondOk(s, row(0, 0, screens::COND_FLAG, 5)), true, "flag 5 set");
-        t.assert(screenCondOk(s, row(0, 0, screens::COND_FLAG, 4)), false, "flag 4 clear");
-        s.tier[1] = SCREEN_MAX_TIER - 1;
-        t.assert(screenCondOk(s, row(0, 0, screens::COND_TIER, 1)), true, "tier below max");
-        s.tier[1] = SCREEN_MAX_TIER;
-        t.assert(screenCondOk(s, row(0, 0, screens::COND_TIER, 1)), false, "tier at max");
         t.assert(screenCondOk(s, row(9, 0, screens::COND_ALWAYS, 0)), true, "always");
         suite.addTest(t);
     }
@@ -434,63 +423,6 @@ void ScreenSuite(TestRunner &runner) {
     }
 
     // ------------------------------------------------------------- actions
-    {
-        Test t("buy upgrade spends zenny, bumps tier, stops at the cap");
-        SaveBlock s;
-        saveDefaults(s);
-        s.zenny = 250;
-        ScreenRow r = row(100, screens::ACTION_BUY_UPGRADE, screens::COND_ZENNY, 0);
-        t.assert(screenApplyAction(s, r), true, "first buy changes save");
-        t.assert(s.zenny, 150, "zenny debited");
-        t.assert(s.tier[0], 1, "tier bumped");
-        t.assert(screenApplyAction(s, r), true, "second buy changes save");
-        t.assert(s.zenny, 50, "zenny debited again");
-        t.assert(s.tier[0], 2, "tier 2");
-        t.assert(screenApplyAction(s, r), false, "unaffordable buy rejected");
-        t.assert(s.tier[0], 2, "tier unchanged when broke");
-        s.zenny = 1000;
-        s.tier[1] = SCREEN_MAX_TIER;
-        t.assert(screenApplyAction(s, row(100, screens::ACTION_BUY_UPGRADE, 0, 1)), false, "cap reached");
-        t.assert(s.tier[1], SCREEN_MAX_TIER, "tier pinned at cap");
-        suite.addTest(t);
-    }
-
-    {
-        Test t("COND_UPGRADE smith rows: next-tier gate, lock, bought, funds");
-        SaveBlock s;
-        saveDefaults(s);
-        s.zenny = 500;
-        // param = (unlock << 4) | (weapon << 2) | tier
-        const ScreenRow t1 = row(100, screens::ACTION_BUY_UPGRADE, screens::COND_UPGRADE, static_cast<uint8_t>((0 << 4) | (0 << 2) | 1));
-        const ScreenRow t2 = row(250, screens::ACTION_BUY_UPGRADE, screens::COND_UPGRADE, static_cast<uint8_t>((0 << 4) | (0 << 2) | 2));
-        t.assert(screenCondOk(s, t1), true, "tier 1 available");
-        t.assert(screenCondOk(s, t2), false, "tier 2 not the next tier");
-        t.assert(screenApplyAction(s, t1), true, "tier 1 bought");
-        t.assert(s.tier[0], 1, "tier 1 stored");
-        t.assert(s.zenny, 400, "zenny debited");
-        t.assert(screenCondOk(s, t1), false, "bought row dead");
-        t.assert(screenCondOk(s, t2), true, "tier 2 now available");
-        t.assert(screenApplyAction(s, t2), true, "tier 2 bought");
-        t.assert(s.tier[0], 2, "tier 2 stored");
-        t.assert(screenCondOk(s, t2), false, "max row dead");
-
-        SaveBlock locked;
-        saveDefaults(locked);
-        locked.zenny = 500;
-        const ScreenRow gate = row(100, screens::ACTION_BUY_UPGRADE, screens::COND_UPGRADE, static_cast<uint8_t>((1 << 4) | (0 << 2) | 1));
-        t.assert(screenCondOk(locked, gate), false, "locked until flag");
-        saveQuestSet(locked, 0, 1);
-        t.assert(screenCondOk(locked, gate), true, "quest done unlocks tier");
-
-        SaveBlock poor;
-        saveDefaults(poor);
-        poor.zenny = 99;
-        t.assert(screenCondOk(poor, t1), false, "one short of cost");
-        t.assert(screenApplyAction(poor, t1), false, "purchase rejected");
-        t.assert(poor.tier[0], 0, "tier unchanged");
-        suite.addTest(t);
-    }
-
     {
         Test t("equip weapon writes the v4 byte; out-of-range + same weapon are no-ops");
         SaveBlock s;
