@@ -65,9 +65,9 @@ void QuestSuite(TestRunner &runner) {
         saveQuestSet(s, 2, 0);
         uint8_t bytes[SAVE_BYTES];
         t.assert(SAVE_BYTES, static_cast<uint8_t>(SAVE_CHECKSUM_OFF + 1), "record is checksum-terminated");
-        t.assert(SAVE_CHECKSUM_OFF, static_cast<uint8_t>(SAVE_ITEMS_OFF + ITEM_COUNT), "checksum follows the inventory tail");
+        t.assert(SAVE_CHECKSUM_OFF, static_cast<uint8_t>(SAVE_WEAPON_OFF + 1), "checksum follows the weapon byte");
         saveEncode(s, bytes);
-        t.assert(bytes[2], SAVE_VERSION, "version 3");
+        t.assert(bytes[2], SAVE_VERSION, "version 4");
         t.assert(bytes[SAVE_ACTIVE_OFF], 2, "active quest byte");
         t.assert(bytes[SAVE_PROGRESS_OFF], 5, "progress byte");
         uint8_t sum = 0;

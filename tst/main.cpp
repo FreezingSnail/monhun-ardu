@@ -8,7 +8,6 @@
 #include "world_test.hpp"
 #include "art_dims_test.hpp"
 #include "sin_test.hpp"
-#include "menu_test.hpp"
 #include "screens_test.hpp"
 #include "app_state_test.hpp"
 #include "quests_test.hpp"
@@ -34,7 +33,6 @@ int main() {
     WorldSuite(runner);
     artdimstest::ArtDimsSuite(runner);
     SinSuite(runner);
-    MenuSuite(runner);
     ScreenSuite(runner);
     AppSuite(runner);
     QuestSuite(runner);

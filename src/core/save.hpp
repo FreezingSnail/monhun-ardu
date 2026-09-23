@@ -1,13 +1,13 @@
 #pragma once
 // Persistent save block (bead monhun-ardu-cgz, docs/quests-shops.md; v2 layout
-// bead monhun-ardu-prg.5).
+// bead monhun-ardu-prg.5; v4 weapon bead monhun-ardu-isp.1).
 //
-// Packed little-endian record in EEPROM (version 3). The record is the v2
+// Packed little-endian record in EEPROM (version 4). The record is the v2
 // prefix (bead monhun-ardu-me6) followed by the progression tail (prg.5:
-// equipment + inventory counts):
+// equipment + inventory counts) and the hml.1 weapon byte:
 //
 //   0..1   magic  u16 0x484D ("MH")
-//   2      version u8 (3)
+//   2      version u8 (4)
 //   3..4   zenny  u16
 //   5..8   quest  u8[4]  (16 quests x 2 bits: taken, done)
 //   9      activeQuest u8 (0xFF = none; the quest progress is counted for)
@@ -16,7 +16,8 @@
 //   14..16 equip u8[3] (head/body/charm slot id; 0 = none)
 //   17     flags  u8 (reserved progression bits, e.g. smithy seen)
 //   18..25 items  u8[ITEM_COUNT] (inventory counts, cap 255)
-//   26     checksum u8 (sum of bytes 0..25)
+//   26     weapon u8 (WeaponId 0..2; the hub's HUNT loadout, hml.1)
+//   27     checksum u8 (sum of bytes 0..26)
 //
 // Load runs once on boot; anything but a good magic + version + checksum falls
 // back to defaults. saveStore() only writes bytes that differ and verifies the
@@ -24,11 +25,13 @@
 // called during a hunt: only screen actions and the hunt-end progress commit
 // write (write-cycle hygiene).
 //
-// Migration (prg.5): a blank/old block never crashes. saveLoad() decodes the
-// shared v2 prefix from a version-2 record (inventory/equip default to empty)
-// and rejects anything else into saveDefaults(). saveDecodeV1 covers the
-// original 15-byte bead-cgz record (no active quest/progress) for the same
-// reason: older EEPROM contents load with their zenny/quests/tiers intact.
+// Migration (prg.5/isp.1): a blank/old block never crashes. saveLoad() decodes
+// the shared v2 prefix from a version-2 record (inventory/equip default to
+// empty), decodes the full v3 tail with weapon = 0 (hml.1 appended the weapon
+// byte, so a v3 record's checksum still sits at byte 26), and rejects anything
+// else into saveDefaults(). The v1 path covers the original 15-byte bead-cgz
+// record (no active quest/progress) for the same reason: older EEPROM contents
+// load with their zenny/quests/tiers intact.
 //
 // Host-testable: the logic takes a SaveBackend of three-address read/write
 // functions rather than touching Arduino.h. On AVR save.hpp also provides the
@@ -42,7 +45,8 @@
 namespace mh {
 
 constexpr uint16_t SAVE_MAGIC = 0x484D;   // 'M','H' little-endian
-constexpr uint8_t SAVE_VERSION = 3;
+constexpr uint8_t SAVE_VERSION = 4;
+constexpr uint8_t SAVE_VERSION_V3 = 3;   // prg.5: tail, checksum at byte 26
 constexpr uint8_t SAVE_VERSION_V2 = 2;   // bead me6: v2 prefix (15 B)
 constexpr uint8_t SAVE_VERSION_V1 = 1;   // bead cgz: original 15 B, no quest progress
 constexpr uint8_t SAVE_QUEST_BYTES = 4;
@@ -52,10 +56,14 @@ constexpr uint8_t SAVE_PROGRESS_OFF = 10;
 constexpr uint8_t SAVE_TIER_OFF = 11;
 constexpr uint8_t SAVE_EQUIP_OFF = 14;   // u8[3]: head, body, charm
 constexpr uint8_t SAVE_EQUIP_COUNT = 3;
-constexpr uint8_t SAVE_FLAGS_OFF = 17;   // reserved progression bits
-constexpr uint8_t SAVE_ITEMS_OFF = 18;   // u8[item::ITEM_COUNT]
-constexpr uint8_t SAVE_CHECKSUM_OFF = static_cast<uint8_t>(SAVE_ITEMS_OFF + item::ITEM_COUNT);
-constexpr uint8_t SAVE_BYTES = static_cast<uint8_t>(SAVE_CHECKSUM_OFF + 1);
+constexpr uint8_t SAVE_FLAGS_OFF = 17;                                                         // reserved progression bits
+constexpr uint8_t SAVE_ITEMS_OFF = 18;                                                         // u8[item::ITEM_COUNT]
+constexpr uint8_t SAVE_WEAPON_OFF = static_cast<uint8_t>(SAVE_ITEMS_OFF + item::ITEM_COUNT);   // 26
+constexpr uint8_t SAVE_CHECKSUM_OFF = static_cast<uint8_t>(SAVE_WEAPON_OFF + 1);               // 27
+constexpr uint8_t SAVE_BYTES = static_cast<uint8_t>(SAVE_CHECKSUM_OFF + 1);                    // 28
+// Legacy records (v1..v3) kept the checksum at byte 26: v4 appended the weapon
+// byte there, so a v3 decode validates against this offset.
+constexpr uint8_t SAVE_V3_CHECKSUM_OFF = SAVE_WEAPON_OFF;   // 26
 constexpr uint8_t SAVE_QUEST_NONE = 0xFF;
 constexpr uint8_t SAVE_EQUIP_NONE = 0;   // empty equipment slot
 // Arduboy2 reserves EEPROM 0..15 for system settings (EEPROM_STORAGE_SPACE_START).
@@ -80,6 +88,7 @@ struct SaveBlock {
     uint8_t equip[SAVE_EQUIP_COUNT];   // head/body/charm slot id (0 = none)
     uint8_t flags;                     // SAVE_FLAG_* bits
     uint8_t items[item::ITEM_COUNT];   // inventory counts, cap 255
+    uint8_t weapon;                    // WeaponId 0..2 (hml.1 hub loadout)
 };
 
 // 1u << n for the crafted-flag bits and the quest bitmap byte bits. The AVR
@@ -93,12 +102,21 @@ inline void saveSetCrafted(SaveBlock &s, uint8_t piece) {
         s.flags |= mhBit8(static_cast<uint8_t>(SAVE_CRAFTED_BIT_BASE + piece));
 }
 
-// Sum of the payload bytes (everything before the checksum).
-inline uint8_t saveChecksum(const uint8_t *bytes) {
+// Sum of the first `count` payload bytes.
+inline uint8_t saveChecksumN(const uint8_t *bytes, uint8_t count) {
     uint8_t sum = 0;
-    for (uint8_t i = 0; i < SAVE_CHECKSUM_OFF; i++)
+    for (uint8_t i = 0; i < count; i++)
         sum = static_cast<uint8_t>(sum + bytes[i]);
     return sum;
+}
+
+// Sum of the current (v4) payload bytes (everything before the checksum).
+inline uint8_t saveChecksum(const uint8_t *bytes) {
+    return saveChecksumN(bytes, SAVE_CHECKSUM_OFF);
+}
+
+inline bool saveMagicOk(const uint8_t *in) {
+    return in[0] == static_cast<uint8_t>(SAVE_MAGIC & 0xFF) && in[1] == static_cast<uint8_t>(SAVE_MAGIC >> 8);
 }
 
 // Pack the save fields into the wire record (little-endian, magic/version/
@@ -120,17 +138,14 @@ inline void saveEncode(const SaveBlock &s, uint8_t *out) {
     out[SAVE_FLAGS_OFF] = s.flags;
     for (uint8_t i = 0; i < item::ITEM_COUNT; i++)
         out[SAVE_ITEMS_OFF + i] = s.items[i];
+    out[SAVE_WEAPON_OFF] = s.weapon;
     out[SAVE_CHECKSUM_OFF] = saveChecksum(out);
 }
 
-// Unpack the shared v1/v2 prefix (bytes 0..14) into `s`, leaving the prg.5 tail
-// at defaults. Only magic and checksum are checked; the version is the caller's
-// concern. False leaves `s` unspecified.
-inline bool saveDecodePrefix(const uint8_t *in, SaveBlock &s) {
-    if (in[0] != static_cast<uint8_t>(SAVE_MAGIC & 0xFF) || in[1] != static_cast<uint8_t>(SAVE_MAGIC >> 8))
-        return false;
-    if (in[SAVE_CHECKSUM_OFF] != saveChecksum(in))
-        return false;
+// Unpack the shared prefix fields (magic already checked; bytes 0..13 through
+// tier) into `s`, leaving the equip/flags/items/weapon tail at defaults. The
+// caller validates magic + the version's checksum. False leaves `s` unspecified.
+inline void saveDecodePrefixFields(const uint8_t *in, SaveBlock &s) {
     s.zenny = static_cast<uint16_t>(in[3] | (static_cast<uint16_t>(in[4]) << 8));
     for (uint8_t i = 0; i < SAVE_QUEST_BYTES; i++)
         s.quest[i] = in[5 + i];
@@ -143,6 +158,17 @@ inline bool saveDecodePrefix(const uint8_t *in, SaveBlock &s) {
     s.flags = 0;
     for (uint8_t i = 0; i < item::ITEM_COUNT; i++)
         s.items[i] = 0;
+    s.weapon = 0;
+}
+
+// Unpack a legacy v1/v2 prefix record: validates magic + the pre-v4 checksum
+// (byte 26) and decodes the shared prefix; the tail and weapon default.
+inline bool saveDecodePrefix(const uint8_t *in, SaveBlock &s) {
+    if (!saveMagicOk(in))
+        return false;
+    if (in[SAVE_V3_CHECKSUM_OFF] != saveChecksumN(in, SAVE_V3_CHECKSUM_OFF))
+        return false;
+    saveDecodePrefixFields(in, s);
     return true;
 }
 
@@ -159,13 +185,12 @@ inline void saveDefaults(SaveBlock &s) {
     s.flags = 0;
     for (uint8_t i = 0; i < item::ITEM_COUNT; i++)
         s.items[i] = 0;
+    s.weapon = 0;
 }
 
-// Validate + unpack the current record. False leaves `s` unspecified: callers
-// fall back to saveDefaults(). Magic/version/checksum are all checked.
-inline bool saveDecode(const uint8_t *in, SaveBlock &s) {
-    if (in[2] != SAVE_VERSION)
-        return false;
+// Unpack the v3 tail (equip/flags/items) after a validated prefix; weapon stays
+// 0 (hml.1 appended it, so a v3 record has no weapon byte).
+inline bool saveDecodeV3(const uint8_t *in, SaveBlock &s) {
     if (!saveDecodePrefix(in, s))
         return false;
     for (uint8_t i = 0; i < SAVE_EQUIP_COUNT; i++)
@@ -173,6 +198,25 @@ inline bool saveDecode(const uint8_t *in, SaveBlock &s) {
     s.flags = in[SAVE_FLAGS_OFF];
     for (uint8_t i = 0; i < item::ITEM_COUNT; i++)
         s.items[i] = in[SAVE_ITEMS_OFF + i];
+    return true;
+}
+
+// Validate + unpack the current (v4) record. False leaves `s` unspecified:
+// callers fall back to saveDefaults(). Magic/version/checksum are all checked.
+inline bool saveDecode(const uint8_t *in, SaveBlock &s) {
+    if (in[2] != SAVE_VERSION)
+        return false;
+    if (!saveMagicOk(in))
+        return false;
+    if (in[SAVE_CHECKSUM_OFF] != saveChecksum(in))
+        return false;
+    saveDecodePrefixFields(in, s);
+    for (uint8_t i = 0; i < SAVE_EQUIP_COUNT; i++)
+        s.equip[i] = in[SAVE_EQUIP_OFF + i];
+    s.flags = in[SAVE_FLAGS_OFF];
+    for (uint8_t i = 0; i < item::ITEM_COUNT; i++)
+        s.items[i] = in[SAVE_ITEMS_OFF + i];
+    s.weapon = in[SAVE_WEAPON_OFF];
     return true;
 }
 
@@ -230,11 +274,12 @@ struct SaveBackend {
     SaveWriteFn write;
 };
 
-// Load + migrate. Reads the current SAVE_BYTES; a good v3 record decodes, a v2
-// record decodes its shared prefix (prg.5 tail = defaults), a v1 record decodes
-// the bead-cgz prefix, and anything else falls back to saveDefaults(). Returns
-// true when a well-formed record was loaded (including a migrated older
-// version); false only for blank/junk, where `s` holds the defaults.
+// Load + migrate. Reads the current SAVE_BYTES; a good v4 record decodes, a v3
+// record decodes its full tail with weapon = 0, a v2 record decodes its shared
+// prefix (prg.5 tail = defaults), a v1 record decodes the bead-cgz prefix, and
+// anything else falls back to saveDefaults(). Returns true when a well-formed
+// record was loaded (including a migrated older version); false only for
+// blank/junk, where `s` holds the defaults.
 inline bool saveLoad(SaveBlock &s, const SaveBackend &backend) {
     uint8_t bytes[SAVE_BYTES];
     for (uint8_t i = 0; i < SAVE_BYTES; i++)
@@ -242,6 +287,8 @@ inline bool saveLoad(SaveBlock &s, const SaveBackend &backend) {
     if (saveDecode(bytes, s))
         return true;
     // Migration: an older but well-formed record keeps its fields.
+    if (bytes[2] == SAVE_VERSION_V3 && saveDecodeV3(bytes, s))
+        return true;
     if (bytes[2] == SAVE_VERSION_V2 && saveDecodePrefix(bytes, s))
         return true;
     if (bytes[2] == SAVE_VERSION_V1 && saveDecodePrefix(bytes, s)) {

@@ -152,7 +152,7 @@ inline void test_screens(FxTest &test) {
     test.expectEq(appScreenAccept(screens::SCREEN_HUB, r2), APP_NAV_SMITH, F("hub SMITH route"));
     test.expectEq(appScreenAccept(screens::SCREEN_HUB, r3), APP_NAV_NONE, F("hub zenny row is a no-op"));
     test.expectEq(appScreenBack(screens::SCREEN_QUESTS), APP_NAV_HUB, F("quests B -> hub"));
-    test.expectEq(appScreenBack(screens::SCREEN_HUB), APP_NAV_MENU, F("hub B -> menu"));
+    test.expectEq(appScreenBack(screens::SCREEN_HUB), APP_NAV_NONE, F("hub B is a root no-op"));
 
     // ----------------------------------------------------- EEPROM roundtrip
     SaveBlock eep;
@@ -163,6 +163,7 @@ inline void test_screens(FxTest &test) {
     eep.flags = SAVE_FLAG_SMITHY_SEEN;
     eep.items[ITEM_HERB] = 6;
     eep.items[ITEM_FANG] = 2;
+    eep.weapon = W_GUN;   // save v4 weapon (hml.1)
     saveQuestSet(eep, 4, 0);
     test.expectEq(saveStore(eep, REAL_BACKEND), 1, F("eeprom store verifies"));
 
@@ -175,6 +176,7 @@ inline void test_screens(FxTest &test) {
     test.expectEq(out.flags, SAVE_FLAG_SMITHY_SEEN, F("eeprom flags"));
     test.expectEq(out.items[ITEM_HERB], 6, F("eeprom herb count"));
     test.expectEq(out.items[ITEM_FANG], 2, F("eeprom fang count"));
+    test.expectEq(out.weapon, W_GUN, F("eeprom weapon"));
 
     // Write-on-change: an identical block rewrites nothing; one changed field
     // rewrites the field byte plus the checksum.

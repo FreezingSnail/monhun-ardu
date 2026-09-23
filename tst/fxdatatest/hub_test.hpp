@@ -1,10 +1,9 @@
 #pragma once
-// On-device end-to-end suite for the app flow (bead monhun-ardu-mgn qs.4; hub
-// loop rework monhun-ardu-dlp.3): boot menu -> A -> hub -> HUNT -> fight ->
-// win/death -> A -> hub -> QUESTS board, plus the hub -> quests take -> smith
-// buy -> hub detour. Drives the same src/app_state.hpp routing and
-// src/app_setup.hpp hunt arming as the shipping sketch (the hub HUNT row arms
-// quest/tier + clears the hunt latch exactly like the screen branch).
+// On-device end-to-end suite for the app flow (bead monhun-ardu-mgn qs.4; hub as
+// the root screen monhun-ardu-isp.1): boot -> hub -> HUNT -> fight -> win/death
+// -> A -> hub -> QUESTS board, plus the hub -> quests take -> smith buy -> hub
+// detour. Drives the same src/app_state.hpp routing and src/app_setup.hpp hunt
+// start (huntStart + quest/tier/items/armor arming) as the shipping sketch.
 
 #include "harness/fxtest.hpp"
 #include "src/screens.hpp"
@@ -85,6 +84,19 @@ static AppNav pressB(ScreenState &s, SaveBlock &save) {
     return nav;
 }
 
+// Apply a nav exactly like the sketch: a hunt request starts the hunt through
+// the device glue (huntStart) and arms quest/tier/items. (armorApplyToGame is
+// the same call the sketch makes; it is covered by the armor engine suites.)
+static bool applyNav(AppNav nav, ScreenState &s, SaveBlock &save, Game &g, const Input &in) {
+    if (!appNavApply(nav, s, save, g, in))
+        return false;
+    huntStart(g, save);
+    questApplyToGame(g, save);
+    upgradeApplyToGame(g, save);
+    itemsApplyToGame(g, save);
+    return true;
+}
+
 inline void test_hub(FxTest &test) {
     // Known save: 500 zenny, a 4-herb pantry, no quest, no tier.
     SaveBlock save;
@@ -97,61 +109,57 @@ inline void test_hub(FxTest &test) {
     save.items[ITEM_SCALE] = 1;
     saveStore(save, REAL_BACKEND);
 
-    MenuState menu;   // boot picks SWD / LUNGE
     ScreenState screen;
     Game g;
-    bool huntLatched = false;
 
-    // --------------------------------------- boot: menu A -> hub (dlp.3)
-    test.expectEq(static_cast<uint32_t>(appMenuAccept()), APP_NAV_HUB, F("menu A routes to hub"));
-    test.expectEq(static_cast<uint32_t>(menuStep(menu, H_A)), MENU_ACCEPT, F("menu A accepts"));
-    test.expectEq(static_cast<uint32_t>(appNavApply(appMenuAccept(), menu, screen, save, g, H_A)), 0, F("hub opened, no hunt"));
-    test.expectEq(static_cast<uint32_t>(screen.active), 1, F("hub active"));
-    test.expectEq(static_cast<uint32_t>(screen.screen), screens::SCREEN_HUB, F("hub screen"));
+    // --------------------------------------- boot: the hub is the root (isp.1)
+    screenEnter(screen, screens::SCREEN_HUB, save);
+    test.expectEq(static_cast<uint32_t>(screen.active), 1, F("boot hub active"));
+    test.expectEq(static_cast<uint32_t>(screen.screen), screens::SCREEN_HUB, F("boot hub screen"));
     test.expectEq(static_cast<uint32_t>(screen.rowCount), screens::SCREEN_HUB_ROWS, F("hub row count"));
-    test.expectEq(static_cast<uint32_t>(menu.active), 0, F("menu closed in hub"));
     test.expectEq(static_cast<uint32_t>(g.over), OVER_NONE, F("no hunt started yet"));
 
     // ----------------------------- hub HUNT (row 0) launches the picked hunt
-    test.expectEq(static_cast<uint32_t>(appNavApply(pressA(screen, save), menu, screen, save, g, H_A)), 1, F("hub HUNT starts the hunt"));
-    test.expectEq(static_cast<uint32_t>(g.weapon), W_SWORD, F("hunt weapon from menu"));
-    test.expectEq(static_cast<uint32_t>(g.monsterKind), MON_LUNGE, F("hunt beast from menu"));
+    // No active quest -> the LUNGE fallback beast; the save weapon is used.
+    test.expectEq(static_cast<uint32_t>(applyNav(pressA(screen, save), screen, save, g, H_A)), 1, F("hub HUNT starts the hunt"));
+    test.expectEq(static_cast<uint32_t>(g.weapon), W_SWORD, F("hunt weapon from the save"));
+    test.expectEq(static_cast<uint32_t>(g.monsterKind), MON_LUNGE, F("no quest -> fallback lunge beast"));
     test.expectEq(static_cast<uint32_t>(g.over), OVER_NONE, F("hunt starts live"));
     test.expectEq(static_cast<uint32_t>(g.projN), 0, F("fresh projectile ring"));
     test.expectEq(static_cast<uint32_t>(g.fxN), 0, F("fresh effect ring"));
 
     // --------------------- hub -> quests take -> smith buy -> hub
-    appNavApply(APP_NAV_HUB, menu, screen, save, g, H_A);
+    appNavApply(APP_NAV_HUB, screen, save, g, H_A);
     test.expectEq(static_cast<uint32_t>(screen.active), 1, F("hub active again"));
     test.expectEq(static_cast<uint32_t>(screen.rowCount), screens::SCREEN_HUB_ROWS, F("hub row count"));
 
     // QUESTS is hub row 1: cursor down once, A opens the board, A takes quest 0.
     tap(screen, H_DOWN);
     test.expectEq(static_cast<uint32_t>(screen.cursor), 1, F("cursor on QUESTS"));
-    appNavApply(pressA(screen, save), menu, screen, save, g, H_A);
+    appNavApply(pressA(screen, save), screen, save, g, H_A);
     test.expectEq(static_cast<uint32_t>(screen.screen), screens::SCREEN_QUESTS, F("quests screen"));
     test.expectEq(static_cast<uint32_t>(screen.rowCount), screens::SCREEN_QUESTS_ROWS, F("quests row count"));
-    appNavApply(pressA(screen, save), menu, screen, save, g, H_A);   // take row 0
+    appNavApply(pressA(screen, save), screen, save, g, H_A);   // take row 0
     test.expectEq(static_cast<uint32_t>(save.activeQuest), 0, F("quest 0 active"));
     test.expectEq(static_cast<uint32_t>(saveQuestGet(save, 0, 0)), 1, F("quest 0 taken bit"));
 
     // SMITH is hub row 2.
-    appNavApply(pressB(screen, save), menu, screen, save, g, H_B);
+    appNavApply(pressB(screen, save), screen, save, g, H_B);
     test.expectEq(static_cast<uint32_t>(screen.screen), screens::SCREEN_HUB, F("back on hub"));
     test.expectEq(static_cast<uint32_t>(screen.cursor), 0, F("hub cursor reset to HUNT"));
     tap(screen, H_DOWN);
     tap(screen, H_DOWN);
     test.expectEq(static_cast<uint32_t>(screen.cursor), 2, F("cursor on SMITH"));
-    appNavApply(pressA(screen, save), menu, screen, save, g, H_A);
+    appNavApply(pressA(screen, save), screen, save, g, H_A);
     test.expectEq(static_cast<uint32_t>(screen.screen), screens::SCREEN_SMITH, F("smith screen"));
-    appNavApply(pressA(screen, save), menu, screen, save, g, H_A);   // buy SWORD T1
+    appNavApply(pressA(screen, save), screen, save, g, H_A);   // buy SWORD T1
     test.expectEq(save.zenny, 400, F("zenny after buy"));
     test.expectEq(static_cast<uint32_t>(save.tier[W_SWORD]), 1, F("sword tier 1 stored"));
     test.expectEq(static_cast<uint32_t>(save.items[ITEM_ORE]), 0, F("recipe ore debited"));
     test.expectEq(static_cast<uint32_t>(save.items[ITEM_SCALE]), 0, F("recipe scale debited"));
 
     // back to the hub, cursor reset to HUNT, then the hub pixel check.
-    appNavApply(pressB(screen, save), menu, screen, save, g, H_B);
+    appNavApply(pressB(screen, save), screen, save, g, H_B);
     test.expectEq(static_cast<uint32_t>(screen.screen), screens::SCREEN_HUB, F("back on hub 2"));
     test.expectEq(static_cast<uint32_t>(screen.cursor), 0, F("hub cursor reset to HUNT"));
 
@@ -175,20 +183,16 @@ inline void test_hub(FxTest &test) {
     test.expectEq(countBits(10, 32, 38, 45) > 0 ? 1 : 0, 1, F("ZENNY label ink"));
     test.expectEq(countBits(112, 123, 38, 45) > 0 ? 1 : 0, 1, F("live zenny 400 drawn"));
 
-    // hub B -> menu.
-    appNavApply(pressB(screen, save), menu, screen, save, g, H_B);
-    test.expectEq(static_cast<uint32_t>(menu.active), 1, F("hub B -> menu"));
-    test.expectEq(static_cast<uint32_t>(screen.active), 0, F("hub closed on exit"));
+    // hub B is a root no-op: the hub stays up (isp.1 deleted the menu).
+    appNavApply(pressB(screen, save), screen, save, g, H_B);
+    test.expectEq(static_cast<uint32_t>(screen.active), 1, F("hub B keeps the hub active"));
+    test.expectEq(static_cast<uint32_t>(screen.screen), screens::SCREEN_HUB, F("hub B stays on the hub"));
 
-    // ------------- menu A -> hub -> HUNT with the quest/tier armed, then win
-    appNavApply(appMenuAccept(), menu, screen, save, g, H_A);   // menu -> hub
-    test.expectEq(static_cast<uint32_t>(screen.active), 1, F("menu A opens hub again"));
-    test.expectEq(static_cast<uint32_t>(appNavApply(pressA(screen, save), menu, screen, save, g, H_A)), 1, F("second hunt started"));
-    questApplyToGame(g, save);
-    upgradeApplyToGame(g, save);
-    itemsApplyToGame(g, save);
+    // ------------- hub HUNT with quest 0 active: kill target + tier armed
+    test.expectEq(static_cast<uint32_t>(applyNav(pressA(screen, save), screen, save, g, H_A)), 1, F("second hunt started"));
     test.expectEq(static_cast<uint32_t>(g.weapon), W_SWORD, F("hunt weapon"));
-    test.expectEq(static_cast<uint32_t>(g.monsterKind), MON_LUNGE, F("hunt beast"));
+    test.expectEq(static_cast<uint32_t>(g.monsterKind), MON_LUNGE, F("quest kill target beast"));
+    test.expectEq(static_cast<uint32_t>(g.questGoalKind), quests::GOAL_KILL, F("quest kill goal armed"));
     test.expectEq(static_cast<uint32_t>(g.questTarget), MON_LUNGE, F("quest target armed"));
     test.expectEq(static_cast<uint32_t>(g.questNeed), 3, F("quest need armed"));
     test.expectEq(static_cast<uint32_t>(g.dmgMul), 110, F("tier 1 damage multiplier applied"));
@@ -206,6 +210,7 @@ inline void test_hub(FxTest &test) {
     g.items[ITEM_SCALE] = 2;
     g.items[ITEM_ORE] = 1;
 
+    bool huntLatched = false;
     test.expectEq(static_cast<uint32_t>(appHuntCommit(g.over != OVER_NONE, huntLatched, save, g)), 1, F("end commit fires"));
     saveStore(save, REAL_BACKEND);
     test.expectEq(static_cast<uint32_t>(appHuntCommit(g.over != OVER_NONE, huntLatched, save, g)), 0, F("end commit latched"));
@@ -218,35 +223,35 @@ inline void test_hub(FxTest &test) {
     test.expectEq(static_cast<uint32_t>(reloaded.items[ITEM_SCALE]), 2, F("carved scale persisted"));
     test.expectEq(static_cast<uint32_t>(reloaded.items[ITEM_ORE]), 1, F("gathered ore persisted"));
 
-    // Over screen: the sketch runs menuReturnStep each tick; a fresh A returns
-    // to the hub (dlp.3) so the quest can be turned in.
-    menuReturnStep(menu, true, H_IDLE);
-    test.expectEq(static_cast<uint32_t>(menuReturnStep(menu, true, H_A)), 1, F("over + A returns"));
+    // Over screen: the sketch runs appOverReturnStep each tick; a fresh A
+    // returns to the hub (dlp.3) so the quest can be turned in.
+    bool prevA = false;
+    appOverReturnStep(true, H_IDLE, prevA);
+    test.expectEq(static_cast<uint32_t>(appOverReturnStep(true, H_A, prevA)), 1, F("over + A returns"));
     test.expectEq(static_cast<uint32_t>(appHuntReturn()), APP_NAV_HUB, F("hunt end routes to hub"));
-    test.expectEq(static_cast<uint32_t>(appNavApply(appHuntReturn(), menu, screen, save, g, H_A)), 0, F("return is not a hunt start"));
+    test.expectEq(static_cast<uint32_t>(appNavApply(appHuntReturn(), screen, save, g, H_A)), 0, F("return is not a hunt start"));
     test.expectEq(static_cast<uint32_t>(screen.active), 1, F("hunt end -> hub"));
     test.expectEq(static_cast<uint32_t>(screen.screen), screens::SCREEN_HUB, F("hub after hunt"));
-    test.expectEq(static_cast<uint32_t>(menu.active), 0, F("menu stays closed"));
     test.expectEq(save.zenny, 400, F("hub zenny updated"));
     test.expectEq(static_cast<uint32_t>(save.progress), 1, F("hub progress updated"));
 
     // The hub QUESTS row (row 1) reaches the 8-row board from the live hub.
     tap(screen, H_DOWN);
-    appNavApply(pressA(screen, save), menu, screen, save, g, H_A);
+    appNavApply(pressA(screen, save), screen, save, g, H_A);
     test.expectEq(static_cast<uint32_t>(screen.screen), screens::SCREEN_QUESTS, F("hub QUESTS row reaches the board"));
     test.expectEq(static_cast<uint32_t>(screen.rowCount), screens::SCREEN_QUESTS_ROWS, F("board row count"));
-    appNavApply(pressB(screen, save), menu, screen, save, g, H_B);
+    appNavApply(pressB(screen, save), screen, save, g, H_B);
     test.expectEq(static_cast<uint32_t>(screen.screen), screens::SCREEN_HUB, F("board B -> hub"));
 
     // Fresh hunt from the hub resets the fight state (newGame path).
     g.projN = 2;
     g.fxN = 1;
     g.tick = 50;
-    appNavApply(pressA(screen, save), menu, screen, save, g, H_A);   // hub HUNT
+    applyNav(pressA(screen, save), screen, save, g, H_A);   // hub HUNT
     test.expectEq(static_cast<uint32_t>(g.tick), 0, F("fresh tick"));
     test.expectEq(static_cast<uint32_t>(g.projN), 0, F("fresh projectiles"));
     test.expectEq(static_cast<uint32_t>(g.fxN), 0, F("fresh effects"));
-    test.expectEq(static_cast<uint32_t>(g.monsterKind), MON_LUNGE, F("fresh beast from menu"));
+    test.expectEq(static_cast<uint32_t>(g.monsterKind), MON_LUNGE, F("fresh quest beast"));
 }
 
 }   // namespace hubfx

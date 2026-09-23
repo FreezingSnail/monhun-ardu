@@ -30,7 +30,8 @@
 #include "harness/fxtest.hpp"
 #include "src/core/world.hpp"
 #include "src/render.hpp"
-#include "src/app_state.hpp"   // demo-flow app routing (fie.6)
+#include "src/app_state.hpp"   // hub app routing (fie.6/isp.1)
+#include "src/app_setup.hpp"   // huntStart: save weapon + quest kind (isp.1)
 
 #include <stdint.h>
 
@@ -244,20 +245,20 @@ inline void test_zones(FxTest &test) {
     stepGame(t, Z_IDLE);
     test.expectEq(t.fade, FADE_TICKS - 1, F("wipe decays per tick"));
 
-    // -------------------------------------------- 6. live app flow (fie.6/dlp.3)
-    // menu A -> hub -> HUNT -> camp; camp hold-B -> Game::menuRequest -> menu;
+    // -------------------------------------------- 6. live app flow (fie.6/isp.1)
+    // boot -> hub -> HUNT -> camp; camp hold-B -> Game::menuRequest -> hub;
     // area door -> camp. Drives the shipping src/app_state.hpp router.
-    MenuState menu;
     ScreenState screen;
     SaveBlock save;
     saveDefaults(save);
     Game &d = g;
-    test.expectEq(static_cast<uint32_t>(appNavApply(appMenuAccept(), menu, screen, save, d, Z_IDLE)), 0, F("menu A opens the hub"));
+    appNavApply(APP_NAV_HUB, screen, save, d, Z_IDLE);
     test.expectEq(static_cast<uint32_t>(screen.active), 1, F("hub active"));
     test.expectEq(static_cast<uint32_t>(screen.screen), screens::SCREEN_HUB, F("on the hub"));
     ScreenRow huntRow;
     huntRow.action = screens::ACTION_HUNT;   // hub row 0 (no cart read needed)
-    test.expectEq(static_cast<uint32_t>(appNavApply(appScreenAccept(screens::SCREEN_HUB, huntRow), menu, screen, save, d, Z_IDLE)), 1, F("hub HUNT starts the hunt"));
+    test.expectEq(static_cast<uint32_t>(appNavApply(appScreenAccept(screens::SCREEN_HUB, huntRow), screen, save, d, Z_IDLE)), 1, F("hub HUNT requests the hunt"));
+    huntStart(d, save);   // the sketch's device glue starts the world
     test.expectEq(static_cast<uint32_t>(d.roomId), zone::ROOM_CAMP, F("hunt starts in camp"));
     test.expectEq(static_cast<uint32_t>(roomIsSafe(d)), 1, F("camp is safe"));
 
@@ -266,21 +267,22 @@ inline void test_zones(FxTest &test) {
     d.menuRequest = false;
     for (int16_t i = 0; i < HOLD_TICKS; i++)
         stepGame(d, Z_B);
-    test.expectEq(static_cast<uint32_t>(d.menuRequest), 1, F("camp hold-B requests menu"));
-    test.expectEq(static_cast<uint32_t>(appMenuRequest(d)), APP_NAV_MENU, F("request routes to menu"));
+    test.expectEq(static_cast<uint32_t>(d.menuRequest), 1, F("camp hold-B requests the hub"));
+    test.expectEq(static_cast<uint32_t>(appHubRequest(d)), APP_NAV_HUB, F("request routes to the hub"));
     test.expectEq(static_cast<uint32_t>(d.menuRequest), 0, F("request consumed once"));
-    appNavApply(APP_NAV_MENU, menu, screen, save, d, Z_B);
-    test.expectEq(static_cast<uint32_t>(menu.active), 1, F("camp exit opens menu"));
+    appNavApply(APP_NAV_HUB, screen, save, d, Z_B);
+    test.expectEq(static_cast<uint32_t>(screen.active), 1, F("camp exit opens the hub"));
 
-    // beast pick -> hub -> camp -> area door round trip; the camp hold-B exit
-    // above is the only route back to the menu (prg.8 removed the pole room).
-    MenuState beast;
+    // huntStart from a save picks the loadout + kill-target beast, and the camp
+    // door still leads to the area hunt (prg.8 removed the pole room).
+    SaveBlock beast;
+    saveDefaults(beast);
     beast.weapon = W_GUN;
-    beast.target = MON_HEAVY;
-    appNavApply(appMenuAccept(), beast, screen, save, d, Z_IDLE);   // menu -> hub
-    test.expectEq(static_cast<uint32_t>(appNavApply(appScreenAccept(screens::SCREEN_HUB, huntRow), beast, screen, save, d, Z_IDLE)), 1, F("beast pick starts"));
+    beast.activeQuest = 1;   // slay_sweep (kill, target sweep)
+    huntStart(d, beast);
     test.expectEq(static_cast<uint32_t>(d.mode), MODE_HUNT, F("beast hunt mode"));
-    test.expectEq(static_cast<uint32_t>(d.monsterKind), MON_HEAVY, F("picked heavy beast"));
+    test.expectEq(static_cast<uint32_t>(d.weapon), W_GUN, F("beast hunt weapon"));
+    test.expectEq(static_cast<uint32_t>(d.monsterKind), MON_SWEEP, F("quest kill-target beast"));
     test.expectEq(static_cast<uint32_t>(d.roomId), zone::ROOM_CAMP, F("beast starts in camp"));
 }
 

@@ -28,11 +28,11 @@ flashing. Controls are below; no USB serial device comes up while the game runs
 |---|---|
 | Vertical-slice sim | Ported + parity-verified (20 scenes / 1269 ticks / 660 device asserts) |
 | Device render + HUD + audio | Working (block/FX-sprite art, cue tones; HUD text/FX glyphs + bars — `7y3` clamp fixed) |
-| Host unit tests | `make test` — **6190 passed / 0 failed** |
-| Device tests (Ardens) | 18 suites / 1670 asserts — boot 4, assets 270, audio 10, menu 60, menu_art 53, hud 25, data 343, combat 237, hub 63, monster_art 111, player_art 120, quests 50, screens 85, smith 105, tell 14, zones 80, items 35, perf 5 — all PASS (the frozen `test_parity` diagnostics image is not a gate) |
+| Host unit tests | `make test` — **6188 passed / 0 failed** |
+| Device tests (Ardens) | 16 suites / 1645 asserts — boot 4, assets 270, audio 9, hud 29, data 348, combat 237, hub 70, monster_art 127, player_art 120, quests 87, screens 89, smith 115, tell 18, zones 82, items 35, perf 5 — all PASS (the frozen `test_parity` diagnostics image is not a gate; the opening-menu `test_menu`/`test_menu_art` suites were deleted with the menu, `isp.1`) |
 | Perf gate (`monhun-ardu-8v7`, re-verified through `kt7.7`) | **PASS.** plane 157 Hz (≥135), logic 52 Hz (≥45), render max 3348 µs (≤7407), tick 480 µs, RAM free 689 B (bench) |
 | Perf tooling | Headless Ardens profiler dump (`profiledump=<path>`, local patch) + on-device cycle bench (`test_perf`) |
-| Shipping build | flash **29170 / 29696 B** (98%, 526 free), RAM **1631 / 2560 B** (929 free); USB-free, see below |
+| Shipping build | flash **28804 / 29696 B** (97%, 892 free), RAM **1701 / 2560 B** (859 free); USB-free, see below |
 | FX data image | **200418 B** of 16 MB used |
 
 Speculative gameplay status: combat (sword / flail / gunshield), monster FSM,
@@ -87,20 +87,22 @@ directly in 1/16-px units and integrated by straight addition.
 ### Device layer
 
 - `monhun-ardu.ino` — plane loop, input sampling, `stepGame()` + `audioUpdate()`
-  in `run()`, `renderScene()` in `render()`. Boots into the opening menu; while
-  it is active the sim/audio are skipped and `drawMenu()` replaces the scene.
-  Menu A launches the picked hunt directly; win/loss + A returns to the menu
-  (demo loop `5r1`). FX reads happen inside `FX::enableOLED()` /
+  in `run()`, `renderScene()` in `render()`. Boots straight into the **hub** (the
+  root screen, `isp.1` deleted the opening menu); while a screen is active the
+  sim/audio are skipped and `drawScreen()` replaces the scene. The hub HUNT row
+  starts the save's hunt (`huntStart`), win/loss + A returns to the hub, and the
+  camp hold-B leaves to the hub. FX reads happen inside `FX::enableOLED()` /
   `waitForNextPlane()` / `FX::disableOLED()`.
-- `src/menu_state.hpp` — host-testable menu FSM (`MenuState`/`menuStep`, pick →
-  mode/kind mapping, post-over return edge); no Arduino.h.
-- `src/menu.hpp` — menu render (FX glyph rows + selection underline), per plane.
-- `src/app_state.hpp` — host-testable app routing (qs.4, demo flow `5r1`):
-  menu → hunt → menu on the shipped path (a fresh hunt re-runs `newGame`), plus
-  the shelf hub ↔ quests/smith graph kept compiled/tested but off the demo path,
-  the held-button guards and the once-per-hunt progress commit.
-- `src/app_setup.hpp` — device cart glue for a hunt start: arm the quest kill
-  counter from the active `QuestDef` and resolve the smith tier multipliers.
+- `src/app_state.hpp` — host-testable app routing (qs.4; hub-as-root `isp.1`):
+  the hub is the root (`appScreenBack(HUB) == APP_NAV_NONE`), its HUNT row
+  requests a hunt (`appNavApply(APP_NAV_HUNT)` returns true; the caller starts
+  it), camp hold-B routes to the hub (`appHubRequest`), the held-button guards,
+  the over-screen return edge (`appOverReturnStep`) and the once-per-hunt
+  progress commit.
+- `src/app_setup.hpp` — device cart glue for a hunt start: `huntStart()` picks the
+  beast kind from the active `QuestDef` (kill target, else LUNGE) and the save's
+  v4 weapon, then arms the quest kill counter and resolves the smith tier
+  multipliers.
 - `src/armor_state.hpp` — host-testable armor engine (arm.2): crafted/equip save
   helpers and `armorAggregate()` (defense/resist/skill-point sums + S/M tiers).
 - `src/armor.hpp` — device cart glue: reads `mhArmor` and caches the equipped
@@ -235,45 +237,27 @@ data/skeletons.json + data/creatures/*.json ──tools/gen-combat.py──►�
 
 ## Controls
 
-### Opening menu (boot)
+### Hub (boot — the root screen, `isp.1`)
 
-| Input | Action |
-|---|---|
-| LEFT / RIGHT | cycle weapon: SWD (sword) / FLS (flail) / GUN (gunshield) |
-| UP / DOWN | cycle target: LUNGE / SWEEP / HEAVY / RAVAGER beast |
-| A | launch the picked loadout directly into the hunt |
-
-D-pad nav is debounced: a tap moves exactly one pick (immediate on the direction
-change), while holding waits ~300 ms (16 logic ticks) and then repeats every
-~115 ms (6 ticks). Reversing steps at once; releasing resets the hold timer; a
-re-entry after win/loss resets it too, so a held d-pad cannot skip picks. A stays
-edge-based: one launch per press. Picks wrap in both directions. A starts the
-selected scene (demo flow, monhun-ardu-5r1), so every target starts the matching
-beast variant in hunt mode (the training pole and its mode were removed in
-prg.8). After a win or loss, A returns to the menu with the picks kept
-until reboot; the next A runs `newGame` again, so projectiles/effects/quest
-counters start clean. While the menu is up the sim and audio are not stepped.
-
-Menu v2 (monhun-ardu-2u8, name-only by 4t4) bakes the options into FX sheets:
-`mh_menu_bg` (the title/labels/footer plus the dim light-gray options),
-`mh_menu_wsel` (three 32x8 weapon tiles) and `mh_menu_msel` (four 64x8 target
-tiles). Every option is a name only — SWD/FLS/GUN on the weapon row, CHICKEN/
-BULL/LONGTAIL/RAVAGER in a 2-column beast grid — with the v2 icon slot left
-clear and the text glyph-identical to `fxfontw`/`fxfontg` (gen-art
-`check_menu_identity`). The picked weapon and target each draw a bright 1 px
-frame plus cursor arrow; unpicked options stay dim. Footer: `A HUNT`.
-
-### Hub / quests / smith (shelf code, qs.1–qs.4 — not on the demo path)
-
-The data-driven hub/quests/smith screens and their EEPROM save stay in the tree
-and unit/device-tested, but the shipped demo loop is menu → hunt → menu
-(monhun-ardu-5r1) and never enters the hub. The shelf graph is:
+Boot lands on the hub; the opening menu is gone (`isp.1`). The hub is the root,
+so B there is a no-op.
 
 | Input | Action |
 |---|---|
 | UP / DOWN | move the cursor (6 rows per page, scroll by 6) |
 | A | accept the cursor row (start hunt / open a screen / buy / take quest) |
-| B | back one level (quests/smith → hub; hub → opening menu) |
+| B | back one level (quests/smith → hub; hub B is a root no-op) |
+
+D-pad nav is debounced: a tap moves exactly one row (immediate on the direction
+change), while holding waits ~300 ms (16 logic ticks) and then repeats every
+~115 ms (6 ticks). A is edge-based: one accept per press, and the press that
+opened a screen cannot re-fire inside it. The hub HUNT row starts the save's
+hunt: `huntStart()` reads the active quest's `QuestDef` (a `kill` goal spawns its
+target beast, anything else — no quest or a `gather` goal — falls back to the
+LUNGE beast) and the save's v4 `weapon`, then runs `newGame` + the camp spawn.
+After a win or loss, A returns to the hub so the finished quest can be turned in;
+the next HUNT runs `newGame` again, so projectiles/effects/quest counters start
+clean. While a screen is up the sim and audio are not stepped.
 
 The hub shows HUNT / QUESTS / SMITH plus a ZENNY row that renders the live
 `save.zenny` balance (dynamic value token). The quests board takes a kill quest
@@ -282,12 +266,11 @@ pieces (`COND_ARMOR`/`ACTION_CRAFT_ARMOR` rows: A crafts the piece — debiting
 its materials + zenny and marking it crafted — then toggles equip/unequip; the
 crafted bitmask and the equipped ids persist in the save, and the equipped stats
 cache at hunt start, arm.2). Every
-state-changing action commits the 15-byte EEPROM save block once (write-on-
-change + verify read). If a save already carries an active quest/tier it still
-applies at hunt start and the hunt-end quest-progress commit still runs exactly
-once per hunt; the demo path never takes/turns in a quest, so nothing can
-double-count. There is no quit input in the demo — win/loss + A is the only
-hunt exit.
+state-changing action commits the 28-byte EEPROM save block once (write-on-
+change + verify read). A save with an active quest/tier applies it at hunt start
+and the hunt-end quest-progress commit still runs exactly once per hunt. Camp
+hold-B (sheathed) leaves the hunt back to the hub. There is no quit input in the
+hunt — win/loss + A is the only hunt exit.
 
 ### Target roster (`MONSTER_DEFS`, FX cart blob)
 
@@ -386,7 +369,9 @@ Notes:
    for the menu state machine, FX-glyph render and the runtime monster-kind
    start path), d-pad nav debounce (`6zb.4`, +16 B for the per-axis hold
    timers) and the combat blob pipeline (`ljj.1`; blob is FX data, shipping
-   flash unchanged). The 119 B of hot LUTs (`mh::SIN65`
+   flash unchanged). The hub-as-root rework (`isp.1`) then deleted the opening
+   menu (FSM + FX render + its suites) and reclaimed 470 B: shipping measures
+   **28804/29696 B (892 free)**. The 119 B of hot LUTs (`mh::SIN65`
    65 B, `fp::DIR8` 32 B, `mh::MH_MASK_TOP/BOT` 16 B, `mh::RING6` 6 B) stay in
    MCU flash by decision (`monhun-ardu-42n.5`): FX per-access reads measured
    ~150 cycles (~9 µs, 20-35x an LPM) and a SIN65 RAM cache would breach the
@@ -401,8 +386,9 @@ Notes:
    per-axis nav hold state (`6zb.4`) → 1950 B; the `ljj.2` combat loader caches
    in `Game::combat` (22 B profile + 21 B attack/window + 7 B runtime = 50 B)
    → 2000 B. FX sprite data stays on the cart, so RAM grew little through the
-   art pass; the USB-stack removal (`42n.8`) then dropped it to **1742 B
-   (818 free)**, and the latest build measures **1760 B (800 free)**.
+   art pass; the USB-stack removal (`42n.8`) then dropped it, the opening-menu
+   `MenuState` was deleted with the menu (`isp.1`) and the save grew one byte
+   for the v4 weapon byte, and the latest build measures **1701 B (859 free)**.
 4. **Mock is legacy**: `src/` is the source of truth. The mock/device parity
    image (`test_parity`, 660 asserts) stays runnable as legacy diagnostics but
    is no longer a commit gate; do not update `mock/` or regenerate its fixtures.
@@ -462,8 +448,8 @@ Notes:
 monhun-ardu.ino     device sketch (plane loop, input, run/render wiring)
 src/core/           host-testable sim (no Arduino.h)
 src/render.hpp      device render path (also in perf bench)
-src/menu_state.hpp  opening-menu FSM (host-testable)
-src/menu.hpp        opening-menu render (per plane)
+src/app_state.hpp   host-testable hub/screen/hunt routing
+src/app_setup.hpp   device cart glue: huntStart + quest/tier arming
 src/audio.hpp       tone cue detector
 src/external/       ArduboyG, SpritesU, SpritesABC
 src/fxdata.h        generated FX offset constants

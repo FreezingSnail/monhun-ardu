@@ -18,10 +18,9 @@
 // exact same header is compiled into the on-device perf bench, so the numbers
 // there describe this loop's real render path.
 #include "src/render.hpp"
-#include "src/menu.hpp"        // draws through render.hpp (textPut/blk) + MenuState
 #include "src/screens.hpp"     // hub/list screens + EEPROM save (qs.1)
-#include "src/app_state.hpp"   // boot-flow routing: menu <-> hub <-> screens <-> hunt (qs.4)
-#include "src/app_setup.hpp"   // cart-backed hunt arming: quest def + smith tier (qs.4)
+#include "src/app_state.hpp"   // boot-flow routing: hub <-> screens <-> hunt (isp.1)
+#include "src/app_setup.hpp"   // cart-backed hunt arming + huntStart (qs.4/isp.1)
 #include "src/quest.hpp"       // quest defs on cart + TAKE/TURN_IN state (qs.2)
 #include "src/smith.hpp"       // smith upgrade defs on cart + tier multipliers (qs.3)
 
@@ -31,13 +30,6 @@ decltype(arduboy) arduboy;
 // tests; the device loop only samples input, steps it, and reads it for draw.
 mh::Game g;
 
-// Opening menu (bead monhun-ardu-6zb.2): boot lands here. While active it owns
-// every input edge; the sim and audio are not stepped. A opens the hub
-// (monhun-ardu-dlp.3: the hub is live again); the picked weapon/target launches
-// from the hub HUNT row, and a win/loss + A returns to the hub to turn quests
-// in. The picks stay live across the menu -> hub -> hunt -> hub loop.
-mh::MenuState s_menu;
-
 // Audio cue edge detector. Driven from run() after stepGame(); reads Game only
 // (no core changes). Muted at compile time with -DMH_AUDIO=0.
 mh::AudioState s_audio;
@@ -45,12 +37,17 @@ mh::AudioState s_audio;
 // Persistent save + the data-driven screen state (bead monhun-ardu-cgz). The
 // save loads once in setup(); it is committed only from a screen action or the
 // hunt-end progress commit (never mid-hunt) so EEPROM write cycles stay low.
-// The hub is on the demo path again (monhun-ardu-dlp.3): menu A opens it, HUNT
-// launches the picked loadout, and a finished hunt returns to it for turn-ins.
-// The quests/smith screens are reachable from its rows.
+// The hub is the root screen (monhun-ardu-isp.1, the opening menu is gone):
+// boot enters it, HUNT launches the save's weapon/active-quest hunt, and a
+// finished hunt returns to it for turn-ins. The quests/smith screens are
+// reachable from its rows.
 mh::SaveBlock s_save;
 mh::ScreenState s_screen;
 static const mh::SaveBackend SAVE_BACKEND = {mh::saveEepromRead, mh::saveEepromWrite};
+
+// Hunt-end A edge flag (monhun-ardu-isp.1): the over-screen return used to be
+// owned by the deleted MenuState; the sketch keeps its own flag now.
+static bool s_huntPrevA = false;
 
 // Quest kill accounting edge (qs.2/qs.4): the hunt-end commit writes the
 // progress once per hunt (never mid-hunt); appHuntCommit() owns the once-only
@@ -91,18 +88,17 @@ void setup() {
     FX::begin(FX_DATA_PAGE);
     FX::setCursorRange(0, 32767);
 
-    mh::newGame(g, mh::W_SWORD, mh::MODE_HUNT);
     mh::saveLoad(s_save, SAVE_BACKEND);   // first boot / bad block -> defaults
-    mh::questApplyToGame(g, s_save);
-    mh::upgradeApplyToGame(g, s_save);
-    mh::itemsApplyToGame(g, s_save);   // restore the persisted inventory
-    mh::armorApplyToGame(g, s_save);   // cache equipped armor stats (arm.2)
+    // The hub is the root screen (monhun-ardu-isp.1): boot enters it. The world
+    // is only built when the hub HUNT row starts a hunt (huntStart), so no
+    // newGame/arming happens here.
+    mh::screenEnter(s_screen, screens::SCREEN_HUB, s_save);
 }
 
-// One input sample per logic tick, shared by the menu and the sim. The menu
-// owns its own edge flags (MenuState::prevA/prevB); while the sim runs,
-// menuReturnStep() keeps those same flags current, so the post-game A edge
-// needs no second edge rule here.
+// One input sample per logic tick, shared by the screens and the sim. The
+// screens own their own A/B edge flags (ScreenState::prevA/prevB); while the
+// sim runs, appOverReturnStep() keeps the hunt-end A flag (s_huntPrevA) current,
+// so the post-game return edge needs no second edge rule here.
 static mh::Input sampleInput() {
     mh::Input in;
     in.mx = (arduboy.pressed(RIGHT_BUTTON) ? 1 : 0) - (arduboy.pressed(LEFT_BUTTON) ? 1 : 0);
@@ -114,46 +110,29 @@ static mh::Input sampleInput() {
 
 // One logic tick. Called only from needsUpdate() (never mid-plane), so the
 // whole core advances atomically between planes. pollButtons() already ran.
-// Live flow (monhun-ardu-dlp.3): menu --A--> hub --HUNT--> camp --door--> area
-// --door--> camp; hub --QUESTS/SMITH--> screen --B--> hub; hub --B--> menu;
-// camp hold-B -> menu; win/loss + A -> hub (turn-ins).
+// Live flow (monhun-ardu-isp.1): boot -> hub --HUNT--> camp --door--> area
+// --door--> camp; hub --QUESTS/SMITH--> screen --B--> hub; camp hold-B -> hub;
+// win/loss + A -> hub (turn-ins). The hub is the root: B there does nothing.
 void run() {
     const mh::Input in = sampleInput();
 #if DEBUG_HURTBOXES
     pollDebugToggle(in);   // observes A+B; does not consume input from stepGame
 #endif
-    if (s_menu.active) {
-        // Menu tick: no stepGame, no audio (the new game re-latches the audio
-        // snapshot on its tick 0). A opens the hub (APP_NAV_HUB); the picked
-        // loadout launches from the hub HUNT row (APP_NAV_HUNT -> menuStart ->
-        // newGame, so projectiles/effects/quest counters reset for the fresh
-        // hunt), which re-arms the quest/tier from the save and clears the
-        // hunt-end latch, exactly like the screen path.
-        if (mh::menuStep(s_menu, in) == mh::MENU_ACCEPT) {
-            if (mh::appNavApply(mh::appMenuAccept(), s_menu, s_screen, s_save, g, in)) {
-                mh::questApplyToGame(g, s_save);
-                mh::upgradeApplyToGame(g, s_save);
-                mh::itemsApplyToGame(g, s_save);
-                mh::armorApplyToGame(g, s_save);
-                s_huntOver = false;
-            }
-        }
-        return;
-    }
     if (s_screen.active) {
-        // Screen tick: nav + A/B. B steps back one level (quests/smith -> hub,
-        // hub -> menu); A routes through the hub map or runs the row action.
+        // Screen tick: nav + A/B. B steps back one level (quests/smith -> hub;
+        // the hub is the root, so its B is a no-op); A routes through the hub
+        // map or runs the row action.
         const mh::ScreenEvent ev = mh::screenStep(s_screen, in);
         if (ev == mh::SCREEN_BACK) {
             // A camp-opened smith closes back into the camp sim; every other
-            // screen keeps the shelf back-step (quests/smith -> hub).
+            // screen keeps the back-step (quests/smith -> hub).
             if (s_smithyFromCamp && s_screen.screen == screens::SCREEN_SMITH) {
                 s_smithyFromCamp = false;
-                mh::appNavApply(mh::APP_NAV_CAMP, s_menu, s_screen, s_save, g, in);
+                mh::appNavApply(mh::APP_NAV_CAMP, s_screen, s_save, g, in);
                 // A camp-smith equip/unequip changes the live hunt's armor cache.
                 mh::armorApplyToGame(g, s_save);
             } else {
-                mh::appNavApply(mh::appScreenBack(s_screen.screen), s_menu, s_screen, s_save, g, in);
+                mh::appNavApply(mh::appScreenBack(s_screen.screen), s_screen, s_save, g, in);
             }
             return;
         }
@@ -164,12 +143,14 @@ void run() {
             return;
         const mh::AppNav nav = mh::appScreenAccept(s_screen.screen, row);
         if (nav != mh::APP_NAV_NONE) {
-            // Boot-flow destination (hub row, leave, hunt): a hunt start arms
-            // the quest/upgrade state and clears the hunt-end latch. A smith
-            // opened from the hub is not a camp smith (back goes to the hub).
+            // Hub destination (row, hunt): a hunt start builds the world from
+            // the save (huntStart), arms the quest/upgrade/item/armor state and
+            // clears the hunt-end latch. A smith opened from the hub is not a
+            // camp smith (back goes to the hub).
             if (nav == mh::APP_NAV_SMITH)
                 s_smithyFromCamp = false;
-            if (mh::appNavApply(nav, s_menu, s_screen, s_save, g, in)) {
+            if (mh::appNavApply(nav, s_screen, s_save, g, in)) {
+                mh::huntStart(g, s_save);
                 mh::questApplyToGame(g, s_save);
                 mh::upgradeApplyToGame(g, s_save);
                 mh::itemsApplyToGame(g, s_save);
@@ -185,17 +166,16 @@ void run() {
     mh::stepGame(g, in);
     mh::audioUpdate(s_audio, g);
     // Camp hold-B sheathed: the core raises Game::menuRequest.
-    // Consume it once (a held B cannot re-fire) and open the menu with the
-    // weapon/target picks preserved.
-    if (mh::appMenuRequest(g) != mh::APP_NAV_NONE) {
-        mh::appNavApply(mh::APP_NAV_MENU, s_menu, s_screen, s_save, g, in);
+    // Consume it once (a held B cannot re-fire) and open the hub (root).
+    if (mh::appHubRequest(g) != mh::APP_NAV_NONE) {
+        mh::appNavApply(mh::APP_NAV_HUB, s_screen, s_save, g, in);
         s_smithyFromCamp = false;
         return;
     }
     // Camp smithy (prg.7): a sheathed B press inside the forge rect opens the
     // smith screen; its B returns to the camp sim (s_smithyFromCamp).
     if (mh::appSmithyRequest(g) != mh::APP_NAV_NONE) {
-        mh::appNavApply(mh::APP_NAV_SMITH, s_menu, s_screen, s_save, g, in);
+        mh::appNavApply(mh::APP_NAV_SMITH, s_screen, s_save, g, in);
         s_smithyFromCamp = true;
         return;
     }
@@ -206,24 +186,20 @@ void run() {
         mh::saveStore(s_save, SAVE_BACKEND);
     // Win/lose over screen: a fresh A returns to the hub (monhun-ardu-dlp.3) so
     // the finished quest can be turned in; the hub HUNT row starts a fully reset
-    // hunt with the menu picks. While a carcass
-    // carve is live (prg.3) the A belongs to the carve, so consume the menu
-    // edge but skip the return nav; the hunt end still routes out otherwise.
-    const bool huntReturn = mh::menuReturnStep(s_menu, g.over != mh::OVER_NONE, in);
+    // hunt (huntStart). While a carcass carve is live (prg.3) the A belongs to
+    // the carve, so keep the edge current but skip the return nav; the hunt end
+    // still routes out otherwise.
+    const bool huntReturn = mh::appOverReturnStep(g.over != mh::OVER_NONE, in, s_huntPrevA);
     if (huntReturn && mh::appHuntReturnAllowed(g))
-        mh::appNavApply(mh::appHuntReturn(), s_menu, s_screen, s_save, g, in);
+        mh::appNavApply(mh::appHuntReturn(), s_screen, s_save, g, in);
 }
 
 // Full block-art scene (arena, target, player, shells, effects, HUD). Read-only:
 // render never mutates Game; the three plane passes composite one L4 image.
-// While the menu is up it replaces the scene (same per-plane call discipline).
+// While a screen is up it replaces the scene (same per-plane call discipline).
 void render() {
     if (s_screen.active) {
         mh::drawScreen(s_screen, s_save);
-        return;
-    }
-    if (s_menu.active) {
-        mh::drawMenu(s_menu);
         return;
     }
 #if DEBUG_HURTBOXES

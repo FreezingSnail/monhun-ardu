@@ -1,14 +1,12 @@
 #pragma once
 // Host unit tests for the generic list-screen logic (bead monhun-ardu-cgz):
-// core/save.hpp (encode/decode/checksum/roundtrip/fallback/write-on-change) and
-// screen_state.hpp (conditions, visibility, debounced nav, action switch), the
-// pure screenReset() entry helper, plus the opening menu's A -> MENU_ACCEPT
-// edge (app_state.hpp routes it; the hub loop sends it to the hub, monhun-
-// ardu-dlp.3). The cart side
-// (src/screens.hpp) is device-only and is pinned by tst/fxdatatest/screens_test.hpp.
+// core/save.hpp (encode/decode/checksum/roundtrip/fallback/write-on-change,
+// v4 weapon + v3 migration by monhun-ardu-isp.1) and screen_state.hpp
+// (conditions, visibility, debounced nav, action switch) plus the pure
+// screenReset() entry helper. The cart side (src/screens.hpp) is device-only
+// and is pinned by tst/fxdatatest/screens_test.hpp.
 #include "test.hpp"
 #include "../src/screen_state.hpp"
-#include "../src/menu_state.hpp"
 
 using namespace mh;
 
@@ -75,6 +73,7 @@ void ScreenSuite(TestRunner &runner) {
         saveDefaults(s);
         s.zenny = 12345;
         s.tier[1] = 2;
+        s.weapon = W_FLAIL;
         saveQuestSet(s, 3, 0);
         uint8_t bytes[SAVE_BYTES];
         saveEncode(s, bytes);
@@ -85,11 +84,12 @@ void ScreenSuite(TestRunner &runner) {
         t.assert(bytes[4], 0x30, "zenny high");
         t.assert(bytes[5 + 0], 0x40, "quest3 taken bit");
         t.assert(bytes[SAVE_TIER_OFF + 1], 2, "tier[1]");
+        t.assert(bytes[SAVE_WEAPON_OFF], W_FLAIL, "weapon byte");
         uint8_t sum = 0;
         for (uint8_t i = 0; i < SAVE_CHECKSUM_OFF; i++)
             sum = static_cast<uint8_t>(sum + bytes[i]);
         t.assert(bytes[SAVE_CHECKSUM_OFF], sum, "checksum is the byte sum");
-        t.assert(sizeof(SaveBlock) >= SAVE_BYTES - 3, true, "policy: struct is fields only");
+        t.assert(sizeof(SaveBlock) >= SAVE_CHECKSUM_OFF - 3, true, "policy: struct is fields only");
         suite.addTest(t);
     }
 
@@ -100,6 +100,7 @@ void ScreenSuite(TestRunner &runner) {
         s.zenny = 4321;
         s.tier[0] = 1;
         s.tier[2] = 3;
+        s.weapon = W_GUN;
         saveQuestSet(s, 7, 1);
         uint8_t bytes[SAVE_BYTES];
         saveEncode(s, bytes);
@@ -108,6 +109,7 @@ void ScreenSuite(TestRunner &runner) {
         t.assert(out.zenny, 4321, "zenny round-trip");
         t.assert(out.tier[0], 1, "tier0 round-trip");
         t.assert(out.tier[2], 3, "tier2 round-trip");
+        t.assert(out.weapon, W_GUN, "weapon round-trip");
         t.assert(saveQuestGet(out, 7, 1), true, "quest done bit round-trip");
         t.assert(saveQuestGet(out, 7, 0), false, "quest taken bit stays clear");
         suite.addTest(t);
@@ -160,14 +162,15 @@ void ScreenSuite(TestRunner &runner) {
         suite.addTest(t);
     }
 
-    // ------------------------------------------------- save v2 (prg.5 tail)
+    // --------------------------------------- save v4 tail (prg.5 + isp.1)
     {
-        Test t("v2 record: equipment slots + inventory counts encode/decode at exact offsets");
-        t.assert(SAVE_BYTES, static_cast<uint8_t>(14 + 3 + 1 + ITEM_COUNT + 1), "27 B for 8 items");
+        Test t("v4 record: equipment/inventory tail + weapon byte at exact offsets");
+        t.assert(SAVE_BYTES, static_cast<uint8_t>(14 + 3 + 1 + ITEM_COUNT + 1 + 1), "28 B for 8 items + weapon");
         t.assert(SAVE_EQUIP_OFF, 14, "equip starts after the v2 prefix");
         t.assert(SAVE_FLAGS_OFF, 17, "flags after the 3 equip slots");
         t.assert(SAVE_ITEMS_OFF, 18, "inventory after flags");
-        t.assert(SAVE_CHECKSUM_OFF, static_cast<uint8_t>(18 + ITEM_COUNT), "checksum last");
+        t.assert(SAVE_WEAPON_OFF, static_cast<uint8_t>(18 + ITEM_COUNT), "weapon after the inventory");
+        t.assert(SAVE_CHECKSUM_OFF, static_cast<uint8_t>(SAVE_WEAPON_OFF + 1), "checksum last");
         SaveBlock s;
         saveDefaults(s);
         s.equip[0] = 2;   // head
@@ -176,6 +179,7 @@ void ScreenSuite(TestRunner &runner) {
         s.flags = SAVE_FLAG_SMITHY_SEEN;
         s.items[ITEM_HERB] = 7;
         s.items[ITEM_ORE] = 255;
+        s.weapon = W_FLAIL;
         uint8_t bytes[SAVE_BYTES];
         saveEncode(s, bytes);
         t.assert(bytes[SAVE_EQUIP_OFF + 0], 2, "head slot byte");
@@ -184,17 +188,19 @@ void ScreenSuite(TestRunner &runner) {
         t.assert(bytes[SAVE_FLAGS_OFF], SAVE_FLAG_SMITHY_SEEN, "flags byte");
         t.assert(bytes[SAVE_ITEMS_OFF + ITEM_HERB], 7, "herb count byte");
         t.assert(bytes[SAVE_ITEMS_OFF + ITEM_ORE], 255, "ore count byte");
+        t.assert(bytes[SAVE_WEAPON_OFF], W_FLAIL, "weapon byte");
         uint8_t sum = 0;
         for (uint8_t i = 0; i < SAVE_CHECKSUM_OFF; i++)
             sum = static_cast<uint8_t>(sum + bytes[i]);
-        t.assert(bytes[SAVE_CHECKSUM_OFF], sum, "checksum covers the v2 tail");
+        t.assert(bytes[SAVE_CHECKSUM_OFF], sum, "checksum covers the v4 tail");
         SaveBlock out;
-        t.assert(saveDecode(bytes, out), true, "v3 decodes");
+        t.assert(saveDecode(bytes, out), true, "v4 decodes");
         t.assert(out.equip[0], 2, "head round-trip");
         t.assert(out.equip[2], 3, "charm round-trip");
         t.assert(out.flags, SAVE_FLAG_SMITHY_SEEN, "flags round-trip");
         t.assert(out.items[ITEM_HERB], 7, "herb round-trip");
         t.assert(out.items[ITEM_ORE], 255, "ore round-trip");
+        t.assert(out.weapon, W_FLAIL, "weapon round-trip");
         suite.addTest(t);
     }
 
@@ -242,9 +248,9 @@ void ScreenSuite(TestRunner &runner) {
         uint8_t bytes[SAVE_BYTES];
         saveEncode(v2, bytes);
         bytes[2] = SAVE_VERSION_V2;
-        bytes[SAVE_CHECKSUM_OFF] = 0;
-        for (uint8_t i = 0; i < SAVE_CHECKSUM_OFF; i++)
-            bytes[SAVE_CHECKSUM_OFF] = static_cast<uint8_t>(bytes[SAVE_CHECKSUM_OFF] + bytes[i]);
+        bytes[SAVE_V3_CHECKSUM_OFF] = 0;
+        for (uint8_t i = 0; i < SAVE_V3_CHECKSUM_OFF; i++)
+            bytes[SAVE_V3_CHECKSUM_OFF] = static_cast<uint8_t>(bytes[SAVE_V3_CHECKSUM_OFF] + bytes[i]);
 
         for (uint8_t i = 0; i < 64; i++)
             hostEeprom[i] = 0xEE;
@@ -257,6 +263,42 @@ void ScreenSuite(TestRunner &runner) {
         t.assert(saveQuestGet(out, 5, 0), true, "v2 quest bit preserved");
         t.assert(out.items[ITEM_HERB], 0, "v2 inventory defaults empty");
         t.assert(out.equip[0], SAVE_EQUIP_NONE, "v2 equipment defaults none");
+        t.assert(out.weapon, W_SWORD, "v2 weapon defaults sword");
+        suite.addTest(t);
+    }
+
+    {
+        Test t("migration: a version-3 record keeps its tail, weapon defaults to sword");
+        // Build a valid v4 record then re-label it v3: the tail bytes are
+        // identical (v4 appended the weapon byte after the v3 tail), but the v3
+        // checksum lives at byte 26.
+        SaveBlock v3;
+        saveDefaults(v3);
+        v3.zenny = 4321;
+        v3.tier[1] = 2;
+        v3.equip[0] = 3;
+        v3.flags = SAVE_FLAG_SMITHY_SEEN;
+        v3.items[ITEM_HERB] = 6;
+        v3.weapon = W_GUN;   // must NOT survive: a v3 record has no weapon byte
+        saveQuestSet(v3, 5, 0);
+        uint8_t bytes[SAVE_BYTES];
+        saveEncode(v3, bytes);
+        bytes[2] = SAVE_VERSION_V3;
+        bytes[SAVE_V3_CHECKSUM_OFF] = 0;
+        for (uint8_t i = 0; i < SAVE_V3_CHECKSUM_OFF; i++)
+            bytes[SAVE_V3_CHECKSUM_OFF] = static_cast<uint8_t>(bytes[SAVE_V3_CHECKSUM_OFF] + bytes[i]);
+
+        for (uint8_t i = 0; i < 64; i++)
+            hostEeprom[i] = 0xEE;
+        for (uint8_t i = 0; i < SAVE_BYTES; i++)
+            hostEeprom[SAVE_EEPROM_ADDR + i] = bytes[i];
+        SaveBlock out;
+        t.assert(saveLoad(out, HOST_BACKEND), true, "v3 record migrates");
+        t.assert(out.zenny, 4321, "v3 zenny preserved");
+        t.assert(out.equip[0], 3, "v3 equip preserved");
+        t.assert(out.flags, SAVE_FLAG_SMITHY_SEEN, "v3 flags preserved");
+        t.assert(out.items[ITEM_HERB], 6, "v3 inventory preserved");
+        t.assert(out.weapon, W_SWORD, "v3 weapon defaults sword");
         suite.addTest(t);
     }
 
@@ -270,12 +312,13 @@ void ScreenSuite(TestRunner &runner) {
         uint8_t bytes[SAVE_BYTES];
         saveEncode(v1, bytes);
         bytes[2] = SAVE_VERSION_V1;
-        // v1 had no active-quest/progress bytes: zero them, then fix the checksum.
+        // v1 had no active-quest/progress bytes: zero them, then fix the checksum
+        // at the legacy offset (byte 26).
         bytes[SAVE_ACTIVE_OFF] = 0;
         bytes[SAVE_PROGRESS_OFF] = 0;
-        bytes[SAVE_CHECKSUM_OFF] = 0;
-        for (uint8_t i = 0; i < SAVE_CHECKSUM_OFF; i++)
-            bytes[SAVE_CHECKSUM_OFF] = static_cast<uint8_t>(bytes[SAVE_CHECKSUM_OFF] + bytes[i]);
+        bytes[SAVE_V3_CHECKSUM_OFF] = 0;
+        for (uint8_t i = 0; i < SAVE_V3_CHECKSUM_OFF; i++)
+            bytes[SAVE_V3_CHECKSUM_OFF] = static_cast<uint8_t>(bytes[SAVE_V3_CHECKSUM_OFF] + bytes[i]);
 
         for (uint8_t i = 0; i < 64; i++)
             hostEeprom[i] = 0xEE;
@@ -495,18 +538,6 @@ void ScreenSuite(TestRunner &runner) {
         t.assert(screenApplyAction(s, turn), true, "turn-in applies");
         t.assert(s.zenny, 150, "reward zenny paid");
         t.assert(s.items[ITEM_ORE], 2, "material reward granted");
-        suite.addTest(t);
-    }
-
-    {
-        Test t("menu A edge accepts once per press; B is not a menu action (qs.4)");
-        MenuState m;
-        t.assert(menuStep(m, ST_B), MENU_NONE, "B is silent in the menu");
-        t.assert(menuStep(m, ST_IDLE), MENU_NONE, "release silent");
-        t.assert(menuStep(m, ST_A), MENU_ACCEPT, "A edge -> accept (routes to hub)");
-        t.assert(menuStep(m, ST_A), MENU_NONE, "held A silent");
-        t.assert(menuStep(m, ST_IDLE), MENU_NONE, "release after A silent");
-        t.assert(menuStep(m, ST_A), MENU_ACCEPT, "fresh A press fires again");
         suite.addTest(t);
     }
 

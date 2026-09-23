@@ -3,7 +3,7 @@
 //
 // Host-testable state machine shared by the device suite and src/screens.hpp:
 //   * ScreenState: current screen index, cursor, page scroll
-//   * debounced up/down nav (same tap/hold feel as menu_state.hpp)
+//   * debounced up/down nav (tap/hold feel shared with the deleted opening menu)
 //   * row condition evaluation (zenny >= cost / save flag / tier < max / quest)
 //   * the fixed action switch (BUY_UPGRADE / TAKE_QUEST / TURN_IN_QUEST / LEAVE)
 //
@@ -42,9 +42,9 @@ namespace mh {
 constexpr uint8_t SCREEN_ROWS = 6;       // rows per page
 constexpr uint8_t SCREEN_MAX_TIER = 3;   // smith cap; data holds the costs
 
-// Same d-pad repeat feel as the opening menu (menu_state.hpp): a fresh
-// direction steps at once, a held one waits SCREEN_NAV_DELAY ticks then steps
-// every SCREEN_NAV_REPEAT. uint8 timers, no floats.
+// Same d-pad repeat feel as the deleted opening menu: a fresh direction steps
+// at once, a held one waits SCREEN_NAV_DELAY ticks then steps every
+// SCREEN_NAV_REPEAT. uint8 timers, no floats.
 constexpr uint8_t SCREEN_NAV_DELAY = 16;
 constexpr uint8_t SCREEN_NAV_REPEAT = 6;
 

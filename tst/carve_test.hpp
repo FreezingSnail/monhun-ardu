@@ -203,13 +203,13 @@ void CarveSuite(TestRunner &runner) {
         Test t("flow guard: carveHold suppresses the return nav, then clears");
         Game g;
         killLunge(g);
-        MenuState menu;
+        bool prevA = false;
         t.assert(appHuntReturnAllowed(g), 1, "no carve: return allowed");
         t.assert(startCarve(g), 1, "carve running");
         t.assert(appHuntReturnAllowed(g), 0, "live carve blocks the return");
-        // The caller still consumes the A edge (menuReturnStep owns its flags);
+        // The caller still consumes the A edge (appOverReturnStep owns its flag);
         // the gate is what stops the nav.
-        t.assert(menuReturnStep(menu, true, C_A), 1, "menu sees the A edge");
+        t.assert(appOverReturnStep(true, C_A, prevA), 1, "return edge sees the A press");
         t.assert(appHuntReturnAllowed(g), 0, "gate still blocks while carving");
         finishCarve(g);
         t.assert(g.carveHold, 0, "hold clears when the carve ends");

@@ -1,31 +1,30 @@
 #pragma once
-// App-level routing between the opening menu, the data-driven screens (hub /
-// quests / smith) and a hunt (bead monhun-ardu-mgn, docs/quests-shops.md qs.4;
-// hub loop rework monhun-ardu-dlp.3).
+// App-level routing between the data-driven screens (hub / quests / smith) and a
+// hunt (bead monhun-ardu-mgn, docs/quests-shops.md qs.4; hub-as-root rework
+// monhun-ardu-isp.1, which deleted the opening menu).
 //
 // Host- and device-testable: no cart reads, no Arduino.h. The caller resolves
 // the cursor row off the cart (screenCursorRow in src/screens.hpp) and passes
 // it to appScreenAccept(); this header only decides where to go and applies the
-// menu/screen state changes, so the sketch and the device E2E suite run the
-// exact same routing code.
+// screen state changes, so the sketch and the device E2E suite run the exact
+// same routing code.
 //
-// Live flow (monhun-ardu-dlp.3, what the shipping sketch wires; prg.8 removed
-// the training-pole room):
-//   menu --A--> hub --HUNT--> camp --door--> area --door--> camp
+// Live flow (monhun-ardu-isp.1; the hub is the root screen, the 5r1/opening
+// menu is gone; prg.8 removed the training-pole room):
+//   boot --> hub --HUNT--> camp --door--> area --door--> camp
 //   hub --QUESTS/SMITH--> screen --B/LEAVE--> hub
-//   hub --B--> menu   (camp hold-B still -> menu; appMenuRequest)
+//   hub --B--> nothing (root; appScreenBack(HUB) == APP_NAV_NONE)
+//   camp hold-B --> hub                              (appHubRequest)
 //   hunt end + A --> hub                             (appHuntReturn; turn-ins)
 //
-// The hub is back on the demo path (the 5r1 direct-to-hunt shortcut is
-// superseded): menu A opens the hub so the quest board can be reached, the
-// picked loadout launches from the hub HUNT row, and a finished hunt returns to
-// the hub to turn quests in. Camp hold-B still leaves to the menu.
+// The picked loadout lives in the save (v4 `weapon`); the hub HUNT row launches
+// it through the device glue huntStart() (src/app_setup.hpp) and a finished hunt
+// returns to the hub to turn quests in.
 //
 // appNavApply() takes the transition Input so the new owner's A/B edge flags
 // start from the button state that caused the change: a held button cannot
 // re-fire through the new screen on the very next tick.
 
-#include "menu_state.hpp"
 #include "screen_state.hpp"
 #include "core/save.hpp"
 
@@ -33,24 +32,16 @@ namespace mh {
 
 enum AppNav : int8_t {
     APP_NAV_NONE = 0,
-    APP_NAV_MENU,   // back to the opening menu
     APP_NAV_HUB,
     APP_NAV_QUESTS,
     APP_NAV_SMITH,
     APP_NAV_CAMP,   // close a screen opened from the camp smithy (resume the hunt)
-    APP_NAV_HUNT    // start the picked loadout in the sim
+    APP_NAV_HUNT    // the hub HUNT row: the caller starts the hunt (huntStart)
 };
 
-// Opening-menu A: open the hub (monhun-ardu-dlp.3). The hub is the live hub
-// graph again; the picked loadout launches from its HUNT row (appScreenAccept)
-// and the menu's B/hold-B path stays the only way back out.
-inline AppNav appMenuAccept() {
-    return APP_NAV_HUB;
-}
-
-// B: quests/smith -> hub; hub -> menu.
+// B: hub is the root (no back destination); quests/smith -> hub.
 inline AppNav appScreenBack(uint8_t screen) {
-    return screen == screens::SCREEN_HUB ? APP_NAV_MENU : APP_NAV_HUB;
+    return screen == screens::SCREEN_HUB ? APP_NAV_NONE : APP_NAV_HUB;
 }
 
 // A on the cursor row. Hub rows route to a screen (or the menu on LEAVE);
@@ -66,7 +57,7 @@ inline AppNav appScreenAccept(uint8_t screen, const ScreenRow &row) {
         case screens::ACTION_OPEN_SMITH:
             return APP_NAV_SMITH;
         case screens::ACTION_LEAVE:
-            return APP_NAV_MENU;
+            return APP_NAV_NONE;   // hub is the root: no leave destination
         default:
             return APP_NAV_NONE;
         }
@@ -78,29 +69,43 @@ inline AppNav appScreenAccept(uint8_t screen, const ScreenRow &row) {
 
 // Hunt end: A after the over screen returns to the hub (monhun-ardu-dlp.3) so
 // the finished quest can be turned in and the next chain step taken. The hub's
-// HUNT row starts the next hunt with the menu's picks (menuStart -> newGame,
-// so the fresh hunt starts from a fully reset world: projectiles/effects/quest
-// counters).
+// HUNT row starts the next hunt (huntStart -> newGame, so the fresh hunt starts
+// from a fully reset world: projectiles/effects/quest counters) with the save's
+// v4 weapon.
 inline AppNav appHuntReturn() {
     return APP_NAV_HUB;
 }
 
+// Hunt-end A edge helper (replaces menuReturnStep, monhun-ardu-isp.1): true on
+// the A rising edge only while `over`, exactly once per press. `prevA` is the
+// caller's edge flag (the sketch's own, since there is no menu state to own it
+// any more) and stays current on every tick so the release is not seen as a
+// fresh press. Host-testable.
+inline bool appOverReturnStep(bool over, const Input &in, bool &prevA) {
+    const bool aP = in.a && !prevA;
+    prevA = in.a;
+    return over && aP;
+}
+
 // Hunt-end A gate (bead monhun-ardu-prg.3): while a carcass carve is live the
-// over-screen A is the carve verb, so the caller keeps the menu edge current
-// (menuReturnStep) but must not apply the return nav. True = the edge may leave
-// the hunt. Game::carveHold is cleared the tick the carve ends or is cancelled.
+// over-screen A is the carve verb, so the caller keeps the A edge current
+// (appOverReturnStep) but must not apply the return nav. True = the edge may
+// leave the hunt. Game::carveHold is cleared the tick the carve ends or is
+// cancelled.
 inline bool appHuntReturnAllowed(const Game &g) {
     return !g.carveHold;
 }
 
 // Camp hold-B (sheathed): the core raises Game::menuRequest.
-// The app layer consumes it exactly once -> opening menu, so a held B cannot
-// re-fire once the menu is up. Returns the nav for the caller to apply.
-inline AppNav appMenuRequest(Game &g) {
+// The app layer consumes it exactly once -> the hub (the root screen), so a
+// held B cannot re-fire once the hub is up. Returns the nav for the caller to
+// apply. (Named appHubRequest in monhun-ardu-isp.1: the opening menu it used to
+// open is gone.)
+inline AppNav appHubRequest(Game &g) {
     if (!g.menuRequest)
         return APP_NAV_NONE;
     g.menuRequest = false;
-    return APP_NAV_MENU;
+    return APP_NAV_HUB;
 }
 
 // Camp smithy (prg.7): a sheathed B press inside a smithy rect raises
@@ -113,52 +118,41 @@ inline AppNav appSmithyRequest(Game &g) {
     return APP_NAV_SMITH;
 }
 
-// Apply a nav destination to the live states. Returns true when a hunt just
-// started (the caller then arms the quest/upgrade state and clears its
-// hunt-end latch). `menu` keeps the weapon/target picks across the hunt.
-// Screen row counts come from the generated screen_meta.hpp constants, so this
-// stays cart-free and host-testable; the device build's screenEnter() reads the
-// same counts off the cart.
-MH_NOINLINE inline bool appNavApply(AppNav nav, MenuState &menu, ScreenState &screen, const SaveBlock &save, Game &game, const Input &in) {
+// Apply a nav destination to the live state. Returns true when the hub HUNT row
+// requested a hunt: the caller then starts it (device glue huntStart(), which
+// runs newGame + loadRoom), arms the quest/upgrade state and clears its
+// hunt-end latch. Screen row counts come from the generated screen_meta.hpp
+// constants, so this stays cart-free and host-testable; the device build's
+// screenEnter() reads the same counts off the cart.
+MH_NOINLINE inline bool appNavApply(AppNav nav, ScreenState &screen, const SaveBlock &save, Game &game, const Input &in) {
     (void)save;
+    (void)game;
     switch (nav) {
-    case APP_NAV_MENU:
-        screen.active = false;
-        menu.active = true;
-        menuResetNav(menu);
-        menu.prevA = in.a;
-        menu.prevB = in.b;
-        return false;
     case APP_NAV_HUB:
         screenReset(screen, screens::SCREEN_HUB, screens::SCREEN_HUB_ROWS);
         screen.prevA = in.a;
         screen.prevB = in.b;
-        menu.active = false;
         return false;
     case APP_NAV_QUESTS:
         screenReset(screen, screens::SCREEN_QUESTS, screens::SCREEN_QUESTS_ROWS);
         screen.prevA = in.a;
         screen.prevB = in.b;
-        menu.active = false;
         return false;
     case APP_NAV_SMITH:
         screenReset(screen, screens::SCREEN_SMITH, screens::SCREEN_SMITH_ROWS);
         screen.prevA = in.a;
         screen.prevB = in.b;
-        menu.active = false;
         return false;
     case APP_NAV_HUNT:
-        menuStart(game, menu);
+        // The hub HUNT row: close the screen and report the hunt request. The
+        // caller starts it (huntStart reads the quest def + save weapon), so the
+        // fresh hunt resets projectiles/effects/quest counters.
         screen.active = false;
-        menu.active = false;   // the hub HUNT row launched the hunt
-        menu.prevA = in.a;
-        menu.prevB = in.b;
         return true;
     case APP_NAV_CAMP:
         // Close a screen opened from the camp smithy: the camp sim resumes
-        // where it was (no hunt reset, no menu).
+        // where it was (no hunt reset).
         screen.active = false;
-        menu.active = false;
         return false;
     default:
         return false;
