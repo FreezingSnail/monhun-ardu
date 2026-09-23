@@ -1,4 +1,4 @@
-.PHONY :  full build mini gen gen-check size debug hooks format test test-tools testvm testvm-debug fxtest fxtest-headless fxtest-headless-preflight fxtest-build fxtest-run base-sheet
+.PHONY :  full build mini gen gen-check size size-line debug hooks format test test-tools testvm testvm-debug fxtest fxtest-headless fxtest-headless-preflight fxtest-build fxtest-run base-sheet
 
 # Common compiler flags
 CXX_FLAGS = -std=c++17 -I/src -w -O0 -g3
@@ -70,6 +70,16 @@ size: build
 	          printf "size: flash=%d/%d (%d free)  ram=%d/2560\n", flash, 29696, 29696-flash, ram }'
 	@printf 'size: data facts: '; grep -E '^constexpr bool ' src/generated/combat_meta.hpp | sed 's/constexpr bool //; s/ = /:/; s/;//' | tr '\n' ' '; echo
 
+# Script/checkpoint friendly: only the flash/RAM headroom line (same ELF as
+# `size`). Use after each layer in a bead to catch a budget blow-up early
+# (AGENTS.md "Dev-cycle speed rules").
+size-line: build
+	@elf=dist/monhun-ardu.ino.elf; \
+	$(AVR_SIZE) -A "$$elf" | awk ' \
+	    $$1==".text"{t=$$2} $$1==".data"{d=$$2} $$1==".bss"{b=$$2} \
+	    END { flash=t+d; ram=d+b; \
+	          printf "size: flash=%d/%d (%d free)  ram=%d/2560\n", flash, 29696, 29696-flash, ram }'
+
 # Install the repo git hooks (.githooks/pre-commit runs clang-format on staged
 # C/C++ files and restages them). Idempotent; run once per clone.
 hooks:
@@ -139,7 +149,8 @@ fxtest-headless:
 	@if [ -z "$(ARDENS)" ] || [ ! -x "$(ARDENS)" ]; then \
 		echo "fxtest-headless: SKIPPED (Ardens unavailable at $(ARDENS); set ARDENS=/path/to/Ardens to run serial device tests)"; \
 	else \
-		$(MAKE) --no-print-directory fxtest-headless-preflight fxtest-build fxtest-run; \
+		$(MAKE) --no-print-directory fxtest-headless-preflight fxtest-build-parallel && \
+		$(MAKE) --no-print-directory fxtest-run; \
 	fi
 
 fxtest-headless-preflight:
@@ -154,22 +165,30 @@ FXTEST_SIZE_FLAGS = --build-property compiler.cpp.extra_flags="-mcall-prologues 
     --build-property compiler.c.extra_flags="-mrelax" \
     --build-property compiler.c.elf.extra_flags="-mrelax"
 
-fxtest-build:
-	@set -e; \
-	for ino in $(FXTEST_RUN); do \
-		stage="$(FXTEST_BUILD_DIR)/$$ino"; \
-		rm -rf "$$stage"; \
-		mkdir -p "$$stage"; \
-		cp -R src "$$stage/src"; \
-		cp "tst/fxdatatest/$$ino.ino" "$$stage/"; \
-		cp tst/fxdatatest/*.hpp "$$stage/"; \
-		cp -R tst/fxdatatest/harness "$$stage/harness"; \
-		echo $$ino; \
-		$(ARDUINO_CLI) compile --fqbn "$(FQBN)" \
-		    --optimize-for-debug --output-dir "$$stage/output" \
-		    $(FXTEST_SIZE_FLAGS) \
-		    "$$stage/$$ino.ino"; \
-	done
+# Stage + compile the selected suites. Each suite is its own make target, so
+# `fxtest-build-parallel` compiles them with `make -j$(FXTEST_JOBS)` (private
+# stage dirs, no shared state); the Ardens run phase stays serial (one GUI/
+# serial instance). A failed compile fails its target and the sub-make.
+FXTEST_JOBS ?= 4
+
+fxtest-build: $(addprefix fxtest-build-,$(FXTEST_RUN))
+
+fxtest-build-parallel:
+	@$(MAKE) --no-print-directory -j$(FXTEST_JOBS) fxtest-build
+
+fxtest-build-%:
+	@stage="$(FXTEST_BUILD_DIR)/$*"; \
+	rm -rf "$$stage"; \
+	mkdir -p "$$stage"; \
+	cp -R src "$$stage/src"; \
+	cp "tst/fxdatatest/$*.ino" "$$stage/"; \
+	cp tst/fxdatatest/*.hpp "$$stage/"; \
+	cp -R tst/fxdatatest/harness "$$stage/harness"; \
+	echo "build: $*"; \
+	$(ARDUINO_CLI) compile --fqbn "$(FQBN)" \
+	    --optimize-for-debug --output-dir "$$stage/output" \
+	    $(FXTEST_SIZE_FLAGS) \
+	    "$$stage/$*.ino"
 
 fxtest-run:
 	@failed=0; \
