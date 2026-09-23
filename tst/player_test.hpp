@@ -894,6 +894,22 @@ void PlayerSuite(TestRunner &runner) {
     }
 
     {
+        Test t("shove bash: small forward step, shield thrust stays (feel.24)");
+        Game g;
+        initGame(g, W_GUN);
+        const int x0 = g.player.x;
+        tapB(g);
+        t.assert(g.player.state, PS_SHOVE, "shove state");
+        t.assertGreaterThan(g.player.vx, 0, "bash arms a forward velocity");
+        for (int i = 0; i < 14 && g.player.state == PS_SHOVE; i++)
+            stepN(g, 1);
+        t.assert(g.player.state, PS_IDLE, "shove ends");
+        t.assertGreaterThan(g.player.x, x0, "bash stepped the hunter forward");
+        t.assertLessThan(g.player.x - x0, 20, "the step stays small (~12 px)");
+        suite.addTest(t);
+    }
+
+    {
         Test t("direction + A: thrust opener replaces combo hit 1");
         Game g;
         initGame(g, W_SWORD);

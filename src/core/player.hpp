@@ -495,6 +495,11 @@ static void tapDefense(Game &g, const WeaponDef *def, const Input &inp) {
         p.stam -= 10;
         p.state = PS_SHOVE;
         p.t = 10;
+        // Bash step (feel.24): the shield thrust in drawPlayer carries a small
+        // forward lean-in, riding the PS_SHOVE evade drift (14/16 per tick):
+        // vx 24 = 1.5 px/t -> ~12 px total.
+        p.vx = (dx * 24) >> 4;
+        p.vy = (dy * 24) >> 4;
         exitStance(p);
         if (g.target.alive) {
             const Rect &m = g.target.rect;
@@ -911,14 +916,17 @@ static void updatePlayer(Game &g, const Input &inp, bool aP, bool bP, bool bR) {
         break;
     }
     case PS_DODGE:
-    case PS_DEFLECT: {
+    case PS_DEFLECT:
+    case PS_SHOVE: {
+        // PS_SHOVE rides the evade drift (feel.24): the bash step armed in
+        // tapDefense is a short lean-in (~12 px for vx 24 at 14/16 per tick).
+        // PS_STUN keeps no drift.
         p.t--;
         applyDrift(p, 14);
         if (p.t <= 0)
             p.state = PS_IDLE;
         break;
     }
-    case PS_SHOVE:
     case PS_STUN: {
         p.t--;
         if (p.t <= 0)
