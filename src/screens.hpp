@@ -172,6 +172,17 @@ inline void screenEnter(ScreenState &s, uint8_t screen, const SaveBlock &save) {
     screenReset(s, screen, screenRowCount(screen));
 }
 
+// gs.2 GEAR skill readout: copy the cached aggregation's per-skill points/tier
+// into the ScreenState cache drawScreen reads. The caller refreshes Game::armor
+// first (armorApplyToGame), so this is the last step on GEAR entry and after
+// every equip action.
+inline void screenGearCache(ScreenState &s, const ArmorAgg &agg) {
+    for (uint8_t i = 0; i < armor::SKILL_COUNT; i++) {
+        s.skillPoints[i] = agg.points[i];
+        s.skillTier[i] = agg.tier[i];
+    }
+}
+
 // One page of the generic list. Called once per plane (same discipline as
 // renderScene/menu), between ArduboyG's plane blits.
 inline void drawScreen(const ScreenState &s, const SaveBlock &save) {
@@ -207,11 +218,28 @@ inline void drawScreen(const ScreenState &s, const SaveBlock &save) {
 
         const uint16_t fields = static_cast<uint16_t>(rowOff + 1 + labelLen);
         const uint8_t flags = mhFxReadU8(screenCart(static_cast<uint16_t>(fields + 3)));
-        // Dynamic value token (qs.4): a ROW_F_ZENNY row draws the live save
-        // balance in the cost column instead of the packed row cost.
-        const int16_t value = (flags & screens::ROW_F_ZENNY) != 0 ? static_cast<int16_t>(save.zenny) : static_cast<int16_t>(mhFxReadU16(reinterpret_cast<const uint16_t *>(screenCart(fields))));
+        int16_t value;
+        uint8_t tier = 0;
+        if ((flags & screens::ROW_F_SKILL) != 0) {
+            // Live skill readout (gs.2): `param` is the armor::SKILL_* index; a
+            // bad id clamps to skill 0 so a corrupt cart cannot read past the
+            // cache. The cached points are already clamped to THRESHOLD_M.
+            const uint8_t raw = mhFxReadU8(screenCart(static_cast<uint16_t>(fields + 5)));
+            const uint8_t skill = raw < armor::SKILL_COUNT ? raw : 0;
+            value = static_cast<int16_t>(s.skillPoints[skill]);
+            tier = s.skillTier[skill];
+        } else {
+            // Dynamic value token (qs.4): a ROW_F_ZENNY row draws the live save
+            // balance in the cost column instead of the packed row cost.
+            value = (flags & screens::ROW_F_ZENNY) != 0 ? static_cast<int16_t>(save.zenny) : static_cast<int16_t>(mhFxReadU16(reinterpret_cast<const uint16_t *>(screenCart(fields))));
+        }
         const uint8_t digits = hudDigits(value);
-        drawNumber(static_cast<int16_t>(SCREEN_COST_RIGHT - digits * 4), y, value, selected ? 3 : 2);
+        const int16_t costX = static_cast<int16_t>(SCREEN_COST_RIGHT - digits * 4);
+        // An active skill (tier 1 = S, 2 = M) marks its points with a letter
+        // just left of the number; an inert tier draws the points only.
+        if (tier != 0)
+            textPut(selected ? fxfontw : fxfontg, static_cast<int16_t>(costX - 8), y, tier == 2 ? 'M' : 'S');
+        drawNumber(costX, y, value, selected ? 3 : 2);
     }
 }
 

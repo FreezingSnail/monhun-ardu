@@ -12,12 +12,18 @@
 #include "harness/fxtest.hpp"
 #include "src/screens.hpp"
 #include "src/app_state.hpp"
+#include "src/armor.hpp"
 
 #include <stdint.h>
 
 namespace screenfx {
 
 using namespace mh;
+
+// gs.2: one file-scope Game for the armor cache fill (a second ~750 B stack
+// frame does not fit the sim's tight stack; smith_test.hpp takes the same
+// approach).
+static Game g_gear;
 
 // ---- EEPROM backends: the real one and a write-counting wrapper ------------
 static uint16_t eepWrites = 0;
@@ -272,8 +278,9 @@ inline void test_screens(FxTest &test) {
     test.expectEq(countBits(10, 60, 11, 18) > 0 ? 1 : 0, 1, F("quests row0 label ink"));
 
     // ------------------------------------------------------- gear screen
-    test.expectEq(screenRowCount(screens::SCREEN_GEAR), 9, F("gear row count"));
-    ScreenRow g0, g1, g2, g3, g4, g5, g6, g7, g8;
+    // gs.2: five skill readout rows sit between the armor rows and LEAVE.
+    test.expectEq(screenRowCount(screens::SCREEN_GEAR), 14, F("gear row count"));
+    ScreenRow g0, g1, g2, g3, g4, g5, g6, g7, g8, g9, g10, g11, g12, g13;
     screenReadRow(screenRowOffsetAt(screens::SCREEN_GEAR, 0), g0);
     screenReadRow(screenRowOffsetAt(screens::SCREEN_GEAR, 1), g1);
     screenReadRow(screenRowOffsetAt(screens::SCREEN_GEAR, 2), g2);
@@ -283,6 +290,11 @@ inline void test_screens(FxTest &test) {
     screenReadRow(screenRowOffsetAt(screens::SCREEN_GEAR, 6), g6);
     screenReadRow(screenRowOffsetAt(screens::SCREEN_GEAR, 7), g7);
     screenReadRow(screenRowOffsetAt(screens::SCREEN_GEAR, 8), g8);
+    screenReadRow(screenRowOffsetAt(screens::SCREEN_GEAR, 9), g9);
+    screenReadRow(screenRowOffsetAt(screens::SCREEN_GEAR, 10), g10);
+    screenReadRow(screenRowOffsetAt(screens::SCREEN_GEAR, 11), g11);
+    screenReadRow(screenRowOffsetAt(screens::SCREEN_GEAR, 12), g12);
+    screenReadRow(screenRowOffsetAt(screens::SCREEN_GEAR, 13), g13);
     test.expectEq(g0.action, screens::ACTION_EQUIP_WEAPON, F("gear row0 action equip"));
     test.expectEq(g0.param, W_SWORD, F("gear row0 param sword"));
     test.expectEq(g1.action, screens::ACTION_EQUIP_WEAPON, F("gear row1 action equip"));
@@ -297,8 +309,18 @@ inline void test_screens(FxTest &test) {
     test.expectEq(g5.param, static_cast<uint8_t>((armor::SLOT_BODY << 5) | armor::ARMOR_HUNTER_MAIL), F("gear row5 param mail"));
     test.expectEq(g6.param, static_cast<uint8_t>((armor::SLOT_BODY << 5) | armor::ARMOR_BONE_MAIL), F("gear row6 param bone mail"));
     test.expectEq(g7.param, static_cast<uint8_t>((armor::SLOT_CHARM << 5) | armor::ARMOR_EVADE_CHARM), F("gear row7 param charm"));
-    test.expectEq(g8.action, screens::ACTION_LEAVE, F("gear leave row"));
-    test.expectEq(appScreenAccept(screens::SCREEN_GEAR, g8), APP_NAV_HUB, F("gear leave backs to hub"));
+    // gs.2 skill rows: inert (action none, always live) with param = skill idx.
+    test.expectEq(g8.action, screens::ACTION_NONE, F("gear row8 skill action none"));
+    test.expectEq(g8.cond, screens::COND_ALWAYS, F("gear row8 skill cond always"));
+    test.expectEq(g8.flags, screens::ROW_F_SKILL, F("gear row8 skill flag"));
+    test.expectEq(g8.param, armor::SKILL_ATTACK_UP, F("gear row8 attack up"));
+    test.expectEq(g9.param, armor::SKILL_DEFENSE_UP, F("gear row9 defense up"));
+    test.expectEq(g10.param, armor::SKILL_HEALTH_UP, F("gear row10 health up"));
+    test.expectEq(g11.param, armor::SKILL_STAMINA_UP, F("gear row11 stamina up"));
+    test.expectEq(g12.param, armor::SKILL_EVADE_WINDOW, F("gear row12 evade"));
+    test.expectEq(g13.action, screens::ACTION_LEAVE, F("gear leave row"));
+    test.expectEq(appScreenAccept(screens::SCREEN_GEAR, g13), APP_NAV_HUB, F("gear leave backs to hub"));
+    test.expectEq(appScreenAccept(screens::SCREEN_GEAR, g8), APP_NAV_NONE, F("gear skill row is inert"));
     test.expectEq(appScreenAccept(screens::SCREEN_GEAR, g1), APP_NAV_NONE, F("gear equip is a save action"));
     // The cart's equip row writes the v4 weapon byte.
     SaveBlock gear;
@@ -322,6 +344,76 @@ inline void test_screens(FxTest &test) {
     test.expectEq(saveCrafted(geararmor, armor::ARMOR_HUNTER_HELM), 1, F("crafted bit persisted"));
     test.expectEq(screenApplyAction(gear, g3), 1, F("second A unequips"));
     test.expectEq(gear.equip[armor::SLOT_HEAD], SAVE_EQUIP_NONE, F("helm unequipped"));
+
+    // -------------------------------------- gear skill readout cache (gs.2)
+    // Cart armor records -> ScreenState cache: helm (attack_up 6, defense_up 4)
+    // + mail (attack_up 6, health_up 4) -> attack 12/S, health 4/inert.
+    SaveBlock skillSave;
+    saveDefaults(skillSave);
+    saveSetCrafted(skillSave, armor::ARMOR_HUNTER_HELM);
+    saveSetCrafted(skillSave, armor::ARMOR_HUNTER_MAIL);
+    skillSave.equip[armor::SLOT_HEAD] = armor::ARMOR_HUNTER_HELM + 1;
+    skillSave.equip[armor::SLOT_BODY] = armor::ARMOR_HUNTER_MAIL + 1;
+    armorApplyToGame(g_gear, skillSave);
+    ScreenState readout;
+    screenEnter(readout, screens::SCREEN_GEAR, skillSave);
+    screenGearCache(readout, g_gear.armor);
+    test.expectEq(readout.skillPoints[armor::SKILL_ATTACK_UP], 12, F("attack points from cart"));
+    test.expectEq(readout.skillTier[armor::SKILL_ATTACK_UP], 1, F("12 -> S tier"));
+    test.expectEq(readout.skillPoints[armor::SKILL_HEALTH_UP], 4, F("health points from cart"));
+    test.expectEq(readout.skillTier[armor::SKILL_HEALTH_UP], 0, F("health 4 inert"));
+    test.expectEq(readout.skillPoints[armor::SKILL_EVADE_WINDOW], 0, F("no charm -> evade 0"));
+
+    // Equipping a piece through the cart gear row moves the readout: mail added
+    // to the helm -> attack 6 -> 12 (crosses S), health 0 -> 4.
+    SaveBlock moveSave;
+    saveDefaults(moveSave);
+    saveSetCrafted(moveSave, armor::ARMOR_HUNTER_HELM);
+    saveSetCrafted(moveSave, armor::ARMOR_HUNTER_MAIL);
+    moveSave.equip[armor::SLOT_HEAD] = armor::ARMOR_HUNTER_HELM + 1;
+    armorApplyToGame(g_gear, moveSave);
+    ScreenState moveRead;
+    screenEnter(moveRead, screens::SCREEN_GEAR, moveSave);
+    screenGearCache(moveRead, g_gear.armor);
+    test.expectEq(moveRead.skillPoints[armor::SKILL_ATTACK_UP], 6, F("helm-only attack 6"));
+    test.expectEq(moveRead.skillTier[armor::SKILL_ATTACK_UP], 0, F("helm-only attack inert"));
+    test.expectEq(screenApplyAction(moveSave, g5), 1, F("equip mail via gear row"));
+    armorApplyToGame(g_gear, moveSave);
+    screenGearCache(moveRead, g_gear.armor);
+    test.expectEq(moveRead.skillPoints[armor::SKILL_ATTACK_UP], 12, F("equip raises attack to 12"));
+    test.expectEq(moveRead.skillTier[armor::SKILL_ATTACK_UP], 1, F("equip crosses S"));
+    test.expectEq(moveRead.skillPoints[armor::SKILL_HEALTH_UP], 4, F("equip adds health points"));
+
+    // M clamp: helm + mail + charm -> attack 16 -> clamped 15/M.
+    saveSetCrafted(moveSave, armor::ARMOR_EVADE_CHARM);
+    moveSave.equip[armor::SLOT_CHARM] = armor::ARMOR_EVADE_CHARM + 1;
+    armorApplyToGame(g_gear, moveSave);
+    screenGearCache(moveRead, g_gear.armor);
+    test.expectEq(moveRead.skillPoints[armor::SKILL_ATTACK_UP], 15, F("attack clamps to 15"));
+    test.expectEq(moveRead.skillTier[armor::SKILL_ATTACK_UP], 2, F("clamped attack is M"));
+
+    // Pixel: a skill row draws its points + tier letter in the cost column.
+    // ATTACK UP (idx 8) sits on page 1 (rows 6..11) at y = 11 + (8-6)*9 = 29;
+    // 15 points -> 2 digits at x 116..123, the M letter just left at 108..111.
+    clearFb();
+    ScreenState smoke;
+    screenEnter(smoke, screens::SCREEN_GEAR, moveSave);
+    smoke.cursor = 8;
+    smoke.scroll = 6;
+    screenGearCache(smoke, g_gear.armor);   // attack 15/M
+    drawScreen(smoke, moveSave);
+    test.expectEq(countBits(108, 111, 29, 36) > 0 ? 1 : 0, 1, F("skill M letter ink"));
+    test.expectEq(countBits(116, 123, 29, 36) > 0 ? 1 : 0, 1, F("skill points ink"));
+
+    // An inert skill (DEFENSE UP idx 9: defense_up 4) draws the points only.
+    clearFb();
+    screenEnter(smoke, screens::SCREEN_GEAR, moveSave);
+    smoke.cursor = 9;
+    smoke.scroll = 6;
+    screenGearCache(smoke, g_gear.armor);
+    drawScreen(smoke, moveSave);
+    test.expectEq(countBits(120, 123, 38, 45) > 0 ? 1 : 0, 1, F("inert skill points ink"));
+    test.expectEq(countBits(108, 115, 38, 45), 0, F("inert skill no letter"));
 
     // Pixel: the gear page draws through the same generic renderer.
     clearFb();

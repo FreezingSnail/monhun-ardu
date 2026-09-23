@@ -63,7 +63,10 @@ COND_NAMES = ("always", "zenny", "flag", "tier", "quest", "upgrade", "armor",
               "crafted")
 # hide_locked: reserved. zenny: draw the live save.zenny balance in the cost
 # column instead of the row cost (dynamic value token, qs.4 hub display).
-ROW_FLAGS = {"hide_locked": 0x01, "zenny": 0x02}
+# skill: draw the cached live skill points (ScreenState::skillPoints) in the cost
+# column plus an S/M tier letter next to it (gs.2 GEAR readout); `param` = the
+# armor::SKILL_* index.
+ROW_FLAGS = {"hide_locked": 0x01, "zenny": 0x02, "skill": 0x04}
 # COND_UPGRADE param packs (unlockFlag << 4) | (weaponIdx << 2) | tier (see
 # screen_state.hpp): unlock 0 = always, else 1-based quest whose done bit gates
 # the tier; weapon 0..TIER_COUNT-1; tier 1..SCREEN_MAX_TIER (2 in data).

@@ -13,12 +13,12 @@ namespace screens {
 constexpr uint16_t MAGIC = 0x5343;
 constexpr uint8_t VERSION = 1;
 constexpr uint8_t FLAGS = 0x00;
-constexpr uint16_t SIZE = 574;
+constexpr uint16_t SIZE = 652;
 constexpr uint8_t HEADER_SIZE = 8;
 constexpr uint8_t DEF_OFF_OFF = 8;
 constexpr uint16_t ROWS_OFF = 54;
 constexpr uint8_t SCREEN_COUNT = 4;
-constexpr uint16_t ROW_COUNT = 34;
+constexpr uint16_t ROW_COUNT = 39;
 constexpr uint8_t TIER_COUNT = 3;   // must match core/save.hpp SAVE_TIER_COUNT
 
 // Row action ids; src/screen_state.hpp switches on these.
@@ -47,6 +47,7 @@ constexpr uint8_t COND_CRAFTED = 7;
 
 // ScreenRow flags.
 constexpr uint8_t ROW_F_HIDE_LOCKED = 0x01;
+constexpr uint8_t ROW_F_SKILL = 0x04;
 constexpr uint8_t ROW_F_ZENNY = 0x02;
 
 // Screen indices, sorted by id, with the cart offsets the runtime uses.
@@ -67,7 +68,7 @@ constexpr uint8_t SCREEN_SMITH_TITLE_LEN = 5;
 constexpr uint16_t SCREEN_SMITH_FIRST_ROW = 260;
 constexpr uint8_t SCREEN_GEAR = 3;
 constexpr uint16_t SCREEN_GEAR_OFF = 45;
-constexpr uint8_t SCREEN_GEAR_ROWS = 9;
+constexpr uint8_t SCREEN_GEAR_ROWS = 14;
 constexpr uint8_t SCREEN_GEAR_TITLE_LEN = 4;
 constexpr uint16_t SCREEN_GEAR_FIRST_ROW = 443;
 

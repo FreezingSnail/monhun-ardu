@@ -58,6 +58,15 @@ static bool s_huntOver = false;
 // camp smithy prop, so its B steps back into the camp sim instead of the hub.
 static bool s_smithyFromCamp = false;
 
+// GEAR skill readout (gs.2): refresh Game::armor from the save, then copy the
+// per-skill points/tier into the GEAR screen's cache. Called when GEAR is
+// entered and after every GEAR action, so equipping a piece moves the numbers
+// on the very next frame.
+static void refreshGearReadout() {
+    mh::armorApplyToGame(g, s_save);
+    mh::screenGearCache(s_screen, g.armor);
+}
+
 #if DEBUG_HURTBOXES
 // Runtime toggle inside the debug build: hold A+B for 30 ticks to flip. The
 // buttons still reach the sim unchanged (run() never consumes them); A+B is
@@ -156,11 +165,18 @@ void run() {
                 mh::itemsApplyToGame(g, s_save);
                 mh::armorApplyToGame(g, s_save);
                 s_huntOver = false;
+            } else if (s_screen.active && s_screen.screen == screens::SCREEN_GEAR) {
+                // gs.2: entering GEAR fills the live skill readout cache.
+                refreshGearReadout();
             }
             return;
         }
         if (mh::screenApplyAction(s_save, row))
             mh::saveStore(s_save, SAVE_BACKEND);
+        // gs.2: a GEAR equip action refreshes the readout so the points/letters
+        // move immediately (armorApplyToGame first, then the cache copy).
+        if (s_screen.screen == screens::SCREEN_GEAR)
+            refreshGearReadout();
         return;
     }
     mh::stepGame(g, in);

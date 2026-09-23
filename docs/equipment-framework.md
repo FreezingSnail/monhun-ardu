@@ -243,6 +243,22 @@ only when the slot actually changed — a dead row or same-piece re-press writes
 nothing. SMITH therefore owns craft (debit + set bit) and GEAR owns the equipped
 set, both persisting in the same save block.
 
+**Gear skill readout (monhun-ardu-mn6.2).** GEAR also displays the live skill
+totals. Five `ROW_F_SKILL` rows (`flags: ["skill"]`, `param` = `armor::SKILL_*`
+index 0..4, label authored in `gear.json`: ATTACK UP / DEFENSE UP / HEALTH UP /
+STAMINA UP / EVADE) sit between the armor rows and LEAVE. `ScreenState` carries
+a small readout cache (`skillPoints[SKILL_COUNT]`, `skillTier[SKILL_COUNT]`,
+zeroed by `screenReset`); `src/screens.hpp screenGearCache()` copies
+`Game::armor` into it and `drawScreen()` renders a skill row as the cached points
+right-aligned in the cost column, plus an `S` (tier 1, points >= `THRESHOLD_S` =
+10) or `M` (tier 2, points >= `THRESHOLD_M` = 15) letter just left of the
+number. Points are already clamped to 15 by `armorFinalize`, so the display
+cannot exceed the max useful total; an inert skill shows points with no letter.
+The sketch refreshes the cache (`armorApplyToGame` then `screenGearCache`) when
+GEAR is entered and after every GEAR action, so equipping/unequipping a piece
+moves the numbers on the next frame. There is no equipped marker on the row yet
+(the label is not toggled); the weapon/armor row itself is the control.
+
 **Render (placeholder).** Per-piece armor sheets are not in the equip blob yet
 (the 05x art epic owns them), so the render maps the equipped head piece to the
 closest existing layered head sheet (`src/render.hpp armorHeadPart`):

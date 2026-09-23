@@ -40,7 +40,7 @@
 #include "quest_state.hpp"
 #include "upgrade_state.hpp"
 #include "generated/screen_meta.hpp"
-#include "generated/armor_meta.hpp"   // armor::PIECE_COUNT for the armor rows (arm.2)
+#include "generated/armor_meta.hpp"   // armor::PIECE_COUNT / SKILL_COUNT (arm.2, gs.2)
 #include "armor_state.hpp"            // armorEquipToggle (arm.2)
 
 namespace mh {
@@ -120,6 +120,12 @@ struct ScreenState {
     bool prevB = false;
     int8_t navY = 0;         // last vertical direction; 0 = released
     uint8_t navYTimer = 0;   // ticks until the next repeat (0 = disarmed)
+    // gs.2 GEAR skill readout cache: copied from Game::armor on GEAR entry and
+    // after every equip action (src/screens.hpp screenGearCache). drawScreen
+    // reads these for ROW_F_SKILL rows; screenReset() zeroes them so a stale
+    // screen never shows another save's points.
+    uint8_t skillPoints[armor::SKILL_COUNT];
+    uint8_t skillTier[armor::SKILL_COUNT];
 };
 
 enum ScreenEvent : int8_t {
@@ -240,6 +246,10 @@ MH_NOINLINE inline void screenReset(ScreenState &s, uint8_t screen, uint8_t rowC
     s.prevB = false;
     s.navY = 0;
     s.navYTimer = 0;
+    for (uint8_t i = 0; i < armor::SKILL_COUNT; i++) {
+        s.skillPoints[i] = 0;
+        s.skillTier[i] = 0;
+    }
 }
 
 // One input tick: debounced vertical nav + A/B edges. The caller evaluates the

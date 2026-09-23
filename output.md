@@ -1,75 +1,51 @@
-# monhun-ardu-mn6.1 — GEAR: armor equip rows (crafted gate, toggle)
+# monhun-ardu-mn6.2 — gs.2 GEAR: active skill readout (points + S/M tier)
 
-Baseline HEAD `8f26685`, clean. **DONE — all gates green, no commit/push.**
-
-Hub GEAR now lists the five crafted-gated armor rows beside the weapon rows;
-A toggles a crafted piece into its slot (`armorEquipToggle`), and the change
-persists. SMITH owns craft; GEAR owns equip/unequip.
-
-## Size (final gate)
-
-```
-Sketch uses 28970 bytes (97%) of program storage space. Maximum is 29696 bytes.
-Global variables use 1705 bytes (66%) of dynamic memory, leaving 855 bytes for local variables. Maximum is 2560 bytes.
-size: .text=28952 .data=18 .bss=1687
-size: flash=28970/29696 (726 free)  ram=1705/2560
-size: data facts: HAS_CARVE:true HAS_ENRAGE:true HAS_GUARD_CHANCE:false HAS_GUARD_COOLDOWN:false HAS_GUARD_FACING:true HAS_GUARD_HP:true HAS_GUARD_PLAYER:false HAS_GUARD_ZONES:true HAS_HIT_STAGGER:false HAS_MULTI_STEP:true HAS_MULTI_WINDOW:true HAS_SIMPLE_GUARDS:false HAS_STAGGER:true HAS_STEP_AFTER:true HAS_STEP_CHANCE:true HAS_TURN_RATE:true HAS_WAIT_STEPS:true HAS_ZONES:true
-```
-
-| | baseline | mn6.1 | delta |
-|---|---|---|---|
-| flash | 28848/29696 (848 free) | **28970/29696 (726 free)** | **+122 B** |
-| RAM | 1705/2560 | 1705/2560 | **0 B** |
-| FX data (`fxdata/fxdata-data.bin`) | 200360 B | 200445 B | +85 B |
-
-The +122 B MCU flash is the new `COND_CRAFTED`/`ACTION_EQUIP_ARMOR` switch arms
-plus the `bool` return of `armorEquipToggle` (the compiler no longer elides the
-now-observed result). The +85 B FX data is the 5 extra `screens.bin` rows; that
-blob precedes the image sheets, so every later baked offset shifts +85, which
-rewrites `equip_meta.hpp`/`zone_meta.hpp`/`manifest.json` with identical deltas.
-`HAS_*` facts unchanged. Fits with 726 B free.
+Status: DONE (build + all gates green). No commit/push (orchestrator commits).
 
 ## What changed
 
-- `tools/gen-screens.py` — appended `equip_armor` to `ACTION_NAMES` (id 11) and
-  `crafted` to `COND_NAMES` (id 7), ids append-only so existing values stay
-  stable; added the `condition 'crafted'` validation (needs an `equip_armor`
-  action, slot 0..2).
-- `src/armor_state.hpp` — `armorEquipToggle()` now returns `bool`: `false` for
-  an out-of-range piece/slot or an uncrafted piece, `true` only when the slot
-  byte actually changed.
-- `src/screen_state.hpp` — `COND_CRAFTED` (piece = `screenArmorPiece(param)`,
-  live when `saveCrafted`); `ACTION_EQUIP_ARMOR` (packs `(slot << 5) | pieceIdx`,
-  returns `armorEquipToggle`). `ACTION_CRAFT_ARMOR` now accumulates the craft +
-  toggle deltas through the bool (same observable behaviour).
-- `data/screens/gear.json` — 5 `equip_armor`/`crafted` rows before LEAVE:
-  HUNTER HELM (0), BONE CAP (1), HUNTER MAIL (34), BONE MAIL (35),
-  EVADE CHARM (68); GEAR rows 4 → 9.
-- Generated set (staged together by the orchestrator): `src/generated/screen_meta.hpp`,
-  `fxdata/tables/screens.bin`, plus the +85-shifted `fxdata.bin`/`fxdata-data.bin`/
-  `fxdata.h`/`src/fxdata.h`/`manifest.json`/`equip.bin`/`equip_meta.hpp`/`zone_meta.hpp`.
-- Tests: `tst/screens_test.hpp` (new crafted-gate/toggle/bad-id block);
-  `tst/armor_engine_test.hpp` (return-value assertions on the existing toggle
-  test); `tst/fxdatatest/screens_test.hpp` (9-row cart read + crafted E2E equip
-  + EEPROM persist + unequip).
-- Docs: `README.md` (GEAR paragraph), `docs/quests-shops.md` (actions/conditions
-  + gear bullet), `docs/equipment-framework.md` (new "Gear equip UI" note).
+- `tools/gen-screens.py` — added `ROW_FLAGS["skill"] = 0x04` (existing values
+  stable); comment documents the readout semantics.
+- `data/screens/gear.json` — five `flags: ["skill"]` rows before LEAVE:
+  ATTACK UP / DEFENSE UP / HEALTH UP / STAMINA UP / EVADE, `action: none`,
+  `condition: always`, `param` 0..4 (armor::SKILL_* index). GEAR is now 14 rows
+  (3 pages).
+- `src/screen_state.hpp` — `ScreenState` gains
+  `uint8_t skillPoints[armor::SKILL_COUNT]` + `uint8_t skillTier[armor::SKILL_COUNT]`;
+  `screenReset()` zeroes them. Explicit `generated/armor_meta.hpp` include.
+- `src/screens.hpp` — `drawScreen()` decodes `ROW_F_SKILL` rows: cached points
+  right-aligned in the cost column, plus an `S` (tier 1) / `M` (tier 2) letter
+  8 px left of the number via `textPut` on the selected/unselected font sheet.
+  A bad `param` clamps to skill 0 (no cache overrun). ROW_F_ZENNY path and the
+  `(const ScreenState&, const SaveBlock&)` signature are unchanged. New device
+  helper `screenGearCache(ScreenState&, const ArmorAgg&)`.
+- `monhun-ardu.ino` — `refreshGearReadout()` (`armorApplyToGame` then
+  `screenGearCache`) called when a nav lands on GEAR and after every GEAR
+  screen action, so equip/unequip moves the numbers on the next frame.
+- Tests (permanent, co-located, native):
+  - host `tst/screens_test.hpp` — new case "screenReset zeroes the gear skill
+    cache; ROW_F_SKILL decodes" (flag values 0x01/0x02/0x04, cache zeroed,
+    skill param decode).
+  - device `tst/fxdatatest/screens_test.hpp` — GEAR row count 9 -> 14 + g8..g13
+    decode; cart armor -> cache fill (attack 12/S, health 4/inert); equip via
+    the cart gear row moves attack 6 -> 12 (crosses S); helm+mail+charm clamps
+    attack to 15/M; pixel smoke for a skill row (M letter at x108..111, points
+    at x112..123) and an inert skill (points only, no letter).
+- Docs: `README.md` + `docs/equipment-framework.md` (readout: points clamp at
+  15, S=10 / M=15 letters, no equipped marker yet).
 
-## Command tails
+## Gate evidence
 
 ```
-make gen
-  gen-screens: 4 screens, 34 rows, 574 B blob (magic 0x5343 version 1)
-  ... fxdata/fxdata.bin regenerated
-
-make gen-check
+make gen (two passes; stale-blob convergence) + make gen-check
   fxdata_manifest: PASS (87 generated artifacts unchanged)
+  gen-check: OK (fxdata/fxdata.h == src/fxdata.h)
 
 make test
-  Total Passed: 6225   Total Failed: 0
+  Total Passed: 6240   Total Failed: 0
 
 make test-tools
-  Ran 310 tests in 18.674s   OK
+  Ran 310 tests in 18.406s   OK
 
 make fxtest-headless (full, 16 suites)
   asset_test   PASSED=264 FAILED=0
@@ -84,19 +60,30 @@ make fxtest-headless (full, 16 suites)
   perf_test    PASSED=5   FAILED=0
   test_player_art PASSED=120 FAILED=0
   test_quests  PASSED=87  FAILED=0
-  test_screens PASSED=128 FAILED=0
+  test_screens PASSED=154 FAILED=0
   test_smith   PASSED=115 FAILED=0
   test_tell    PASSED=18  FAILED=0
   zones_test   PASSED=82  FAILED=0
+
+make size
+  size: .text=29186 .data=18 .bss=1697
+  size: flash=29204/29696 (492 free)  ram=1715/2560
 ```
+
+## Size delta
+
+- Shipping flash: **29204 / 29696 (492 free)** — baseline 28970 (726 free) ->
+  **+234 bytes**.
+- RAM: 1715 / 2560 — baseline 1705 -> **+10 bytes** (the two 5-byte caches).
+- Note: the binding constraint was the `test_hub` device sketch, not shipping.
+  The first `drawScreen` cut pushed `test_hub` to 29704 (over by 8); the shared
+  digits/drawNumber refactor dropped it to 29638 (58 free) and shipping to 492
+  free.
 
 ## Deviations
 
-- The bead names `tst/armor_test.hpp` for the `armorEquipToggle` return value,
-  but that suite is the generated-data pin mirror (no save/armor_state context).
-  The return-value assertions were added to `tst/armor_engine_test.hpp`, where
-  the toggle test already lives and `armor_state.hpp` is in scope.
-- `make gen-check` needed the second `make gen` pass (documented stale-blob
-  two-pass: pass 1 bakes `equip.bin`/`equip_meta.hpp`/`zone_meta.hpp` offsets
-  from the previous `fxdata.h`). It passes on the converged tree.
-- `output.md` overwritten with this bead's report (was the isp.2 ledger).
+- `make gen` is a documented two-pass tool: pass 1 bakes `equip_meta.hpp` /
+  `fxdata.h` offsets before the cart is repacked, so the equip sheet
+  static_asserts (and thus the fxtest build) only settle after a second `make
+  gen`; `gen-check` then reports 87 artifacts unchanged on the converged tree.
+- `output.md` was the previous bead's ledger; overwritten with this report.
