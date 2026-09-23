@@ -48,9 +48,20 @@ QuestDef (v2): id, goalKind u8 (0 kill / 1 gather), target u8
                rewardZenny u16, rewardItem u8 (itemIdx+1, 0 = none),
                rewardCount u8, unlockFlag u8
 ```
-- Progress counted in `Game` during a hunt (kill target kind, or gathered item
-  count for a gather quest), persisted on quest complete; board shows
-  taken/progress/done and pays out on turn-in (zenny + optional material).
+- Progress counted in `Game` during a hunt (`questGoalKind` selects the hook):
+  a `GOAL_KILL` quest counts one per target-kind death (`core/monster.hpp`); a
+  `GOAL_GATHER` quest counts the node's `gatherYield` when the gathered item
+  matches its target (`core/items.hpp` `applyGather`; carves go through
+  `carve.hpp`, so they never count). Progress saturates at 255, and a kill goal
+  never counts a gather (and vice versa).
+- The board row is decoded from the quest def by `screens.hpp screenReadRow`:
+  a take row fills `ScreenRow::unlock` (`0` = always, else the 1-based prior
+  quest whose done bit gates it, enforced in the `COND_QUEST` condition and
+  re-checked in `ACTION_TAKE_QUEST`), and a turn-in row fills `recipe[0] =
+  (rewardItem, rewardCount)` plus `cost = rewardZenny` (the def is the source of
+  truth, like the armor recipe rows). Payout is zenny + the optional material.
+- Persisted on quest complete; board shows taken/progress/done and pays out on
+  turn-in.
 - Gather targets and material rewards are validated against `data/items.json`
   by `tools/gen-quests.py`; no second item list is hardcoded.
 

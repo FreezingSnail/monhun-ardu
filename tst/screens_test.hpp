@@ -44,6 +44,11 @@ inline ScreenRow row(uint16_t cost, uint8_t action, uint8_t cond, uint8_t param,
     r.cond = cond;
     r.param = param;
     r.flags = flags;
+    r.unlock = 0;   // dlp.2: always unlocked unless a quest def supplies one
+    r.recipe[0].item = 0;
+    r.recipe[0].count = 0;
+    r.recipe[1].item = 0;
+    r.recipe[1].count = 0;
     return r;
 }
 
@@ -458,6 +463,38 @@ void ScreenSuite(TestRunner &runner) {
         t.assert(screenApplyAction(s, turn), false, "double turn-in rejected");
         t.assert(screenApplyAction(s, row(0, screens::ACTION_TURN_IN_QUEST, 0, 3)), false, "untaken turn-in rejected");
         t.assert(screenApplyAction(s, row(0, screens::ACTION_LEAVE, 0, 0)), false, "leave changes nothing");
+        suite.addTest(t);
+    }
+
+    {
+        Test t("COND_QUEST take row gated by the chain unlock; action re-checks (dlp.2)");
+        SaveBlock s;
+        saveDefaults(s);
+        ScreenRow locked = row(0, screens::ACTION_TAKE_QUEST, screens::COND_QUEST, 2);
+        locked.unlock = 2;   // the prior quest (index 1) must be done
+        t.assert(screenCondOk(s, locked), false, "locked take row dead");
+        t.assert(screenApplyAction(s, locked), false, "locked action rejected");
+        t.assert(saveQuestGet(s, 2, 0), false, "quest not taken while locked");
+        saveQuestSet(s, 1, 1);
+        t.assert(screenCondOk(s, locked), true, "chain unlock makes row live");
+        t.assert(screenApplyAction(s, locked), true, "unlocked take applies");
+        t.assert(saveQuestGet(s, 2, 0), true, "taken after unlock");
+        suite.addTest(t);
+    }
+
+    {
+        Test t("turn-in row material reward comes from row.recipe[0] (dlp.2)");
+        SaveBlock s;
+        saveDefaults(s);
+        ScreenRow turn = row(150, screens::ACTION_TURN_IN_QUEST, screens::COND_QUEST, 48);   // need 3, quest 0
+        turn.recipe[0].item = static_cast<uint8_t>(ITEM_ORE + 1);
+        turn.recipe[0].count = 2;
+        questTake(s, 0);
+        s.progress = 3;
+        t.assert(screenCondOk(s, turn), true, "ready turn row live");
+        t.assert(screenApplyAction(s, turn), true, "turn-in applies");
+        t.assert(s.zenny, 150, "reward zenny paid");
+        t.assert(s.items[ITEM_ORE], 2, "material reward granted");
         suite.addTest(t);
     }
 

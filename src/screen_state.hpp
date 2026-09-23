@@ -65,6 +65,11 @@ struct ScreenRow {
     uint8_t flags;
     uint8_t cond;
     uint8_t param;
+    // Quest-chain unlock flag (dlp.2): 0 = always unlocked, else the 1-based
+    // prior quest whose done bit gates a COND_QUEST take row. Resolved from the
+    // quest def by screens.hpp screenReadRow (or supplied by a test); zeroed for
+    // every other row.
+    uint8_t unlock;
     // prg.7 recipe bill, resolved from the cart upgrade def for COND_UPGRADE
     // rows by the caller (screens.hpp screenReadRow) or supplied by a test.
     // Zeroed for every other row / a zenny-only recipe.
@@ -150,7 +155,8 @@ inline bool screenCondOk(const SaveBlock &save, const ScreenRow &row) {
         const uint8_t quest = static_cast<uint8_t>(row.param & 15);
         if (row.action == screens::ACTION_TURN_IN_QUEST)
             return questReady(save, quest, static_cast<uint8_t>((row.param >> 4) & 15));
-        return questTakeable(save, quest);
+        // dlp.2: a take row is live only when the chain unlock holds too.
+        return questTakeable(save, quest) && questUnlocked(save, row.unlock);
     }
     case screens::COND_UPGRADE: {
         const uint8_t weapon = screenUpgradeWeapon(row.param);
@@ -305,12 +311,16 @@ inline bool screenApplyAction(SaveBlock &save, const ScreenRow &row) {
         return true;
     }
     case screens::ACTION_TAKE_QUEST:
+        // dlp.2: re-check the chain unlock so a stale row cannot take a locked
+        // quest (mirrors the recipe re-check on the smith rows).
+        if (!questUnlocked(save, row.unlock))
+            return false;
         return questTake(save, static_cast<uint8_t>(row.param & 15));
     case screens::ACTION_TURN_IN_QUEST:
-        // Quest v2 (dlp.1): the row's recipe[0] carries the optional material
-        // reward as (itemIdx+1, count). Board rows are zeroed for now (no
-        // material rewards authored), so this stays zenny-only until a later
-        // wiring bead fills the row from the quest def.
+        // Quest v2 (dlp.1/dlp.2): the row's recipe[0] carries the optional
+        // material reward as (itemIdx+1, count) and the row cost is the
+        // def.rewardZenny, both filled from the cart quest def by
+        // screens.hpp screenReadRow.
         return questTurnIn(save, static_cast<uint8_t>(row.param & 15), static_cast<uint8_t>((row.param >> 4) & 15), row.cost, row.recipe[0].item, row.recipe[0].count);
     default:   // ACTION_LEAVE
         return false;

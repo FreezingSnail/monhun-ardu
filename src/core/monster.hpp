@@ -34,7 +34,8 @@
 
 #include <stdint.h>
 #include "player.hpp"
-#include "combat.hpp"   // attack/window cache loaders (migration A)
+#include "combat.hpp"                    // attack/window cache loaders (migration A)
+#include "../generated/quest_meta.hpp"   // quests::GOAL_KILL (dlp.2 kill accounting)
 
 namespace mh {
 
@@ -172,10 +173,12 @@ static void damageMonster(Game &g, int16_t dmg, int16_t hx, int16_t hy) {
         m.state = MS_DEAD;
         g.over = OVER_WIN;
         g.freeze = 12;
-        // Quest kill accounting (bead monhun-ardu-me6): count this hunt's kill
-        // when the beast matches the active quest's target kind. progress is
-        // committed to the save at hunt end by the sketch, never mid-hunt.
-        if (g.questTarget >= 0 && g.monsterKind == g.questTarget && g.questProgress < 255)
+        // Quest kill accounting (bead monhun-ardu-me6; goal kind dlp.2): count
+        // this hunt's kill only when the active quest's goal is KILL and the
+        // beast matches its target kind. A gather quest (GOAL_GATHER) never
+        // counts a kill. progress is committed to the save at hunt end by the
+        // sketch, never mid-hunt.
+        if (g.questGoalKind == quests::GOAL_KILL && g.questTarget >= 0 && g.monsterKind == g.questTarget && g.questProgress < 255)
             g.questProgress++;
     }
 }

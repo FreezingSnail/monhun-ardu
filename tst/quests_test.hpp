@@ -8,28 +8,37 @@
 #include "../src/quest_state.hpp"
 #include "../src/screen_state.hpp"
 #include "../src/core/monster.hpp"
+#include "../src/core/items.hpp"
 #include "../src/core/world.hpp"
 #include "../src/generated/quest_meta.hpp"
+#include "../src/generated/zone_meta.hpp"
 
 using namespace mh;
 
 namespace queststest {
 
-inline ScreenRow questRow(uint8_t action, uint8_t param, uint16_t cost = 0) {
+inline ScreenRow questRow(uint8_t action, uint8_t param, uint16_t cost = 0, uint8_t unlock = 0) {
     ScreenRow r;
     r.cost = cost;
     r.action = action;
     r.flags = 0;
     r.cond = screens::COND_QUEST;
     r.param = param;
+    r.unlock = unlock;
+    r.recipe[0].item = 0;
+    r.recipe[0].count = 0;
+    r.recipe[1].item = 0;
+    r.recipe[1].count = 0;
     return r;
 }
 
 // Full hunt: initGame + spawn a beast of `kind`, then kill it for real through
-// the hit path (damageMonster) so the death hook is exercised.
+// the hit path (damageMonster) so the death hook is exercised. The goal kind is
+// KILL (dlp.2: a kill only counts when the active goal is GOAL_KILL).
 inline void killBeast(Game &g, int8_t kind) {
     initGame(g, W_SWORD);
     initMonster(g, kind);
+    g.questGoalKind = quests::GOAL_KILL;
     g.questTarget = static_cast<int8_t>(kind);
     g.questNeed = 3;
     g.questProgress = 0;
@@ -230,6 +239,43 @@ void QuestSuite(TestRunner &runner) {
         suite.addTest(t);
     }
 
+    {
+        Test t("COND_QUEST take row honours the chain unlock; action re-checks");
+        SaveBlock s;
+        saveDefaults(s);
+        // Quest 2 chained behind unlockFlag 2 = the prior quest (index 1) done.
+        const ScreenRow locked = questRow(screens::ACTION_TAKE_QUEST, 2, 0, 2);
+        t.assert(screenCondOk(s, locked), false, "locked row dead");
+        t.assert(screenApplyAction(s, locked), false, "locked take rejected");
+        t.assert(saveQuestGet(s, 2, 0), false, "locked quest not taken");
+        t.assert(s.activeQuest, SAVE_QUEST_NONE, "no active quest set");
+        saveQuestSet(s, 1, 1);   // prior quest done -> chain unlocks
+        t.assert(screenCondOk(s, locked), true, "chain unlock makes the row live");
+        t.assert(screenApplyAction(s, locked), true, "unlocked take applies");
+        t.assert(saveQuestGet(s, 2, 0), true, "taken after unlock");
+        // unlockFlag 0 is always live even with a locked-looking quest index.
+        SaveBlock fresh;
+        saveDefaults(fresh);
+        t.assert(screenCondOk(fresh, questRow(screens::ACTION_TAKE_QUEST, 2)), true, "flag 0 always unlocked");
+        suite.addTest(t);
+    }
+
+    {
+        Test t("turn-in row pays the material reward from row.recipe[0]");
+        SaveBlock s;
+        saveDefaults(s);
+        questTake(s, 0);
+        s.progress = 3;
+        ScreenRow turn = questRow(screens::ACTION_TURN_IN_QUEST, 48, 150);   // need 3, quest 0
+        turn.recipe[0].item = static_cast<uint8_t>(ITEM_ORE + 1);
+        turn.recipe[0].count = 2;
+        t.assert(screenApplyAction(s, turn), true, "turn-in applies");
+        t.assert(s.zenny, 150, "zenny paid");
+        t.assert(s.items[ITEM_ORE], 2, "material reward granted");
+        t.assert(saveQuestGet(s, 0, 1), true, "done bit set");
+        suite.addTest(t);
+    }
+
     // ------------------------------------------------------- kill hook
     {
         Test t("monster death counts only the active quest's target kind");
@@ -242,6 +288,7 @@ void QuestSuite(TestRunner &runner) {
         // A sweep dies while the quest targets lunge: no count.
         initGame(g, W_SWORD);
         initMonster(g, MON_SWEEP);
+        g.questGoalKind = quests::GOAL_KILL;
         g.questTarget = MON_LUNGE;
         g.questProgress = 1;
         damageMonster(g, 2000, g.monster.x, g.monster.y);
@@ -250,9 +297,65 @@ void QuestSuite(TestRunner &runner) {
         // No active quest: no count.
         initGame(g, W_SWORD);
         initMonster(g, MON_LUNGE);
+        g.questGoalKind = quests::GOAL_KILL;
         g.questTarget = -1;
         damageMonster(g, 2000, g.monster.x, g.monster.y);
         t.assert(g.questProgress, 0, "no active quest counts nothing");
+        suite.addTest(t);
+    }
+
+    {
+        Test t("a gather goal never counts a kill");
+        Game g;
+        initGame(g, W_SWORD);
+        initMonster(g, MON_LUNGE);
+        g.questGoalKind = quests::GOAL_GATHER;
+        g.questTarget = ITEM_HERB;   // item target, not a monster kind
+        g.questProgress = 2;
+        damageMonster(g, 2000, g.monster.x, g.monster.y);
+        t.assert(g.over, OVER_WIN, "beast still died");
+        t.assert(g.questProgress, 2, "gather quest ignores the kill");
+        suite.addTest(t);
+    }
+
+    // ---------------------------------------------------- gather accounting
+    {
+        Test t("gather completion counts the yield only for a matching GOAL_GATHER quest");
+        Game g;
+        newGame(g, W_SWORD, MODE_HUNT);
+        g.questGoalKind = quests::GOAL_GATHER;
+        g.questTarget = static_cast<int8_t>(ITEM_HERB);
+        g.questNeed = 5;
+        g.player.itemNode = zone::PROP_CAMP_2;   // herb node, yield 2
+        applyGather(g, g.player);
+        t.assert(g.items[ITEM_HERB], 2, "yield banked");
+        t.assert(g.questProgress, 2, "yield counted as progress");
+
+        // Off-item node: still gathered, but the goal does not advance.
+        newGame(g, W_SWORD, MODE_HUNT);
+        g.questGoalKind = quests::GOAL_GATHER;
+        g.questTarget = static_cast<int8_t>(ITEM_ORE);
+        g.player.itemNode = zone::PROP_CAMP_2;   // herb node, not the ore target
+        applyGather(g, g.player);
+        t.assert(g.items[ITEM_HERB], 2, "off-item node still gathered");
+        t.assert(g.questProgress, 0, "off-item yield not counted");
+
+        // A kill goal ignores gathered items entirely.
+        newGame(g, W_SWORD, MODE_HUNT);
+        g.questGoalKind = quests::GOAL_KILL;
+        g.questTarget = static_cast<int8_t>(ITEM_HERB);
+        g.player.itemNode = zone::PROP_CAMP_2;
+        applyGather(g, g.player);
+        t.assert(g.questProgress, 0, "kill goal ignores gather");
+
+        // Saturation: the progress clamp holds at 255 across the yield add.
+        newGame(g, W_SWORD, MODE_HUNT);
+        g.questGoalKind = quests::GOAL_GATHER;
+        g.questTarget = static_cast<int8_t>(ITEM_HERB);
+        g.questProgress = 254;
+        g.player.itemNode = zone::PROP_CAMP_2;   // yield 2 -> 256 clamps
+        applyGather(g, g.player);
+        t.assert(g.questProgress, 255, "gather progress clamps at 255");
         suite.addTest(t);
     }
 

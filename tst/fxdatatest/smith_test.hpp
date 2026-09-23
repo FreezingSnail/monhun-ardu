@@ -239,7 +239,12 @@ inline void test_smith(FxTest &test) {
     // Cart aggregation: helm defense 10, attack_up 6 + defense_up 4 (arm.4
     // two-skills-per-piece); both stay below S=10 alone -> inert, so the flat
     // helm defense is the only active effect.
-    Game ag;
+    // Reuse the file-scope Game instead of a second 650 B stack frame: the
+    // ATmega32u4 sim has ~845 B of stack left after globals, and this suite's
+    // frame already sat within 7 B of that limit (dlp.2 grew ScreenRow by one
+    // byte and tipped it). g_smith is re-initialized by the melee/walk helpers
+    // right after, so its state here is transient.
+    Game &ag = g_smith;
     newGame(ag, W_SWORD, MODE_HUNT);
     armorApplyToGame(ag, aloaded);
     test.expectEq(ag.armor.defense, 10, F("cart armor defense"));

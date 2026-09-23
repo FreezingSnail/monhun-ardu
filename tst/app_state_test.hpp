@@ -24,6 +24,11 @@ inline ScreenRow arow(uint8_t action, uint8_t cond = screens::COND_ALWAYS, uint8
     r.cond = cond;
     r.param = param;
     r.flags = 0;
+    r.unlock = 0;
+    r.recipe[0].item = 0;
+    r.recipe[0].count = 0;
+    r.recipe[1].item = 0;
+    r.recipe[1].count = 0;
     return r;
 }
 

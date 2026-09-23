@@ -55,8 +55,11 @@ inline void test_quests(FxTest &test) {
     screenReadRow(screenRowOffsetAt(screens::SCREEN_QUESTS, 1), turn0);
     test.expectEq(take0.action, screens::ACTION_TAKE_QUEST, F("board take action"));
     test.expectEq(take0.cond, screens::COND_QUEST, F("board take cond"));
+    test.expectEq(take0.unlock, d0.unlockFlag, F("take unlock from def"));
     test.expectEq(turn0.action, screens::ACTION_TURN_IN_QUEST, F("board turn action"));
     test.expectEq(turn0.cost, d0.rewardZenny, F("turn cost == reward"));
+    test.expectEq(turn0.recipe[0].item, d0.rewardItem, F("turn material item from def"));
+    test.expectEq(turn0.recipe[0].count, d0.rewardCount, F("turn material count from def"));
     test.expectEq((turn0.param >> 4) & 15, d0.need, F("turn need nibble"));
 
     // ------------------------------------------------ E2E: take -> kills -> turn-in
@@ -82,6 +85,7 @@ inline void test_quests(FxTest &test) {
         initGame(g, W_SWORD);
         initMonster(g, MON_LUNGE);
         g.questTarget = static_cast<int8_t>(loaded.activeQuest == 0 ? d0.target : -1);
+        g.questGoalKind = static_cast<int8_t>(loaded.activeQuest == 0 ? d0.goalKind : -1);
         g.questNeed = d0.need;
         g.questProgress = loaded.progress;
         // 2000 respects damageMonster's int16 contract (dmg*14 <= 32767) and the
@@ -99,6 +103,7 @@ inline void test_quests(FxTest &test) {
     initGame(g, W_SWORD);
     initMonster(g, MON_SWEEP);
     g.questTarget = d0.target;
+    g.questGoalKind = d0.goalKind;
     g.questProgress = loaded.progress;
     damageMonster(g, 2000, g.monster.x, g.monster.y);
     test.expectEq(g.questProgress, 3, F("off-kind kill not counted"));

@@ -26,6 +26,11 @@ inline ScreenRow upgradeRow(uint16_t cost, uint8_t weapon, uint8_t tier, uint8_t
     r.flags = 0;
     r.cond = screens::COND_UPGRADE;
     r.param = upgradeParam(weapon, tier, unlock);
+    r.unlock = 0;
+    r.recipe[0].item = 0;
+    r.recipe[0].count = 0;
+    r.recipe[1].item = 0;
+    r.recipe[1].count = 0;
     return r;
 }
 
@@ -37,6 +42,11 @@ inline ScreenRow plainBuyRow(uint16_t cost, uint8_t weapon, uint8_t cond = scree
     r.flags = 0;
     r.cond = cond;
     r.param = weapon;
+    r.unlock = 0;
+    r.recipe[0].item = 0;
+    r.recipe[0].count = 0;
+    r.recipe[1].item = 0;
+    r.recipe[1].count = 0;
     return r;
 }
 

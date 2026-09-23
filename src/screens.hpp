@@ -15,6 +15,7 @@
 #include "render.hpp"
 #include "screen_state.hpp"
 #include "smith.hpp"   // smithReadDef: cart recipe bill for COND_UPGRADE rows (prg.7)
+#include "quest.hpp"   // questReadDef: quest unlock + reward for COND_QUEST rows (dlp.2)
 
 namespace mh {
 
@@ -120,14 +121,33 @@ inline void screenReadRow(uint16_t off, ScreenRow &row) {
     row.flags = mhFxReadU8(screenCart(static_cast<uint16_t>(fields + 3)));
     row.cond = mhFxReadU8(screenCart(static_cast<uint16_t>(fields + 4)));
     row.param = mhFxReadU8(screenCart(static_cast<uint16_t>(fields + 5)));
+    row.unlock = 0;
     row.recipe[0].item = 0;
     row.recipe[0].count = 0;
     row.recipe[1].item = 0;
     row.recipe[1].count = 0;
-    if (row.cond == screens::COND_UPGRADE)
+    if (row.cond == screens::COND_UPGRADE) {
         screenRowRecipe(row.param, row.recipe);
-    else if (row.cond == screens::COND_ARMOR)
+    } else if (row.cond == screens::COND_ARMOR) {
         screenRowArmorRecipe(screenArmorPiece(row.param), row.cost, row.recipe);
+    } else if (row.cond == screens::COND_QUEST) {
+        // dlp.2: the quest def is the source of truth for the chain unlock and
+        // the turn-in payout (reward zenny + optional material), mirroring
+        // screenRowArmorRecipe. Board take rows fill `unlock`; turn-in rows fill
+        // recipe[0] + cost and are ignored by the take path.
+        const uint8_t quest = static_cast<uint8_t>(row.param & 15);
+        if (quest < quests::QUEST_COUNT) {
+            QuestDef def;
+            questReadDef(quest, def);
+            if (row.action == screens::ACTION_TAKE_QUEST) {
+                row.unlock = def.unlockFlag;
+            } else if (row.action == screens::ACTION_TURN_IN_QUEST) {
+                row.recipe[0].item = def.rewardItem;
+                row.recipe[0].count = def.rewardCount;
+                row.cost = def.rewardZenny;
+            }
+        }
+    }
 }
 
 // Blob offset of row `index` (walk the variable-length records).

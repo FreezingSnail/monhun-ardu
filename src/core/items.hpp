@@ -27,6 +27,7 @@
 #include <stdint.h>
 #include "game.hpp"
 #include "zones.hpp"
+#include "../generated/quest_meta.hpp"   // quests::GOAL_GATHER (dlp.2 gather accounting)
 
 #if !defined(__AVR__)
 #include "../generated/items_data.hpp"   // host mirror (identity reads)
@@ -187,6 +188,14 @@ static void applyGather(Game &g, Player &p) {
     // slot is one less. itemAdd ignores an id past the table.
     const uint8_t slot = static_cast<uint8_t>(prop.gatherItem - 1);
     itemAdd(g, slot, prop.gatherYield);
+    // Quest gather accounting (bead monhun-ardu-dlp.2): a GOAL_GATHER quest
+    // counts the yielded item units only when the node's item matches its
+    // target — an off-item node still gathers but does not advance progress.
+    // Carves go through carve.hpp, never this path, so they never count.
+    if (g.questGoalKind == quests::GOAL_GATHER && g.questTarget == static_cast<int8_t>(slot)) {
+        const uint16_t p = static_cast<uint16_t>(g.questProgress) + prop.gatherYield;
+        g.questProgress = p > 255 ? 255 : static_cast<uint8_t>(p);
+    }
     addEffect(g, static_cast<int16_t>(p.x + (p.w >> 1)), static_cast<int16_t>(p.y + (p.h >> 1)), GATHER_SPARK_LIFE, false);
 }
 
