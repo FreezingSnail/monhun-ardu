@@ -280,12 +280,4 @@ inline void test_assets(FxTest &test) {
     blobHeader(fxpole_sever, 24, 40, test, F("sever pole w/h"));
     blobHeader(fxpole_break, 24, 40, test, F("break pole w/h"));
     blobHeader(fxpole_crack, 24, 40, test, F("crack pole w/h"));
-
-    // Opening menu v2 (beads 2u8 / 4t4): bg + per-row selection tiles, now
-    // name-only (no icons). Header identity only here; the device pixel oracle
-    // (tst/fxdatatest/menu_art_test.hpp) pins names/frame/cursor and the clear
-    // icon slots.
-    blobHeader(mh_menu_bg, 128, 64, test, F("menu bg w/h"));
-    blobHeader(mh_menu_wsel, 32, 8, test, F("menu weapon sel w/h"));
-    blobHeader(mh_menu_msel, 64, 8, test, F("menu monster sel w/h"));
 }

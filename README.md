@@ -28,12 +28,12 @@ flashing. Controls are below; no USB serial device comes up while the game runs
 |---|---|
 | Vertical-slice sim | Ported + parity-verified (20 scenes / 1269 ticks / 660 device asserts) |
 | Device render + HUD + audio | Working (block/FX-sprite art, cue tones; HUD text/FX glyphs + bars — `7y3` clamp fixed) |
-| Host unit tests | `make test` — **6188 passed / 0 failed** |
-| Device tests (Ardens) | 16 suites / 1645 asserts — boot 4, assets 270, audio 9, hud 29, data 348, combat 237, hub 70, monster_art 127, player_art 120, quests 87, screens 89, smith 115, tell 18, zones 82, items 35, perf 5 — all PASS (the frozen `test_parity` diagnostics image is not a gate; the opening-menu `test_menu`/`test_menu_art` suites were deleted with the menu, `isp.1`) |
+| Host unit tests | `make test` — **6207 passed / 0 failed** |
+| Device tests (Ardens) | 16 suites / 1671 asserts — boot 4, assets 264, audio 9, hud 29, data 348, combat 237, hub 81, monster_art 127, player_art 120, quests 87, screens 110, smith 115, tell 18, zones 82, items 35, perf 5 — all PASS (the frozen `test_parity` diagnostics image is not a gate; the opening-menu `test_menu`/`test_menu_art` suites and its `mh_menu_*` sheets were deleted with the menu, `isp.1`/`hml.2`) |
 | Perf gate (`monhun-ardu-8v7`, re-verified through `kt7.7`) | **PASS.** plane 157 Hz (≥135), logic 52 Hz (≥45), render max 3348 µs (≤7407), tick 480 µs, RAM free 689 B (bench) |
 | Perf tooling | Headless Ardens profiler dump (`profiledump=<path>`, local patch) + on-device cycle bench (`test_perf`) |
-| Shipping build | flash **28804 / 29696 B** (97%, 892 free), RAM **1701 / 2560 B** (859 free); USB-free, see below |
-| FX data image | **200418 B** of 16 MB used |
+| Shipping build | flash **28848 / 29696 B** (97%, 848 free), RAM **1705 / 2560 B** (855 free); USB-free, see below |
+| FX data image | **200360 B** of 16 MB used |
 
 Speculative gameplay status: combat (sword / flail / gunshield), monster FSM,
 camera/world clamps, HUD, audio cues all in place. The prg.8 trim removed
@@ -174,7 +174,8 @@ data/skeletons.json + data/creatures/*.json ──tools/gen-combat.py──►�
 - Current blobs: `fxmonster`, `fxplayer`, `fxpole`, `fxball`, `fxscatter`,
   `fxspark`, `fxfontw`, `fxfontg`, the overlay/effect sheets and the raw
   content tables (`mhWeaponDefs`, `mhMonsterAttacks`, `mhMonsterDefs`,
-  `mhCombat`) — 22719 B total.
+  `mhCombat`) — 200360 B cart image total. The dead `mh_menu_bg`/`mh_menu_wsel`/
+  `mh_menu_msel` sheets were dropped with the opening menu (`hml.2`).
 - Regenerate with `make gen` (or `./tools/gen.sh`); bins are tracked despite
   `*.bin` being gitignored (force-added) so device tests are reproducible.
 - `fxdata/manifest.json` (tracked) pins sha256+size for every source image,
@@ -374,8 +375,9 @@ Notes:
    start path), d-pad nav debounce (`6zb.4`, +16 B for the per-axis hold
    timers) and the combat blob pipeline (`ljj.1`; blob is FX data, shipping
    flash unchanged). The hub-as-root rework (`isp.1`) then deleted the opening
-   menu (FSM + FX render + its suites) and reclaimed 470 B: shipping measures
-   **28804/29696 B (892 free)**. The 119 B of hot LUTs (`mh::SIN65`
+   menu (FSM + FX render + its suites) and reclaimed 470 B; the menu art cleanup
+   (`hml.2`) dropped the dead `mh_menu_*` sheets from the cart (flash unchanged,
+   -8262 B FX data). Shipping measures **28848/29696 B (848 free)**. The 119 B of hot LUTs (`mh::SIN65`
    65 B, `fp::DIR8` 32 B, `mh::MH_MASK_TOP/BOT` 16 B, `mh::RING6` 6 B) stay in
    MCU flash by decision (`monhun-ardu-42n.5`): FX per-access reads measured
    ~150 cycles (~9 µs, 20-35x an LPM) and a SIN65 RAM cache would breach the
@@ -392,7 +394,7 @@ Notes:
    → 2000 B. FX sprite data stays on the cart, so RAM grew little through the
    art pass; the USB-stack removal (`42n.8`) then dropped it, the opening-menu
    `MenuState` was deleted with the menu (`isp.1`) and the save grew one byte
-   for the v4 weapon byte, and the latest build measures **1701 B (859 free)**.
+   for the v4 weapon byte, and the latest build measures **1705 B (855 free)**.
 4. **Mock is legacy**: `src/` is the source of truth. The mock/device parity
    image (`test_parity`, 660 asserts) stays runnable as legacy diagnostics but
    is no longer a commit gate; do not update `mock/` or regenerate its fixtures.

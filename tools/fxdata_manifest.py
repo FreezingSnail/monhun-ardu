@@ -33,12 +33,10 @@ FXDATA_REL = "fxdata/fxdata.txt"
 GENERATED_GLOBS = (
     "images/blocks/*.png",
     "images/fonts/*.png",
-    "images/menu/*.png",
     "images/equip/*.png",
     "images/maps/*.png",
     "fxdata/blocks/Sprites.txt",
     "fxdata/fonts/Sprites.txt",
-    "fxdata/menu/Sprites.txt",
     "fxdata/equip/Sprites.txt",
     "fxdata/maps/Sprites.txt",
     "fxdata/tables/*.bin",

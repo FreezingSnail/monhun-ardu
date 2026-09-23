@@ -87,11 +87,11 @@ python3 tools/gen-zones.py
 # convert-sprite.py appends to Sprites.txt (it does not truncate), so a sheet
 # renamed in gen-art.py would leave a stale symbol behind: remove the generated
 # files first. convert-sprite.py resolves paths relative to tools/, hence ../.
-mkdir -p fxdata/blocks fxdata/fonts fxdata/menu fxdata/equip
-rm -f fxdata/blocks/Sprites.txt fxdata/fonts/Sprites.txt fxdata/menu/Sprites.txt fxdata/equip/Sprites.txt
+# The opening-menu sheets were deleted with the menu (`hml.2`).
+mkdir -p fxdata/blocks fxdata/fonts fxdata/equip
+rm -f fxdata/blocks/Sprites.txt fxdata/fonts/Sprites.txt fxdata/equip/Sprites.txt
 python3 tools/convert-sprite.py ../images/blocks -s 4 -o ../fxdata/blocks/
 python3 tools/convert-sprite.py ../images/fonts -s 4 -o ../fxdata/fonts/
-python3 tools/convert-sprite.py ../images/menu -s 4 -o ../fxdata/menu/
 python3 tools/convert-sprite.py ../images/equip -s 4 -o ../fxdata/equip/
 
 # Pack the FX image and emit the generated header.

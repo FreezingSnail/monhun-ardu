@@ -401,7 +401,7 @@ with the animation-frame selector):
 
 | Cut | How |
 |---|---|
-| training mode (pole target, pole room, menu POLE row) | removed end to end: `MODE_TRAIN`, `Pole`, `initPole`/`updatePole`/`damagePole`/`armPoleTarget`, `data/creatures/pole.json`, the `pole_room` map record, the opening menu's target count 5→4 (that menu was deleted outright by `isp.1`), `mh_menu_msel` rebuilt as 4 tiles |
+| training mode (pole target, pole room, menu POLE row) | removed end to end: `MODE_TRAIN`, `Pole`, `initPole`/`updatePole`/`damagePole`/`armPoleTarget`, `data/creatures/pole.json`, the `pole_room` map record, the opening menu's target count 5→4 (that menu and its `mh_menu_*` sheets were deleted outright by `isp.1`/`hml.2`) |
 | damage-number text | removed (sparks kept): `Effect::text`, `drawEffects` number branch, `addEffect` text arg |
 | screen shake | removed: the render's tick-derived view offset |
 | weapon trail | removed: the 3 trail puffs in `drawProjectiles` |

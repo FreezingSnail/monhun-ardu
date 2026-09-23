@@ -79,12 +79,12 @@ raw_t mhItems = "tables/items.bin"
 // it only shifts the sprite sections that follow.
 raw_t mhArmor = "tables/armor.bin"
 
-// Sprite sections: blocks/fonts/menu/equip sheets, addressed with 24-bit
+// Sprite sections: blocks/fonts/equip sheets, addressed with 24-bit
 // SpritesU seeks so they may grow past the tables' 64 KiB window. Equipment
 // sheets stay after the base sheets; room layer arrays (maps/Sprites.txt, fie.5)
 // follow them and are addressed with seekData like any other sprite.
+// The opening-menu sheets were deleted with the menu (`hml.2`).
 include "blocks/Sprites.txt"
 include "fonts/Sprites.txt"
-include "menu/Sprites.txt"
 include "equip/Sprites.txt"
 include "maps/Sprites.txt"
