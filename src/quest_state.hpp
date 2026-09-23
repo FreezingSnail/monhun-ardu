@@ -1,28 +1,34 @@
 #pragma once
-// Quest runtime logic (bead monhun-ardu-me6, docs/quests-shops.md "Quests").
+// Quest runtime logic (bead monhun-ardu-me6, docs/quests-shops.md "Quests";
+// record v2 bead monhun-ardu-dlp.1).
 //
 // Host-testable, no Arduino/cart: the QuestDef struct + the save-block state
-// machine that TAKES a quest, counts target-kind kills, and TURNS IT IN for a
-// u16-clamped zenny payout. The cart read side (record -> QuestDef) lives in
+// machine that TAKES a quest, counts goal progress (kills or gathered items,
+// clamped at 255), and TURNS IT IN for a u16-clamped zenny payout plus an
+// optional material reward. The cart read side (record -> QuestDef) lives in
 // src/quest.hpp so this header compiles on the host with plain structs.
 //
 // One active quest at a time: TAKE writes the taken bit and sets activeQuest;
-// kills feed progress (clamped at 255); TURN_IN requires progress >= need,
-// pays reward, clears taken, sets done and clears the active slot. unlockFlag
-// 0 means "always unlocked"; otherwise it names the (1-based) quest whose done
-// bit gates this one, so quest chains are data.
+// progress feeds through questAddProgress (clamped at 255); TURN_IN requires
+// progress >= need, pays rewardZenny, adds rewardItem-1 x rewardCount through
+// saveItemAdd when rewardItem != 0, clears taken, sets done and clears the
+// active slot. unlockFlag 0 means "always unlocked"; otherwise it names the
+// (1-based) quest whose done bit gates this one, so quest chains are data.
 
 #include <stdint.h>
 #include "core/save.hpp"
 
 namespace mh {
 
-// A quest record, matching the packed 6 B cart layout from tools/gen-quests.py.
+// A quest record, matching the packed 9 B cart layout from tools/gen-quests.py.
 struct QuestDef {
     uint8_t id;
-    uint8_t targetKind;   // MonsterKind (MON_LUNGE..), see quests::TARGET_*
+    uint8_t goalKind;   // quests::GOAL_KILL / GOAL_GATHER
+    uint8_t target;     // MonsterKind (kill) or item index (gather)
     uint8_t need;
-    uint16_t reward;
+    uint16_t rewardZenny;
+    uint8_t rewardItem;    // itemIdx + 1, 0 = none
+    uint8_t rewardCount;   // 1..255 when rewardItem != 0
     uint8_t unlockFlag;
 };
 
@@ -94,20 +100,25 @@ inline bool questTake(SaveBlock &save, uint8_t quest) {
     return true;
 }
 
-// Count one kill of the active quest's target kind (progress saturates at 255).
-inline void questAddKill(SaveBlock &save) {
+// Add `n` goal-progress steps to the active quest (progress saturates at 255).
+// The kill path adds one per target-kind kill; a gather path adds the yielded
+// item count. No active quest is a no-op.
+inline void questAddProgress(SaveBlock &save, uint8_t n) {
     if (save.activeQuest == SAVE_QUEST_NONE)
         return;
-    if (save.progress < 255)
-        save.progress++;
+    const uint16_t v = static_cast<uint16_t>(save.progress) + n;
+    save.progress = v > 255 ? 255 : static_cast<uint8_t>(v);
 }
 
-// Turn in: requires the active quest at/over need; pays reward, marks done,
-// clears taken + active progress.
-inline bool questTurnIn(SaveBlock &save, uint8_t quest, uint8_t need, uint16_t reward) {
+// Turn in: requires the active quest at/over need; pays rewardZenny, grants
+// rewardItem-1 x rewardCount (when rewardItem != 0), marks done, clears taken +
+// active progress.
+inline bool questTurnIn(SaveBlock &save, uint8_t quest, uint8_t need, uint16_t rewardZenny, uint8_t rewardItem, uint8_t rewardCount) {
     if (!questReady(save, quest, need))
         return false;
-    save.zenny = zennyAdd(save.zenny, reward);
+    save.zenny = zennyAdd(save.zenny, rewardZenny);
+    if (rewardItem != 0)
+        saveItemAdd(save, static_cast<uint8_t>(rewardItem - 1), rewardCount);
     saveQuestClear(save, quest, 0);
     saveQuestSet(save, quest, 1);
     save.activeQuest = SAVE_QUEST_NONE;

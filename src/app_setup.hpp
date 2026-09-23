@@ -14,6 +14,7 @@
 namespace mh {
 
 static void questApplyToGame(Game &g, const SaveBlock &save) {
+    g.questGoalKind = -1;
     g.questTarget = -1;
     g.questNeed = 0;
     g.questProgress = 0;
@@ -22,7 +23,8 @@ static void questApplyToGame(Game &g, const SaveBlock &save) {
         return;
     QuestDef def;
     questReadDef(quest, def);
-    g.questTarget = static_cast<int8_t>(def.targetKind);
+    g.questGoalKind = static_cast<int8_t>(def.goalKind);
+    g.questTarget = static_cast<int8_t>(def.target);
     g.questNeed = def.need;
     g.questProgress = save.progress;
 }

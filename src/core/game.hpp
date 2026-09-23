@@ -907,6 +907,12 @@ struct Game {
     // from the save, and every monster death of that kind bumps questProgress.
     // The hunt-end commit writes questProgress back to the save. Not part of the
     // deterministic sim hash: a default Game (questTarget -1) never counts.
+    // Quest goal accounting (bead monhun-ardu-dlp.1, record v2): goalKind is
+    // quests::GOAL_KILL / GOAL_GATHER for the active quest (-1 = none). The
+    // sketch arms it from the active QuestDef at hunt start; no accounting hook
+    // reads it yet (dlp.2 wires the gather/kill split). Like questTarget it is
+    // not part of the deterministic sim hash: a default Game (-1) never counts.
+    int8_t questGoalKind;
     int8_t questTarget;   // MonsterKind to count, -1 = no active quest
     uint8_t questNeed;
     uint8_t questProgress;

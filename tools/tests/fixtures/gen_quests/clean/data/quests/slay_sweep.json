@@ -1,7 +1,8 @@
 {
   "id": 1,
-  "targetKind": "sweep",
+  "goalKind": "kill",
+  "target": "sweep",
   "need": 2,
-  "reward": 250,
+  "rewardZenny": 250,
   "unlockFlag": 0
 }

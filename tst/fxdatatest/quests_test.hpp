@@ -32,18 +32,21 @@ inline void test_quests(FxTest &test) {
     questReadDef(quests::QUEST_SLAY_SWEEP, d1);
     questReadDef(quests::QUEST_CRUSH_HEAVY, d2);
     test.expectEq(d0.id, 0, F("q0 id"));
-    test.expectEq(d0.targetKind, MON_LUNGE, F("q0 target"));
+    test.expectEq(d0.goalKind, quests::GOAL_KILL, F("q0 goal kill"));
+    test.expectEq(d0.target, MON_LUNGE, F("q0 target"));
     test.expectEq(d0.need, 3, F("q0 need"));
-    test.expectEq(d0.reward, 150, F("q0 reward"));
+    test.expectEq(d0.rewardZenny, 150, F("q0 reward"));
+    test.expectEq(d0.rewardItem, 0, F("q0 no material"));
+    test.expectEq(d0.rewardCount, 0, F("q0 no material count"));
     test.expectEq(d0.unlockFlag, 0, F("q0 unlock"));
     test.expectEq(d1.id, 1, F("q1 id"));
-    test.expectEq(d1.targetKind, MON_SWEEP, F("q1 target"));
+    test.expectEq(d1.target, MON_SWEEP, F("q1 target"));
     test.expectEq(d1.need, 2, F("q1 need"));
-    test.expectEq(d1.reward, 250, F("q1 reward"));
+    test.expectEq(d1.rewardZenny, 250, F("q1 reward"));
     test.expectEq(d2.id, 2, F("q2 id"));
-    test.expectEq(d2.targetKind, MON_HEAVY, F("q2 target"));
+    test.expectEq(d2.target, MON_HEAVY, F("q2 target"));
     test.expectEq(d2.need, 1, F("q2 need"));
-    test.expectEq(d2.reward, 400, F("q2 reward"));
+    test.expectEq(d2.rewardZenny, 400, F("q2 reward"));
 
     // Board rows: take/reward pairs, reward in cost, need nibble in param.
     test.expectEq(screenRowCount(screens::SCREEN_QUESTS), 6, F("board rows"));
@@ -53,7 +56,7 @@ inline void test_quests(FxTest &test) {
     test.expectEq(take0.action, screens::ACTION_TAKE_QUEST, F("board take action"));
     test.expectEq(take0.cond, screens::COND_QUEST, F("board take cond"));
     test.expectEq(turn0.action, screens::ACTION_TURN_IN_QUEST, F("board turn action"));
-    test.expectEq(turn0.cost, d0.reward, F("turn cost == reward"));
+    test.expectEq(turn0.cost, d0.rewardZenny, F("turn cost == reward"));
     test.expectEq((turn0.param >> 4) & 15, d0.need, F("turn need nibble"));
 
     // ------------------------------------------------ E2E: take -> kills -> turn-in
@@ -78,7 +81,7 @@ inline void test_quests(FxTest &test) {
     for (uint8_t i = 0; i < 3; i++) {
         initGame(g, W_SWORD);
         initMonster(g, MON_LUNGE);
-        g.questTarget = static_cast<int8_t>(loaded.activeQuest == 0 ? d0.targetKind : -1);
+        g.questTarget = static_cast<int8_t>(loaded.activeQuest == 0 ? d0.target : -1);
         g.questNeed = d0.need;
         g.questProgress = loaded.progress;
         // 2000 respects damageMonster's int16 contract (dmg*14 <= 32767) and the
@@ -95,7 +98,7 @@ inline void test_quests(FxTest &test) {
     // Off-kind kill must not count (sweep while the lunge quest is active).
     initGame(g, W_SWORD);
     initMonster(g, MON_SWEEP);
-    g.questTarget = d0.targetKind;
+    g.questTarget = d0.target;
     g.questProgress = loaded.progress;
     damageMonster(g, 2000, g.monster.x, g.monster.y);
     test.expectEq(g.questProgress, 3, F("off-kind kill not counted"));

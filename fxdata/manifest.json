@@ -524,18 +524,18 @@
     },
     {
       "path": "data/quests/crush_heavy.json",
-      "sha256": "f7d456761a2046eb06e44c6bceec2ec4b6e06886ee8aa56b64d64e70ed9a2d04",
-      "size": 88
+      "sha256": "dd66287a4c7368198109e56d9f646f50d19423d085eb6821a63ec7447b5e79a1",
+      "size": 111
     },
     {
       "path": "data/quests/slay_lunge.json",
-      "sha256": "dcd3cd3d282a7f9e3ea11de3b2e184fd863e5f17428b8ce112ae2dbfd4998aa2",
-      "size": 88
+      "sha256": "a8b4f35742776634b8e3b72e1b4192b91988441a028f0d6ec724aa56de59f20e",
+      "size": 111
     },
     {
       "path": "data/quests/slay_sweep.json",
-      "sha256": "39bb77591c29bfcca7879ba07b4f297878ba3f47047668a7093d9e19e1c594e8",
-      "size": 88
+      "sha256": "d845f0f9aad3151ed0078cfe04ab79d7a5da27dc7bc70bf3d0338d54f913215e",
+      "size": 111
     },
     {
       "path": "data/screens/hub.json",
@@ -698,7 +698,7 @@
     },
     {
       "path": "fxdata/tables/equip.bin",
-      "sha256": "cec9b8a6c351cda447a64bc289e4d14b7c1bc958eba7575eebd77057ae2062f3",
+      "sha256": "ac7f00e10ae3a0808ddef7ae2d1be15a50c7b922e28135b344d6588fee6da2df",
       "size": 876,
       "symbol": "mhEquip"
     },
@@ -722,8 +722,8 @@
     },
     {
       "path": "fxdata/tables/quests.bin",
-      "sha256": "602b818afd1759dd8637896a8bb5e74418b77d6474a99e6c1d9f1dc32825c65f",
-      "size": 26,
+      "sha256": "ca63c2e5af6458e141c94901894bf1c67c3e9a765e1642cde49cf5b9d0586565",
+      "size": 35,
       "symbol": "mhQuests"
     },
     {
@@ -760,17 +760,17 @@
   "outputs": [
     {
       "path": "fxdata/fxdata-data.bin",
-      "sha256": "968de4f26665a05a90372565b0744c1571bee0e4a7afa4a7c3ce3ce0b91b4e86",
-      "size": 208484
+      "sha256": "3d0e84635b1de468f071d81d828576700637a966af93239ee1e58c7aedc5eacf",
+      "size": 208493
     },
     {
       "path": "fxdata/fxdata.bin",
-      "sha256": "d6724a43f5f4f19820a25aca8fedda8fcf1c1cc809f4160ecb9e8cb7e40dcbb3",
+      "sha256": "e01ec842c8c81de7e3afa789f56b20459263b0102137a5812083250a078e49aa",
       "size": 208640
     },
     {
       "path": "fxdata/fxdata.h",
-      "sha256": "99d4c3f5a885379a02dd31575b84ab275f46537a8cdff120568c6fb4b7d654c7",
+      "sha256": "f99a00c8917fe626b0a913680f3d73a1352512fcacb79ff4d751fabfc0ed88fd",
       "size": 2988
     },
     {
@@ -785,7 +785,7 @@
     },
     {
       "path": "fxdata/tables/equip.bin",
-      "sha256": "cec9b8a6c351cda447a64bc289e4d14b7c1bc958eba7575eebd77057ae2062f3",
+      "sha256": "ac7f00e10ae3a0808ddef7ae2d1be15a50c7b922e28135b344d6588fee6da2df",
       "size": 876
     },
     {
@@ -795,8 +795,8 @@
     },
     {
       "path": "fxdata/tables/quests.bin",
-      "sha256": "602b818afd1759dd8637896a8bb5e74418b77d6474a99e6c1d9f1dc32825c65f",
-      "size": 26
+      "sha256": "ca63c2e5af6458e141c94901894bf1c67c3e9a765e1642cde49cf5b9d0586565",
+      "size": 35
     },
     {
       "path": "fxdata/tables/screens.bin",
@@ -810,7 +810,7 @@
     },
     {
       "path": "src/fxdata.h",
-      "sha256": "99d4c3f5a885379a02dd31575b84ab275f46537a8cdff120568c6fb4b7d654c7",
+      "sha256": "f99a00c8917fe626b0a913680f3d73a1352512fcacb79ff4d751fabfc0ed88fd",
       "size": 2988
     },
     {
@@ -850,7 +850,7 @@
     },
     {
       "path": "src/generated/equip_meta.hpp",
-      "sha256": "fcc6ce02e172583b6247084fb0072d3b56186b76f15970cdfccaa0243ca50554",
+      "sha256": "57ed010cb3e7e0e31f4775f8d4d4dc38aa0e17f18bc0ca65ee946a4907b90ac3",
       "size": 22334
     },
     {
@@ -875,8 +875,8 @@
     },
     {
       "path": "src/generated/quest_meta.hpp",
-      "sha256": "09ab256ffc9fbf1b5ea99a6b7bdb33ff49683a97457267438da5f4153a4dbc63",
-      "size": 1461
+      "sha256": "1cc9a0775edf3f968cf35d44e500d4acf3029eefc8e97e57db14d8f2405f98d2",
+      "size": 1857
     },
     {
       "path": "src/generated/screen_meta.hpp",
@@ -895,7 +895,7 @@
     },
     {
       "path": "src/generated/zone_meta.hpp",
-      "sha256": "ee0b346528fdfc26ef78bee5205d6e5b38b8e155cff1e2358468f14409773252",
+      "sha256": "0ac202a53e9daacd3f33b40cd782d5706c84aba7003d4aea13bf0282afb61be0",
       "size": 8388
     }
   ],

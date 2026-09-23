@@ -25,12 +25,13 @@ BLOB_REL = "fxdata/tables/quests.bin"
 META_REL = "src/generated/quest_meta.hpp"
 
 HEADER = struct.Struct("<HBBBBH")
-RECORD = struct.Struct("<BBBHB")
+RECORD = struct.Struct("<BBBBHBBB")
 
 
 def parse_record(blob, off):
-    qid, target, need, reward, unlock = RECORD.unpack_from(blob, off)
-    return {"id": qid, "target": target, "need": need, "reward": reward, "unlock": unlock}
+    qid, goal, target, need, zenny, ritem, rcount, unlock = RECORD.unpack_from(blob, off)
+    return {"id": qid, "goal": goal, "target": target, "need": need,
+            "zenny": zenny, "ritem": ritem, "rcount": rcount, "unlock": unlock}
 
 
 def run_tool(*args):
@@ -96,15 +97,20 @@ class GenQuestsTests(unittest.TestCase):
         text = self.read(META_REL)
         for needle in (
             "constexpr uint16_t MAGIC = 0x5153;",
-            "constexpr uint8_t VERSION = 1;",
+            "constexpr uint8_t VERSION = 2;",
             "constexpr uint8_t HEADER_SIZE = 8;",
-            "constexpr uint8_t RECORD_SIZE = 6;",
+            "constexpr uint8_t RECORD_SIZE = 9;",
             "constexpr uint8_t QUEST_COUNT = 2;",
             "constexpr uint8_t DEF_ID_OFF = 0;",
-            "constexpr uint8_t DEF_TARGET_OFF = 1;",
-            "constexpr uint8_t DEF_NEED_OFF = 2;",
-            "constexpr uint8_t DEF_REWARD_OFF = 3;",
-            "constexpr uint8_t DEF_UNLOCK_OFF = 5;",
+            "constexpr uint8_t DEF_GOAL_OFF = 1;",
+            "constexpr uint8_t DEF_TARGET_OFF = 2;",
+            "constexpr uint8_t DEF_NEED_OFF = 3;",
+            "constexpr uint8_t DEF_REWARD_ZENNY_OFF = 4;",
+            "constexpr uint8_t DEF_REWARD_ITEM_OFF = 6;",
+            "constexpr uint8_t DEF_REWARD_COUNT_OFF = 7;",
+            "constexpr uint8_t DEF_UNLOCK_OFF = 8;",
+            "constexpr uint8_t GOAL_KILL = 0;",
+            "constexpr uint8_t GOAL_GATHER = 1;",
             "constexpr uint8_t TARGET_LUNGE = 0;",
             "constexpr uint8_t TARGET_SWEEP = 1;",
             "constexpr uint8_t TARGET_HEAVY = 2;",
@@ -112,7 +118,7 @@ class GenQuestsTests(unittest.TestCase):
             "constexpr uint8_t QUEST_SLAY_LUNGE = 0;",
             "constexpr uint16_t QUEST_SLAY_LUNGE_OFF = 8;",
             "constexpr uint8_t QUEST_SLAY_SWEEP = 1;",
-            "constexpr uint16_t QUEST_SLAY_SWEEP_OFF = 14;",
+            "constexpr uint16_t QUEST_SLAY_SWEEP_OFF = 17;",
         ):
             self.assertIn(needle, text)
 
@@ -121,19 +127,23 @@ class GenQuestsTests(unittest.TestCase):
         blob = self.read_bytes(BLOB_REL)
         magic, version, flags, count, reserved, reserved2 = HEADER.unpack_from(blob, 0)
         self.assertEqual((magic, version, flags, count, reserved, reserved2),
-                         (0x5153, 1, 0, 2, 0, 0))
-        self.assertEqual(len(blob), 20)
+                         (0x5153, 2, 0, 2, 0, 0))
+        self.assertEqual(len(blob), 26)
         self.assertEqual(parse_record(blob, 8),
-                         {"id": 0, "target": 0, "need": 3, "reward": 150, "unlock": 0})
-        self.assertEqual(parse_record(blob, 14),
-                         {"id": 1, "target": 1, "need": 2, "reward": 250, "unlock": 0})
+                         {"id": 0, "goal": 0, "target": 0, "need": 3, "zenny": 150,
+                          "ritem": 0, "rcount": 0, "unlock": 0})
+        self.assertEqual(parse_record(blob, 17),
+                         {"id": 1, "goal": 0, "target": 1, "need": 2, "zenny": 250,
+                          "ritem": 0, "rcount": 0, "unlock": 0})
 
     def test_dump_mode_lists_quests_and_writes_nothing(self):
         result = self.compile("--dump")
         self.assert_succeeds(result)
-        self.assertIn("quest slay_lunge: id 0 target lunge need 3 reward 150 unlock 0", result.stdout)
-        self.assertIn("quest slay_sweep: id 1 target sweep need 2 reward 250 unlock 0", result.stdout)
-        self.assertIn("gen-quests: 2 quests, 20 B blob", result.stdout)
+        self.assertIn("quest slay_lunge: id 0 goal kill target 0 need 3 zenny 150 item 0 count 0 unlock 0",
+                      result.stdout)
+        self.assertIn("quest slay_sweep: id 1 goal kill target 1 need 2 zenny 250 item 0 count 0 unlock 0",
+                      result.stdout)
+        self.assertIn("gen-quests: 2 quests, 26 B blob", result.stdout)
         self.assertFalse(os.path.exists(self.path(BLOB_REL)))
         self.assertFalse(os.path.exists(self.path(META_REL)))
 
@@ -146,7 +156,7 @@ class GenQuestsTests(unittest.TestCase):
         self.assertIn("constexpr uint8_t QUEST_AAA_SWEEP = 1;", text)
         blob = self.read_bytes(BLOB_REL)
         self.assertEqual(parse_record(blob, 8)["id"], 0, "record 0 is the id-0 quest")
-        self.assertEqual(parse_record(blob, 14)["id"], 1, "record 1 is the id-1 quest")
+        self.assertEqual(parse_record(blob, 17)["id"], 1, "record 1 is the id-1 quest")
 
     # ------------------------------------------------------- schema errors
 
@@ -155,24 +165,73 @@ class GenQuestsTests(unittest.TestCase):
         self.assert_fails(self.compile(), "unknown key 'theme'")
 
     def test_missing_key_rejected(self):
-        self.mutate("data/quests/slay_lunge.json", lambda doc: doc.pop("reward"))
-        self.assert_fails(self.compile(), "missing key 'reward'")
+        self.mutate("data/quests/slay_lunge.json", lambda doc: doc.pop("rewardZenny"))
+        self.assert_fails(self.compile(), "missing key 'rewardZenny'")
 
     def test_duplicate_id_rejected(self):
         self.mutate("data/quests/slay_sweep.json", lambda doc: doc.__setitem__("id", 0))
         self.assert_fails(self.compile(), "duplicate quest id 0")
 
-    def test_unknown_target_rejected(self):
-        self.mutate("data/quests/slay_lunge.json", lambda doc: doc.__setitem__("targetKind", "dragon"))
-        self.assert_fails(self.compile(), "targetKind: unknown value 'dragon'")
+    def test_unknown_goal_kind_rejected(self):
+        self.mutate("data/quests/slay_lunge.json", lambda doc: doc.__setitem__("goalKind", "escort"))
+        self.assert_fails(self.compile(), "goalKind: unknown value 'escort'")
+
+    def test_unknown_kill_target_rejected(self):
+        self.mutate("data/quests/slay_lunge.json", lambda doc: doc.__setitem__("target", "dragon"))
+        self.assert_fails(self.compile(), "target: unknown kill value 'dragon'")
+
+    def test_unknown_gather_target_rejected(self):
+        def mutate(doc):
+            doc["goalKind"] = "gather"
+            doc["target"] = "dragon"
+        self.mutate("data/quests/slay_lunge.json", mutate)
+        self.assert_fails(self.compile(), "target: unknown gather item 'dragon'")
+
+    def test_gather_quest_encodes_item_index(self):
+        def mutate(doc):
+            doc["goalKind"] = "gather"
+            doc["target"] = "ore"
+        self.mutate("data/quests/slay_lunge.json", mutate)
+        self.assert_succeeds(self.compile())
+        blob = self.read_bytes(BLOB_REL)
+        rec = parse_record(blob, 8)
+        self.assertEqual(rec["goal"], 1, "gather goal kind")
+        self.assertEqual(rec["target"], 1, "ore is item index 1")
+
+    def test_reward_item_requires_count(self):
+        def mutate(doc):
+            doc["rewardItem"] = "scale"
+        self.mutate("data/quests/slay_lunge.json", mutate)
+        self.assert_fails(self.compile(), "missing key 'rewardCount'")
+
+    def test_reward_count_requires_item(self):
+        self.mutate("data/quests/slay_lunge.json", lambda doc: doc.__setitem__("rewardCount", 2))
+        self.assert_fails(self.compile(), "rewardCount: requires rewardItem")
+
+    def test_reward_item_unknown_rejected(self):
+        def mutate(doc):
+            doc["rewardItem"] = "dragon"
+            doc["rewardCount"] = 1
+        self.mutate("data/quests/slay_lunge.json", mutate)
+        self.assert_fails(self.compile(), "rewardItem: unknown item 'dragon'")
+
+    def test_reward_item_encodes_index_plus_one(self):
+        def mutate(doc):
+            doc["rewardItem"] = "scale"
+            doc["rewardCount"] = 2
+        self.mutate("data/quests/slay_lunge.json", mutate)
+        self.assert_succeeds(self.compile())
+        rec = parse_record(self.read_bytes(BLOB_REL), 8)
+        self.assertEqual(rec["ritem"], 3, "scale is item index 2 -> packed 3")
+        self.assertEqual(rec["rcount"], 2)
 
     def test_need_zero_rejected(self):
         self.mutate("data/quests/slay_lunge.json", lambda doc: doc.__setitem__("need", 0))
         self.assert_fails(self.compile(), "need: out of range 1..255")
 
     def test_reward_out_of_range_rejected(self):
-        self.mutate("data/quests/slay_lunge.json", lambda doc: doc.__setitem__("reward", 70000))
-        self.assert_fails(self.compile(), "reward: out of range 0..65535")
+        self.mutate("data/quests/slay_lunge.json", lambda doc: doc.__setitem__("rewardZenny", 70000))
+        self.assert_fails(self.compile(), "rewardZenny: out of range 0..65535")
 
     def test_unlock_out_of_range_rejected(self):
         self.mutate("data/quests/slay_lunge.json", lambda doc: doc.__setitem__("unlockFlag", 256))

@@ -43,10 +43,16 @@ upgradeTier u8[N_WEAPONS], checksum u8
 ## Quests (content model)
 
 ```
-QuestDef: id, targetKind u8, need u8, reward u16, unlockFlag
+QuestDef (v2): id, goalKind u8 (0 kill / 1 gather), target u8
+               (MonsterKind for kill / item index for gather), need u8,
+               rewardZenny u16, rewardItem u8 (itemIdx+1, 0 = none),
+               rewardCount u8, unlockFlag u8
 ```
-- Progress counted in `Game` during a hunt (kill target kind), persisted on
-  quest complete; board shows taken/progress/done and pays out on turn-in.
+- Progress counted in `Game` during a hunt (kill target kind, or gathered item
+  count for a gather quest), persisted on quest complete; board shows
+  taken/progress/done and pays out on turn-in (zenny + optional material).
+- Gather targets and material rewards are validated against `data/items.json`
+  by `tools/gen-quests.py`; no second item list is hardcoded.
 
 ## Smith (content model)
 

@@ -5,19 +5,23 @@
         -> fxdata/tables/quests.bin        (packed blob; build intermediate)
         -> src/generated/quest_meta.hpp    (quest indices, offsets, enums)
 
-Design: docs/quests-shops.md "Quests (content model)" (bead monhun-ardu-me6,
-qs.2). One QuestDef record per quest is read on device through core/fxmem.hpp
-during the screen scan/render window (src/quest.hpp); the host suite and the
-kill-accounting logic use the plain QuestDef struct (src/quest_state.hpp). The
-targetKind values mirror MonsterKind (MON_LUNGE..MON_RAVAGER) so Game's kill
-accounting can compare them directly.
+Design: docs/quests-shops.md "Quests (content model)" (bead monhun-ardu-dlp.1,
+hql.1: record v2). One QuestDef record per quest is read on device through
+core/fxmem.hpp during the screen scan/render window (src/quest.hpp); the host
+suite and the goal-accounting logic use the plain QuestDef struct
+(src/quest_state.hpp).
 
-Blob layout (little-endian, explicit u8/u16, no padding, fixed order):
+Record v2 (9 B, little-endian, explicit u8/u16, no padding, fixed order):
 
-    header     8 B  magic u16 0x5153, version u8, flags u8, questCount u8,
-                    reserved u8, reserved u16
-    records    6 B each, ordered by quest id: id u8, targetKind u8, need u8,
-                    reward u16, unlockFlag u8
+    id u8, goalKind u8 (0 kill / 1 gather), target u8 (MonsterKind for kill /
+    item idx for gather), need u8, rewardZenny u16, rewardItem u8
+    (itemIdx + 1, 0 = none), rewardCount u8, unlockFlag u8
+
+The kill target values mirror MonsterKind (MON_LUNGE..MON_RAVAGER) so Game's
+kill accounting can compare them directly. A gather target is validated against
+the id list in data/items.json (source order == item index, so the packed
+target is the item idx the runtime uses); a material reward is validated the
+same way and packed as item idx + 1 (0 = none).
 
 Usage:
     python3 tools/gen-quests.py [--root DIR] [--dump]
@@ -34,17 +38,23 @@ import sys
 
 REPO_ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 DATA_DIR = "data/quests"
+ITEMS_REL = "data/items.json"
 BLOB_REL = "fxdata/tables/quests.bin"
 META_REL = "src/generated/quest_meta.hpp"
 
 MAGIC = 0x5153   # 'S','Q' little-endian
-VERSION = 1
+VERSION = 2
 FLAGS = 0
 HEADER_SIZE = 8
-RECORD_SIZE = 6
+RECORD_SIZE = 9
 QUEST_MAX = 16
 
-# Target kinds, index == MonsterKind (src/core/game.hpp). Keep in sync.
+# Goal kinds; values mirror the packed goalKind byte + quests::GOAL_*.
+GOAL_NAMES = ("kill", "gather")
+GOAL_KILL = 0
+GOAL_GATHER = 1
+
+# Kill targets, index == MonsterKind (src/core/game.hpp). Keep in sync.
 TARGET_NAMES = ("lunge", "sweep", "heavy", "ravager")
 
 NAME_RE = re.compile(r"^[a-z][a-z0-9_]*$")
@@ -64,12 +74,12 @@ def is_int(value):
     return isinstance(value, int) and not isinstance(value, bool)
 
 
-def check_keys(errors, ctx, obj, required):
+def check_keys(errors, ctx, obj, required, optional=()):
     if not isinstance(obj, dict):
         errors.add(ctx, "expected an object")
         return False
     for key in sorted(obj):
-        if key not in required:
+        if key not in required and key not in optional:
             errors.add(ctx, "unknown key '%s'" % key)
     for key in required:
         if key not in obj:
@@ -88,13 +98,52 @@ def read_int(errors, ctx, obj, key, lo, hi):
     return value
 
 
-def read_target(errors, ctx, obj):
-    value = obj.get("targetKind") if isinstance(obj, dict) else None
+def read_goal(errors, ctx, obj):
+    value = obj.get("goalKind") if isinstance(obj, dict) else None
+    if not isinstance(value, str) or value not in GOAL_NAMES:
+        errors.add(ctx, "goalKind: unknown value %r (want one of %s)"
+                   % (value, ", ".join(GOAL_NAMES)))
+        return None
+    return GOAL_NAMES.index(value)
+
+
+def read_target(errors, ctx, obj, goal, item_ids):
+    value = obj.get("target") if isinstance(obj, dict) else None
+    if goal == GOAL_GATHER:
+        if not isinstance(value, str) or value not in item_ids:
+            errors.add(ctx, "target: unknown gather item %r (want an id from %s)"
+                       % (value, ITEMS_REL))
+            return None
+        return item_ids.index(value)
     if not isinstance(value, str) or value not in TARGET_NAMES:
-        errors.add(ctx, "targetKind: unknown value %r (want one of %s)"
+        errors.add(ctx, "target: unknown kill value %r (want one of %s)"
                    % (value, ", ".join(TARGET_NAMES)))
         return None
     return TARGET_NAMES.index(value)
+
+
+def load_item_ids(errors, root):
+    """The item id list from data/items.json, in source order (== item index).
+
+    Validates gather targets and material rewards against the same table
+    src/core/items.hpp uses; no second list is hardcoded here.
+    """
+    path = os.path.join(root, ITEMS_REL)
+    doc = load_json(errors, path, ITEMS_REL)
+    if doc is None:
+        return None
+    raw = doc.get("items") if isinstance(doc, dict) else None
+    if not isinstance(raw, list) or not raw:
+        errors.add(ITEMS_REL, "items: expected a non-empty array")
+        return None
+    ids = []
+    for i, obj in enumerate(raw):
+        item_id = obj.get("id") if isinstance(obj, dict) else None
+        if not isinstance(item_id, str):
+            errors.add("%s: items[%d]" % (ITEMS_REL, i), "id: expected a string")
+            return None
+        ids.append(item_id)
+    return ids
 
 
 def load_json(errors, path, rel):
@@ -108,9 +157,11 @@ def load_json(errors, path, rel):
     return None
 
 
-def normalize_quest(errors, rel, name, obj, seen_ids):
+def normalize_quest(errors, rel, name, obj, seen_ids, item_ids):
     ctx = rel
-    check_keys(errors, ctx, obj, {"id", "targetKind", "need", "reward", "unlockFlag"})
+    check_keys(errors, ctx, obj,
+               {"id", "goalKind", "target", "need", "rewardZenny", "unlockFlag"},
+               optional={"rewardItem", "rewardCount"})
     if not isinstance(obj, dict):
         return None
     stem = os.path.splitext(name)[0]
@@ -121,20 +172,50 @@ def normalize_quest(errors, rel, name, obj, seen_ids):
         if quest_id in seen_ids:
             errors.add(ctx, "duplicate quest id %d" % quest_id)
         seen_ids.add(quest_id)
-    target = read_target(errors, ctx, obj)
+    goal = read_goal(errors, ctx, obj)
+    if goal is not None:
+        target = read_target(errors, ctx, obj, goal, item_ids)
+    else:
+        target = None
     need = read_int(errors, ctx, obj, "need", 1, 255)
-    reward = read_int(errors, ctx, obj, "reward", 0, 65535)
+    reward_zenny = read_int(errors, ctx, obj, "rewardZenny", 0, 65535)
     unlock = read_int(errors, ctx, obj, "unlockFlag", 0, 255)
-    if None in (quest_id, target, need, reward, unlock):
+    # rewardItem is optional. When present it names an item id (packed as
+    # itemIdx + 1, 0 = none) and requires rewardCount 1..255; when absent
+    # rewardCount must not be present either.
+    has_item = "rewardItem" in obj if isinstance(obj, dict) else False
+    has_count = "rewardCount" in obj if isinstance(obj, dict) else False
+    reward_item = 0
+    reward_count = 0
+    if has_item:
+        item_id = obj.get("rewardItem")
+        if not isinstance(item_id, str) or item_id not in item_ids:
+            errors.add(ctx, "rewardItem: unknown item %r (want an id from %s)"
+                       % (item_id, ITEMS_REL))
+        else:
+            reward_item = item_ids.index(item_id) + 1
+        if not has_count:
+            errors.add(ctx, "missing key 'rewardCount'")
+        else:
+            reward_count = read_int(errors, ctx, obj, "rewardCount", 1, 255)
+    elif has_count:
+        errors.add(ctx, "rewardCount: requires rewardItem")
+    if None in (quest_id, goal, target, need, reward_zenny, unlock):
         return None
-    return {"name": stem, "id": quest_id, "targetKind": target, "need": need,
-            "reward": reward, "unlockFlag": unlock}
+    if has_item and (reward_item == 0 or reward_count is None):
+        return None
+    return {"name": stem, "id": quest_id, "goalKind": goal, "target": target,
+            "need": need, "rewardZenny": reward_zenny, "rewardItem": reward_item,
+            "rewardCount": reward_count, "unlockFlag": unlock}
 
 
 def compile_model(errors, root):
     data_dir = os.path.join(root, DATA_DIR)
     if not os.path.isdir(data_dir):
         errors.add(DATA_DIR, "missing quests directory")
+        return None
+    item_ids = load_item_ids(errors, root)
+    if item_ids is None:
         return None
     names = sorted(name for name in os.listdir(data_dir) if name.endswith(".json"))
     if not names:
@@ -147,7 +228,7 @@ def compile_model(errors, root):
         obj = load_json(errors, os.path.join(data_dir, name), rel)
         if obj is None:
             continue
-        quest = normalize_quest(errors, rel, name, obj, seen_ids)
+        quest = normalize_quest(errors, rel, name, obj, seen_ids, item_ids)
         if quest is not None:
             quests.append(quest)
     if errors.items:
@@ -163,8 +244,9 @@ def pack_blob(errors, quests):
         return None
     blob = bytearray(struct.pack("<HBBBBH", MAGIC, VERSION, FLAGS, count, 0, 0))
     for quest in quests:
-        blob += struct.pack("<BBBH B", quest["id"], quest["targetKind"],
-                            quest["need"], quest["reward"], quest["unlockFlag"])
+        blob += struct.pack("<BBBBHBBB", quest["id"], quest["goalKind"],
+                            quest["target"], quest["need"], quest["rewardZenny"],
+                            quest["rewardItem"], quest["rewardCount"], quest["unlockFlag"])
     expected = HEADER_SIZE + RECORD_SIZE * count
     if len(blob) != expected:
         errors.add("data", "internal: blob is %d B, want %d" % (len(blob), expected))
@@ -178,7 +260,7 @@ def emit_meta_header(quests, blob):
     app("#pragma once")
     app("// Generated by tools/gen-quests.py -- do not edit.")
     app("//")
-    app("// Quest data ABI (docs/quests-shops.md): header then one fixed 6 B")
+    app("// Quest data ABI (docs/quests-shops.md): header then one fixed 9 B")
     app("// QuestDef record per quest, ordered by id. src/quest.hpp reads this")
     app("// blob through core/fxmem.hpp during the screen scan/render window;")
     app("// src/quest_state.hpp holds the host-testable logic + struct.")
@@ -195,14 +277,23 @@ def emit_meta_header(quests, blob):
     app("constexpr uint8_t RECORD_SIZE = %d;" % RECORD_SIZE)
     app("constexpr uint8_t QUEST_COUNT = %d;" % len(quests))
     app("")
-    app("// Record field offsets (QuestDef: id, targetKind, need, reward, unlockFlag).")
+    app("// Record field offsets (QuestDef: id, goalKind, target, need, rewardZenny,")
+    app("// rewardItem, rewardCount, unlockFlag).")
     app("constexpr uint8_t DEF_ID_OFF = 0;")
-    app("constexpr uint8_t DEF_TARGET_OFF = 1;")
-    app("constexpr uint8_t DEF_NEED_OFF = 2;")
-    app("constexpr uint8_t DEF_REWARD_OFF = 3;   // u16")
-    app("constexpr uint8_t DEF_UNLOCK_OFF = 5;")
+    app("constexpr uint8_t DEF_GOAL_OFF = 1;")
+    app("constexpr uint8_t DEF_TARGET_OFF = 2;")
+    app("constexpr uint8_t DEF_NEED_OFF = 3;")
+    app("constexpr uint8_t DEF_REWARD_ZENNY_OFF = 4;   // u16")
+    app("constexpr uint8_t DEF_REWARD_ITEM_OFF = 6;    // itemIdx + 1, 0 = none")
+    app("constexpr uint8_t DEF_REWARD_COUNT_OFF = 7;")
+    app("constexpr uint8_t DEF_UNLOCK_OFF = 8;")
     app("")
-    app("// Target kinds; values mirror MonsterKind in src/core/game.hpp.")
+    app("// Goal kinds; values mirror the packed goalKind byte.")
+    for i, name in enumerate(GOAL_NAMES):
+        app("constexpr uint8_t GOAL_%s = %d;" % (name.upper(), i))
+    app("")
+    app("// Kill target kinds; values mirror MonsterKind in src/core/game.hpp.")
+    app("// A gather quest's target is instead an item index (data/items.json).")
     for i, name in enumerate(TARGET_NAMES):
         app("constexpr uint8_t TARGET_%s = %d;" % (name.upper(), i))
     app("")
@@ -249,9 +340,10 @@ def run(root, dump):
 
     if dump:
         for quest in quests:
-            print("quest %s: id %d target %s need %d reward %d unlock %d"
-                  % (quest["name"], quest["id"], TARGET_NAMES[quest["targetKind"]],
-                     quest["need"], quest["reward"], quest["unlockFlag"]))
+            print("quest %s: id %d goal %s target %d need %d zenny %d item %d count %d unlock %d"
+                  % (quest["name"], quest["id"], GOAL_NAMES[quest["goalKind"]],
+                     quest["target"], quest["need"], quest["rewardZenny"],
+                     quest["rewardItem"], quest["rewardCount"], quest["unlockFlag"]))
         print("gen-quests: %d quests, %d B blob" % (len(quests), len(blob)))
         return 0
 

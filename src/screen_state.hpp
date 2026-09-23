@@ -307,7 +307,11 @@ inline bool screenApplyAction(SaveBlock &save, const ScreenRow &row) {
     case screens::ACTION_TAKE_QUEST:
         return questTake(save, static_cast<uint8_t>(row.param & 15));
     case screens::ACTION_TURN_IN_QUEST:
-        return questTurnIn(save, static_cast<uint8_t>(row.param & 15), static_cast<uint8_t>((row.param >> 4) & 15), row.cost);
+        // Quest v2 (dlp.1): the row's recipe[0] carries the optional material
+        // reward as (itemIdx+1, count). Board rows are zeroed for now (no
+        // material rewards authored), so this stays zenny-only until a later
+        // wiring bead fills the row from the quest def.
+        return questTurnIn(save, static_cast<uint8_t>(row.param & 15), static_cast<uint8_t>((row.param >> 4) & 15), row.cost, row.recipe[0].item, row.recipe[0].count);
     default:   // ACTION_LEAVE
         return false;
     }

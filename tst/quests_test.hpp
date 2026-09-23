@@ -9,6 +9,7 @@
 #include "../src/screen_state.hpp"
 #include "../src/core/monster.hpp"
 #include "../src/core/world.hpp"
+#include "../src/generated/quest_meta.hpp"
 
 using namespace mh;
 
@@ -108,15 +109,29 @@ void QuestSuite(TestRunner &runner) {
         Test t("kills feed progress and saturate at 255");
         SaveBlock s;
         saveDefaults(s);
-        questAddKill(s);   // no active quest: no-op
+        questAddProgress(s, 1);   // no active quest: no-op
         t.assert(s.progress, 0, "no active quest counts nothing");
         questTake(s, 0);
         for (uint8_t i = 0; i < 3; i++)
-            questAddKill(s);
+            questAddProgress(s, 1);
         t.assert(s.progress, 3, "three kills counted");
         s.progress = 255;
-        questAddKill(s);
+        questAddProgress(s, 1);
         t.assert(s.progress, 255, "progress saturates");
+        suite.addTest(t);
+    }
+
+    {
+        Test t("gather progress adds a yield count and clamps at 255");
+        SaveBlock s;
+        saveDefaults(s);
+        questTake(s, 0);
+        questAddProgress(s, 200);
+        t.assert(s.progress, 200, "200 gathered");
+        questAddProgress(s, 100);
+        t.assert(s.progress, 255, "yield clamps to 255");
+        questAddProgress(s, 0);
+        t.assert(s.progress, 255, "zero yield is a no-op");
         suite.addTest(t);
     }
 
@@ -128,18 +143,43 @@ void QuestSuite(TestRunner &runner) {
         questTake(s, 0);
         s.progress = 2;
         t.assert(questReady(s, 0, 3), false, "under need not ready");
-        t.assert(questTurnIn(s, 0, 3, 150), false, "under need rejected");
+        t.assert(questTurnIn(s, 0, 3, 150, 0, 0), false, "under need rejected");
         t.assert(s.zenny, 100, "no payout when short");
         s.progress = 3;
         t.assert(questReady(s, 0, 3), true, "at need ready");
-        t.assert(questTurnIn(s, 0, 3, 150), true, "turn-in changes save");
+        t.assert(questTurnIn(s, 0, 3, 150, 0, 0), true, "turn-in changes save");
         t.assert(s.zenny, 250, "reward paid");
         t.assert(saveQuestGet(s, 0, 0), false, "taken cleared");
         t.assert(saveQuestGet(s, 0, 1), true, "done set");
         t.assert(s.activeQuest, SAVE_QUEST_NONE, "active slot cleared");
         t.assert(s.progress, 0, "progress reset");
-        t.assert(questTurnIn(s, 0, 3, 150), false, "double turn-in rejected");
+        t.assert(questTurnIn(s, 0, 3, 150, 0, 0), false, "double turn-in rejected");
         t.assert(questStatus(s, 0), QS_DONE, "status done");
+        suite.addTest(t);
+    }
+
+    {
+        Test t("turn-in grants the material reward via saveItemAdd");
+        SaveBlock s;
+        saveDefaults(s);
+        questTake(s, 0);
+        s.progress = 3;
+        // rewardItem is itemIdx + 1; the payout lands in the item's slot.
+        t.assert(questTurnIn(s, 0, 3, 150, static_cast<uint8_t>(item::ITEM_ORE + 1), 2), true, "turn-in with a material");
+        t.assert(s.zenny, 150, "zenny paid");
+        t.assert(s.items[item::ITEM_ORE], 2, "two ore granted");
+        suite.addTest(t);
+    }
+
+    {
+        Test t("material reward saturates the slot at 255");
+        SaveBlock s;
+        saveDefaults(s);
+        s.items[item::ITEM_ORE] = 250;
+        questTake(s, 0);
+        s.progress = 3;
+        t.assert(questTurnIn(s, 0, 3, 150, static_cast<uint8_t>(item::ITEM_ORE + 1), 10), true, "turn-in applies");
+        t.assert(s.items[item::ITEM_ORE], 255, "slot clamps at 255");
         suite.addTest(t);
     }
 
@@ -150,7 +190,7 @@ void QuestSuite(TestRunner &runner) {
         s.zenny = 65400;
         questTake(s, 2);
         s.progress = 1;
-        t.assert(questTurnIn(s, 2, 1, 400), true, "turn-in applies");
+        t.assert(questTurnIn(s, 2, 1, 400, 0, 0), true, "turn-in applies");
         t.assert(s.zenny, 65535, "zenny saturates at 65535");
         t.assert(zennyAdd(65535, 1), 65535, "zennyAdd saturates");
         t.assert(zennyAdd(100, 250), 350, "zennyAdd adds normally");
@@ -219,9 +259,11 @@ void QuestSuite(TestRunner &runner) {
     {
         Test t("newGame resets quest accounting off");
         Game g;
+        g.questGoalKind = quests::GOAL_KILL;
         g.questTarget = MON_HEAVY;
         g.questProgress = 9;
         newGame(g, W_SWORD, MODE_HUNT, MON_HEAVY);
+        t.assert(g.questGoalKind, -1, "new hunt starts with no goal kind");
         t.assert(g.questTarget, -1, "new hunt starts unarmed");
         t.assert(g.questProgress, 0, "new hunt progress reset");
         t.assert(g.questNeed, 0, "new hunt need reset");

@@ -1,7 +1,8 @@
 {
   "id": 0,
-  "targetKind": "lunge",
+  "goalKind": "kill",
+  "target": "lunge",
   "need": 3,
-  "reward": 150,
+  "rewardZenny": 150,
   "unlockFlag": 0
 }
