@@ -13,6 +13,8 @@
 #include "src/screens.hpp"
 #include "src/app_state.hpp"
 #include "src/armor.hpp"
+#include "src/forge_state.hpp"   // forgeNodeApply / forgeReadNode (hbk.3 markers)
+#include "src/fxdata.h"          // mh_screen_forge_* page addresses
 
 #include <stdint.h>
 
@@ -55,6 +57,15 @@ static uint16_t countBits(uint8_t xa, uint8_t xb, uint8_t ya, uint8_t yb) {
         for (uint8_t x = xa; x <= xb; x++)
             n += bitAt(x, y);
     return n;
+}
+
+// Park on a specific triplane pass (mirrors cards_test.hpp).
+static void waitPlane(uint8_t plane) {
+    while (arduboy.currentPlane() != plane) {
+        FX::enableOLED();
+        arduboy.waitForNextPlane();
+        FX::disableOLED();
+    }
 }
 
 inline void test_screens(FxTest &test) {
@@ -226,14 +237,19 @@ inline void test_screens(FxTest &test) {
 
     // Selected row carries the 4x4 white chip cursor at (2, row0 y + 2 = 13).
     test.expectEq(countBits(2, 5, 13, 16), 16, F("cursor chip 4x4"));
-    // Title "HUB" ink on the white lane at the top; header zenny (ui.5) is
+    // Baked title band (shade 1) + title text; header zenny (ui.5) is
     // right-aligned on the same title line: `$` + 1234 at x 104..123.
-    test.expectEq(countBits(2, 13, 0, 7) > 0 ? 1 : 0, 1, F("title ink"));
+    test.expectEq(countBits(2, 13, 0, 7) > 0 ? 1 : 0, 1, F("title band ink"));
     test.expectEq(countBits(104, 123, 0, 7) > 0 ? 1 : 0, 1, F("header zenny drawn"));
-    // Row 0 label (selected -> white) and the right-aligned packed cost (0).
+    // Row 0 label (baked; selected -> white redraw). Row 0 is HUNT: the live
+    // quest column draws `-` (no active quest) at 120..123.
     test.expectEq(countBits(10, 40, 11, 18) > 0 ? 1 : 0, 1, F("row0 label ink"));
-    test.expectEq(countBits(120, 123, 11, 18) > 0 ? 1 : 0, 1, F("row0 cost right-aligned"));
-    // Row 1 label (light gray, unselected) one row pitch below.
+    test.expectEq(countBits(120, 123, 11, 18) > 0 ? 1 : 0, 1, F("hub quest column dash"));
+    // The hub bakes labels only (costs are 0): rows 1..3 have no cost ink.
+    test.expectEq(countBits(104, 123, 20, 27), 0, F("hub row1 no baked cost"));
+    test.expectEq(countBits(104, 123, 29, 36), 0, F("hub row2 no baked cost"));
+    test.expectEq(countBits(104, 123, 38, 45), 0, F("hub row3 no baked cost"));
+    // Row 1 label (baked light gray, unselected) one row pitch below.
     test.expectEq(countBits(10, 50, 20, 27) > 0 ? 1 : 0, 1, F("row1 QUESTS label ink"));
     // The cursor sits on row 0, so row 1's cursor cell stays empty.
     test.expectEq(countBits(2, 5, 22, 25), 0, F("row1 no cursor"));
@@ -241,11 +257,14 @@ inline void test_screens(FxTest &test) {
     test.expectEq(countBits(10, 50, 29, 36) > 0 ? 1 : 0, 1, F("row2 FORGE label ink"));
     test.expectEq(countBits(10, 50, 38, 45) > 0 ? 1 : 0, 1, F("row3 GEAR label ink"));
     // Control: an empty balance draws `$` + one digit at the right edge only.
+    // Plane 1 clears the shade-1 band, so only the white zenny shows there.
+    waitPlane(1);
     clearFb();
     saveDefaults(ps);
     drawScreen(draw, ps, g_gear);
     test.expectEq(countBits(104, 115, 0, 7), 0, F("zenny 0 leaves the 4-digit span empty"));
     test.expectEq(countBits(116, 123, 0, 7) > 0 ? 1 : 0, 1, F("zenny 0 `$`+digit drawn"));
+    waitPlane(0);
 
     // -------------------------------------------- ui.5.2 hub chrome pixels
     // HUNT right column (row 0, y=11): active quest progress `p/n`.
@@ -274,7 +293,10 @@ inline void test_screens(FxTest &test) {
     test.expectEq(countBits(120, 123, 11, 18) > 0 ? 1 : 0, 1, F("hunt none dash ink"));
     test.expectEq(countBits(104, 119, 11, 18), 0, F("hunt none leaves the digit span empty"));
 
-    // Bottom strip (y=56): weapon marker "SWD1" at x 2..17, then active skills.
+    // Bottom strip (y=56): the five skill labels bake at fixed slots
+    // x=20/40/60/80/100 (light); live = the weapon class abbr at x=2 + tier
+    // digit at x=14 and each ACTIVE skill's 2-digit points at slot+12 (ATK ->
+    // x=32..39).
     clearFb();
     SaveBlock strip;
     saveDefaults(strip);
@@ -288,18 +310,27 @@ inline void test_screens(FxTest &test) {
     ScreenState sh;
     screenEnter(sh, screens::SCREEN_HUB, strip);
     drawScreen(sh, strip, g_gear);
+    // Baked ATK label at x 20..31 (the label span is baked, not live).
+    test.expectEq(countBits(20, 31, 56, 63) > 0 ? 1 : 0, 1, F("strip baked ATK label ink"));
+    // Live weapon marker "SWD1" at x 2..17.
     test.expectEq(countBits(2, 17, 56, 63) > 0 ? 1 : 0, 1, F("strip weapon marker ink"));
-    // "ATK " at x 26..41 then "12" at 42..49 (marker ends 18 + 8 gap).
-    test.expectEq(countBits(26, 49, 56, 63) > 0 ? 1 : 0, 1, F("strip active skill ink"));
+    // Active ATK points "12" at x 32..39 (slot 20 + 12).
+    test.expectEq(countBits(32, 39, 56, 63) > 0 ? 1 : 0, 1, F("strip active ATK points ink"));
 
-    // Inert skills (tier 0) draw nothing after the marker.
+    // Inert skills (tier 0) draw no points: the number slots stay empty while
+    // the baked labels remain.
     clearFb();
     for (uint8_t i = 0; i < armor::SKILL_COUNT; i++)
         g_gear.armor.tier[i] = 0;
     drawScreen(sh, strip, g_gear);
-    test.expectEq(countBits(26, 60, 56, 63), 0, F("strip inert skills leave the skill span empty"));
+    test.expectEq(countBits(32, 39, 56, 63), 0, F("strip inert ATK number slot empty"));
+    test.expectEq(countBits(52, 59, 56, 63), 0, F("strip inert DEF number slot empty"));
+    test.expectEq(countBits(20, 31, 56, 63) > 0 ? 1 : 0, 1, F("strip baked labels stay with inert skills"));
 
-    // Page indicator `n/m` after the title on a >6-row list (QUESTS: 8 rows).
+    // Page indicator `n/m` bakes into each page at x = 2 + title width + 4
+    // (QUESTS title 6 chars -> x=30, shade 2). Plane 1 clears the shade-1 band,
+    // so the shade-2 indicator text is the only ink there.
+    waitPlane(1);
     clearFb();
     ScreenState pgs;
     screenEnter(pgs, screens::SCREEN_QUESTS, ps);
@@ -316,6 +347,7 @@ inline void test_screens(FxTest &test) {
     screenEnter(hubPg, screens::SCREEN_HUB, ps);
     drawScreen(hubPg, ps, g_gear);
     test.expectEq(countBits(30, 41, 0, 7), 0, F("hub has no page indicator"));
+    waitPlane(0);
 
     // -------------------------------------------------- quests board screen
     test.expectEq(screenRowCount(screens::SCREEN_QUESTS), 8, F("quests row count"));
@@ -329,7 +361,9 @@ inline void test_screens(FxTest &test) {
     test.expectEq(qr1.cost, 150, F("quest row1 reward cost"));
     test.expectEq(qr1.param, 48, F("quest row1 param (need 3, quest 0)"));
 
-    // Pixel: the quests page draws through the same generic renderer.
+    // Pixel: the quests page draws through the same generic renderer. Page 0
+    // bakes the turn-in costs (shade 3, right-aligned ending at x=112); the take
+    // rows bake no cost.
     clearFb();
     ScreenState qs;
     screenEnter(qs, screens::SCREEN_QUESTS, ps);
@@ -337,6 +371,13 @@ inline void test_screens(FxTest &test) {
     test.expectEq(countBits(2, 5, 13, 16), 16, F("quests cursor chip 4x4"));
     test.expectEq(countBits(2, 20, 0, 7) > 0 ? 1 : 0, 1, F("quests title ink"));
     test.expectEq(countBits(10, 60, 11, 18) > 0 ? 1 : 0, 1, F("quests row0 label ink"));
+    // Row 1 "TURN IN 150" cost at x 100..111; take rows 0/2 have none.
+    test.expectEq(countBits(100, 111, 20, 27) > 0 ? 1 : 0, 1, F("quests row1 baked cost 150"));
+    test.expectEq(countBits(104, 112, 11, 18), 0, F("quests row0 take no cost"));
+    test.expectEq(countBits(104, 112, 29, 36), 0, F("quests row2 take no cost"));
+    // Row 3 "TURN IN 250" and row 5 "TURN IN 200" (page 0).
+    test.expectEq(countBits(100, 111, 38, 45) > 0 ? 1 : 0, 1, F("quests row3 baked cost 250"));
+    test.expectEq(countBits(100, 111, 56, 63) > 0 ? 1 : 0, 1, F("quests row5 baked cost 200"));
 
     // ------------------------------------------------------- gear screen
     // ui.4: the weapon section is the whole tree (class headers + one equip row
@@ -429,9 +470,10 @@ inline void test_screens(FxTest &test) {
     test.expectEq(moveRead.skillPoints[armor::SKILL_ATTACK_UP], 15, F("attack clamps to 15"));
     test.expectEq(moveRead.skillTier[armor::SKILL_ATTACK_UP], 2, F("clamped attack is M"));
 
-    // Pixel: a skill row draws its points + tier letter in the cost column.
-    // ATTACK UP (row 18) is the first row of page 3 (rows 18..23) at y = 11;
-    // 15 points -> 2 digits at x 116..123, the M letter just left at 108..111.
+    // Pixel: a skill row draws its points + tier letter at the baked cost column
+    // (right-aligned ending at x=112). ATTACK UP (row 18) is the first row of
+    // page 3 (rows 18..23) at y = 11; 15 points -> 2 digits at x 104..111, the M
+    // letter just left at 96..99.
     clearFb();
     ScreenState smoke;
     screenEnter(smoke, screens::SCREEN_GEAR, moveSave);
@@ -439,18 +481,31 @@ inline void test_screens(FxTest &test) {
     smoke.scroll = 18;
     screenGearCache(smoke, g_gear.armor);   // attack 15/M
     drawScreen(smoke, moveSave, g_gear);
-    test.expectEq(countBits(108, 111, 11, 18) > 0 ? 1 : 0, 1, F("skill M letter ink"));
-    test.expectEq(countBits(116, 123, 11, 18) > 0 ? 1 : 0, 1, F("skill points ink"));
+    test.expectEq(countBits(96, 99, 11, 18) > 0 ? 1 : 0, 1, F("skill M letter ink"));
+    test.expectEq(countBits(104, 111, 11, 18) > 0 ? 1 : 0, 1, F("skill points ink"));
 
-    // An inert skill (DEFENSE UP row 19: defense_up 4) draws the points only.
+    // An inert skill (DEFENSE UP row 19: defense_up 4) draws the points only
+    // (1 digit at 108..111, no tier letter).
     clearFb();
     screenEnter(smoke, screens::SCREEN_GEAR, moveSave);
     smoke.cursor = 19;
     smoke.scroll = 18;
     screenGearCache(smoke, g_gear.armor);
     drawScreen(smoke, moveSave, g_gear);
-    test.expectEq(countBits(120, 123, 20, 27) > 0 ? 1 : 0, 1, F("inert skill points ink"));
-    test.expectEq(countBits(108, 115, 20, 27), 0, F("inert skill no prefix"));
+    test.expectEq(countBits(108, 111, 20, 27) > 0 ? 1 : 0, 1, F("inert skill points ink"));
+    test.expectEq(countBits(100, 107, 20, 27), 0, F("inert skill no prefix"));
+
+    // Live skill number straight from the cache: skill 0 (attack_up) = 12 with
+    // no tier -> 2 digits at the baked cost column (104..111), no S/M letter.
+    clearFb();
+    screenEnter(smoke, screens::SCREEN_GEAR, moveSave);
+    smoke.cursor = 18;
+    smoke.scroll = 18;
+    smoke.skillPoints[armor::SKILL_ATTACK_UP] = 12;
+    smoke.skillTier[armor::SKILL_ATTACK_UP] = 0;
+    drawScreen(smoke, moveSave, g_gear);
+    test.expectEq(countBits(104, 111, 11, 18) > 0 ? 1 : 0, 1, F("gear skill 12 points ink"));
+    test.expectEq(countBits(96, 103, 11, 18), 0, F("gear skill 12 no tier letter"));
 
     // Pixel: the gear page draws through the same generic renderer.
     clearFb();
@@ -460,6 +515,105 @@ inline void test_screens(FxTest &test) {
     test.expectEq(countBits(2, 5, 13, 16), 16, F("gear cursor chip 4x4"));
     test.expectEq(countBits(2, 20, 0, 7) > 0 ? 1 : 0, 1, F("gear title ink"));
     test.expectEq(countBits(10, 60, 11, 18) > 0 ? 1 : 0, 1, F("gear row0 label ink"));
+
+    // Section header rows bake a full-width dark band (shade 1) behind centered
+    // white text: the SWD header (row 0, band y=10..17) and the ARMOR header
+    // (row 12, page 2, band y=10..17). The legacy path never drew a band.
+    test.expectEq(countBits(110, 127, 10, 17) > 0 ? 1 : 0, 1, F("gear SWD section band ink"));
+    // Page 2 (scroll 12) opens on the ARMOR header at row 12.
+    clearFb();
+    screenEnter(gs, screens::SCREEN_GEAR, ps);
+    gs.scroll = 12;
+    drawScreen(gs, ps, g_gear);
+    test.expectEq(countBits(110, 127, 10, 17) > 0 ? 1 : 0, 1, F("gear ARMOR section band ink"));
+    // Armor rows draw no marker (deferred): the marker column stays empty.
+    test.expectEq(countBits(116, 123, 20, 27), 0, F("gear armor no marker"));
+
+    // -------------------------------------------- hbk.3 prebaked pages
+    // Page table (docs/ui-design.md): per screen a u8 page count then that many
+    // u24 absolute FX addresses of the baked mh_screen_<name>_<page> layers.
+    // Every shipped screen is prebaked (the legacy text path is deleted).
+    test.expectEq(screenPageCount(screens::SCREEN_HUB), 1, F("hub page count"));
+    test.expectEq(screenPageCount(screens::SCREEN_QUESTS), 2, F("quests page count"));
+    test.expectEq(screenPageCount(screens::SCREEN_GEAR), 4, F("gear page count"));
+    test.expectEq(screenPageCount(screens::SCREEN_FORGE), 3, F("forge page count"));
+    test.expectEq(screenPageTableOff(screens::SCREEN_HUB), screens::SCREEN_HUB_PAGE_TABLE, F("hub page table off"));
+    test.expectEq(screenPageTableOff(screens::SCREEN_QUESTS), screens::SCREEN_QUESTS_PAGE_TABLE, F("quests page table off"));
+    test.expectEq(screenPageTableOff(screens::SCREEN_GEAR), screens::SCREEN_GEAR_PAGE_TABLE, F("gear page table off"));
+    test.expectEq(screenPageTableOff(screens::SCREEN_FORGE), screens::SCREEN_FORGE_PAGE_TABLE, F("forge page table off"));
+    test.expectEq(screenPageAddr(screens::SCREEN_HUB, 0), mh_screen_hub_0, F("hub page0 addr"));
+    test.expectEq(screenPageAddr(screens::SCREEN_QUESTS, 0), mh_screen_quests_0, F("quests page0 addr"));
+    test.expectEq(screenPageAddr(screens::SCREEN_QUESTS, 1), mh_screen_quests_1, F("quests page1 addr"));
+    test.expectEq(screenPageAddr(screens::SCREEN_GEAR, 0), mh_screen_gear_0, F("gear page0 addr"));
+    test.expectEq(screenPageAddr(screens::SCREEN_GEAR, 3), mh_screen_gear_3, F("gear page3 addr"));
+    test.expectEq(screenPageAddr(screens::SCREEN_FORGE, 0), mh_screen_forge_0, F("forge page0 addr"));
+    test.expectEq(screenPageAddr(screens::SCREEN_FORGE, 1), mh_screen_forge_1, F("forge page1 addr"));
+    test.expectEq(screenPageAddr(screens::SCREEN_FORGE, 2), mh_screen_forge_2, F("forge page2 addr"));
+
+    // Baked FORGE page 0 blit: the y=8 rule row and the full-width title band
+    // only exist in the baked art (the legacy path never draws either).
+    SaveBlock fsave;
+    saveDefaults(fsave);
+    fsave.zenny = 1234;
+    ScreenState forge;
+    screenEnter(forge, screens::SCREEN_FORGE, fsave);
+    waitPlane(0);
+    clearFb();
+    drawScreen(forge, fsave, g_gear);
+    test.expectEq(countBits(0, 127, 8, 8) > 0 ? 1 : 0, 1, F("forge baked rule ink"));
+    test.expectEq(countBits(0, 127, 0, 7) > 0 ? 1 : 0, 1, F("forge baked title band ink"));
+    // A baked label for an UNSELECTED row (row 2 "+- SWD T2" at y=29..36).
+    test.expectEq(countBits(10, 60, 29, 36) > 0 ? 1 : 0, 1, F("forge baked row2 label ink"));
+    // Cursor chip stays live on row 0 (4x4 white at (2,13)).
+    test.expectEq(countBits(2, 5, 13, 16), 16, F("forge cursor chip 4x4"));
+
+    // Plane 2 lights shade 3 (white) only: the baked white title band and the
+    // white selected-row redraw are ink there, the shade-2 rule/baked labels are
+    // not. Row 0 is a baked-white ACTION_NONE section header, so select the node
+    // row 1 to prove the live white label redraw.
+    waitPlane(2);
+    clearFb();
+    screenEnter(forge, screens::SCREEN_FORGE, fsave);
+    forge.cursor = 1;
+    drawScreen(forge, fsave, g_gear);
+    test.expectEq(countBits(0, 127, 0, 7) > 0 ? 1 : 0, 1, F("forge white title band plane2"));
+    test.expectEq(countBits(0, 127, 8, 8), 0, F("forge rule skips plane2"));
+    test.expectEq(countBits(10, 60, 20, 27) > 0 ? 1 : 0, 1, F("forge selected node label white plane2"));
+    test.expectEq(countBits(10, 60, 29, 36), 0, F("forge unselected baked label skips plane2"));
+
+    // Live FORGE node markers (x=118..121): one 4x4 square, shade 3 (white)
+    // when equipped, shade 2 (light gray) when owned, nothing otherwise. Equip
+    // node 1 (SWD T2, row 2, y=29); node 0 (row 1, y=20) stays owned; node 2
+    // (row 3, y=38) is never forged. Pure save bits, no cart read.
+    // Reuse the FORGE SaveBlock/ScreenState (the suite stack is tight).
+    saveDefaults(fsave);
+    fsave.zenny = 200;
+    fsave.items[ITEM_ORE] = 2;
+    fsave.items[ITEM_SCALE] = 1;
+    ForgeNode swordT1;
+    forgeReadNode(forge::NODE_SWORD_T1, swordT1);
+    test.expectEq(forgeNodeApply(fsave, swordT1, forge::NODE_COUNT), 1, F("forge node 1 applies"));
+    test.expectEq(fsave.equippedNode, forge::NODE_SWORD_T1, F("node 1 becomes equipped"));
+    waitPlane(0);
+    clearFb();
+    screenEnter(forge, screens::SCREEN_FORGE, fsave);
+    drawScreen(forge, fsave, g_gear);
+    // Row 1 (node 0, owned): light-gray square at (118,23).
+    test.expectEq(countBits(118, 121, 23, 26) > 0 ? 1 : 0, 1, F("owned node marker ink"));
+    // Row 2 (node 1, equipped): white square at (118,32).
+    test.expectEq(countBits(118, 121, 32, 35) > 0 ? 1 : 0, 1, F("equipped node marker ink"));
+    // Row 3 (node 2, never forged): the marker column stays empty.
+    test.expectEq(countBits(118, 121, 41, 44), 0, F("unforged node marker empty"));
+
+    // Marker shade: plane 2 lights shade 3 only, so the equipped square is ink
+    // there and the owned (shade 2) square is not.
+    waitPlane(2);
+    clearFb();
+    screenEnter(forge, screens::SCREEN_FORGE, fsave);
+    drawScreen(forge, fsave, g_gear);
+    test.expectEq(countBits(118, 121, 32, 35) > 0 ? 1 : 0, 1, F("equipped marker lights plane2"));
+    test.expectEq(countBits(118, 121, 23, 26), 0, F("owned marker skips plane2"));
+    waitPlane(0);
 }
 
 }   // namespace screenfx

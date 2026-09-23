@@ -28,12 +28,12 @@ flashing. Controls are below; no USB serial device comes up while the game runs
 |---|---|
 | Vertical-slice sim | Ported + parity-verified (20 scenes / 1269 ticks / 660 device asserts) |
 | Device render + HUD + audio | Working (block/FX-sprite art, cue tones; HUD text/FX glyphs + bars — `7y3` clamp fixed) |
-| Host unit tests | `make test` — **6232 passed / 0 failed** |
-| Device tests (Ardens) | 17 suites / 1712 asserts — boot 4, assets 264, audio 9, hud 29, data 348, combat 237, hub 77, monster_art 127, player_art 120, quests 87, screens 136, smith 51, cards 83, tell 18, zones 82, items 35, perf 5 — all PASS (the frozen `test_parity` diagnostics image is not a gate; the opening-menu `test_menu`/`test_menu_art` suites and its `mh_menu_*` sheets were deleted with the menu, `isp.1`/`hml.2`) |
-| Perf gate (`monhun-ardu-8v7`, re-verified through `kt7.7`) | **PASS.** plane 157 Hz (≥135), logic 52 Hz (≥45), render max 3348 µs (≤7407), tick 480 µs, RAM free 689 B (bench) |
+| Host unit tests | `make test` — **6316 passed / 0 failed** |
+| Device tests (Ardens) | 18 suites / 1829 asserts — boot 4, assets 264, audio 9, hud 29, data 348, combat 237, hub 81, monster_art 127, player_art 120, quests 87, screens 189, smith 51, cards 85, tell 18, zones 82, items 35, forge 58, perf 5 — all PASS (the frozen `test_parity` diagnostics image is not a gate; the opening-menu `test_menu`/`test_menu_art` suites and its `mh_menu_*` sheets were deleted with the menu, `isp.1`/`hml.2`) |
+| Perf gate (`monhun-ardu-8v7`, re-verified through `hbk.3`) | **PASS.** plane 157 Hz (≥135), logic 52 Hz (≥45), render max 3004 µs (≤7407), tick 184 µs, RAM free 609 B (bench) |
 | Perf tooling | Headless Ardens profiler dump (`profiledump=<path>`, local patch) + on-device cycle bench (`test_perf`) |
-| Shipping build | flash **29172 / 29696 B** (524 free), RAM **1764 / 2560 B** (796 free); USB-free, see below |
-| FX data image | **298925 B** of 16 MB used (96 KB of it is the 32 prebaked detail-card pages) |
+| Shipping build | flash **29506 / 29696 B** (190 free), RAM **1798 / 2560 B** (762 free); USB-free, see below |
+| FX data image | **404480 B** of 16 MB used (96 KB of it is the 32 prebaked detail-card pages, 30 KB the 10 prebaked screen pages) |
 
 Speculative gameplay status: combat (sword / flail / gunshield), monster FSM,
 camera/world clamps, HUD, audio cues all in place. The prg.8 trim removed
@@ -142,6 +142,10 @@ directly in 1/16-px units and integrated by straight addition.
   build has **no USB serial device** (no serial monitor / no OS port while the
   game runs); uploads go through the Cathy3K bootloader window
   (`arduino-cli upload` resets into it as usual).
+- **Dev feel build** (`make dev`, `-DMH_DEV=1`, default off): unlimited crafting
+  — fresh sandbox defaults (9999 zenny + 99 of every item), every bill gate
+  passes with no debit, and the EEPROM save is never read or written, so the
+  player's real save is untouched. Zero shipping cost (constant-folded).
 
 ### FX asset pipeline (all assets live on the FX chip)
 
@@ -310,6 +314,24 @@ denied cue, reusing the low `CUE_HURT` tone (no new cue row). The generator caps
 titles and labels at 16 chars, so the renderer draws the batched cart fetch only;
 the old per-char tail fallback was dead and is gone (5co.9 trim).
 
+Every list screen (HUB / QUESTS / FORGE / GEAR) renders from **prebaked 128x64
+4-shade pages** (`hbk`, docs/ui-design.md "Screen prebake v2"): one page image
+per 6-row window on the FX cart, the same 3x 1bpp page-major layer family as the
+detail cards, generated from the screen JSON by `tools/gen-screens.py`
+(`python3 tools/gen-screens.py --sheet build/screens_contact_sheet.png` renders
+every page for review; never committed). The baked page carries the title band,
+the page indicator (`n/m`), the rule, row labels, section bands and costs
+(right-aligned at x=112). The device draws only the live chrome on top: the
+cursor chip, the selected row's label re-drawn white, the FORGE/GEAR weapon
+markers at x=118 (white = equipped, gray = owned), the GEAR skill numbers, the
+hub quest column and the hub strip (its five skill labels are baked at fixed
+slots, the live points at slot + 12). The legacy text renderer was deleted with
+the wave — the whole prebake lands **56 B cheaper** than the text path it
+replaced. `make dev` builds the feel harness instead of a release: `-DMH_DEV=1`
+gives fresh 9999-zenny / 99-item defaults, every forge and craft bill passes
+without debiting, and the EEPROM save is never read or written (the player's
+real save is untouched; default off, so the shipping image is unchanged).
+
 The FORGE screen (`data/screens/forge.json` + generated rows from
 `data/forge/*.json`) lists every weapon node as an indented tree (class headers
 + one `ACTION_FORGE_NODE` row per node, label + upgrade cost). A opens the
@@ -388,13 +410,15 @@ by the card hint line, not a list token column (ui.4.1 trim).
 ## Commands
 
 ```sh
-make test               # host unit tests (6190 asserts)
+make test               # host unit tests (6316 asserts)
 make fxtest-headless    # Ardens device tests (18 suites; FXTEST_ONLY=test_combat for one)
 make size               # whole-image flash/RAM report + compile-time data facts
+make dev                # dev feel build: unlimited crafting, EEPROM untouched
 make gen-check          # regen determinism + generated header sync
 make build              # compile shipping sketch (output in dist/)
 make debug              # build, then open Ardens debugger (ELF + DWARF) with FX image
 make mini               # compile for Arduboy Mini FQBN
+make dev                # dev feel build: shipping flags + -DMH_DEV=1 (unlimited craft, no EEPROM)
 make gen                # regenerate FX assets + fxdata.h/bin from images/
 make hooks              # install git hooks (clang-format pre-commit), once per clone
 make format             # format all tracked C-family sources
@@ -448,7 +472,7 @@ Notes:
    (`80bbfb0`), and `blk()`'s `fillRect`/`drawFastVLine` path was replaced with
    direct masked framebuffer writes (`816767d`) — render max 13312 → 3984 µs,
    plane 82 → 156 Hz, logic 27 → 52 Hz, profiler `mh::blk` share 29% → 3.6%.
-   Any new feature must fit flash (2226 B free) and keep the perf gates green.
+   Any new feature must fit flash (190 B free after the prebake wave) and keep the perf gates green.
 2. **Flash headroom**: shipping 27470/29696 B (2226 B free) after the
    USB-stack removal (`42n.8`: custom USB-free `main()`, -2666 B flash /
    -140 B RAM, see the device-layer note), the content-table offload
@@ -460,7 +484,10 @@ Notes:
    flash unchanged). The hub-as-root rework (`isp.1`) then deleted the opening
    menu (FSM + FX render + its suites) and reclaimed 470 B; the menu art cleanup
    (`hml.2`) dropped the dead `mh_menu_*` sheets from the cart (flash unchanged,
-   -8262 B FX data). Shipping measures **28848/29696 B (848 free)**. The 119 B of hot LUTs (`mh::SIN65`
+   -8262 B FX data). The prebake wave (`hbk.2`/`hbk.3`) then replaced the
+   per-row text renderer with baked 4-shade page blits and landed **net -56 B**
+   (the baked pages, live overlays and the deleted legacy path together).
+   Shipping measures **29506/29696 B (190 free)**. The 119 B of hot LUTs (`mh::SIN65`
    65 B, `fp::DIR8` 32 B, `mh::MH_MASK_TOP/BOT` 16 B, `mh::RING6` 6 B) stay in
    MCU flash by decision (`monhun-ardu-42n.5`): FX per-access reads measured
    ~150 cycles (~9 µs, 20-35x an LPM) and a SIN65 RAM cache would breach the
@@ -477,7 +504,7 @@ Notes:
    → 2000 B. FX sprite data stays on the cart, so RAM grew little through the
    art pass; the USB-stack removal (`42n.8`) then dropped it, the opening-menu
    `MenuState` was deleted with the menu (`isp.1`) and the save grew one byte
-   for the v4 weapon byte, and the latest build measures **1705 B (855 free)**.
+   for the v4 weapon byte, and the prebake wave landed it at **1798 B (762 free)**.
 4. **Mock is legacy**: `src/` is the source of truth. The mock/device parity
    image (`test_parity`, 660 asserts) stays runnable as legacy diagnostics but
    is no longer a commit gate; do not update `mock/` or regenerate its fixtures.

@@ -735,6 +735,76 @@
       "sha256": "c5d3eb458b9eb9f30fb90c85242ab5b5c059815c56061648d425d8f3270c08f9",
       "size": 264,
       "symbol": "mh_map_camp"
+    },
+    {
+      "declaration": "fxdata/screens/Sprites.txt",
+      "path": "images/screens/mh_screen_forge_0_128x64.png",
+      "sha256": "c0b84bec749fa3e3dde6e5bb75344f63cc2f105d036388c8efd100f065a23c7d",
+      "size": 651,
+      "symbol": "mh_screen_forge_0"
+    },
+    {
+      "declaration": "fxdata/screens/Sprites.txt",
+      "path": "images/screens/mh_screen_forge_1_128x64.png",
+      "sha256": "f6f3f713fb5de844df8fe2f122cead8ef560451ae4c5ddf39097b15b6e8e68a5",
+      "size": 651,
+      "symbol": "mh_screen_forge_1"
+    },
+    {
+      "declaration": "fxdata/screens/Sprites.txt",
+      "path": "images/screens/mh_screen_forge_2_128x64.png",
+      "sha256": "018203c50af2698c99593db87fad501900430c78c956f215596f4293f3e57068",
+      "size": 311,
+      "symbol": "mh_screen_forge_2"
+    },
+    {
+      "declaration": "fxdata/screens/Sprites.txt",
+      "path": "images/screens/mh_screen_gear_0_128x64.png",
+      "sha256": "85f567bbb4869f3d84a089f71e4de6d65a4a466acaf069102b5ad565e4920b98",
+      "size": 567,
+      "symbol": "mh_screen_gear_0"
+    },
+    {
+      "declaration": "fxdata/screens/Sprites.txt",
+      "path": "images/screens/mh_screen_gear_1_128x64.png",
+      "sha256": "a8ab4bc934bd71baf7cdeef50e67772986e5accc783b64780f8dad5e9237d78c",
+      "size": 509,
+      "symbol": "mh_screen_gear_1"
+    },
+    {
+      "declaration": "fxdata/screens/Sprites.txt",
+      "path": "images/screens/mh_screen_gear_2_128x64.png",
+      "sha256": "dc2512492e8cdd890d526c60dd97f3c6efe7ecc7303d73b857c1338e46ac379d",
+      "size": 590,
+      "symbol": "mh_screen_gear_2"
+    },
+    {
+      "declaration": "fxdata/screens/Sprites.txt",
+      "path": "images/screens/mh_screen_gear_3_128x64.png",
+      "sha256": "218d39551c4f0aa0d96a741196a1b2052d20026a52b7fbc3b35b0237bbbaa557",
+      "size": 609,
+      "symbol": "mh_screen_gear_3"
+    },
+    {
+      "declaration": "fxdata/screens/Sprites.txt",
+      "path": "images/screens/mh_screen_hub_0_128x64.png",
+      "sha256": "eae1fe32d9f57d1b4d6628681acb640d461dfd8d82411642077c580bfb71e86a",
+      "size": 481,
+      "symbol": "mh_screen_hub_0"
+    },
+    {
+      "declaration": "fxdata/screens/Sprites.txt",
+      "path": "images/screens/mh_screen_quests_0_128x64.png",
+      "sha256": "5686ce458dbeba6dd32ecc7b92c676dd5f7152b3e9cf08ebd0fce14f7399d5f9",
+      "size": 750,
+      "symbol": "mh_screen_quests_0"
+    },
+    {
+      "declaration": "fxdata/screens/Sprites.txt",
+      "path": "images/screens/mh_screen_quests_1_128x64.png",
+      "sha256": "6a2e4ea334a8a26b0beb3b4e1434e9c3c9a13ef7d4a541ba1264acd86de611c7",
+      "size": 459,
+      "symbol": "mh_screen_quests_1"
     }
   ],
   "inputs": [
@@ -930,23 +1000,23 @@
     },
     {
       "path": "data/screens/forge.json",
-      "sha256": "15b8d5f5e8fecc016be4a3701a1997c972f4cdc18a44f67ac210c7689f4ae239",
-      "size": 163
+      "sha256": "ee72b71de748f74e3eac7247254771ab745d73bcee50ec9d4994370dc7b0f051",
+      "size": 182
     },
     {
       "path": "data/screens/gear.json",
-      "sha256": "d44cff85e423dcf980566386dad9f8f1c9ec80e447080fc1330ef54c26fc718a",
-      "size": 1339
+      "sha256": "6d5386fb8c145c2a0866b40afa165b1a0dfa965066dd3560f8af990eb04cc513",
+      "size": 1358
     },
     {
       "path": "data/screens/hub.json",
-      "sha256": "5769bbf64b567ec00d3a43ec65cabfae19bce3432d93a5e6caf257c491f13fe4",
-      "size": 425
+      "sha256": "93a5ec152f84df4d24b44c37e0548fb69cd5589c2c010c35000a9f4f56c47c57",
+      "size": 461
     },
     {
       "path": "data/screens/quests.json",
-      "sha256": "6e6382f5007f9b65bb190f0a069d3652b43eb84491378012ffa55213e088be70",
-      "size": 886
+      "sha256": "740e074d4bd9dce369c657a9ef37aa1cc8125cb83c8b178ba05f056cd629506f",
+      "size": 905
     },
     {
       "path": "data/skeletons.json",
@@ -1121,8 +1191,8 @@
     },
     {
       "path": "fxdata/fxdata.txt",
-      "sha256": "87b3dfa2bcae7dac4ddbbaa60e2a55a78f0491cce8f247fa00140fc9e83481b7",
-      "size": 6076
+      "sha256": "3075a34a86ef650f75f73b9b26bdc2fa281a08486c3ae1190351a41500b4daec",
+      "size": 6267
     },
     {
       "path": "fxdata/maps/Sprites.txt",
@@ -1134,6 +1204,23 @@
       ]
     },
     {
+      "path": "fxdata/screens/Sprites.txt",
+      "sha256": "84614f2803bddc62861ab1163a955e3210357e35f8b62d983ec0631b692c3b28",
+      "size": 108593,
+      "symbols": [
+        "mh_screen_hub_0",
+        "mh_screen_quests_0",
+        "mh_screen_quests_1",
+        "mh_screen_gear_0",
+        "mh_screen_gear_1",
+        "mh_screen_gear_2",
+        "mh_screen_gear_3",
+        "mh_screen_forge_0",
+        "mh_screen_forge_1",
+        "mh_screen_forge_2"
+      ]
+    },
+    {
       "path": "fxdata/tables/armor.bin",
       "sha256": "ba3fde94cb3cc352f4e9e70b88e64857fe29f65a8cfbadfebe498856ef435e4d",
       "size": 113,
@@ -1141,7 +1228,7 @@
     },
     {
       "path": "fxdata/tables/cards.bin",
-      "sha256": "a2fb5aaedc90dd2ab39a7c6a4e796fde5b61c1f5bd17997966a6f438564152de",
+      "sha256": "82e578f8abdb1916902c9b0218b7e934305f2e5c0a4b37c0f117f98344e80bde",
       "size": 602,
       "symbol": "mhCards"
     },
@@ -1153,7 +1240,7 @@
     },
     {
       "path": "fxdata/tables/equip.bin",
-      "sha256": "772bbf0b9a02786aa901d7209f94158cc7c77f90f61ce65c7301a518b7346b97",
+      "sha256": "02c8f9c7b0b856393f16841e96d5bea6ab3015ef1c6a1be374bda35f478ed31c",
       "size": 876,
       "symbol": "mhEquip"
     },
@@ -1189,8 +1276,8 @@
     },
     {
       "path": "fxdata/tables/screens.bin",
-      "sha256": "c431324b7ffd6e52f6505314d87dbc5e2d88193db2e6566334bbe648bab5834f",
-      "size": 829,
+      "sha256": "5d5832ca2b749d5ba9c1695ef31a74450ec4a625158b6a4c5763c1e5e50451f6",
+      "size": 863,
       "symbol": "mhScreens"
     },
     {
@@ -1221,18 +1308,18 @@
   "outputs": [
     {
       "path": "fxdata/fxdata-data.bin",
-      "sha256": "ec7b89c10fd6b703d6a640b09c7f8e050e516727b31cf8c3ebf6cc03a2b7c1a6",
-      "size": 373495
+      "sha256": "c371ce33536d6d4881f1f0031113f3e85628c133c5dde2556eec06d379c5559e",
+      "size": 404249
     },
     {
       "path": "fxdata/fxdata.bin",
-      "sha256": "e104b367dcb20cd8a1945d6f1ab7fef414f5848e82da5a28a63c4502f07405d4",
-      "size": 373504
+      "sha256": "714390db1d92035133f327fabacc3a35a841c8366db93ade154ee0317efca9b2",
+      "size": 404480
     },
     {
       "path": "fxdata/fxdata.h",
-      "sha256": "d87211e026c33bb1df7bf1f22c5f4d663e5da9c37ce3b8f006a2d667194c328c",
-      "size": 6159
+      "sha256": "61fbdfbc9f917fae3500e8fb86b6bb678d45d59f5f0432b4b672330aa2d4ce36",
+      "size": 6645
     },
     {
       "path": "fxdata/tables/armor.bin",
@@ -1241,7 +1328,7 @@
     },
     {
       "path": "fxdata/tables/cards.bin",
-      "sha256": "a2fb5aaedc90dd2ab39a7c6a4e796fde5b61c1f5bd17997966a6f438564152de",
+      "sha256": "82e578f8abdb1916902c9b0218b7e934305f2e5c0a4b37c0f117f98344e80bde",
       "size": 602
     },
     {
@@ -1251,7 +1338,7 @@
     },
     {
       "path": "fxdata/tables/equip.bin",
-      "sha256": "772bbf0b9a02786aa901d7209f94158cc7c77f90f61ce65c7301a518b7346b97",
+      "sha256": "02c8f9c7b0b856393f16841e96d5bea6ab3015ef1c6a1be374bda35f478ed31c",
       "size": 876
     },
     {
@@ -1266,8 +1353,8 @@
     },
     {
       "path": "fxdata/tables/screens.bin",
-      "sha256": "c431324b7ffd6e52f6505314d87dbc5e2d88193db2e6566334bbe648bab5834f",
-      "size": 829
+      "sha256": "5d5832ca2b749d5ba9c1695ef31a74450ec4a625158b6a4c5763c1e5e50451f6",
+      "size": 863
     },
     {
       "path": "fxdata/tables/smith.bin",
@@ -1276,8 +1363,8 @@
     },
     {
       "path": "src/fxdata.h",
-      "sha256": "d87211e026c33bb1df7bf1f22c5f4d663e5da9c37ce3b8f006a2d667194c328c",
-      "size": 6159
+      "sha256": "61fbdfbc9f917fae3500e8fb86b6bb678d45d59f5f0432b4b672330aa2d4ce36",
+      "size": 6645
     },
     {
       "path": "src/generated/armor_data.hpp",
@@ -1321,7 +1408,7 @@
     },
     {
       "path": "src/generated/equip_meta.hpp",
-      "sha256": "db6d2022f5731158151958a1e3418ea6630620f45500b3dd562ef6e7c5599330",
+      "sha256": "d818936c0c17ad9a633d4e5ce08fa1e09844ea37e736e0c7ee205365d5dbfd9e",
       "size": 22334
     },
     {
@@ -1356,8 +1443,8 @@
     },
     {
       "path": "src/generated/screen_meta.hpp",
-      "sha256": "0406d9aaf285d39baf4e807a63a0de3dd35c73ae004c293436da78860341ce61",
-      "size": 2582
+      "sha256": "30bf20c2673d80c36b4fb425ba4121e42d49269eb779d6fe393a6a9960d9ea2c",
+      "size": 3303
     },
     {
       "path": "src/generated/smith_meta.hpp",
@@ -1371,7 +1458,7 @@
     },
     {
       "path": "src/generated/zone_meta.hpp",
-      "sha256": "6f16c82d57aca703df468d64278cacef25cb6f8f98c8155a77a00e6a628be9cc",
+      "sha256": "55c0febbbd3d1d5251fb4b760f855c66e90a64ff55823c5dde92ca76a9961c5c",
       "size": 8388
     }
   ],

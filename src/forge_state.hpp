@@ -77,8 +77,11 @@ enum BillShort : uint8_t {
 };
 
 // noinline: the gate is shared by the forge and armor card paths, so a single
-// out-of-line copy beats one inlined loop per caller (AVR flash).
+// out-of-line copy beats one inlined loop per caller (AVR flash). Dev mode
+// (hbk.1) short-circuits every gate to BILL_OK.
 MH_NOINLINE inline uint8_t billShort(const SaveBlock &save, uint16_t cost, const uint8_t *mats, uint8_t slots) {
+    if (DEV_UNLIMITED)
+        return BILL_OK;
     if (save.zenny < cost)
         return BILL_NEED_ZENNY;
     for (uint8_t i = 0; i < slots; i++) {
@@ -96,6 +99,8 @@ inline bool billAffordable(const SaveBlock &save, uint16_t cost, const uint8_t *
     return billShort(save, cost, mats, slots) == BILL_OK;
 }
 MH_NOINLINE inline void billDebit(SaveBlock &save, uint16_t cost, const uint8_t *mats, uint8_t slots) {
+    if (DEV_UNLIMITED)
+        return;
     for (uint8_t i = 0; i < slots; i++) {
         const uint8_t code = mats[i * 2];
         if (code == 0)

@@ -1,6 +1,7 @@
 {
   "id": 3,
   "title": "GEAR",
+  "prebake": true,
   "weapons": "equip",
   "rows": [
     { "label": "-- ARMOR --", "cost": 0, "action": "none", "condition": "always", "param": 0 },

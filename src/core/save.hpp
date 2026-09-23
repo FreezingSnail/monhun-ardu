@@ -33,8 +33,13 @@
 // Host-testable: the logic takes a SaveBackend of three-address read/write
 // functions rather than touching Arduino.h. On AVR save.hpp also provides the
 // EEPROM-backed functions (EEPROM.update == write-if-different).
+//
+// Dev feel mode (hbk.1, core/dev.hpp): with DEV_UNLIMITED the load always
+// returns fresh defaults and the store never writes, so a `make dev` session
+// cannot touch the player's real save.
 
 #include <stdint.h>
+#include "dev.hpp"                       // DEV_UNLIMITED (MH_DEV; hbk.1 feel mode)
 #include "progmem.hpp"                   // MH_NOINLINE
 #include "bitlut.hpp"                    // mhBit8 (flash one-hot LUT)
 #include "../generated/items_meta.hpp"   // item::ITEM_COUNT (inventory slot count)
@@ -147,7 +152,7 @@ inline void saveEncode(const SaveBlock &s, uint8_t *out) {
 // the depth-0 nodes of the generated forge tree (linear class spines), and
 // NODE_SWORD_BASE is the first.
 inline void saveDefaults(SaveBlock &s) {
-    s.zenny = 0;
+    s.zenny = DEV_UNLIMITED ? 9999 : 0;
     for (uint8_t i = 0; i < SAVE_QUEST_BYTES; i++)
         s.quest[i] = 0;
     s.activeQuest = SAVE_QUEST_NONE;
@@ -156,7 +161,7 @@ inline void saveDefaults(SaveBlock &s) {
         s.equip[i] = SAVE_EQUIP_NONE;
     s.flags = 0;
     for (uint8_t i = 0; i < item::ITEM_COUNT; i++)
-        s.items[i] = 0;
+        s.items[i] = DEV_UNLIMITED ? 99 : 0;
     s.equippedNode = forge::NODE_SWORD_BASE;
     for (uint8_t i = 0; i < SAVE_OWNED_BYTES; i++)
         s.weaponOwned[i] = 0;
@@ -243,6 +248,10 @@ struct SaveBackend {
 // when a well-formed record was loaded; false for blank/junk, where `s` holds
 // the defaults.
 inline bool saveLoad(SaveBlock &s, const SaveBackend &backend) {
+    if (DEV_UNLIMITED) {
+        saveDefaults(s);
+        return false;
+    }
     uint8_t bytes[SAVE_BYTES];
     for (uint8_t i = 0; i < SAVE_BYTES; i++)
         bytes[i] = backend.read(static_cast<uint16_t>(SAVE_EEPROM_ADDR + i));
@@ -254,6 +263,8 @@ inline bool saveLoad(SaveBlock &s, const SaveBackend &backend) {
 
 // Write-on-change + verify read. Returns false when the verify mismatches.
 inline bool saveStore(const SaveBlock &s, const SaveBackend &backend) {
+    if (DEV_UNLIMITED)
+        return true;
     uint8_t bytes[SAVE_BYTES];
     saveEncode(s, bytes);
     for (uint8_t i = 0; i < SAVE_BYTES; i++) {

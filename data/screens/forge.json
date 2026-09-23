@@ -1,6 +1,7 @@
 {
   "id": 4,
   "title": "FORGE",
+  "prebake": true,
   "weapons": "forge",
   "rows": [
     { "label": "LEAVE", "cost": 0, "action": "leave", "condition": "always", "param": 0 }

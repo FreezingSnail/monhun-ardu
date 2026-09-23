@@ -190,3 +190,86 @@ Beads:
    and `ui.5.2` (5co.9) landed the hub HUNT column, hub strip, page indicators
    and the denied cue (see Status above). Items screen later
    (monhun-ardu-prg.13) reuses the same card pipeline.
+
+---
+
+# Screen prebake v2 (epic hbk) — baked 4-shade list pages, dev feel mode
+
+Status: accepted with the owner (2026-09). The list screens are procedural
+text (one shade, no grouping, no per-row state); the owner asked for prebaked
+4-shade pages "for clarity", starting with FORGE, plus a dev mode with
+unlimited crafting resources to feel-test the menus.
+
+Budget finding (hbk.3, 2026-09): a FORGE-only prebake *adds* ~390 B on a
+134 B-free image (blocked). With **every** screen prebaked the legacy title /
+row-label / cost column fold out, and with the page indicator + hub strip
+labels baked the wave nets out **29506 B (190 free)** vs HEAD 29562 (134 free):
+the whole prebake + overlays wave is 56 B *cheaper* than the legacy text
+renderer. The armor-row markers were measured at +120 B and deferred.
+
+## Model
+
+A list screen keeps its rows in the `mhScreens` blob (labels, costs, actions —
+unchanged ABI), but the *chrome* is baked: one 128x64 4-shade image per 6-row
+page, the same 3x 1bpp page-major layer family as the detail cards
+(`cardBlit` reuse, 3 KB FX per page). **Every** shipped screen opts in with
+`"prebake": true`; the legacy text renderer is deleted (`hbk.3`), so a screen
+with no baked pages renders as an empty page plus live chrome (pinned by
+`test_screens`: all four screens must have `pageCount > 0`).
+
+Page = `scroll / 6` (scroll is always a multiple of 6), so a baked page maps
+1:1 onto the visible window. Pages are addressed through a page table appended
+to the screens blob: per screen, `u8 pageCount` + `pageCount x u24` absolute FX
+addresses of the `mh_screen_<name>_<page>` layer arrays.
+
+### Baked page layout (frozen; gen-screens.py is the source of truth)
+
+| Zone | Spec |
+|---|---|
+| Title band | rect (0,0,128,8) shade 1 (dark); title text shade 3 (white) at (2,0) |
+| Page indicator | `n/m` shade 2 after the title (2 + title width + 4) when a screen spans >1 page; static per page, so baked |
+| Rule | y=8, full width, shade 2 (light) |
+| Rows | y = 11 + 9*i, 6 per page (same grid as the legacy path) |
+| Section header rows (`action == none`, label starts `--`) | band (0,y-1,128,8) shade 1, frame-stripped text shade 3, centered |
+| Node label | tree prefix chars (` +-|`) shade 2, name shade 2, x=10 |
+| Cost | digits shade 3, right-aligned ending at x=112 (3-digit cap, 999 max) |
+| Marker column | x=118..121, baked empty; live-owned markers only |
+| Hub strip (`"strip": true`) | five skill labels shade 2 at x=20/40/60/80/100, y=56 (live points at slot+12) |
+| Bottom | free (hub strip numbers / live lanes) |
+
+### Live overlays (device, per plane, on top of the blit)
+
+- Cursor chip (existing `fxchip` sprDraw).
+- Selected row: the label is re-drawn in white (shade 3) at the same x/y —
+  exactly covering its baked shade-2 copy. Skipped for section header rows
+  (`ACTION_NONE` without the skill flag), whose baked text is centered.
+- Marker column, FORGE + GEAR weapon rows (`ROW_F_FORGE`): one 4x4
+  `hudBlk(118, y+3, 4, 4, shade)` — white (3) when equipped, light gray (2)
+  when owned, nothing otherwise. Pure save bits, no cart read per row.
+  GEAR armor-row markers are deferred (measured +120 B; budget).
+- GEAR skill rows (`ROW_F_SKILL`): the live points number + S/M tier letter at
+  the baked cost column (right-aligned at x=112).
+- Hub strip: the live weapon class abbr (x=2) + tree tier digit (x=14) and
+  each active skill's points at its baked slot + 12.
+- Unchanged live chrome: header zenny, hub quest column.
+
+Everything else (labels, costs, section bands, tree prefixes) is baked: no
+runtime text layout, no per-row cost math for prebaked screens.
+
+## Dev feel mode (`make dev`)
+
+`-DMH_DEV=1` (default 0, zero shipping cost — constant-folded) makes the build
+a feel-test harness: `saveLoad` always returns fresh defaults (never reads
+EEPROM), `saveStore` never writes, defaults carry 9999 zenny + 99 of every
+item, and the bill gate/debit (`billShort`/`billDebit`) always passes/does
+nothing — every craft and forge is free and repeatable. The player's real save
+is untouched by a dev session.
+
+## Phasing
+
+1. `hbk.1` dev mode (`make dev`, MH_DEV).
+2. `hbk.2` page baker: gen-screens prebake pipeline + page table + meta +
+   tooling tests + `--sheet` review PNG (landed).
+3. `hbk.3` baked `drawScreen` for all four screens: blit + live overlays,
+   legacy text path deleted (hbk.4–.7 merged here — the budget only works with
+   every screen baked).

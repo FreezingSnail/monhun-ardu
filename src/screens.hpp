@@ -1,13 +1,17 @@
 #pragma once
-// Generic list-screen renderer + cart readers (bead monhun-ardu-cgz,
-// docs/quests-shops.md). Device-only (like render.hpp): draws through the FX
-// glyph lane + the chip cursor tile, and reads the ScreenDef/ScreenRow records
+// List-screen renderer + cart readers (bead monhun-ardu-cgz,
+// docs/quests-shops.md; prebaked pages: epic monhun-ardu-hbk,
+// docs/ui-design.md "Screen prebake v2"). Device-only (like render.hpp): blits
+// a baked 4-shade page per 6-row window and draws only the live chrome on top
+// (cursor, selected label, node/armor markers, quest column, skill numbers,
+// zenny, page indicator, hub strip), then reads the ScreenDef/ScreenRow records
 // from the mhScreens cart blob during the scan/render window.
 //
-// Layout: title on the glyph lane at the top; up to 6 rows per page, scroll by
-// 6; the selected row carries the white chip cursor and white label, the cost
-// is right-aligned at x=124. Conditions gate the row action (screen_state.hpp),
-// not the render, so every row is drawn.
+// Layout: the title band, rule, row labels, section bands and costs are baked
+// into the page; rows stay on the y=11 + 9*i grid, 6 per page, scroll by 6. The
+// selected row's label is re-drawn in white over its baked copy (section
+// headers bake centered white text and are skipped). Conditions gate the row
+// action (screen_state.hpp), not the render.
 //
 // The pure state machine (nav, conditions, action switch, save) lives in
 // screen_state.hpp so the host suite can exercise it without the cart.
@@ -25,9 +29,18 @@ constexpr int16_t SCREEN_ROW_Y0 = 11;   // first of 6 rows, 9 px pitch
 constexpr int16_t SCREEN_ROW_H = 9;
 constexpr int16_t SCREEN_LABEL_X = 10;   // past the cursor tile
 constexpr int16_t SCREEN_CURSOR_X = 2;
+// Live-chrome right edge (header zenny + hub quest column), right-aligned on
+// the title/row lane. The baked cost column ends further left (SCREEN_BAKE_COST_RIGHT)
+// so the live marker column x=118..121 stays clear.
 constexpr int16_t SCREEN_COST_RIGHT = 124;
+constexpr int16_t SCREEN_BAKE_COST_RIGHT = 112;   // baked cost / live skill digits end here
 // Hub bottom strip (ui.5.2): below the 4 hub rows, on the free y=56 line.
 constexpr int16_t SCREEN_STRIP_Y = 56;
+// Hub strip skill slots (hbk.3): the five skill labels bake into the hub page
+// at these x positions (PREBAKE_LAYOUT strip_slot_*); the live points are
+// drawn at slot + 12.
+constexpr int16_t SCREEN_STRIP_SLOT_X0 = 20;
+constexpr int16_t SCREEN_STRIP_SLOT_W = 20;
 
 // Fake cart pointer for a byte offset into the mhScreens raw_t section.
 inline const uint8_t *screenCart(uint16_t off) {
@@ -47,6 +60,30 @@ inline uint8_t screenReadText(uint16_t off, uint8_t len, char *buf) {
     if (n != 0)
         mhFxReadBytes(screenCart(off), reinterpret_cast<uint8_t *>(buf), n);
     return n;
+}
+
+// Prebaked page table (hbk.3, docs/ui-design.md): per screen in index order a
+// u8 page count then that many u24 absolute FX addresses of the baked
+// mh_screen_<name>_<page> layer arrays. Walk the variable entries forward from
+// PAGE_TABLE_OFF. Every shipped screen is prebaked; pageCount == 0 (a corrupt
+// or unauthored cart) renders as an empty page plus the live chrome.
+inline uint16_t screenPageTableOff(uint8_t screen) {
+    uint16_t off = screens::PAGE_TABLE_OFF;
+    while (screen-- > 0)
+        off = static_cast<uint16_t>(off + 1 + 3 * mhFxReadU8(screenCart(off)));
+    return off;
+}
+
+inline uint8_t screenPageCount(uint8_t screen) {
+    return mhFxReadU8(screenCart(screenPageTableOff(screen)));
+}
+
+// u24 little-endian page address (same decode style as cardPageOffset).
+inline uint32_t screenPageAddr(uint8_t screen, uint8_t page) {
+    const uint16_t off = static_cast<uint16_t>(screenPageTableOff(screen) + 1 + page * 3);
+    const uint16_t lo = mhFxReadU16(reinterpret_cast<const uint16_t *>(screenCart(off)));
+    const uint8_t hi = mhFxReadU8(screenCart(static_cast<uint16_t>(off + 2)));
+    return static_cast<uint32_t>(lo) | (static_cast<uint32_t>(hi) << 16);
 }
 
 // u16 ScreenDef offset for a screen index from the header's defOff table.
@@ -143,13 +180,11 @@ inline void screenGearCache(ScreenState &s, const ArmorAgg &agg) {
 // ---- ui.5.2 hub chrome -----------------------------------------------------
 // Fixed-width flash abbreviation tables + one small PROGMEM string drawer. A
 // flat char array beats a pointer table (which would land in .data); the space
-// padding keeps every entry 3/4 chars wide so one indexed read serves each
-// class/skill ("SWD"/"FL "/"GN " and ATK/DEF/HP/STAM/EVA).
+// padding keeps every entry 3 chars wide so one indexed read serves each class
+// ("SWD"/"FL "/"GN "). The skill labels bake into the hub page (hbk.3), so only
+// the class table stays in flash.
 static const char MH_PROGMEM SCREEN_READY[] = "READY";
 static const char MH_PROGMEM SCREEN_WCLASS[9] = {'S', 'W', 'D', 'F', 'L', ' ', 'G', 'N', ' '};
-static const char MH_PROGMEM SCREEN_SKILL_ABBR[20] = {
-    'A', 'T', 'K', ' ', 'D', 'E', 'F', ' ', 'H', 'P', ' ', ' ', 'S', 'T', 'A', 'M', 'E', 'V', 'A', ' ',
-};
 
 // Draw `n` glyphs from a flash byte array, returning the next x. The loop body
 // is shared across iterations, so a variable `n` costs one textPut() call site
@@ -183,66 +218,59 @@ inline void drawHubQuestColumn(const SaveBlock &save, uint8_t y, bool selected) 
     drawNumber(static_cast<int16_t>(x + (pd + 1) * 4), y, def.need, selected ? 3 : 2);
 }
 
-// Hub bottom strip (ui.5.2): equipped weapon marker (class abbr + tree tier)
-// and the active armor skill point totals (tier != 0 only; no all-skills
+// Hub bottom strip (ui.5.2, hbk.3): the five skill labels bake into the hub
+// page at fixed 20 px slots (PREBAKE_LAYOUT strip_slot_*), so the live pass
+// draws only the equipped weapon marker (class abbr + tree tier) and each
+// active skill's points at its slot + 12 (tier != 0 only; no all-skills
 // screen). Runs on the free y=56 line below the four hub rows.
 inline void drawHubStrip(const SaveBlock &save, const Game &g) {
-    uint8_t x = 2;
     const uint8_t node = save.equippedNode;
     // Class from the generated tree block starts (sword < flail < gun), so no
     // cart read; a fresh/unequipped save falls back to the sword marker.
     uint8_t cls = forge::WEAPON_SWORD;
     if (node != SAVE_NODE_NONE)
         cls = node >= forge::NODE_GUN_FIRST ? forge::WEAPON_GUN : node >= forge::NODE_FLAIL_FIRST ? forge::WEAPON_FLAIL : forge::WEAPON_SWORD;
-    x = screenTextN(fxfontw, x, SCREEN_STRIP_Y, &SCREEN_WCLASS[cls * 3], 3);
+    const uint8_t x = screenTextN(fxfontw, 2, SCREEN_STRIP_Y, &SCREEN_WCLASS[cls * 3], 3);
     if (node != SAVE_NODE_NONE) {
         // Tree tier as a single digit ("SWD2"): one glyph beats the " T" + a
         // drawNumber call. The class base is the generated first-node constant.
         const uint8_t first = cls == forge::WEAPON_SWORD ? forge::NODE_SWORD_FIRST : cls == forge::WEAPON_FLAIL ? forge::NODE_FLAIL_FIRST : forge::NODE_GUN_FIRST;
-        x = static_cast<uint8_t>(textPut(fxfontw, x, SCREEN_STRIP_Y, static_cast<char>('0' + (node - first + 1))));
+        textPut(fxfontw, x, SCREEN_STRIP_Y, static_cast<char>('0' + (node - first + 1)));
     }
-    x = static_cast<uint8_t>(x + 8);
     for (uint8_t i = 0; i < armor::SKILL_COUNT; i++) {
-        if (g.armor.tier[i] == 0)
-            continue;
-        x = screenTextN(fxfontg, x, SCREEN_STRIP_Y, &SCREEN_SKILL_ABBR[i * 4], 4);
-        drawNumber(x, SCREEN_STRIP_Y, static_cast<int16_t>(g.armor.points[i]), 2);
-        // An active skill is >= THRESHOLD_S (10), so the points are always two
-        // digits: advance 2 glyphs + a 1-glyph gap.
-        x = static_cast<uint8_t>(x + 12);
+        if (g.armor.tier[i] != 0)
+            drawNumber(static_cast<int16_t>(SCREEN_STRIP_SLOT_X0 + 12 + i * SCREEN_STRIP_SLOT_W), SCREEN_STRIP_Y, static_cast<int16_t>(g.armor.points[i]), 2);
     }
 }
 
-// One page of the generic list. Called once per plane (same discipline as
-// renderScene/menu), between ArduboyG's plane blits.
-inline void drawScreen(const ScreenState &s, const SaveBlock &save, const Game &g) {
-    const uint16_t defOff = screenDefOff(s.screen);
-    const uint8_t titleLen = mhFxReadU8(screenCart(static_cast<uint16_t>(defOff + 1)));
-    char text[SCREEN_TEXT_BUF];
-    uint8_t tn = screenReadText(static_cast<uint16_t>(defOff + 2), titleLen, text);
-    uint8_t x = 2;
-    for (uint8_t i = 0; i < tn; i++)
-        x = static_cast<uint8_t>(textPut(fxfontw, x, SCREEN_TITLE_Y, text[i]));
+// Live marker column (x=118..121): one 4x4 square whose shade is the state --
+// white (3) when equipped, light gray (2) when owned/crafted, nothing
+// otherwise. Pure save bits, no cart read.
+inline void screenMarker(bool equipped, bool owned, int16_t y) {
+    if (equipped || owned)
+        hudBlk(118, static_cast<int16_t>(y + 3), 4, 4, equipped ? 3 : 2);
+}
 
-    // Page indicator (ui.5.2): `n/m` after the title when a list spans more than
-    // one 6-row page. The 6-row grid fills y=11..63, so the title line is the
-    // only free lane (the header zenny owns the far right; this stays left).
-    if (s.rowCount > SCREEN_ROWS) {
-        // Count pages with a 6-step walk instead of two u8 divisions (AVR has no
-        // divide; the loop measured cheaper whole-image).
-        uint8_t pages = 1;
-        uint8_t page = 1;
-        for (uint8_t r = SCREEN_ROWS; r < s.rowCount; r = static_cast<uint8_t>(r + SCREEN_ROWS)) {
-            pages++;
-            if (r <= s.scroll)
-                page++;
-        }
-        uint8_t px = static_cast<uint8_t>(x + 4);
-        drawNumber(px, SCREEN_TITLE_Y, page, 2);
-        px = static_cast<uint8_t>(px + hudDigits(page) * 4);
-        textPut(fxfontg, px, SCREEN_TITLE_Y, '/');
-        px = static_cast<uint8_t>(px + 4);
-        drawNumber(px, SCREEN_TITLE_Y, pages, 2);
+// One page of the list. Called once per plane (same discipline as
+// renderScene/menu), between ArduboyG's plane blits. hbk.3: every shipped
+// screen is prebaked -- blit the page for the visible window, then draw only
+// the live chrome.
+inline void drawScreen(const ScreenState &s, const SaveBlock &save, const Game &g) {
+    // Prebaked page for the visible window: page = scroll / SCREEN_ROWS (scroll
+    // is always a multiple of 6). Every shipped screen prebakes pages
+    // (test_screens pins it); the count guard keeps a hypothetical future
+    // screen without pages from blitting a null address (it then renders as an
+    // empty page plus the live chrome).
+    if (screenPageCount(s.screen) != 0) {
+        const uint24_t page = static_cast<uint24_t>(screenPageAddr(s.screen, static_cast<uint8_t>(s.scroll / SCREEN_ROWS)));
+#if MH_ROOM_BOUNDS
+        cardBlit(page);
+#else
+        // render.hpp folds cardBlit out when MH_ROOM_BOUNDS is 0 (the carved
+        // hub/screen test images), so blit the page layer inline there. Same
+        // 128x64 3x 1bpp page-major family as the detail cards.
+        FX::readDataBytes(page + static_cast<uint24_t>(arduboy.currentPlane()) * 1024u, arduboy.getBuffer(), 1024);
+#endif
     }
 
     // Header zenny (ui.5): right-aligned `$` + live balance on the title line;
@@ -252,6 +280,7 @@ inline void drawScreen(const ScreenState &s, const SaveBlock &save, const Game &
     textPut(fxfontw, zx, SCREEN_TITLE_Y, '$');
     drawNumber(static_cast<int16_t>(zx + 4), SCREEN_TITLE_Y, static_cast<int16_t>(save.zenny), 3);
 
+    char text[SCREEN_TEXT_BUF];
     const uint8_t last = static_cast<uint8_t>(s.scroll + SCREEN_ROWS);
     uint16_t rowOff = screenFirstRow(s.screen);
     for (uint8_t i = 0; i < s.rowCount; i++, rowOff = screenRowNext(rowOff)) {
@@ -263,41 +292,45 @@ inline void drawScreen(const ScreenState &s, const SaveBlock &save, const Game &
             sprDraw(fxchip, SCREEN_CURSOR_X, static_cast<int16_t>(y + 2), FRAME(1));
 
         const uint8_t labelLen = mhFxReadU8(screenCart(rowOff));
-        const uint24_t sheet = selected ? fxfontw : fxfontg;
-        const uint8_t ln = screenReadText(static_cast<uint16_t>(rowOff + 1), labelLen, text);
-        uint8_t lx = SCREEN_LABEL_X;
-        for (uint8_t j = 0; j < ln; j++)
-            lx = static_cast<uint8_t>(textPut(sheet, lx, y, text[j]));
-
-        // Hub HUNT row (ui.5.2): the right column is the quest progress instead
-        // of the packed cost (the hub cost is always 0).
-        if (s.screen == screens::SCREEN_HUB && i == 0) {
-            drawHubQuestColumn(save, y, selected);
-            continue;
-        }
-
         const uint16_t fields = static_cast<uint16_t>(rowOff + 1 + labelLen);
-        const uint8_t flags = mhFxReadU8(screenCart(static_cast<uint16_t>(fields + 3)));
-        int16_t value;
-        uint8_t tier = 0;
-        if ((flags & screens::ROW_F_SKILL) != 0) {
-            // Live skill readout (gs.2): `param` is the armor::SKILL_* index; a
-            // bad id clamps to skill 0 so a corrupt cart cannot read past the
-            // cache. The cached points are already clamped to THRESHOLD_M.
-            const uint8_t raw = mhFxReadU8(screenCart(static_cast<uint16_t>(fields + 5)));
-            const uint8_t skill = raw < armor::SKILL_COUNT ? raw : 0;
-            value = static_cast<int16_t>(s.skillPoints[skill]);
-            tier = s.skillTier[skill];
-        } else {
-            value = static_cast<int16_t>(mhFxReadU16(reinterpret_cast<const uint16_t *>(screenCart(fields))));
+        // One bulk read of the packed tail (cost u16, action, flags, cond,
+        // param) -- one cart transaction instead of a seek per field.
+        uint8_t packed[6];
+        mhFxReadBytes(screenCart(fields), packed, 6);
+        const uint8_t action = packed[2];
+        const uint8_t flags = packed[3];
+        const uint8_t param = packed[5];
+
+        // Selected row: redraw the label white over its baked shade-2 copy.
+        // Section headers (action none, no skill flag) bake centered white text
+        // at a different x, so they are skipped; skill rows still highlight.
+        if (selected && (action != screens::ACTION_NONE || (flags & screens::ROW_F_SKILL) != 0)) {
+            const uint8_t ln = screenReadText(static_cast<uint16_t>(rowOff + 1), labelLen, text);
+            uint8_t lx = SCREEN_LABEL_X;
+            for (uint8_t j = 0; j < ln; j++)
+                lx = static_cast<uint8_t>(textPut(fxfontw, lx, y, text[j]));
         }
-        const uint8_t digits = hudDigits(value);
-        const uint8_t costX = static_cast<uint8_t>(SCREEN_COST_RIGHT - digits * 4);
-        // An active skill (tier 1 = S, 2 = M) marks its points with a letter
-        // just left of the number; an inert tier draws the points only.
-        if (tier != 0)
-            textPut(selected ? fxfontw : fxfontg, static_cast<int16_t>(costX - 8), y, tier == 2 ? 'M' : 'S');
-        drawNumber(costX, y, value, selected ? 3 : 2);
+
+        if ((flags & screens::ROW_F_FORGE) != 0) {
+            // FORGE + GEAR weapon rows: node id in `param`; marker from save
+            // bits only.
+            screenMarker(save.equippedNode == param, saveWeaponOwned(save, param), static_cast<int16_t>(y));
+        } else if ((flags & screens::ROW_F_SKILL) != 0) {
+            // GEAR skill rows: live points + S/M tier letter at the baked cost
+            // column. A bad id clamps to skill 0 so a corrupt cart cannot read
+            // past the cache; the cached points are already clamped to M.
+            const uint8_t skill = param < armor::SKILL_COUNT ? param : 0;
+            const int16_t value = static_cast<int16_t>(s.skillPoints[skill]);
+            const uint8_t tier = s.skillTier[skill];
+            const uint8_t digits = hudDigits(value);
+            const uint8_t costX = static_cast<uint8_t>(SCREEN_BAKE_COST_RIGHT - digits * 4);
+            if (tier != 0)
+                textPut(selected ? fxfontw : fxfontg, static_cast<int16_t>(costX - 8), y, tier == 2 ? 'M' : 'S');
+            drawNumber(costX, y, value, selected ? 3 : 2);
+        } else if (s.screen == screens::SCREEN_HUB && i == 0) {
+            // Hub HUNT row: live quest progress instead of a baked cost.
+            drawHubQuestColumn(save, y, selected);
+        }
     }
 
     // Hub bottom strip (ui.5.2): only the hub is short enough to leave y=56 free.

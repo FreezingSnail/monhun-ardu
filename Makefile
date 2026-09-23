@@ -1,4 +1,4 @@
-.PHONY :  full build mini gen gen-check size size-line debug hooks format test test-tools testvm testvm-debug fxtest fxtest-headless fxtest-headless-preflight fxtest-build fxtest-run base-sheet
+.PHONY :  full build mini dev gen gen-check size size-line debug hooks format test test-tools testvm testvm-debug fxtest fxtest-headless fxtest-headless-preflight fxtest-build fxtest-run base-sheet
 
 # Common compiler flags
 CXX_FLAGS = -std=c++17 -I/src -w -O0 -g3
@@ -43,6 +43,16 @@ build:
 
 mini:
 	arduino-cli compile --fqbn "arduboy-homemade:avr:arduboy-mini" --optimize-for-debug  --output-dir dist $(SIZE_FLAGS)
+
+# Dev feel build (hbk.1): shipping flags + -DMH_DEV=1 -- unlimited crafting,
+# fresh 9999-zenny/99-item defaults, EEPROM never touched. Not for releases.
+dev:
+	arduino-cli compile --fqbn "arduboy-homemade:avr:arduboy-fx" --optimize-for-debug --output-dir dist \
+	    --build-property compiler.cpp.extra_flags="-mcall-prologues -mrelax -DMH_NO_USB -DMH_DEV=1" \
+	    --build-property compiler.c.extra_flags="-mrelax" \
+	    --build-property compiler.c.elf.extra_flags="-mrelax"
+	@elf=dist/monhun-ardu.ino.elf; \
+	$(AVR_SIZE) -A "$$elf" | awk '$$1==".text"{t=$$2} $$1==".data"{d=$$2} $$1==".bss"{b=$$2} END {flash=t+d; ram=d+b; printf "dev size: flash=%d/%d (%d free)  ram=%d/2560\n", flash, 29696, 29696-flash, ram}'
 
 gen:
 	./tools/gen.sh

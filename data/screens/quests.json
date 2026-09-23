@@ -1,6 +1,7 @@
 {
   "id": 1,
   "title": "QUESTS",
+  "prebake": true,
   "rows": [
     { "label": "SLAY 3 LUNGE", "cost": 0, "action": "take_quest", "condition": "quest", "param": 0 },
     { "label": "TURN IN 150", "cost": 150, "action": "turn_in_quest", "condition": "quest", "param": 48 },

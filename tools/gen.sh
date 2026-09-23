@@ -60,6 +60,11 @@ python3 tools/gen-forge.py
 # Screen data (bead monhun-ardu-cgz): compile data/screens/*.json into the
 # packed fxdata/tables/screens.bin blob + src/generated/screen_meta.hpp (screen
 # indices/offsets + action/condition enums). Schema-validated, deterministic.
+# Screen prebake v2 (hbk.2): a screen with "prebake": true also bakes one
+# 128x64 4-shade page per 6-row block into images/screens/ + fxdata/screens/
+# Sprites.txt and appends the page address table to the blob; the page symbols
+# resolve from the committed fxdata.h (a first gen pass before fxdata-build
+# leaves them 0, the next pass fills them).
 python3 tools/gen-screens.py
 
 # Quest defs (bead monhun-ardu-me6): compile data/quests/*.json into the packed
