@@ -515,7 +515,10 @@ static void tapDefense(Game &g, const WeaponDef *def, const Input &inp) {
     }
 }
 
-static void stanceSpecial(Game &g, const WeaponDef *def) {
+// Fires the stance verb for the active stance. Returns false when the verb is
+// not available yet (state busy / nock / throw cooldown / stamina), so the A
+// tap can be buffered instead of dropped.
+static bool stanceSpecial(Game &g, const WeaponDef *def, const Input &inp) {
     Player &p = g.player;
 
     const Attack *special = weaponSpecial(def);
@@ -523,9 +526,9 @@ static void stanceSpecial(Game &g, const WeaponDef *def) {
     if (defId == W_SWORD) {
         const int16_t stam = attackStam(special);
         if (p.state != PS_IDLE)
-            return;
+            return false;
         if (p.stam < stam)
-            return;
+            return false;
         p.stam -= stam;
         p.state = PS_SPECIAL;
         p.atk = special;
@@ -536,9 +539,9 @@ static void stanceSpecial(Game &g, const WeaponDef *def) {
     } else if (defId == W_FLAIL) {
         const int16_t stam = attackStam(special);
         if (p.state != PS_IDLE || p.throwCd > 0)
-            return;
+            return false;
         if (p.stam < stam)
-            return;
+            return false;
         p.stam -= stam;
         p.throwCd = 50;
         p.state = PS_SPECIAL;
@@ -550,22 +553,29 @@ static void stanceSpecial(Game &g, const WeaponDef *def) {
         // reach (no projectile system); the tracer draw sells the flight. The
         // nock timer (p.reload) paces the shot and drives the HUD hint.
         if (p.reload > 0)
-            return;
+            return false;
         const int16_t stam = attackStam(special);
         if (p.state != PS_IDLE)
-            return;
+            return false;
         if (p.stam < stam)
-            return;
+            return false;
         p.stam -= stam;
         p.reload = ARROW_NOCK_TICKS;
         p.state = PS_SPECIAL;
         p.atk = special;
         p.t = 0;
         p.hitDone = false;
-        exitStance(p);
-        p.bLocked = true;
+        // Guard stays up while B is held: the shot is a stance verb, not an
+        // exit. The bR path still drops the stance on release, and a stance
+        // broken by chip damage/stamina is unchanged. Firing off a non-held
+        // stance keeps the old exit + lock.
+        if (!inp.b) {
+            exitStance(p);
+            p.bLocked = true;
+        }
         addEffect(g, static_cast<int16_t>(p.x + (p.w >> 1) + ((p.fx * 10) >> 4)), static_cast<int16_t>(p.y + (p.h >> 1) + ((p.fy * 10) >> 4)), 5, true);
     }
+    return true;
 }
 
 // Damage taken by the player. Parry/deflect/guard responses live here so the
@@ -805,7 +815,11 @@ static void updatePlayer(Game &g, const Input &inp, bool aP, bool bP, bool bR) {
         } else if (ROLL_ALT_ENABLED && (p.state == PS_DODGE || p.state == PS_DEFLECT || p.state == PS_SHOVE)) {
             startRollAttack(g, def);
         } else if (p.stance != ST_NONE) {
-            stanceSpecial(g, def);
+            // Guard can outlive its own verb: a shot keeps the stance while B is
+            // held, so taps inside the recovery/nock re-arm the buffer (the shot
+            // is a locked-out action, not a normal swing).
+            if (!stanceSpecial(g, def, inp))
+                p.aBuffer = A_BUFFER;
         } else if (canAttackNow) {
             startAttack(g, def, altInput);
         } else {
@@ -813,8 +827,16 @@ static void updatePlayer(Game &g, const Input &inp, bool aP, bool bP, bool bR) {
         }
     }
     if (!p.sheathed && p.aBuffer > 0 && canAttackNow) {
-        p.aBuffer = 0;
-        startAttack(g, def, altInput);
+        // A held stance keeps its verb for a buffered tap: a shot queued during
+        // the previous shot's recovery fires the arrowshot, not a melee swing.
+        if (p.stance != ST_NONE) {
+            // Busy (nock/throw cd): leave the buffer to retry until it expires.
+            if (stanceSpecial(g, def, inp))
+                p.aBuffer = 0;
+        } else {
+            p.aBuffer = 0;
+            startAttack(g, def, altInput);
+        }
     }
 
     switch (p.state) {

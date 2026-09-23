@@ -3,7 +3,8 @@
 // projectile suite) — permanent, co-located with repo tests. The special enters
 // PS_SPECIAL, resolves instantly through meleeHitbox at the authored reach
 // (44 px), spends stamina, spawns the muzzle spark, and never touches the
-// retired projectile ring.
+// retired projectile ring. Holding B keeps the guard up through the shot (the
+// nock paces repeat fire); releasing B drops the stance as usual.
 #include "test.hpp"
 #include "../src/core/world.hpp"
 
@@ -86,8 +87,23 @@ void HitscanSuite(TestRunner &runner) {
         t.assert(g.player.atk == weaponSpecial(&WEAPON_DEFS[W_GUN]) ? 1 : 0, 1, "special attack data");
         t.assert(g.player.stam, stam0 - 14, "stam spent");
         t.assert(g.player.reload, ARROW_NOCK_TICKS, "nock timer armed");
+        t.assert(g.player.stance, ST_GUARD, "guard held through the shot (B held)");
+        t.assert(g.player.bLocked, false, "no re-entry lock: the hold is still live");
         t.assertGreaterThan(g.fxN, 0, "muzzle spark spawned");
         t.assert(g.projN, 0, "no projectile spawned");
+        suite.addTest(t);
+    }
+
+    {
+        Test t("releasing B drops the guard mid-shot, shot still resolves");
+        Game g{};
+        hinitGun(g);
+        hhold(g);
+        hfire(g);
+        t.assert(g.player.stance, ST_GUARD, "guard up during the shot");
+        hstep(g, 1, Input{0, 0, false, false});   // release B
+        t.assert(g.player.stance, ST_NONE, "release exits the stance");
+        t.assert(g.player.state, PS_SPECIAL, "shot still resolves");
         suite.addTest(t);
     }
 
@@ -101,15 +117,34 @@ void HitscanSuite(TestRunner &runner) {
         for (int i = 0; i < 4; i++)
             hstep(g, 1, Input{0, 0, false, true});
         t.assert(g.player.reload > 0 ? 1 : 0, 1, "still nocking");
-        // Wait out the nock and the special; the shot drops the stance (bLocked
-        // latches until B is released), so release and re-hold to guard again.
-        for (int i = 0; i < ARROW_NOCK_TICKS + 20; i++)
+        // The shot no longer drops the stance: hold B through the special and
+        // the nock, then a fresh A tap fires again with no release/re-hold.
+        for (int i = 0; i < ARROW_NOCK_TICKS + 4; i++)
             hstep(g, 1, Input{0, 0, false, true});
         t.assert(g.player.reload, 0, "nock expired");
-        hstep(g, 1, Input{0, 0, false, false});
-        hhold(g);
+        t.assert(g.player.state, PS_IDLE, "special finished");
+        t.assert(g.player.stance, ST_GUARD, "guard held through the shot");
         hfire(g);
         t.assert(g.player.state, PS_SPECIAL, "ready again after the nock");
+        suite.addTest(t);
+    }
+
+    {
+        Test t("A tap during the shot buffers: the guard fires again, not a melee swing");
+        Game g{};
+        hinitGun(g);
+        hhold(g);
+        hfire(g);
+        hstep(g, 11, Input{0, 0, false, true});   // mid-recovery
+        hstep(g, 1, Input{0, 0, true, true});     // A tap: PS_SPECIAL is still busy
+        t.assertGreaterThan(g.player.aBuffer, 0, "tap buffered, not dropped");
+        for (int i = 0; i < 18; i++)
+            hstep(g, 1, Input{0, 0, false, true});
+        t.assert(g.player.reload, ARROW_NOCK_TICKS - 4, "second shot re-armed the nock");
+        t.assert(g.player.state, PS_SPECIAL, "second arrowshot running");
+        t.assert(g.player.stance, ST_GUARD, "guard still up");
+        t.assert(g.player.aBuffer, 0, "buffer consumed");
+        t.assert(g.player.chain, 0, "no melee chain started");
         suite.addTest(t);
     }
 
