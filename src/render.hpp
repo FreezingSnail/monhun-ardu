@@ -313,6 +313,39 @@ static void drawArena(int16_t camX, int16_t camY, int16_t roomW, int16_t roomH) 
 // ArduboyG paint.
 #if MH_ROOM_BOUNDS
 
+// v == 0: byte-for-byte page copy (no mul). Same SPIF-margin padding as the
+// split reader. Shared by the room-image blit and the fixed 128x64 card blit
+// (bead 5co.3): card pages are page-aligned, so the copy reader alone suffices.
+#if defined(__AVR__)
+static void roomAsmCopy(uint8_t *dst, uint8_t n) {
+    uint8_t b, t;
+    asm volatile("1:                        \n\t"
+                 "in  %[b], %[spdr]         \n\t"
+                 "out %[spdr], __zero_reg__ \n\t"
+                 "ld  %[t], X               \n\t"
+                 "or  %[t], %[b]            \n\t"
+                 "st  X+, %[t]              \n\t"
+                 "nop                       \n\t"
+                 "nop                       \n\t"
+                 "nop                       \n\t"
+                 "nop                       \n\t"
+                 "nop                       \n\t"
+                 "nop                       \n\t"
+                 "nop                       \n\t"
+                 "nop                       \n\t"
+                 "dec %[n]                  \n\t"
+                 "brne 1b                   \n\t"
+                 : [b] "=&r"(b), [t] "=&r"(t), [n] "+r"(n), "+x"(dst)
+                 : [spdr] "I"(_SFR_IO_ADDR(SPDR))
+                 : "memory");
+}
+#else
+static void roomAsmCopy(uint8_t *dst, uint8_t n) {
+    for (uint8_t i = 0; i < n; i++)
+        dst[i] = static_cast<uint8_t>(dst[i] | 0);
+}
+#endif
+
 #if MH_ROOM_IMAGE
 // Per-room image base + extent from the generated meta constants. Only the
 // three shipped rooms exist; the default (pre-room) scene maps to area, the
@@ -361,30 +394,6 @@ static void roomAsmDual(uint8_t *dstHi, uint8_t *dstLo, uint8_t coef, uint8_t n)
                  "clr __zero_reg__          \n\t"
                  : [b] "=&r"(b), [t] "=&r"(t), [n] "+r"(n), "+x"(dstHi), "+z"(dstLo)
                  : [coef] "r"(coef), [spdr] "I"(_SFR_IO_ADDR(SPDR))
-                 : "memory");
-}
-
-// v == 0: byte-for-byte page copy (no mul). Same SPIF-margin padding.
-static void roomAsmCopy(uint8_t *dst, uint8_t n) {
-    uint8_t b, t;
-    asm volatile("1:                        \n\t"
-                 "in  %[b], %[spdr]         \n\t"
-                 "out %[spdr], __zero_reg__ \n\t"
-                 "ld  %[t], X               \n\t"
-                 "or  %[t], %[b]            \n\t"
-                 "st  X+, %[t]              \n\t"
-                 "nop                       \n\t"
-                 "nop                       \n\t"
-                 "nop                       \n\t"
-                 "nop                       \n\t"
-                 "nop                       \n\t"
-                 "nop                       \n\t"
-                 "nop                       \n\t"
-                 "nop                       \n\t"
-                 "dec %[n]                  \n\t"
-                 "brne 1b                   \n\t"
-                 : [b] "=&r"(b), [t] "=&r"(t), [n] "+r"(n), "+x"(dst)
-                 : [spdr] "I"(_SFR_IO_ADDR(SPDR))
                  : "memory");
 }
 #endif
@@ -464,6 +473,19 @@ __attribute__((noinline)) static void drawRoom(const Game &g, int16_t camX, int1
 }
 
 #endif   // MH_ROOM_IMAGE
+
+// Fixed 128x64 detail-card blit (bead monhun-ardu-5co.3). A card page is exactly
+// one screen: one 1024 B 1 bpp layer per plane, page-aligned, so a single bulk
+// FX::readDataBytes fills framebuffer pages 0..7 for the current plane
+// (img + plane * 1024). Cheaper than the camera-windowed room path and than a
+// per-page asm copy (the bulk reader is already linked for the screen text).
+// Reads happen in the render pass between plane blits.
+constexpr uint16_t CARD_LAYER_BYTES = 1024;
+
+static void cardBlit(uint24_t img) {
+    const uint24_t layer = img + static_cast<uint24_t>(arduboy.currentPlane()) * static_cast<uint24_t>(CARD_LAYER_BYTES);
+    FX::readDataBytes(layer, arduboy.getBuffer(), CARD_LAYER_BYTES);
+}
 
 // Room props: the active room's prop records blitted as FX sprites over the
 // ground layer (stored room image or procedural dot field) and under the

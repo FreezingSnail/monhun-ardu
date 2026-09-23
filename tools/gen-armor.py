@@ -79,6 +79,9 @@ POINTS_MAX = 15    # per-piece skill points cap (and the maxPoints cap)
 DEFENSE_MAX = 255
 RESIST_MIN = -128
 RESIST_MAX = 127
+# Card copy bounds (ui.3): the pre-wrapped desc lines the card baker draws.
+DESC_MAX_LINES = 4
+DESC_MAX_LEN = 22
 
 NAME_RE = re.compile(r"^[a-z][a-z0-9_]*$")
 MAX_ID = 31
@@ -219,16 +222,24 @@ def normalize_skills(errors, doc):
     seen = set()
     for i, obj in enumerate(raw):
         ctx = "%s: skills[%d]" % (SKILLS_REL, i)
-        check_keys(errors, ctx, obj, {"id", "kind", "maxPoints", "perPoint"})
+        check_keys(errors, ctx, obj, {"id", "kind", "maxPoints", "perPoint"}, ("abbr",))
         if not isinstance(obj, dict):
             continue
         skill_id = read_id(errors, ctx, obj, "id", seen)
         kind = read_enum(errors, ctx, obj, "kind", KINDS)
         max_points = read_int(errors, ctx, obj, "maxPoints", 1, POINTS_MAX)
         per_point = read_int(errors, ctx, obj, "perPoint", 0, 255)
+        # `abbr` is display-only (the ui.3 card baker reads it from the JSON);
+        # validated here so a bad table is caught, never packed into the blob.
+        abbr = obj.get("abbr")
+        if abbr is not None and (not isinstance(abbr, str) or not abbr or len(abbr) > 4
+                                 or not abbr.isupper()):
+            errors.add(ctx, "abbr: expected 1..4 uppercase letters, got %r" % (abbr,))
+            abbr = None
         if None in (skill_id, kind, max_points, per_point):
             continue
-        skills.append({"id": skill_id, "kind": kind, "maxPoints": max_points, "perPoint": per_point})
+        skills.append({"id": skill_id, "kind": kind, "maxPoints": max_points, "perPoint": per_point,
+                       "abbr": abbr})
     if errors.items or thr is None:
         return None
     return {"thresholds": thr, "skills": skills}
@@ -317,9 +328,30 @@ def normalize_piece_skills(errors, ctx, obj, skill_index):
     return skills
 
 
+def normalize_desc(errors, ctx, obj):
+    """Optional `desc` block: pre-wrapped card lines. Absent = no copy.
+    Validated (1..DESC_MAX_LINES lines, each 1..DESC_MAX_LEN printable ASCII)
+    but never packed: the ui.3 card baker reads the JSON directly."""
+    raw = obj.get("desc") if isinstance(obj, dict) else None
+    if raw is None:
+        return []
+    if not isinstance(raw, list) or not raw or len(raw) > DESC_MAX_LINES:
+        errors.add(ctx, "desc: expected 1..%d lines" % DESC_MAX_LINES)
+        return []
+    lines = []
+    for i, line in enumerate(raw):
+        if (not isinstance(line, str) or not line or len(line) > DESC_MAX_LEN
+                or any(ord(ch) < 32 or ord(ch) > 126 for ch in line)):
+            errors.add(ctx, "desc[%d]: expected 1..%d printable ASCII chars, got %r"
+                       % (i, DESC_MAX_LEN, line))
+            return []
+        lines.append(line)
+    return lines
+
+
 def normalize_piece(errors, ctx, obj, seen_ids, skill_index, item_ids):
     check_keys(errors, ctx, obj, {"id", "slot", "defense", "resist", "skills", "recipe"},
-               ("sheet",))
+               ("sheet", "desc"))
     if not isinstance(obj, dict):
         return None
     piece_id = read_id(errors, ctx, obj, "id", seen_ids)
@@ -336,6 +368,9 @@ def normalize_piece(errors, ctx, obj, seen_ids, skill_index, item_ids):
         check_keys(errors, ctx + ".recipe", recipe, {"materials", "zenny"})
         zenny = read_int(errors, ctx + ".recipe", recipe, "zenny", 0, 65535)
         mats = normalize_materials(errors, ctx + ".recipe", recipe, item_ids)
+    # `desc` is the pre-wrapped card copy (ui.3 card baker reads the JSON
+    # directly); validated here, never packed into the mhArmor blob.
+    desc = normalize_desc(errors, ctx, obj)
     sheet = obj.get("sheet")
     if sheet is not None and (not isinstance(sheet, str) or not NAME_RE.match(sheet)):
         errors.add(ctx, "sheet: expected a [a-z][a-z0-9_]* symbol, got %r" % (sheet,))
@@ -343,7 +378,8 @@ def normalize_piece(errors, ctx, obj, seen_ids, skill_index, item_ids):
     if None in (piece_id, slot, defense, resist, skills, zenny, mats):
         return None
     return {"id": piece_id, "slot": slot, "defense": defense, "resist": resist,
-            "skills": skills, "materials": mats, "zenny": zenny, "sheet": sheet}
+            "skills": skills, "materials": mats, "zenny": zenny, "sheet": sheet,
+            "desc": desc}
 
 
 def compile_model(errors, root):

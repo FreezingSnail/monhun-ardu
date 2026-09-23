@@ -33,6 +33,34 @@ ScreenRow: labelLen u8 + chars, cost u16, actionId u8, flags u8,
   CRAFT_ARMOR(slot|piece), EQUIP_WEAPON(weaponIdx), EQUIP_ARMOR(slot|piece),
   OPEN_GEAR, LEAVE. `BUY_UPGRADE` is trimmed (ui.2; FORGE trees in ui.4).
 
+## Detail cards (ui.3)
+
+```
+list screen --A--> detail card --LEFT/RIGHT--> pages --A--> action --B--> list
+```
+
+- Armor rows (`ACTION_CRAFT_ARMOR` / `ACTION_EQUIP_ARMOR`) and quest rows
+  (`ACTION_TAKE_QUEST` / `ACTION_TURN_IN_QUEST`) open a prebaked 128x64 card
+  instead of firing the action on the list. The card A runs the same
+  `screenApplyAction` switch with the row that opened it, so the list and the
+  card cannot diverge (a gated row stays inert on both).
+- Pages are per-item data: armor `DESC / PARTS (uncrafted only) / STATS /
+  SKILL`; quests `GOAL / PROG / REWARD`. A page with no data is not generated.
+  LEFT/RIGHT cycles only pages present in the mask; B backs to the list.
+- Everything is baked (`tools/gen-cards.py` -> `images/cards/` ->
+  `fxdata/cards/Sprites.txt` + `fxdata/tables/cards.bin` +
+  `src/generated/card_meta.hpp`). The only dynamic pixels are the hint line
+  (`A CRAFT` / `A EQUIP` / `A UNEQUIP` / `A ACCEPT` / `A TURN IN` /
+  `NEED PARTS` / `NEED ZENNY`) and the meta overlay slots: live PARTS
+  have-counts and the quest PROG bar. After an action the card refreshes, so a
+  crafted piece loses its PARTS page and cannot be crafted twice.
+- `mhCards` record per item: kind, page mask, the four page image addresses and
+  up to two overlay slots (page + x/y + kind + args). The cart-free page machine
+  is `src/card_state.hpp`; the cart reader + renderer is `src/cards.hpp`.
+- Temporary scope split (ui.4 owns the rest): GEAR **weapon** rows keep their
+  direct-equip action because weapon cards land with the FORGE trees. Every
+  armor row (smith craft + gear equip) and every quest row opens a card.
+
 ## Save block (EEPROM)
 
 ```

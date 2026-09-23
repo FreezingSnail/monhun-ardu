@@ -2,10 +2,10 @@
   "version": 1,
   "thresholds": { "s": 10, "m": 15 },
   "skills": [
-    { "id": "attack_up", "kind": "ATTACK_UP", "maxPoints": 15, "perPoint": 2 },
-    { "id": "defense_up", "kind": "DEFENSE_UP", "maxPoints": 15, "perPoint": 2 },
-    { "id": "health_up", "kind": "HEALTH_UP", "maxPoints": 15, "perPoint": 1 },
-    { "id": "stamina_up", "kind": "STAMINA_UP", "maxPoints": 15, "perPoint": 1 },
-    { "id": "evade_window", "kind": "EVADE_WINDOW", "maxPoints": 15, "perPoint": 1 }
+    { "id": "attack_up", "abbr": "ATK", "kind": "ATTACK_UP", "maxPoints": 15, "perPoint": 2 },
+    { "id": "defense_up", "abbr": "DEF", "kind": "DEFENSE_UP", "maxPoints": 15, "perPoint": 2 },
+    { "id": "health_up", "abbr": "HP", "kind": "HEALTH_UP", "maxPoints": 15, "perPoint": 1 },
+    { "id": "stamina_up", "abbr": "STAM", "kind": "STAMINA_UP", "maxPoints": 15, "perPoint": 1 },
+    { "id": "evade_window", "abbr": "EVA", "kind": "EVADE_WINDOW", "maxPoints": 15, "perPoint": 1 }
   ]
 }

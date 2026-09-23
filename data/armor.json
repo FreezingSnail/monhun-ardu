@@ -5,6 +5,10 @@
       "id": "hunter_helm",
       "slot": "head",
       "defense": 10,
+      "desc": [
+        "STURDY HEADGEAR FORGED",
+        "FROM ORE AND SCALE."
+      ],
       "resist": {
         "fire": 1,
         "water": 0,
@@ -40,6 +44,10 @@
       "id": "bone_cap",
       "slot": "head",
       "defense": 6,
+      "desc": [
+        "A LIGHT CAP CARVED",
+        "FROM BEAST FANG."
+      ],
       "resist": {
         "fire": 0,
         "water": 0,
@@ -75,6 +83,10 @@
       "id": "hunter_mail",
       "slot": "body",
       "defense": 14,
+      "desc": [
+        "REINFORCED MAIL OF",
+        "SCALE AND SHELL."
+      ],
       "resist": {
         "fire": 1,
         "water": 0,
@@ -110,6 +122,10 @@
       "id": "bone_mail",
       "slot": "body",
       "defense": 8,
+      "desc": [
+        "BONE PLATE THAT",
+        "FAVORS ENDURANCE."
+      ],
       "resist": {
         "fire": 0,
         "water": -1,
@@ -145,6 +161,10 @@
       "id": "evade_charm",
       "slot": "charm",
       "defense": 0,
+      "desc": [
+        "A CHARM THAT SHARPENS",
+        "THE DODGE WINDOW."
+      ],
       "resist": {
         "fire": 0,
         "water": 0,

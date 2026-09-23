@@ -3,6 +3,10 @@
   "goalKind": "kill",
   "target": "lunge",
   "need": 3,
+  "desc": [
+    "HUNT THE LUNGE BEAST",
+    "IN THE AREA."
+  ],
   "rewardZenny": 150,
   "unlockFlag": 0
 }

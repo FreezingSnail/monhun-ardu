@@ -83,6 +83,15 @@ python3 tools/gen-smith.py
 # images/maps/ are authored only when missing, so fie.5's refined art survives.
 python3 tools/gen-zones.py
 
+# Detail-card pipeline (bead monhun-ardu-5co.3, docs/ui-design.md): bake one
+# 128x64 card page per item from data/armor.json + data/skills.json +
+# data/quests/*.json into images/cards/ (3x 1bpp page-major layers in
+# fxdata/cards/Sprites.txt) + fxdata/tables/cards.bin + src/generated/
+# card_meta.hpp. Runs before fxdata-build.py so the raw_t mhCards payload and
+# the card layer arrays exist; page image offsets resolve from the committed
+# fxdata.h (a first gen pass before fxdata-build leaves them 0).
+python3 tools/gen-cards.py
+
 # Convert each sprite directory into a Sprites.txt of uint8_t plus-mask blobs.
 # convert-sprite.py appends to Sprites.txt (it does not truncate), so a sheet
 # renamed in gen-art.py would leave a stale symbol behind: remove the generated

@@ -3,6 +3,10 @@
   "goalKind": "kill",
   "target": "sweep",
   "need": 2,
+  "desc": [
+    "BRING DOWN THE SWEEP",
+    "BEAST."
+  ],
   "rewardZenny": 250,
   "rewardItem": "shell",
   "rewardCount": 1,

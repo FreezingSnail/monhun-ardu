@@ -19,6 +19,7 @@
 // there describe this loop's real render path.
 #include "src/render.hpp"
 #include "src/screens.hpp"     // hub/list screens + EEPROM save (qs.1)
+#include "src/cards.hpp"       // prebaked detail cards + nav (5co.3)
 #include "src/app_state.hpp"   // boot-flow routing: hub <-> screens <-> hunt (isp.1)
 #include "src/app_setup.hpp"   // cart-backed hunt arming + huntStart (qs.4/isp.1)
 #include "src/quest.hpp"       // quest defs on cart + TAKE/TURN_IN state (qs.2)
@@ -43,6 +44,16 @@ mh::AudioState s_audio;
 // reachable from its rows.
 mh::SaveBlock s_save;
 mh::ScreenState s_screen;
+// Detail-card state (bead monhun-ardu-5co.3): the open card's page machine and
+// the list row that opened it (the card A reuses screenApplyAction with the row,
+// so the packed action/param/recipe context travels with the card). Armor and
+// quest rows open cards; a GEAR weapon row keeps its direct-equip action until
+// the ui.4 forge trees land (temporary scope split, docs/ui-design.md).
+mh::DetailState s_detail;
+mh::ScreenRow s_detailRow;
+// Decoded card record cached at open/refresh so drawCard does not re-read the
+// mhCards record every frame.
+mh::CardItem s_card;
 static const mh::SaveBackend SAVE_BACKEND = {mh::saveEepromRead, mh::saveEepromWrite};
 
 // Hunt-end A edge flag (monhun-ardu-isp.1): the over-screen return used to be
@@ -127,6 +138,28 @@ void run() {
 #if DEBUG_HURTBOXES
     pollDebugToggle(in);   // observes A+B; does not consume input from stepGame
 #endif
+#ifndef MH_CARD_OFF
+    if (s_detail.active) {
+        // Card tick (5co.3): LEFT/RIGHT cycle pages (skipping pages absent from
+        // the effective mask), B backs to the list, A runs the stored row's
+        // context action and refreshes the card (a craft drops the PARTS page)
+        // and the GEAR readout.
+        const mh::DetailEvent dev = mh::detailStep(s_detail, in);
+        if (dev == mh::DETAIL_BACK) {
+            mh::cardClose(s_detail);
+            return;
+        }
+        if (dev == mh::DETAIL_ACTION) {
+            if (mh::screenCondOk(s_save, s_detailRow) && mh::screenApplyAction(s_save, s_detailRow))
+                mh::saveStore(s_save, SAVE_BACKEND);
+            mh::cardLoad(s_detail, s_card, s_detail.index, s_save, true);
+            if (s_screen.screen == screens::SCREEN_GEAR)
+                refreshGearReadout();
+            return;
+        }
+        return;
+    }
+#endif
     if (s_screen.active) {
         // Screen tick: nav + A/B. B steps back one level (quests/smith -> hub;
         // the hub is the root, so its B is a no-op); A routes through the hub
@@ -148,7 +181,19 @@ void run() {
         if (ev != mh::SCREEN_ACCEPT)
             return;
         mh::ScreenRow row;
-        if (!mh::screenCursorRow(s_screen, row) || !mh::screenCondOk(s_save, row))
+        if (!mh::screenCursorRow(s_screen, row))
+            return;
+        // Armor/quest rows open their prebaked card (even when the action is
+        // gated -- the card's hint line shows NEED PARTS / NEED ZENNY). Every
+        // other row keeps the direct-action path below.
+#ifndef MH_CARD_OFF
+        if (mh::cardRowOpens(row)) {
+            mh::cardLoad(s_detail, s_card, mh::cardRowIndex(row), s_save, false);
+            s_detailRow = row;
+            return;
+        }
+#endif
+        if (!mh::screenCondOk(s_save, row))
             return;
         const mh::AppNav nav = mh::appScreenAccept(s_screen.screen, row);
         if (nav != mh::APP_NAV_NONE) {
@@ -214,6 +259,12 @@ void run() {
 // render never mutates Game; the three plane passes composite one L4 image.
 // While a screen is up it replaces the scene (same per-plane call discipline).
 void render() {
+#ifndef MH_CARD_OFF
+    if (s_detail.active) {
+        mh::drawCard(s_detail, s_card, s_save, s_detailRow);
+        return;
+    }
+#endif
     if (s_screen.active) {
         mh::drawScreen(s_screen, s_save);
         return;

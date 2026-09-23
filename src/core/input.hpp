@@ -41,7 +41,9 @@ struct InputState {
 
 // Stateless primitive: mock step() edges into caller-owned previous flags.
 // stepPlayer() calls this so Game::prevA/prevB and the layer never diverge.
-inline void inputEdges(const Input &in, bool &prevA, bool &prevB, bool &aP, bool &bP, bool &bR) {
+// always_inline: the screen and detail-card state machines both call it, and an
+// outlined shared copy costs more flash than the two inlined expansions.
+__attribute__((always_inline)) inline void inputEdges(const Input &in, bool &prevA, bool &prevB, bool &aP, bool &bP, bool &bR) {
     aP = in.a && !prevA;
     bP = in.b && !prevB;
     bR = !in.b && prevB;

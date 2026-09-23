@@ -49,6 +49,10 @@ HEADER_SIZE = 8
 RECORD_SIZE = 9
 QUEST_MAX = 16
 
+# Card copy bounds (ui.3): the pre-wrapped desc lines the card baker draws.
+DESC_MAX_LINES = 4
+DESC_MAX_LEN = 22
+
 # Goal kinds; values mirror the packed goalKind byte + quests::GOAL_*.
 GOAL_NAMES = ("kill", "gather")
 GOAL_KILL = 0
@@ -161,7 +165,7 @@ def normalize_quest(errors, rel, name, obj, seen_ids, item_ids):
     ctx = rel
     check_keys(errors, ctx, obj,
                {"id", "goalKind", "target", "need", "rewardZenny", "unlockFlag"},
-               optional={"rewardItem", "rewardCount"})
+               optional={"rewardItem", "rewardCount", "desc"})
     if not isinstance(obj, dict):
         return None
     stem = os.path.splitext(name)[0]
@@ -204,9 +208,30 @@ def normalize_quest(errors, rel, name, obj, seen_ids, item_ids):
         return None
     if has_item and (reward_item == 0 or reward_count is None):
         return None
+    # `desc` is the pre-wrapped card copy (ui.3 card baker reads the JSON
+    # directly); validated here, never packed into the mhQuests blob.
+    desc = normalize_desc(errors, ctx, obj)
     return {"name": stem, "id": quest_id, "goalKind": goal, "target": target,
             "need": need, "rewardZenny": reward_zenny, "rewardItem": reward_item,
-            "rewardCount": reward_count, "unlockFlag": unlock}
+            "rewardCount": reward_count, "unlockFlag": unlock, "desc": desc}
+
+
+def normalize_desc(errors, ctx, obj):
+    raw = obj.get("desc") if isinstance(obj, dict) else None
+    if raw is None:
+        return []
+    if not isinstance(raw, list) or not raw or len(raw) > DESC_MAX_LINES:
+        errors.add(ctx, "desc: expected 1..%d lines" % DESC_MAX_LINES)
+        return []
+    lines = []
+    for i, line in enumerate(raw):
+        if (not isinstance(line, str) or not line or len(line) > DESC_MAX_LEN
+                or any(ord(ch) < 32 or ord(ch) > 126 for ch in line)):
+            errors.add(ctx, "desc[%d]: expected 1..%d printable ASCII chars, got %r"
+                       % (i, DESC_MAX_LEN, line))
+            return []
+        lines.append(line)
+    return lines
 
 
 def compile_model(errors, root):

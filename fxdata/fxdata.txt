@@ -79,6 +79,14 @@ raw_t mhItems = "tables/items.bin"
 // it only shifts the sprite sections that follow.
 raw_t mhArmor = "tables/armor.bin"
 
+// Detail-card table (bead monhun-ardu-5co.3): data/armor.json + data/skills.json
+// + data/quests/*.json compiled by tools/gen-cards.py into the 8 B header + 28 B
+// item records from the card_meta.hpp ABI (little-endian, no padding). Offsets
+// land in card_meta.hpp; read on device through fxmem.hpp by src/cards.hpp for
+// the page mask, page image addresses and overlay slots. Packed after mhArmor
+// so adding it only shifts the sprite sections that follow.
+raw_t mhCards = "tables/cards.bin"
+
 // Sprite sections: blocks/fonts/equip sheets, addressed with 24-bit
 // SpritesU seeks so they may grow past the tables' 64 KiB window. Equipment
 // sheets stay after the base sheets; room layer arrays (maps/Sprites.txt, fie.5)
@@ -88,3 +96,4 @@ include "blocks/Sprites.txt"
 include "fonts/Sprites.txt"
 include "equip/Sprites.txt"
 include "maps/Sprites.txt"
+include "cards/Sprites.txt"

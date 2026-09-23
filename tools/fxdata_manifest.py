@@ -35,10 +35,12 @@ GENERATED_GLOBS = (
     "images/fonts/*.png",
     "images/equip/*.png",
     "images/maps/*.png",
+    "images/cards/*.png",
     "fxdata/blocks/Sprites.txt",
     "fxdata/fonts/Sprites.txt",
     "fxdata/equip/Sprites.txt",
     "fxdata/maps/Sprites.txt",
+    "fxdata/cards/Sprites.txt",
     "fxdata/tables/*.bin",
     "fxdata/fxdata.bin",
     "fxdata/fxdata-data.bin",
@@ -60,6 +62,7 @@ OUTPUT_PATHS = (
     "fxdata/tables/smith.bin",
     "fxdata/tables/items.bin",
     "fxdata/tables/armor.bin",
+    "fxdata/tables/cards.bin",
 )
 
 OUTPUT_GLOBS = ("src/generated/**/*",)

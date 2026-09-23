@@ -28,12 +28,12 @@ flashing. Controls are below; no USB serial device comes up while the game runs
 |---|---|
 | Vertical-slice sim | Ported + parity-verified (20 scenes / 1269 ticks / 660 device asserts) |
 | Device render + HUD + audio | Working (block/FX-sprite art, cue tones; HUD text/FX glyphs + bars — `7y3` clamp fixed) |
-| Host unit tests | `make test` — **6183 passed / 0 failed** |
-| Device tests (Ardens) | 16 suites / 1687 asserts — boot 4, assets 264, audio 9, hud 29, data 348, combat 237, hub 83, monster_art 127, player_art 120, quests 87, screens 155, smith 84, tell 18, zones 82, items 35, perf 5 — all PASS (the frozen `test_parity` diagnostics image is not a gate; the opening-menu `test_menu`/`test_menu_art` suites and its `mh_menu_*` sheets were deleted with the menu, `isp.1`/`hml.2`) |
+| Host unit tests | `make test` — **6262 passed / 0 failed** |
+| Device tests (Ardens) | 17 suites / 1763 asserts — boot 4, assets 264, audio 9, hud 29, data 348, combat 237, hub 83, monster_art 127, player_art 120, quests 87, screens 155, smith 84, cards 76, tell 18, zones 82, items 35, perf 5 — all PASS (the frozen `test_parity` diagnostics image is not a gate; the opening-menu `test_menu`/`test_menu_art` suites and its `mh_menu_*` sheets were deleted with the menu, `isp.1`/`hml.2`) |
 | Perf gate (`monhun-ardu-8v7`, re-verified through `kt7.7`) | **PASS.** plane 157 Hz (≥135), logic 52 Hz (≥45), render max 3348 µs (≤7407), tick 480 µs, RAM free 689 B (bench) |
 | Perf tooling | Headless Ardens profiler dump (`profiledump=<path>`, local patch) + on-device cycle bench (`test_perf`) |
-| Shipping build | flash **28848 / 29696 B** (97%, 848 free), RAM **1705 / 2560 B** (855 free); USB-free, see below |
-| FX data image | **200360 B** of 16 MB used |
+| Shipping build | flash **29680 / 29696 B** (16 free), RAM **1762 / 2560 B** (798 free); USB-free, see below |
+| FX data image | **298992 B** of 16 MB used (96 KB of it is the 32 prebaked detail-card pages) |
 
 Speculative gameplay status: combat (sword / flail / gunshield), monster FSM,
 camera/world clamps, HUD, audio cues all in place. The prg.8 trim removed
@@ -89,7 +89,10 @@ directly in 1/16-px units and integrated by straight addition.
 - `monhun-ardu.ino` — plane loop, input sampling, `stepGame()` + `audioUpdate()`
   in `run()`, `renderScene()` in `render()`. Boots straight into the **hub** (the
   root screen, `isp.1` deleted the opening menu); while a screen is active the
-  sim/audio are skipped and `drawScreen()` replaces the scene. The hub HUNT row
+  sim/audio are skipped and `drawScreen()` replaces the scene; while a detail
+  card is open (`DetailState::active`) `drawCard()` replaces everything and A/B
+  drive the card, with A running the stored row's action through
+  `screenApplyAction`. The hub HUNT row
   starts the save's hunt (`huntStart`), win/loss + A returns to the hub, and the
   camp hold-B leaves to the hub. FX reads happen inside `FX::enableOLED()` /
   `waitForNextPlane()` / `FX::disableOLED()`.
@@ -107,9 +110,21 @@ directly in 1/16-px units and integrated by straight addition.
   helpers and `armorAggregate()` (defense/resist/skill-point sums + S/M tiers).
 - `src/armor.hpp` — device cart glue: reads `mhArmor` and caches the equipped
   stats into `Game::armor`/`Game::armorHead` at hunt start and on equip change.
+- `src/card_state.hpp` — host-testable detail-card state machine (5co.3):
+  the `DetailState` page mask/machine (open on the first present page,
+  LEFT/RIGHT cycles only pages in the mask, B backs out), the list-row ->
+  card kind/global-index mapping, the crafted-armor PARTS trim, and the
+  dynamic hint rule (`A CRAFT` / `A EQUIP` / `A UNEQUIP` / `A ACCEPT` /
+  `A TURN IN` / `NEED PARTS` / `NEED ZENNY`).
+- `src/cards.hpp` — device cart glue for the cards: reads the `mhCards` record
+  with one bulk `mhFxReadBytes` into a byte-identical `CardItem` cache
+  (`static_assert`d), blits the baked 128x64 page through `cardBlit`
+  (`src/render.hpp`, one 1024 B layer per plane), and draws the meta overlay
+  slots (live PARTS have-counts, the quest PROG bar) plus the hint line. A
+  card action reuses `screenApplyAction` with the list row that opened it.
 - `src/render.hpp` — whole render path (also compiled into the perf bench so
   measured numbers describe the real loop). Arena, target, player, shells,
-  effects, HUD.
+  effects, HUD, and the fixed 128x64 card blit (`cardBlit`).
 - `src/audio.hpp` — cue detector diffing `Game` edges after `stepGame()`;
   non-blocking one-shot tones via ArduboyTones (Timer3, no Timer1 conflict).
   Mute with `-DMH_AUDIO=0`.
@@ -174,8 +189,18 @@ data/skeletons.json + data/creatures/*.json ──tools/gen-combat.py──►�
 - Current blobs: `fxmonster`, `fxplayer`, `fxpole`, `fxball`, `fxscatter`,
   `fxspark`, `fxfontw`, `fxfontg`, the overlay/effect sheets and the raw
   content tables (`mhWeaponDefs`, `mhMonsterAttacks`, `mhMonsterDefs`,
-  `mhCombat`) — 200360 B cart image total. The dead `mh_menu_bg`/`mh_menu_wsel`/
-  `mh_menu_msel` sheets were dropped with the opening menu (`hml.2`).
+  `mhCombat`, `mhCards`) — 298992 B cart image total. The dead
+  `mh_menu_bg`/`mh_menu_wsel`/`mh_menu_msel` sheets were dropped with the
+  opening menu (`hml.2`).
+- Detail cards (`tools/gen-cards.py`, ui.3): `data/armor.json` +
+  `data/skills.json` + `data/quests/*.json` compile into one 128x64 page image
+  per item page under `images/cards/` (3x 1bpp page-major layers in
+  `fxdata/cards/Sprites.txt`, the same family as the room images), the packed
+  `fxdata/tables/cards.bin` record table (mask + page image addresses + overlay
+  slots) and `src/generated/card_meta.hpp`. A page with no data is not
+  generated. `python3 tools/gen-cards.py --sheet build/cards_contact_sheet.png`
+  renders every page into one review grid (never committed); `--dump` lists the
+  masks/overlays without writing.
 - Regenerate with `make gen` (or `./tools/gen.sh`); bins are tracked despite
   `*.bin` being gitignored (force-added) so device tests are reproducible.
 - `fxdata/manifest.json` (tracked) pins sha256+size for every source image,
@@ -216,6 +241,7 @@ data/skeletons.json + data/creatures/*.json ──tools/gen-combat.py──►�
    - `test_audio` — cue-map asserts with real tones
     - `test_data` — FX-cart weapon/monster tables match the mock values and packed layout
     - `test_combat` — combat blob loader: header/spot values, cross-refs, guard eval, damage routing, cache read counts
+    - `test_cards` — mhCards cart reads, list-row -> card mapping, card action E2E (craft/take/turn-in + EEPROM), card page blit + overlay pixels across planes
     - `test_parity` — replays mock-generated traces tick-by-tick vs core
    - `test_hud` — pins HUD bar/divider framebuffer bytes + world-clip control
    - `test_perf` — cycle-based bench + budget gates
@@ -287,6 +313,18 @@ change + verify read). A save with an active quest/tier applies it at hunt start
 and the hunt-end quest-progress commit still runs exactly once per hunt. Camp
 hold-B (sheathed) leaves the hunt back to the hub. There is no quit input in the
 hunt — win/loss + A is the only hunt exit.
+
+Armor and quest rows open a **prebaked detail card** (ui.3) instead of firing
+the action on the list: A on the list opens the card, LEFT/RIGHT cycles its
+pages (DESC/PARTS/STATS/SKILL for armor; GOAL/PROG/REWARD for quests), B backs
+to the list, and A on the card performs the row's context action
+(craft/equip/unequip or take/turn-in) through the same action switch the list
+used. Everything is baked into the 128x64 page image except the hint line and
+the live overlay slots (PARTS have-counts, the quest progress bar); a crafted
+armor piece loses its PARTS page immediately, so the card cannot offer a second
+craft. GEAR **weapon** rows keep their direct-equip action for now: weapon
+cards land with the ui.4 forge trees, so GEAR has one card-opening row kind
+(armor) and one direct-action row kind (weapon) until then.
 
 ### Target roster (`MONSTER_DEFS`, FX cart blob)
 

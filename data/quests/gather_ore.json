@@ -3,6 +3,10 @@
   "goalKind": "gather",
   "target": "ore",
   "need": 3,
+  "desc": [
+    "MINE ORE FROM THE",
+    "AREA NODES."
+  ],
   "rewardZenny": 200,
   "rewardItem": "ore",
   "rewardCount": 2,

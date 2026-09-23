@@ -75,6 +75,11 @@
       "size": 8
     },
     {
+      "path": "fxdata/tables/cards.bin",
+      "sha256": "1483cf2aea50908a446220f2229d53f7fc6c535e7f545a1bf8d4533d00562ee7",
+      "size": 8
+    },
+    {
       "path": "fxdata/tables/combat.bin",
       "sha256": "dceb8287d98c55ead5877afc702e730a565af54b6532eed7e41516d755241267",
       "size": 8

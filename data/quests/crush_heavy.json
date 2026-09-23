@@ -3,6 +3,10 @@
   "goalKind": "kill",
   "target": "heavy",
   "need": 1,
+  "desc": [
+    "FELL THE HEAVY",
+    "LONGTAIL."
+  ],
   "rewardZenny": 400,
   "rewardItem": "scale",
   "rewardCount": 2,
