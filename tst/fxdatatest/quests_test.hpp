@@ -22,15 +22,16 @@ static const SaveBackend REAL_BACKEND = {saveEepromRead, saveEepromWrite};
 
 inline void test_quests(FxTest &test) {
     // --------------------------------------------------- cart quest records
-    test.expectEq(quests::QUEST_COUNT, 3, F("quest count"));
+    test.expectEq(quests::QUEST_COUNT, 4, F("quest count"));
     test.expectEq(quests::TARGET_LUNGE, MON_LUNGE, F("target lunge == roster"));
     test.expectEq(quests::TARGET_SWEEP, MON_SWEEP, F("target sweep == roster"));
     test.expectEq(quests::TARGET_HEAVY, MON_HEAVY, F("target heavy == roster"));
 
-    QuestDef d0, d1, d2;
+    QuestDef d0, d1, d2, d3;
     questReadDef(quests::QUEST_SLAY_LUNGE, d0);
     questReadDef(quests::QUEST_SLAY_SWEEP, d1);
-    questReadDef(quests::QUEST_CRUSH_HEAVY, d2);
+    questReadDef(quests::QUEST_GATHER_ORE, d2);
+    questReadDef(quests::QUEST_CRUSH_HEAVY, d3);
     test.expectEq(d0.id, 0, F("q0 id"));
     test.expectEq(d0.goalKind, quests::GOAL_KILL, F("q0 goal kill"));
     test.expectEq(d0.target, MON_LUNGE, F("q0 target"));
@@ -40,16 +41,32 @@ inline void test_quests(FxTest &test) {
     test.expectEq(d0.rewardCount, 0, F("q0 no material count"));
     test.expectEq(d0.unlockFlag, 0, F("q0 unlock"));
     test.expectEq(d1.id, 1, F("q1 id"));
+    test.expectEq(d1.goalKind, quests::GOAL_KILL, F("q1 goal kill"));
     test.expectEq(d1.target, MON_SWEEP, F("q1 target"));
     test.expectEq(d1.need, 2, F("q1 need"));
     test.expectEq(d1.rewardZenny, 250, F("q1 reward"));
+    test.expectEq(d1.rewardItem, static_cast<uint8_t>(ITEM_SHELL + 1), F("q1 shell material"));
+    test.expectEq(d1.rewardCount, 1, F("q1 shell count"));
+    test.expectEq(d1.unlockFlag, 1, F("q1 unlock chain"));
     test.expectEq(d2.id, 2, F("q2 id"));
-    test.expectEq(d2.target, MON_HEAVY, F("q2 target"));
-    test.expectEq(d2.need, 1, F("q2 need"));
-    test.expectEq(d2.rewardZenny, 400, F("q2 reward"));
+    test.expectEq(d2.goalKind, quests::GOAL_GATHER, F("q2 goal gather"));
+    test.expectEq(d2.target, static_cast<uint8_t>(ITEM_ORE), F("q2 target ore item"));
+    test.expectEq(d2.need, 3, F("q2 need"));
+    test.expectEq(d2.rewardZenny, 200, F("q2 reward"));
+    test.expectEq(d2.rewardItem, static_cast<uint8_t>(ITEM_ORE + 1), F("q2 ore material"));
+    test.expectEq(d2.rewardCount, 2, F("q2 ore count"));
+    test.expectEq(d2.unlockFlag, 2, F("q2 unlock chain"));
+    test.expectEq(d3.id, 3, F("q3 id"));
+    test.expectEq(d3.goalKind, quests::GOAL_KILL, F("q3 goal kill"));
+    test.expectEq(d3.target, MON_HEAVY, F("q3 target"));
+    test.expectEq(d3.need, 1, F("q3 need"));
+    test.expectEq(d3.rewardZenny, 400, F("q3 reward"));
+    test.expectEq(d3.rewardItem, static_cast<uint8_t>(ITEM_SCALE + 1), F("q3 scale material"));
+    test.expectEq(d3.rewardCount, 2, F("q3 scale count"));
+    test.expectEq(d3.unlockFlag, 3, F("q3 unlock chain"));
 
     // Board rows: take/reward pairs, reward in cost, need nibble in param.
-    test.expectEq(screenRowCount(screens::SCREEN_QUESTS), 6, F("board rows"));
+    test.expectEq(screenRowCount(screens::SCREEN_QUESTS), 8, F("board rows"));
     ScreenRow take0, turn0;
     screenReadRow(screenRowOffsetAt(screens::SCREEN_QUESTS, 0), take0);
     screenReadRow(screenRowOffsetAt(screens::SCREEN_QUESTS, 1), turn0);
@@ -122,6 +139,44 @@ inline void test_quests(FxTest &test) {
     test.expectEq(out.zenny, 150, F("zenny persisted"));
     test.expectEq(saveQuestGet(out, 0, 1), 1, F("done persisted"));
     test.expectEq(out.activeQuest, SAVE_QUEST_NONE, F("active none persisted"));
+
+    // ------------------------- E2E: gather quest + chain (monhun-ardu-dlp.3)
+    // Quest 2 (gather_ore) is chained behind quest 1: mark 1 done, take 2,
+    // gather three ore through the real applyGather hook, then turn it in for
+    // the zenny + material reward and confirm quest 3 unlocks.
+    saveDefaults(save);
+    saveQuestSet(save, 1, 1);   // prior quest done -> the gather quest is unlocked
+    ScreenRow take2, turn2, take3;
+    screenReadRow(screenRowOffsetAt(screens::SCREEN_QUESTS, 4), take2);
+    screenReadRow(screenRowOffsetAt(screens::SCREEN_QUESTS, 5), turn2);
+    screenReadRow(screenRowOffsetAt(screens::SCREEN_QUESTS, 6), take3);
+    test.expectEq(take2.action, screens::ACTION_TAKE_QUEST, F("gather take action"));
+    test.expectEq(take2.unlock, d2.unlockFlag, F("gather take unlock from def"));
+    test.expectEq(turn2.cost, d2.rewardZenny, F("gather turn cost == reward"));
+    test.expectEq(turn2.recipe[0].item, d2.rewardItem, F("gather material item from def"));
+    test.expectEq(screenCondOk(save, take2), 1, F("gather take live after unlock"));
+    test.expectEq(screenApplyAction(save, take2), 1, F("gather take applies"));
+    test.expectEq(save.activeQuest, 2, F("gather active quest set"));
+
+    newGame(g, W_SWORD, MODE_HUNT);
+    g.questGoalKind = static_cast<int8_t>(d2.goalKind);
+    g.questTarget = static_cast<int8_t>(d2.target);
+    g.questNeed = d2.need;
+    g.questProgress = save.progress;
+    for (uint8_t i = 0; i < 3; i++) {
+        g.gatherMask = 0;                        // re-pick the node each pass
+        g.player.itemNode = zone::PROP_AREA_5;   // ore node, yield 1
+        applyGather(g, g.player);
+    }
+    test.expectEq(static_cast<uint32_t>(g.items[ITEM_ORE]), 3, F("three ore banked"));
+    test.expectEq(static_cast<uint32_t>(g.questProgress), 3, F("gather progress == need"));
+    save.progress = g.questProgress;
+    test.expectEq(screenCondOk(save, turn2), 1, F("gather turn row live at need"));
+    test.expectEq(screenApplyAction(save, turn2), 1, F("gather turn-in applies"));
+    test.expectEq(save.zenny, 200, F("gather reward paid"));
+    test.expectEq(static_cast<uint32_t>(save.items[ITEM_ORE]), 2, F("ore material reward granted"));
+    test.expectEq(saveQuestGet(save, 2, 1), 1, F("gather done bit set"));
+    test.expectEq(screenCondOk(save, take3), 1, F("chain unlock: quest 3 live after gather done"));
 
     // Corrupt magic -> safe defaults (active none).
     saveEepromWrite(SAVE_EEPROM_ADDR, 0x00);

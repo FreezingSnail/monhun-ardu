@@ -1,11 +1,11 @@
 #pragma once
-// Host unit tests for the app-level routing (bead monhun-ardu-mgn qs.4, demo
-// flow rework monhun-ardu-5r1): src/app_state.hpp. Pins the shipped demo loop
-// (menu -> hunt -> menu, fresh newGame per hunt) plus the shelf hub graph
-// (menu/hub/quests/smith) that stays compiled and tested but is off the demo
-// path, the held-button guards, and the once-per-hunt progress commit. The
-// device E2E counterpart (tst/fxdatatest/hub_test.hpp) drives the same
-// app_state.hpp functions against the real cart + EEPROM.
+// Host unit tests for the app-level routing (bead monhun-ardu-mgn qs.4; hub
+// loop rework monhun-ardu-dlp.3): src/app_state.hpp. Pins the shipped loop
+// (menu -> hub -> hunt -> hub -> menu, fresh newGame per hunt) plus the hub
+// graph (hub/quests/smith) that is live again, the held-button guards, and the
+// once-per-hunt progress commit. The device E2E counterpart
+// (tst/fxdatatest/hub_test.hpp) drives the same app_state.hpp functions against
+// the real cart + EEPROM.
 #include "test.hpp"
 #include "../src/app_state.hpp"
 
@@ -40,7 +40,7 @@ void AppSuite(TestRunner &runner) {
     TestSuite suite("Boot-flow routing: menu/hub/screens/hunt (src/app_state.hpp, qs.4)");
 
     {
-        Test t("menu A launches the picked hunt directly, no hub (demo flow)");
+        Test t("menu A opens the hub; hub HUNT launches the picked loadout");
         MenuState menu;
         menu.weapon = W_FLAIL;
         menu.target = MON_HEAVY;
@@ -48,23 +48,29 @@ void AppSuite(TestRunner &runner) {
         Game g;
         SaveBlock save;
         saveDefaults(save);
-        t.assert(appMenuAccept(), APP_NAV_HUNT, "menu A routes to hunt");
+        t.assert(appMenuAccept(), APP_NAV_HUB, "menu A routes to hub");
         t.assert(menuStep(menu, AT_A), MENU_ACCEPT, "A edge accepts");
-        t.assert(appNavApply(appMenuAccept(), menu, screen, save, g, AT_A), true, "hunt started");
+        t.assert(appNavApply(appMenuAccept(), menu, screen, save, g, AT_A), false, "hub opened, no hunt");
+        t.assert(screen.active, true, "hub active");
+        t.assert(screen.screen, screens::SCREEN_HUB, "on the hub");
+        t.assert(menu.active, false, "menu closed in the hub");
+        t.assert(menu.weapon, W_FLAIL, "weapon pick kept");
+        t.assert(menu.target, MON_HEAVY, "target pick kept");
+        t.assert(appNavApply(appScreenAccept(screens::SCREEN_HUB, arow(screens::ACTION_HUNT)), menu, screen, save, g, AT_A), true, "hub HUNT starts the hunt");
         t.assert(g.weapon, W_FLAIL, "started flail");
         t.assert(g.monsterKind, MON_HEAVY, "started heavy beast");
-        t.assert(g.roomId, zone::ROOM_CAMP, "menu A starts in the camp");
+        t.assert(g.roomId, zone::ROOM_CAMP, "hub HUNT starts in the camp");
         t.assert(g.roomMonsterKind, zone::MONSTER_NONE, "camp room is safe");
         t.assert(roomIsSafe(g), true, "camp reads safe");
         t.assert(menu.active, false, "menu closed while hunting");
-        t.assert(screen.active, false, "no hub on the demo path");
+        t.assert(screen.active, false, "hub closed while hunting");
         t.assert(menu.weapon, W_FLAIL, "weapon pick kept");
         t.assert(menu.target, MON_HEAVY, "target pick kept");
         suite.addTest(t);
     }
 
     {
-        Test t("menu A with the last target pick starts the camp hunt");
+        Test t("menu A -> hub -> HUNT starts the camp hunt with the last target pick");
         MenuState menu;
         menu.weapon = W_GUN;
         menu.target = MENU_TARGET_COUNT - 1;   // RAVAGER (prg.8: no pole target)
@@ -72,7 +78,8 @@ void AppSuite(TestRunner &runner) {
         Game g;
         SaveBlock save;
         saveDefaults(save);
-        t.assert(appNavApply(appMenuAccept(), menu, screen, save, g, AT_A), true, "hunt started");
+        appNavApply(appMenuAccept(), menu, screen, save, g, AT_A);   // menu A -> hub
+        t.assert(appNavApply(appScreenAccept(screens::SCREEN_HUB, arow(screens::ACTION_HUNT)), menu, screen, save, g, AT_A), true, "hunt started");
         t.assert(g.mode, MODE_HUNT, "hunt mode");
         t.assert(g.roomId, zone::ROOM_CAMP, "starts in the camp");
         t.assert(g.roomMonsterKind, zone::MONSTER_NONE, "camp room is safe");
@@ -192,7 +199,7 @@ void AppSuite(TestRunner &runner) {
     }
 
     {
-        Test t("hunt end / hub B re-open the menu and clear the held-dpad state");
+        Test t("hunt end routes to the hub; hub B re-opens the menu and clears the held-dpad state");
         MenuState menu;
         ScreenState screen;
         screenReset(screen, screens::SCREEN_HUB, screens::SCREEN_HUB_ROWS);
@@ -202,9 +209,12 @@ void AppSuite(TestRunner &runner) {
         menu.weapon = 2;
         menu.navX = 1;
         menu.navXTimer = 4;
-        t.assert(appHuntReturn(), APP_NAV_MENU, "hunt end routes to the menu");
-        t.assert(appScreenBack(screens::SCREEN_HUB), APP_NAV_MENU, "hub B routes to the menu (shelf)");
+        t.assert(appHuntReturn(), APP_NAV_HUB, "hunt end routes to the hub");
         t.assert(appNavApply(appHuntReturn(), menu, screen, save, g, AT_B), false, "return is not a hunt start");
+        t.assert(screen.active, true, "hub active after the hunt");
+        t.assert(screen.screen, screens::SCREEN_HUB, "return lands on the hub");
+        t.assert(menu.active, false, "menu stays closed");
+        t.assert(appNavApply(appScreenBack(screens::SCREEN_HUB), menu, screen, save, g, AT_B), false, "hub B leaves to the menu");
         t.assert(menu.active, true, "menu active");
         t.assert(screen.active, false, "hub closed");
         t.assert(menu.navX, 0, "nav direction reset");
@@ -270,7 +280,7 @@ void AppSuite(TestRunner &runner) {
     }
 
     {
-        Test t("demo round trip: menu -> hunt -> death -> menu, picks kept, fresh hunt resets");
+        Test t("hub loop: menu -> hub -> hunt -> death -> hub -> menu, picks kept, fresh hunt resets");
         MenuState menu;
         menu.weapon = W_GUN;
         menu.target = MON_SWEEP;
@@ -278,11 +288,14 @@ void AppSuite(TestRunner &runner) {
         Game g;
         SaveBlock save;
         saveDefaults(save);
-        appNavApply(appMenuAccept(), menu, screen, save, g, AT_A);
+        appNavApply(appMenuAccept(), menu, screen, save, g, AT_A);   // menu A -> hub
+        t.assert(screen.active, true, "menu A opens the hub");
+        t.assert(screen.screen, screens::SCREEN_HUB, "on the hub");
+        appNavApply(appScreenAccept(screens::SCREEN_HUB, arow(screens::ACTION_HUNT)), menu, screen, save, g, AT_A);
         t.assert(g.weapon, W_GUN, "picks survived to the hunt");
         t.assert(g.monsterKind, MON_SWEEP, "target survived to the hunt");
         t.assert(menu.active, false, "no menu while hunting");
-        t.assert(screen.active, false, "no hub on the demo path");
+        t.assert(screen.active, false, "hub closed while hunting");
         g.projN = 3;
         g.fxN = 2;
         g.tick = 77;
@@ -291,11 +304,15 @@ void AppSuite(TestRunner &runner) {
         t.assert(menuReturnStep(menu, true, AT_IDLE), false, "over tick without A");
         t.assert(menuReturnStep(menu, true, AT_A), true, "death + A returns");
         t.assert(appNavApply(appHuntReturn(), menu, screen, save, g, AT_A), false, "return is not a hunt start");
-        t.assert(menu.active, true, "death returns to the menu");
-        t.assert(screen.active, false, "no hub on the return");
+        t.assert(screen.active, true, "death returns to the hub");
+        t.assert(screen.screen, screens::SCREEN_HUB, "on the hub after death");
+        t.assert(menu.active, false, "menu stays closed");
         t.assert(menu.weapon, W_GUN, "weapon pick kept across the death");
         t.assert(menu.target, MON_SWEEP, "target pick kept across the death");
-        appNavApply(appMenuAccept(), menu, screen, save, g, AT_A);   // fresh hunt
+        appNavApply(appScreenBack(screens::SCREEN_HUB), menu, screen, save, g, AT_B);   // hub B -> menu
+        t.assert(menu.active, true, "hub B returns to the menu");
+        appNavApply(appMenuAccept(), menu, screen, save, g, AT_A);                                                    // menu -> hub
+        appNavApply(appScreenAccept(screens::SCREEN_HUB, arow(screens::ACTION_HUNT)), menu, screen, save, g, AT_A);   // fresh hunt
         t.assert(g.tick, 0, "fresh tick");
         t.assert(g.projN, 0, "projectiles cleared");
         t.assert(g.fxN, 0, "effects cleared");
@@ -308,7 +325,7 @@ void AppSuite(TestRunner &runner) {
     }
 
     {
-        Test t("shelf hub graph: smith round trip still starts the picked hunt");
+        Test t("hub graph: smith round trip still starts the picked hunt");
         MenuState menu;
         menu.weapon = W_GUN;
         menu.target = MON_SWEEP;

@@ -1,0 +1,10 @@
+{
+  "id": 2,
+  "goalKind": "gather",
+  "target": "ore",
+  "need": 3,
+  "rewardZenny": 200,
+  "rewardItem": "ore",
+  "rewardCount": 2,
+  "unlockFlag": 2
+}

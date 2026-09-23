@@ -3,10 +3,12 @@
   "title": "QUESTS",
   "rows": [
     { "label": "SLAY 3 LUNGE", "cost": 0, "action": "take_quest", "condition": "quest", "param": 0 },
-    { "label": "REWARD 150", "cost": 150, "action": "turn_in_quest", "condition": "quest", "param": 48 },
+    { "label": "TURN IN 150", "cost": 150, "action": "turn_in_quest", "condition": "quest", "param": 48 },
     { "label": "SLAY 2 SWEEP", "cost": 0, "action": "take_quest", "condition": "quest", "param": 1 },
-    { "label": "REWARD 250", "cost": 250, "action": "turn_in_quest", "condition": "quest", "param": 33 },
-    { "label": "SLAY 1 HEAVY", "cost": 0, "action": "take_quest", "condition": "quest", "param": 2 },
-    { "label": "REWARD 400", "cost": 400, "action": "turn_in_quest", "condition": "quest", "param": 18 }
+    { "label": "TURN IN 250", "cost": 250, "action": "turn_in_quest", "condition": "quest", "param": 33 },
+    { "label": "GATHER 3 ORE", "cost": 0, "action": "take_quest", "condition": "quest", "param": 2 },
+    { "label": "TURN IN 200", "cost": 200, "action": "turn_in_quest", "condition": "quest", "param": 50 },
+    { "label": "CRUSH HEAVY", "cost": 0, "action": "take_quest", "condition": "quest", "param": 3 },
+    { "label": "TURN IN 400", "cost": 400, "action": "turn_in_quest", "condition": "quest", "param": 19 }
   ]
 }

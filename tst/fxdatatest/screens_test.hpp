@@ -57,7 +57,7 @@ inline void test_screens(FxTest &test) {
     test.expectEq(screens::SCREEN_HUB, 0, F("hub index"));
     test.expectEq(screens::SCREEN_QUESTS, 1, F("quests index"));
     test.expectEq(screens::SCREEN_SMITH, 2, F("smith index"));
-    test.expectEq(screenRowCount(screens::SCREEN_HUB), 3, F("hub row count"));
+    test.expectEq(screenRowCount(screens::SCREEN_HUB), 4, F("hub row count"));
 
     // Title bytes come from the cart def (id u8, titleLen u8, title chars).
     const uint16_t hubDef = screenDefOff(screens::SCREEN_HUB);
@@ -67,18 +67,21 @@ inline void test_screens(FxTest &test) {
     test.expectEq(mhFxReadU8(screenCart(hubDef + 3)), 'U', F("hub title U"));
     test.expectEq(mhFxReadU8(screenCart(hubDef + 4)), 'B', F("hub title B"));
 
-    ScreenRow r0, r1, r2;
+    ScreenRow r0, r1, r2, r3;
     screenReadRow(screenRowOffsetAt(screens::SCREEN_HUB, 0), r0);
     screenReadRow(screenRowOffsetAt(screens::SCREEN_HUB, 1), r1);
     screenReadRow(screenRowOffsetAt(screens::SCREEN_HUB, 2), r2);
+    screenReadRow(screenRowOffsetAt(screens::SCREEN_HUB, 3), r3);
     test.expectEq(r0.cost, 0, F("row0 cost"));
     test.expectEq(r0.action, screens::ACTION_HUNT, F("row0 action hunt"));
     test.expectEq(r0.cond, screens::COND_ALWAYS, F("row0 cond"));
     test.expectEq(r0.param, 0, F("row0 param"));
-    test.expectEq(r1.action, screens::ACTION_OPEN_SMITH, F("row1 action open smith"));
+    test.expectEq(r1.action, screens::ACTION_OPEN_QUESTS, F("row1 action open quests"));
     test.expectEq(r1.cond, screens::COND_ALWAYS, F("row1 cond"));
-    test.expectEq(r2.action, screens::ACTION_NONE, F("row2 action none"));
-    test.expectEq(r2.flags, screens::ROW_F_ZENNY, F("row2 zenny dynamic-value flag"));
+    test.expectEq(r2.action, screens::ACTION_OPEN_SMITH, F("row2 action open smith"));
+    test.expectEq(r2.cond, screens::COND_ALWAYS, F("row2 cond"));
+    test.expectEq(r3.action, screens::ACTION_NONE, F("row3 action none"));
+    test.expectEq(r3.flags, screens::ROW_F_ZENNY, F("row3 zenny dynamic-value flag"));
 
     // ----------------------------------------------------- nav/scroll
     SaveBlock save;
@@ -86,7 +89,7 @@ inline void test_screens(FxTest &test) {
 
     ScreenState st;
     screenEnter(st, screens::SCREEN_HUB, save);
-    test.expectEq(st.rowCount, 3, F("enter rowCount"));
+    test.expectEq(st.rowCount, 4, F("enter rowCount"));
     test.expectEq(st.cursor, 0, F("enter cursor"));
     test.expectEq(st.scroll, 0, F("enter scroll"));
     test.expectEq(st.active, 1, F("enter active"));
@@ -105,7 +108,7 @@ inline void test_screens(FxTest &test) {
     screenStep(st, idle);
     screenStep(st, up);   // wrap to the last row
     screenStep(st, idle);
-    test.expectEq(st.cursor, 2, F("nav up wraps"));
+    test.expectEq(st.cursor, 3, F("nav up wraps"));
     test.expectEq(screenStep(st, a), SCREEN_ACCEPT, F("A accepts"));
     test.expectEq(screenStep(st, a), SCREEN_NONE, F("held A silent"));
     screenStep(st, idle);
@@ -143,15 +146,11 @@ inline void test_screens(FxTest &test) {
     test.expectEq(screenCondOk(act, q0), 1, F("take always allowed"));
     test.expectEq(screenApplyAction(act, q0), 1, F("take applies"));
     test.expectEq(saveQuestGet(act, 0, 0), 1, F("quest0 taken"));
-    test.expectEq(screenApplyAction(act, r2), 0, F("none row changes nothing"));
+    test.expectEq(screenApplyAction(act, r3), 0, F("none row changes nothing"));
     test.expectEq(appScreenAccept(screens::SCREEN_HUB, r0), APP_NAV_HUNT, F("hub HUNT routes to hunt"));
-    test.expectEq(appScreenAccept(screens::SCREEN_HUB, r1), APP_NAV_SMITH, F("hub SMITH route"));
-    test.expectEq(appScreenAccept(screens::SCREEN_HUB, r2), APP_NAV_NONE, F("hub zenny row is a no-op"));
-    // The QUESTS row is hidden from the shipped hub (epic monhun-ardu-nch), but
-    // the routing action stays: a synthetic open_quests row still routes.
-    ScreenRow qrow = r0;
-    qrow.action = screens::ACTION_OPEN_QUESTS;
-    test.expectEq(appScreenAccept(screens::SCREEN_HUB, qrow), APP_NAV_QUESTS, F("hub QUESTS route (row hidden)"));
+    test.expectEq(appScreenAccept(screens::SCREEN_HUB, r1), APP_NAV_QUESTS, F("hub QUESTS route"));
+    test.expectEq(appScreenAccept(screens::SCREEN_HUB, r2), APP_NAV_SMITH, F("hub SMITH route"));
+    test.expectEq(appScreenAccept(screens::SCREEN_HUB, r3), APP_NAV_NONE, F("hub zenny row is a no-op"));
     test.expectEq(appScreenBack(screens::SCREEN_QUESTS), APP_NAV_HUB, F("quests B -> hub"));
     test.expectEq(appScreenBack(screens::SCREEN_HUB), APP_NAV_MENU, F("hub B -> menu"));
 
@@ -226,22 +225,24 @@ inline void test_screens(FxTest &test) {
     test.expectEq(countBits(10, 40, 11, 18) > 0 ? 1 : 0, 1, F("row0 label ink"));
     test.expectEq(countBits(112, 123, 11, 18) > 0 ? 1 : 0, 1, F("row0 cost right-aligned"));
     // Row 1 label (light gray, unselected) one row pitch below.
-    test.expectEq(countBits(10, 50, 20, 27) > 0 ? 1 : 0, 1, F("row1 label ink"));
+    test.expectEq(countBits(10, 50, 20, 27) > 0 ? 1 : 0, 1, F("row1 QUESTS label ink"));
     // The cursor sits on row 0, so row 1's cursor cell stays empty.
     test.expectEq(countBits(2, 5, 22, 25), 0, F("row1 no cursor"));
-    // Row 2 is the dynamic ZENNY row: the live balance (1234, 4 digits) is
-    // drawn in the cost column at y = 11 + 2*9 = 29, not the packed cost.
-    test.expectEq(countBits(10, 30, 29, 36) > 0 ? 1 : 0, 1, F("zenny row label ink"));
-    test.expectEq(countBits(108, 123, 29, 36) > 0 ? 1 : 0, 1, F("zenny balance drawn"));
+    // Row 2 label (SMITH) at y = 11 + 2*9 = 29.
+    test.expectEq(countBits(10, 50, 29, 36) > 0 ? 1 : 0, 1, F("row2 SMITH label ink"));
+    // Row 3 is the dynamic ZENNY row: the live balance (1234, 4 digits) is
+    // drawn in the cost column at y = 11 + 3*9 = 38, not the packed cost.
+    test.expectEq(countBits(10, 32, 38, 45) > 0 ? 1 : 0, 1, F("zenny row label ink"));
+    test.expectEq(countBits(108, 123, 38, 45) > 0 ? 1 : 0, 1, F("zenny balance drawn"));
     // Control: an empty balance draws one digit at the right edge only.
     clearFb();
     saveDefaults(ps);
     drawScreen(draw, ps);
-    test.expectEq(countBits(108, 119, 29, 36), 0, F("zenny 0 leaves the 4-digit span empty"));
-    test.expectEq(countBits(120, 123, 29, 36) > 0 ? 1 : 0, 1, F("zenny 0 digit drawn"));
+    test.expectEq(countBits(108, 119, 38, 45), 0, F("zenny 0 leaves the 4-digit span empty"));
+    test.expectEq(countBits(120, 123, 38, 45) > 0 ? 1 : 0, 1, F("zenny 0 digit drawn"));
 
     // -------------------------------------------------- quests board screen
-    test.expectEq(screenRowCount(screens::SCREEN_QUESTS), 6, F("quests row count"));
+    test.expectEq(screenRowCount(screens::SCREEN_QUESTS), 8, F("quests row count"));
     ScreenRow qr0, qr1;
     screenReadRow(screenRowOffsetAt(screens::SCREEN_QUESTS, 0), qr0);
     screenReadRow(screenRowOffsetAt(screens::SCREEN_QUESTS, 1), qr1);

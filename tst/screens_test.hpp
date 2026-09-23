@@ -3,8 +3,8 @@
 // core/save.hpp (encode/decode/checksum/roundtrip/fallback/write-on-change) and
 // screen_state.hpp (conditions, visibility, debounced nav, action switch), the
 // pure screenReset() entry helper, plus the opening menu's A -> MENU_ACCEPT
-// edge (app_state.hpp routes it; the demo flow sends it to the hunt, monhun-
-// ardu-5r1). The cart side
+// edge (app_state.hpp routes it; the hub loop sends it to the hub, monhun-
+// ardu-dlp.3). The cart side
 // (src/screens.hpp) is device-only and is pinned by tst/fxdatatest/screens_test.hpp.
 #include "test.hpp"
 #include "../src/screen_state.hpp"
@@ -503,7 +503,7 @@ void ScreenSuite(TestRunner &runner) {
         MenuState m;
         t.assert(menuStep(m, ST_B), MENU_NONE, "B is silent in the menu");
         t.assert(menuStep(m, ST_IDLE), MENU_NONE, "release silent");
-        t.assert(menuStep(m, ST_A), MENU_ACCEPT, "A edge -> accept (routes to hunt)");
+        t.assert(menuStep(m, ST_A), MENU_ACCEPT, "A edge -> accept (routes to hub)");
         t.assert(menuStep(m, ST_A), MENU_NONE, "held A silent");
         t.assert(menuStep(m, ST_IDLE), MENU_NONE, "release after A silent");
         t.assert(menuStep(m, ST_A), MENU_ACCEPT, "fresh A press fires again");

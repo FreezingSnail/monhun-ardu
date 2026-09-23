@@ -1,8 +1,10 @@
 {
-  "id": 2,
+  "id": 3,
   "goalKind": "kill",
   "target": "heavy",
   "need": 1,
   "rewardZenny": 400,
-  "unlockFlag": 0
+  "rewardItem": "scale",
+  "rewardCount": 2,
+  "unlockFlag": 3
 }

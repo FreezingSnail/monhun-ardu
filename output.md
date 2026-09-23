@@ -1,91 +1,111 @@
-# monhun-ardu-dlp.2 — hql.2 device: goal-kind accounting + gather hook + reward payout
+# monhun-ardu-dlp.3 — hql.3 loop: hub reachable + quest board content/chain + full gate
 
 Status: **DONE** (no commit/push — orchestrator owns the commit).
 
 ## What changed
 
-- `src/core/monster.hpp` — kill accounting now gated on
-  `g.questGoalKind == quests::GOAL_KILL` (include `generated/quest_meta.hpp`).
-  A `GOAL_GATHER` quest never counts a kill; existing target-kind compare and
-  255 clamp unchanged.
-- `src/core/items.hpp` `applyGather()` — after `itemAdd`, when
-  `g.questGoalKind == GOAL_GATHER && g.questTarget == slot`, adds
-  `prop.gatherYield` to `g.questProgress` (clamped 255). Off-item nodes still
-  gather but do not count; carves go through `carve.hpp`, never this path.
-- `src/screen_state.hpp` — `ScreenRow` gains `uint8_t unlock` (0 = always).
-  `COND_QUEST` take path = `questTakeable(save, quest) && questUnlocked(save,
-  row.unlock)`; `ACTION_TAKE_QUEST` re-checks `questUnlocked` before
-  `questTake` (mirrors the recipe re-check).
-- `src/screens.hpp` `screenReadRow()` — for `COND_QUEST` rows reads the quest
-  def (`src/quest.hpp`): take rows fill `row.unlock = def.unlockFlag`; turn-in
-  rows fill `row.recipe[0] = {def.rewardItem, def.rewardCount}` and
-  `row.cost = def.rewardZenny`. `row.unlock` zeroed for all other rows.
-- `docs/quests-shops.md` — unlock field + gather/kill accounting wiring.
+### Wiring (hub back on the demo path)
+- `src/app_state.hpp` — `appMenuAccept()` -> `APP_NAV_HUB`; `appHuntReturn()` ->
+  `APP_NAV_HUB`. Header/flow comments rewritten: live flow is
+  menu -> hub -> HUNT -> camp/area, hub -> QUESTS/SMITH -> hub, hub B -> menu,
+  camp hold-B -> menu, hunt end + A -> hub. The 5r1 direct-to-hunt shortcut is
+  noted as superseded.
+- `monhun-ardu.ino` — comment block updated (menu A opens the hub; hub HUNT
+  launches the loadout; hunt end returns to the hub; the hub is no longer "off
+  the demo path"). No behavior change beyond the routing above.
 
-## Tests
+### Content
+- `data/screens/hub.json` — QUESTS row added (action `open_quests`, condition
+  `always`, cost 0) -> rows HUNT / QUESTS / SMITH / ZENNY (row indices 0..3;
+  ZENNY row stays row 3 with the `zenny` flag). B still leaves to the menu.
+- `data/quests/*.json` (v2, 4 quests, unique ids 0..3, `[a-z][a-z0-9_]*.json`):
+  - `slay_lunge` id 0: kill 3 lunge, 150z, no material, unlock 0.
+  - `slay_sweep` id 1: kill 2 sweep, 250z + shell x1, unlock 1.
+  - `gather_ore` id 2 (new): gather 3 ore, 200z + ore x2, unlock 2.
+  - `crush_heavy` id 3 (was id 2): kill 1 heavy, 400z + scale x2, unlock 3.
+  Chain: `unlockFlag = N` = prior quest index N-1 done -> 0 -> 1 -> 2 -> 3.
+- `data/screens/quests.json` — 8 rows (take + turn-in per quest), page scrolls
+  by 6. Take rows `param = quest` (need nibble 0, as gen-screens requires);
+  turn-in rows `param = (need << 4) | quest`, `cost = rewardZenny`
+  (48/33/50/19). Labels: SLAY 3 LUNGE / TURN IN 150 / SLAY 2 SWEEP /
+  TURN IN 250 / GATHER 3 ORE / TURN IN 200 / CRUSH HEAVY / TURN IN 400.
 
-- `tst/quests_test.hpp` — new: gather goal never counts a kill; gather
-  completion counts yield with `GOAL_GATHER`; off-item gather no-op; kill goal
-  ignores gather; 255 clamp from `254 + yield 2`; chain-unlock take row (cond
-  false + action rejected while locked, then live after prior quest done);
-  turn-in material reward via `row.recipe[0]`. `killBeast` now arms
-  `questGoalKind = GOAL_KILL`; `questRow` zeroes `unlock`/recipe.
-- `tst/screens_test.hpp` — `row()` zeroes `unlock`/recipe; new unlock-gated take
-  row + turn-in material reward cases.
-- `tst/fxdatatest/quests_test.hpp` — arms `questGoalKind` on the manual kill
-  setups; asserts the board take row's `unlock` and the turn-in row's
-  `recipe[0]` come from the def.
-- `tst/smith_test.hpp`, `tst/app_state_test.hpp` — host `ScreenRow` helpers
-  zero the new `unlock` + recipe fields (layout change made uninitialized
-  `recipe` garbage visible).
-- `tst/fxdatatest/smith_test.hpp` — **test-only stack fix (deviation)**: reuse
-  the existing file-scope `static Game g_smith` instead of a second 650 B
-  stack `Game ag`. The sim leaves ~845 B of stack after globals and this suite's
-  frame already sat within 7 B of the limit; growing `ScreenRow` by 1 B tipped
-  it. Proven: adding a 7-byte `volatile` pad to the pre-change suite reproduces
-  the crash. Behavior of the test is unchanged (helpers re-init `g_smith`).
+### Tests
+- `tst/app_state_test.hpp` — menu A -> hub (no hunt); hub HUNT -> hunt;
+  hunt end -> hub; hub B -> menu; round-trip test reworked to the hub loop.
+- `tst/fxdatatest/hub_test.hpp` — boot menu A -> hub (row count 4), hub HUNT
+  starts the hunt, QUESTS row 1 -> board (row count 8), SMITH row 2, ZENNY
+  row 3 pixel checks (y = 38), hunt end -> hub, fresh hunt from the hub.
+- `tst/fxdatatest/screens_test.hpp` — hub row count 4 + r3 ZENNY row, nav wrap
+  to 3, real QUESTS route (synthetic-row workaround removed), hub pixel rows
+  shifted, quests board row count 8.
+- `tst/fxdatatest/zones_test.hpp` — section 6 drives menu -> hub -> HUNT -> camp.
+- `tst/fxdatatest/quests_test.hpp` — quest count 4, def assertions for all four
+  (goal kinds, ore gather target, shell/ore/scale materials, unlock chain),
+  board rows 8, plus a new gather E2E: unlock chain -> take `gather_ore` ->
+  three ore through the real `applyGather` hook -> turn-in pays 200z + ore x2 ->
+  quest 3 unlocks.
+- `tst/screens_test.hpp` — comments only (menu A now routes to the hub).
 
-## Verification (makes)
+### Docs
+- `docs/quests-shops.md` — v2 record, goal kinds, material rewards, unlock rule,
+  the live hub loop (5r1 superseded), scaffold limitations (dead-condition board
+  rows still render; no inventory screen).
 
-Baseline (HEAD c0309ca): `size: flash=29098/29696 (598 free)  ram=1709/2560`
-(`.text=29074 .data=24 .bss=1685`).
+## Generated artifacts
 
-After this bead:
+`make gen` regenerated `quests.bin`/`screens.bin` + `quest_meta.hpp`/
+`screen_meta.hpp`, and the larger blobs shifted later FX offsets
+(`equip.bin`/`equip_meta.hpp`, `zone_meta.hpp` sheet/room offsets). gen-equipment
+bakes the *previous* run's `fxdata.h`, so a second `make gen` was needed to
+converge; `make gen-check` then passed (see tails).
+
+## Verification (exact tails)
+
 ```
-size: .text=29248 .data=24 .bss=1685
-size: flash=29272/29696 (424 free)  ram=1709/2560
-size: data facts: HAS_CARVE:true HAS_ENRAGE:true ... HAS_ZONES:true
-```
-**Delta for this bead: +174 flash (`+174 .text`, `.data`/`.bss` unchanged),
-RAM unchanged.** Fits (424 free).
+$ make gen-check
+fxdata_manifest: fxdata/manifest.json up to date (52 images, 64 inputs, 28 outputs)
+gen.sh: FX data + src/fxdata.h regenerated
+fxdata_manifest: PASS (91 generated artifacts unchanged)
 
-- `make test` → `Total Passed: 6378  Total Failed: 0`
-- `make gen-check` → `fxdata_manifest: PASS (91 generated artifacts unchanged)`
-- `FXTEST_ONLY=test_quests make fxtest-headless` → `test_quests PASSED=56 FAILED=0`
-- `FXTEST_ONLY=test_hub make fxtest-headless` → `test_hub PASSED=63 FAILED=0`
-- Full `make fxtest-headless` (final gate):
-  ```
-  asset_test PASSED=270 FAILED=0
-  test_audio PASSED=9 FAILED=0
-  test_boot PASSED=4 FAILED=0
-  combat_test PASSED=237 FAILED=0
-  data_test PASSED=348 FAILED=0
-  test_hub PASSED=63 FAILED=0
-  test_hud PASSED=29 FAILED=0
-  test_items PASSED=35 FAILED=0
-  test_menu_art PASSED=53 FAILED=0
-  menu_test PASSED=60 FAILED=0
-  test_monster_art PASSED=127 FAILED=0
-  perf_test PASSED=5 FAILED=0
-  test_player_art PASSED=120 FAILED=0
-  test_quests PASSED=56 FAILED=0
-  test_screens PASSED=85 FAILED=0
-  test_smith PASSED=115 FAILED=0
-  test_tell PASSED=18 FAILED=0
-  zones_test PASSED=80 FAILED=0
-  ```
+$ make test
+Total Passed: 6391
+Total Failed: 0
+
+$ make test-tools
+Ran 308 tests in 19.012s
+OK
+
+$ make fxtest-headless   (final full run)
+asset_test PASSED=270 FAILED=0
+test_audio PASSED=9 FAILED=0
+test_boot PASSED=4 FAILED=0
+combat_test PASSED=237 FAILED=0
+data_test PASSED=348 FAILED=0
+test_hub PASSED=75 FAILED=0
+test_hud PASSED=29 FAILED=0
+test_items PASSED=35 FAILED=0
+test_menu_art PASSED=53 FAILED=0
+menu_test PASSED=60 FAILED=0
+test_monster_art PASSED=127 FAILED=0
+perf_test PASSED=5 FAILED=0
+test_player_art PASSED=120 FAILED=0
+test_quests PASSED=87 FAILED=0
+test_screens PASSED=88 FAILED=0
+test_smith PASSED=115 FAILED=0
+test_tell PASSED=18 FAILED=0
+zones_test PASSED=83 FAILED=0
+
+$ make size
+size: .text=29250 .data=24 .bss=1685
+size: flash=29274/29696 (422 free)  ram=1709/2560
+size: data facts: HAS_CARVE:true HAS_ENRAGE:true HAS_GUARD_CHANCE:false HAS_GUARD_COOLDOWN:false HAS_GUARD_FACING:true HAS_GUARD_HP:true HAS_GUARD_PLAYER:false HAS_GUARD_ZONES:true HAS_HIT_STAGGER:false HAS_MULTI_STEP:true HAS_MULTI_WINDOW:true HAS_SIMPLE_GUARDS:false HAS_STAGGER:true HAS_STEP_AFTER:true HAS_STEP_CHANCE:true HAS_TURN_RATE:true HAS_WAIT_STEPS:true HAS_ZONES:true
+```
+
+Baseline at HEAD e80b487: flash 29272/29696 (424 free), RAM 1709/2560.
+**Delta: +2 flash (.text), RAM unchanged.** Fits (422 free). Content is cart
+data; the 2 bytes are the `appMenuAccept`/`appHuntReturn` routing.
 
 ## Blockers
 
-None. Budget gate cleared. The only deviation is the test-only sim stack fix in
-`tst/fxdatatest/smith_test.hpp` (documented above).
+None. All gates green; budget gate cleared.

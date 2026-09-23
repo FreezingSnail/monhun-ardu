@@ -3,6 +3,7 @@
   "title": "HUB",
   "rows": [
     { "label": "HUNT", "cost": 0, "action": "hunt", "condition": "always", "param": 0 },
+    { "label": "QUESTS", "cost": 0, "action": "open_quests", "condition": "always", "param": 0 },
     { "label": "SMITH", "cost": 0, "action": "open_smith", "condition": "always", "param": 0 },
     { "label": "ZENNY", "cost": 0, "action": "none", "condition": "always", "param": 0, "flags": ["zenny"] }
   ]

@@ -244,15 +244,20 @@ inline void test_zones(FxTest &test) {
     stepGame(t, Z_IDLE);
     test.expectEq(t.fade, FADE_TICKS - 1, F("wipe decays per tick"));
 
-    // -------------------------------------------- 6. demo app flow (fie.6)
-    // menu A -> camp; camp hold-B -> Game::menuRequest -> menu; pole pick ->
-    // pole room, its door -> menu. Drives the shipping src/app_state.hpp router.
+    // -------------------------------------------- 6. live app flow (fie.6/dlp.3)
+    // menu A -> hub -> HUNT -> camp; camp hold-B -> Game::menuRequest -> menu;
+    // area door -> camp. Drives the shipping src/app_state.hpp router.
     MenuState menu;
     ScreenState screen;
     SaveBlock save;
     saveDefaults(save);
     Game &d = g;
-    test.expectEq(static_cast<uint32_t>(appNavApply(appMenuAccept(), menu, screen, save, d, Z_IDLE)), 1, F("menu A starts the hunt"));
+    test.expectEq(static_cast<uint32_t>(appNavApply(appMenuAccept(), menu, screen, save, d, Z_IDLE)), 0, F("menu A opens the hub"));
+    test.expectEq(static_cast<uint32_t>(screen.active), 1, F("hub active"));
+    test.expectEq(static_cast<uint32_t>(screen.screen), screens::SCREEN_HUB, F("on the hub"));
+    ScreenRow huntRow;
+    huntRow.action = screens::ACTION_HUNT;   // hub row 0 (no cart read needed)
+    test.expectEq(static_cast<uint32_t>(appNavApply(appScreenAccept(screens::SCREEN_HUB, huntRow), menu, screen, save, d, Z_IDLE)), 1, F("hub HUNT starts the hunt"));
     test.expectEq(static_cast<uint32_t>(d.roomId), zone::ROOM_CAMP, F("hunt starts in camp"));
     test.expectEq(static_cast<uint32_t>(roomIsSafe(d)), 1, F("camp is safe"));
 
@@ -267,12 +272,13 @@ inline void test_zones(FxTest &test) {
     appNavApply(APP_NAV_MENU, menu, screen, save, d, Z_B);
     test.expectEq(static_cast<uint32_t>(menu.active), 1, F("camp exit opens menu"));
 
-    // beast pick -> camp -> area door round trip; the camp hold-B exit above is
-    // the only demo-path route back to the menu (prg.8 removed the pole room).
+    // beast pick -> hub -> camp -> area door round trip; the camp hold-B exit
+    // above is the only route back to the menu (prg.8 removed the pole room).
     MenuState beast;
     beast.weapon = W_GUN;
     beast.target = MON_HEAVY;
-    test.expectEq(static_cast<uint32_t>(appNavApply(appMenuAccept(), beast, screen, save, d, Z_IDLE)), 1, F("beast pick starts"));
+    appNavApply(appMenuAccept(), beast, screen, save, d, Z_IDLE);   // menu -> hub
+    test.expectEq(static_cast<uint32_t>(appNavApply(appScreenAccept(screens::SCREEN_HUB, huntRow), beast, screen, save, d, Z_IDLE)), 1, F("beast pick starts"));
     test.expectEq(static_cast<uint32_t>(d.mode), MODE_HUNT, F("beast hunt mode"));
     test.expectEq(static_cast<uint32_t>(d.monsterKind), MON_HEAVY, F("picked heavy beast"));
     test.expectEq(static_cast<uint32_t>(d.roomId), zone::ROOM_CAMP, F("beast starts in camp"));

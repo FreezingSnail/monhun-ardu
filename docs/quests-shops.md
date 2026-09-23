@@ -60,6 +60,21 @@ QuestDef (v2): id, goalKind u8 (0 kill / 1 gather), target u8
   re-checked in `ACTION_TAKE_QUEST`), and a turn-in row fills `recipe[0] =
   (rewardItem, rewardCount)` plus `cost = rewardZenny` (the def is the source of
   truth, like the armor recipe rows). Payout is zenny + the optional material.
+- Unlock chain (monhun-ardu-dlp.3): the four shipped quests are
+  `slay_lunge` (id 0, always) -> `slay_sweep` (id 1, unlock 1) -> `gather_ore`
+  (id 2, unlock 2) -> `crush_heavy` (id 3, unlock 3), where `unlockFlag = N`
+  means "quest index N-1 must be done". Turn one in and the next take row goes
+  live; the board still draws a locked row (no graying/filtering yet).
+- Live hub loop (monhun-ardu-dlp.3; supersedes the 5r1 direct-to-hunt demo):
+  menu --A--> hub --QUESTS--> take a quest --B--> hub --HUNT--> camp/area hunt
+  (kill or gather goal) --win/loss + A--> hub --QUESTS--> turn-in (pays zenny +
+  material, sets done) --B--> hub, where the next quest is now unlocked. Hub B
+  (or camp hold-B) leaves to the menu; the loadout picks live on `MenuState`.
+- Scaffold limitations: the board renders every authored row even when its
+  `COND_QUEST` condition is dead (locked/not-active) — status graying, progress
+  display and nav filtering are a follow-up. There is no inventory screen; the
+  material reward lands silently in the save and is shown only in the smith
+  recipe debits.
 - Persisted on quest complete; board shows taken/progress/done and pays out on
   turn-in.
 - Gather targets and material rewards are validated against `data/items.json`
@@ -95,9 +110,9 @@ engine") for the piece/skill schema and the aggregation contract.
 2. `qs.2` quest content: board screen data, kill accounting, payout, guards.
 3. `qs.3` smith content: tier table, stat application, purchase flow.
 4. `qs.4` integration: hub entry from the opening menu, return paths, art.
-   (Superseded on the demo path by `monhun-ardu-5r1`: the opening menu A now
-   launches the hunt directly and win/loss + A returns to the menu. The hub
-   graph stays compiled and tested but is not reachable from the sketch.)
+   (The `monhun-ardu-5r1` direct-to-hunt shortcut is superseded by
+   `monhun-ardu-dlp.3`: menu A opens the hub again, the picked loadout launches
+   from the hub HUNT row, and a finished hunt returns to the hub for turn-ins.)
 
 ## Acceptance
 

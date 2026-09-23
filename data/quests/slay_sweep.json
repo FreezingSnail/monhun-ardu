@@ -4,5 +4,7 @@
   "target": "sweep",
   "need": 2,
   "rewardZenny": 250,
-  "unlockFlag": 0
+  "rewardItem": "shell",
+  "rewardCount": 1,
+  "unlockFlag": 1
 }

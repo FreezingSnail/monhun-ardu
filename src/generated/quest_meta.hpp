@@ -13,10 +13,10 @@ namespace quests {
 constexpr uint16_t MAGIC = 0x5153;
 constexpr uint8_t VERSION = 2;
 constexpr uint8_t FLAGS = 0x00;
-constexpr uint16_t SIZE = 35;
+constexpr uint16_t SIZE = 44;
 constexpr uint8_t HEADER_SIZE = 8;
 constexpr uint8_t RECORD_SIZE = 9;
-constexpr uint8_t QUEST_COUNT = 3;
+constexpr uint8_t QUEST_COUNT = 4;
 
 // Record field offsets (QuestDef: id, goalKind, target, need, rewardZenny,
 // rewardItem, rewardCount, unlockFlag).
@@ -45,7 +45,9 @@ constexpr uint8_t QUEST_SLAY_LUNGE = 0;
 constexpr uint16_t QUEST_SLAY_LUNGE_OFF = 8;
 constexpr uint8_t QUEST_SLAY_SWEEP = 1;
 constexpr uint16_t QUEST_SLAY_SWEEP_OFF = 17;
-constexpr uint8_t QUEST_CRUSH_HEAVY = 2;
-constexpr uint16_t QUEST_CRUSH_HEAVY_OFF = 26;
+constexpr uint8_t QUEST_GATHER_ORE = 2;
+constexpr uint16_t QUEST_GATHER_ORE_OFF = 26;
+constexpr uint8_t QUEST_CRUSH_HEAVY = 3;
+constexpr uint16_t QUEST_CRUSH_HEAVY_OFF = 35;
 
 }   // namespace quests

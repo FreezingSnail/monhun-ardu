@@ -1,7 +1,7 @@
 #pragma once
 // App-level routing between the opening menu, the data-driven screens (hub /
 // quests / smith) and a hunt (bead monhun-ardu-mgn, docs/quests-shops.md qs.4;
-// demo flow rework monhun-ardu-5r1).
+// hub loop rework monhun-ardu-dlp.3).
 //
 // Host- and device-testable: no cart reads, no Arduino.h. The caller resolves
 // the cursor row off the cart (screenCursorRow in src/screens.hpp) and passes
@@ -9,17 +9,17 @@
 // menu/screen state changes, so the sketch and the device E2E suite run the
 // exact same routing code.
 //
-// Demo flow (monhun-ardu-fie.6, what the shipping sketch wires; prg.8 removed
+// Live flow (monhun-ardu-dlp.3, what the shipping sketch wires; prg.8 removed
 // the training-pole room):
-//   menu --A--> camp --door--> area --door--> camp   (hunt pick; camp hold-B
-//   --B hold--> menu)                                -> menu; area door -> camp
-//   hunt end + A --> menu                            (appHuntReturn)
-//
-// Shelf graph (kept compiled + unit-tested, NOT reachable from the sketch; the
-// hub/quests/smith work stays in the tree for later re-enable):
-//   hub --HUNT--> hunt
+//   menu --A--> hub --HUNT--> camp --door--> area --door--> camp
 //   hub --QUESTS/SMITH--> screen --B/LEAVE--> hub
-//   hub --B/LEAVE--> menu
+//   hub --B--> menu   (camp hold-B still -> menu; appMenuRequest)
+//   hunt end + A --> hub                             (appHuntReturn; turn-ins)
+//
+// The hub is back on the demo path (the 5r1 direct-to-hunt shortcut is
+// superseded): menu A opens the hub so the quest board can be reached, the
+// picked loadout launches from the hub HUNT row, and a finished hunt returns to
+// the hub to turn quests in. Camp hold-B still leaves to the menu.
 //
 // appNavApply() takes the transition Input so the new owner's A/B edge flags
 // start from the button state that caused the change: a held button cannot
@@ -41,10 +41,11 @@ enum AppNav : int8_t {
     APP_NAV_HUNT    // start the picked loadout in the sim
 };
 
-// Opening-menu A: launch the picked loadout straight into the hunt (demo flow,
-// monhun-ardu-5r1). The hub graph below stays for the screen suites only.
+// Opening-menu A: open the hub (monhun-ardu-dlp.3). The hub is the live hub
+// graph again; the picked loadout launches from its HUNT row (appScreenAccept)
+// and the menu's B/hold-B path stays the only way back out.
 inline AppNav appMenuAccept() {
-    return APP_NAV_HUNT;
+    return APP_NAV_HUB;
 }
 
 // B: quests/smith -> hub; hub -> menu.
@@ -75,11 +76,13 @@ inline AppNav appScreenAccept(uint8_t screen, const ScreenRow &row) {
     return APP_NAV_NONE;
 }
 
-// Hunt end: A after the over screen returns to the opening menu (demo flow).
-// The menu's next A re-runs menuStart -> newGame, so the fresh hunt starts from
-// a fully reset world (projectiles/effects/quest counters).
+// Hunt end: A after the over screen returns to the hub (monhun-ardu-dlp.3) so
+// the finished quest can be turned in and the next chain step taken. The hub's
+// HUNT row starts the next hunt with the menu's picks (menuStart -> newGame,
+// so the fresh hunt starts from a fully reset world: projectiles/effects/quest
+// counters).
 inline AppNav appHuntReturn() {
-    return APP_NAV_MENU;
+    return APP_NAV_HUB;
 }
 
 // Hunt-end A gate (bead monhun-ardu-prg.3): while a carcass carve is live the
@@ -147,7 +150,7 @@ MH_NOINLINE inline bool appNavApply(AppNav nav, MenuState &menu, ScreenState &sc
     case APP_NAV_HUNT:
         menuStart(game, menu);
         screen.active = false;
-        menu.active = false;   // demo flow: the menu itself launched the hunt
+        menu.active = false;   // the hub HUNT row launched the hunt
         menu.prevA = in.a;
         menu.prevB = in.b;
         return true;
