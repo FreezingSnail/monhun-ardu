@@ -132,6 +132,9 @@ class GenScreensTests(unittest.TestCase):
             "constexpr uint8_t ACTION_HUNT = 5;",
             "constexpr uint8_t ACTION_OPEN_QUESTS = 6;",
             "constexpr uint8_t ACTION_OPEN_SMITH = 7;",
+            "constexpr uint8_t ACTION_CRAFT_ARMOR = 8;",
+            "constexpr uint8_t ACTION_EQUIP_WEAPON = 9;",
+            "constexpr uint8_t ACTION_OPEN_GEAR = 10;",
             "constexpr uint8_t COND_ALWAYS = 0;",
             "constexpr uint8_t COND_ZENNY = 1;",
             "constexpr uint8_t COND_FLAG = 2;",
@@ -237,6 +240,28 @@ class GenScreensTests(unittest.TestCase):
         row = parse_row(blob, hub["firstRow"])
         self.assertEqual(row["action"], 5, "hunt action id")
         self.assertEqual(row["cond"], 0, "always condition id")
+
+    def test_equip_weapon_action_compiles(self):
+        # hml.3: the gear screen equips a weapon; the generated header exposes
+        # the appended action ids (pinned above) and the row packs its param.
+        self.mutate("data/screens/hub.json",
+                    lambda doc: doc["rows"][0].update({"action": "equip_weapon", "condition": "always",
+                                                       "param": 2}))
+        self.assert_succeeds(self.compile())
+        blob = self.read_bytes(BLOB_REL)
+        hub = parse_def(blob, struct.unpack_from("<H", blob, DEF_OFF)[0])
+        row = parse_row(blob, hub["firstRow"])
+        self.assertEqual(row["action"], 9, "equip_weapon action id")
+        self.assertEqual(row["param"], 2, "weapon index param")
+
+    def test_open_gear_action_compiles(self):
+        self.mutate("data/screens/hub.json",
+                    lambda doc: doc["rows"][0].update({"action": "open_gear", "condition": "always"}))
+        self.assert_succeeds(self.compile())
+        blob = self.read_bytes(BLOB_REL)
+        hub = parse_def(blob, struct.unpack_from("<H", blob, DEF_OFF)[0])
+        row = parse_row(blob, hub["firstRow"])
+        self.assertEqual(row["action"], 10, "open_gear action id")
 
     def test_zenny_dynamic_value_flag_compiles(self):
         self.mutate("data/screens/hub.json",

@@ -246,7 +246,7 @@ so B there is a no-op.
 |---|---|
 | UP / DOWN | move the cursor (6 rows per page, scroll by 6) |
 | A | accept the cursor row (start hunt / open a screen / buy / take quest) |
-| B | back one level (quests/smith → hub; hub B is a root no-op) |
+| B | back one level (quests/smith/gear → hub; hub B is a root no-op) |
 
 D-pad nav is debounced: a tap moves exactly one row (immediate on the direction
 change), while holding waits ~300 ms (16 logic ticks) and then repeats every
@@ -259,13 +259,17 @@ After a win or loss, A returns to the hub so the finished quest can be turned in
 the next HUNT runs `newGame` again, so projectiles/effects/quest counters start
 clean. While a screen is up the sim and audio are not stepped.
 
-The hub shows HUNT / QUESTS / SMITH plus a ZENNY row that renders the live
+The hub shows HUNT / QUESTS / SMITH / GEAR plus a ZENNY row that renders the live
 `save.zenny` balance (dynamic value token). The quests board takes a kill quest
 and turns it in for its reward; the smith sells weapon upgrade tiers and armor
 pieces (`COND_ARMOR`/`ACTION_CRAFT_ARMOR` rows: A crafts the piece — debiting
 its materials + zenny and marking it crafted — then toggles equip/unequip; the
 crafted bitmask and the equipped ids persist in the save, and the equipped stats
-cache at hunt start, arm.2). Every
+cache at hunt start, arm.2). The GEAR screen (`hml.3`) equips one of the three
+weapons (SWORD / FLAIL / GUN) into the save's v4 `weapon` byte; A on an equip row
+writes it (a same-weapon press is a no-op), and the next HUNT starts with it.
+Armor/equipment stays on the smith screen, and an items screen is still a
+follow-up; the equipped weapon has no on-screen mark yet. Every
 state-changing action commits the 28-byte EEPROM save block once (write-on-
 change + verify read). A save with an active quest/tier applies it at hunt start
 and the hunt-end quest-progress commit still runs exactly once per hunt. Camp

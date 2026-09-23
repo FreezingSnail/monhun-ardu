@@ -1,0 +1,10 @@
+{
+  "id": 3,
+  "title": "GEAR",
+  "rows": [
+    { "label": "SWORD", "cost": 0, "action": "equip_weapon", "condition": "always", "param": 0 },
+    { "label": "FLAIL", "cost": 0, "action": "equip_weapon", "condition": "always", "param": 1 },
+    { "label": "GUN", "cost": 0, "action": "equip_weapon", "condition": "always", "param": 2 },
+    { "label": "LEAVE", "cost": 0, "action": "leave", "condition": "always", "param": 0 }
+  ]
+}

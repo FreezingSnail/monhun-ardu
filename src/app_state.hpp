@@ -35,6 +35,7 @@ enum AppNav : int8_t {
     APP_NAV_HUB,
     APP_NAV_QUESTS,
     APP_NAV_SMITH,
+    APP_NAV_GEAR,   // hml.3: hub GEAR row (weapon select)
     APP_NAV_CAMP,   // close a screen opened from the camp smithy (resume the hunt)
     APP_NAV_HUNT    // the hub HUNT row: the caller starts the hunt (huntStart)
 };
@@ -56,6 +57,8 @@ inline AppNav appScreenAccept(uint8_t screen, const ScreenRow &row) {
             return APP_NAV_QUESTS;
         case screens::ACTION_OPEN_SMITH:
             return APP_NAV_SMITH;
+        case screens::ACTION_OPEN_GEAR:
+            return APP_NAV_GEAR;
         case screens::ACTION_LEAVE:
             return APP_NAV_NONE;   // hub is the root: no leave destination
         default:
@@ -140,6 +143,11 @@ MH_NOINLINE inline bool appNavApply(AppNav nav, ScreenState &screen, const SaveB
         return false;
     case APP_NAV_SMITH:
         screenReset(screen, screens::SCREEN_SMITH, screens::SCREEN_SMITH_ROWS);
+        screen.prevA = in.a;
+        screen.prevB = in.b;
+        return false;
+    case APP_NAV_GEAR:
+        screenReset(screen, screens::SCREEN_GEAR, screens::SCREEN_GEAR_ROWS);
         screen.prevA = in.a;
         screen.prevB = in.b;
         return false;

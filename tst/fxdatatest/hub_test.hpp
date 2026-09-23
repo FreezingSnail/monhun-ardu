@@ -172,16 +172,17 @@ inline void test_hub(FxTest &test) {
     clearFb();
     drawScreen(screen, save);
 
-    // HUNT is row 0 with the white chip cursor; QUESTS row 1; SMITH row 2; the
-    // ZENNY row (row 3, y = 11 + 3*9 = 38) shows the live 400 balance in the
-    // cost column.
+    // HUNT is row 0 with the white chip cursor; QUESTS row 1; SMITH row 2; GEAR
+    // row 3; the ZENNY row (row 4, y = 11 + 4*9 = 47) shows the live 400
+    // balance in the cost column.
     test.expectEq(countBits(2, 5, 13, 16), 16, F("hub cursor chip 4x4"));
     test.expectEq(countBits(2, 13, 0, 7) > 0 ? 1 : 0, 1, F("hub title ink"));
     test.expectEq(countBits(10, 30, 11, 18) > 0 ? 1 : 0, 1, F("HUNT label ink"));
     test.expectEq(countBits(10, 50, 20, 27) > 0 ? 1 : 0, 1, F("QUESTS label ink"));
     test.expectEq(countBits(10, 40, 29, 36) > 0 ? 1 : 0, 1, F("SMITH label ink"));
-    test.expectEq(countBits(10, 32, 38, 45) > 0 ? 1 : 0, 1, F("ZENNY label ink"));
-    test.expectEq(countBits(112, 123, 38, 45) > 0 ? 1 : 0, 1, F("live zenny 400 drawn"));
+    test.expectEq(countBits(10, 40, 38, 45) > 0 ? 1 : 0, 1, F("GEAR label ink"));
+    test.expectEq(countBits(10, 32, 47, 54) > 0 ? 1 : 0, 1, F("ZENNY label ink"));
+    test.expectEq(countBits(112, 123, 47, 54) > 0 ? 1 : 0, 1, F("live zenny 400 drawn"));
 
     // hub B is a root no-op: the hub stays up (isp.1 deleted the menu).
     appNavApply(pressB(screen, save), screen, save, g, H_B);
@@ -252,6 +253,30 @@ inline void test_hub(FxTest &test) {
     test.expectEq(static_cast<uint32_t>(g.projN), 0, F("fresh projectiles"));
     test.expectEq(static_cast<uint32_t>(g.fxN), 0, F("fresh effects"));
     test.expectEq(static_cast<uint32_t>(g.monsterKind), MON_LUNGE, F("fresh quest beast"));
+
+    // ---------------------- hub GEAR: equip FLAIL, next hunt uses it (hml.3)
+    // Return to the hub, open GEAR (row 3), pick FLAIL (row 1), A equips and
+    // persists; the next hub HUNT starts the hunt with the equipped weapon.
+    appNavApply(APP_NAV_HUB, screen, save, g, H_A);
+    test.expectEq(static_cast<uint32_t>(screen.screen), screens::SCREEN_HUB, F("hub again"));
+    tap(screen, H_DOWN);
+    tap(screen, H_DOWN);
+    tap(screen, H_DOWN);
+    test.expectEq(static_cast<uint32_t>(screen.cursor), 3, F("cursor on GEAR"));
+    appNavApply(pressA(screen, save), screen, save, g, H_A);
+    test.expectEq(static_cast<uint32_t>(screen.screen), screens::SCREEN_GEAR, F("gear screen"));
+    test.expectEq(static_cast<uint32_t>(screen.rowCount), screens::SCREEN_GEAR_ROWS, F("gear row count"));
+    tap(screen, H_DOWN);   // SWORD -> FLAIL
+    test.expectEq(static_cast<uint32_t>(screen.cursor), 1, F("cursor on FLAIL"));
+    applyNav(pressA(screen, save), screen, save, g, H_A);   // equip (save action, no hunt start)
+    test.expectEq(static_cast<uint32_t>(save.weapon), W_FLAIL, F("flail equipped"));
+    SaveBlock geareload;
+    test.expectEq(static_cast<uint32_t>(saveLoad(geareload, REAL_BACKEND)), 1, F("gear save reloads"));
+    test.expectEq(static_cast<uint32_t>(geareload.weapon), W_FLAIL, F("weapon byte persisted"));
+    appNavApply(pressB(screen, save), screen, save, g, H_B);
+    test.expectEq(static_cast<uint32_t>(screen.screen), screens::SCREEN_HUB, F("gear B -> hub"));
+    applyNav(pressA(screen, save), screen, save, g, H_A);   // hub HUNT
+    test.expectEq(static_cast<uint32_t>(g.weapon), W_FLAIL, F("hunt started with the equipped flail"));
 }
 
 }   // namespace hubfx

@@ -310,6 +310,15 @@ inline bool screenApplyAction(SaveBlock &save, const ScreenRow &row) {
         armorEquipToggle(save, piece, slot);
         return true;
     }
+    case screens::ACTION_EQUIP_WEAPON: {
+        // hml.3: the GEAR screen equips one of the SAVE_TIER_COUNT weapons. A
+        // stale row (param past the weapon table) is inert; equipping the
+        // already-held weapon is a no-op (no EEPROM write).
+        if (row.param >= SAVE_TIER_COUNT || save.weapon == row.param)
+            return false;
+        save.weapon = row.param;
+        return true;
+    }
     case screens::ACTION_TAKE_QUEST:
         // dlp.2: re-check the chain unlock so a stale row cannot take a locked
         // quest (mirrors the recipe re-check on the smith rows).

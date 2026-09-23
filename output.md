@@ -1,105 +1,62 @@
-# monhun-ardu-isp.1 — hub is the root; menu deleted; save v4 weapon
+# monhun-ardu-isp.3 — hub GEAR screen: weapon select (save v4 weapon)
 
-Baseline HEAD `04c2c63`, clean. **DONE — all gates green, no commit/push.**
+Baseline HEAD `cd190bf`, clean. **DONE — all gates green, no commit/push.**
 
 ## Size (final gate)
 
 ```
-size: flash=28804/29696 (892 free)  ram=1701/2560
-size: .text=28790 .data=14 .bss=1687
+size: .text=28830 .data=18 .bss=1687
+size: flash=28848/29696 (848 free)  ram=1705/2560
+size: data facts: HAS_CARVE:true HAS_ENRAGE:true ... (all facts unchanged)
 ```
 
-| | baseline | isp.1 | delta |
+| | baseline | isp.3 | delta |
 |---|---|---|---|
-| flash | 29274 (422 free) | 28804 (892 free) | **-470 B reclaimed** |
-| RAM | 1709 (851 free) | 1701 (859 free) | **-8 B** |
+| flash | 28804 (892 free) | 28848 (848 free) | **+44 B** |
+| RAM | 1701 (859 free) | 1705 (855 free) | **+4 B** |
 
-The deleted opening-menu FSM (`menu_state.hpp`), its FX render (`menu.hpp`) and
-the runtime menu branch reclaimed the flash; the v4 save adds one byte
-(`weapon`) while the removed `MenuState`/`menu` state offsets the RAM.
+The +44 B is the `ACTION_EQUIP_WEAPON` switch case + `APP_NAV_GEAR` route in
+`appNavApply` (a new `screenReset(SCREEN_GEAR)` arm); the hub row, gear rows and
+screen def all live in the cart blob (`fxdata/fxdata.bin`), so their byte cost is
+data, not flash. No `HAS_*` data fact flipped.
 
 ## What changed
 
-- **A. Save v4** (`src/core/save.hpp`): `SAVE_VERSION = 4`; `weapon` u8 at byte
-  26 (`SAVE_WEAPON_OFF`), checksum at 27, `SAVE_BYTES = 28`. v3 migration
-  decodes the full tail against the legacy checksum at 26 with `weapon = 0`
-  (`saveDecodeV3`); v1/v2 keep their shared-prefix path (`saveDecodePrefix`
-  validates magic + the byte-26 checksum). `saveEncode`/`saveDecode`/
-  `saveDefaults` + header comment updated.
-- **B. `src/app_state.hpp`**: `APP_NAV_MENU`/`appMenuAccept` deleted;
-  `appScreenBack(HUB) == APP_NAV_NONE` (root), hub LEAVE row -> `APP_NAV_NONE`;
-  `appNavApply(AppNav, ScreenState&, SaveBlock&, Game&, Input&)` drops the
-  `MenuState`, `APP_NAV_HUNT` closes the screen and returns true (caller starts
-  the hunt); `appMenuRequest` -> `appHubRequest` (returns `APP_NAV_HUB`);
-  `menuReturnStep` replaced by `appOverReturnStep(bool over, const Input&,
-  bool &prevA)`.
-- **C. `src/app_setup.hpp`**: `huntStart(Game&, const SaveBlock&)` — active
-  `QuestDef` -> `kind = GOAL_KILL ? def.target : MON_LUNGE`; `newGame(g,
-  save.weapon, MODE_HUNT, kind)`; `loadRoom(ROOM_CAMP, SPAWN_CAMP_ENTRY)`.
-- **D. `monhun-ardu.ino`**: menu branch/`s_menu`/`drawMenu`/menu includes
-  removed; `setup()` boots the hub (`screenEnter(SCREEN_HUB)`); hub HUNT ->
-  `huntStart` + quest/upgrade/items/armor arming + `s_huntOver = false`; camp
-  hold-B -> `appHubRequest` -> hub; hunt end -> `appOverReturnStep` +
-  `appNavApply(appHuntReturn())` (own `s_huntPrevA` edge flag).
-- **E. Deleted**: `src/menu.hpp`, `src/menu_state.hpp`, `tst/menu_test.hpp`
-  (+ `tst/main.cpp` registration), `tst/fxdatatest/menu_test.hpp` +
-  `test_menu.ino`, `tst/fxdatatest/menu_art_test.hpp` + `test_menu_art.ino`.
-  FX menu art sheets/manifest left for `hml.2`.
-- **F. Suites**: `tst/app_state_test.hpp` rewritten (hub root, HUNT returns
-  true, `appHubRequest`, `appOverReturnStep`, no `MenuState`);
-  `tst/screens_test.hpp` (v4 offsets, weapon round-trip, v3 migration, menu
-  block removed); `tst/quests_test.hpp` (v4 checksum offset);
-  `tst/carve_test.hpp` (`appOverReturnStep`);
-  `tst/fxdatatest/hub_test.hpp` (boot->hub, hub HUNT, hub B no-op, arming);
-  `tst/fxdatatest/screens_test.hpp` (hub B -> NONE, weapon EEPROM round-trip);
-  `tst/fxdatatest/zones_test.hpp` (camp hold-B -> hub; `huntStart` weapon +
-  kill-target + camp). `asset_test.hpp` menu-blob checks stay (sheets remain
-  until `hml.2`).
-- **G. Docs**: `README.md` (device layer, controls/hub section, suite+size
-  snapshot, repo layout, flash/RAM history), `docs/quests-shops.md` (save v4
-  layout + hub-root flow), `docs/feel-design.md` (stale `menu_state` note).
+- `tools/gen-screens.py` — appended `equip_weapon` + `open_gear` to
+  `ACTION_NAMES` (new ids 9/10; existing ids unchanged).
+- `data/screens/gear.json` — **new**, id 3, title `GEAR`, rows `SWORD / FLAIL /
+  GUN` (`equip_weapon`, `always`, param = weapon idx, cost 0) + `LEAVE`.
+- `data/screens/hub.json` — added the `GEAR` row (`open_gear`) between `SMITH`
+  and `ZENNY` → HUNT / QUESTS / SMITH / GEAR / ZENNY.
+- `src/screen_state.hpp` — `ACTION_EQUIP_WEAPON`: rejects `param >=
+  SAVE_TIER_COUNT` and the already-held weapon, else writes `save.weapon` and
+  returns true (caller commits once).
+- `src/app_state.hpp` — `APP_NAV_GEAR` enum, hub `ACTION_OPEN_GEAR →
+  APP_NAV_GEAR`, `appNavApply` opens `screens::SCREEN_GEAR` with
+  `SCREEN_GEAR_ROWS`; `appScreenBack` already sends any non-hub screen to the hub.
+- `monhun-ardu.ino` — no change: the generic screen path calls
+  `screenApplyAction(s_save, row)` for a non-routing A, which covers equip.
+- Tests: host `tst/screens_test.hpp` (equip sets weapon / out-of-range no-op /
+  same-weapon false) and `tst/app_state_test.hpp` (hub GEAR route, gear
+  navApply + B back, equip is a save action); device
+  `tst/fxdatatest/screens_test.hpp` (SCREEN_COUNT 4, hub row count 5, GEAR rows
+  + cart equip write + pixel row), `tst/fxdatatest/hub_test.hpp` (GEAR label
+  pixel, equip FLAIL → reload → next hunt uses it), `smith_test.hpp` (screen
+  count); `tools/tests/test_gen_screens.py` (new action ids + compile cases).
+- Docs: README hub input table + hub paragraph; `docs/quests-shops.md` layers /
+  actions / gear-screen loop; armor/equipment stays on SMITH, items screen still
+  a follow-up, no on-screen equipped-weapon mark yet.
 
-## Verification (exact tails)
+## Gate tails
 
-`make test`:
-```
-Total Passed: 6188
-Total Failed: 0
-```
-
-`make gen-check`:
-```
-fxdata_manifest: PASS (91 generated artifacts unchanged)
-```
-
-`make fxtest-headless` (16 suites; `test_parity` excluded per AGENTS.md):
-```
-test_assets: PASS (270)
-test_audio: PASS (9)
-test_boot: PASS (4)
-test_combat: PASS (237)
-test_data: PASS (348)
-test_hub: PASS (70)
-test_hud: PASS (29)
-test_items: PASS (35)
-test_monster_art: PASS (127)
-test_perf: PASS (5)
-test_player_art: PASS (120)
-test_quests: PASS (87)
-test_screens: PASS (89)
-test_smith: PASS (115)
-test_tell: PASS (18)
-test_zones: PASS (82)
-```
-1645 asserts, 0 failures.
-
-`make size`: flash `28804/29696 (892 free)`, RAM `1701/2560`.
-
-## Notes / deviations
-
-- `test_hub.ino` compiles with `MH_ROOM_BOUNDS 0` (pre-existing flash carve), so
-  the camp-room start is verified in `test_zones` (bounds on) instead; `hub_test`
-  verifies the save weapon / quest-kind arming. The two standalone `huntStart`
-  blocks added to `hub_test` were removed to fit that image's stock-flag flash
-  budget (was 29986 B > 29696); coverage moved to `test_zones`.
-- No blockers.
+- `make gen-check` — `fxdata_manifest: PASS (91 generated artifacts unchanged)`.
+  (A second `make gen` is required after a table-size change because
+  `gen-equipment.py` bakes sheet offsets from the previous `fxdata.h`; see its
+  stale-blob static_assert comment.)
+- `make test` — `Total Passed: 6207  Total Failed: 0`.
+- `make test-tools` — `Ran 310 tests ... OK`.
+- `make fxtest-headless` (full, EXIT=0) — all 16 gate suites PASS: asset 270,
+  audio 9, boot 4, combat 237, data 348, hub 81, hud 29, items 35,
+  monster_art 127, perf 5, player_art 120, quests 87, screens 110, smith 115,
+  tell 18, zones 82.
+- `make size` — the line above; delta **+44 B flash / +4 B RAM**.

@@ -57,6 +57,7 @@ void AppSuite(TestRunner &runner) {
         t.assert(appScreenAccept(screens::SCREEN_HUB, arow(screens::ACTION_HUNT)), APP_NAV_HUNT, "HUNT row");
         t.assert(appScreenAccept(screens::SCREEN_HUB, arow(screens::ACTION_OPEN_QUESTS)), APP_NAV_QUESTS, "QUESTS row");
         t.assert(appScreenAccept(screens::SCREEN_HUB, arow(screens::ACTION_OPEN_SMITH)), APP_NAV_SMITH, "SMITH row");
+        t.assert(appScreenAccept(screens::SCREEN_HUB, arow(screens::ACTION_OPEN_GEAR)), APP_NAV_GEAR, "GEAR row");
         t.assert(appScreenAccept(screens::SCREEN_HUB, arow(screens::ACTION_LEAVE)), APP_NAV_NONE, "LEAVE row is root no-op");
         t.assert(appScreenAccept(screens::SCREEN_HUB, arow(screens::ACTION_NONE, screens::COND_ALWAYS)), APP_NAV_NONE, "status row");
         t.assert(appScreenAccept(screens::SCREEN_HUB, arow(screens::ACTION_TAKE_QUEST, screens::COND_QUEST)), APP_NAV_NONE, "quest row not a hub dest");
@@ -67,8 +68,26 @@ void AppSuite(TestRunner &runner) {
         Test t("sub-screen A: LEAVE returns to the hub, save actions stay with the caller");
         t.assert(appScreenAccept(screens::SCREEN_QUESTS, arow(screens::ACTION_LEAVE)), APP_NAV_HUB, "quests LEAVE");
         t.assert(appScreenAccept(screens::SCREEN_SMITH, arow(screens::ACTION_LEAVE)), APP_NAV_HUB, "smith LEAVE");
+        t.assert(appScreenAccept(screens::SCREEN_GEAR, arow(screens::ACTION_LEAVE)), APP_NAV_HUB, "gear LEAVE");
         t.assert(appScreenAccept(screens::SCREEN_QUESTS, arow(screens::ACTION_TAKE_QUEST, screens::COND_QUEST)), APP_NAV_NONE, "take is a save action");
         t.assert(appScreenAccept(screens::SCREEN_SMITH, arow(screens::ACTION_BUY_UPGRADE, screens::COND_UPGRADE, 1)), APP_NAV_NONE, "buy is a save action");
+        t.assert(appScreenAccept(screens::SCREEN_GEAR, arow(screens::ACTION_EQUIP_WEAPON, screens::COND_ALWAYS, 1)), APP_NAV_NONE, "equip is a save action");
+        suite.addTest(t);
+    }
+
+    {
+        Test t("hub GEAR row opens the gear screen; B backs out; LEAVE returns");
+        ScreenState screen;
+        Game g;
+        SaveBlock save;
+        saveDefaults(save);
+        t.assert(appNavApply(APP_NAV_GEAR, screen, save, g, AT_A), false, "gear nav is not a hunt start");
+        t.assert(screen.active, true, "gear screen active");
+        t.assert(screen.screen, screens::SCREEN_GEAR, "on the gear screen");
+        t.assert(screen.rowCount, screens::SCREEN_GEAR_ROWS, "gear row count from the meta");
+        t.assert(appScreenBack(screens::SCREEN_GEAR), APP_NAV_HUB, "gear B backs to the hub");
+        appNavApply(appScreenBack(screen.screen), screen, save, g, AT_B);
+        t.assert(screen.screen, screens::SCREEN_HUB, "back on the hub");
         suite.addTest(t);
     }
 

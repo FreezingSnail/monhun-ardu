@@ -96,7 +96,7 @@ inline void test_smith(FxTest &test) {
     test.expectEq(upgradeMul(18, 115), 20, F("upgradeMul rounds down"));
 
     // ------------------------------------------------- smith screen rows
-    test.expectEq(screens::SCREEN_COUNT, 3, F("screen count"));
+    test.expectEq(screens::SCREEN_COUNT, 4, F("screen count"));
     test.expectEq(screens::SCREEN_SMITH, 2, F("smith screen index"));
     test.expectEq(screenRowCount(screens::SCREEN_SMITH), 12, F("smith row count"));
     ScreenRow t1, t2, leave;

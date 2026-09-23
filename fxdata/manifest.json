@@ -543,9 +543,14 @@
       "size": 156
     },
     {
+      "path": "data/screens/gear.json",
+      "sha256": "9f85bb486f388df9b6a4a6704e0aa96d5aa6ea1e863fd442fbda213d5d3ff094",
+      "size": 432
+    },
+    {
       "path": "data/screens/hub.json",
-      "sha256": "e2147be813b1f43d1185bfaa7bb75250992a40a26b9619444356d6c6c1977f7f",
-      "size": 441
+      "sha256": "6852596b2c0749d1f30ffd4e3e85daff4d70585bf3060e1d9e7d679559611482",
+      "size": 535
     },
     {
       "path": "data/screens/quests.json",
@@ -703,7 +708,7 @@
     },
     {
       "path": "fxdata/tables/equip.bin",
-      "sha256": "009dd722f177e51a09b537df2f766b92197cab08e514dddbfbef4be2750eabe3",
+      "sha256": "794caee0bca30aa9ec471d9c1e286346dd1274639852fbbd916ba4a2ff101afa",
       "size": 876,
       "symbol": "mhEquip"
     },
@@ -733,8 +738,8 @@
     },
     {
       "path": "fxdata/tables/screens.bin",
-      "sha256": "d7c116f964e486ac815111fa05550de34b40f116e5c67a3499cbff201891fabe",
-      "size": 421,
+      "sha256": "94ce8d3bca633723b91ab832892d936f708454d439712ba52cd2f978fd0622f7",
+      "size": 489,
       "symbol": "mhScreens"
     },
     {
@@ -765,17 +770,17 @@
   "outputs": [
     {
       "path": "fxdata/fxdata-data.bin",
-      "sha256": "bcdb111f50a42eaa99758f5ed2350fa6fff9428953f5441febbd2db68fcdd891",
-      "size": 208554
+      "sha256": "d15c8b7bea2893b48a2ffd3aeb8b381e6bf9e8d2e43ad1386a4854264c93ccdb",
+      "size": 208622
     },
     {
       "path": "fxdata/fxdata.bin",
-      "sha256": "7754111bb7537858c4ddad432433a3be039561cbacfd80a0e200751ad4f7f10b",
+      "sha256": "943e8d38884c87991dac86093d3220dd26692efbb45d291d53a399314e777776",
       "size": 208640
     },
     {
       "path": "fxdata/fxdata.h",
-      "sha256": "8a593d89f16673149994e141f93e887cdd618a57153699d44184ca3f5bccaaed",
+      "sha256": "9b0b098bf75015050eabbdab738e7efcb3e6c13268f998d34c3a93a1bd592941",
       "size": 2988
     },
     {
@@ -790,7 +795,7 @@
     },
     {
       "path": "fxdata/tables/equip.bin",
-      "sha256": "009dd722f177e51a09b537df2f766b92197cab08e514dddbfbef4be2750eabe3",
+      "sha256": "794caee0bca30aa9ec471d9c1e286346dd1274639852fbbd916ba4a2ff101afa",
       "size": 876
     },
     {
@@ -805,8 +810,8 @@
     },
     {
       "path": "fxdata/tables/screens.bin",
-      "sha256": "d7c116f964e486ac815111fa05550de34b40f116e5c67a3499cbff201891fabe",
-      "size": 421
+      "sha256": "94ce8d3bca633723b91ab832892d936f708454d439712ba52cd2f978fd0622f7",
+      "size": 489
     },
     {
       "path": "fxdata/tables/smith.bin",
@@ -815,7 +820,7 @@
     },
     {
       "path": "src/fxdata.h",
-      "sha256": "8a593d89f16673149994e141f93e887cdd618a57153699d44184ca3f5bccaaed",
+      "sha256": "9b0b098bf75015050eabbdab738e7efcb3e6c13268f998d34c3a93a1bd592941",
       "size": 2988
     },
     {
@@ -855,7 +860,7 @@
     },
     {
       "path": "src/generated/equip_meta.hpp",
-      "sha256": "c48833cafbc628837a55fd46e94508a54097038d097f4efd66776710f34dc8bb",
+      "sha256": "ed71359853467f100f0190c63d76a0015e976b220df403dc53820518a2833fde",
       "size": 22334
     },
     {
@@ -885,8 +890,8 @@
     },
     {
       "path": "src/generated/screen_meta.hpp",
-      "sha256": "e39c32cb7e18ca80e39093659091be4fcccb2762809a663b99ae82f732a9adcd",
-      "size": 2321
+      "sha256": "9a6e7280647d2d30cdb0bb80a72b58e3655d8a454b225962335b7bf3bb66afa6",
+      "size": 2615
     },
     {
       "path": "src/generated/smith_meta.hpp",
@@ -900,7 +905,7 @@
     },
     {
       "path": "src/generated/zone_meta.hpp",
-      "sha256": "538ba87d6361e1f8d3f02da8e7eeb792adbb85d3067ba56bd7739a1826d69c8a",
+      "sha256": "93a26a3752d3a9a7a7c38edd1731aaacf305803ee1dd6f173e91829f71069731",
       "size": 8388
     }
   ],

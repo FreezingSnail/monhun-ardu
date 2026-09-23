@@ -7,7 +7,7 @@ screen must cost ~0 flash (cart data) once the framework lands.
 ## Layers
 
 ```
-hub menu (title -> HUNT / QUESTS / SMITH)
+hub menu (title -> HUNT / QUESTS / SMITH / GEAR)
   screen framework: one generic list renderer + input + row actions
     cart data: screen tables (title, rows: label, cost, flags, condition, action)
     state:    save block in EEPROM (zenny, quest flags, upgrade tiers)
@@ -27,7 +27,8 @@ ScreenRow: labelLen u8 + chars, cost u16, actionId u8, flags u8,
 - Input: up/down move, A = accept (fires action), B = back.
 - Conditions: `zenny >= cost`, `flag set`, `tier < max` — one switch, no VM.
 - Actions (fixed enum, one switch): BUY_UPGRADE(tier), TAKE_QUEST(id),
-  TURN_IN_QUEST(id), LEAVE.
+  TURN_IN_QUEST(id), CRAFT_ARMOR(slot|piece), EQUIP_WEAPON(weaponIdx),
+  OPEN_GEAR, LEAVE.
 
 ## Save block (EEPROM)
 
@@ -77,6 +78,12 @@ QuestDef (v2): id, goalKind u8 (0 kill / 1 gather), target u8
   Hub B is a root no-op; camp hold-B leaves the hunt back to the hub. The loadout
   is the save's v4 `weapon` byte (hml.1) and the HUNT row's beast comes from the
   active quest's `goalKind`/`target` (`huntStart`, src/app_setup.hpp).
+- Gear screen (hml.3): the hub's GEAR row (`ACTION_OPEN_GEAR`) opens the
+  `data/screens/gear.json` list (SWORD / FLAIL / GUN + LEAVE). A on an equip row
+  (`ACTION_EQUIP_WEAPON`, `param` = weapon index) writes `save.weapon` when it
+  changes (same-weapon press and out-of-range params are no-ops), so the next
+  HUNT starts with the picked weapon. Armor/equipment stays on SMITH; an items
+  screen is still a follow-up, and the equipped weapon has no on-screen mark yet.
 - Scaffold limitations: the board renders every authored row even when its
   `COND_QUEST` condition is dead (locked/not-active) — status graying, progress
   display and nav filtering are a follow-up. There is no inventory screen; the

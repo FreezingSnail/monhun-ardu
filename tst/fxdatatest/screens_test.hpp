@@ -53,11 +53,12 @@ static uint16_t countBits(uint8_t xa, uint8_t xb, uint8_t ya, uint8_t yb) {
 
 inline void test_screens(FxTest &test) {
     // ------------------------------------------------- generated cart rows
-    test.expectEq(screens::SCREEN_COUNT, 3, F("screen count"));
+    test.expectEq(screens::SCREEN_COUNT, 4, F("screen count"));
     test.expectEq(screens::SCREEN_HUB, 0, F("hub index"));
     test.expectEq(screens::SCREEN_QUESTS, 1, F("quests index"));
     test.expectEq(screens::SCREEN_SMITH, 2, F("smith index"));
-    test.expectEq(screenRowCount(screens::SCREEN_HUB), 4, F("hub row count"));
+    test.expectEq(screens::SCREEN_GEAR, 3, F("gear index"));
+    test.expectEq(screenRowCount(screens::SCREEN_HUB), 5, F("hub row count"));
 
     // Title bytes come from the cart def (id u8, titleLen u8, title chars).
     const uint16_t hubDef = screenDefOff(screens::SCREEN_HUB);
@@ -67,11 +68,12 @@ inline void test_screens(FxTest &test) {
     test.expectEq(mhFxReadU8(screenCart(hubDef + 3)), 'U', F("hub title U"));
     test.expectEq(mhFxReadU8(screenCart(hubDef + 4)), 'B', F("hub title B"));
 
-    ScreenRow r0, r1, r2, r3;
+    ScreenRow r0, r1, r2, r3, r4;
     screenReadRow(screenRowOffsetAt(screens::SCREEN_HUB, 0), r0);
     screenReadRow(screenRowOffsetAt(screens::SCREEN_HUB, 1), r1);
     screenReadRow(screenRowOffsetAt(screens::SCREEN_HUB, 2), r2);
     screenReadRow(screenRowOffsetAt(screens::SCREEN_HUB, 3), r3);
+    screenReadRow(screenRowOffsetAt(screens::SCREEN_HUB, 4), r4);
     test.expectEq(r0.cost, 0, F("row0 cost"));
     test.expectEq(r0.action, screens::ACTION_HUNT, F("row0 action hunt"));
     test.expectEq(r0.cond, screens::COND_ALWAYS, F("row0 cond"));
@@ -80,8 +82,10 @@ inline void test_screens(FxTest &test) {
     test.expectEq(r1.cond, screens::COND_ALWAYS, F("row1 cond"));
     test.expectEq(r2.action, screens::ACTION_OPEN_SMITH, F("row2 action open smith"));
     test.expectEq(r2.cond, screens::COND_ALWAYS, F("row2 cond"));
-    test.expectEq(r3.action, screens::ACTION_NONE, F("row3 action none"));
-    test.expectEq(r3.flags, screens::ROW_F_ZENNY, F("row3 zenny dynamic-value flag"));
+    test.expectEq(r3.action, screens::ACTION_OPEN_GEAR, F("row3 action open gear"));
+    test.expectEq(r3.cond, screens::COND_ALWAYS, F("row3 cond"));
+    test.expectEq(r4.action, screens::ACTION_NONE, F("row4 action none"));
+    test.expectEq(r4.flags, screens::ROW_F_ZENNY, F("row4 zenny dynamic-value flag"));
 
     // ----------------------------------------------------- nav/scroll
     SaveBlock save;
@@ -89,7 +93,7 @@ inline void test_screens(FxTest &test) {
 
     ScreenState st;
     screenEnter(st, screens::SCREEN_HUB, save);
-    test.expectEq(st.rowCount, 4, F("enter rowCount"));
+    test.expectEq(st.rowCount, 5, F("enter rowCount"));
     test.expectEq(st.cursor, 0, F("enter cursor"));
     test.expectEq(st.scroll, 0, F("enter scroll"));
     test.expectEq(st.active, 1, F("enter active"));
@@ -108,7 +112,7 @@ inline void test_screens(FxTest &test) {
     screenStep(st, idle);
     screenStep(st, up);   // wrap to the last row
     screenStep(st, idle);
-    test.expectEq(st.cursor, 3, F("nav up wraps"));
+    test.expectEq(st.cursor, 4, F("nav up wraps"));
     test.expectEq(screenStep(st, a), SCREEN_ACCEPT, F("A accepts"));
     test.expectEq(screenStep(st, a), SCREEN_NONE, F("held A silent"));
     screenStep(st, idle);
@@ -150,7 +154,8 @@ inline void test_screens(FxTest &test) {
     test.expectEq(appScreenAccept(screens::SCREEN_HUB, r0), APP_NAV_HUNT, F("hub HUNT routes to hunt"));
     test.expectEq(appScreenAccept(screens::SCREEN_HUB, r1), APP_NAV_QUESTS, F("hub QUESTS route"));
     test.expectEq(appScreenAccept(screens::SCREEN_HUB, r2), APP_NAV_SMITH, F("hub SMITH route"));
-    test.expectEq(appScreenAccept(screens::SCREEN_HUB, r3), APP_NAV_NONE, F("hub zenny row is a no-op"));
+    test.expectEq(appScreenAccept(screens::SCREEN_HUB, r3), APP_NAV_GEAR, F("hub GEAR route"));
+    test.expectEq(appScreenAccept(screens::SCREEN_HUB, r4), APP_NAV_NONE, F("hub zenny row is a no-op"));
     test.expectEq(appScreenBack(screens::SCREEN_QUESTS), APP_NAV_HUB, F("quests B -> hub"));
     test.expectEq(appScreenBack(screens::SCREEN_HUB), APP_NAV_NONE, F("hub B is a root no-op"));
 
@@ -232,16 +237,18 @@ inline void test_screens(FxTest &test) {
     test.expectEq(countBits(2, 5, 22, 25), 0, F("row1 no cursor"));
     // Row 2 label (SMITH) at y = 11 + 2*9 = 29.
     test.expectEq(countBits(10, 50, 29, 36) > 0 ? 1 : 0, 1, F("row2 SMITH label ink"));
-    // Row 3 is the dynamic ZENNY row: the live balance (1234, 4 digits) is
-    // drawn in the cost column at y = 11 + 3*9 = 38, not the packed cost.
-    test.expectEq(countBits(10, 32, 38, 45) > 0 ? 1 : 0, 1, F("zenny row label ink"));
-    test.expectEq(countBits(108, 123, 38, 45) > 0 ? 1 : 0, 1, F("zenny balance drawn"));
+    // Row 3 label (GEAR) at y = 11 + 3*9 = 38.
+    test.expectEq(countBits(10, 50, 38, 45) > 0 ? 1 : 0, 1, F("row3 GEAR label ink"));
+    // Row 4 is the dynamic ZENNY row: the live balance (1234, 4 digits) is
+    // drawn in the cost column at y = 11 + 4*9 = 47, not the packed cost.
+    test.expectEq(countBits(10, 32, 47, 54) > 0 ? 1 : 0, 1, F("zenny row label ink"));
+    test.expectEq(countBits(108, 123, 47, 54) > 0 ? 1 : 0, 1, F("zenny balance drawn"));
     // Control: an empty balance draws one digit at the right edge only.
     clearFb();
     saveDefaults(ps);
     drawScreen(draw, ps);
-    test.expectEq(countBits(108, 119, 38, 45), 0, F("zenny 0 leaves the 4-digit span empty"));
-    test.expectEq(countBits(120, 123, 38, 45) > 0 ? 1 : 0, 1, F("zenny 0 digit drawn"));
+    test.expectEq(countBits(108, 119, 47, 54), 0, F("zenny 0 leaves the 4-digit span empty"));
+    test.expectEq(countBits(120, 123, 47, 54) > 0 ? 1 : 0, 1, F("zenny 0 digit drawn"));
 
     // -------------------------------------------------- quests board screen
     test.expectEq(screenRowCount(screens::SCREEN_QUESTS), 8, F("quests row count"));
@@ -263,6 +270,38 @@ inline void test_screens(FxTest &test) {
     test.expectEq(countBits(2, 5, 13, 16), 16, F("quests cursor chip 4x4"));
     test.expectEq(countBits(2, 20, 0, 7) > 0 ? 1 : 0, 1, F("quests title ink"));
     test.expectEq(countBits(10, 60, 11, 18) > 0 ? 1 : 0, 1, F("quests row0 label ink"));
+
+    // ------------------------------------------------------- gear screen
+    test.expectEq(screenRowCount(screens::SCREEN_GEAR), 4, F("gear row count"));
+    ScreenRow g0, g1, g2, g3;
+    screenReadRow(screenRowOffsetAt(screens::SCREEN_GEAR, 0), g0);
+    screenReadRow(screenRowOffsetAt(screens::SCREEN_GEAR, 1), g1);
+    screenReadRow(screenRowOffsetAt(screens::SCREEN_GEAR, 2), g2);
+    screenReadRow(screenRowOffsetAt(screens::SCREEN_GEAR, 3), g3);
+    test.expectEq(g0.action, screens::ACTION_EQUIP_WEAPON, F("gear row0 action equip"));
+    test.expectEq(g0.param, W_SWORD, F("gear row0 param sword"));
+    test.expectEq(g1.action, screens::ACTION_EQUIP_WEAPON, F("gear row1 action equip"));
+    test.expectEq(g1.param, W_FLAIL, F("gear row1 param flail"));
+    test.expectEq(g2.action, screens::ACTION_EQUIP_WEAPON, F("gear row2 action equip"));
+    test.expectEq(g2.param, W_GUN, F("gear row2 param gun"));
+    test.expectEq(g3.action, screens::ACTION_LEAVE, F("gear leave row"));
+    test.expectEq(appScreenAccept(screens::SCREEN_GEAR, g3), APP_NAV_HUB, F("gear leave backs to hub"));
+    test.expectEq(appScreenAccept(screens::SCREEN_GEAR, g1), APP_NAV_NONE, F("gear equip is a save action"));
+    // The cart's equip row writes the v4 weapon byte.
+    SaveBlock gear;
+    saveDefaults(gear);
+    test.expectEq(screenApplyAction(gear, g2), 1, F("cart gear row equips"));
+    test.expectEq(gear.weapon, W_GUN, F("cart gear row wrote the weapon byte"));
+    test.expectEq(screenApplyAction(gear, g2), 0, F("re-equip same weapon is a no-op"));
+
+    // Pixel: the gear page draws through the same generic renderer.
+    clearFb();
+    ScreenState gs;
+    screenEnter(gs, screens::SCREEN_GEAR, ps);
+    drawScreen(gs, ps);
+    test.expectEq(countBits(2, 5, 13, 16), 16, F("gear cursor chip 4x4"));
+    test.expectEq(countBits(2, 20, 0, 7) > 0 ? 1 : 0, 1, F("gear title ink"));
+    test.expectEq(countBits(10, 60, 11, 18) > 0 ? 1 : 0, 1, F("gear row0 label ink"));
 }
 
 }   // namespace screenfx

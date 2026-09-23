@@ -55,7 +55,8 @@ SCREEN_MAX = 255
 TIER_COUNT = 3   # N_WEAPONS (W_SWORD/W_FLAIL/W_GUN); must match core/save.hpp
 
 ACTION_NAMES = ("leave", "buy_upgrade", "take_quest", "turn_in_quest",
-                "none", "hunt", "open_quests", "open_smith", "craft_armor")
+                "none", "hunt", "open_quests", "open_smith", "craft_armor",
+                "equip_weapon", "open_gear")
 COND_NAMES = ("always", "zenny", "flag", "tier", "quest", "upgrade", "armor")
 # hide_locked: reserved. zenny: draw the live save.zenny balance in the cost
 # column instead of the row cost (dynamic value token, qs.4 hub display).

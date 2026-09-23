@@ -492,6 +492,23 @@ void ScreenSuite(TestRunner &runner) {
     }
 
     {
+        Test t("equip weapon writes the v4 byte; out-of-range + same weapon are no-ops");
+        SaveBlock s;
+        saveDefaults(s);
+        t.assert(s.weapon, W_SWORD, "default sword");
+        t.assert(screenApplyAction(s, row(0, screens::ACTION_EQUIP_WEAPON, screens::COND_ALWAYS, W_FLAIL)), true, "equip flail changes save");
+        t.assert(s.weapon, W_FLAIL, "flail equipped");
+        t.assert(screenApplyAction(s, row(0, screens::ACTION_EQUIP_WEAPON, screens::COND_ALWAYS, W_FLAIL)), false, "same weapon is a no-op");
+        t.assert(s.weapon, W_FLAIL, "still flail");
+        t.assert(screenApplyAction(s, row(0, screens::ACTION_EQUIP_WEAPON, screens::COND_ALWAYS, SAVE_TIER_COUNT)), false, "param at the weapon count rejected");
+        t.assert(screenApplyAction(s, row(0, screens::ACTION_EQUIP_WEAPON, screens::COND_ALWAYS, 255)), false, "param 255 rejected");
+        t.assert(s.weapon, W_FLAIL, "weapon unchanged after rejects");
+        t.assert(screenApplyAction(s, row(0, screens::ACTION_EQUIP_WEAPON, screens::COND_ALWAYS, W_GUN)), true, "equip gun changes save");
+        t.assert(s.weapon, W_GUN, "gun equipped");
+        suite.addTest(t);
+    }
+
+    {
         Test t("take/turn-in quest set the taken then done bits");
         SaveBlock s;
         saveDefaults(s);
