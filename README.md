@@ -304,7 +304,7 @@ hunt exit.
 |---|---|
 | D-pad | move |
 | D-pad double-tap | dodge roll toward the tapped direction (all weapons, sheathed too — same sword roll; stamina + state gates as the B tap) |
-| B held + double-tap Down | sheathe (stow the weapon); A draws into combo hit 1 |
+| B held + double-tap Down | sheathe (stow the weapon); A draws — rooted per-weapon windup (sword 6 / flail 10 / gun 16 ticks), then combo hit 1 |
 | A | attack (in a stance: stance special) |
 | A (sheathed, at a herb node) | gather the node (rooted ~40 ticks; a tap away from a node draws instead) |
 | B tap | dodge (sword) / deflect (flail) / shove (gunshield); inert while sheathed |

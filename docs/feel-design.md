@@ -128,7 +128,10 @@ flail deflect, gun shove).
 Sheathe (S2, replaces the feel.17 B+double-Down stow): hold A on an armed press
 puts the weapon away — sword/gun at `STOW_HOLD_TICKS` (the swing plays out
 first), flail at `CHARGE_MIN + STOW_HOLD_TICKS` (its charge hold wins, the long
-hold stows from `PS_CHARGE`). A draws back into combo hit 1. Moving the stow off
+hold stows from `PS_CHARGE`). A draws back into combo hit 1, but only after a
+rooted per-weapon windup (feel.24): sword 6 / flail 10 / gun 16 ticks, so the
+weapon visibly comes out during the draw and the swing does not start until it
+is out. Moving the stow off
 the d-pad frees every direction for the roll, so a guard/parry/whirl can always
 roll out; the draw press latches `aStowOk` so draw-and-keep-holding never
 re-stows.

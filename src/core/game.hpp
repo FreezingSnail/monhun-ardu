@@ -190,7 +190,8 @@ enum PState : int8_t {
     PS_CHARGE,   // appended (ynb): existing 0..6 values must not move
     PS_GATHER,   // appended (feel.22): sheathed node gather, stationary
     PS_ITEM,     // appended (feel.22): sheathed herb use, stationary
-    PS_CARVE     // appended (prg.3): carcass carve, stationary on the over screen
+    PS_CARVE,    // appended (prg.3): carcass carve, stationary on the over screen
+    PS_DRAW      // appended (feel.24): rooted weapon draw windup (per-weapon)
 };
 enum Stance : int8_t {
     ST_NONE = 0,
@@ -385,6 +386,15 @@ inline const Attack *weaponCharge(const WeaponDef *d, int16_t i) {
 }
 inline bool weaponHasCharge(const WeaponDef *d) {
     return mhFxReadI16(&d->charge[0].dmg) != 0;
+}
+
+// Draw windup per weapon (feel.24). Unsheathing is a rooted commitment that
+// scales with the weapon's heft, so the weight is felt on the first press:
+// sword 6, flail 10 (between), gun 16 (slowest). Indexed by WeaponId, so the
+// ordering is W_SWORD < W_FLAIL < W_GUN.
+constexpr uint8_t DRAW_TICKS[3] = {6, 10, 16};
+inline uint8_t weaponDrawTicks(int8_t id) {
+    return DRAW_TICKS[id];
 }
 
 inline int16_t attackStartup(const Attack *a) {

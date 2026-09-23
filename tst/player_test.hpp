@@ -511,26 +511,76 @@ void PlayerSuite(TestRunner &runner) {
         suite.addTest(t);
     }
 
-    // ------------------------------------------------- sheathe + debounce (udb)
+    // ------------------------------------------------- sheathe + draw windup (gis)
     {
-        Test t("sheathe S2: hold A after the swing stows, A draws hit 1");
-        Game g;
-        initGame(g, W_SWORD);
-        stowWeapon(g);
-        t.assert(g.player.sheathed, true, "hold A stows");
-        t.assert(g.player.state, PS_IDLE, "stow settles at idle");
-        stepN(g, 1, Input{0, 0, true, false});   // A draws
-        t.assert(g.player.sheathed, false, "A draws the weapon");
-        t.assert(g.player.state, PS_ATTACK, "draw swings immediately");
-        t.assert(g.player.atk != nullptr ? 1 : 0, 1, "draw attack runs");
+        Test t("sheathe S2: A starts a rooted per-weapon draw, then combo hit 1");
+        // Per-weapon draw length: sword fastest, gun slowest, flail between.
+        t.assert(weaponDrawTicks(W_SWORD), 6, "sword draw 6");
+        t.assert(weaponDrawTicks(W_FLAIL), 10, "flail draw 10");
+        t.assert(weaponDrawTicks(W_GUN), 16, "gun draw 16");
+        t.assertLessThan(weaponDrawTicks(W_SWORD), weaponDrawTicks(W_FLAIL), "sword draws before flail");
+        t.assertLessThan(weaponDrawTicks(W_FLAIL), weaponDrawTicks(W_GUN), "flail draws before gun");
+
+        const int8_t weapons[3] = {W_SWORD, W_FLAIL, W_GUN};
+        for (int i = 0; i < 3; i++) {
+            const int8_t w = weapons[i];
+            Game g;
+            initGame(g, w);
+            stowWeapon(g);
+            t.assert(g.player.sheathed, true, "weapon stowed");
+
+            const int16_t x0 = g.player.x;
+            const int16_t y0 = g.player.y;
+            // Draw press with East held: the draw is rooted, so no movement.
+            stepN(g, 1, Input{1, 0, true, false});
+            t.assert(g.player.sheathed, false, "A draws the weapon");
+            t.assert(g.player.state, PS_DRAW, "draw press enters PS_DRAW");
+            t.assert(g.player.atk == nullptr ? 1 : 0, 1, "no attack during the draw");
+            t.assert(static_cast<int16_t>(g.player.x - x0) + static_cast<int16_t>(g.player.y - y0), 0, "rooted on the draw press");
+
+            // Count the ticks until combo hit 1 starts. DRAW_TICKS counts the
+            // press tick (the first PS_DRAW update), so the total is n + 1.
+            int n = 0;
+            while (n < 40 && g.player.state == PS_DRAW) {
+                stepN(g, 1, Input{1, 0, false, false});   // direction still held
+                n++;
+            }
+            t.assert(g.player.state, PS_ATTACK, "draw ends in an attack");
+            t.assert(n + 1, weaponDrawTicks(w), "exact per-weapon draw length");
+            t.assert(static_cast<int16_t>(g.player.x - x0) + static_cast<int16_t>(g.player.y - y0), 0, "rooted through the whole draw");
+            // Combo hit 1 starts when the weapon is out: the attacks[0] data.
+            const Attack *a0 = &WEAPON_DEFS[w].attacks[0];
+            t.assert(attackStartup(g.player.atk), a0->startup, "draw attack = combo hit 1 startup");
+            t.assert(attackDmg(g.player.atk), a0->dmg, "draw attack = combo hit 1 dmg");
+        }
+
+        // Damage mid-draw cancels to idle with the weapon out.
+        Game h;
+        initGame(h, W_GUN);
+        stowWeapon(h);
+        stepN(h, 1, Input{0, 0, true, false});   // draw press -> PS_DRAW
+        t.assert(h.player.state, PS_DRAW, "gun draw running");
+        playerHurt(h, 5, 1, 0);
+        t.assert(h.player.state, PS_IDLE, "damage cancels the draw to idle");
+        t.assert(h.player.sheathed, false, "weapon stays out after a draw cancel");
+        t.assert(h.player.atk == nullptr ? 1 : 0, 1, "no attack left armed");
+
+        // A B tap during the draw does not dodge (sword would roll).
+        Game b;
+        initGame(b, W_SWORD);
+        stowWeapon(b);
+        stepN(b, 1, Input{0, 0, true, false});   // draw press -> PS_DRAW
+        tapB(b);
+        t.assert(b.player.state, PS_DRAW, "B tap does not cancel the draw");
+        t.assert(b.player.state != PS_DODGE ? 1 : 0, 1, "no dodge out of the draw");
 
         // Draw-and-keep-holding must not bounce straight back into the sheath.
-        Game h;
-        initGame(h, W_SWORD);
-        stowWeapon(h);
-        stepN(h, 1, Input{0, 0, true, false});                     // draw press
-        stepN(h, STOW_HOLD_TICKS + 8, Input{0, 0, true, false});   // keep holding
-        t.assert(h.player.sheathed, false, "draw hold does not re-stow");
+        Game k;
+        initGame(k, W_SWORD);
+        stowWeapon(k);
+        stepN(k, 1, Input{0, 0, true, false});                     // draw press
+        stepN(k, STOW_HOLD_TICKS + 8, Input{0, 0, true, false});   // keep holding
+        t.assert(k.player.sheathed, false, "draw hold does not re-stow");
         suite.addTest(t);
     }
 

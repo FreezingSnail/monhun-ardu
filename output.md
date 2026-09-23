@@ -1,36 +1,76 @@
-# monhun-ardu-z5i — gun shove thrusts the shield forward (feel.24)
+# monhun-ardu-gis — per-weapon draw windup (feel.24)
 
 ## What changed
 
-`src/render.hpp` (gunshield branch of `drawPlayer`)
+- `src/core/game.hpp`
+  - `constexpr uint8_t DRAW_TICKS[3] = {6, 10, 16};` + `inline uint8_t
+    weaponDrawTicks(int8_t id)`, indexed by `WeaponId` (sword fastest, gun
+    slowest, flail between). No `WeaponDef` layout change; size asserts untouched.
+  - `PS_DRAW` appended to `PState` after `PS_CARVE` (existing 0..9 values did
+    not move).
+- `src/core/player.hpp`
+  - Sheathed A away from a gather node now enters `PS_DRAW` (rooted) instead of
+    calling `startAttack` on the press tick; `sheathed=false`, `chain=0`,
+    `chainWin=0`, `aBuffer=0`, `atk=nullptr`, `hitDone=false`. `aStowOk` latch
+    unchanged, so the draw press still never re-stows.
+  - New `case PS_DRAW:` in `updatePlayer`: `p.t++`; at `p.t >=
+    weaponDrawTicks(g.weapon)` -> `PS_IDLE`, `t=0`, `startAttack(g, def)` (combo
+    hit 1). No movement handling. If `startAttack` refuses on lock/stamina the
+    hunter stands there with the weapon out. `playerHurt` already resets to
+    `PS_IDLE` and leaves `sheathed=false`.
+  - `PS_DRAW` added to the `tapDefenseReady()` exclusion list (B tap + d-pad
+    double-tap roll cannot cancel a draw).
+- `src/render.hpp`: NOT modified. `drawPlayer` only special-cases
+  `PS_ATTACK`/`PS_SPECIAL` for the attack pose; with `sheathed=false` and any
+  other state it draws the idle weapon pose, so the weapon is visible for the
+  whole windup. Verified by reading lines 894/904/954/979.
+- Docs: README input-table sheathed-A row and the S2 sheathe paragraph in
+  `docs/feel-design.md` now state the rooted per-weapon draw windup
+  (sword 6 / flail 10 / gun 16).
 
-- Before: the base guard/idle plate was drawn every tick AND the POSE_SHOVE
-  plate at a static forward offset `(p.fx * 4) >> 4` (+1 cell compensation), so
-  the bash read as a wide static plate for all 10 shove ticks.
-- After: during `PS_SHOVE` only the POSE_SHOVE plate is drawn, at a forward
-  offset that retracts over the shove. `p.t` counts 10 -> 1 (PS_SHOVE case in
-  `player.hpp`), so `thrust = 4 + (p.t * 6) / 10` starts at 10 px (E facing) on
-  the first tick and retracts to 4 px + 1 by the last. The +1 cell compensation
-  is kept (the shove frame is drawn 1 px left inside its cell, anchor 5 vs the
-  idle/guard 6).
-- No sim change: the 38 px reach check, push 10, stamina and state timing are
-  untouched.
+## Tests
 
-`tst/fxdatatest/player_art_test.hpp`
+`tst/player_test.hpp`: replaced the old "A draws hit 1" test with
+"sheathe S2: A starts a rooted per-weapon draw, then combo hit 1" (42 asserts):
+exact tick values 6/10/16 + ordering; `PS_DRAW` on the press with `atk==nullptr`;
+position unchanged on the press and through the whole draw under a held
+direction; `n+1 == weaponDrawTicks(w)` ticks to combo hit 1; attack data equals
+`attacks[0]`; damage mid-draw -> `PS_IDLE` with `sheathed=false`; B tap mid-draw
+does not dodge; draw-and-hold does not re-stow.
 
-- Regenerated exactly one oracle golden: matrix index 32 = `{W_GUN, PS_SHOVE,
-  ST_NONE, E}` (the row the bead text called "case 33"; 33 is gun-special W).
-  New hashes `{0x4f202fb3, 0x670510b3, 0x670510b3}` — `p.t == 0` in the oracle,
-  the fully retracted 4 px pose with the guard/idle plate gone. Regen-history
-  note added to the file header. Every other case byte-identical.
+`tst/zone_test.hpp` `zswing()` (steps to `PS_IDLE`, 80-tick cap) and
+`tst/gather_test.hpp` (depleted node: state != `PS_GATHER`, `sheathed==0`) pass
+unchanged. No other suite assumed a same-tick draw.
 
 ## Gate (exact)
 
-1. `make test`: `Total Passed: 6298  Total Failed: 0`
-2. `make fxtest-headless FXTEST_ONLY=test_player_art`: `PASSED=120 FAILED=0`
-3. `make fxtest-headless`: 18/18 suites PASS
-4. `make gen-check`: `fxdata_manifest: PASS (91 generated artifacts unchanged)`
-5. `make size`: `size: flash=28920/29696 (776 free)  ram=1704/2560`
-   — +46 B vs the 28874 (822 free) pre-change baseline.
+1. `make test`
+   ```
+   Total Passed: 6334
+   Total Failed: 0
+   ```
+   New suite: `sheathe S2: A starts a rooted per-weapon draw, then combo hit 1`
+   -> `Passed: 42  Failed: 0`.
+2. `make gen-check`
+   ```
+   fxdata_manifest: PASS (91 generated artifacts unchanged)
+   ```
+   No generated artifact changed.
+3. `make fxtest-headless` (all suites)
+   ```
+   EXIT=0; 18 "=== test_*: PASS ===" lines; no FAILED=[1-9]
+   test_perf: B pUs=6342 pHz=157 lHz=52 lTk=184 rMx=3004 rAv=2550 ram=606
+   test_tell: PASS, test_zones: PASS, test_player_art: PASS (120)
+   ```
+4. `make size` (delta vs pre-change baseline of the same tree minus this bead)
+   - after:  `size: flash=28982/29696 (714 free)  ram=1708/2560`
+     `.text=28958 .data=24 .bss=1684`
+   - before: `size: flash=28920/29696 (776 free)  ram=1704/2560`
+     `.text=28900 .data=20 .bss=1684`
+   - delta: **flash +62 B** (.text +58, .data +4), ram +4 B. Free 776 -> 714.
+     Baseline measured on the identical tree with only this bead's
+     game.hpp/player.hpp hunks reversed; the other two in-tree tasks' changes
+     were kept (render.hpp/fxdatatest never touched).
+5. `make test-tools`: not run — no tooling changed.
 
-Worker-run bead; orchestrator re-ran the full gate on the final tree.
+No commit/push (orchestrator owns commits).

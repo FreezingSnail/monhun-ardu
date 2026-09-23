@@ -431,7 +431,7 @@ static bool tryBranch(Game &g, const WeaponDef *def, const Input &inp) {
 // evade, stun or special is running, and out of an attack only when the weapon
 // can cancel (feel.16/17/18). Mirrors the gate the B tap always had.
 static bool tapDefenseReady(const Player &p, const WeaponDef *def) {
-    if (p.state == PS_DODGE || p.state == PS_DEFLECT || p.state == PS_SHOVE || p.state == PS_STUN || p.state == PS_SPECIAL)
+    if (p.state == PS_DODGE || p.state == PS_DEFLECT || p.state == PS_SHOVE || p.state == PS_STUN || p.state == PS_SPECIAL || p.state == PS_DRAW)
         return false;
     if (p.state == PS_ATTACK && !weaponCanCancel(def))
         return false;
@@ -803,13 +803,17 @@ static void updatePlayer(Game &g, const Input &inp, bool aP, bool bP, bool bR) {
         if (p.sheathed) {
             if (p.state == PS_IDLE) {
                 // Sheathed A: a gather node under the hunter wins (feel.22);
-                // otherwise draw into combo hit 1.
+                // otherwise commit to the rooted per-weapon draw windup
+                // (feel.24) — combo hit 1 starts when the weapon is out.
                 if (!tryStartGather(g, p)) {
                     p.sheathed = false;
                     p.chain = 0;
                     p.chainWin = 0;
                     p.aBuffer = 0;
-                    startAttack(g, def);
+                    p.state = PS_DRAW;
+                    p.t = 0;
+                    p.atk = nullptr;
+                    p.hitDone = false;
                 }
             }
         } else if (ROLL_ALT_ENABLED && (p.state == PS_DODGE || p.state == PS_DEFLECT || p.state == PS_SHOVE)) {
@@ -941,6 +945,19 @@ static void updatePlayer(Game &g, const Input &inp, bool aP, bool bP, bool bR) {
                 // chargeArmed was already cleared by the top-of-tick release.
             }
             applyDrift(p);
+        }
+        break;
+    }
+    case PS_DRAW: {
+        // Rooted weapon draw (feel.24): no movement input handling, same
+        // commitment class as PS_GATHER/PS_ITEM. When the windup elapses the
+        // weapon is out and combo hit 1 starts; if startAttack refuses on the
+        // lock/stamina gate the hunter just stands there with the weapon out.
+        p.t++;
+        if (p.t >= weaponDrawTicks(g.weapon)) {
+            p.state = PS_IDLE;
+            p.t = 0;
+            startAttack(g, def);
         }
         break;
     }
