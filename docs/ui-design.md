@@ -6,11 +6,12 @@ list-screen look. Budget at design time: flash 29204/29696 (492 free), RAM
 
 Shipped so far: ui.1–ui.4 (cards, forge trees, save v5, unified card paths).
 ui.5 landed the **header zenny** (retiring the HUB ZENNY row + `ROW_F_ZENNY`)
-and the docs; the remaining chrome below — the HUB HUNT right column, the HUB
-bottom strip, and the list page indicator — is **deferred**: measured against
-the 190 B free at HEAD addb103, header zenny alone costs +76 B (114 free left),
-the HUNT column +238, the strip +276, and the page indicator +144 (all
-whole-image `make size` deltas). Fitting the rest needs a trim wave first.
+and the docs. ui.5.2 (5co.9) landed the rest of the chrome on the 746 B reclaimed
+by ui.5.1: the **HUB HUNT right column**, the **HUB bottom strip**, the list
+**page indicator**, and the **blocked-A denied cue**. Measured whole-image deltas
+(ui.5.2, with the ui.5.1 trim): HUNT column +248, strip +322, page indicator
++114, denied cue +32; the now-dead per-char label/title tail fallback was
+dropped for -128. Net +612 from HEAD 4c5ec9f (28950 -> 29562, 134 B free).
 
 ## Interaction model
 
@@ -53,9 +54,12 @@ list screen --A--> detail card --LEFT/RIGHT--> pages --A--> action --B--> list
 
 - Title line: screen title left, zenny right (`$` + digits) — the fake ZENNY
   row and `ROW_F_ZENNY` are retired.
-- 6 rows/page at 9 px pitch; page indicator (`n/m`) when a screen has more
-  than one page.
+- 6 rows/page at 9 px pitch. The 6-row grid fills y=11..63, so the page
+  indicator (`n/m`, gray) sits on the title line just after the title; it is
+  drawn only when a screen has more than one page (>6 rows).
 - Cursor: chip tile; selected label white, others gray; state tokens per row.
+- A blocked A (a gated row, or a card whose hint is `NEED PARTS` / `NEED ZENNY`
+  / silent) plays a short denied cue (the low `CUE_HURT` tone; no new cue).
 
 ## List screens
 
@@ -64,21 +68,22 @@ list screen --A--> detail card --LEFT/RIGHT--> pages --A--> action --B--> list
 ```
 HUB                      1240
 ____________________________
-> HUNT            QUEST 2/3
+> HUNT                 2/3
   QUESTS
   FORGE
   GEAR
 ____________________________
-SWD T2A  ATK12 DEF10 EVA4
+SWD1  ATK12 DEF10
 ```
 
-`HUNT` right column = active quest progress / `READY` / `-`; bottom strip =
-equipped weapon + top active skill totals.
+`HUNT` right column = active quest progress `p/n` / `READY` / `-`; bottom strip
+(y=56) = equipped weapon marker (class abbr + forge-tree tier) + active armor
+skill point totals (abbr + points, tiered skills only).
 
 ### QUESTS
 
 ```
-QUESTS                   1240
+QUESTS 1/2               1240
 ____________________________
 > SLAY LUNGE     2/3 [##..]
   SLAY SWEEP         NEW
@@ -93,7 +98,7 @@ Cards: GOAL / PROG / REWARD. A = accept (`NEW`) / turn in (`READY`); locked
 ### GEAR (owned gear, equip)
 
 ```
-GEAR                     1240
+GEAR 1/2                 1240
 ____________________________
   -- WEAPON --
 > SWD T2A           E
@@ -103,7 +108,6 @@ ____________________________
   HUNTER HELM      E DEF10
   BONE CAP            DEF6
 ____________________________
-                   page 1/2
 ```
 
 Cards: weapon `DESC / STATS`; armor `DESC / PARTS (unowned only) / STATS /
@@ -113,7 +117,7 @@ the crafted bitset; no upgrade path).
 ### FORGE (full weapon trees, forge/upgrade)
 
 ```
-FORGE                    1240
+FORGE 1/3                1240
 ____________________________
   -- SWD --
 > SWD T1          120  OK
@@ -124,7 +128,6 @@ ____________________________
   |  +- SWD T4   900
   -- FLAIL --
 ____________________________
-                   page 1/3
 ```
 
 The list keeps label + cost only; the live state (equipped / owned /
@@ -183,6 +186,7 @@ Beads:
    meta; card nav/LEFT-RIGHT/hint line; armor + quests content wired first.
 4. `ui.4` weapon trees: node table + save v5 + FORGE list/cards + GEAR owned
    list; v4 migration.
-5. `ui.5` polish: header zenny + docs landed (this wave); hub strip, HUNT
-   right column and page indicators deferred (budget — see Status above).
-   Items screen later (monhun-ardu-prg.13) reuses the same card pipeline.
+5. `ui.5` polish: header zenny + docs landed; `ui.5.1` reclaimed the budget,
+   and `ui.5.2` (5co.9) landed the hub HUNT column, hub strip, page indicators
+   and the denied cue (see Status above). Items screen later
+   (monhun-ardu-prg.13) reuses the same card pipeline.

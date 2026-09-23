@@ -298,6 +298,18 @@ removed the SMITH screen and ui.4 (5co.4) added the FORGE trees, which own all
 weapon progression: armor crafting moved onto the GEAR armor card (below) and
 the camp smithy interaction was dropped with the screen.
 
+Hub chrome (ui.5.2, 5co.9): the HUNT row's right column shows the active quest's
+progress (`2/3`), `READY` once progress >= need, or `-` with no active quest
+(replacing the packed cost, which is always 0 on the hub). A bottom strip on the
+free y=56 line shows the equipped weapon marker (`SWD1` — the class abbreviation
++ forge-tree tier) and the active armor skill point totals (`ATK12`, tiered
+skills only; no all-skills screen). Any list spanning more than one 6-row page
+carries an `n/m` page indicator after its title. A blocked A — a gated list row
+or a card whose hint is `NEED PARTS` / `NEED ZENNY` / silent — plays a short
+denied cue, reusing the low `CUE_HURT` tone (no new cue row). The generator caps
+titles and labels at 16 chars, so the renderer draws the batched cart fetch only;
+the old per-char tail fallback was dead and is gone (5co.9 trim).
+
 The FORGE screen (`data/screens/forge.json` + generated rows from
 `data/forge/*.json`) lists every weapon node as an indented tree (class headers
 + one `ACTION_FORGE_NODE` row per node, label + upgrade cost). A opens the
@@ -320,8 +332,8 @@ DEFENSE UP / HEALTH UP / STAMINA UP / EVADE) show each skill's stacked points,
 and an active skill gets an `S` (points >= 10) or `M` (points >= 15) letter just
 left of the number; points clamp at 15. The cache refills when GEAR is entered
 and after every equip action, so the numbers move as gear changes. An items
-screen is still a follow-up; the equipped weapon/armor itself has no on-screen
-mark yet. Every state-changing action commits the 44-byte EEPROM save block
+screen is still a follow-up; the equipped weapon's hub strip marker (ui.5.2) is
+the only loadout readout outside GEAR. Every state-changing action commits the 44-byte EEPROM save block
 once (write-on-change + verify read). A save with an active quest applies it at
 hunt start and the hunt-end quest-progress commit still runs exactly once per
 hunt. Camp hold-B (sheathed) leaves the hunt back to the hub. There is no quit

@@ -14,7 +14,9 @@
 
 #include "render.hpp"
 #include "screen_state.hpp"
-#include "quest.hpp"   // questReadDef: quest unlock + reward for COND_QUEST rows (dlp.2)
+#include "quest.hpp"          // questReadDef: quest unlock + reward for COND_QUEST rows (dlp.2)
+#include "forge.hpp"          // forge::WEAPON_*/NODE_* for the hub strip marker (ui.5.2)
+#include "core/progmem.hpp"   // MH_PROGMEM + mhPgmReadU8 for the chrome strings
 
 namespace mh {
 
@@ -24,6 +26,8 @@ constexpr int16_t SCREEN_ROW_H = 9;
 constexpr int16_t SCREEN_LABEL_X = 10;   // past the cursor tile
 constexpr int16_t SCREEN_CURSOR_X = 2;
 constexpr int16_t SCREEN_COST_RIGHT = 124;
+// Hub bottom strip (ui.5.2): below the 4 hub rows, on the free y=56 line.
+constexpr int16_t SCREEN_STRIP_Y = 56;
 
 // Fake cart pointer for a byte offset into the mhScreens raw_t section.
 inline const uint8_t *screenCart(uint16_t off) {
@@ -31,10 +35,11 @@ inline const uint8_t *screenCart(uint16_t off) {
 }
 
 // Batched string fetch (monhun-ardu-dx5.3): one cart transaction per title/label
-// instead of one mhFxReadU8 seek per glyph. The longest shipped label is 11
-// chars ("HUNTER HELM"), so the 16-byte stack buffer covers every authored
-// row; longer strings return only the buffered prefix and drawScreen finishes
-// the tail per-char, keeping the character mapping byte-identical either way.
+// instead of one mhFxReadU8 seek per glyph. The generator caps titles and row
+// labels at 16 chars (tools/gen-screens.py TITLE_MAX/LABEL_MAX), so this 16-byte
+// stack buffer covers every authored string and the renderer draws the buffered
+// prefix only. A corrupt cart with a longer string is truncated, never read past
+// the buffer (monhun-ardu-5co.9 dropped the now-dead per-char tail loop).
 constexpr uint8_t SCREEN_TEXT_BUF = 16;
 
 inline uint8_t screenReadText(uint16_t off, uint8_t len, char *buf) {
@@ -135,9 +140,82 @@ inline void screenGearCache(ScreenState &s, const ArmorAgg &agg) {
     }
 }
 
+// ---- ui.5.2 hub chrome -----------------------------------------------------
+// Fixed-width flash abbreviation tables + one small PROGMEM string drawer. A
+// flat char array beats a pointer table (which would land in .data); the space
+// padding keeps every entry 3/4 chars wide so one indexed read serves each
+// class/skill ("SWD"/"FL "/"GN " and ATK/DEF/HP/STAM/EVA).
+static const char MH_PROGMEM SCREEN_READY[] = "READY";
+static const char MH_PROGMEM SCREEN_WCLASS[9] = {'S', 'W', 'D', 'F', 'L', ' ', 'G', 'N', ' '};
+static const char MH_PROGMEM SCREEN_SKILL_ABBR[20] = {
+    'A', 'T', 'K', ' ', 'D', 'E', 'F', ' ', 'H', 'P', ' ', ' ', 'S', 'T', 'A', 'M', 'E', 'V', 'A', ' ',
+};
+
+// Draw `n` glyphs from a flash byte array, returning the next x. The loop body
+// is shared across iterations, so a variable `n` costs one textPut() call site
+// rather than one per glyph.
+inline uint8_t screenTextN(uint24_t sheet, uint8_t x, int16_t y, const char *str, uint8_t n) {
+    for (uint8_t i = 0; i < n; i++)
+        x = static_cast<uint8_t>(textPut(sheet, x, y, static_cast<char>(mhPgmReadU8(reinterpret_cast<const uint8_t *>(str + i)))));
+    return x;
+}
+
+// Hub HUNT right column (ui.5.2): the active quest's progress (p/n), READY when
+// the goal is met, or `-` with no active quest. Right-aligned like the cost it
+// replaces; the quest `need` comes from the cart def, `progress` from the save.
+inline void drawHubQuestColumn(const SaveBlock &save, uint8_t y, bool selected) {
+    const uint24_t sheet = selected ? fxfontw : fxfontg;
+    if (save.activeQuest == SAVE_QUEST_NONE) {
+        textPut(sheet, static_cast<int16_t>(SCREEN_COST_RIGHT - 4), y, '-');
+        return;
+    }
+    QuestDef def;
+    questReadDef(save.activeQuest, def);
+    if (save.progress >= def.need) {
+        screenTextN(sheet, static_cast<uint8_t>(SCREEN_COST_RIGHT - 20), y, SCREEN_READY, 5);
+        return;
+    }
+    const uint8_t pd = hudDigits(save.progress);
+    const uint8_t nd = hudDigits(def.need);
+    const uint8_t x = static_cast<uint8_t>(SCREEN_COST_RIGHT - (pd + 1 + nd) * 4);
+    drawNumber(x, y, save.progress, selected ? 3 : 2);
+    textPut(sheet, static_cast<int16_t>(x + pd * 4), y, '/');
+    drawNumber(static_cast<int16_t>(x + (pd + 1) * 4), y, def.need, selected ? 3 : 2);
+}
+
+// Hub bottom strip (ui.5.2): equipped weapon marker (class abbr + tree tier)
+// and the active armor skill point totals (tier != 0 only; no all-skills
+// screen). Runs on the free y=56 line below the four hub rows.
+inline void drawHubStrip(const SaveBlock &save, const Game &g) {
+    uint8_t x = 2;
+    const uint8_t node = save.equippedNode;
+    // Class from the generated tree block starts (sword < flail < gun), so no
+    // cart read; a fresh/unequipped save falls back to the sword marker.
+    uint8_t cls = forge::WEAPON_SWORD;
+    if (node != SAVE_NODE_NONE)
+        cls = node >= forge::NODE_GUN_FIRST ? forge::WEAPON_GUN : node >= forge::NODE_FLAIL_FIRST ? forge::WEAPON_FLAIL : forge::WEAPON_SWORD;
+    x = screenTextN(fxfontw, x, SCREEN_STRIP_Y, &SCREEN_WCLASS[cls * 3], 3);
+    if (node != SAVE_NODE_NONE) {
+        // Tree tier as a single digit ("SWD2"): one glyph beats the " T" + a
+        // drawNumber call. The class base is the generated first-node constant.
+        const uint8_t first = cls == forge::WEAPON_SWORD ? forge::NODE_SWORD_FIRST : cls == forge::WEAPON_FLAIL ? forge::NODE_FLAIL_FIRST : forge::NODE_GUN_FIRST;
+        x = static_cast<uint8_t>(textPut(fxfontw, x, SCREEN_STRIP_Y, static_cast<char>('0' + (node - first + 1))));
+    }
+    x = static_cast<uint8_t>(x + 8);
+    for (uint8_t i = 0; i < armor::SKILL_COUNT; i++) {
+        if (g.armor.tier[i] == 0)
+            continue;
+        x = screenTextN(fxfontg, x, SCREEN_STRIP_Y, &SCREEN_SKILL_ABBR[i * 4], 4);
+        drawNumber(x, SCREEN_STRIP_Y, static_cast<int16_t>(g.armor.points[i]), 2);
+        // An active skill is >= THRESHOLD_S (10), so the points are always two
+        // digits: advance 2 glyphs + a 1-glyph gap.
+        x = static_cast<uint8_t>(x + 12);
+    }
+}
+
 // One page of the generic list. Called once per plane (same discipline as
 // renderScene/menu), between ArduboyG's plane blits.
-inline void drawScreen(const ScreenState &s, const SaveBlock &save) {
+inline void drawScreen(const ScreenState &s, const SaveBlock &save, const Game &g) {
     const uint16_t defOff = screenDefOff(s.screen);
     const uint8_t titleLen = mhFxReadU8(screenCart(static_cast<uint16_t>(defOff + 1)));
     char text[SCREEN_TEXT_BUF];
@@ -145,8 +223,27 @@ inline void drawScreen(const ScreenState &s, const SaveBlock &save) {
     uint8_t x = 2;
     for (uint8_t i = 0; i < tn; i++)
         x = static_cast<uint8_t>(textPut(fxfontw, x, SCREEN_TITLE_Y, text[i]));
-    for (uint8_t i = tn; i < titleLen; i++)
-        x = static_cast<uint8_t>(textPut(fxfontw, x, SCREEN_TITLE_Y, static_cast<char>(mhFxReadU8(screenCart(static_cast<uint16_t>(defOff + 2 + i))))));
+
+    // Page indicator (ui.5.2): `n/m` after the title when a list spans more than
+    // one 6-row page. The 6-row grid fills y=11..63, so the title line is the
+    // only free lane (the header zenny owns the far right; this stays left).
+    if (s.rowCount > SCREEN_ROWS) {
+        // Count pages with a 6-step walk instead of two u8 divisions (AVR has no
+        // divide; the loop measured cheaper whole-image).
+        uint8_t pages = 1;
+        uint8_t page = 1;
+        for (uint8_t r = SCREEN_ROWS; r < s.rowCount; r = static_cast<uint8_t>(r + SCREEN_ROWS)) {
+            pages++;
+            if (r <= s.scroll)
+                page++;
+        }
+        uint8_t px = static_cast<uint8_t>(x + 4);
+        drawNumber(px, SCREEN_TITLE_Y, page, 2);
+        px = static_cast<uint8_t>(px + hudDigits(page) * 4);
+        textPut(fxfontg, px, SCREEN_TITLE_Y, '/');
+        px = static_cast<uint8_t>(px + 4);
+        drawNumber(px, SCREEN_TITLE_Y, pages, 2);
+    }
 
     // Header zenny (ui.5): right-aligned `$` + live balance on the title line;
     // the fake ZENNY row and its ROW_F_ZENNY token are retired.
@@ -171,8 +268,13 @@ inline void drawScreen(const ScreenState &s, const SaveBlock &save) {
         uint8_t lx = SCREEN_LABEL_X;
         for (uint8_t j = 0; j < ln; j++)
             lx = static_cast<uint8_t>(textPut(sheet, lx, y, text[j]));
-        for (uint8_t j = ln; j < labelLen; j++)
-            lx = static_cast<uint8_t>(textPut(sheet, lx, y, static_cast<char>(mhFxReadU8(screenCart(static_cast<uint16_t>(rowOff + 1 + j))))));
+
+        // Hub HUNT row (ui.5.2): the right column is the quest progress instead
+        // of the packed cost (the hub cost is always 0).
+        if (s.screen == screens::SCREEN_HUB && i == 0) {
+            drawHubQuestColumn(save, y, selected);
+            continue;
+        }
 
         const uint16_t fields = static_cast<uint16_t>(rowOff + 1 + labelLen);
         const uint8_t flags = mhFxReadU8(screenCart(static_cast<uint16_t>(fields + 3)));
@@ -197,6 +299,10 @@ inline void drawScreen(const ScreenState &s, const SaveBlock &save) {
             textPut(selected ? fxfontw : fxfontg, static_cast<int16_t>(costX - 8), y, tier == 2 ? 'M' : 'S');
         drawNumber(costX, y, value, selected ? 3 : 2);
     }
+
+    // Hub bottom strip (ui.5.2): only the hub is short enough to leave y=56 free.
+    if (s.screen == screens::SCREEN_HUB)
+        drawHubStrip(save, g);
 }
 
 }   // namespace mh

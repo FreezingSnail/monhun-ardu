@@ -337,6 +337,14 @@ inline void cardSetHint(DetailState &s, const SaveBlock &save, const CardItem &i
     s.hint = static_cast<uint8_t>(cardHint(save, row, it, s.node));
 }
 
+// Blocked card A (ui.5.2 denied cue): the cached hint is not an actionable verb
+// (NEED PARTS / NEED ZENNY / no action), so cardApply() would be a no-op. The
+// sketch plays a short cue on the A edge when this holds; pure so the host
+// suite pins the case without the audio module.
+inline bool cardDenied(const DetailState &s) {
+    return s.hint == HINT_NONE || s.hint == HINT_NEED_PARTS || s.hint == HINT_NEED_ZENNY;
+}
+
 // Card A: one entry for every card kind, switching on the stored row action.
 // Armor crafts/equips from the baked bill; weapon FORGE forges/upgrades (the
 // forge re-checks the bill), GEAR equips/unequips; quest rows take/turn in.

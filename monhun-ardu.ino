@@ -106,7 +106,9 @@ void setup() {
     mh::saveLoad(s_save, SAVE_BACKEND);   // first boot / bad block -> defaults
     // The hub is the root screen (monhun-ardu-isp.1): boot enters it. The world
     // is only built when the hub HUNT row starts a hunt (huntStart), so no
-    // newGame/arming happens here.
+    // newGame/arming happens here. The armor cache is armed only for the hub
+    // bottom strip (ui.5.2); a hunt re-arms it in huntStart.
+    mh::armorApplyToGame(g, s_save);
     mh::screenEnter(s_screen, screens::SCREEN_HUB, s_save);
 }
 
@@ -151,6 +153,10 @@ void run() {
             const bool changed = mh::cardApply(s_save, s_card, s_detail.node, s_detailRow);
             if (changed)
                 mh::saveStore(s_save, SAVE_BACKEND);
+            else if (mh::cardDenied(s_detail))
+                // ui.5.2 denied cue: a blocked card A (NEED PARTS / NEED ZENNY /
+                // no action) reuses the low CUE_HURT thunk; no new cue row.
+                mh::audioPlay(mh::CUE_HURT);
             mh::cardLoad(s_detail, s_card, s_detail.index, s_save, true);
             mh::cardSetHint(s_detail, s_save, s_card, s_detailRow);
             if (s_screen.screen == screens::SCREEN_GEAR)
@@ -186,8 +192,11 @@ void run() {
             return;
         }
 #endif
-        if (!mh::screenCondOk(s_save, row))
+        if (!mh::screenCondOk(s_save, row)) {
+            // ui.5.2 denied cue: a blocked list A (locked/gated row) thunks.
+            mh::audioPlay(mh::CUE_HURT);
             return;
+        }
         const mh::AppNav nav = mh::appScreenAccept(s_screen.screen, row);
         if (nav != mh::APP_NAV_NONE) {
             // Hub destination (row, hunt): a hunt start builds the world from
@@ -251,7 +260,7 @@ void render() {
     }
 #endif
     if (s_screen.active) {
-        mh::drawScreen(s_screen, s_save);
+        mh::drawScreen(s_screen, s_save, g);
         return;
     }
 #if DEBUG_HURTBOXES

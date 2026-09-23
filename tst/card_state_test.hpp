@@ -382,6 +382,64 @@ inline void CardStateSuite(TestRunner &runner) {
         suite.addTest(t);
     }
 
+    // ------------------------------------------------- denied cue (ui.5.2)
+    // cardDenied() is the pure half of the blocked-A audio cue: the sketch plays
+    // a short cue on the A edge when it holds. It is true exactly when the cached
+    // hint is not an actionable verb.
+    {
+        Test t("cardDenied: a blocked card A is flagged for the denied cue");
+        const ScreenRow gear = armorRow(armor::ARMOR_HUNTER_HELM, armor::SLOT_HEAD);
+        const CardItem card = helmCard();
+        DetailState s;
+        SaveBlock save;
+        saveDefaults(save);
+        save.zenny = 500;
+        save.items[ITEM_ORE] = 3;
+        save.items[ITEM_SCALE] = 2;
+
+        // Affordable uncrafted -> A CRAFT is actionable.
+        cardSetHint(s, save, card, gear);
+        t.assert(s.hint, HINT_CRAFT, "craftable hint");
+        t.assert(cardDenied(s), false, "craftable not denied");
+
+        // Short zenny -> NEED ZENNY is blocked.
+        SaveBlock poor;
+        saveDefaults(poor);
+        poor.zenny = 299;
+        poor.items[ITEM_ORE] = 3;
+        poor.items[ITEM_SCALE] = 2;
+        cardSetHint(s, poor, card, gear);
+        t.assert(s.hint, HINT_NEED_ZENNY, "short zenny hint");
+        t.assert(cardDenied(s), true, "need zenny denied");
+
+        // Missing parts -> NEED PARTS is blocked.
+        SaveBlock nomat;
+        saveDefaults(nomat);
+        nomat.zenny = 500;
+        nomat.items[ITEM_ORE] = 2;
+        cardSetHint(s, nomat, card, gear);
+        t.assert(s.hint, HINT_NEED_PARTS, "missing parts hint");
+        t.assert(cardDenied(s), true, "need parts denied");
+
+        // A crafted + equipped piece is actionable (A UNEQUIP), not denied.
+        SaveBlock eq;
+        saveDefaults(eq);
+        saveSetCrafted(eq, armor::ARMOR_HUNTER_HELM);
+        eq.equip[armor::SLOT_HEAD] = armor::ARMOR_HUNTER_HELM + 1;
+        cardSetHint(s, eq, card, gear);
+        t.assert(s.hint, HINT_UNEQUIP, "equipped hint");
+        t.assert(cardDenied(s), false, "equip toggle not denied");
+
+        // A silent card (already-taken quest) is denied.
+        SaveBlock taken;
+        saveDefaults(taken);
+        saveQuestSet(taken, quests::QUEST_SLAY_LUNGE, 0);
+        cardSetHint(s, taken, card, questRow(screens::ACTION_TAKE_QUEST, quests::QUEST_SLAY_LUNGE, 3));
+        t.assert(s.hint, HINT_NONE, "already-taken quest card silent");
+        t.assert(cardDenied(s), true, "silent card denied");
+        suite.addTest(t);
+    }
+
     runner.addTestSuite(suite);
 }
 

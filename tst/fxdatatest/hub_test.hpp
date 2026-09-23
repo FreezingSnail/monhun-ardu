@@ -166,7 +166,7 @@ inline void test_hub(FxTest &test) {
         FX::disableOLED();
     }
     clearFb();
-    drawScreen(screen, save);
+    drawScreen(screen, save, g);
 
     // HUNT is row 0 with the white chip cursor; QUESTS row 1; FORGE row 2; GEAR
     // row 3. The ZENNY row is retired (ui.5): the live 500 balance is now the

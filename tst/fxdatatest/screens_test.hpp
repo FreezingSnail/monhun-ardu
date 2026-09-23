@@ -222,7 +222,7 @@ inline void test_screens(FxTest &test) {
     ps.zenny = 1234;
     ScreenState draw;
     screenEnter(draw, screens::SCREEN_HUB, ps);
-    drawScreen(draw, ps);
+    drawScreen(draw, ps, g_gear);
 
     // Selected row carries the 4x4 white chip cursor at (2, row0 y + 2 = 13).
     test.expectEq(countBits(2, 5, 13, 16), 16, F("cursor chip 4x4"));
@@ -243,9 +243,79 @@ inline void test_screens(FxTest &test) {
     // Control: an empty balance draws `$` + one digit at the right edge only.
     clearFb();
     saveDefaults(ps);
-    drawScreen(draw, ps);
+    drawScreen(draw, ps, g_gear);
     test.expectEq(countBits(104, 115, 0, 7), 0, F("zenny 0 leaves the 4-digit span empty"));
     test.expectEq(countBits(116, 123, 0, 7) > 0 ? 1 : 0, 1, F("zenny 0 `$`+digit drawn"));
+
+    // -------------------------------------------- ui.5.2 hub chrome pixels
+    // HUNT right column (row 0, y=11): active quest progress `p/n`.
+    clearFb();
+    SaveBlock qs2;
+    saveDefaults(qs2);
+    qs2.activeQuest = quests::QUEST_SLAY_LUNGE;   // need 3
+    qs2.progress = 2;
+    ScreenState hud;
+    screenEnter(hud, screens::SCREEN_HUB, qs2);
+    drawScreen(hud, qs2, g_gear);
+    // "2/3": digits x 112..115 / 120..123, slash 116..119.
+    test.expectEq(countBits(112, 123, 11, 18) > 0 ? 1 : 0, 1, F("hunt progress p/n ink"));
+    test.expectEq(countBits(104, 111, 11, 18), 0, F("hunt progress leaves the READY span empty"));
+
+    // READY when progress >= need: 5 chars right-aligned at x 104..123.
+    clearFb();
+    qs2.progress = 3;
+    drawScreen(hud, qs2, g_gear);
+    test.expectEq(countBits(104, 123, 11, 18) > 0 ? 1 : 0, 1, F("hunt READY ink"));
+
+    // No active quest -> `-` at x 120..123.
+    clearFb();
+    qs2.activeQuest = SAVE_QUEST_NONE;
+    drawScreen(hud, qs2, g_gear);
+    test.expectEq(countBits(120, 123, 11, 18) > 0 ? 1 : 0, 1, F("hunt none dash ink"));
+    test.expectEq(countBits(104, 119, 11, 18), 0, F("hunt none leaves the digit span empty"));
+
+    // Bottom strip (y=56): weapon marker "SWD1" at x 2..17, then active skills.
+    clearFb();
+    SaveBlock strip;
+    saveDefaults(strip);
+    strip.equippedNode = forge::NODE_SWORD_BASE;
+    for (uint8_t i = 0; i < armor::SKILL_COUNT; i++) {
+        g_gear.armor.tier[i] = 0;
+        g_gear.armor.points[i] = 0;
+    }
+    g_gear.armor.tier[armor::SKILL_ATTACK_UP] = 1;
+    g_gear.armor.points[armor::SKILL_ATTACK_UP] = 12;
+    ScreenState sh;
+    screenEnter(sh, screens::SCREEN_HUB, strip);
+    drawScreen(sh, strip, g_gear);
+    test.expectEq(countBits(2, 17, 56, 63) > 0 ? 1 : 0, 1, F("strip weapon marker ink"));
+    // "ATK " at x 26..41 then "12" at 42..49 (marker ends 18 + 8 gap).
+    test.expectEq(countBits(26, 49, 56, 63) > 0 ? 1 : 0, 1, F("strip active skill ink"));
+
+    // Inert skills (tier 0) draw nothing after the marker.
+    clearFb();
+    for (uint8_t i = 0; i < armor::SKILL_COUNT; i++)
+        g_gear.armor.tier[i] = 0;
+    drawScreen(sh, strip, g_gear);
+    test.expectEq(countBits(26, 60, 56, 63), 0, F("strip inert skills leave the skill span empty"));
+
+    // Page indicator `n/m` after the title on a >6-row list (QUESTS: 8 rows).
+    clearFb();
+    ScreenState pgs;
+    screenEnter(pgs, screens::SCREEN_QUESTS, ps);
+    drawScreen(pgs, ps, g_gear);
+    test.expectEq(countBits(30, 41, 0, 7) > 0 ? 1 : 0, 1, F("page indicator 1/2 ink"));
+    clearFb();
+    pgs.cursor = 6;
+    pgs.scroll = 6;
+    drawScreen(pgs, ps, g_gear);
+    test.expectEq(countBits(30, 41, 0, 7) > 0 ? 1 : 0, 1, F("page indicator 2/2 ink"));
+    // A <=6-row list (HUB) draws no indicator.
+    clearFb();
+    ScreenState hubPg;
+    screenEnter(hubPg, screens::SCREEN_HUB, ps);
+    drawScreen(hubPg, ps, g_gear);
+    test.expectEq(countBits(30, 41, 0, 7), 0, F("hub has no page indicator"));
 
     // -------------------------------------------------- quests board screen
     test.expectEq(screenRowCount(screens::SCREEN_QUESTS), 8, F("quests row count"));
@@ -263,7 +333,7 @@ inline void test_screens(FxTest &test) {
     clearFb();
     ScreenState qs;
     screenEnter(qs, screens::SCREEN_QUESTS, ps);
-    drawScreen(qs, ps);
+    drawScreen(qs, ps, g_gear);
     test.expectEq(countBits(2, 5, 13, 16), 16, F("quests cursor chip 4x4"));
     test.expectEq(countBits(2, 20, 0, 7) > 0 ? 1 : 0, 1, F("quests title ink"));
     test.expectEq(countBits(10, 60, 11, 18) > 0 ? 1 : 0, 1, F("quests row0 label ink"));
@@ -368,7 +438,7 @@ inline void test_screens(FxTest &test) {
     smoke.cursor = 18;
     smoke.scroll = 18;
     screenGearCache(smoke, g_gear.armor);   // attack 15/M
-    drawScreen(smoke, moveSave);
+    drawScreen(smoke, moveSave, g_gear);
     test.expectEq(countBits(108, 111, 11, 18) > 0 ? 1 : 0, 1, F("skill M letter ink"));
     test.expectEq(countBits(116, 123, 11, 18) > 0 ? 1 : 0, 1, F("skill points ink"));
 
@@ -378,7 +448,7 @@ inline void test_screens(FxTest &test) {
     smoke.cursor = 19;
     smoke.scroll = 18;
     screenGearCache(smoke, g_gear.armor);
-    drawScreen(smoke, moveSave);
+    drawScreen(smoke, moveSave, g_gear);
     test.expectEq(countBits(120, 123, 20, 27) > 0 ? 1 : 0, 1, F("inert skill points ink"));
     test.expectEq(countBits(108, 115, 20, 27), 0, F("inert skill no prefix"));
 
@@ -386,7 +456,7 @@ inline void test_screens(FxTest &test) {
     clearFb();
     ScreenState gs;
     screenEnter(gs, screens::SCREEN_GEAR, ps);
-    drawScreen(gs, ps);
+    drawScreen(gs, ps, g_gear);
     test.expectEq(countBits(2, 5, 13, 16), 16, F("gear cursor chip 4x4"));
     test.expectEq(countBits(2, 20, 0, 7) > 0 ? 1 : 0, 1, F("gear title ink"));
     test.expectEq(countBits(10, 60, 11, 18) > 0 ? 1 : 0, 1, F("gear row0 label ink"));

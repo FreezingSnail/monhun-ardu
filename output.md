@@ -1,116 +1,107 @@
-# monhun-ardu-5co.8 — ui.5.1 trim: reclaim >= ~600 B for the hub chrome
+# monhun-ardu-5co.9 — ui.5.2 chrome: HUB quest column + skill strip, page indicator, denied cue
 
-Status: **DONE.** Reclaimed **632 B** flash (vs the ~600 B target) with the full
-gate green and no behavior change. Free headroom is now **746 B**, enough for the
-deferred ui.5b chrome (658 B measured) with ~88 B margin.
+Status: **DONE.** All four chrome pieces landed, the full gate is green, and
+free flash is **134 B** (target >= ~50 B). Net +612 B from HEAD 4c5ec9f
+(28950 -> 29562), including a -128 B dead-code trim adopted to make it fit.
 
 ```
-baseline (HEAD 5f4b7f9):
-size: .text=29550 .data=32 .bss=1769
-size: flash=29582/29696 (114 free)  ram=1801/2560
-
-after:
+baseline (HEAD 4c5ec9f):
 size: .text=28918 .data=32 .bss=1766
 size: flash=28950/29696 (746 free)  ram=1798/2560
+
+after:
+size: .text=29530 .data=32 .bss=1766
+size: flash=29562/29696 (134 free)  ram=1798/2560
 ```
 
 | | flash |
 |---|---|
-| HEAD 5f4b7f9 (baseline) | 29582 (114 free) |
-| this wave | **28950 (746 free)** |
-| reclaimed | **632 B** |
+| HEAD 4c5ec9f (baseline) | 28950 (746 free) |
+| this wave | **29562 (134 free)** |
+| delta | **+612 B** |
 
-Target: free >= ~700 B (114 + reclaim >= ~600). **746 >= 700.** RAM also drops
-3 B (the removed `Game` smithy-cache fields).
+RAM is unchanged (1798/2560); no new Game/ScreenState fields.
 
-## Adopted reclaim set (whole-image `make size`, isolated from HEAD)
+## Measured chrome deltas (whole-image `make size`, isolated per `-DMH_UI52_*`)
 
-Each candidate was built alone against HEAD 29582 so the delta is its own cost.
+Each piece was built alone against the gated baseline (28954 = baseline + the
+always-on `armorApplyToGame` boot call + the new includes).
 
-| # | Candidate | files | isolated flash | free after | notes |
-|---|---|---|---|---|---|
-| 1 | Save wire image copied, not field-by-field | `src/core/save.hpp` | **−216** | 330 | encode/decode = two `__builtin_memcpy` around the 3 reserved bytes; the old per-field stores/loads were ~33 unrolled each |
-| 2 | Armor device aggregation rewrite | `src/armor.hpp` | **−222** | 336 | one bulk read per equipped piece; skip the never-read resist/zenny/mat/sheet bytes; finalize+tier+effects share one loop over one bulk skill-table read |
-| 3 | `QuestDef` bulk read | `src/quest.hpp` | **−92** | 206 | 9 B record is byte-identical to `QuestDef`; one `mhFxReadBytes` replaces 7 seek-per-field reads |
-| 4 | smithy runtime cache removal | `zones/world/game/player.hpp` | **−48** | 162 | dead since the SMITH screen was deleted (ui.3.1); FORGE lives on the hub, so the camp-smithy range was never read. Cart data/generator untouched |
-| 5 | `screenReadRow` fixed-part bulk read | `src/screens.hpp` | **−48** | 162 | cost/action/flags/cond/param are contiguous and match the front of `ScreenRow`; one 6 B read replaces 6 reads |
-| | **combined** | | **−632** | **746** | interactions net the isolated sum (−626) to −632 |
+| Piece | flash | notes |
+|---|---|---|
+| HUB HUNT right column | **+248** | `questReadDef` + `READY` string + `p/n` digit pair |
+| HUB bottom strip | **+322** | weapon marker +164 (incl. the tier glyph), active skills +146 |
+| list page indicator | **+114** | loop-based page walk (no u8 divide) + `n/m` |
+| blocked-A denied cue | **+32** | `cardDenied` + two `audioPlay(CUE_HURT)` sites (reused tone) |
+| dead label/title tail trim | **-128** | removed the never-run per-char fallback loops |
+| **net** | **+612** | 134 free after |
+
+The ui.5 spike estimated +748 for the same four pieces; this landed at +740
+gross by (a) drawing the tree tier as a single glyph (`SWD2`) instead of the
+`" T"` + `drawNumber` form (-82), (b) a 6-step page walk instead of two u8
+divisions (-32), and (c) the flat PROGMEM abbr tables + one shared string loop.
 
 ## What changed
 
-### 1. Save encode/decode (`src/core/save.hpp`) — 216 B
+### 1. HUB HUNT right column (`src/screens.hpp`)
 
-The wire record is the in-RAM `SaveBlock` byte image with a 3-byte header
-(magic u16 + version) in front and the 3 reserved bytes between `progress` and
-`equip`, plus the checksum. `saveEncode`/`saveDecode` now copy the two
-sub-images (`__builtin_memcpy`) instead of ~33 unrolled field stores/loads.
-Endianness is LE on AVR and every host target; the static layout asserts pin the
-coupling. Also fixed the stale 44-byte comments (record is 33 B since ui.4.1).
+`drawHubQuestColumn()` replaces the row-0 packed cost on the hub (the hub cost
+is always 0): `-` with no active quest, `READY` once `save.progress >= def.need`,
+else the right-aligned `p/n` pair. `need` comes from the cart `QuestDef`
+(`questReadDef`), `progress` from the save. `drawScreen` branches on
+`s.screen == SCREEN_HUB && i == 0` inside the row loop.
 
-### 2. Armor device path (`src/armor.hpp`) — 222 B
+### 2. HUB bottom strip (`src/screens.hpp`)
 
-- `armorApplyToGame`: aggregates straight into `g.armor`, walks only the three
-  equipped slots, one `mhFxReadBytes` per packed 18 B piece record, and reads
-  only `slot`/`defense`/`skills[]`/`points[]`. The resist/zenny/mat/sheet bytes
-  were already never read by the runtime (the GEAR readout reads points/tier,
-  combat reads `armorFx`); they stay in the cart record.
-- New `armorResolve(ArmorAgg &, ArmorEffects &)`: fuses the old
-  `armorFinalize` + `armorEffects` into one loop, bulk-reads the 5 skill records
-  once, and resolves kind -> magnitude. Semantics match the host
-  `armorFinalize`/`armorEffects` (clamp points to `THRESHOLD_M`, tier, then
-  `min(points,maxPoints)*perPoint`).
-- Removed the now-unused `armorReadPiece`/`armorReadSkill` decode helpers (only
-  `armorApplyToGame` used them; the host suite uses plain structs).
+`drawHubStrip()` runs on the free y=56 line (below the four hub rows, no row
+overlap): the equipped weapon marker (class abbreviation from the generated tree
+block starts + the tree tier as a digit, `SWD1`) followed by every **active**
+armor skill's point total (`ATK12`, `armor::SKILL_*` order, tier != 0 only; no
+all-skills screen). `Game::armor` is the source; `drawScreen` gained a
+`const Game &` parameter and the sketch arms `g.armor` at boot
+(`setup()` -> `armorApplyToGame`), so the strip is correct on first frame.
 
-### 3. Quest def reader (`src/quest.hpp`) — 92 B
+### 3. Page indicator (`src/screens.hpp`)
 
-`QuestDef` has the packed record's byte layout, so `questReadDef` is one bulk
-read of `RECORD_SIZE`; `offsetof` asserts pin `rewardZenny`/`unlockFlag`.
+For any list with `rowCount > 6`, `n/m` is drawn after the title (gray). The
+6-row grid fills y=11..63, so the title line is the only non-overlapping lane;
+the header zenny owns the far right, the indicator stays left of it. Pages are
+counted with a 6-step walk (AVR has no divide).
 
-### 4. Dead smithy cache (`zones/world/game/player.hpp`) — 48 B
+### 4. Denied cue (`monhun-ardu.ino`, `src/card_state.hpp`)
 
-`Game::roomFirstSmithy`/`roomSmithyCount` and `ZoneRoom::firstSmithy`/
-`smithyCount` were only written (loadRoom/initGame) and never read after the
-SMITH screen removal; dropped the fields, the two cart reads, the two stores and
-the init. `zoneSmithyRead`/`ZoneSmithy` were already unused (LTO-dropped, 0 B)
-and left in place; the generator + cart smithy data are untouched.
+`cardDenied()` (pure) is true when the cached card hint is not an actionable
+verb (`HINT_NONE` / `NEED PARTS` / `NEED ZENNY`). The sketch plays the existing
+low `CUE_HURT` tone on the A edge when a card A is blocked, and on a gated list
+row (`!screenCondOk`). No new cue row (reuse, per the bead).
 
-### 5. Screen row fixed-part bulk (`src/screens.hpp`) — 48 B
+### 5. Dead label/title tail trim (`src/screens.hpp`)
 
-`screenReadRow` copies the 6 contiguous bytes after the variable label straight
-into `&row.cost`; static asserts pin the `ScreenRow` field order.
+`tools/gen-screens.py` caps titles and row labels at 16 chars
+(`TITLE_MAX`/`LABEL_MAX`) == `SCREEN_TEXT_BUF`, so the per-char tail fallback
+loops in `drawScreen` could never execute. Removed (measured -128 B). A corrupt
+cart with a longer string is still truncated safely by `screenReadText` (bounded
+read), never over-read.
 
-## Rejected / measured candidates
+### 6. Docs
 
-| Candidate | Δ flash | why not |
-|---|---|---|
-| `armorEffects` `MH_NOINLINE` | +22 | outlining one-caller helper regresses |
-| `itemRead` bulk read | +30 | inlined into `main`; call+stack beats 4 shared reads |
-| `drawScreen` per-row 6 B bulk | −4 | not worth the added branch |
-| `EFF_OFF` offset table for the effect switch | −14 | +4 B `.data` (const-in-RAM trap) — net not worth it |
-| Bake `perPoint` as flash constants | −20 | only −20 over the bulk skill-table read; violates the cart-data principle |
-| `-fno-tree-sink` / `-fno-move-loop-invariants` | −84 / −24 | global codegen flags; need perf re-validation and were not needed once the code trims hit target |
-| `-maccumulate-args` / `-fno-jump-tables` / `-fira-region=all` | +50 / +4 / +12 | regress |
-| `smith.hpp` / `upgradeFind` / `upgradeResolve` | 0 | never included by a shipping TU — LTO already drops them; removes FX-cart bytes only |
-| generated dead consts (`ACTION_BUY_UPGRADE`, `COND_ZENNY/FLAG/TIER/UPGRADE`, `ROW_F_HIDE_LOCKED`, `ROW_F_FORGE`) | 0 | `constexpr`, no emitted code |
+`README.md` hub/GEAR sections and `docs/ui-design.md` (Status, global chrome,
+HUB/QUESTS/GEAR/FORGE examples, phasing/bead list) now describe the shipped
+chrome.
 
-## Tests
+## Tests (permanent, co-located, native frameworks)
 
-Permanent coverage is the existing native suites; the new layout couplings are
-pinned with compile-time `static_assert`s (host + device) instead of duplicated
-runtime tests:
+- **Host** `tst/card_state_test.hpp`: new `cardDenied` suite — craftable -> not
+  denied, NEED ZENNY -> denied, NEED PARTS -> denied, crafted+equipped
+  (A UNEQUIP) -> not denied, silent (already-taken quest) -> denied.
+- **Device** `tst/fxdatatest/screens_test.hpp`: pixel assertions for the HUNT
+  column (`p/n` at x 112..123 y 11, READY at 104..123, `-` at 120..123 with the
+  digit span empty), the bottom strip (`SWD1` at x 2..17 y 56, `ATK12` at
+  x 26..49, inert skills leave the span empty), and the page indicator
+  (`1/2` and `2/2` at x 30..41 on the QUESTS title line; HUB has none).
+- `tst/fxdatatest/hub_test.hpp`: `drawScreen` call updated for the new Game arg.
 
-- `src/quest.hpp`: `offsetof(QuestDef, rewardZenny/unlockFlag)` == the packed
-  `quests::DEF_*_OFF`.
-- `src/screens.hpp`: `offsetof(ScreenRow, action/flags/cond/param)`.
-- `src/core/save.hpp`: `sizeof(SaveBlock)` and `SAVE_EQUIP_OFF` vs the wire
-  header/reserved gap.
-- Save wire bytes are already asserted byte-for-byte by
-  `tst/screens_test.hpp` and `tst/quests_test.hpp`; armor aggregation/quest/
-  screen reads are exercised by the device suites (`test_smith`, `test_screens`,
-  `test_hub`, `test_quests`, `test_data`, `test_boot`).
-
-No tests were removed or weakened.
+No tests removed or weakened.
 
 ## Gate tails
 
@@ -121,50 +112,52 @@ fxdata_manifest: PASS (148 generated artifacts unchanged)
 
 `make test`:
 ```
-Total Passed: 6306
+Total Passed: 6316
 Total Failed: 0
 ```
 
 `make test-tools`:
 ```
-Ran 344 tests in 19.414s
+Ran 344 tests in 19.4s
 OK
 ```
 
-`make fxtest-headless` (full, 18/18; log `build/5co8-fxtest.log`):
+`make fxtest-headless` (full, 18/18; log `build/5co9-fxtest.log`):
 ```
 asset_test PASSED=264  test_audio PASSED=9    test_boot PASSED=4
 test_cards PASSED=85   combat_test PASSED=237 data_test PASSED=348
 test_forge PASSED=58   test_hub PASSED=81     test_hud PASSED=29
 test_items PASSED=35   test_monster_art PASSED=127  test_perf PASSED=5
-test_player_art PASSED=120  test_quests PASSED=87  test_screens PASSED=131
+test_player_art PASSED=120  test_quests PASSED=87  test_screens PASSED=142
 test_smith PASSED=51   test_tell PASSED=18     zones_test PASSED=82
 ```
 
 `make size`:
 ```
-size: .text=28918 .data=32 .bss=1766
-size: flash=28950/29696 (746 free)  ram=1798/2560
+size: .text=29530 .data=32 .bss=1766
+size: flash=29562/29696 (134 free)  ram=1798/2560
 ```
 
-`make mini` also builds clean at 28950 / ram 1798.
+`make mini` also builds clean at 29562 / ram 1798.
 
 ## Files
 
 ```
- M src/armor.hpp        device aggregation rewrite + fused armorResolve
- M src/quest.hpp        QuestDef bulk read + offsetof asserts
- M src/screens.hpp      screenReadRow 6 B bulk + field-order asserts
- M src/core/save.hpp    wire byte-image encode/decode + layout asserts/comment fix
- M src/core/zones.hpp   drop the dead smithy range fields/reads
- M src/core/world.hpp   drop the smithy cache stores
- M src/core/game.hpp    drop Game::roomFirstSmithy/roomSmithyCount
- M src/core/player.hpp  drop the smithy init
+ M src/screens.hpp                  HUNT column + strip + page indicator, drawScreen(Game)
+ M src/card_state.hpp               cardDenied (pure blocked-A predicate)
+ M monhun-ardu.ino                  drawScreen(g), denied cue, boot armor arm
+ M tst/card_state_test.hpp          cardDenied suite
+ M tst/fxdatatest/screens_test.hpp  chrome pixel assertions
+ M tst/fxdatatest/hub_test.hpp      drawScreen signature
+ M README.md docs/ui-design.md      chrome as shipped
 ```
 
 No commit/push (orchestrator commits between bead waves).
 
 ## Blockers
 
-None. Free 746 B > the ~700 B target; ui.5b's deferred chrome (HUNT column +238,
-bottom strip +276, page indicator +144 = 658) now fits with ~88 B to spare.
+None. The chrome fits with 134 B free (target >= ~50 B). The tier is drawn as a
+single digit (`SWD1`) rather than the design mock's `SWD T2A` to keep the
+marker affordable; the tree is linear so no branch suffix is needed. If a later
+wave wants the full `SWD T2A` label, a generated per-node marker table would be
+the clean path (a cart/generator change, not an MCU-flash one).
