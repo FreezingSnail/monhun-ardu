@@ -18,9 +18,9 @@
 //   17     flags  u8 (reserved progression bits, e.g. smithy seen)
 //   18..25 items  u8[ITEM_COUNT] (inventory counts, cap 255)
 //   26     equippedNode u8 (forge node id, 0xFF = none; replaces the class byte)
-//   27..34 weaponOwned u8[8] (64 node slots, bit n = node n owned)
-//   35..42 armorCrafted u8[8] (64 piece slots, bit n = piece n crafted)
-//   43     checksum u8 (sum of bytes 0..42)
+//   27..30 weaponOwned u8[4] (32 node slots, bit n = node n owned)
+//   31     armorCrafted u8[1] (8 piece slots, bit n = piece n crafted)
+//   32     checksum u8 (sum of bytes 0..31)
 //
 // Load runs once on boot; only a good magic + version 5 + checksum decodes.
 // Anything else (blank, junk, or any older version) falls back to
@@ -56,8 +56,13 @@ constexpr uint8_t SAVE_OWNED_OFF = static_cast<uint8_t>(SAVE_EQUIPPED_OFF + 1); 
 constexpr uint8_t SAVE_OWNED_BYTES = 4;                                                              // 32 node slots (forge::NODE_COUNT <= 32)
 constexpr uint8_t SAVE_CRAFTED_OFF = static_cast<uint8_t>(SAVE_OWNED_OFF + SAVE_OWNED_BYTES);        // 31
 constexpr uint8_t SAVE_CRAFTED_BYTES = 1;                                                            // 8 piece slots (armor::PIECE_COUNT <= 8)
-constexpr uint8_t SAVE_CHECKSUM_OFF = static_cast<uint8_t>(SAVE_CRAFTED_OFF + SAVE_CRAFTED_BYTES);   // 43
-constexpr uint8_t SAVE_BYTES = static_cast<uint8_t>(SAVE_CHECKSUM_OFF + 1);                          // 44
+constexpr uint8_t SAVE_CHECKSUM_OFF = static_cast<uint8_t>(SAVE_CRAFTED_OFF + SAVE_CRAFTED_BYTES);   // 32
+constexpr uint8_t SAVE_BYTES = static_cast<uint8_t>(SAVE_CHECKSUM_OFF + 1);                          // 33
+// Byte offset of `equip` inside the in-RAM SaveBlock image. The wire record
+// adds the 3 header bytes (magic u16 + version) and the 3 reserved bytes before
+// it, so SAVE_EQUIP_OFF == SAVE_WIRE_HEADER + SAVE_BLOCK_EQUIP_OFF + 3.
+constexpr uint8_t SAVE_WIRE_HEADER = 3;
+constexpr uint8_t SAVE_BLOCK_EQUIP_OFF = static_cast<uint8_t>(2 + SAVE_QUEST_BYTES + 2);   // 8
 constexpr uint8_t SAVE_QUEST_NONE = 0xFF;
 constexpr uint8_t SAVE_EQUIP_NONE = 0;     // empty equipment slot
 constexpr uint8_t SAVE_NODE_NONE = 0xFF;   // no equipped weapon node
@@ -81,6 +86,13 @@ struct SaveBlock {
     uint8_t weaponOwned[SAVE_OWNED_BYTES];   // bit n = forge node n owned
     uint8_t crafted[SAVE_CRAFTED_BYTES];     // bit n = armor piece n crafted
 };
+
+// The in-RAM block is the wire payload with the 3 reserved bytes elided between
+// `progress` and `equip`: encode/decode copy the two byte-images around that
+// gap (monhun-ardu-5co.8), so the two layouts must stay in lockstep. All members
+// are byte-aligned and little-endian on every supported target (AVR + host).
+static_assert(sizeof(SaveBlock) == SAVE_BLOCK_EQUIP_OFF + (SAVE_BYTES - SAVE_EQUIP_OFF - 1), "SaveBlock must be the wire image minus header/reserved/checksum");
+static_assert(SAVE_EQUIP_OFF == SAVE_WIRE_HEADER + SAVE_BLOCK_EQUIP_OFF + 3, "wire = 3 header + saveblock header + 3 reserved before equip");
 
 // 1u << n via the shared flash LUT (core/bitlut.hpp); n is masked to 3 bits by
 // the LUT. Each bitset is sized to its data (see the *_SLOTS caps), so the slot
@@ -119,25 +131,15 @@ inline void saveEncode(const SaveBlock &s, uint8_t *out) {
     out[0] = static_cast<uint8_t>(SAVE_MAGIC & 0xFF);
     out[1] = static_cast<uint8_t>(SAVE_MAGIC >> 8);
     out[2] = SAVE_VERSION;
-    out[3] = static_cast<uint8_t>(s.zenny & 0xFF);
-    out[4] = static_cast<uint8_t>(s.zenny >> 8);
-    for (uint8_t i = 0; i < SAVE_QUEST_BYTES; i++)
-        out[5 + i] = s.quest[i];
-    out[SAVE_ACTIVE_OFF] = s.activeQuest;
-    out[SAVE_PROGRESS_OFF] = s.progress;
-    out[11] = 0;   // reserved (formerly the v4 smith tier bytes)
-    out[12] = 0;
-    out[13] = 0;
-    for (uint8_t i = 0; i < SAVE_EQUIP_COUNT; i++)
-        out[SAVE_EQUIP_OFF + i] = s.equip[i];
-    out[SAVE_FLAGS_OFF] = s.flags;
-    for (uint8_t i = 0; i < item::ITEM_COUNT; i++)
-        out[SAVE_ITEMS_OFF + i] = s.items[i];
-    out[SAVE_EQUIPPED_OFF] = s.equippedNode;
-    for (uint8_t i = 0; i < SAVE_OWNED_BYTES; i++)
-        out[SAVE_OWNED_OFF + i] = s.weaponOwned[i];
-    for (uint8_t i = 0; i < SAVE_CRAFTED_BYTES; i++)
-        out[SAVE_CRAFTED_OFF + i] = s.crafted[i];
+    // The wire payload is the SaveBlock byte image around a 3-byte reserved gap:
+    // copy the fields before `equip` straight after the header, zero the gap,
+    // then copy the rest. Byte copies beat the old per-field stores by ~90 B.
+    const uint8_t *raw = reinterpret_cast<const uint8_t *>(&s);
+    __builtin_memcpy(out + SAVE_WIRE_HEADER, raw, SAVE_BLOCK_EQUIP_OFF);
+    out[SAVE_EQUIP_OFF - 3] = 0;
+    out[SAVE_EQUIP_OFF - 2] = 0;
+    out[SAVE_EQUIP_OFF - 1] = 0;
+    __builtin_memcpy(out + SAVE_EQUIP_OFF, raw + SAVE_BLOCK_EQUIP_OFF, sizeof(SaveBlock) - SAVE_BLOCK_EQUIP_OFF);
     out[SAVE_CHECKSUM_OFF] = saveChecksum(out);
 }
 
@@ -175,21 +177,10 @@ inline bool saveDecode(const uint8_t *in, SaveBlock &s) {
         return false;
     if (in[SAVE_CHECKSUM_OFF] != saveChecksum(in))
         return false;
-    s.zenny = static_cast<uint16_t>(in[3] | (static_cast<uint16_t>(in[4]) << 8));
-    for (uint8_t i = 0; i < SAVE_QUEST_BYTES; i++)
-        s.quest[i] = in[5 + i];
-    s.activeQuest = in[SAVE_ACTIVE_OFF];
-    s.progress = in[SAVE_PROGRESS_OFF];
-    for (uint8_t i = 0; i < SAVE_EQUIP_COUNT; i++)
-        s.equip[i] = in[SAVE_EQUIP_OFF + i];
-    s.flags = in[SAVE_FLAGS_OFF];
-    for (uint8_t i = 0; i < item::ITEM_COUNT; i++)
-        s.items[i] = in[SAVE_ITEMS_OFF + i];
-    s.equippedNode = in[SAVE_EQUIPPED_OFF];
-    for (uint8_t i = 0; i < SAVE_OWNED_BYTES; i++)
-        s.weaponOwned[i] = in[SAVE_OWNED_OFF + i];
-    for (uint8_t i = 0; i < SAVE_CRAFTED_BYTES; i++)
-        s.crafted[i] = in[SAVE_CRAFTED_OFF + i];
+    // Mirror of saveEncode: two byte copies around the reserved gap.
+    uint8_t *raw = reinterpret_cast<uint8_t *>(&s);
+    __builtin_memcpy(raw, in + SAVE_WIRE_HEADER, SAVE_BLOCK_EQUIP_OFF);
+    __builtin_memcpy(raw + SAVE_BLOCK_EQUIP_OFF, in + SAVE_EQUIP_OFF, sizeof(SaveBlock) - SAVE_BLOCK_EQUIP_OFF);
     return true;
 }
 

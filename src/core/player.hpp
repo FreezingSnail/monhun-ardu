@@ -93,8 +93,6 @@ MH_NOINLINE void initGame(Game &g, int8_t weapon) {
         g.roomHealCount = 0;
         g.roomFirstProp = 0;
         g.roomPropCount = 0;
-        g.roomFirstSmithy = 0;
-        g.roomSmithyCount = 0;
         g.doorLatch = false;
         g.menuRequest = false;
     }

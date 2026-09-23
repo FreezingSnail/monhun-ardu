@@ -4,6 +4,7 @@
 // blob through core/fxmem.hpp during the screen/render window. The host suite
 // exercises src/quest_state.hpp with plain QuestDef structs instead.
 
+#include <stddef.h>
 #include "core/fxmem.hpp"
 #include "generated/quest_meta.hpp"
 #include "quest_state.hpp"
@@ -17,17 +18,14 @@ inline const uint8_t *questCart(uint16_t off) {
 
 // Fixed 9 B records (v2, bead monhun-ardu-dlp.1): id u8, goalKind u8, target u8,
 // need u8, rewardZenny u16, rewardItem u8 (itemIdx+1, 0 = none), rewardCount u8,
-// unlockFlag u8.
+// unlockFlag u8. QuestDef mirrors that layout, so one bulk read fills the whole
+// def (monhun-ardu-5co.8); the offsetof asserts pin the packed ABI (host
+// padding past the last field is fine -- only RECORD_SIZE bytes are copied).
+static_assert(offsetof(QuestDef, rewardZenny) == quests::DEF_REWARD_ZENNY_OFF, "QuestDef rewardZenny offset drift");
+static_assert(offsetof(QuestDef, unlockFlag) == quests::DEF_UNLOCK_OFF, "QuestDef unlockFlag offset drift");
 inline void questReadDef(uint8_t quest, QuestDef &def) {
     const uint16_t off = static_cast<uint16_t>(quests::HEADER_SIZE + quests::RECORD_SIZE * quest);
-    def.id = mhFxReadU8(questCart(static_cast<uint16_t>(off + quests::DEF_ID_OFF)));
-    def.goalKind = mhFxReadU8(questCart(static_cast<uint16_t>(off + quests::DEF_GOAL_OFF)));
-    def.target = mhFxReadU8(questCart(static_cast<uint16_t>(off + quests::DEF_TARGET_OFF)));
-    def.need = mhFxReadU8(questCart(static_cast<uint16_t>(off + quests::DEF_NEED_OFF)));
-    def.rewardZenny = mhFxReadU16(reinterpret_cast<const uint16_t *>(questCart(static_cast<uint16_t>(off + quests::DEF_REWARD_ZENNY_OFF))));
-    def.rewardItem = mhFxReadU8(questCart(static_cast<uint16_t>(off + quests::DEF_REWARD_ITEM_OFF)));
-    def.rewardCount = mhFxReadU8(questCart(static_cast<uint16_t>(off + quests::DEF_REWARD_COUNT_OFF)));
-    def.unlockFlag = mhFxReadU8(questCart(static_cast<uint16_t>(off + quests::DEF_UNLOCK_OFF)));
+    mhFxReadBytes(questCart(off), reinterpret_cast<uint8_t *>(&def), quests::RECORD_SIZE);
 }
 
 }   // namespace mh

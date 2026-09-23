@@ -1,120 +1,170 @@
-# monhun-ardu-5co.5 — ui.5 polish: header zenny, tokens, page indicator, hub strip, docs
+# monhun-ardu-5co.8 — ui.5.1 trim: reclaim >= ~600 B for the hub chrome
 
-Status: **BLOCKED (partial).** Priority 1 (header zenny) and the docs landed and
-the full gate is green; the hub chrome (HUNT right column, bottom strip), the
-list page indicator, and the denied cue do **not fit** the 190 B free at
-HEAD addb103 and are deferred with measured deficits below. No commit/push
-(orchestrator commits).
+Status: **DONE.** Reclaimed **632 B** flash (vs the ~600 B target) with the full
+gate green and no behavior change. Free headroom is now **746 B**, enough for the
+deferred ui.5b chrome (658 B measured) with ~88 B margin.
 
 ```
+baseline (HEAD 5f4b7f9):
 size: .text=29550 .data=32 .bss=1769
 size: flash=29582/29696 (114 free)  ram=1801/2560
+
+after:
+size: .text=28918 .data=32 .bss=1766
+size: flash=28950/29696 (746 free)  ram=1798/2560
 ```
 
 | | flash |
 |---|---|
-| HEAD addb103 (baseline) | 29506 (190 free) |
-| this wave (header zenny + docs) | **29582 (114 free)** |
-| delta | **+76 B** |
+| HEAD 5f4b7f9 (baseline) | 29582 (114 free) |
+| this wave | **28950 (746 free)** |
+| reclaimed | **632 B** |
 
-## What landed
+Target: free >= ~700 B (114 + reclaim >= ~600). **746 >= 700.** RAM also drops
+3 B (the removed `Game` smithy-cache fields).
 
-### 1. Header zenny, ZENNY row + `ROW_F_ZENNY` retired (priority 1)
+## Adopted reclaim set (whole-image `make size`, isolated from HEAD)
 
-- `src/screens.hpp drawScreen()` draws the live balance right-aligned on the
-  title line: `$` glyph + `hudDigits`/`drawNumber` at `SCREEN_COST_RIGHT`
-  (white). The old `ROW_F_ZENNY` ternary in the cost column is gone.
-- `data/screens/hub.json`: the `ZENNY` row is removed — the hub is now
-  HUNT / QUESTS / FORGE / GEAR (`SCREEN_HUB_ROWS` 5 → 4, blob 841 → 829 B).
-- `tools/gen-screens.py`: the `zenny` row flag is dropped from `ROW_FLAGS`
-  (generated `ROW_F_ZENNY` const removed); `COND_ZENNY` stays in the ABI.
-- `tools/gen-art.py`: a 3x5 `$` glyph added to `GLYPHS` (tile 36); the font
-  sheets were always 128 fixed tiles, so this is a data-only art regen.
+Each candidate was built alone against HEAD 29582 so the delta is its own cost.
 
-### 2. Docs (priority 5)
+| # | Candidate | files | isolated flash | free after | notes |
+|---|---|---|---|---|---|
+| 1 | Save wire image copied, not field-by-field | `src/core/save.hpp` | **−216** | 330 | encode/decode = two `__builtin_memcpy` around the 3 reserved bytes; the old per-field stores/loads were ~33 unrolled each |
+| 2 | Armor device aggregation rewrite | `src/armor.hpp` | **−222** | 336 | one bulk read per equipped piece; skip the never-read resist/zenny/mat/sheet bytes; finalize+tier+effects share one loop over one bulk skill-table read |
+| 3 | `QuestDef` bulk read | `src/quest.hpp` | **−92** | 206 | 9 B record is byte-identical to `QuestDef`; one `mhFxReadBytes` replaces 7 seek-per-field reads |
+| 4 | smithy runtime cache removal | `zones/world/game/player.hpp` | **−48** | 162 | dead since the SMITH screen was deleted (ui.3.1); FORGE lives on the hub, so the camp-smithy range was never read. Cart data/generator untouched |
+| 5 | `screenReadRow` fixed-part bulk read | `src/screens.hpp` | **−48** | 162 | cost/action/flags/cond/param are contiguous and match the front of `ScreenRow`; one 6 B read replaces 6 reads |
+| | **combined** | | **−632** | **746** | interactions net the isolated sum (−626) to −632 |
 
-- `README.md` UI section: hub rows HUNT/QUESTS/FORGE/GEAR + header zenny; v5
-  equipped-node loadout; FORGE/GEAR card flow; 44-byte save; **shipped caps 32
-  weapon-node / 8 armor-piece slots, no migration**; no stale smith/token text.
-- `docs/quests-shops.md`: layers/screen-data/actions updated (FORGE_NODE,
-  OPEN_FORGE), a new **FORGE** section, the v5 save layout (44 B) + caps + no
-  migration, the smith section marked removed, GEAR updated to weapon cards.
-- `docs/ui-design.md`: Status records what ui.5 shipped and what is deferred
-  with the per-feature deltas.
+## What changed
 
-### 3. Tests (permanent, co-located, native)
+### 1. Save encode/decode (`src/core/save.hpp`) — 216 B
 
-- `tst/screens_test.hpp`: `ROW_F_ZENNY` → `ROW_F_FORGE` stable-value check.
-- `tst/fxdatatest/screens_test.hpp`: hub row count 4, hub rows r0..r3, header
-  zenny pixel assertions (1234 → `$`+digits at x 104..123, and the empty-balance
-  control at x 116..123), HUNT/QUESTS/FORGE/GEAR label pixels.
-- `tst/fxdatatest/hub_test.hpp`: hub row count + label pixels + header zenny.
-- `tools/tests/test_gen_screens.py`: dropped the `ROW_F_ZENNY` const assertion;
-  the zenny-flag test now asserts the flag name is rejected (retired).
+The wire record is the in-RAM `SaveBlock` byte image with a 3-byte header
+(magic u16 + version) in front and the 3 reserved bytes between `progress` and
+`equip`, plus the checksum. `saveEncode`/`saveDecode` now copy the two
+sub-images (`__builtin_memcpy`) instead of ~33 unrolled field stores/loads.
+Endianness is LE on AVR and every host target; the static layout asserts pin the
+coupling. Also fixed the stale 44-byte comments (record is 33 B since ui.4.1).
 
-## Blocked work + measured deficits
+### 2. Armor device path (`src/armor.hpp`) — 222 B
 
-Each new chrome piece was built in isolation with `-DMH_UI5_*=0/1` overrides
-through `SIZE_FLAGS` and measured with the whole-image linker total (LTO makes
-per-symbol math meaningless). Baseline for the split: header-only build =
-29596 B; the delta is the piece's own cost.
+- `armorApplyToGame`: aggregates straight into `g.armor`, walks only the three
+  equipped slots, one `mhFxReadBytes` per packed 18 B piece record, and reads
+  only `slot`/`defense`/`skills[]`/`points[]`. The resist/zenny/mat/sheet bytes
+  were already never read by the runtime (the GEAR readout reads points/tier,
+  combat reads `armorFx`); they stay in the cart record.
+- New `armorResolve(ArmorAgg &, ArmorEffects &)`: fuses the old
+  `armorFinalize` + `armorEffects` into one loop, bulk-reads the 5 skill records
+  once, and resolves kind -> magnitude. Semantics match the host
+  `armorFinalize`/`armorEffects` (clamp points to `THRESHOLD_M`, tier, then
+  `min(points,maxPoints)*perPoint`).
+- Removed the now-unused `armorReadPiece`/`armorReadSkill` decode helpers (only
+  `armorApplyToGame` used them; the host suite uses plain structs).
 
-| Piece | flash | free after header+piece | note |
-|---|---|---|---|
-| header zenny (landed) | **+90** | 100 | incl. retiring the `ROW_F_ZENNY` branch |
-| HUB HUNT right column (progress / READY / -) | **+238** | over | `questReadDef` + `READY` string + digit pair |
-| HUB bottom strip (weapon marker + active skills) | **+276** | over | `forgeEquippedClass` + skill-abbr table loop + marker blit |
-| list page indicator (`n/m`) | **+144** | over | two `/6` pages + `drawNumber`/`textPut` call sites |
-| all four together | **+748** | 558 over | |
+### 3. Quest def reader (`src/quest.hpp`) — 92 B
 
-Deficit to fit the full polish: **≈ 558 B** (needs free ≥ ~750 B; only 190 at
-baseline). The ui.1 trim table's large pools (smith UPGRADE −462, armor craft
-−376) were already spent by ui.2/ui.3.1; no comparable dead code remains.
+`QuestDef` has the packed record's byte layout, so `questReadDef` is one bulk
+read of `RECORD_SIZE`; `offsetof` asserts pin `rewardZenny`/`unlockFlag`.
 
-### Options (ranked)
+### 4. Dead smithy cache (`zones/world/game/player.hpp`) — 48 B
 
-1. **Split a trim bead** (preferred): reclaim ~600 B of shipping code, then land
-   ui.5b (hub chrome + page indicator). The two remaining big pools are the
-   `armorApplyToGame` aggregate path (724 B) and the `MH_NOINLINE` sweep — both
-   need their own spike (perf/behavior risk).
-2. **Land in priority order as budget allows**: header zenny is landed; the page
-   indicator (+144) is the next cheapest and fits only after a ~30 B trim; the
-   HUNT column (+238) and strip (+276) need the trim bead.
-3. **Drop scope**: weapon-only strip (no skill totals) ≈ −120 B, but the HUNT
-   column + page still exceed the current budget.
+`Game::roomFirstSmithy`/`roomSmithyCount` and `ZoneRoom::firstSmithy`/
+`smithyCount` were only written (loadRoom/initGame) and never read after the
+SMITH screen removal; dropped the fields, the two cart reads, the two stores and
+the init. `zoneSmithyRead`/`ZoneSmithy` were already unused (LTO-dropped, 0 B)
+and left in place; the generator + cart smithy data are untouched.
 
-## Item 6 — bitset widening
+### 5. Screen row fixed-part bulk (`src/screens.hpp`) — 48 B
 
-Free after the landed work is **114 B**, below the ~120 B threshold, so the
-bitsets stay at the shipped caps and are documented as such:
-**32 owned weapon-node slots (4 B)** and **8 crafted armor-piece slots (1 B)**,
-no migration (v5 + checksum only; anything else falls back to defaults).
+`screenReadRow` copies the 6 contiguous bytes after the variable label straight
+into `&row.cost`; static asserts pin the `ScreenRow` field order.
 
-## Gates (all green, tree with the partial landing)
+## Rejected / measured candidates
 
-- `make gen-check` — PASS (148 generated artifacts unchanged)
-- `make test` — 6306 passed / 0 failed
-- `make test-tools` — Ran 344 tests, OK
-- `make fxtest-headless` — 18/18 suites PASS (assets, audio, boot, cards,
-  combat, data, forge, hub, hud, items, monster_art, perf, player_art, quests,
-  screens, smith, tell, zones), exit 0
-- `make size` — `flash=29582/29696 (114 free)  ram=1801/2560` (+76 B)
+| Candidate | Δ flash | why not |
+|---|---|---|
+| `armorEffects` `MH_NOINLINE` | +22 | outlining one-caller helper regresses |
+| `itemRead` bulk read | +30 | inlined into `main`; call+stack beats 4 shared reads |
+| `drawScreen` per-row 6 B bulk | −4 | not worth the added branch |
+| `EFF_OFF` offset table for the effect switch | −14 | +4 B `.data` (const-in-RAM trap) — net not worth it |
+| Bake `perPoint` as flash constants | −20 | only −20 over the bulk skill-table read; violates the cart-data principle |
+| `-fno-tree-sink` / `-fno-move-loop-invariants` | −84 / −24 | global codegen flags; need perf re-validation and were not needed once the code trims hit target |
+| `-maccumulate-args` / `-fno-jump-tables` / `-fira-region=all` | +50 / +4 / +12 | regress |
+| `smith.hpp` / `upgradeFind` / `upgradeResolve` | 0 | never included by a shipping TU — LTO already drops them; removes FX-cart bytes only |
+| generated dead consts (`ACTION_BUY_UPGRADE`, `COND_ZENNY/FLAG/TIER/UPGRADE`, `ROW_F_HIDE_LOCKED`, `ROW_F_FORGE`) | 0 | `constexpr`, no emitted code |
+
+## Tests
+
+Permanent coverage is the existing native suites; the new layout couplings are
+pinned with compile-time `static_assert`s (host + device) instead of duplicated
+runtime tests:
+
+- `src/quest.hpp`: `offsetof(QuestDef, rewardZenny/unlockFlag)` == the packed
+  `quests::DEF_*_OFF`.
+- `src/screens.hpp`: `offsetof(ScreenRow, action/flags/cond/param)`.
+- `src/core/save.hpp`: `sizeof(SaveBlock)` and `SAVE_EQUIP_OFF` vs the wire
+  header/reserved gap.
+- Save wire bytes are already asserted byte-for-byte by
+  `tst/screens_test.hpp` and `tst/quests_test.hpp`; armor aggregation/quest/
+  screen reads are exercised by the device suites (`test_smith`, `test_screens`,
+  `test_hub`, `test_quests`, `test_data`, `test_boot`).
+
+No tests were removed or weakened.
+
+## Gate tails
+
+`make gen-check`:
+```
+fxdata_manifest: PASS (148 generated artifacts unchanged)
+```
+
+`make test`:
+```
+Total Passed: 6306
+Total Failed: 0
+```
+
+`make test-tools`:
+```
+Ran 344 tests in 19.414s
+OK
+```
+
+`make fxtest-headless` (full, 18/18; log `build/5co8-fxtest.log`):
+```
+asset_test PASSED=264  test_audio PASSED=9    test_boot PASSED=4
+test_cards PASSED=85   combat_test PASSED=237 data_test PASSED=348
+test_forge PASSED=58   test_hub PASSED=81     test_hud PASSED=29
+test_items PASSED=35   test_monster_art PASSED=127  test_perf PASSED=5
+test_player_art PASSED=120  test_quests PASSED=87  test_screens PASSED=131
+test_smith PASSED=51   test_tell PASSED=18     zones_test PASSED=82
+```
+
+`make size`:
+```
+size: .text=28918 .data=32 .bss=1766
+size: flash=28950/29696 (746 free)  ram=1798/2560
+```
+
+`make mini` also builds clean at 28950 / ram 1798.
 
 ## Files
 
 ```
- M data/screens/hub.json              ZENNY row removed (4-row hub)
- M src/screens.hpp                    header zenny, ROW_F_ZENNY branch removed
- M tools/gen-art.py                   $ glyph
- M tools/gen-screens.py               zenny row flag retired
- M tools/tests/test_gen_screens.py    flag assertion/test updated
- M tst/screens_test.hpp               ROW_F_FORGE stable-value check
- M tst/fxdatatest/screens_test.hpp    hub rows + header zenny pixels
- M tst/fxdatatest/hub_test.hpp        hub rows + header zenny pixels
- M README.md docs/quests-shops.md docs/ui-design.md
- M src/generated/{screen_meta,equip_meta,zone_meta}.hpp
- M fxdata/* (font sheets + fxdata bins + manifest, screens/cards/equip tables)
- M src/fxdata.h
+ M src/armor.hpp        device aggregation rewrite + fused armorResolve
+ M src/quest.hpp        QuestDef bulk read + offsetof asserts
+ M src/screens.hpp      screenReadRow 6 B bulk + field-order asserts
+ M src/core/save.hpp    wire byte-image encode/decode + layout asserts/comment fix
+ M src/core/zones.hpp   drop the dead smithy range fields/reads
+ M src/core/world.hpp   drop the smithy cache stores
+ M src/core/game.hpp    drop Game::roomFirstSmithy/roomSmithyCount
+ M src/core/player.hpp  drop the smithy init
 ```
 
-No commit/push.
+No commit/push (orchestrator commits between bead waves).
+
+## Blockers
+
+None. Free 746 B > the ~700 B target; ui.5b's deferred chrome (HUNT column +238,
+bottom strip +276, page indicator +144 = 658) now fits with ~88 B to spare.

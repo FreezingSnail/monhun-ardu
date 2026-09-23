@@ -68,14 +68,15 @@ inline uint16_t screenRowNext(uint16_t off) {
     return static_cast<uint16_t>(off + 7 + mhFxReadU8(screenCart(off)));
 }
 
+// The packed row fields after the variable label (cost u16, action, flags,
+// cond, param) are contiguous and match the front of ScreenRow, so one bulk
+// read fills them (monhun-ardu-5co.8); the asserts pin the order.
+static_assert(offsetof(ScreenRow, action) == 2 && offsetof(ScreenRow, flags) == 3, "ScreenRow action/flags order drift");
+static_assert(offsetof(ScreenRow, cond) == 4 && offsetof(ScreenRow, param) == 5, "ScreenRow cond/param order drift");
 inline void screenReadRow(uint16_t off, ScreenRow &row) {
     const uint8_t labelLen = mhFxReadU8(screenCart(off));
     const uint16_t fields = static_cast<uint16_t>(off + 1 + labelLen);
-    row.cost = mhFxReadU16(reinterpret_cast<const uint16_t *>(screenCart(fields)));
-    row.action = mhFxReadU8(screenCart(static_cast<uint16_t>(fields + 2)));
-    row.flags = mhFxReadU8(screenCart(static_cast<uint16_t>(fields + 3)));
-    row.cond = mhFxReadU8(screenCart(static_cast<uint16_t>(fields + 4)));
-    row.param = mhFxReadU8(screenCart(static_cast<uint16_t>(fields + 5)));
+    mhFxReadBytes(screenCart(fields), reinterpret_cast<uint8_t *>(&row.cost), 6);
     row.unlock = 0;
     row.recipe[0].item = 0;
     row.recipe[0].count = 0;

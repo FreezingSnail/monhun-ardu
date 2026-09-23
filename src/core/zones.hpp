@@ -41,8 +41,9 @@ struct ZoneRoom {
     uint8_t propCount;
     uint16_t firstHeal;
     uint8_t healCount;
-    uint16_t firstSmithy;   // prg.7 forge interaction range
-    uint8_t smithyCount;
+    // The prg.7 camp-smithy range was cached here; its only consumer (the SMITH
+    // screen) is gone and the ui.4 FORGE trees live on the hub, so the runtime
+    // no longer reads the smithy rects (monhun-ardu-5co.8). The cart data stays.
     uint8_t monsterKind;    // zone::MONSTER_NONE or MONSTER_KINDS index
     uint8_t monsterSpawn;   // global spawn index (0xFF when none)
 };
@@ -115,8 +116,6 @@ inline ZoneRoom zoneRoomRead(uint8_t i) {
     v.propCount = zoneReadU8(b + zone::ROOM_PROP_COUNT_OFF);
     v.firstHeal = zoneReadU16(b + zone::ROOM_FIRST_HEAL_OFF);
     v.healCount = zoneReadU8(b + zone::ROOM_HEAL_COUNT_OFF);
-    v.firstSmithy = zoneReadU16(b + zone::ROOM_FIRST_SMITHY_OFF);
-    v.smithyCount = zoneReadU8(b + zone::ROOM_SMITHY_COUNT_OFF);
     v.monsterKind = zoneReadU8(b + zone::ROOM_MONSTER_KIND_OFF);
     v.monsterSpawn = zoneReadU8(b + zone::ROOM_MONSTER_SPAWN_OFF);
     return v;
@@ -204,8 +203,6 @@ inline ZoneRoom zoneRoomRead(uint8_t i) {
     v.propCount = r.propCount;
     v.firstHeal = r.firstHeal;
     v.healCount = r.healCount;
-    v.firstSmithy = r.firstSmithy;
-    v.smithyCount = r.smithyCount;
     v.monsterKind = r.monsterKind;
     v.monsterSpawn = r.monsterSpawn;
     return v;

@@ -877,12 +877,8 @@ struct Game {
     // door/heal ranges (the 9 B records are read off the blob on demand).
     uint16_t roomFirstProp;
     uint8_t roomPropCount;
-    // Smithy interaction range (bead monhun-ardu-prg.7): cached like the
-    // door/heal ranges (the 6 B rects are read off the blob on demand). The
-    // camp smithy consumer was removed with the SMITH screen (ui.3.1, 5co.6);
-    // the data stays for the ui.4 FORGE trees.
-    uint16_t roomFirstSmithy;
-    uint8_t roomSmithyCount;
+    // (The prg.7 camp-smithy range cache is gone: the SMITH screen that consumed
+    // it was removed by ui.3.1, and ui.4 put FORGE on the hub. monhun-ardu-5co.8.)
     bool doorLatch;     // suppress doors until the player leaves every door rect
     bool menuRequest;   // menu door / hold-B sheathed in camp: app layer consumes
     bool prevA, prevB;

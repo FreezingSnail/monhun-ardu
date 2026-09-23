@@ -123,8 +123,6 @@ static void loadRoom(Game &g, uint8_t roomId, uint8_t spawn) {
     gp->roomHealCount = room.healCount;
     gp->roomFirstProp = room.firstProp;
     gp->roomPropCount = room.propCount;
-    gp->roomFirstSmithy = room.firstSmithy;
-    gp->roomSmithyCount = room.smithyCount;
     gp->roomMonsterKind = room.monsterKind;
 
     const ZoneSpawn sp = zoneSpawnRead(spawn);
