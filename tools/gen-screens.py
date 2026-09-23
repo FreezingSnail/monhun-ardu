@@ -65,12 +65,11 @@ ACTION_NAMES = ("leave", "buy_upgrade", "take_quest", "turn_in_quest",
                 "equip_weapon", "open_gear", "equip_armor",
                 "forge_node", "open_forge")
 COND_NAMES = ("always", "zenny", "flag", "tier", "quest", "upgrade")
-# hide_locked: reserved. zenny: draw the live save.zenny balance in the cost
-# column instead of the row cost (dynamic value token, qs.4 hub display).
-# skill: draw the cached live skill points (ScreenState::skillPoints) in the cost
-# column plus an S/M tier letter next to it (gs.2 GEAR readout); `param` = the
-# armor::SKILL_* index.
-ROW_FLAGS = {"hide_locked": 0x01, "zenny": 0x02, "skill": 0x04, "forge": 0x08}
+# hide_locked: reserved. skill: draw the cached live skill points
+# (ScreenState::skillPoints) in the cost column plus an S/M tier letter next to
+# it (gs.2 GEAR readout); `param` = the armor::SKILL_* index. The qs.4 zenny
+# dynamic-value token is retired (ui.5): the live balance moved to the header.
+ROW_FLAGS = {"hide_locked": 0x01, "skill": 0x04, "forge": 0x08}
 # Per-screen generated weapon block (ui.4, 5co.4): "weapons": "forge" emits the
 # class headers + forge_node rows (cost column = the upgrade cost), "equip"
 # emits the same tree with equip_weapon rows (no cost; the GEAR list). The rows

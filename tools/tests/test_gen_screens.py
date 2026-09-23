@@ -140,7 +140,6 @@ class GenScreensTests(unittest.TestCase):
             "constexpr uint8_t COND_QUEST = 4;",
             "constexpr uint8_t COND_UPGRADE = 5;",
             "constexpr uint8_t ROW_F_HIDE_LOCKED = 0x01;",
-            "constexpr uint8_t ROW_F_ZENNY = 0x02;",
             "constexpr uint8_t SCREEN_HUB = 0;",
             "constexpr uint16_t SCREEN_HUB_OFF = 12;",
             "constexpr uint8_t SCREEN_HUB_ROWS = 2;",
@@ -330,16 +329,12 @@ class GenScreensTests(unittest.TestCase):
         self.assertEqual(rows[3]["label"], "LEAVE")
         self.assertEqual(off, len(blob), "rows end the blob")
 
-    def test_zenny_dynamic_value_flag_compiles(self):
+    def test_zenny_flag_retired(self):
+        # ui.5 retired the qs.4 zenny dynamic-value token (the live balance moved
+        # to the list header), so the flag name is no longer accepted.
         self.mutate("data/screens/hub.json",
                     lambda doc: doc["rows"][1].update({"action": "none", "flags": ["zenny"]}))
-        self.assert_succeeds(self.compile())
-        blob = self.read_bytes(BLOB_REL)
-        hub = parse_def(blob, struct.unpack_from("<H", blob, DEF_OFF)[0])
-        first = parse_row(blob, hub["firstRow"])
-        second = parse_row(blob, hub["firstRow"] + first["size"])
-        self.assertEqual(second["flags"], 2, "ROW_F_ZENNY bit")
-        self.assertEqual(second["action"], 4, "none action id")
+        self.assert_fails(self.compile(), "unknown flag 'zenny'")
 
     def test_label_too_long_rejected(self):
         self.mutate("data/screens/hub.json", lambda doc: doc["rows"][0].__setitem__("label", "X" * 17))

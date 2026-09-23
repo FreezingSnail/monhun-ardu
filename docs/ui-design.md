@@ -4,6 +4,14 @@ Status: accepted with the owner (2026-09). Supersedes the qs.1–qs.4 flat
 list-screen look. Budget at design time: flash 29204/29696 (492 free), RAM
 1715/2560 — trim wave first (docs/dev-flow.md).
 
+Shipped so far: ui.1–ui.4 (cards, forge trees, save v5, unified card paths).
+ui.5 landed the **header zenny** (retiring the HUB ZENNY row + `ROW_F_ZENNY`)
+and the docs; the remaining chrome below — the HUB HUNT right column, the HUB
+bottom strip, and the list page indicator — is **deferred**: measured against
+the 190 B free at HEAD addb103, header zenny alone costs +76 B (114 free left),
+the HUNT column +238, the strip +276, and the page indicator +144 (all
+whole-image `make size` deltas). Fitting the rest needs a trim wave first.
+
 ## Interaction model
 
 One screen at a time:
@@ -175,5 +183,6 @@ Beads:
    meta; card nav/LEFT-RIGHT/hint line; armor + quests content wired first.
 4. `ui.4` weapon trees: node table + save v5 + FORGE list/cards + GEAR owned
    list; v4 migration.
-5. `ui.5` polish: hub strip, page indicators, docs; items screen later
-   (monhun-ardu-prg.13) reuses the same card pipeline.
+5. `ui.5` polish: header zenny + docs landed (this wave); hub strip, HUNT
+   right column and page indicators deferred (budget — see Status above).
+   Items screen later (monhun-ardu-prg.13) reuses the same card pipeline.

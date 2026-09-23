@@ -137,7 +137,6 @@ inline void screenGearCache(ScreenState &s, const ArmorAgg &agg) {
 // One page of the generic list. Called once per plane (same discipline as
 // renderScene/menu), between ArduboyG's plane blits.
 inline void drawScreen(const ScreenState &s, const SaveBlock &save) {
-    (void)save;
     const uint16_t defOff = screenDefOff(s.screen);
     const uint8_t titleLen = mhFxReadU8(screenCart(static_cast<uint16_t>(defOff + 1)));
     char text[SCREEN_TEXT_BUF];
@@ -147,6 +146,13 @@ inline void drawScreen(const ScreenState &s, const SaveBlock &save) {
         x = static_cast<uint8_t>(textPut(fxfontw, x, SCREEN_TITLE_Y, text[i]));
     for (uint8_t i = tn; i < titleLen; i++)
         x = static_cast<uint8_t>(textPut(fxfontw, x, SCREEN_TITLE_Y, static_cast<char>(mhFxReadU8(screenCart(static_cast<uint16_t>(defOff + 2 + i))))));
+
+    // Header zenny (ui.5): right-aligned `$` + live balance on the title line;
+    // the fake ZENNY row and its ROW_F_ZENNY token are retired.
+    const uint8_t zd = hudDigits(static_cast<int16_t>(save.zenny));
+    const uint8_t zx = static_cast<uint8_t>(SCREEN_COST_RIGHT - (zd + 1) * 4);
+    textPut(fxfontw, zx, SCREEN_TITLE_Y, '$');
+    drawNumber(static_cast<int16_t>(zx + 4), SCREEN_TITLE_Y, static_cast<int16_t>(save.zenny), 3);
 
     const uint8_t last = static_cast<uint8_t>(s.scroll + SCREEN_ROWS);
     uint16_t rowOff = screenFirstRow(s.screen);
@@ -180,9 +186,7 @@ inline void drawScreen(const ScreenState &s, const SaveBlock &save) {
             value = static_cast<int16_t>(s.skillPoints[skill]);
             tier = s.skillTier[skill];
         } else {
-            // Dynamic value token (qs.4): a ROW_F_ZENNY row draws the live save
-            // balance in the cost column instead of the packed row cost.
-            value = (flags & screens::ROW_F_ZENNY) != 0 ? static_cast<int16_t>(save.zenny) : static_cast<int16_t>(mhFxReadU16(reinterpret_cast<const uint16_t *>(screenCart(fields))));
+            value = static_cast<int16_t>(mhFxReadU16(reinterpret_cast<const uint16_t *>(screenCart(fields))));
         }
         const uint8_t digits = hudDigits(value);
         const uint8_t costX = static_cast<uint8_t>(SCREEN_COST_RIGHT - digits * 4);

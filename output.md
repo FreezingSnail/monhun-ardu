@@ -1,158 +1,120 @@
-# monhun-ardu-5co.7 — ui.4.1 trim: no save migration, fold list tokens into cards, unify card paths
+# monhun-ardu-5co.5 — ui.5 polish: header zenny, tokens, page indicator, hub strip, docs
 
-Status: **DONE.** The shipping image fits with headroom; ui.4's features are
-intact end to end and the full gate is green.
+Status: **BLOCKED (partial).** Priority 1 (header zenny) and the docs landed and
+the full gate is green; the hub chrome (HUNT right column, bottom strip), the
+list page indicator, and the denied cue do **not fit** the 190 B free at
+HEAD addb103 and are deferred with measured deficits below. No commit/push
+(orchestrator commits).
 
 ```
-size: flash=29506/29696 (190 free)  ram=1801/2560
+size: .text=29550 .data=32 .bss=1769
+size: flash=29582/29696 (114 free)  ram=1801/2560
 ```
 
 | | flash |
 |---|---|
-| ui.4 working tree (BLOCKED) | 30880 (1184 over) |
-| ui.4.1 (this bead) | **29506 (190 free)** |
-| reclaimed from the ui.4 tree | **1374 B** |
-| HEAD 30ef641 (ui.3.1) | 29172 (524 free) |
-| ui.4 net delta now | +334 B |
+| HEAD addb103 (baseline) | 29506 (190 free) |
+| this wave (header zenny + docs) | **29582 (114 free)** |
+| delta | **+76 B** |
 
-Target was ≥ ~150 B free; **190 B free** clears it.
+## What landed
 
-## Owner decisions, implemented
+### 1. Header zenny, ZENNY row + `ROW_F_ZENNY` retired (priority 1)
 
-### 1. No save migration (≈ −460 B)
+- `src/screens.hpp drawScreen()` draws the live balance right-aligned on the
+  title line: `$` glyph + `hudDigits`/`drawNumber` at `SCREEN_COST_RIGHT`
+  (white). The old `ROW_F_ZENNY` ternary in the cost column is gone.
+- `data/screens/hub.json`: the `ZENNY` row is removed — the hub is now
+  HUNT / QUESTS / FORGE / GEAR (`SCREEN_HUB_ROWS` 5 → 4, blob 841 → 829 B).
+- `tools/gen-screens.py`: the `zenny` row flag is dropped from `ROW_FLAGS`
+  (generated `ROW_F_ZENNY` const removed); `COND_ZENNY` stays in the ABI.
+- `tools/gen-art.py`: a 3x5 `$` glyph added to `GLYPHS` (tile 36); the font
+  sheets were always 128 fixed tiles, so this is a data-only art regen.
 
-`src/core/save.hpp` now decodes **only** version 5 + magic + checksum; anything
-else (blank, junk, v1..v4) falls back to `saveDefaults()`.
-- Removed `saveDecodePrefix`, `saveDecodeV4`, `saveDecodeV3`, `saveMigrateWeapon`,
-  `saveZeroTail`, `saveDecodeCommon`, `saveChecksumN`.
-- Removed every legacy constant: `SAVE_VERSION_V1..V4`, `SAVE_TIER_*`,
-  `SAVE_LEGACY_CRAFTED_*`, `SAVE_V4/V3_CHECKSUM_OFF`.
-- Removed the v4 spine map `forge::TIER_NODE` from `tools/gen-forge.py` and the
-  generated `src/generated/forge_meta.hpp`; `saveDefaults()` now owns every
-  depth-0 node via `forge::NODE_DEPTH` and equips `forge::NODE_SWORD_BASE`.
-- Kept v5 encode/decode/defaults + checksum. Pre-release: an old save is
-  discarded on a version change.
+### 2. Docs (priority 5)
 
-### 2. Fold the live list token column into the cards (≈ −430 B)
+- `README.md` UI section: hub rows HUNT/QUESTS/FORGE/GEAR + header zenny; v5
+  equipped-node loadout; FORGE/GEAR card flow; 44-byte save; **shipped caps 32
+  weapon-node / 8 armor-piece slots, no migration**; no stale smith/token text.
+- `docs/quests-shops.md`: layers/screen-data/actions updated (FORGE_NODE,
+  OPEN_FORGE), a new **FORGE** section, the v5 save layout (44 B) + caps + no
+  migration, the smith section marked removed, GEAR updated to weapon cards.
+- `docs/ui-design.md`: Status records what ui.5 shipped and what is deferred
+  with the per-feature deltas.
 
-- `src/screens.hpp`: deleted the `MH_FORGE_TOKENS` block, the `FORGE_TOKENS`
-  string/offset tables and the per-row classifier + render branch; deleted the
-  `src/forge.hpp` include. FORGE/GEAR rows now draw label + packed cost through
-  the generic path.
-- `src/forge_state.hpp`: deleted the `ForgeToken` enum, `forgeToken()` and
-  `forgeActionable()` (list-only); their coverage is gone (justified below).
-- `tst/fxdatatest/test_hub.ino` no longer defines `MH_FORGE_TOKENS 0`.
+### 3. Tests (permanent, co-located, native)
 
-### 3. Unify the weapon and armor card paths (≈ −300 B incl. sweeps)
+- `tst/screens_test.hpp`: `ROW_F_ZENNY` → `ROW_F_FORGE` stable-value check.
+- `tst/fxdatatest/screens_test.hpp`: hub row count 4, hub rows r0..r3, header
+  zenny pixel assertions (1234 → `$`+digits at x 104..123, and the empty-balance
+  control at x 116..123), HUNT/QUESTS/FORGE/GEAR label pixels.
+- `tst/fxdatatest/hub_test.hpp`: hub row count + label pixels + header zenny.
+- `tools/tests/test_gen_screens.py`: dropped the `ROW_F_ZENNY` const assertion;
+  the zenny-flag test now asserts the flag name is rejected (retired).
 
-- New shared bill machinery in `src/forge_state.hpp`: `billShort()` (gate with a
-  reason code) + `billDebit()`, operating on packed `{itemCode,count}` byte pairs.
-  The armor card craft bill (`CardItem.craft`) and a forge node's
-  `mats`/`directMats` share the exact layout, so both card kinds run **one**
-  gate loop and **one** debit loop.
-- `forgeActiveMats()` selects the upgrade/direct bill as a pointer (no
-  `ForgeBill` copy); `forgeActiveBill()`/`forgeAffordable()` remain only for the
-  host suite (LTO drops them from shipping).
-- One card action entry: `cardApply(save, it, node, row)` replaces the
-  ino ternary chain and `cardWeaponApply`. `forgeHint()` is the weapon half of
-  `cardHint()`; the hint is classified once per card state change
-  (`cardSetHint`) and cached in `DetailState`, so `drawCard` no longer
-  re-classifies per plane.
-- `cardRowIndex()` now returns `CARD_NONE` for non-opening rows; the sketch tests
-  one value instead of `cardRowOpens()` + `cardRowIndex()`; `cardRowNode()` is
-  gone.
-- `forgeReadNode()` bulk-reads the 17-byte record straight into the `ForgeNode`
-  tail (static_asserts pin the layout) instead of staging + field-decoding;
-  `forgeEquippedMul()` reads only the two multiplier bytes.
-- `forgeNodeState()` does one `billShort()` pass (no duplicate zenny compare).
+## Blocked work + measured deficits
 
-### 4. Safe sweeps (each measured)
+Each new chrome piece was built in isolation with `-DMH_UI5_*=0/1` overrides
+through `SIZE_FLAGS` and measured with the whole-image linker total (LTO makes
+per-symbol math meaningless). Baseline for the split: header-only build =
+29596 B; the delta is the piece's own cost.
 
-| Sweep | Δ |
-|---|---|
-| save bitsets narrowed to the data: owned 8 B/64 → 4 B/32, crafted 8 B/64 → 1 B/8 (record 44 → 33 B); generic `saveBitGet/Set` replaced by sized accessors | **≈ −290** |
-| `forgeReadNode` bulk read + `forgeEquippedMul` 2-byte read | −90 |
-| `billShort`/`billDebit` `MH_NOINLINE` (one shared copy) + `billShort` reason code | −18 |
-| dead `screen_meta.hpp` `TIER_COUNT` (stale `SAVE_TIER_COUNT` reference) removed from `gen-screens.py` | 0 flash (dead const) |
+| Piece | flash | free after header+piece | note |
+|---|---|---|---|
+| header zenny (landed) | **+90** | 100 | incl. retiring the `ROW_F_ZENNY` branch |
+| HUB HUNT right column (progress / READY / -) | **+238** | over | `questReadDef` + `READY` string + digit pair |
+| HUB bottom strip (weapon marker + active skills) | **+276** | over | `forgeEquippedClass` + skill-abbr table loop + marker blit |
+| list page indicator (`n/m`) | **+144** | over | two `/6` pages + `drawNumber`/`textPut` call sites |
+| all four together | **+748** | 558 over | |
 
-`MH_NOINLINE` on `forgeNodeState`/`forgeNodeApply`/`forgeNodeEquipToggle` was
-tried and **reverted** (+46 B: it added call overhead without dedup).
+Deficit to fit the full polish: **≈ 558 B** (needs free ≥ ~750 B; only 190 at
+baseline). The ui.1 trim table's large pools (smith UPGRADE −462, armor craft
+−376) were already spent by ui.2/ui.3.1; no comparable dead code remains.
 
-## What still works (ui.4, verified)
+### Options (ranked)
 
-- Forge tree data + `mhForge` cart records; `FORGE`/`GEAR` generated rows.
-- Save v5: weapon owned bitset, equipped node, armor crafted bitset; round-trip
-  + checksum.
-- `forge_state.hpp`: direct-vs-upgrade bills, affordability, debit,
-  equipped-follows-upgrade, equip/unequip toggle.
-- Weapon cards: `DESC/PARTS/STATS`, cached node, `A FORGE`/`A EQUIP`/
-  `A UNEQUIP`/`NEED PARTS`/`NEED ZENNY` hint, forge/upgrade/equip on A.
-- Armor cards: craft bill gate/debit/equip, crafted PARTS trim.
-- Quest cards; hub FORGE routing; hunt reads the equipped node's class +
-  dmg/spd multipliers.
+1. **Split a trim bead** (preferred): reclaim ~600 B of shipping code, then land
+   ui.5b (hub chrome + page indicator). The two remaining big pools are the
+   `armorApplyToGame` aggregate path (724 B) and the `MH_NOINLINE` sweep — both
+   need their own spike (perf/behavior risk).
+2. **Land in priority order as budget allows**: header zenny is landed; the page
+   indicator (+144) is the next cheapest and fits only after a ~30 B trim; the
+   HUNT column (+238) and strip (+276) need the trim bead.
+3. **Drop scope**: weapon-only strip (no skill totals) ≈ −120 B, but the HUNT
+   column + page still exceed the current budget.
 
-## Tests
+## Item 6 — bitset widening
 
-Permanent, co-located, native frameworks, no `/tmp`.
+Free after the landed work is **114 B**, below the ~120 B threshold, so the
+bitsets stay at the shipped caps and are documented as such:
+**32 owned weapon-node slots (4 B)** and **8 crafted armor-piece slots (1 B)**,
+no migration (v5 + checksum only; anything else falls back to defaults).
 
-- Updated: `tst/screens_test.hpp` — v5 offsets/bitset caps; the four migration
-  tests replaced by one "v1..v4 fall back to defaults" test.
-- Updated: `tst/forge_state_test.hpp` — token test removed (machinery gone);
-  bitset caps. `tst/card_state_test.hpp` — weapon path now `cardHint`/`cardApply`.
-- Updated: `tst/armor_engine_test.hpp` (crafted cap), `tst/fxdatatest/forge_test.hpp`
-  (`cardApply`, sentinel fields), `tst/fxdatatest/cards_test.hpp`
-  (`drawCard` signature + `cardSetHint`), `tst/fxdatatest/hub_test.hpp` comment,
-  `tst/fxdatatest/test_hub.ino`.
-- Tools: `tools/tests/test_gen_forge.py` asserts `TIER_NODE` is gone;
-  `tools/tests/test_gen_screens.py` drops the `TIER_COUNT` expectation.
-- Removed tests pin removed machinery: v1..v4 decoders + spine map, list
-  E/OK/UP/DIR tokens, `cardWeaponHint`/`cardWeaponApply`/`cardRowNode`,
-  `MH_FORGE_TOKENS`. Coverage of what remains (tree walk, upgrade/direct,
-  equipped follow, card forge/equip/craft, v5 round-trip) is kept.
+## Gates (all green, tree with the partial landing)
 
-## Gate tails
+- `make gen-check` — PASS (148 generated artifacts unchanged)
+- `make test` — 6306 passed / 0 failed
+- `make test-tools` — Ran 344 tests, OK
+- `make fxtest-headless` — 18/18 suites PASS (assets, audio, boot, cards,
+  combat, data, forge, hub, hud, items, monster_art, perf, player_art, quests,
+  screens, smith, tell, zones), exit 0
+- `make size` — `flash=29582/29696 (114 free)  ram=1801/2560` (+76 B)
 
-`make gen`:
+## Files
+
 ```
-gen-forge: 9 nodes, 161 B blob (magic 0x4647 version 1)
-gen-screens: 4 screens, 50 rows, 841 B blob (magic 0x5343 version 1)
-gen-cards: 18 items, 56 pages, 602 B blob (magic 0x4341 version 1)
-```
-`make gen-check`:
-```
-fxdata_manifest: PASS (148 generated artifacts unchanged)
-```
-`make test`:
-```
-Total Passed: 6306
-Total Failed: 0
-```
-`make test-tools`:
-```
-Ran 344 tests in 18.2s
-OK
-```
-`make fxtest-headless` (full, 18/18):
-```
-asset_test PASSED=264  test_audio PASSED=9    test_boot PASSED=4
-test_cards PASSED=85   combat_test PASSED=237 data_test PASSED=348
-test_forge PASSED=58   test_hub PASSED=81     test_hud PASSED=29
-test_items PASSED=35   test_monster_art PASSED=127  test_perf PASSED=5
-test_player_art PASSED=120  test_quests PASSED=87  test_screens PASSED=136
-test_smith PASSED=51   test_tell PASSED=18     zones_test PASSED=82
-```
-`make size`:
-```
-size: .text=29474 .data=32 .bss=1769
-size: flash=29506/29696 (190 free)  ram=1801/2560
+ M data/screens/hub.json              ZENNY row removed (4-row hub)
+ M src/screens.hpp                    header zenny, ROW_F_ZENNY branch removed
+ M tools/gen-art.py                   $ glyph
+ M tools/gen-screens.py               zenny row flag retired
+ M tools/tests/test_gen_screens.py    flag assertion/test updated
+ M tst/screens_test.hpp               ROW_F_FORGE stable-value check
+ M tst/fxdatatest/screens_test.hpp    hub rows + header zenny pixels
+ M tst/fxdatatest/hub_test.hpp        hub rows + header zenny pixels
+ M README.md docs/quests-shops.md docs/ui-design.md
+ M src/generated/{screen_meta,equip_meta,zone_meta}.hpp
+ M fxdata/* (font sheets + fxdata bins + manifest, screens/cards/equip tables)
+ M src/fxdata.h
 ```
 
-## Smith retirement note
-
-Unchanged from the ui.4 report: `src/smith.hpp` / `UpgradeDef` / `upgradeFind` /
-`upgradeResolve` are shipping-dead and `mhSmith` is read only by
-`tst/fxdatatest/smith_test.hpp`; retiring them reclaims FX-cart bytes, not MCU
-flash, so it is left in place (the trim did not need it).
-
-No commit/push (orchestrator commits between bead waves). ui.4 is complete on
-this same tree.
+No commit/push.

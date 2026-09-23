@@ -1,20 +1,20 @@
 # Quests & shops — data-driven screens (design)
 
 Status: accepted defaults (kill-quests + zenny; armor crafted on the GEAR armor
-card; weapon progression returns as FORGE trees in ui.4, which replaces the
-removed SMITH screen).
-Budget: shipping flash 29172/29696 (524 free) after ui.3.1; each new screen must
+card; weapon progression is the ui.4 FORGE trees, which replaced the removed
+SMITH screen). ui.5 moved the live zenny balance into the list header.
+Budget: shipping flash 29582/29696 (114 free) after ui.5; each new screen must
 cost ~0 flash (cart data) once the framework lands.
 
 ## Layers
 
 ```
-hub menu (title -> HUNT / QUESTS / GEAR)
+hub menu (title -> HUNT / QUESTS / FORGE / GEAR, header zenny)
   screen framework: one generic list renderer + input + row actions
     cart data: screen tables (title, rows: label, cost, flags, condition, action)
-    state:    save block in EEPROM (zenny, quest flags, upgrade tiers)
-    content:  quest board rows, armor craft bills (baked into the cards), future
-              shop stock
+    state:    save block v5 in EEPROM (zenny, quest flags, owned/crafted bitsets)
+    content:  quest board rows, armor craft bills (baked into the cards), forge
+              trees (data/forge/*.json -> generated FORGE/GEAR rows)
 ```
 
 ## Screen data (cart, packed little-endian)
@@ -26,16 +26,19 @@ ScreenRow: labelLen u8 + chars, cost u16, actionId u8, flags u8,
 ```
 
 - Render: rows via the existing `textPut` glyph lane + the baked cursor/tile
-  sprites; 6 rows per page, scroll by 6; cost right-aligned.
-- Input: up/down move, A = accept (fires action), B = back.
+  sprites; 6 rows per page, scroll by 6; cost right-aligned. The title line
+  carries the live zenny (`$` + `drawNumber`, ui.5).
+- Input: up/down move, A = accept (opens a card or fires the row action), B = back.
 - Conditions (runtime): quest state (`COND_QUEST`) only; every other row is
   always live. The generated `zenny`/`flag`/`tier`/`upgrade` ids remain in the
-  ABI but have no runtime case since ui.2.
+  ABI but have no runtime case since ui.2. The `zenny` row *flag* is retired
+  (ui.5): the header owns the live balance.
 - Actions (fixed enum, one switch): TAKE_QUEST(id), TURN_IN_QUEST(id),
-  EQUIP_WEAPON(weaponIdx), OPEN_GEAR, LEAVE. Armor rows
-  (`ACTION_EQUIP_ARMOR`) open the card, whose `cardArmorApply` crafts/equips;
-  `BUY_UPGRADE` is trimmed (ui.2; FORGE trees in ui.4) and ui.3.1 removed
-  `CRAFT_ARMOR` + `OPEN_SMITH` with the SMITH screen.
+  EQUIP_WEAPON(weaponIdx), FORGE_NODE(nodeIdx), OPEN_GEAR, OPEN_FORGE, LEAVE.
+  Armor rows (`ACTION_EQUIP_ARMOR`) open the card, whose `cardArmorApply`
+  crafts/equips; weapon rows open the weapon card, whose `cardApply` forges /
+  upgrades / equips. `BUY_UPGRADE` is trimmed (ui.2; FORGE trees in ui.4) and
+  ui.3.1 removed `CRAFT_ARMOR` + `OPEN_SMITH` with the SMITH screen.
 
 ## Detail cards (ui.3)
 
@@ -61,25 +64,44 @@ list screen --A--> detail card --LEFT/RIGHT--> pages --A--> action --B--> list
   crafted piece loses its PARTS page and cannot be crafted twice.
 - `mhCards` record per item: kind, page mask, the four page image addresses,
   up to two overlay slots (page + x/y + kind + args) and the armor craft bill
-  (u16 zenny + up to two `{itemIdx+1, count}` pairs; zero for quests). The
-  cart-free page machine is `src/card_state.hpp`; the cart reader + renderer is
-  `src/cards.hpp`.
-- Temporary scope split (ui.4 owns the rest): GEAR **weapon** rows keep their
-  direct-equip action because weapon cards land with the FORGE trees. Every
-  armor row (gear craft/equip) and every quest row opens a card.
+  (u16 zenny + up to two `{itemIdx+1, count}` pairs; zero for quests/weapons).
+  The cart-free page machine is `src/card_state.hpp`; the cart reader + renderer
+  is `src/cards.hpp`. Weapon cards cache the `mhForge` node record at open
+  (`src/forge.hpp` `forgeReadNode`).
+- ui.4 made the split whole: armor, quest, **and weapon** rows all open cards;
+  a list row never fires an action directly.
 
-## Save block (EEPROM)
+## FORGE (weapon trees, ui.4)
+
+- `data/forge/*.json` -> `fxdata/tables/forge.bin` + `src/generated/forge_meta.hpp`
+  (one 17 B node record: class, parent, flags, dmg/spd multipliers, upgrade +
+  direct bills). `tools/gen-forge.py` also emits the generated FORGE/GEAR row
+  blocks (indented tree labels + the upgrade cost on FORGE).
+- Node semantics (`src/forge_state.hpp`): an owned parent unlocks the cheaper
+  **upgrade** bill (transforms the parent; if the parent was equipped the
+  equipped id follows the child); with no owned parent a `direct` node uses the
+  pricier **direct** bill and leaves skipped nodes unowned. `billShort`/
+  `billDebit` are shared with the armor card craft.
+- `huntStart` resolves the equipped node's class + multipliers
+  (`forgeEquippedClass` / `forgeEquippedMul`); `SAVE_NODE_NONE` falls back to the
+  sword root at 100/100.
+
+## Save block (EEPROM, v5)
 
 ```
-magic u16 "MH", version u8 (4), zenny u16, questState u8[4] (bits: taken/done),
-activeQuest u8, progress u8, upgradeTier u8[N_WEAPONS], equip u8[3], flags u8,
-items u8[ITEM_COUNT], weapon u8, checksum u8
+magic u16 "MH", version u8 (5), zenny u16, questState u8[4] (bits: taken/done),
+activeQuest u8, progress u8, reserved u8[3], equip u8[3], flags u8,
+items u8[ITEM_COUNT], equippedNode u8, weaponOwned u8[4], crafted u8[1],
+checksum u8                                                   (44 B total)
 ```
 
-- v4 (monhun-ardu-isp.1/hml.1) appended the `weapon` byte at 26 and moved the
-  checksum to 27 (`SAVE_BYTES` 28). A v3 record migrates with its full tail and
-  `weapon = 0` (checksum still at 26); v1/v2 migrate their shared prefix.
-
+- v5 (monhun-ardu-5co.4) replaced the per-class smith tier bytes + class-index
+  weapon byte with the forge-tree model: a 4 B owned bitset (**32 node slots**),
+  the equipped node id, and a 1 B crafted bitset (**8 armor-piece slots**).
+  Caps are fixed regions; content below them is data-only.
+- There is **no migration** (ui.4.1, owner decision): only a v5 record with a
+  good magic + checksum decodes; anything else (blank, junk, v1..v4) falls back
+  to `saveDefaults()`. Pre-release, an old save is discarded on a version change.
 - Load on boot; write-on-change with a verify read (Arduboy2 EEPROM helper);
   first boot / bad magic / bad checksum = defaults.
 - No save during a hunt (only on screen actions) to keep write cycles low.
@@ -114,20 +136,23 @@ QuestDef (v2): id, goalKind u8 (0 kill / 1 gather), target u8
   hunt (kill or gather goal) --win/loss + A--> hub --QUESTS--> turn-in (pays
   zenny + material, sets done) --B--> hub, where the next quest is now unlocked.
   Hub B is a root no-op; camp hold-B leaves the hunt back to the hub. The loadout
-  is the save's v4 `weapon` byte (hml.1) and the HUNT row's beast comes from the
+  is the save's equipped forge node (v5) and the HUNT row's beast comes from the
   active quest's `goalKind`/`target` (`huntStart`, src/app_setup.hpp).
-- Gear screen (hml.3, armor rows gs.1; ui.3.1 craft): the hub's GEAR row
-  (`ACTION_OPEN_GEAR`) opens the `data/screens/gear.json` list (SWORD / FLAIL /
-  GUN + the five armor pieces + the skill rows + LEAVE). A on a weapon equip row
-  (`ACTION_EQUIP_WEAPON`, `param` = weapon index) writes `save.weapon` when it
-  changes (same-weapon press and out-of-range params are no-ops). The armor rows
+- Gear screen (hml.3, armor rows gs.1; ui.3.1 craft; ui.4 weapons): the hub's
+  GEAR row (`ACTION_OPEN_GEAR`) opens the `data/screens/gear.json` list (the
+  generated weapon-tree rows + the five armor pieces + the skill rows + LEAVE).
+  A on a weapon equip row (`ACTION_EQUIP_WEAPON`, `param` = node id) opens the
+  weapon card; the card's A equips an owned node or unequips the wielded one
+  (`forgeNodeEquipToggle`; unowned nodes refuse). The armor rows
   (`ACTION_EQUIP_ARMOR`, `param` = `(slot << 5) | pieceIdx`) are always live and
   A opens the armor card: `cardArmorApply` crafts an uncrafted piece from the
   baked bill (debit + crafted bit) then toggles it into its slot
   (`armorEquipToggle`, true only on a real slot change); a crafted piece just
   toggles. A same-piece re-press unequips. The next HUNT starts with the picked
-  weapon + armor. An items screen is still a follow-up, and the equipped
-  weapon/armor has no on-screen mark yet.
+  loadout. An items screen is still a follow-up, and the equipped weapon/armor
+  has no on-screen mark yet.
+- FORGE screen (ui.4): the hub's FORGE row (`ACTION_OPEN_FORGE`) opens
+  `data/screens/forge.json` (generated tree rows + LEAVE). See the FORGE section.
 - Scaffold limitations: the board renders every authored row even when its
   `COND_QUEST` condition is dead (locked/not-active) — status graying, progress
   display and nav filtering are a follow-up. There is no inventory screen; the
@@ -138,18 +163,15 @@ QuestDef (v2): id, goalKind u8 (0 kill / 1 gather), target u8
 - Gather targets and material rewards are validated against `data/items.json`
   by `tools/gen-quests.py`; no second item list is hardcoded.
 
-## Smith (content model)
+## Smith (removed)
 
-```
-UpgradeDef: weaponIdx u8, tier u8, cost u16, dmgMul u8, spdMul u8, unlockFlag u8
-```
-- Applied as a multiplier in the player damage/velocity path; tier persisted.
-- ui.2 trimmed the smith weapon-tier **purchase** path (`COND_UPGRADE` /
-  `ACTION_BUY_UPGRADE` rows + `screenRowRecipe`, and the dead
-  `zenny`/`flag`/`tier` condition cases) for headroom. The `mhSmith` upgrade
-  table itself is unchanged and still feeds `upgradeApplyToGame` /
-  `smithResolve`. ui.3.1 removed the SMITH screen entirely: the hub FORGE row
-  (ui.4) will own the upgrade UI and the FORGE trees.
+The SMITH screen, the camp smithy interaction, and the smith weapon-tier
+**purchase** path (`COND_UPGRADE` / `ACTION_BUY_UPGRADE` rows +
+`screenRowRecipe`, trimmed in ui.2) are gone (ui.3.1, 5co.6). Weapon progression
+is the ui.4 FORGE trees above: the equipped node's `dmgMul`/`spdMul` replaced the
+per-class smith tiers (`upgradeApplyToGame` now calls `forgeEquippedMul`). The
+`mhSmith` table and `tools/gen-smith.py` still pack armor recipes (unread by the
+runtime) and host-test fixtures; nothing in the shipping UI references smith.
 
 **Armor craft bill (monhun-ardu-arm.1; moved to the cards in ui.3.1).** The
 piece's `{materials, zenny}` bill from `data/armor.json` is now baked into the

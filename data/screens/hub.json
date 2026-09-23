@@ -5,7 +5,6 @@
     { "label": "HUNT", "cost": 0, "action": "hunt", "condition": "always", "param": 0 },
     { "label": "QUESTS", "cost": 0, "action": "open_quests", "condition": "always", "param": 0 },
     { "label": "FORGE", "cost": 0, "action": "open_forge", "condition": "always", "param": 0 },
-    { "label": "GEAR", "cost": 0, "action": "open_gear", "condition": "always", "param": 0 },
-    { "label": "ZENNY", "cost": 0, "action": "none", "condition": "always", "param": 0, "flags": ["zenny"] }
+    { "label": "GEAR", "cost": 0, "action": "open_gear", "condition": "always", "param": 0 }
   ]
 }

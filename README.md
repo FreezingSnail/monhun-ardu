@@ -275,7 +275,7 @@ so B there is a no-op.
 | Input | Action |
 |---|---|
 | UP / DOWN | move the cursor (6 rows per page, scroll by 6) |
-| A | accept the cursor row (start hunt / open a screen / buy / take quest) |
+| A | accept the cursor row (start hunt / open a screen / open a card / take a quest) |
 | B | back one level (quests/gear → hub; hub B is a root no-op) |
 
 D-pad nav is debounced: a tap moves exactly one row (immediate on the direction
@@ -284,50 +284,69 @@ change), while holding waits ~300 ms (16 logic ticks) and then repeats every
 opened a screen cannot re-fire inside it. The hub HUNT row starts the save's
 hunt: `huntStart()` reads the active quest's `QuestDef` (a `kill` goal spawns its
 target beast, anything else — no quest or a `gather` goal — falls back to the
-LUNGE beast) and the save's v4 `weapon`, then runs `newGame` + the camp spawn.
+LUNGE beast) and the save's equipped forge node (v5), then runs `newGame` + the
+camp spawn.
 After a win or loss, A returns to the hub so the finished quest can be turned in;
 the next HUNT runs `newGame` again, so projectiles/effects/quest counters start
 clean. While a screen is up the sim and audio are not stepped.
 
-The hub shows HUNT / QUESTS / GEAR plus a ZENNY row that renders the live
-`save.zenny` balance (dynamic value token). The quests board takes a kill quest
-and turns it in for its reward. ui.3.1 (5co.6) removed the SMITH screen: armor
-crafting moved onto the GEAR armor card (below), and the hub FORGE trees replace
-the smith screen in ui.4 (the `mhSmith` upgrade table still feeds the tier
-multiplier path until then; the camp forge interaction was dropped with it).
-The GEAR screen equips the loadout: the three
-weapons (SWORD / FLAIL / GUN) into the save's v4 `weapon` byte, then the five
-armor pieces (`ACTION_EQUIP_ARMOR` rows, gs.1) — always live, because the card's
-A crafts an uncrafted piece (debit + crafted bit) before toggling equip. A on an
-equip row toggles it (a same-weapon / same-piece press is a no-op) and the next
-HUNT starts with it; the crafted bitmask and the equipped ids persist in the
-save, and the equipped stats cache at hunt start (arm.2). The GEAR page
-also carries a live skill readout (gs.2): five `ROW_F_SKILL` rows (ATTACK UP /
+The hub shows HUNT / QUESTS / FORGE / GEAR. Every list screen carries the live
+`save.zenny` balance right-aligned on the title line (`$` + digits, ui.5); the
+old HUB ZENNY row and its `ROW_F_ZENNY` dynamic-value token are retired. The
+quests board takes a quest and turns it in for its reward. ui.3.1 (5co.6)
+removed the SMITH screen and ui.4 (5co.4) added the FORGE trees, which own all
+weapon progression: armor crafting moved onto the GEAR armor card (below) and
+the camp smithy interaction was dropped with the screen.
+
+The FORGE screen (`data/screens/forge.json` + generated rows from
+`data/forge/*.json`) lists every weapon node as an indented tree (class headers
++ one `ACTION_FORGE_NODE` row per node, label + upgrade cost). A opens the
+weapon card (`DESC / PARTS / STATS`); A on the card forges the node — an upgrade
+when the parent is owned (cheaper bill, transforms the owned parent, and moves
+the equipped id to the child if the parent was wielded), otherwise a pricier
+direct forge that leaves skipped nodes unowned. Skipped branches stay locked
+until an owned parent exists.
+
+The GEAR screen equips the loadout. The weapon rows (`ACTION_EQUIP_WEAPON`,
+generated from the same tree) open the weapon card, whose A equips an owned node
+or unequips the wielded one; the equipped node id persists in the save (v5). The
+five armor pieces (`ACTION_EQUIP_ARMOR` rows, gs.1) are always live, because the
+card's A crafts an uncrafted piece (debit + crafted bit) before toggling equip.
+A same-weapon / same-piece press is a no-op and the next HUNT starts with the
+picked loadout; the owned/crafted bitsets and the equipped ids persist in the
+save, and the equipped stats cache at hunt start (arm.2). The GEAR page also
+carries a live skill readout (gs.2): five `ROW_F_SKILL` rows (ATTACK UP /
 DEFENSE UP / HEALTH UP / STAMINA UP / EVADE) show each skill's stacked points,
 and an active skill gets an `S` (points >= 10) or `M` (points >= 15) letter just
 left of the number; points clamp at 15. The cache refills when GEAR is entered
 and after every equip action, so the numbers move as gear changes. An items
 screen is still a follow-up; the equipped weapon/armor itself has no on-screen
-mark yet. Every
-state-changing action commits the 28-byte EEPROM save block once (write-on-
-change + verify read). A save with an active quest/tier applies it at hunt start
-and the hunt-end quest-progress commit still runs exactly once per hunt. Camp
-hold-B (sheathed) leaves the hunt back to the hub. There is no quit input in the
-hunt — win/loss + A is the only hunt exit.
+mark yet. Every state-changing action commits the 44-byte EEPROM save block
+once (write-on-change + verify read). A save with an active quest applies it at
+hunt start and the hunt-end quest-progress commit still runs exactly once per
+hunt. Camp hold-B (sheathed) leaves the hunt back to the hub. There is no quit
+input in the hunt — win/loss + A is the only hunt exit.
 
-Armor and quest rows open a **prebaked detail card** (ui.3) instead of firing
-the action on the list: A on the list opens the card, LEFT/RIGHT cycles its
-pages (DESC/PARTS/STATS/SKILL for armor; GOAL/PROG/REWARD for quests), B backs
-to the list, and A on the card performs the row's context action
-(craft/equip/unequip or take/turn-in). The armor craft bill (zenny + up to two
-`{item, count}` pairs) is baked into the `mhCards` record (ui.3.1), so the card
-gates and debits the craft itself; quest cards still run the row action.
-Everything is baked into the 128x64 page image except the hint line and
-the live overlay slots (PARTS have-counts, the quest progress bar); a crafted
-armor piece loses its PARTS page immediately, so the card cannot offer a second
-craft. GEAR **weapon** rows keep their direct-equip action for now: weapon
-cards land with the ui.4 forge trees, so GEAR has one card-opening row kind
-(armor) and one direct-action row kind (weapon) until then.
+Save v5 caps are fixed and data-only to grow below them: **32 owned weapon-node
+slots (4 B)** and **8 crafted armor-piece slots (1 B)** (`core/save.hpp`). There
+is no migration (ui.4.1, owner decision): only a version-5 record with a valid
+checksum decodes; anything else (blank, junk, or an older version) falls back to
+`saveDefaults()`, so an old save is discarded on a version change. Widening the
+bitsets (e.g. 16 armor pieces) is a future budget event, not a data-only change.
+
+Armor, quest, and weapon rows open a **prebaked detail card** (ui.3/ui.4)
+instead of firing the action on the list: A on the list opens the card,
+LEFT/RIGHT cycles its pages (DESC/PARTS/STATS/SKILL for armor; DESC/PARTS/STATS
+for weapons; GOAL/PROG/REWARD for quests), B backs to the list, and A on the
+card performs the row's context action (forge/upgrade, craft/equip/unequip, or
+take/turn-in). The armor craft bill (zenny + up to two `{item, count}` pairs) is
+baked into the `mhCards` record (ui.3.1), so the card gates and debits the craft
+itself; quest cards still run the row action. Everything is baked into the
+128x64 page image except the hint line and the live overlay slots (PARTS
+have-counts, the quest progress bar); a crafted armor piece loses its PARTS page
+immediately, so the card cannot offer a second craft. The live per-row state
+(equipped / owned / upgradeable / direct / need-parts / need-zenny) is carried
+by the card hint line, not a list token column (ui.4.1 trim).
 
 ### Target roster (`MONSTER_DEFS`, FX cart blob)
 

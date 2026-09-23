@@ -393,8 +393,8 @@ void ScreenSuite(TestRunner &runner) {
     {
         Test t("screenReset zeroes the gear skill cache; ROW_F_SKILL decodes");
         t.assert(screens::ROW_F_HIDE_LOCKED, 0x01, "hide_locked flag stable");
-        t.assert(screens::ROW_F_ZENNY, 0x02, "zenny flag stable");
         t.assert(screens::ROW_F_SKILL, 0x04, "skill flag value");
+        t.assert(screens::ROW_F_FORGE, 0x08, "forge flag value");
         ScreenState s;
         for (uint8_t i = 0; i < armor::SKILL_COUNT; i++) {
             s.skillPoints[i] = static_cast<uint8_t>(i + 1);

@@ -168,15 +168,16 @@ inline void test_hub(FxTest &test) {
     clearFb();
     drawScreen(screen, save);
 
-    // HUNT is row 0 with the white chip cursor; QUESTS row 1; GEAR row 2; the
-    // ZENNY row (row 3, y = 11 + 3*9 = 38) shows the live 500 balance.
+    // HUNT is row 0 with the white chip cursor; QUESTS row 1; FORGE row 2; GEAR
+    // row 3. The ZENNY row is retired (ui.5): the live 500 balance is now the
+    // header zenny (`$` + digits at x 108..123 on the title line).
     test.expectEq(countBits(2, 5, 13, 16), 16, F("hub cursor chip 4x4"));
     test.expectEq(countBits(2, 13, 0, 7) > 0 ? 1 : 0, 1, F("hub title ink"));
+    test.expectEq(countBits(108, 123, 0, 7) > 0 ? 1 : 0, 1, F("hub header zenny 500"));
     test.expectEq(countBits(10, 30, 11, 18) > 0 ? 1 : 0, 1, F("HUNT label ink"));
     test.expectEq(countBits(10, 50, 20, 27) > 0 ? 1 : 0, 1, F("QUESTS label ink"));
-    test.expectEq(countBits(10, 40, 29, 36) > 0 ? 1 : 0, 1, F("GEAR label ink"));
-    test.expectEq(countBits(10, 32, 38, 45) > 0 ? 1 : 0, 1, F("ZENNY label ink"));
-    test.expectEq(countBits(108, 123, 38, 45) > 0 ? 1 : 0, 1, F("live zenny 500 drawn"));
+    test.expectEq(countBits(10, 40, 29, 36) > 0 ? 1 : 0, 1, F("FORGE label ink"));
+    test.expectEq(countBits(10, 40, 38, 45) > 0 ? 1 : 0, 1, F("GEAR label ink"));
 
     // hub B is a root no-op: the hub stays up (isp.1 deleted the menu).
     appNavApply(pressB(screen, save), screen, save, g, H_B);
