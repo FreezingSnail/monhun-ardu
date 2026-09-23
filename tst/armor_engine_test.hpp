@@ -95,21 +95,21 @@ void ArmorEngineSuite(TestRunner &runner) {
         saveDefaults(s);
         t.assert(s.equip[armor::SLOT_HEAD], SAVE_EQUIP_NONE, "empty to start");
         // Uncrafted pieces are refused (craft gate at the lowest level).
-        armorEquipToggle(s, armor::ARMOR_HUNTER_HELM, armor::SLOT_HEAD);
+        t.assert(armorEquipToggle(s, armor::ARMOR_HUNTER_HELM, armor::SLOT_HEAD), false, "uncrafted refused (no change)");
         t.assert(s.equip[armor::SLOT_HEAD], SAVE_EQUIP_NONE, "uncrafted refused");
         saveSetCrafted(s, armor::ARMOR_HUNTER_HELM);
         saveSetCrafted(s, armor::ARMOR_BONE_CAP);
-        armorEquipToggle(s, armor::ARMOR_HUNTER_HELM, armor::SLOT_HEAD);
+        t.assert(armorEquipToggle(s, armor::ARMOR_HUNTER_HELM, armor::SLOT_HEAD), true, "helm equip changes the slot");
         t.assert(s.equip[armor::SLOT_HEAD], armor::ARMOR_HUNTER_HELM + 1, "helm equipped");
-        armorEquipToggle(s, armor::ARMOR_HUNTER_HELM, armor::SLOT_HEAD);
+        t.assert(armorEquipToggle(s, armor::ARMOR_HUNTER_HELM, armor::SLOT_HEAD), true, "same piece unequip changes the slot");
         t.assert(s.equip[armor::SLOT_HEAD], SAVE_EQUIP_NONE, "same piece unequips");
-        armorEquipToggle(s, armor::ARMOR_BONE_CAP, armor::SLOT_HEAD);
+        t.assert(armorEquipToggle(s, armor::ARMOR_BONE_CAP, armor::SLOT_HEAD), true, "cap equip changes the slot");
         t.assert(s.equip[armor::SLOT_HEAD], armor::ARMOR_BONE_CAP + 1, "cap equipped");
-        armorEquipToggle(s, armor::ARMOR_HUNTER_HELM, armor::SLOT_HEAD);
+        t.assert(armorEquipToggle(s, armor::ARMOR_HUNTER_HELM, armor::SLOT_HEAD), true, "helm replaces cap");
         t.assert(s.equip[armor::SLOT_HEAD], armor::ARMOR_HUNTER_HELM + 1, "helm replaces cap");
-        // Out-of-range ids are inert.
-        armorEquipToggle(s, armor::PIECE_COUNT, armor::SLOT_HEAD);
-        armorEquipToggle(s, armor::ARMOR_HUNTER_MAIL, 9);
+        // Out-of-range ids are inert and report no change.
+        t.assert(armorEquipToggle(s, armor::PIECE_COUNT, armor::SLOT_HEAD), false, "piece past the table no change");
+        t.assert(armorEquipToggle(s, armor::ARMOR_HUNTER_MAIL, 9), false, "slot past the array no change");
         t.assert(s.equip[armor::SLOT_HEAD], armor::ARMOR_HUNTER_HELM + 1, "bad toggle leaves slot");
         t.assert(s.equip[armor::SLOT_BODY], SAVE_EQUIP_NONE, "bad slot untouched");
         suite.addTest(t);

@@ -233,6 +233,16 @@ is crafted (debits the bill + zenny, sets the crafted bit, auto-equips); a
 crafted piece toggles equip/unequip. The whole action is one `screenApplyAction`
 return, so the sketch commits the EEPROM save once (`saveStore`).
 
+**Gear equip UI (monhun-ardu-mn6.1).** The hub GEAR screen owns equip/unequip
+once a piece exists: `data/screens/gear.json` appends one `COND_CRAFTED` /
+`ACTION_EQUIP_ARMOR` row per piece after the weapon rows (same
+`(slot << 5) | pieceIdx` packing). `COND_CRAFTED` reads the crafted bit, so an
+uncrafted row is drawn but dead; `ACTION_EQUIP_ARMOR` calls
+`armorEquipToggle()`, which re-checks the crafted bit + range and returns true
+only when the slot actually changed — a dead row or same-piece re-press writes
+nothing. SMITH therefore owns craft (debit + set bit) and GEAR owns the equipped
+set, both persisting in the same save block.
+
 **Render (placeholder).** Per-piece armor sheets are not in the equip blob yet
 (the 05x art epic owns them), so the render maps the equipped head piece to the
 closest existing layered head sheet (`src/render.hpp armorHeadPart`):

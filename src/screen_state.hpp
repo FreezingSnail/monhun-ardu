@@ -27,6 +27,12 @@
 // inventory lacks is dead too, and the cart-side row scan (src/screens.hpp
 // screenCursorRecipeOk) reads the packed UpgradeDef. The host parity of that
 // scan is screenRecipeOk() below, so both paths share the same rule.
+//
+// Gear rows (bead monhun-ardu-mn6.1): the GEAR screen equips crafted armor
+// alongside the weapon rows. COND_CRAFTED is live only when the row's piece
+// has its crafted bit (COND_ARMOR already decoded the same (slot << 5) | piece
+// packing), and ACTION_EQUIP_ARMOR calls armorEquipToggle -- true only when the
+// slot changed, so a dead/uncrafted row and a same-piece re-press write nothing.
 
 #include <stdint.h>
 #include "core/input.hpp"
@@ -189,6 +195,13 @@ inline bool screenCondOk(const SaveBlock &save, const ScreenRow &row) {
             return true;
         return save.zenny >= row.cost && screenRecipeOk(save, row.recipe);
     }
+    case screens::COND_CRAFTED: {
+        // gs.1: the GEAR armor row is live once the piece is crafted. `param`
+        // packs (slot << 5) | pieceIdx like ACTION_EQUIP_ARMOR, so decode the
+        // piece with screenArmorPiece; an out-of-range id reads dead.
+        const uint8_t piece = screenArmorPiece(row.param);
+        return piece < armor::PIECE_COUNT && saveCrafted(save, piece);
+    }
     default:
         return true;
     }
@@ -298,6 +311,7 @@ inline bool screenApplyAction(SaveBlock &save, const ScreenRow &row) {
         const uint8_t slot = screenArmorSlot(row.param);
         if (piece >= armor::PIECE_COUNT || slot >= SAVE_EQUIP_COUNT)
             return false;
+        bool changed = false;
         if (!saveCrafted(save, piece)) {
             if (save.zenny < row.cost)
                 return false;
@@ -306,9 +320,18 @@ inline bool screenApplyAction(SaveBlock &save, const ScreenRow &row) {
             screenRecipeDebit(save, row.recipe);
             save.zenny = static_cast<uint16_t>(save.zenny - row.cost);
             saveSetCrafted(save, piece);
+            changed = true;
         }
-        armorEquipToggle(save, piece, slot);
-        return true;
+        if (armorEquipToggle(save, piece, slot))
+            changed = true;
+        return changed;
+    }
+    case screens::ACTION_EQUIP_ARMOR: {
+        // gs.1: the GEAR screen toggles a crafted piece into its slot. `param`
+        // packs (slot << 5) | pieceIdx; armorEquipToggle re-checks the crafted
+        // bit and range, so an uncrafted / stale row is inert and the EEPROM
+        // write only happens on a real slot change.
+        return armorEquipToggle(save, screenArmorPiece(row.param), screenArmorSlot(row.param));
     }
     case screens::ACTION_EQUIP_WEAPON: {
         // hml.3: the GEAR screen equips one of the SAVE_TIER_COUNT weapons. A

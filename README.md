@@ -266,11 +266,14 @@ and turns it in for its reward; the smith sells weapon upgrade tiers and armor
 pieces (`COND_ARMOR`/`ACTION_CRAFT_ARMOR` rows: A crafts the piece — debiting
 its materials + zenny and marking it crafted — then toggles equip/unequip; the
 crafted bitmask and the equipped ids persist in the save, and the equipped stats
-cache at hunt start, arm.2). The GEAR screen (`hml.3`) equips one of the three
-weapons (SWORD / FLAIL / GUN) into the save's v4 `weapon` byte; A on an equip row
-writes it (a same-weapon press is a no-op), and the next HUNT starts with it.
-Armor/equipment stays on the smith screen, and an items screen is still a
-follow-up; the equipped weapon has no on-screen mark yet. Every
+cache at hunt start, arm.2). The GEAR screen equips the loadout: the three
+weapons (SWORD / FLAIL / GUN) into the save's v4 `weapon` byte, then the five
+crafted armor pieces (`COND_CRAFTED`/`ACTION_EQUIP_ARMOR` rows, gs.1). A on an
+equip row toggles it (a same-weapon / same-piece press is a no-op) and the next
+HUNT starts with it; an armor row is dead until the piece is crafted on SMITH,
+so crafting and equipping split cleanly between the two screens. An items
+screen is still a follow-up; the equipped weapon/armor has no on-screen mark
+yet. Every
 state-changing action commits the 28-byte EEPROM save block once (write-on-
 change + verify read). A save with an active quest/tier applies it at hunt start
 and the hunt-end quest-progress commit still runs exactly once per hunt. Camp

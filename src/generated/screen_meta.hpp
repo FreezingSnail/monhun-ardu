@@ -13,12 +13,12 @@ namespace screens {
 constexpr uint16_t MAGIC = 0x5343;
 constexpr uint8_t VERSION = 1;
 constexpr uint8_t FLAGS = 0x00;
-constexpr uint16_t SIZE = 489;
+constexpr uint16_t SIZE = 574;
 constexpr uint8_t HEADER_SIZE = 8;
 constexpr uint8_t DEF_OFF_OFF = 8;
 constexpr uint16_t ROWS_OFF = 54;
 constexpr uint8_t SCREEN_COUNT = 4;
-constexpr uint16_t ROW_COUNT = 29;
+constexpr uint16_t ROW_COUNT = 34;
 constexpr uint8_t TIER_COUNT = 3;   // must match core/save.hpp SAVE_TIER_COUNT
 
 // Row action ids; src/screen_state.hpp switches on these.
@@ -33,6 +33,7 @@ constexpr uint8_t ACTION_OPEN_SMITH = 7;
 constexpr uint8_t ACTION_CRAFT_ARMOR = 8;
 constexpr uint8_t ACTION_EQUIP_WEAPON = 9;
 constexpr uint8_t ACTION_OPEN_GEAR = 10;
+constexpr uint8_t ACTION_EQUIP_ARMOR = 11;
 
 // Row condition ids; 0 = always, else the save query in screenCondOk().
 constexpr uint8_t COND_ALWAYS = 0;
@@ -42,6 +43,7 @@ constexpr uint8_t COND_TIER = 3;
 constexpr uint8_t COND_QUEST = 4;
 constexpr uint8_t COND_UPGRADE = 5;
 constexpr uint8_t COND_ARMOR = 6;
+constexpr uint8_t COND_CRAFTED = 7;
 
 // ScreenRow flags.
 constexpr uint8_t ROW_F_HIDE_LOCKED = 0x01;
@@ -65,7 +67,7 @@ constexpr uint8_t SCREEN_SMITH_TITLE_LEN = 5;
 constexpr uint16_t SCREEN_SMITH_FIRST_ROW = 260;
 constexpr uint8_t SCREEN_GEAR = 3;
 constexpr uint16_t SCREEN_GEAR_OFF = 45;
-constexpr uint8_t SCREEN_GEAR_ROWS = 4;
+constexpr uint8_t SCREEN_GEAR_ROWS = 9;
 constexpr uint8_t SCREEN_GEAR_TITLE_LEN = 4;
 constexpr uint16_t SCREEN_GEAR_FIRST_ROW = 443;
 

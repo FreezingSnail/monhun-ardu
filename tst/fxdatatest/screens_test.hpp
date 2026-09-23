@@ -272,20 +272,33 @@ inline void test_screens(FxTest &test) {
     test.expectEq(countBits(10, 60, 11, 18) > 0 ? 1 : 0, 1, F("quests row0 label ink"));
 
     // ------------------------------------------------------- gear screen
-    test.expectEq(screenRowCount(screens::SCREEN_GEAR), 4, F("gear row count"));
-    ScreenRow g0, g1, g2, g3;
+    test.expectEq(screenRowCount(screens::SCREEN_GEAR), 9, F("gear row count"));
+    ScreenRow g0, g1, g2, g3, g4, g5, g6, g7, g8;
     screenReadRow(screenRowOffsetAt(screens::SCREEN_GEAR, 0), g0);
     screenReadRow(screenRowOffsetAt(screens::SCREEN_GEAR, 1), g1);
     screenReadRow(screenRowOffsetAt(screens::SCREEN_GEAR, 2), g2);
     screenReadRow(screenRowOffsetAt(screens::SCREEN_GEAR, 3), g3);
+    screenReadRow(screenRowOffsetAt(screens::SCREEN_GEAR, 4), g4);
+    screenReadRow(screenRowOffsetAt(screens::SCREEN_GEAR, 5), g5);
+    screenReadRow(screenRowOffsetAt(screens::SCREEN_GEAR, 6), g6);
+    screenReadRow(screenRowOffsetAt(screens::SCREEN_GEAR, 7), g7);
+    screenReadRow(screenRowOffsetAt(screens::SCREEN_GEAR, 8), g8);
     test.expectEq(g0.action, screens::ACTION_EQUIP_WEAPON, F("gear row0 action equip"));
     test.expectEq(g0.param, W_SWORD, F("gear row0 param sword"));
     test.expectEq(g1.action, screens::ACTION_EQUIP_WEAPON, F("gear row1 action equip"));
     test.expectEq(g1.param, W_FLAIL, F("gear row1 param flail"));
     test.expectEq(g2.action, screens::ACTION_EQUIP_WEAPON, F("gear row2 action equip"));
     test.expectEq(g2.param, W_GUN, F("gear row2 param gun"));
-    test.expectEq(g3.action, screens::ACTION_LEAVE, F("gear leave row"));
-    test.expectEq(appScreenAccept(screens::SCREEN_GEAR, g3), APP_NAV_HUB, F("gear leave backs to hub"));
+    // Armor rows pack (slot << 5) | pieceIdx like the smith rows (gs.1).
+    test.expectEq(g3.action, screens::ACTION_EQUIP_ARMOR, F("gear row3 action equip armor"));
+    test.expectEq(g3.cond, screens::COND_CRAFTED, F("gear row3 cond crafted"));
+    test.expectEq(g3.param, armor::ARMOR_HUNTER_HELM, F("gear row3 param helm"));
+    test.expectEq(g4.param, armor::ARMOR_BONE_CAP, F("gear row4 param cap"));
+    test.expectEq(g5.param, static_cast<uint8_t>((armor::SLOT_BODY << 5) | armor::ARMOR_HUNTER_MAIL), F("gear row5 param mail"));
+    test.expectEq(g6.param, static_cast<uint8_t>((armor::SLOT_BODY << 5) | armor::ARMOR_BONE_MAIL), F("gear row6 param bone mail"));
+    test.expectEq(g7.param, static_cast<uint8_t>((armor::SLOT_CHARM << 5) | armor::ARMOR_EVADE_CHARM), F("gear row7 param charm"));
+    test.expectEq(g8.action, screens::ACTION_LEAVE, F("gear leave row"));
+    test.expectEq(appScreenAccept(screens::SCREEN_GEAR, g8), APP_NAV_HUB, F("gear leave backs to hub"));
     test.expectEq(appScreenAccept(screens::SCREEN_GEAR, g1), APP_NAV_NONE, F("gear equip is a save action"));
     // The cart's equip row writes the v4 weapon byte.
     SaveBlock gear;
@@ -293,6 +306,22 @@ inline void test_screens(FxTest &test) {
     test.expectEq(screenApplyAction(gear, g2), 1, F("cart gear row equips"));
     test.expectEq(gear.weapon, W_GUN, F("cart gear row wrote the weapon byte"));
     test.expectEq(screenApplyAction(gear, g2), 0, F("re-equip same weapon is a no-op"));
+    // E2E armor equip off the cart: uncrafted is dead + inert, crafted toggles
+    // the piece's slot and the change persists.
+    test.expectEq(screenCondOk(gear, g3), 0, F("uncrafted helm row dead"));
+    test.expectEq(screenApplyAction(gear, g3), 0, F("uncrafted equip no-op"));
+    test.expectEq(gear.equip[armor::SLOT_HEAD], SAVE_EQUIP_NONE, F("head slot empty"));
+    saveSetCrafted(gear, armor::ARMOR_HUNTER_HELM);
+    test.expectEq(screenCondOk(gear, g3), 1, F("crafted helm row live"));
+    test.expectEq(screenApplyAction(gear, g3), 1, F("crafted equip applies"));
+    test.expectEq(gear.equip[armor::SLOT_HEAD], armor::ARMOR_HUNTER_HELM + 1, F("helm equipped"));
+    saveStore(gear, REAL_BACKEND);
+    SaveBlock geararmor;
+    test.expectEq(saveLoad(geararmor, REAL_BACKEND), 1, F("armor save reloads"));
+    test.expectEq(geararmor.equip[armor::SLOT_HEAD], armor::ARMOR_HUNTER_HELM + 1, F("helm equip persisted"));
+    test.expectEq(saveCrafted(geararmor, armor::ARMOR_HUNTER_HELM), 1, F("crafted bit persisted"));
+    test.expectEq(screenApplyAction(gear, g3), 1, F("second A unequips"));
+    test.expectEq(gear.equip[armor::SLOT_HEAD], SAVE_EQUIP_NONE, F("helm unequipped"));
 
     // Pixel: the gear page draws through the same generic renderer.
     clearFb();

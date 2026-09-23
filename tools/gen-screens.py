@@ -54,10 +54,13 @@ LABEL_MAX = 16
 SCREEN_MAX = 255
 TIER_COUNT = 3   # N_WEAPONS (W_SWORD/W_FLAIL/W_GUN); must match core/save.hpp
 
+# Append-only: new names go on the end so the emitted ACTION_*/COND_* ids keep
+# matching the historical records (gs.1 added equip_armor/crafted).
 ACTION_NAMES = ("leave", "buy_upgrade", "take_quest", "turn_in_quest",
                 "none", "hunt", "open_quests", "open_smith", "craft_armor",
-                "equip_weapon", "open_gear")
-COND_NAMES = ("always", "zenny", "flag", "tier", "quest", "upgrade", "armor")
+                "equip_weapon", "open_gear", "equip_armor")
+COND_NAMES = ("always", "zenny", "flag", "tier", "quest", "upgrade", "armor",
+              "crafted")
 # hide_locked: reserved. zenny: draw the live save.zenny balance in the cost
 # column instead of the row cost (dynamic value token, qs.4 hub display).
 ROW_FLAGS = {"hide_locked": 0x01, "zenny": 0x02}
@@ -183,6 +186,15 @@ def normalize_row(errors, ctx, obj):
         slot = (param >> 5) & 3
         if action != ACTION_NAMES.index("craft_armor"):
             errors.add(ctx, "condition 'armor' needs a craft_armor action")
+        if slot >= 3:
+            errors.add(ctx, "param: armor slot must be 0..2, got %d" % slot)
+    if cond == COND_NAMES.index("crafted") and param is not None:
+        # param packs (slot << 5) | pieceIdx (see screen_state.hpp COND_CRAFTED
+        # / ACTION_EQUIP_ARMOR): the GEAR row is live once the piece's crafted
+        # bit is set, and A toggles it into that slot.
+        slot = (param >> 5) & 3
+        if action != ACTION_NAMES.index("equip_armor"):
+            errors.add(ctx, "condition 'crafted' needs an equip_armor action")
         if slot >= 3:
             errors.add(ctx, "param: armor slot must be 0..2, got %d" % slot)
     if cond == COND_NAMES.index("upgrade") and param is not None:

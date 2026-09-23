@@ -214,14 +214,19 @@ inline void armorAggregate(const SaveBlock &save, const ArmorPiece *pieces, uint
 // Toggle a crafted piece into/out of its slot. `piece` is the armor::ARMOR_<ID>
 // index, `slot` its SLOT_* (the screen row packs both). An uncrafted piece is
 // refused (the craft action sets the bit first); equipping only touches its own
-// slot, so a second head piece replaces the first.
-inline void armorEquipToggle(SaveBlock &save, uint8_t piece, uint8_t slot) {
+// slot, so a second head piece replaces the first. Returns true only when the
+// slot actually changed (gs.1: the GEAR action reports the save delta).
+inline bool armorEquipToggle(SaveBlock &save, uint8_t piece, uint8_t slot) {
     if (piece >= armor::PIECE_COUNT || slot >= SAVE_EQUIP_COUNT)
-        return;
+        return false;
     if (!saveCrafted(save, piece))
-        return;
+        return false;
     const uint8_t id = static_cast<uint8_t>(piece + 1);
-    save.equip[slot] = save.equip[slot] == id ? SAVE_EQUIP_NONE : id;
+    const uint8_t next = save.equip[slot] == id ? SAVE_EQUIP_NONE : id;
+    if (next == save.equip[slot])
+        return false;
+    save.equip[slot] = next;
+    return true;
 }
 
 }   // namespace mh
