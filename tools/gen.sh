@@ -49,6 +49,14 @@ python3 tools/gen-combat.py
 # unused (no render change yet).
 python3 tools/gen-equipment.py
 
+# Weapon forge trees (bead monhun-ardu-5co.4, docs/ui-design.md): compile
+# data/forge/*.json into the packed fxdata/tables/forge.bin blob +
+# src/generated/forge_meta.hpp (node ids/offsets, tree depth/branch, the old
+# smith tier -> spine map). Schema-validated, deterministic. Runs before
+# gen-screens.py (generated FORGE/GEAR weapon rows) and gen-cards.py (weapon
+# DESC/PARTS/STATS pages), which both read the same tree.
+python3 tools/gen-forge.py
+
 # Screen data (bead monhun-ardu-cgz): compile data/screens/*.json into the
 # packed fxdata/tables/screens.bin blob + src/generated/screen_meta.hpp (screen
 # indices/offsets + action/condition enums). Schema-validated, deterministic.

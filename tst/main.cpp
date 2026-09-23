@@ -23,6 +23,7 @@
 #include "armor_effect_test.hpp"
 #include "carve_test.hpp"
 #include "card_state_test.hpp"
+#include "forge_state_test.hpp"
 
 int main() {
     TestRunner runner;
@@ -49,6 +50,7 @@ int main() {
     ArmorEffectSuite(runner);
     CarveSuite(runner);
     cardstatetest::CardStateSuite(runner);
+    ForgeSuite(runner);
     runner.printSummary();
     return runner.fail() ? 1 : 0;
 }

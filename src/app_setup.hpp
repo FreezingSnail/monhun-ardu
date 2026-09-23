@@ -9,7 +9,7 @@
 
 #include "core/world.hpp"
 #include "quest.hpp"
-#include "smith.hpp"
+#include "forge.hpp"   // forgeEquippedClass/Mul: equipped node -> class + multipliers (ui.4)
 #include "armor.hpp"   // armorApplyToGame: cache equipped stats at hunt start (arm.2)
 
 namespace mh {
@@ -29,7 +29,7 @@ static void huntStart(Game &g, const SaveBlock &save) {
         if (def.goalKind == quests::GOAL_KILL)
             kind = static_cast<int8_t>(def.target);
     }
-    newGame(g, static_cast<int8_t>(save.weapon), MODE_HUNT, kind);
+    newGame(g, static_cast<int8_t>(forgeEquippedClass(save)), MODE_HUNT, kind);
     loadRoom(g, zone::ROOM_CAMP, zone::SPAWN_CAMP_ENTRY);
 }
 
@@ -49,14 +49,10 @@ static void questApplyToGame(Game &g, const SaveBlock &save) {
     g.questProgress = save.progress;
 }
 
+// ui.4 (5co.4): the equipped forge node's dmgMul/spdMul replace the retired
+// smith tier table. SAVE_NODE_NONE (or an out-of-range id) leaves 100/100.
 static void upgradeApplyToGame(Game &g, const SaveBlock &save) {
-    g.dmgMul = UPGRADE_MUL_BASE;
-    g.spdMul = UPGRADE_MUL_BASE;
-    const int8_t weapon = g.weapon;
-    if (weapon < 0 || weapon >= smith::WEAPON_COUNT)
-        return;
-    const uint8_t tier = (weapon < SAVE_TIER_COUNT) ? save.tier[weapon] : 0;
-    smithResolve(static_cast<uint8_t>(weapon), tier, g.dmgMul, g.spdMul);
+    forgeEquippedMul(save, g.dmgMul, g.spdMul);
 }
 
 // Restore the persisted inventory into the live hunt (prg.5 save v2). newGame

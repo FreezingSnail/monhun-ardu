@@ -58,6 +58,7 @@ void AppSuite(TestRunner &runner) {
         t.assert(appScreenAccept(screens::SCREEN_HUB, arow(screens::ACTION_HUNT)), APP_NAV_HUNT, "HUNT row");
         t.assert(appScreenAccept(screens::SCREEN_HUB, arow(screens::ACTION_OPEN_QUESTS)), APP_NAV_QUESTS, "QUESTS row");
         t.assert(appScreenAccept(screens::SCREEN_HUB, arow(screens::ACTION_OPEN_GEAR)), APP_NAV_GEAR, "GEAR row");
+        t.assert(appScreenAccept(screens::SCREEN_HUB, arow(screens::ACTION_OPEN_FORGE)), APP_NAV_FORGE, "FORGE row");
         t.assert(appScreenAccept(screens::SCREEN_HUB, arow(screens::ACTION_LEAVE)), APP_NAV_NONE, "LEAVE row is root no-op");
         t.assert(appScreenAccept(screens::SCREEN_HUB, arow(screens::ACTION_NONE, screens::COND_ALWAYS)), APP_NAV_NONE, "status row");
         t.assert(appScreenAccept(screens::SCREEN_HUB, arow(screens::ACTION_TAKE_QUEST, screens::COND_QUEST)), APP_NAV_NONE, "quest row not a hub dest");
@@ -68,8 +69,10 @@ void AppSuite(TestRunner &runner) {
         Test t("sub-screen A: LEAVE returns to the hub, save actions stay with the caller");
         t.assert(appScreenAccept(screens::SCREEN_QUESTS, arow(screens::ACTION_LEAVE)), APP_NAV_HUB, "quests LEAVE");
         t.assert(appScreenAccept(screens::SCREEN_GEAR, arow(screens::ACTION_LEAVE)), APP_NAV_HUB, "gear LEAVE");
+        t.assert(appScreenAccept(screens::SCREEN_FORGE, arow(screens::ACTION_LEAVE)), APP_NAV_HUB, "forge LEAVE");
         t.assert(appScreenAccept(screens::SCREEN_QUESTS, arow(screens::ACTION_TAKE_QUEST, screens::COND_QUEST)), APP_NAV_NONE, "take is a save action");
-        t.assert(appScreenAccept(screens::SCREEN_GEAR, arow(screens::ACTION_EQUIP_WEAPON, screens::COND_ALWAYS, 1)), APP_NAV_NONE, "equip is a save action");
+        t.assert(appScreenAccept(screens::SCREEN_GEAR, arow(screens::ACTION_EQUIP_WEAPON, screens::COND_ALWAYS, 1)), APP_NAV_NONE, "equip is a card action");
+        t.assert(appScreenAccept(screens::SCREEN_FORGE, arow(screens::ACTION_FORGE_NODE, screens::COND_ALWAYS, 1)), APP_NAV_NONE, "forge is a card action");
         suite.addTest(t);
     }
 
@@ -86,6 +89,10 @@ void AppSuite(TestRunner &runner) {
         t.assert(appScreenBack(screens::SCREEN_GEAR), APP_NAV_HUB, "gear B backs to the hub");
         appNavApply(appScreenBack(screen.screen), screen, save, g, AT_B);
         t.assert(screen.screen, screens::SCREEN_HUB, "back on the hub");
+        // ui.4: the hub FORGE row opens the FORGE screen.
+        t.assert(appNavApply(APP_NAV_FORGE, screen, save, g, AT_A), false, "forge nav is not a hunt start");
+        t.assert(screen.screen, screens::SCREEN_FORGE, "on the forge screen");
+        t.assert(screen.rowCount, screens::SCREEN_FORGE_ROWS, "forge row count from the meta");
         suite.addTest(t);
     }
 
@@ -94,6 +101,7 @@ void AppSuite(TestRunner &runner) {
         t.assert(appScreenBack(screens::SCREEN_HUB), APP_NAV_NONE, "hub B is a root no-op");
         t.assert(appScreenBack(screens::SCREEN_QUESTS), APP_NAV_HUB, "quests backs to hub");
         t.assert(appScreenBack(screens::SCREEN_GEAR), APP_NAV_HUB, "gear backs to hub");
+        t.assert(appScreenBack(screens::SCREEN_FORGE), APP_NAV_HUB, "forge backs to hub");
         suite.addTest(t);
     }
 

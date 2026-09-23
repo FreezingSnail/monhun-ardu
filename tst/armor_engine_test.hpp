@@ -101,7 +101,7 @@ void ArmorEngineSuite(TestRunner &runner) {
 
     // ----------------------------------------------------- crafted bitmask
     {
-        Test t("crafted bits live in the save flags byte and round-trip");
+        Test t("crafted bits live in the v5 crafted bitset and round-trip");
         SaveBlock s;
         saveDefaults(s);
         t.assert(saveCrafted(s, armor::ARMOR_HUNTER_HELM), false, "default not crafted");
@@ -111,9 +111,12 @@ void ArmorEngineSuite(TestRunner &runner) {
         t.assert(saveCrafted(s, armor::ARMOR_EVADE_CHARM), true, "charm crafted");
         t.assert(saveCrafted(s, armor::ARMOR_BONE_CAP), false, "cap not crafted");
         t.assert(s.flags & SAVE_FLAG_SMITHY_SEEN, 0, "crafted bits do not set smithy-seen");
-        // An old record with only the smithy bit migrates with no crafted gear.
-        s.flags = SAVE_FLAG_SMITHY_SEEN;
-        t.assert(saveCrafted(s, armor::ARMOR_HUNTER_HELM), false, "old flags -> none crafted");
+        // The bitset spans its slot cap; the top slot still round-trips, a slot
+        // past the cap is inert (ui.4.1 narrowed it to the armor data).
+        saveSetCrafted(s, SAVE_CRAFTED_SLOTS - 1);
+        t.assert(saveCrafted(s, SAVE_CRAFTED_SLOTS - 1), true, "top slot crafted");
+        saveSetCrafted(s, SAVE_CRAFTED_SLOTS);
+        t.assert(saveCrafted(s, SAVE_CRAFTED_SLOTS), false, "slot past the cap inert");
         // Round-trip through the wire record.
         SaveBlock enc;
         saveDefaults(enc);

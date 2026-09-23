@@ -17,16 +17,17 @@ namespace cards {
 constexpr uint16_t MAGIC = 0x4341;
 constexpr uint8_t VERSION = 1;
 constexpr uint8_t FLAGS = 0x00;
-constexpr uint16_t SIZE = 305;
+constexpr uint16_t SIZE = 602;
 constexpr uint8_t HEADER_SIZE = 8;
 constexpr uint8_t ITEM_SIZE = 33;
-constexpr uint8_t ITEM_COUNT = 9;
+constexpr uint8_t ITEM_COUNT = 18;
 constexpr uint8_t PAGE_MAX = 4;
 constexpr uint8_t OVERLAY_MAX = 2;
 
 // Card kinds.
 constexpr uint8_t KIND_ARMOR = 0;
 constexpr uint8_t KIND_QUEST = 1;
+constexpr uint8_t KIND_WEAPON = 2;
 
 // Page ids (armor DESC..SKILL, quest GOAL..REWARD; shared mask space).
 constexpr uint8_t PAGE_DESC = 0;
@@ -66,8 +67,10 @@ constexpr uint8_t ITEM_CRAFT_MAT_OFF = 29;   // CRAFT_MAT_SLOTS x 2 B
 constexpr uint8_t ITEM_CRAFT_MAT_STRIDE = 2;
 
 // Item indices + record offsets (armor in data/armor.json order, then
-// quests sorted by (id, name) -- the generated quest_meta order).
-constexpr uint8_t QUEST_BASE = 5;   // first quest card index
+// quests sorted by (id, name) -- the generated quest_meta order -- then
+// the forge-tree weapon nodes in data order).
+constexpr uint8_t QUEST_BASE = 5;    // first quest card index
+constexpr uint8_t WEAPON_BASE = 9;   // first weapon card index
 constexpr uint8_t CARD_ARMOR_HUNTER_HELM = 0;
 constexpr uint16_t CARD_ARMOR_HUNTER_HELM_OFF = 8;
 constexpr uint8_t CARD_ARMOR_BONE_CAP = 1;
@@ -86,6 +89,24 @@ constexpr uint8_t CARD_QUEST_GATHER_ORE = 7;
 constexpr uint16_t CARD_QUEST_GATHER_ORE_OFF = 239;
 constexpr uint8_t CARD_QUEST_CRUSH_HEAVY = 8;
 constexpr uint16_t CARD_QUEST_CRUSH_HEAVY_OFF = 272;
+constexpr uint8_t CARD_WEAPON_SWORD_BASE = 9;
+constexpr uint16_t CARD_WEAPON_SWORD_BASE_OFF = 305;
+constexpr uint8_t CARD_WEAPON_SWORD_T1 = 10;
+constexpr uint16_t CARD_WEAPON_SWORD_T1_OFF = 338;
+constexpr uint8_t CARD_WEAPON_SWORD_T2 = 11;
+constexpr uint16_t CARD_WEAPON_SWORD_T2_OFF = 371;
+constexpr uint8_t CARD_WEAPON_FLAIL_BASE = 12;
+constexpr uint16_t CARD_WEAPON_FLAIL_BASE_OFF = 404;
+constexpr uint8_t CARD_WEAPON_FLAIL_T1 = 13;
+constexpr uint16_t CARD_WEAPON_FLAIL_T1_OFF = 437;
+constexpr uint8_t CARD_WEAPON_FLAIL_T2 = 14;
+constexpr uint16_t CARD_WEAPON_FLAIL_T2_OFF = 470;
+constexpr uint8_t CARD_WEAPON_GUN_BASE = 15;
+constexpr uint16_t CARD_WEAPON_GUN_BASE_OFF = 503;
+constexpr uint8_t CARD_WEAPON_GUN_T1 = 16;
+constexpr uint16_t CARD_WEAPON_GUN_T1_OFF = 536;
+constexpr uint8_t CARD_WEAPON_GUN_T2 = 17;
+constexpr uint16_t CARD_WEAPON_GUN_T2_OFF = 569;
 
 // Page image symbols live in fxdata/fxdata.h (mh_card_<kind>_<name>_<page>);
 // the runtime seeks them from the record's baked u24 offsets, so no

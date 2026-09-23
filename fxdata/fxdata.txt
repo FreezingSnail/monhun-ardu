@@ -87,6 +87,15 @@ raw_t mhArmor = "tables/armor.bin"
 // so adding it only shifts the sprite sections that follow.
 raw_t mhCards = "tables/cards.bin"
 
+// Weapon forge trees (bead monhun-ardu-5co.4): data/forge/*.json compiled by
+// tools/gen-forge.py into the 8 B header + 17 B node records from the
+// forge_meta.hpp ABI (little-endian, no padding). Offsets land in
+// forge_meta.hpp; read on device through fxmem.hpp by src/forge.hpp when
+// resolving the equipped node's damage/speed multipliers, the FORGE/GEAR row
+// tokens and the card forge/upgrade bills. Packed after mhCards so adding it
+// only shifts the sprite sections that follow.
+raw_t mhForge = "tables/forge.bin"
+
 // Sprite sections: blocks/fonts/equip sheets, addressed with 24-bit
 // SpritesU seeks so they may grow past the tables' 64 KiB window. Equipment
 // sheets stay after the base sheets; room layer arrays (maps/Sprites.txt, fie.5)

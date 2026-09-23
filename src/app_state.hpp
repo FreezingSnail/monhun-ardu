@@ -35,8 +35,9 @@ enum AppNav : int8_t {
     APP_NAV_NONE = 0,
     APP_NAV_HUB,
     APP_NAV_QUESTS,
-    APP_NAV_GEAR,   // hml.3: hub GEAR row (weapon select + armor craft/equip)
-    APP_NAV_HUNT    // the hub HUNT row: the caller starts the hunt (huntStart)
+    APP_NAV_GEAR,    // hml.3: hub GEAR row (weapon select + armor craft/equip)
+    APP_NAV_FORGE,   // ui.4: hub FORGE row (weapon tree forge/upgrade)
+    APP_NAV_HUNT     // the hub HUNT row: the caller starts the hunt (huntStart)
 };
 
 // B: hub is the root (no back destination); quests/gear -> hub.
@@ -56,6 +57,8 @@ inline AppNav appScreenAccept(uint8_t screen, const ScreenRow &row) {
             return APP_NAV_QUESTS;
         case screens::ACTION_OPEN_GEAR:
             return APP_NAV_GEAR;
+        case screens::ACTION_OPEN_FORGE:
+            return APP_NAV_FORGE;
         case screens::ACTION_LEAVE:
             return APP_NAV_NONE;   // hub is the root: no leave destination
         default:
@@ -130,6 +133,11 @@ MH_NOINLINE inline bool appNavApply(AppNav nav, ScreenState &screen, const SaveB
         return false;
     case APP_NAV_GEAR:
         screenReset(screen, screens::SCREEN_GEAR, screens::SCREEN_GEAR_ROWS);
+        screen.prevA = in.a;
+        screen.prevB = in.b;
+        return false;
+    case APP_NAV_FORGE:
+        screenReset(screen, screens::SCREEN_FORGE, screens::SCREEN_FORGE_ROWS);
         screen.prevA = in.a;
         screen.prevB = in.b;
         return false;

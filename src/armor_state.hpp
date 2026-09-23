@@ -15,10 +15,10 @@
 // 1 (S active) or 2 (M, the clamp). arm.3 applies
 // min(points, maxPoints) * perPoint once the tier is nonzero.
 //
-// Crafted state reuses the save flags byte (core/save.hpp saveCrafted/
-// saveSetCrafted), so no save layout/version change: an older record loads with
-// no crafted bits. armorEquipToggle() refuses an uncrafted piece, so the equip
-// slots can only ever hold crafted ids; aggregation trusts the slots.
+// Crafted state lives in the save's v5 crafted bitset (core/save.hpp
+// saveCrafted/saveSetCrafted): an older record migrates its flags-byte bits into
+// the bitset. armorEquipToggle() refuses an uncrafted piece, so the equip slots
+// can only ever hold crafted ids; aggregation trusts the slots.
 
 #include <stdint.h>
 #include "core/save.hpp"
@@ -35,7 +35,7 @@ constexpr uint8_t ARMOR_SKILL_SLOTS = 2;    // packed skill slots per piece
 // per-point curve, and it survives a hand-built skill table).
 constexpr uint8_t ARMOR_EVADE_IT_CAP = 4;
 
-static_assert(armor::PIECE_COUNT <= SAVE_CRAFTED_MAX, "crafted bitmask holds every piece");
+static_assert(armor::PIECE_COUNT <= SAVE_CRAFTED_SLOTS, "crafted bitset holds every piece");
 static_assert(armor::SKILL_SLOTS == ARMOR_SKILL_SLOTS, "skill slot count ABI drift");
 
 // Plain view of one armor piece, matching the packed mhArmor record fields the

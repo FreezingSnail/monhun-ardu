@@ -1,0 +1,69 @@
+{
+  "class": "sword",
+  "header": "-- SWD --",
+  "nodes": [
+    {
+      "id": "sword_base",
+      "label": "SWD T1",
+      "parent": null,
+      "direct": true,
+      "cost": 0,
+      "mats": [],
+      "directCost": 0,
+      "directMats": [],
+      "dmgMul": 100,
+      "spdMul": 100,
+      "desc": [
+        "A PLAIN IRON BLADE.",
+        "BALANCED AND QUICK."
+      ],
+      "sheet": "mh_weapon_sword"
+    },
+    {
+      "id": "sword_t1",
+      "label": "SWD T2",
+      "parent": "sword_base",
+      "direct": true,
+      "cost": 100,
+      "mats": [
+        { "item": "ore", "count": 2 },
+        { "item": "scale", "count": 1 }
+      ],
+      "directCost": 180,
+      "directMats": [
+        { "item": "ore", "count": 3 },
+        { "item": "scale", "count": 2 }
+      ],
+      "dmgMul": 110,
+      "spdMul": 105,
+      "desc": [
+        "SHARPENED EDGE.",
+        "Faster draws."
+      ],
+      "sheet": "mh_weapon_sword"
+    },
+    {
+      "id": "sword_t2",
+      "label": "SWD T3",
+      "parent": "sword_t1",
+      "direct": true,
+      "cost": 250,
+      "mats": [
+        { "item": "ore", "count": 3 },
+        { "item": "fang", "count": 1 }
+      ],
+      "directCost": 400,
+      "directMats": [
+        { "item": "ore", "count": 5 },
+        { "item": "fang", "count": 2 }
+      ],
+      "dmgMul": 125,
+      "spdMul": 115,
+      "desc": [
+        "MASTER FORGED SWORD.",
+        "Heavy, swift strikes."
+      ],
+      "sheet": "mh_weapon_sword"
+    }
+  ]
+}

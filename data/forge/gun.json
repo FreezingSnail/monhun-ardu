@@ -1,0 +1,69 @@
+{
+  "class": "gun",
+  "header": "-- GUN --",
+  "nodes": [
+    {
+      "id": "gun_base",
+      "label": "GN T1",
+      "parent": null,
+      "direct": true,
+      "cost": 0,
+      "mats": [],
+      "directCost": 0,
+      "directMats": [],
+      "dmgMul": 100,
+      "spdMul": 100,
+      "desc": [
+        "A BASIC POWDER GUN.",
+        "RAPID SHOTS."
+      ],
+      "sheet": "mh_weapon_gun"
+    },
+    {
+      "id": "gun_t1",
+      "label": "GN T2",
+      "parent": "gun_base",
+      "direct": true,
+      "cost": 90,
+      "mats": [
+        { "item": "bug", "count": 2 },
+        { "item": "scale", "count": 1 }
+      ],
+      "directCost": 160,
+      "directMats": [
+        { "item": "bug", "count": 3 },
+        { "item": "scale", "count": 2 }
+      ],
+      "dmgMul": 108,
+      "spdMul": 100,
+      "desc": [
+        "REINFORCED BARREL.",
+        "Stronger shots."
+      ],
+      "sheet": "mh_weapon_gun"
+    },
+    {
+      "id": "gun_t2",
+      "label": "GN T3",
+      "parent": "gun_t1",
+      "direct": true,
+      "cost": 220,
+      "mats": [
+        { "item": "bug", "count": 3 },
+        { "item": "tail", "count": 1 }
+      ],
+      "directCost": 360,
+      "directMats": [
+        { "item": "bug", "count": 5 },
+        { "item": "tail", "count": 2 }
+      ],
+      "dmgMul": 120,
+      "spdMul": 105,
+      "desc": [
+        "LONG RANGE CANNON.",
+        "Piercing rounds."
+      ],
+      "sheet": "mh_weapon_gun"
+    }
+  ]
+}

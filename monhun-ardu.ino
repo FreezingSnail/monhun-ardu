@@ -23,7 +23,6 @@
 #include "src/app_state.hpp"   // boot-flow routing: hub <-> screens <-> hunt (isp.1)
 #include "src/app_setup.hpp"   // cart-backed hunt arming + huntStart (qs.4/isp.1)
 #include "src/quest.hpp"       // quest defs on cart + TAKE/TURN_IN state (qs.2)
-#include "src/smith.hpp"       // smith upgrade defs on cart + tier multipliers (qs.3)
 
 decltype(arduboy) arduboy;
 
@@ -146,13 +145,14 @@ void run() {
             return;
         }
         if (dev == mh::DETAIL_ACTION) {
-            // Armor cards craft/equip from the baked bill (ui.3.1, 5co.6);
-            // quest cards take/turn in through the row action.
-            const bool changed =
-                s_card.kind == cards::KIND_ARMOR ? mh::cardArmorApply(s_save, s_card, s_detailRow) : (mh::screenCondOk(s_save, s_detailRow) && mh::screenApplyAction(s_save, s_detailRow));
+            // One card action switch (ui.4.1): armor crafts/equips from the
+            // baked bill (5co.6); weapon forge/upgrade or equip/unequip from the
+            // cached node (5co.4); quest cards take/turn in through the row.
+            const bool changed = mh::cardApply(s_save, s_card, s_detail.node, s_detailRow);
             if (changed)
                 mh::saveStore(s_save, SAVE_BACKEND);
             mh::cardLoad(s_detail, s_card, s_detail.index, s_save, true);
+            mh::cardSetHint(s_detail, s_save, s_card, s_detailRow);
             if (s_screen.screen == screens::SCREEN_GEAR)
                 refreshGearReadout();
             return;
@@ -178,9 +178,11 @@ void run() {
         // gated -- the card's hint line shows NEED PARTS / NEED ZENNY). Every
         // other row keeps the direct-action path below.
 #ifndef MH_CARD_OFF
-        if (mh::cardRowOpens(row)) {
-            mh::cardLoad(s_detail, s_card, mh::cardRowIndex(row), s_save, false);
+        const uint8_t cardIndex = mh::cardRowIndex(row);
+        if (cardIndex != mh::CARD_NONE) {
+            mh::cardLoad(s_detail, s_card, cardIndex, s_save, false);
             s_detailRow = row;
+            mh::cardSetHint(s_detail, s_save, s_card, s_detailRow);
             return;
         }
 #endif
@@ -244,7 +246,7 @@ void run() {
 void render() {
 #ifndef MH_CARD_OFF
     if (s_detail.active) {
-        mh::drawCard(s_detail, s_card, s_save, s_detailRow);
+        mh::drawCard(s_detail, s_card, s_save);
         return;
     }
 #endif

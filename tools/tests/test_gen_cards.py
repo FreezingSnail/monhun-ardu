@@ -88,9 +88,29 @@ QUESTS = {
                    "rewardZenny": 0, "unlockFlag": 0},
 }
 
-# The card table order: armor in data/armor.json order, then quests by (id, name).
+# One linear forge class (ui.4, 5co.4): root with no bill (DESC+STATS), child
+# with an upgrade + direct bill (DESC+PARTS+STATS).
+FORGE = {
+    "class": "sword",
+    "header": "-- SWD --",
+    "nodes": [
+        {"id": "sword_base", "label": "SWD T1", "parent": None, "direct": True,
+         "cost": 0, "mats": [], "directCost": 0, "directMats": [],
+         "dmgMul": 100, "spdMul": 100, "desc": ["A PLAIN BLADE."],
+         "sheet": "mh_weapon_sword"},
+        {"id": "sword_t1", "label": "SWD T2", "parent": "sword_base", "direct": True,
+         "cost": 100, "mats": [{"item": "ore", "count": 2}],
+         "directCost": 180, "directMats": [{"item": "ore", "count": 3}],
+         "dmgMul": 110, "spdMul": 105, "desc": ["SHARP EDGE."],
+         "sheet": "mh_weapon_sword"},
+    ],
+}
+
+# The card table order: armor in data/armor.json order, then quests by (id, name),
+# then forge nodes in data order.
 ORDER = ["armor_alpha_helm", "armor_beta_cap", "armor_gamma_mail",
-         "quest_slay_lunge", "quest_gather_ore"]
+         "quest_slay_lunge", "quest_gather_ore",
+         "weapon_sword_base", "weapon_sword_t1"]
 # Pages per item id (from the synthetic data above).
 PAGES = {
     "armor_alpha_helm": [0, 1, 2, 3],
@@ -98,6 +118,8 @@ PAGES = {
     "armor_gamma_mail": [0, 1, 2, 3],
     "quest_slay_lunge": [0, 1, 2],
     "quest_gather_ore": [0, 1],
+    "weapon_sword_base": [0, 2],
+    "weapon_sword_t1": [0, 1, 2],
 }
 MASKS = {
     "armor_alpha_helm": 0x0F,
@@ -105,6 +127,8 @@ MASKS = {
     "armor_gamma_mail": 0x0F,
     "quest_slay_lunge": 0x07,
     "quest_gather_ore": 0x03,
+    "weapon_sword_base": 0x05,
+    "weapon_sword_t1": 0x07,
 }
 
 
@@ -118,10 +142,13 @@ def write_tree(case):
     os.makedirs(quests, exist_ok=True)
     os.makedirs(os.path.join(case, "fxdata"), exist_ok=True)
     os.makedirs(os.path.join(case, "src", "generated"), exist_ok=True)
+    forge = os.path.join(data, "forge")
+    os.makedirs(forge, exist_ok=True)
     docs = {
         os.path.join(data, "items.json"): ITEMS,
         os.path.join(data, "skills.json"): SKILLS,
         os.path.join(data, "armor.json"): ARMOR,
+        os.path.join(forge, "sword.json"): FORGE,
     }
     for quest_name, quest in QUESTS.items():
         docs[os.path.join(quests, quest_name + ".json")] = quest
@@ -232,14 +259,20 @@ class GenCardsTests(unittest.TestCase):
         self.run_ok()
         meta = self.read("src", "generated", "card_meta.hpp")
         self.assertIn("constexpr uint8_t ITEM_SIZE = 33;", meta)
-        self.assertIn("constexpr uint8_t ITEM_COUNT = 5;", meta)
+        self.assertIn("constexpr uint8_t ITEM_COUNT = 7;", meta)
         self.assertIn("constexpr uint8_t QUEST_BASE = 3;", meta)
+        self.assertIn("constexpr uint8_t WEAPON_BASE = 5;", meta)
+        self.assertIn("constexpr uint8_t KIND_WEAPON = 2;", meta)
         self.assertIn("constexpr uint8_t CRAFT_MAT_SLOTS = 2;", meta)
         self.assertIn("constexpr uint8_t ITEM_CRAFT_OFF = 27;", meta)
         self.assertIn("constexpr uint8_t CARD_ARMOR_ALPHA_HELM = 0;", meta)
         self.assertIn("constexpr uint16_t CARD_ARMOR_ALPHA_HELM_OFF = 8;", meta)
         self.assertIn("constexpr uint8_t CARD_QUEST_GATHER_ORE = 4;", meta)
         self.assertIn("constexpr uint16_t CARD_QUEST_GATHER_ORE_OFF = 140;", meta)
+        self.assertIn("constexpr uint8_t CARD_WEAPON_SWORD_BASE = 5;", meta)
+        self.assertIn("constexpr uint16_t CARD_WEAPON_SWORD_BASE_OFF = 173;", meta)
+        self.assertIn("constexpr uint8_t CARD_WEAPON_SWORD_T1 = 6;", meta)
+        self.assertIn("constexpr uint16_t CARD_WEAPON_SWORD_T1_OFF = 206;", meta)
 
     def test_armor_craft_bill_baked_into_record(self):
         self.run_ok()
@@ -256,8 +289,9 @@ class GenCardsTests(unittest.TestCase):
         gamma = records[2]
         self.assertEqual(gamma["craft_cost"], 50)
         self.assertEqual(gamma["craft_mats"], [(0, 0), (0, 0)])
-        # Quest records carry a zero bill.
-        for i in (3, 4):
+        # Quest + weapon records carry a zero bill (the weapon bill lives on the
+        # mhForge node table, not the card).
+        for i in (3, 4, 5, 6):
             self.assertEqual(records[i]["craft_cost"], 0)
             self.assertEqual(records[i]["craft_mats"], [(0, 0), (0, 0)])
 
@@ -274,6 +308,9 @@ class GenCardsTests(unittest.TestCase):
         self.assertFalse(os.path.isfile(self.path("images", "cards", "mh_card_armor_beta_cap_3_128x64.png")))
         # gather_ore has no reward -> no REWARD page.
         self.assertEqual(records[4]["mask"] & (1 << gen_cards.PAGE_REWARD), 0, "gather no REWARD")
+        # weapon root has no bill -> no PARTS page; the child does.
+        self.assertEqual(records[5]["mask"] & (1 << gen_cards.PAGE_PARTS), 0, "weapon root no PARTS")
+        self.assertEqual(records[6]["mask"] & (1 << gen_cards.PAGE_PARTS), 1 << gen_cards.PAGE_PARTS, "weapon child PARTS")
         # Every generated page image exists and is 128x64.
         for name in ORDER:
             for page_id in PAGES[name]:
@@ -293,9 +330,14 @@ class GenCardsTests(unittest.TestCase):
         lunge = records[3]
         self.assertEqual(lunge["overlay_count"], 1)
         self.assertEqual(lunge["overlays"][0][:6], (gen_cards.OVERLAY_PROG, 1, 8, 27, 3, 112))
+        # weapon child PARTS (page 1): one HAVE slot for ore (idx 1) at x=112,y=13.
+        weapon = records[6]
+        self.assertEqual(weapon["overlay_count"], 1)
+        self.assertEqual(weapon["overlays"][0][:5], (gen_cards.OVERLAY_HAVE, 1, 112, 13, 1))
         # No overlays on the quest GOAL/REWARD pages or the questless armor.
         self.assertEqual(records[1]["overlay_count"], 0, "beta has no overlays")
         self.assertEqual(records[2]["overlay_count"], 0, "gamma has no overlays")
+        self.assertEqual(records[5]["overlay_count"], 0, "weapon root has no overlays")
 
     def test_sprites_declare_every_page_once(self):
         self.run_ok()
@@ -308,7 +350,7 @@ class GenCardsTests(unittest.TestCase):
     # -------------------------------------------------------- determinism/CLI
     def test_rerun_is_byte_identical(self):
         first = self.run_ok()
-        self.assertIn("gen-cards: 5 items, 15 pages", first.stdout)
+        self.assertIn("gen-cards: 7 items, 20 pages", first.stdout)
         before = {rel: self.read_bytes(*rel.split("/")) for rel in
                   ("fxdata/tables/cards.bin", "fxdata/cards/Sprites.txt",
                    "src/generated/card_meta.hpp")}
@@ -323,6 +365,7 @@ class GenCardsTests(unittest.TestCase):
         result = self.run_ok("--dump")
         self.assertIn("card armor alpha_helm: mask 0x0F", result.stdout)
         self.assertIn("card quest gather_ore: mask 0x03", result.stdout)
+        self.assertIn("card weapon sword_t1: mask 0x07", result.stdout)
         after = sorted(os.path.relpath(os.path.join(dirpath, name), self.case)
                        for dirpath, _dirs, files in os.walk(self.case) for name in files)
         self.assertEqual(before, after)

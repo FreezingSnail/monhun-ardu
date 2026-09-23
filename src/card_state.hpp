@@ -21,12 +21,14 @@
 #include "core/input.hpp"
 #include "core/save.hpp"
 #include "screen_state.hpp"
+#include "forge_state.hpp"
 #include "generated/card_meta.hpp"
 
 namespace mh {
 
 using cards::KIND_ARMOR;
 using cards::KIND_QUEST;
+using cards::KIND_WEAPON;
 using cards::OVERLAY_HAVE;
 using cards::OVERLAY_MAX;
 using cards::OVERLAY_PROG;
@@ -72,10 +74,16 @@ struct DetailState {
     uint8_t page = 0;
     uint8_t pageCount = 0;
     uint8_t pageMask = 0;
+    // Cached hint line (ui.4.1): recomputed by cardSetHint() on open/refresh and
+    // after every action, so the per-plane drawCard does not re-classify.
+    uint8_t hint = 0;
     bool active = false;
     bool prevA = false;
     bool prevB = false;
     int8_t navX = 0;
+    // Cached forge node for a weapon card (filled by src/cards.hpp cardLoad on
+    // device, by the test on the host). Unused for armor/quest cards.
+    ForgeNode node = {};
 };
 
 enum DetailEvent : int8_t {
@@ -124,6 +132,7 @@ inline void cardOpen(DetailState &s, uint8_t kind, uint8_t index, uint8_t mask) 
     s.pageMask = mask;
     s.pageCount = cardPopcount(mask);
     s.page = cardFirstPage(mask);
+    s.hint = 0;   // HINT_NONE (defined below)
     s.active = true;
     s.prevA = false;
     s.prevB = false;
@@ -175,34 +184,44 @@ inline DetailEvent detailStep(DetailState &s, const Input &in) {
     return DETAIL_NONE;
 }
 
-// Does the list row open a detail card? Armor (craft/equip) and quest
-// (take/turn-in) rows do; a GEAR weapon row keeps its direct-equip action
-// (ui.3 scope split -- the weapon card lands with the ui.4 forge trees).
-inline bool cardRowOpens(const ScreenRow &row) {
+// Card index that means "this row does not open a card" (cardRowIndex result).
+constexpr uint8_t CARD_NONE = 0xFF;
+
+// The card kind a row opens (armor vs quest vs weapon).
+inline uint8_t cardRowKind(const ScreenRow &row) {
+    if (row.action == screens::ACTION_EQUIP_ARMOR)
+        return KIND_ARMOR;
+    if (row.action == screens::ACTION_EQUIP_WEAPON || row.action == screens::ACTION_FORGE_NODE)
+        return KIND_WEAPON;
+    return KIND_QUEST;
+}
+
+// The card item index a row opens (CARD_NONE when the row opens no card):
+// armor pieces are packed (slot<<5)|piece and are the first card table entries
+// (index == piece); quest rows pack the quest id in the low nibble and the card
+// table stores quests sorted by (id, name) after the armor, so the global index
+// is QUEST_BASE + quest id; weapon rows carry the node id and the weapon cards
+// follow the quests (WEAPON_BASE + node). gen-cards rejects non-dense quest ids
+// so the two stay in lockstep.
+inline uint8_t cardRowIndex(const ScreenRow &row) {
     switch (row.action) {
     case screens::ACTION_EQUIP_ARMOR:
+        return screenArmorPiece(row.param);
+    case screens::ACTION_EQUIP_WEAPON:
+    case screens::ACTION_FORGE_NODE:
+        return static_cast<uint8_t>(cards::WEAPON_BASE + row.param);
     case screens::ACTION_TAKE_QUEST:
     case screens::ACTION_TURN_IN_QUEST:
-        return true;
+        return static_cast<uint8_t>(static_cast<uint8_t>(row.param & 15) + cards::QUEST_BASE);
     default:
-        return false;
+        return CARD_NONE;
     }
 }
 
-// The card kind a row opens (armor vs quest).
-inline uint8_t cardRowKind(const ScreenRow &row) {
-    return row.action == screens::ACTION_EQUIP_ARMOR ? KIND_ARMOR : KIND_QUEST;
-}
-
-// The card item index a row opens: armor pieces are packed (slot<<5)|piece and
-// are the first card table entries (index == piece); quest rows pack the quest
-// id in the low nibble and the card table stores quests sorted by (id, name)
-// after the armor, so the global index is QUEST_BASE + quest id. gen-cards
-// rejects non-dense quest ids so the two stay in lockstep.
-inline uint8_t cardRowIndex(const ScreenRow &row) {
-    if (row.action == screens::ACTION_EQUIP_ARMOR)
-        return screenArmorPiece(row.param);
-    return static_cast<uint8_t>(static_cast<uint8_t>(row.param & 15) + cards::QUEST_BASE);
+// Does the list row open a detail card? Kept for the host/device suites; the
+// sketch just tests cardRowIndex() against CARD_NONE.
+inline bool cardRowOpens(const ScreenRow &row) {
+    return cardRowIndex(row) != CARD_NONE;
 }
 
 // Dynamic hint-line rule (the only dynamic text on a card). Returns the string
@@ -217,7 +236,8 @@ enum CardHint : uint8_t {
     HINT_NEED_PARTS,   // == ARMOR_NEED_PARTS
     HINT_NEED_ZENNY,   // == ARMOR_NEED_ZENNY
     HINT_ACCEPT,
-    HINT_TURN_IN
+    HINT_TURN_IN,
+    HINT_FORGE   // weapon node upgrade/direct forge
 };
 
 inline bool armorSlotEquipped(const SaveBlock &save, uint8_t piece, uint8_t slot) {
@@ -241,7 +261,8 @@ inline uint16_t armorCardCost(const CardItem &it) {
 }
 
 // Classify the armor card: crafted -> equip/unequip, else the craft gate
-// (zenny + the baked material bill). Pure; cardArmorApply consumes it.
+// (zenny + the baked material bill, through the shared forge bill machinery).
+// Pure; cardArmorApply consumes it.
 inline ArmorCardState armorCardState(const SaveBlock &save, const CardItem &it, const ScreenRow &row) {
     const uint8_t piece = screenArmorPiece(row.param);
     const uint8_t slot = screenArmorSlot(row.param);
@@ -249,17 +270,8 @@ inline ArmorCardState armorCardState(const SaveBlock &save, const CardItem &it, 
         return ARMOR_DEAD;
     if (saveCrafted(save, piece))
         return armorSlotEquipped(save, piece, slot) ? ARMOR_UNEQUIP : ARMOR_EQUIP;
-    if (save.zenny < armorCardCost(it))
-        return ARMOR_NEED_ZENNY;
-    for (uint8_t i = 0; i < UPGRADE_MAT_SLOTS; i++) {
-        const uint8_t code = it.craft[static_cast<uint8_t>(2 + i * 2)];
-        if (code == 0)
-            continue;
-        const uint8_t idx = static_cast<uint8_t>(code - 1);
-        if (idx >= item::ITEM_COUNT || save.items[idx] < it.craft[static_cast<uint8_t>(3 + i * 2)])
-            return ARMOR_NEED_PARTS;
-    }
-    return ARMOR_CRAFT;
+    const uint8_t sh = billShort(save, armorCardCost(it), &it.craft[2], UPGRADE_MAT_SLOTS);
+    return sh == BILL_NEED_ZENNY ? ARMOR_NEED_ZENNY : sh == BILL_NEED_PARTS ? ARMOR_NEED_PARTS : ARMOR_CRAFT;
 }
 
 // Card A on an armor item (ui.3.1, 5co.6): an uncrafted piece crafts from the
@@ -274,31 +286,71 @@ inline bool cardArmorApply(SaveBlock &save, const CardItem &it, const ScreenRow 
         return armorEquipToggle(save, piece, slot);
     if (st != ARMOR_CRAFT)
         return false;
-    for (uint8_t i = 0; i < UPGRADE_MAT_SLOTS; i++) {
-        const uint8_t code = it.craft[static_cast<uint8_t>(2 + i * 2)];
-        if (code == 0)
-            continue;
-        const uint8_t idx = static_cast<uint8_t>(code - 1);
-        if (idx < item::ITEM_COUNT)
-            save.items[idx] = static_cast<uint8_t>(save.items[idx] - it.craft[static_cast<uint8_t>(3 + i * 2)]);
-    }
-    save.zenny = static_cast<uint16_t>(save.zenny - armorCardCost(it));
+    billDebit(save, armorCardCost(it), &it.craft[2], UPGRADE_MAT_SLOTS);
     saveSetCrafted(save, piece);
     armorEquipToggle(save, piece, slot);
     return true;
 }
 
-inline CardHint cardHint(const SaveBlock &save, const ScreenRow &row, const CardItem &it) {
+// Weapon card hint: an owned node equips/unequips on GEAR; on FORGE an unowned
+// node forges via the active bill (upgrade when the parent is owned, direct
+// otherwise). One classifier feeds the hint and the action.
+inline CardHint forgeHint(const SaveBlock &save, const ForgeNode &node, bool equipAction) {
+    const ForgeState st = forgeNodeState(save, node, forge::NODE_COUNT);
+    if (equipAction)
+        return st == FORGE_EQUIPPED ? HINT_UNEQUIP : st == FORGE_OWNED ? HINT_EQUIP : HINT_NONE;
+    switch (st) {
+    case FORGE_UPGRADE:
+    case FORGE_DIRECT:
+        return HINT_FORGE;
+    case FORGE_NEED_PARTS:
+        return HINT_NEED_PARTS;
+    case FORGE_NEED_ZENNY:
+        return HINT_NEED_ZENNY;
+    default:
+        return HINT_NONE;
+    }
+}
+
+inline CardHint cardHint(const SaveBlock &save, const ScreenRow &row, const CardItem &it, const ForgeNode &node) {
     switch (row.action) {
     case screens::ACTION_EQUIP_ARMOR:
         // ArmorCardState mirrors the HINT_* values 1:1 (ARMOR_DEAD -> NONE).
         return static_cast<CardHint>(armorCardState(save, it, row));
+    case screens::ACTION_EQUIP_WEAPON:
+        return forgeHint(save, node, true);
+    case screens::ACTION_FORGE_NODE:
+        return forgeHint(save, node, false);
     case screens::ACTION_TAKE_QUEST:
         return screenCondOk(save, row) ? HINT_ACCEPT : HINT_NONE;
     case screens::ACTION_TURN_IN_QUEST:
         return screenCondOk(save, row) ? HINT_TURN_IN : HINT_NONE;
     default:
         return HINT_NONE;
+    }
+}
+
+// Recompute the cached hint line. The caller runs this on open/refresh and
+// after every card action (the action may have changed the save the hint reads),
+// so drawCard can just draw the byte without re-classifying per plane.
+inline void cardSetHint(DetailState &s, const SaveBlock &save, const CardItem &it, const ScreenRow &row) {
+    s.hint = static_cast<uint8_t>(cardHint(save, row, it, s.node));
+}
+
+// Card A: one entry for every card kind, switching on the stored row action.
+// Armor crafts/equips from the baked bill; weapon FORGE forges/upgrades (the
+// forge re-checks the bill), GEAR equips/unequips; quest rows take/turn in.
+// Returns true when the save changed (the caller persists once).
+inline bool cardApply(SaveBlock &save, const CardItem &it, const ForgeNode &node, const ScreenRow &row) {
+    switch (row.action) {
+    case screens::ACTION_EQUIP_ARMOR:
+        return cardArmorApply(save, it, row);
+    case screens::ACTION_FORGE_NODE:
+        return forgeNodeApply(save, node, forge::NODE_COUNT);
+    case screens::ACTION_EQUIP_WEAPON:
+        return forgeNodeEquipToggle(save, node);
+    default:
+        return screenCondOk(save, row) && screenApplyAction(save, row);
     }
 }
 

@@ -72,24 +72,26 @@ void ScreenSuite(TestRunner &runner) {
         SaveBlock s;
         saveDefaults(s);
         s.zenny = 12345;
-        s.tier[1] = 2;
-        s.weapon = W_FLAIL;
+        s.equippedNode = forge::NODE_FLAIL_T1;
+        saveSetWeaponOwned(s, forge::NODE_FLAIL_T1);
+        saveSetCrafted(s, 2);
         saveQuestSet(s, 3, 0);
         uint8_t bytes[SAVE_BYTES];
         saveEncode(s, bytes);
         t.assert(bytes[0], 0x4D, "magic low byte 'M'");
         t.assert(bytes[1], 0x48, "magic high byte 'H'");
-        t.assert(bytes[2], SAVE_VERSION, "version");
+        t.assert(bytes[2], SAVE_VERSION, "version 5");
         t.assert(bytes[3], 0x39, "zenny low");
         t.assert(bytes[4], 0x30, "zenny high");
         t.assert(bytes[5 + 0], 0x40, "quest3 taken bit");
-        t.assert(bytes[SAVE_TIER_OFF + 1], 2, "tier[1]");
-        t.assert(bytes[SAVE_WEAPON_OFF], W_FLAIL, "weapon byte");
+        t.assert(bytes[SAVE_EQUIPPED_OFF], forge::NODE_FLAIL_T1, "equipped node byte");
+        t.assert(bytes[SAVE_OWNED_OFF + (forge::NODE_FLAIL_T1 >> 3)] & mhBit8(forge::NODE_FLAIL_T1), mhBit8(forge::NODE_FLAIL_T1), "owned bit");
+        t.assert(bytes[SAVE_CRAFTED_OFF] & mhBit8(2), mhBit8(2), "crafted bit");
         uint8_t sum = 0;
         for (uint8_t i = 0; i < SAVE_CHECKSUM_OFF; i++)
             sum = static_cast<uint8_t>(sum + bytes[i]);
         t.assert(bytes[SAVE_CHECKSUM_OFF], sum, "checksum is the byte sum");
-        t.assert(sizeof(SaveBlock) >= SAVE_CHECKSUM_OFF - 3, true, "policy: struct is fields only");
+        t.assert(sizeof(SaveBlock) <= SAVE_BYTES, true, "policy: the struct fits the wire record");
         suite.addTest(t);
     }
 
@@ -98,18 +100,21 @@ void ScreenSuite(TestRunner &runner) {
         SaveBlock s;
         saveDefaults(s);
         s.zenny = 4321;
-        s.tier[0] = 1;
-        s.tier[2] = 3;
-        s.weapon = W_GUN;
+        s.equippedNode = forge::NODE_GUN_T2;
+        saveSetWeaponOwned(s, forge::NODE_GUN_T1);
+        saveSetWeaponOwned(s, forge::NODE_GUN_T2);
+        saveSetCrafted(s, 5);
         saveQuestSet(s, 7, 1);
         uint8_t bytes[SAVE_BYTES];
         saveEncode(s, bytes);
         SaveBlock out;
         t.assert(saveDecode(bytes, out), true, "decode succeeds");
         t.assert(out.zenny, 4321, "zenny round-trip");
-        t.assert(out.tier[0], 1, "tier0 round-trip");
-        t.assert(out.tier[2], 3, "tier2 round-trip");
-        t.assert(out.weapon, W_GUN, "weapon round-trip");
+        t.assert(out.equippedNode, forge::NODE_GUN_T2, "equipped node round-trip");
+        t.assert(saveWeaponOwned(out, forge::NODE_GUN_T1), true, "owned bit 1 round-trip");
+        t.assert(saveWeaponOwned(out, forge::NODE_GUN_T2), true, "owned bit 2 round-trip");
+        t.assert(saveWeaponOwned(out, forge::NODE_FLAIL_T2), false, "unowned bit stays clear");
+        t.assert(saveCrafted(out, 5), true, "crafted bit round-trip");
         t.assert(saveQuestGet(out, 7, 1), true, "quest done bit round-trip");
         t.assert(saveQuestGet(out, 7, 0), false, "quest taken bit stays clear");
         suite.addTest(t);
@@ -138,7 +143,7 @@ void ScreenSuite(TestRunner &runner) {
         t.assert(saveLoad(out, HOST_BACKEND), false, "junk load returns false");
         t.assert(out.zenny, 0, "junk load yields default zenny");
         t.assert(saveQuestGet(out, 0, 0), false, "junk load yields default quests");
-        t.assert(out.tier[0], 0, "junk load yields default tiers");
+        t.assert(out.equippedNode, forge::NODE_SWORD_BASE, "junk load yields default sword root");
         suite.addTest(t);
     }
 
@@ -147,12 +152,12 @@ void ScreenSuite(TestRunner &runner) {
         SaveBlock s;
         saveDefaults(s);
         s.zenny = 777;
-        s.tier[2] = 1;
+        saveSetWeaponOwned(s, forge::NODE_SWORD_T1);
         t.assert(saveStore(s, HOST_BACKEND), true, "store verifies");
         SaveBlock out;
         t.assert(saveLoad(out, HOST_BACKEND), true, "load after store");
         t.assert(out.zenny, 777, "stored zenny");
-        t.assert(out.tier[2], 1, "stored tier");
+        t.assert(saveWeaponOwned(out, forge::NODE_SWORD_T1), true, "stored owned bit");
         hostWrites = 0;
         t.assert(saveStore(s, COUNTED_BACKEND), true, "second store verifies");
         t.assert(hostWrites, 0, "identical block writes nothing");
@@ -162,15 +167,19 @@ void ScreenSuite(TestRunner &runner) {
         suite.addTest(t);
     }
 
-    // --------------------------------------- save v4 tail (prg.5 + isp.1)
+    // --------------------------------------- save v5 tail (ui.4, 5co.4)
     {
-        Test t("v4 record: equipment/inventory tail + weapon byte at exact offsets");
-        t.assert(SAVE_BYTES, static_cast<uint8_t>(14 + 3 + 1 + ITEM_COUNT + 1 + 1), "28 B for 8 items + weapon");
-        t.assert(SAVE_EQUIP_OFF, 14, "equip starts after the v2 prefix");
+        Test t("v5 record: equipped/owned/crafted bitsets at exact offsets");
+        t.assert(SAVE_EQUIP_OFF, 14, "equip starts after the legacy prefix");
         t.assert(SAVE_FLAGS_OFF, 17, "flags after the 3 equip slots");
         t.assert(SAVE_ITEMS_OFF, 18, "inventory after flags");
-        t.assert(SAVE_WEAPON_OFF, static_cast<uint8_t>(18 + ITEM_COUNT), "weapon after the inventory");
-        t.assert(SAVE_CHECKSUM_OFF, static_cast<uint8_t>(SAVE_WEAPON_OFF + 1), "checksum last");
+        t.assert(SAVE_EQUIPPED_OFF, static_cast<uint8_t>(18 + ITEM_COUNT), "equipped after the inventory");
+        t.assert(SAVE_OWNED_OFF, static_cast<uint8_t>(SAVE_EQUIPPED_OFF + 1), "owned bitset after equipped");
+        t.assert(SAVE_OWNED_BYTES, 4, "owned bitset is 4 B / 32 slots");
+        t.assert(SAVE_CRAFTED_OFF, static_cast<uint8_t>(SAVE_OWNED_OFF + SAVE_OWNED_BYTES), "crafted after owned");
+        t.assert(SAVE_CRAFTED_BYTES, 1, "crafted bitset is 1 B / 8 slots");
+        t.assert(SAVE_CHECKSUM_OFF, static_cast<uint8_t>(SAVE_CRAFTED_OFF + SAVE_CRAFTED_BYTES), "checksum last");
+        t.assert(SAVE_BYTES, static_cast<uint8_t>(SAVE_CHECKSUM_OFF + 1), "33 B record");
         SaveBlock s;
         saveDefaults(s);
         s.equip[0] = 2;   // head
@@ -179,7 +188,9 @@ void ScreenSuite(TestRunner &runner) {
         s.flags = SAVE_FLAG_SMITHY_SEEN;
         s.items[ITEM_HERB] = 7;
         s.items[ITEM_ORE] = 255;
-        s.weapon = W_FLAIL;
+        s.equippedNode = forge::NODE_SWORD_T2;
+        saveSetWeaponOwned(s, forge::NODE_SWORD_T2);
+        saveSetCrafted(s, 7);   // top crafted slot
         uint8_t bytes[SAVE_BYTES];
         saveEncode(s, bytes);
         t.assert(bytes[SAVE_EQUIP_OFF + 0], 2, "head slot byte");
@@ -188,19 +199,23 @@ void ScreenSuite(TestRunner &runner) {
         t.assert(bytes[SAVE_FLAGS_OFF], SAVE_FLAG_SMITHY_SEEN, "flags byte");
         t.assert(bytes[SAVE_ITEMS_OFF + ITEM_HERB], 7, "herb count byte");
         t.assert(bytes[SAVE_ITEMS_OFF + ITEM_ORE], 255, "ore count byte");
-        t.assert(bytes[SAVE_WEAPON_OFF], W_FLAIL, "weapon byte");
+        t.assert(bytes[SAVE_EQUIPPED_OFF], forge::NODE_SWORD_T2, "equipped node byte");
+        t.assert(bytes[SAVE_OWNED_OFF + (forge::NODE_SWORD_T2 >> 3)] & mhBit8(forge::NODE_SWORD_T2), mhBit8(forge::NODE_SWORD_T2), "owned byte");
+        t.assert(bytes[SAVE_CRAFTED_OFF], mhBit8(7), "crafted byte");
         uint8_t sum = 0;
         for (uint8_t i = 0; i < SAVE_CHECKSUM_OFF; i++)
             sum = static_cast<uint8_t>(sum + bytes[i]);
-        t.assert(bytes[SAVE_CHECKSUM_OFF], sum, "checksum covers the v4 tail");
+        t.assert(bytes[SAVE_CHECKSUM_OFF], sum, "checksum covers the v5 tail");
         SaveBlock out;
-        t.assert(saveDecode(bytes, out), true, "v4 decodes");
+        t.assert(saveDecode(bytes, out), true, "v5 decodes");
         t.assert(out.equip[0], 2, "head round-trip");
         t.assert(out.equip[2], 3, "charm round-trip");
         t.assert(out.flags, SAVE_FLAG_SMITHY_SEEN, "flags round-trip");
         t.assert(out.items[ITEM_HERB], 7, "herb round-trip");
         t.assert(out.items[ITEM_ORE], 255, "ore round-trip");
-        t.assert(out.weapon, W_FLAIL, "weapon round-trip");
+        t.assert(out.equippedNode, forge::NODE_SWORD_T2, "equipped round-trip");
+        t.assert(saveCrafted(out, 7), true, "crafted round-trip");
+        t.assert(saveCrafted(out, SAVE_CRAFTED_SLOTS), false, "crafted slot past the cap inert");
         suite.addTest(t);
     }
 
@@ -237,100 +252,32 @@ void ScreenSuite(TestRunner &runner) {
         suite.addTest(t);
     }
 
+    // Pre-release policy (ui.4.1, 5co.7): there is no migration. A record whose
+    // version is not 5 (blank, junk, or any older layout) is discarded and the
+    // defaults load instead.
     {
-        Test t("migration: a version-2 record keeps its prefix, v2 tail defaults, never crashes");
-        // Build a valid v2 record (prg.5 tail is not present in the stream).
-        SaveBlock v2;
-        saveDefaults(v2);
-        v2.zenny = 4321;
-        v2.tier[1] = 2;
-        saveQuestSet(v2, 5, 0);
-        uint8_t bytes[SAVE_BYTES];
-        saveEncode(v2, bytes);
-        bytes[2] = SAVE_VERSION_V2;
-        bytes[SAVE_V3_CHECKSUM_OFF] = 0;
-        for (uint8_t i = 0; i < SAVE_V3_CHECKSUM_OFF; i++)
-            bytes[SAVE_V3_CHECKSUM_OFF] = static_cast<uint8_t>(bytes[SAVE_V3_CHECKSUM_OFF] + bytes[i]);
-
-        for (uint8_t i = 0; i < 64; i++)
-            hostEeprom[i] = 0xEE;
-        for (uint8_t i = 0; i < SAVE_BYTES; i++)
-            hostEeprom[SAVE_EEPROM_ADDR + i] = bytes[i];
-        SaveBlock out;
-        t.assert(saveLoad(out, HOST_BACKEND), true, "older-version record migrates (fields loaded)");
-        t.assert(out.zenny, 4321, "v2 zenny preserved");
-        t.assert(out.tier[1], 2, "v2 tier preserved");
-        t.assert(saveQuestGet(out, 5, 0), true, "v2 quest bit preserved");
-        t.assert(out.items[ITEM_HERB], 0, "v2 inventory defaults empty");
-        t.assert(out.equip[0], SAVE_EQUIP_NONE, "v2 equipment defaults none");
-        t.assert(out.weapon, W_SWORD, "v2 weapon defaults sword");
-        suite.addTest(t);
-    }
-
-    {
-        Test t("migration: a version-3 record keeps its tail, weapon defaults to sword");
-        // Build a valid v4 record then re-label it v3: the tail bytes are
-        // identical (v4 appended the weapon byte after the v3 tail), but the v3
-        // checksum lives at byte 26.
-        SaveBlock v3;
-        saveDefaults(v3);
-        v3.zenny = 4321;
-        v3.tier[1] = 2;
-        v3.equip[0] = 3;
-        v3.flags = SAVE_FLAG_SMITHY_SEEN;
-        v3.items[ITEM_HERB] = 6;
-        v3.weapon = W_GUN;   // must NOT survive: a v3 record has no weapon byte
-        saveQuestSet(v3, 5, 0);
-        uint8_t bytes[SAVE_BYTES];
-        saveEncode(v3, bytes);
-        bytes[2] = SAVE_VERSION_V3;
-        bytes[SAVE_V3_CHECKSUM_OFF] = 0;
-        for (uint8_t i = 0; i < SAVE_V3_CHECKSUM_OFF; i++)
-            bytes[SAVE_V3_CHECKSUM_OFF] = static_cast<uint8_t>(bytes[SAVE_V3_CHECKSUM_OFF] + bytes[i]);
-
-        for (uint8_t i = 0; i < 64; i++)
-            hostEeprom[i] = 0xEE;
-        for (uint8_t i = 0; i < SAVE_BYTES; i++)
-            hostEeprom[SAVE_EEPROM_ADDR + i] = bytes[i];
-        SaveBlock out;
-        t.assert(saveLoad(out, HOST_BACKEND), true, "v3 record migrates");
-        t.assert(out.zenny, 4321, "v3 zenny preserved");
-        t.assert(out.equip[0], 3, "v3 equip preserved");
-        t.assert(out.flags, SAVE_FLAG_SMITHY_SEEN, "v3 flags preserved");
-        t.assert(out.items[ITEM_HERB], 6, "v3 inventory preserved");
-        t.assert(out.weapon, W_SWORD, "v3 weapon defaults sword");
-        suite.addTest(t);
-    }
-
-    {
-        Test t("migration: a version-1 record preserves zenny/quests/tiers, no active quest");
-        SaveBlock v1;
-        saveDefaults(v1);
-        v1.zenny = 999;
-        v1.tier[0] = 1;
-        saveQuestSet(v1, 2, 1);
-        uint8_t bytes[SAVE_BYTES];
-        saveEncode(v1, bytes);
-        bytes[2] = SAVE_VERSION_V1;
-        // v1 had no active-quest/progress bytes: zero them, then fix the checksum
-        // at the legacy offset (byte 26).
-        bytes[SAVE_ACTIVE_OFF] = 0;
-        bytes[SAVE_PROGRESS_OFF] = 0;
-        bytes[SAVE_V3_CHECKSUM_OFF] = 0;
-        for (uint8_t i = 0; i < SAVE_V3_CHECKSUM_OFF; i++)
-            bytes[SAVE_V3_CHECKSUM_OFF] = static_cast<uint8_t>(bytes[SAVE_V3_CHECKSUM_OFF] + bytes[i]);
-
-        for (uint8_t i = 0; i < 64; i++)
-            hostEeprom[i] = 0xEE;
-        for (uint8_t i = 0; i < SAVE_BYTES; i++)
-            hostEeprom[SAVE_EEPROM_ADDR + i] = bytes[i];
-        SaveBlock out;
-        t.assert(saveLoad(out, HOST_BACKEND), true, "older-version record migrates (fields loaded)");
-        t.assert(out.zenny, 999, "v1 zenny preserved");
-        t.assert(out.tier[0], 1, "v1 tier preserved");
-        t.assert(saveQuestGet(out, 2, 1), true, "v1 done bit preserved");
-        t.assert(out.activeQuest, SAVE_QUEST_NONE, "v1 has no active quest");
-        t.assert(out.progress, 0, "v1 progress default 0");
+        Test t("no migration: v1..v4 records fall back to defaults");
+        for (uint8_t version = 1; version <= 4; version++) {
+            SaveBlock old;
+            saveDefaults(old);
+            old.zenny = 4321;
+            old.items[ITEM_HERB] = 6;
+            saveQuestSet(old, 5, 0);
+            uint8_t bytes[SAVE_BYTES];
+            saveEncode(old, bytes);
+            bytes[2] = version;
+            for (uint8_t i = 0; i < 64; i++)
+                hostEeprom[i] = 0xEE;
+            for (uint8_t i = 0; i < SAVE_BYTES; i++)
+                hostEeprom[SAVE_EEPROM_ADDR + i] = bytes[i];
+            SaveBlock out;
+            t.assert(saveLoad(out, HOST_BACKEND), false, "old version rejected");
+            t.assert(out.zenny, 0, "old version zenny discarded");
+            t.assert(out.items[ITEM_HERB], 0, "old version inventory discarded");
+            t.assert(saveQuestGet(out, 5, 0), false, "old version quest bit discarded");
+            t.assert(out.equippedNode, forge::NODE_SWORD_BASE, "default sword root equipped");
+            t.assert(saveWeaponOwned(out, forge::NODE_SWORD_BASE), true, "default roots owned");
+        }
         suite.addTest(t);
     }
 
@@ -424,19 +371,16 @@ void ScreenSuite(TestRunner &runner) {
 
     // ------------------------------------------------------------- actions
     {
-        Test t("equip weapon writes the v4 byte; out-of-range + same weapon are no-ops");
+        Test t("weapon forge/equip rows are card-only: screenApplyAction stays inert");
+        // ui.4 (5co.4): the GEAR/FORGE weapon rows open the weapon card, whose A
+        // runs forgeNodeApply/forgeNodeEquipToggle (tst/forge_state_test.hpp);
+        // the direct screen switch must not touch the save for those actions.
         SaveBlock s;
         saveDefaults(s);
-        t.assert(s.weapon, W_SWORD, "default sword");
-        t.assert(screenApplyAction(s, row(0, screens::ACTION_EQUIP_WEAPON, screens::COND_ALWAYS, W_FLAIL)), true, "equip flail changes save");
-        t.assert(s.weapon, W_FLAIL, "flail equipped");
-        t.assert(screenApplyAction(s, row(0, screens::ACTION_EQUIP_WEAPON, screens::COND_ALWAYS, W_FLAIL)), false, "same weapon is a no-op");
-        t.assert(s.weapon, W_FLAIL, "still flail");
-        t.assert(screenApplyAction(s, row(0, screens::ACTION_EQUIP_WEAPON, screens::COND_ALWAYS, SAVE_TIER_COUNT)), false, "param at the weapon count rejected");
-        t.assert(screenApplyAction(s, row(0, screens::ACTION_EQUIP_WEAPON, screens::COND_ALWAYS, 255)), false, "param 255 rejected");
-        t.assert(s.weapon, W_FLAIL, "weapon unchanged after rejects");
-        t.assert(screenApplyAction(s, row(0, screens::ACTION_EQUIP_WEAPON, screens::COND_ALWAYS, W_GUN)), true, "equip gun changes save");
-        t.assert(s.weapon, W_GUN, "gun equipped");
+        const uint8_t before = s.equippedNode;
+        t.assert(screenApplyAction(s, row(0, screens::ACTION_EQUIP_WEAPON, screens::COND_ALWAYS, forge::NODE_FLAIL_T1)), false, "equip_weapon inert");
+        t.assert(screenApplyAction(s, row(0, screens::ACTION_FORGE_NODE, screens::COND_ALWAYS, forge::NODE_FLAIL_T1)), false, "forge_node inert");
+        t.assert(s.equippedNode, before, "equipped node unchanged");
         suite.addTest(t);
     }
 

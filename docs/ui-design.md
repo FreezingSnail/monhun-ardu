@@ -119,8 +119,10 @@ ____________________________
                    page 1/3
 ```
 
-Tokens: `E` equipped, `OK` owned, `UP` upgradeable (parent owned), `DIR`
-direct-forgeable, blank locked. Tree prefixes are authored in the labels.
+The list keeps label + cost only; the live state (equipped / owned /
+upgradeable / direct / need-parts / need-zenny) is carried by the card hint
+line, not a per-row token column (ui.4.1 trim). Tree prefixes are authored in
+the labels.
 
 Cards: `DESC / PARTS / STATS`; PARTS lists every required part, the zenny
 cost and `FROM SWD T2A` or `DIRECT`. A = forge (direct, pricier) or upgrade
@@ -137,14 +139,15 @@ child). Skipped nodes stay unowned.
 ## Save v5
 
 ```
-weapon owned bitset  8 B  (64 node slots, all trees combined)
+weapon owned bitset  4 B  (32 node slots, all trees combined)
 equipped node id     1 B  (u8 node index; replaces the class-index byte)
-armor crafted bits   8 B  (64 piece slots)
+armor crafted bits   1 B  (8 piece slots)
 ```
 
-Fixed regions: content below the caps is a data-only change. v4 migration
-keeps zenny/quests/items/armor equip; the weapon maps to the class root (or
-the linear spine node matching the old tier), owned = that node.
+Fixed regions: content below the caps is a data-only change. There is no
+migration (ui.4.1): only a version-5 record with a valid checksum decodes;
+anything else falls back to the defaults. Pre-release, an old save is
+discarded on a version change.
 
 ## Data additions
 

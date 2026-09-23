@@ -8,7 +8,7 @@
 // pinned by cards_test.
 
 #include "harness/fxtest.hpp"
-#include "src/screens.hpp"
+#include "src/screens.hpp"   // includes forge.hpp: forgeReadNode/forgeNodeEquipToggle (ui.4)
 #include "src/app_state.hpp"
 #include "src/app_setup.hpp"
 #include "src/core/world.hpp"
@@ -143,14 +143,15 @@ inline void test_hub(FxTest &test) {
     test.expectEq(static_cast<uint32_t>(save.activeQuest), 0, F("quest 0 active"));
     test.expectEq(static_cast<uint32_t>(saveQuestGet(save, 0, 0)), 1, F("quest 0 taken bit"));
 
-    // GEAR is hub row 2 (ui.3.1: the SMITH row is gone). The armor craft/equip
-    // now lives on the GEAR armor card and is pinned by cards_test.
+    // GEAR is hub row 3 (ui.4: FORGE is row 2, the SMITH row is long gone). The
+    // armor craft/equip lives on the GEAR armor card (cards_test).
     appNavApply(pressB(screen, save), screen, save, g, H_B);
     test.expectEq(static_cast<uint32_t>(screen.screen), screens::SCREEN_HUB, F("back on hub"));
     test.expectEq(static_cast<uint32_t>(screen.cursor), 0, F("hub cursor reset to HUNT"));
     tap(screen, H_DOWN);
     tap(screen, H_DOWN);
-    test.expectEq(static_cast<uint32_t>(screen.cursor), 2, F("cursor on GEAR"));
+    tap(screen, H_DOWN);
+    test.expectEq(static_cast<uint32_t>(screen.cursor), 3, F("cursor on GEAR"));
     appNavApply(pressA(screen, save), screen, save, g, H_A);
     test.expectEq(static_cast<uint32_t>(screen.screen), screens::SCREEN_GEAR, F("gear screen"));
     test.expectEq(static_cast<uint32_t>(screen.rowCount), screens::SCREEN_GEAR_ROWS, F("gear row count"));
@@ -189,10 +190,8 @@ inline void test_hub(FxTest &test) {
     test.expectEq(static_cast<uint32_t>(g.questGoalKind), quests::GOAL_KILL, F("quest kill goal armed"));
     test.expectEq(static_cast<uint32_t>(g.questTarget), MON_LUNGE, F("quest target armed"));
     test.expectEq(static_cast<uint32_t>(g.questNeed), 3, F("quest need armed"));
-    // ui.2: no purchasable weapon tiers -> save.tier stays 0 -> identity mul.
-    // (The smith tier table still feeds upgradeApplyToGame; the purchase rows
-    // return as ui.4 FORGE trees.)
-    test.expectEq(static_cast<uint32_t>(g.dmgMul), 100, F("tier 0 identity multiplier"));
+    // ui.4: the equipped sword root carries 100/100 -> identity multipliers.
+    test.expectEq(static_cast<uint32_t>(g.dmgMul), 100, F("sword root identity multiplier"));
     test.expectEq(static_cast<uint32_t>(g.items[ITEM_HERB]), 4, F("inventory restored from the save"));
 
     // ------------------------------- fight a few ticks, then win + commit
@@ -250,24 +249,36 @@ inline void test_hub(FxTest &test) {
     test.expectEq(static_cast<uint32_t>(g.fxN), 0, F("fresh effects"));
     test.expectEq(static_cast<uint32_t>(g.monsterKind), MON_LUNGE, F("fresh quest beast"));
 
-    // ---------------------- hub GEAR: equip FLAIL, next hunt uses it (hml.3)
-    // Return to the hub, open GEAR (row 2), pick FLAIL (row 1), A equips and
-    // persists; the next hub HUNT starts the hunt with the equipped weapon.
+    // ---------------------- hub GEAR: equip FLAIL, next hunt uses it (ui.4)
+    // Return to the hub, open GEAR (row 2), move to FL T1 (row 5, the flail
+    // root, owned by default), open its card and equip it; the next hub HUNT
+    // starts the hunt with the equipped flail. GEAR weapon rows are card-only
+    // now, so the test drives the forge node read + equip like the sketch.
     appNavApply(APP_NAV_HUB, screen, save, g, H_A);
     test.expectEq(static_cast<uint32_t>(screen.screen), screens::SCREEN_HUB, F("hub again"));
     tap(screen, H_DOWN);
     tap(screen, H_DOWN);
-    test.expectEq(static_cast<uint32_t>(screen.cursor), 2, F("cursor on GEAR"));
+    tap(screen, H_DOWN);
+    test.expectEq(static_cast<uint32_t>(screen.cursor), 3, F("cursor on GEAR"));
     appNavApply(pressA(screen, save), screen, save, g, H_A);
     test.expectEq(static_cast<uint32_t>(screen.screen), screens::SCREEN_GEAR, F("gear screen"));
     test.expectEq(static_cast<uint32_t>(screen.rowCount), screens::SCREEN_GEAR_ROWS, F("gear row count"));
-    tap(screen, H_DOWN);   // SWORD -> FLAIL
-    test.expectEq(static_cast<uint32_t>(screen.cursor), 1, F("cursor on FLAIL"));
-    applyNav(pressA(screen, save), screen, save, g, H_A);   // equip (save action, no hunt start)
-    test.expectEq(static_cast<uint32_t>(save.weapon), W_FLAIL, F("flail equipped"));
+    for (uint8_t i = 0; i < 5; i++)
+        tap(screen, H_DOWN);   // -- SWD -- .. FL T1
+    test.expectEq(static_cast<uint32_t>(screen.cursor), 5, F("cursor on FL T1"));
+    ScreenRow flRow;
+    screenReadRow(screenRowOffsetAt(screens::SCREEN_GEAR, screen.cursor), flRow);
+    test.expectEq(flRow.action, screens::ACTION_EQUIP_WEAPON, F("FL T1 is an equip row"));
+    test.expectEq(flRow.param, forge::NODE_FLAIL_BASE, F("FL T1 param is the flail root"));
+    ForgeNode flNode;
+    forgeReadNode(flRow.param, flNode);
+    test.expectEq(flNode.index, forge::NODE_FLAIL_BASE, F("flail root node read"));
+    test.expectEq(forgeNodeEquipToggle(save, flNode), 1, F("card A equips the flail root"));
+    test.expectEq(static_cast<uint32_t>(save.equippedNode), forge::NODE_FLAIL_BASE, F("flail root equipped"));
+    saveStore(save, REAL_BACKEND);
     SaveBlock geareload;
     test.expectEq(static_cast<uint32_t>(saveLoad(geareload, REAL_BACKEND)), 1, F("gear save reloads"));
-    test.expectEq(static_cast<uint32_t>(geareload.weapon), W_FLAIL, F("weapon byte persisted"));
+    test.expectEq(static_cast<uint32_t>(geareload.equippedNode), forge::NODE_FLAIL_BASE, F("equipped node persisted"));
     appNavApply(pressB(screen, save), screen, save, g, H_B);
     test.expectEq(static_cast<uint32_t>(screen.screen), screens::SCREEN_HUB, F("gear B -> hub"));
     applyNav(pressA(screen, save), screen, save, g, H_A);   // hub HUNT

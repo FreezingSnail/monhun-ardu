@@ -123,7 +123,6 @@ class GenScreensTests(unittest.TestCase):
             "constexpr uint8_t DEF_OFF_OFF = 8;",
             "constexpr uint8_t SCREEN_COUNT = 2;",
             "constexpr uint16_t ROW_COUNT = 3;",
-            "constexpr uint8_t TIER_COUNT = 3;",
             "constexpr uint8_t ACTION_LEAVE = 0;",
             "constexpr uint8_t ACTION_BUY_UPGRADE = 1;",
             "constexpr uint8_t ACTION_TAKE_QUEST = 2;",
@@ -278,6 +277,58 @@ class GenScreensTests(unittest.TestCase):
                     lambda doc: doc["rows"][0].update({"action": "equip_armor", "condition": "always",
                                                        "param": (3 << 5) | 2}))
         self.assert_fails(self.compile(), "armor slot must be 0..2")
+
+    def test_forge_weapons_rows_generated_from_tree(self):
+        # ui.4 (5co.4): a screen with "weapons" expands the forge tree into a
+        # class header + one forge_node row per node (param = node id, cost =
+        # upgrade cost, ROW_F_FORGE flag), before the authored rows.
+        os.makedirs(self.path("data", "forge"), exist_ok=True)
+        with open(self.path("data", "items.json"), "w", encoding="utf-8", newline="\n") as handle:
+            json.dump({"version": 1, "items": [
+                {"id": "ore", "kind": "material", "heal": 0, "stam": 0, "sell": 1},
+                {"id": "scale", "kind": "material", "heal": 0, "stam": 0, "sell": 1},
+            ]}, handle, indent=2)
+        with open(self.path("data", "forge", "sword.json"), "w", encoding="utf-8", newline="\n") as handle:
+            json.dump({
+                "class": "sword", "header": "-- SWD --",
+                "nodes": [
+                    {"id": "sword_base", "label": "SWD T1", "parent": None, "direct": True,
+                     "cost": 0, "mats": [], "directCost": 0, "directMats": [],
+                     "dmgMul": 100, "spdMul": 100, "desc": ["BLADE."], "sheet": "mh_weapon_sword"},
+                    {"id": "sword_t1", "label": "SWD T2", "parent": "sword_base", "direct": True,
+                     "cost": 100, "mats": [{"item": "ore", "count": 2}],
+                     "directCost": 180, "directMats": [{"item": "ore", "count": 3}],
+                     "dmgMul": 110, "spdMul": 105, "desc": ["EDGE."], "sheet": "mh_weapon_sword"},
+                ],
+            }, handle, indent=2)
+        with open(self.path("data", "screens", "forge.json"), "w", encoding="utf-8", newline="\n") as handle:
+            json.dump({"id": 2, "title": "FORGE", "weapons": "forge", "rows": [
+                {"label": "LEAVE", "cost": 0, "action": "leave"}]}, handle, indent=2)
+        self.assert_succeeds(self.compile())
+        blob = self.read_bytes(BLOB_REL)
+        meta = self.read(META_REL)
+        self.assertIn("constexpr uint8_t SCREEN_FORGE = 2;", meta)
+        self.assertIn("constexpr uint8_t ACTION_FORGE_NODE = 10;", meta)
+        self.assertIn("constexpr uint8_t ACTION_OPEN_FORGE = 11;", meta)
+        self.assertIn("constexpr uint8_t ROW_F_FORGE = 0x08;", meta)
+        offsets = struct.unpack_from("<3H", blob, DEF_OFF)
+        forge = parse_def(blob, offsets[2])
+        self.assertEqual((forge["id"], forge["rowCount"]), (2, 4))
+        rows = []
+        off = forge["firstRow"]
+        for _ in range(forge["rowCount"]):
+            row = parse_row(blob, off)
+            rows.append(row)
+            off += row["size"]
+        self.assertEqual(rows[0]["label"], "-- SWD --")
+        self.assertEqual((rows[0]["action"], rows[0]["flags"]), (4, 0))
+        self.assertEqual(rows[1]["label"], "SWD T1")
+        self.assertEqual((rows[1]["action"], rows[1]["flags"], rows[1]["param"], rows[1]["cost"]),
+                         (10, 8, 0, 0))
+        self.assertEqual(rows[2]["label"], "+- SWD T2")
+        self.assertEqual((rows[2]["param"], rows[2]["cost"]), (1, 100))
+        self.assertEqual(rows[3]["label"], "LEAVE")
+        self.assertEqual(off, len(blob), "rows end the blob")
 
     def test_zenny_dynamic_value_flag_compiles(self):
         self.mutate("data/screens/hub.json",

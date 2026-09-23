@@ -1,0 +1,69 @@
+{
+  "class": "flail",
+  "header": "-- FLAIL --",
+  "nodes": [
+    {
+      "id": "flail_base",
+      "label": "FL T1",
+      "parent": null,
+      "direct": true,
+      "cost": 0,
+      "mats": [],
+      "directCost": 0,
+      "directMats": [],
+      "dmgMul": 100,
+      "spdMul": 100,
+      "desc": [
+        "A SIMPLE BALL FLAIL.",
+        "WIDE SWEEPING ARCS."
+      ],
+      "sheet": "mh_weapon_flail"
+    },
+    {
+      "id": "flail_t1",
+      "label": "FL T2",
+      "parent": "flail_base",
+      "direct": true,
+      "cost": 120,
+      "mats": [
+        { "item": "ore", "count": 2 },
+        { "item": "bug", "count": 1 }
+      ],
+      "directCost": 200,
+      "directMats": [
+        { "item": "ore", "count": 3 },
+        { "item": "bug", "count": 2 }
+      ],
+      "dmgMul": 112,
+      "spdMul": 103,
+      "desc": [
+        "HEAVIER HEAD.",
+        "Crushing impact."
+      ],
+      "sheet": "mh_weapon_flail"
+    },
+    {
+      "id": "flail_t2",
+      "label": "FL T3",
+      "parent": "flail_t1",
+      "direct": true,
+      "cost": 280,
+      "mats": [
+        { "item": "ore", "count": 4 },
+        { "item": "shell", "count": 1 }
+      ],
+      "directCost": 450,
+      "directMats": [
+        { "item": "ore", "count": 6 },
+        { "item": "shell", "count": 2 }
+      ],
+      "dmgMul": 130,
+      "spdMul": 110,
+      "desc": [
+        "CHAINED WAR HEAD.",
+        "Devastating sweeps."
+      ],
+      "sheet": "mh_weapon_flail"
+    }
+  ]
+}

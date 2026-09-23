@@ -61,11 +61,14 @@ static void waitPlane(uint8_t plane) {
 
 inline void test_cards(FxTest &test) {
     // ------------------------------------------------- generated cart records
-    test.expectEq(cards::ITEM_COUNT, 9, F("card item count"));
+    test.expectEq(cards::ITEM_COUNT, 18, F("card item count"));
     test.expectEq(cards::QUEST_BASE, armor::PIECE_COUNT, F("quest base follows the armor prefix"));
     test.expectEq(cards::CARD_ARMOR_HUNTER_HELM, 0, F("helm card index"));
     test.expectEq(cards::CARD_QUEST_SLAY_LUNGE, cards::QUEST_BASE + quests::QUEST_SLAY_LUNGE, F("lunge card index"));
-    test.expectEq(cards::CARD_QUEST_CRUSH_HEAVY, cards::ITEM_COUNT - 1, F("crush is the last card"));
+    // ui.4: weapon cards follow the quests; the last node is the last card.
+    test.expectEq(cards::WEAPON_BASE, cards::QUEST_BASE + quests::QUEST_COUNT, F("weapon base follows the quests"));
+    test.expectEq(cards::CARD_WEAPON_SWORD_BASE, cards::WEAPON_BASE + forge::NODE_SWORD_BASE, F("sword root card index"));
+    test.expectEq(cards::CARD_WEAPON_GUN_T2, cards::ITEM_COUNT - 1, F("last weapon node is the last card"));
 
     CardItem it;
     cardReadItem(cards::CARD_ARMOR_HUNTER_HELM, it);
@@ -119,7 +122,7 @@ inline void test_cards(FxTest &test) {
     save.items[item::ITEM_SCALE] = 2;
 
     ScreenRow helm;
-    screenReadRow(screenRowOffsetAt(screens::SCREEN_GEAR, 3), helm);
+    screenReadRow(screenRowOffsetAt(screens::SCREEN_GEAR, 13), helm);
     test.expectEq(helm.action, screens::ACTION_EQUIP_ARMOR, F("gear helm row action"));
     test.expectEq(cardRowOpens(helm), 1, F("gear helm row opens a card"));
     test.expectEq(cardRowKind(helm), cards::KIND_ARMOR, F("gear helm row card kind"));
@@ -131,7 +134,7 @@ inline void test_cards(FxTest &test) {
     test.expectEq(detail.active, 1, F("card open"));
     test.expectEq(detail.page, cards::PAGE_DESC, F("card first page"));
     test.expectEq(detail.pageCount, 4, F("card page count"));
-    test.expectEq(cardHint(save, helm, cache), HINT_CRAFT, F("craft hint"));
+    test.expectEq(cardHint(save, helm, cache, detail.node), HINT_CRAFT, F("craft hint"));
 
     const Input idle = {0, 0, false, false};
     const Input a = {0, 0, true, false};
@@ -147,7 +150,7 @@ inline void test_cards(FxTest &test) {
     cardLoad(detail, cache, cardRowIndex(helm), save, true);
     test.expectEq(cardMaskHas(detail.pageMask, cards::PAGE_PARTS), 0, F("crafted drops the PARTS page"));
     test.expectEq(detail.pageCount, 3, F("page count after craft"));
-    test.expectEq(cardHint(save, helm, cache), HINT_UNEQUIP, F("crafted hint is unequip"));
+    test.expectEq(cardHint(save, helm, cache, detail.node), HINT_UNEQUIP, F("crafted hint is unequip"));
     test.expectEq(detailStep(detail, b), DETAIL_BACK, F("card B backs out"));
 
     test.expectEq(saveStore(save, REAL_BACKEND), 1, F("card action stores"));
@@ -170,19 +173,19 @@ inline void test_cards(FxTest &test) {
     cardLoad(detail, cache, cardRowIndex(take), qsave, false);
     test.expectEq(detail.kind, cards::KIND_QUEST, F("quest card kind"));
     test.expectEq(detail.page, cards::PAGE_GOAL, F("quest first page"));
-    test.expectEq(cardHint(qsave, take, cache), HINT_ACCEPT, F("accept hint"));
+    test.expectEq(cardHint(qsave, take, cache, detail.node), HINT_ACCEPT, F("accept hint"));
     test.expectEq(detailStep(detail, a), DETAIL_ACTION, F("quest card A"));
     test.expectEq(screenApplyAction(qsave, take), 1, F("take applies"));
     test.expectEq(saveQuestGet(qsave, quests::QUEST_SLAY_LUNGE, 0), 1, F("taken bit set"));
-    test.expectEq(cardHint(qsave, take, cache), HINT_NONE, F("taken row hint clears"));
+    test.expectEq(cardHint(qsave, take, cache, detail.node), HINT_NONE, F("taken row hint clears"));
 
     qsave.progress = 3;
     cardLoad(detail, cache, cardRowIndex(turnIn), qsave, false);
-    test.expectEq(cardHint(qsave, turnIn, cache), HINT_TURN_IN, F("turn-in hint"));
+    test.expectEq(cardHint(qsave, turnIn, cache, detail.node), HINT_TURN_IN, F("turn-in hint"));
     test.expectEq(screenApplyAction(qsave, turnIn), 1, F("turn-in applies"));
     test.expectEq(qsave.zenny, 150, F("turn-in pays the row cost"));
     test.expectEq(saveQuestGet(qsave, quests::QUEST_SLAY_LUNGE, 1), 1, F("done bit set"));
-    test.expectEq(cardHint(qsave, turnIn, cache), HINT_NONE, F("turned-in row hint clears"));
+    test.expectEq(cardHint(qsave, turnIn, cache, detail.node), HINT_NONE, F("turned-in row hint clears"));
 
     // ------------------------------------- pixels: blit + dynamic overlays
     arduboy.startGray();
@@ -196,8 +199,9 @@ inline void test_cards(FxTest &test) {
     DetailState ds;
     CardItem dc;
     cardLoad(ds, dc, cards::CARD_ARMOR_HUNTER_HELM, ps, false);
+    cardSetHint(ds, ps, dc, helm);
     ds.page = cards::PAGE_PARTS;
-    drawCard(ds, dc, ps, helm);
+    drawCard(ds, dc, ps);
     // Baked white title + light rule + the live HAVE digit + the hint line.
     test.expectEq(countBits(2, 45, 0, 7) > 0 ? 1 : 0, 1, F("title ink plane0"));
     test.expectEq(countBits(0, 127, 9, 9) > 0 ? 1 : 0, 1, F("rule ink plane0"));
@@ -208,14 +212,14 @@ inline void test_cards(FxTest &test) {
 
     // The overlay only exists on the PARTS page: DESC leaves the slot empty.
     ds.page = cards::PAGE_DESC;
-    drawCard(ds, dc, ps, helm);
+    drawCard(ds, dc, ps);
     test.expectEq(countBits(112, 123, 13, 20), 0, F("no have overlay on DESC"));
 
     // The drawn count tracks save.items: 7 vs 3 must differ.
     SaveBlock ps3 = ps;
     ps3.items[item::ITEM_ORE] = 3;
     ds.page = cards::PAGE_PARTS;
-    drawCard(ds, dc, ps3, helm);
+    drawCard(ds, dc, ps3);
     uint8_t have3[12];
     rowSnapshot(have3, 1, 112, 12);
     bool same = true;
@@ -227,18 +231,19 @@ inline void test_cards(FxTest &test) {
     // PROG page: shade-2 bar fill lights planes 0/1 only, empty at 0 progress.
     waitPlane(1);
     cardLoad(ds, dc, cards::CARD_QUEST_SLAY_LUNGE, ps, false);
+    cardSetHint(ds, ps, dc, turnIn);
     ds.page = cards::PAGE_PROG;
     ps.activeQuest = quests::QUEST_SLAY_LUNGE;
     ps.progress = 3;
-    drawCard(ds, dc, ps, turnIn);
+    drawCard(ds, dc, ps);
     test.expectEq(countBits(9, 118, 28, 31) > 0 ? 1 : 0, 1, F("bar fill plane1"));
     SaveBlock zero = ps;
     zero.progress = 0;
-    drawCard(ds, dc, zero, turnIn);
+    drawCard(ds, dc, zero);
     test.expectEq(countBits(9, 118, 28, 31), 0, F("empty bar at 0 progress"));
 
     waitPlane(2);
-    drawCard(ds, dc, ps, turnIn);
+    drawCard(ds, dc, ps);
     test.expectEq(countBits(9, 118, 28, 31), 0, F("shade-2 fill skips plane2"));
     test.expectEq(countBits(2, 45, 0, 7) > 0 ? 1 : 0, 1, F("white title lights plane2"));
     test.expectEq(countBits(0, 127, 9, 9), 0, F("light rule skips plane2"));

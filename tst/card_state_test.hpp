@@ -181,20 +181,82 @@ inline void CardStateSuite(TestRunner &runner) {
         t.assert(cards::CARD_QUEST_SLAY_SWEEP, cards::QUEST_BASE + quests::QUEST_SLAY_SWEEP, "sweep index");
         t.assert(cards::CARD_QUEST_GATHER_ORE, cards::QUEST_BASE + quests::QUEST_GATHER_ORE, "gather index");
         t.assert(cards::CARD_QUEST_CRUSH_HEAVY, cards::QUEST_BASE + quests::QUEST_CRUSH_HEAVY, "crush index");
-        t.assert(cards::CARD_QUEST_CRUSH_HEAVY, cards::ITEM_COUNT - 1, "quests follow the armor prefix");
+        t.assert(cards::CARD_QUEST_CRUSH_HEAVY, cards::QUEST_BASE + quests::QUEST_CRUSH_HEAVY, "quests follow the armor prefix");
 
-        // GEAR weapon rows keep their direct-equip action (ui.3 scope split).
+        // ui.4: weapon rows open a KIND_WEAPON card; the card index is
+        // WEAPON_BASE + node id (the forge node table order).
         ScreenRow weapon;
         weapon.cost = 0;
         weapon.action = screens::ACTION_EQUIP_WEAPON;
-        weapon.flags = 0;
+        weapon.flags = screens::ROW_F_FORGE;
         weapon.cond = screens::COND_ALWAYS;
-        weapon.param = 1;
+        weapon.param = forge::NODE_SWORD_T1;
         weapon.unlock = 0;
         weapon.recipe[0].item = 0;
         weapon.recipe[1].item = 0;
-        t.assert(cardRowOpens(weapon), false, "weapon row keeps the direct action");
-        t.assert(cardRowKind(weapon), cards::KIND_QUEST, "weapon row maps to the quest fallback (unused)");
+        t.assert(cardRowOpens(weapon), true, "weapon row opens");
+        t.assert(cardRowKind(weapon), cards::KIND_WEAPON, "weapon row is a weapon card");
+        t.assert(cardRowIndex(weapon), cards::WEAPON_BASE + forge::NODE_SWORD_T1, "weapon index is WEAPON_BASE + node");
+        t.assert(cards::CARD_WEAPON_SWORD_T1, cards::WEAPON_BASE + forge::NODE_SWORD_T1, "weapon constant matches");
+        // A FORGE row maps the same way.
+        weapon.action = screens::ACTION_FORGE_NODE;
+        t.assert(cardRowOpens(weapon), true, "forge row opens");
+        t.assert(cardRowKind(weapon), cards::KIND_WEAPON, "forge row is a weapon card");
+        t.assert(cardRowIndex(weapon), cards::WEAPON_BASE + forge::NODE_SWORD_T1, "forge index is WEAPON_BASE + node");
+        suite.addTest(t);
+    }
+
+    // --------------------------------------------------- weapon card (ui.4)
+    {
+        Test t("weapon card hint/apply: FORGE forges, GEAR equips/unequips");
+        SaveBlock s;
+        saveDefaults(s);
+        s.zenny = 1000;
+        s.items[ITEM_ORE] = 10;
+        ForgeNode child{};
+        child.index = forge::NODE_SWORD_T1;
+        child.parent = forge::NODE_SWORD_BASE;
+        child.flags = forge::FLAG_DIRECT;
+        child.dmgMul = 110;
+        child.spdMul = 105;
+        child.cost = 100;
+        child.directCost = 180;
+        child.mats[0].item = static_cast<uint8_t>(ITEM_ORE + 1);
+        child.mats[0].count = 2;
+        child.directMats[0].item = static_cast<uint8_t>(ITEM_ORE + 1);
+        child.directMats[0].count = 3;
+        ScreenRow forge;
+        forge.cost = 100;
+        forge.action = screens::ACTION_FORGE_NODE;
+        forge.flags = screens::ROW_F_FORGE;
+        forge.cond = screens::COND_ALWAYS;
+        forge.param = forge::NODE_SWORD_T1;
+        forge.unlock = 0;
+        forge.recipe[0].item = 0;
+        forge.recipe[0].count = 0;
+        forge.recipe[1].item = 0;
+        forge.recipe[1].count = 0;
+        const CardItem none{};
+        t.assert(cardHint(s, forge, none, child), HINT_FORGE, "affordable upgrade -> A FORGE");
+        t.assert(cardApply(s, none, child, forge), true, "forge applies");
+        t.assert(saveWeaponOwned(s, forge::NODE_SWORD_T1), true, "node owned");
+        t.assert(s.equippedNode, forge::NODE_SWORD_T1, "equipped parent followed the upgrade");
+        t.assert(cardHint(s, forge, none, child), HINT_NONE, "owned node has no forge hint");
+        t.assert(cardApply(s, none, child, forge), false, "owned node re-forge no-op");
+        // GEAR equip/unequip.
+        ScreenRow gear = forge;
+        gear.action = screens::ACTION_EQUIP_WEAPON;
+        t.assert(cardHint(s, gear, none, child), HINT_UNEQUIP, "equipped -> A UNEQUIP");
+        t.assert(cardApply(s, none, child, gear), true, "unequip applies");
+        t.assert(s.equippedNode, SAVE_NODE_NONE, "unequipped to none");
+        t.assert(cardHint(s, gear, none, child), HINT_EQUIP, "owned -> A EQUIP");
+        // An unowned node on GEAR is inert.
+        ForgeNode grand{};
+        grand.index = forge::NODE_SWORD_T2;
+        grand.parent = forge::NODE_SWORD_T1;
+        grand.flags = forge::FLAG_DIRECT;
+        t.assert(cardHint(s, gear, none, grand), HINT_NONE, "unowned -> silent");
+        t.assert(cardApply(s, none, grand, gear), false, "unowned equip no-op");
         suite.addTest(t);
     }
 
@@ -276,22 +338,22 @@ inline void CardStateSuite(TestRunner &runner) {
         s.zenny = 500;
         s.items[ITEM_ORE] = 3;
         s.items[ITEM_SCALE] = 2;
-        t.assert(cardHint(s, gear, card), HINT_CRAFT, "affordable uncrafted -> A CRAFT");
+        t.assert(cardHint(s, gear, card, ForgeNode{}), HINT_CRAFT, "affordable uncrafted -> A CRAFT");
 
         SaveBlock poor = s;
         poor.zenny = 299;
-        t.assert(cardHint(poor, gear, card), HINT_NEED_ZENNY, "short zenny -> NEED ZENNY");
+        t.assert(cardHint(poor, gear, card, ForgeNode{}), HINT_NEED_ZENNY, "short zenny -> NEED ZENNY");
         SaveBlock nomat = s;
         nomat.items[ITEM_ORE] = 2;
-        t.assert(cardHint(nomat, gear, card), HINT_NEED_PARTS, "missing parts -> NEED PARTS");
+        t.assert(cardHint(nomat, gear, card, ForgeNode{}), HINT_NEED_PARTS, "missing parts -> NEED PARTS");
 
         saveSetCrafted(s, armor::ARMOR_HUNTER_HELM);
-        t.assert(cardHint(s, gear, card), HINT_EQUIP, "crafted, unequipped -> A EQUIP");
+        t.assert(cardHint(s, gear, card, ForgeNode{}), HINT_EQUIP, "crafted, unequipped -> A EQUIP");
         s.equip[armor::SLOT_HEAD] = armor::ARMOR_HUNTER_HELM + 1;
-        t.assert(cardHint(s, gear, card), HINT_UNEQUIP, "crafted + equipped -> A UNEQUIP");
+        t.assert(cardHint(s, gear, card, ForgeNode{}), HINT_UNEQUIP, "crafted + equipped -> A UNEQUIP");
         // A crafted piece ignores the (spent) materials/zenny bill.
         saveSetCrafted(poor, armor::ARMOR_HUNTER_HELM);
-        t.assert(cardHint(poor, gear, card), HINT_EQUIP, "crafted row live despite empty wallet");
+        t.assert(cardHint(poor, gear, card, ForgeNode{}), HINT_EQUIP, "crafted row live despite empty wallet");
 
         // Quests: takeable -> ACCEPT; active+ready -> TURN IN; else silent.
         // The armor bill is ignored for quest rows.
@@ -299,24 +361,24 @@ inline void CardStateSuite(TestRunner &runner) {
         const ScreenRow turnIn = questRow(screens::ACTION_TURN_IN_QUEST, quests::QUEST_SLAY_LUNGE, 3);
         SaveBlock q;
         saveDefaults(q);
-        t.assert(cardHint(q, take, card), HINT_ACCEPT, "fresh take row -> A ACCEPT");
-        t.assert(cardHint(q, turnIn, card), HINT_NONE, "inactive turn-in row silent");
+        t.assert(cardHint(q, take, card, ForgeNode{}), HINT_ACCEPT, "fresh take row -> A ACCEPT");
+        t.assert(cardHint(q, turnIn, card, ForgeNode{}), HINT_NONE, "inactive turn-in row silent");
         saveQuestSet(q, quests::QUEST_SLAY_LUNGE, 0);
         q.activeQuest = quests::QUEST_SLAY_LUNGE;
         q.progress = 2;
-        t.assert(cardHint(q, turnIn, card), HINT_NONE, "progress short -> silent");
-        t.assert(cardHint(q, take, card), HINT_NONE, "already taken -> silent");
+        t.assert(cardHint(q, turnIn, card, ForgeNode{}), HINT_NONE, "progress short -> silent");
+        t.assert(cardHint(q, take, card, ForgeNode{}), HINT_NONE, "already taken -> silent");
         q.progress = 3;
-        t.assert(cardHint(q, turnIn, card), HINT_TURN_IN, "ready -> A TURN IN");
+        t.assert(cardHint(q, turnIn, card, ForgeNode{}), HINT_TURN_IN, "ready -> A TURN IN");
 
         // Locked chain row: silent until the prior quest is done.
         ScreenRow locked = take;
         locked.unlock = 2;
         SaveBlock chain;
         saveDefaults(chain);
-        t.assert(cardHint(chain, locked, card), HINT_NONE, "locked chain row silent");
+        t.assert(cardHint(chain, locked, card, ForgeNode{}), HINT_NONE, "locked chain row silent");
         saveQuestSet(chain, 1, 1);
-        t.assert(cardHint(chain, locked, card), HINT_ACCEPT, "unlocked chain row -> A ACCEPT");
+        t.assert(cardHint(chain, locked, card, ForgeNode{}), HINT_ACCEPT, "unlocked chain row -> A ACCEPT");
         suite.addTest(t);
     }
 

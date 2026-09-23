@@ -1,150 +1,158 @@
-# monhun-ardu-5co.6 — ui.3.1 trim: armor craft via card, remove smith screen
+# monhun-ardu-5co.7 — ui.4.1 trim: no save migration, fold list tokens into cards, unify card paths
 
-Status: DONE. HEAD fbb636f + working tree (no commit/push, per orchestrator
-flow). Armor crafting moved off the SMITH screen rows onto the GEAR armor card
-(the craft bill bakes into the `mhCards` record); the SMITH screen, its hub row
-and the whole `APP_NAV_SMITH` routing were removed. FORGE replaces SMITH in
-ui.4 (README + docs/quests-shops.md + docs/equipment-framework.md say so).
+Status: **DONE.** The shipping image fits with headroom; ui.4's features are
+intact end to end and the full gate is green.
 
-## Size
-
-Baseline (HEAD fbb636f, ui.3):
 ```
-size: flash=29680/29696 (16 free)  ram=1762/2560
+size: flash=29506/29696 (190 free)  ram=1801/2560
 ```
-After:
-```
-size: flash=29172/29696 (524 free)  ram=1764/2560
-```
-**Reclaimed: 508 B flash** (+2 B RAM: `CardItem` grew 6 B for the bill, offset
-by the removed `Game::smithyRequest` bool). Target was ~400 B.
 
-Reclaim breakdown (whole-image deltas, `make size`):
-- `COND_ARMOR` + `ACTION_CRAFT_ARMOR` + `screenRowArmorRecipe` removed, card
-  craft re-added (`armorCardState`/`cardArmorApply`, 176 B): net −200.
-- SMITH screen + hub SMITH row + `APP_NAV_SMITH`/`APP_NAV_CAMP`/
-  `appSmithyRequest` routing: net −~50 (screen data is cart bytes, not flash).
-- dead `COND_CRAFTED` + `ACTION_EQUIP_ARMOR` switch cases: −~60.
-- card hint state sharing (ArmorCardState mirrors CardHint 1:1, one gate
-  decode): −56.
-- camp smithy producer (`trySmithy` + `zoneSmithyRead` + `smithyRequest`):
-  **−194** (measured by stubbing the `trySmithy` call). See the scope note.
+| | flash |
+|---|---|
+| ui.4 working tree (BLOCKED) | 30880 (1184 over) |
+| ui.4.1 (this bead) | **29506 (190 free)** |
+| reclaimed from the ui.4 tree | **1374 B** |
+| HEAD 30ef641 (ui.3.1) | 29172 (524 free) |
+| ui.4 net delta now | +334 B |
 
-## What changed
+Target was ≥ ~150 B free; **190 B free** clears it.
 
-Data + generated:
-- `tools/gen-cards.py` — `ITEM_SIZE` 27 → 33: appends an armor craft bill
-  (u16 zenny + `CRAFT_MAT_SLOTS`×`{itemIdx+1, count}`) to every record; quests
-  carry a zero bill. New `card_meta.hpp` constants `CRAFT_MAT_SLOTS`,
-  `ITEM_CRAFT_OFF`, `ITEM_CRAFT_COST_OFF`, `ITEM_CRAFT_MAT_OFF/STRIDE`.
-- `data/screens/smith.json` deleted; `data/screens/hub.json` loses the SMITH
-  row (HUNT/QUESTS/GEAR + ZENNY); `data/screens/gear.json` armor rows switch
-  `crafted` → `always` (the card gates craft).
-- `tools/gen-screens.py` — dropped `open_smith`/`craft_armor` actions and the
-  `armor`/`crafted` conditions (ids renumber; all references are generated
-  constants). Regenerated set staged together (`fxdata/*`, `src/generated/*`,
-  `src/fxdata.h`).
+## Owner decisions, implemented
 
-Runtime:
-- `src/card_state.hpp` — `CardItem.craft[6]` (byte-identical record tail),
-  `ArmorCardState` (DEAD/CRAFT/EQUIP/UNEQUIP/NEED_PARTS/NEED_ZENNY),
-  `armorCardCost`/`armorCardState` (one gate decode), `cardArmorApply` (craft
-  from the baked bill then `armorEquipToggle`), `cardHint(save, row, item)`.
-  `ArmorCardState` mirrors `CardHint` 1:1 so the hint is a cast.
-- `src/cards.hpp` — `drawCard` passes the cached record to `cardHint`; hint
-  string offset table reordered to the new `CardHint` order.
-- `src/screen_state.hpp` — removed the `COND_ARMOR`/`COND_CRAFTED` conditions,
-  the `ACTION_CRAFT_ARMOR`/`ACTION_EQUIP_ARMOR` action cases and the now-dead
-  `screenRecipeOk`/`screenRecipeDebit`; `ScreenRow.recipe[]` now only carries
-  the quest turn-in reward.
-- `src/screens.hpp` — removed `screenRowArmorRecipe` + the `smith.hpp` include;
-  `screenReadRow` only fills the quest fields.
-- `src/app_state.hpp` — removed `APP_NAV_SMITH`, `APP_NAV_CAMP`,
-  `appSmithyRequest` and their `appScreenAccept`/`appNavApply` cases.
-- `monhun-ardu.ino` — card A dispatches armor to `cardArmorApply`, quests to
-  `screenApplyAction`; camp-smith/`s_smithyFromCamp` branches removed.
-- `src/core/world.hpp` / `game.hpp` / `player.hpp` — the camp smithy producer
-  (`trySmithy`, `Game::smithyRequest`) was removed with its only consumer (the
-  SMITH screen); the room smithy rect data stays for the ui.4 FORGE trees.
+### 1. No save migration (≈ −460 B)
 
-Tests (permanent, co-located, native frameworks, no /tmp):
-- `tst/card_state_test.hpp` — new armor card helpers (`armorCard`, `helmCard`)
-  and `cardArmorApply` coverage (craft gate/debit/equip, crafted toggle, blocked
-  zenny/parts, bad ids); hint rule rewritten for the card bill.
-- `tst/armor_engine_test.hpp` — dropped the `COND_ARMOR`/`ACTION_CRAFT_ARMOR`
-  row test (the craft moved to the card); engine/aggregation coverage unchanged.
-- `tst/screens_test.hpp` — dropped the `COND_CRAFTED` gear-row test (armor is
-  card-only now).
-- `tst/app_state_test.hpp` — SMITH/APP_NAV_SMITH/APP_NAV_CAMP/camp-smithy tests
-  removed; hub graph is now hub/quests/gear.
-- `tst/fxdatatest/cards_test.hpp` — gear armor row → card → `cardArmorApply`
-  craft E2E (debits zenny+materials, sets the bit, auto-equips, drops PARTS,
-  EEPROM roundtrip); baked-bill ABI asserts.
-- `tst/fxdatatest/screens_test.hpp` — 3 screens, gear index 2, 4-row hub,
-  always-live armor rows; the direct armor equip E2E moved to the card.
-- `tst/fxdatatest/hub_test.hpp` — SMITH detour replaced by a hub→gear→hub
-  round trip; the card craft E2E lives in cards_test (keeps test_hub's flash
-  budget).
-- `tst/fxdatatest/smith_test.hpp` — SMITH screen rows/nav/craft removed; keeps
-  the upgrade table + multiplier + cart armor aggregation (crafts via
-  `saveSetCrafted` + `armorEquipToggle`).
-- `tools/tests/test_gen_cards.py` — ITEM_SIZE 33, craft-bill parse + asserts,
-  updated meta offsets. `tools/tests/test_gen_screens.py` — new action ids,
-  `equip_armor` slot validation, removed open_smith/craft_armor/armor.
+`src/core/save.hpp` now decodes **only** version 5 + magic + checksum; anything
+else (blank, junk, v1..v4) falls back to `saveDefaults()`.
+- Removed `saveDecodePrefix`, `saveDecodeV4`, `saveDecodeV3`, `saveMigrateWeapon`,
+  `saveZeroTail`, `saveDecodeCommon`, `saveChecksumN`.
+- Removed every legacy constant: `SAVE_VERSION_V1..V4`, `SAVE_TIER_*`,
+  `SAVE_LEGACY_CRAFTED_*`, `SAVE_V4/V3_CHECKSUM_OFF`.
+- Removed the v4 spine map `forge::TIER_NODE` from `tools/gen-forge.py` and the
+  generated `src/generated/forge_meta.hpp`; `saveDefaults()` now owns every
+  depth-0 node via `forge::NODE_DEPTH` and equips `forge::NODE_SWORD_BASE`.
+- Kept v5 encode/decode/defaults + checksum. Pre-release: an old save is
+  discarded on a version change.
 
-Docs: `README.md` (status/architecture/pipeline/counts), `docs/quests-shops.md`
-(status/layers/conditions/actions/cards/gear/smith), `docs/equipment-framework.md`
-(recipe + craft/equip sections).
+### 2. Fold the live list token column into the cards (≈ −430 B)
 
-## Scope note (justified deviation)
+- `src/screens.hpp`: deleted the `MH_FORGE_TOKENS` block, the `FORGE_TOKENS`
+  string/offset tables and the per-row classifier + render branch; deleted the
+  `src/forge.hpp` include. FORGE/GEAR rows now draw label + packed cost through
+  the generic path.
+- `src/forge_state.hpp`: deleted the `ForgeToken` enum, `forgeToken()` and
+  `forgeActionable()` (list-only); their coverage is gone (justified below).
+- `tst/fxdatatest/test_hub.ino` no longer defines `MH_FORGE_TOKENS 0`.
 
-The bead listed `COND_ARMOR`/`ACTION_CRAFT_ARMOR`/`screenRowArmorRecipe`, the
-smith armor rows and the SMITH screen + `APP_NAV_SMITH` routing. The camp
-smithy producer (`Game::smithyRequest` / `trySmithy` / the zone smithy rect
-read) had exactly one consumer — the SMITH screen — so it was dead after the
-removal; it was deleted too (**−194 B**, needed to clear the ~400 B target). The
-zone smithy rect *data* stays for the ui.4 FORGE trees; the ui-design places
-FORGE on the hub, so the camp forge access was not re-wired here. If ui.4 wants
-the camp forge back, it re-adds a small consumer for `smithyRequest` (the data
-is untouched).
+### 3. Unify the weapon and armor card paths (≈ −300 B incl. sweeps)
+
+- New shared bill machinery in `src/forge_state.hpp`: `billShort()` (gate with a
+  reason code) + `billDebit()`, operating on packed `{itemCode,count}` byte pairs.
+  The armor card craft bill (`CardItem.craft`) and a forge node's
+  `mats`/`directMats` share the exact layout, so both card kinds run **one**
+  gate loop and **one** debit loop.
+- `forgeActiveMats()` selects the upgrade/direct bill as a pointer (no
+  `ForgeBill` copy); `forgeActiveBill()`/`forgeAffordable()` remain only for the
+  host suite (LTO drops them from shipping).
+- One card action entry: `cardApply(save, it, node, row)` replaces the
+  ino ternary chain and `cardWeaponApply`. `forgeHint()` is the weapon half of
+  `cardHint()`; the hint is classified once per card state change
+  (`cardSetHint`) and cached in `DetailState`, so `drawCard` no longer
+  re-classifies per plane.
+- `cardRowIndex()` now returns `CARD_NONE` for non-opening rows; the sketch tests
+  one value instead of `cardRowOpens()` + `cardRowIndex()`; `cardRowNode()` is
+  gone.
+- `forgeReadNode()` bulk-reads the 17-byte record straight into the `ForgeNode`
+  tail (static_asserts pin the layout) instead of staging + field-decoding;
+  `forgeEquippedMul()` reads only the two multiplier bytes.
+- `forgeNodeState()` does one `billShort()` pass (no duplicate zenny compare).
+
+### 4. Safe sweeps (each measured)
+
+| Sweep | Δ |
+|---|---|
+| save bitsets narrowed to the data: owned 8 B/64 → 4 B/32, crafted 8 B/64 → 1 B/8 (record 44 → 33 B); generic `saveBitGet/Set` replaced by sized accessors | **≈ −290** |
+| `forgeReadNode` bulk read + `forgeEquippedMul` 2-byte read | −90 |
+| `billShort`/`billDebit` `MH_NOINLINE` (one shared copy) + `billShort` reason code | −18 |
+| dead `screen_meta.hpp` `TIER_COUNT` (stale `SAVE_TIER_COUNT` reference) removed from `gen-screens.py` | 0 flash (dead const) |
+
+`MH_NOINLINE` on `forgeNodeState`/`forgeNodeApply`/`forgeNodeEquipToggle` was
+tried and **reverted** (+46 B: it added call overhead without dedup).
+
+## What still works (ui.4, verified)
+
+- Forge tree data + `mhForge` cart records; `FORGE`/`GEAR` generated rows.
+- Save v5: weapon owned bitset, equipped node, armor crafted bitset; round-trip
+  + checksum.
+- `forge_state.hpp`: direct-vs-upgrade bills, affordability, debit,
+  equipped-follows-upgrade, equip/unequip toggle.
+- Weapon cards: `DESC/PARTS/STATS`, cached node, `A FORGE`/`A EQUIP`/
+  `A UNEQUIP`/`NEED PARTS`/`NEED ZENNY` hint, forge/upgrade/equip on A.
+- Armor cards: craft bill gate/debit/equip, crafted PARTS trim.
+- Quest cards; hub FORGE routing; hunt reads the equipped node's class +
+  dmg/spd multipliers.
+
+## Tests
+
+Permanent, co-located, native frameworks, no `/tmp`.
+
+- Updated: `tst/screens_test.hpp` — v5 offsets/bitset caps; the four migration
+  tests replaced by one "v1..v4 fall back to defaults" test.
+- Updated: `tst/forge_state_test.hpp` — token test removed (machinery gone);
+  bitset caps. `tst/card_state_test.hpp` — weapon path now `cardHint`/`cardApply`.
+- Updated: `tst/armor_engine_test.hpp` (crafted cap), `tst/fxdatatest/forge_test.hpp`
+  (`cardApply`, sentinel fields), `tst/fxdatatest/cards_test.hpp`
+  (`drawCard` signature + `cardSetHint`), `tst/fxdatatest/hub_test.hpp` comment,
+  `tst/fxdatatest/test_hub.ino`.
+- Tools: `tools/tests/test_gen_forge.py` asserts `TIER_NODE` is gone;
+  `tools/tests/test_gen_screens.py` drops the `TIER_COUNT` expectation.
+- Removed tests pin removed machinery: v1..v4 decoders + spine map, list
+  E/OK/UP/DIR tokens, `cardWeaponHint`/`cardWeaponApply`/`cardRowNode`,
+  `MH_FORGE_TOKENS`. Coverage of what remains (tree walk, upgrade/direct,
+  equipped follow, card forge/equip/craft, v5 round-trip) is kept.
 
 ## Gate tails
 
-`make gen` (card line):
+`make gen`:
 ```
-gen-cards: 9 items, 32 pages, 305 B blob (magic 0x4341 version 1)
-gen-cards: src/generated/card_meta.hpp
+gen-forge: 9 nodes, 161 B blob (magic 0x4647 version 1)
+gen-screens: 4 screens, 50 rows, 841 B blob (magic 0x5343 version 1)
+gen-cards: 18 items, 56 pages, 602 B blob (magic 0x4341 version 1)
 ```
 `make gen-check`:
 ```
-fxdata_manifest: PASS (122 generated artifacts unchanged)
+fxdata_manifest: PASS (148 generated artifacts unchanged)
 ```
 `make test`:
 ```
-Total Passed: 6232
+Total Passed: 6306
 Total Failed: 0
 ```
 `make test-tools`:
 ```
-Ran 324 tests in 18.204s
+Ran 344 tests in 18.2s
 OK
 ```
-`make fxtest-headless` (full, 17/17):
+`make fxtest-headless` (full, 18/18):
 ```
-test_assets PASSED=264  test_audio PASSED=9    test_boot PASSED=4
-test_cards PASSED=83    test_combat PASSED=237 test_data PASSED=348
-test_hub PASSED=77      test_hud PASSED=29     test_items PASSED=35
-test_monster_art PASSED=127  test_perf PASSED=5  test_player_art PASSED=120
-test_quests PASSED=87   test_screens PASSED=136  test_smith PASSED=51
-test_tell PASSED=18     test_zones PASSED=82
+asset_test PASSED=264  test_audio PASSED=9    test_boot PASSED=4
+test_cards PASSED=85   combat_test PASSED=237 data_test PASSED=348
+test_forge PASSED=58   test_hub PASSED=81     test_hud PASSED=29
+test_items PASSED=35   test_monster_art PASSED=127  test_perf PASSED=5
+test_player_art PASSED=120  test_quests PASSED=87  test_screens PASSED=136
+test_smith PASSED=51   test_tell PASSED=18     zones_test PASSED=82
 ```
 `make size`:
 ```
-size: .text=29156 .data=16 .bss=1748
-size: flash=29172/29696 (524 free)  ram=1764/2560
+size: .text=29474 .data=32 .bss=1769
+size: flash=29506/29696 (190 free)  ram=1801/2560
 ```
 
-## Blockers
+## Smith retirement note
 
-None. Free headroom is now 524 B (was 16 B); the next bead (ui.4 FORGE trees +
-save v5) has its budget pool.
+Unchanged from the ui.4 report: `src/smith.hpp` / `UpgradeDef` / `upgradeFind` /
+`upgradeResolve` are shipping-dead and `mhSmith` is read only by
+`tst/fxdatatest/smith_test.hpp`; retiring them reclaims FX-cart bytes, not MCU
+flash, so it is left in place (the trim did not need it).
+
+No commit/push (orchestrator commits between bead waves). ui.4 is complete on
+this same tree.

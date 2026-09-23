@@ -12,6 +12,7 @@
 
 #include "render.hpp"
 #include "card_state.hpp"
+#include "forge.hpp"
 #include "generated/card_meta.hpp"
 #include "core/fxmem.hpp"
 
@@ -56,6 +57,11 @@ MH_NOINLINE inline void cardLoad(DetailState &s, CardItem &cache, uint8_t index,
     uint8_t mask = cache.pageMask;
     if (cache.kind == cards::KIND_ARMOR)
         mask = cardArmorMask(mask, saveCrafted(save, index));
+    else if (cache.kind == cards::KIND_WEAPON)
+        // Weapon cards carry the node id; cache the node table record so the
+        // hint line + the A action do not re-read the cart every frame. An
+        // out-of-range index reads the sentinel (zeroed) record.
+        forgeReadNode(index >= cards::WEAPON_BASE ? static_cast<uint8_t>(index - cards::WEAPON_BASE) : forge::NODE_COUNT, s.node);
     if (reopen)
         cardSetMask(s, mask);
     else
@@ -71,11 +77,13 @@ static const char MH_PROGMEM CARD_HINTS[] = "A CRAFT\0"
                                             "A ACCEPT\0"
                                             "A TURN IN\0"
                                             "NEED PARTS\0"
-                                            "NEED ZENNY\0";
+                                            "NEED ZENNY\0"
+                                            "A FORGE\0";
 // Indexed by CardHint (src/card_state.hpp): NONE, CRAFT, EQUIP, UNEQUIP,
-// NEED_PARTS, NEED_ZENNY, ACCEPT, TURN_IN.
-static const uint8_t MH_PROGMEM CARD_HINT_OFF[8] = {
-    67, 0, 8, 16, 45, 56, 26, 35,
+// NEED_PARTS, NEED_ZENNY, ACCEPT, TURN_IN, FORGE. NONE points at the literal's
+// terminating NUL (75), so it draws nothing.
+static const uint8_t MH_PROGMEM CARD_HINT_OFF[9] = {
+    75, 0, 8, 16, 45, 56, 26, 35, 67,
 };
 
 // Draw the hint line at y=56 (white). Null-terminated; at most 11 chars.
@@ -90,9 +98,10 @@ inline void drawCardHint(CardHint hint) {
     }
 }
 
-// Draw one plane of the open card: page image, this page's overlays, hint.
-// Read-only: never mutates the save.
-MH_NOINLINE inline void drawCard(const DetailState &s, const CardItem &it, const SaveBlock &save, const ScreenRow &row) {
+// Draw one plane of the open card: page image, this page's overlays, cached
+// hint. Read-only: never mutates the save. The hint was classified by
+// cardSetHint() when the card opened/refreshed.
+MH_NOINLINE inline void drawCard(const DetailState &s, const CardItem &it, const SaveBlock &save) {
     cardBlit(cardPageOffset(it, s.page));
     for (uint8_t i = 0; i < it.overlayCount && i < cards::OVERLAY_MAX; i++) {
         const CardOverlay &ov = it.overlays[i];
@@ -109,7 +118,7 @@ MH_NOINLINE inline void drawCard(const DetailState &s, const CardItem &it, const
                 hudBlk(ov.x, ov.y, static_cast<int16_t>(w), 6, 2);
         }
     }
-    drawCardHint(cardHint(save, row, it));
+    drawCardHint(static_cast<CardHint>(s.hint));
 }
 
 }   // namespace mh

@@ -1,10 +1,9 @@
 {
   "id": 3,
   "title": "GEAR",
+  "weapons": "equip",
   "rows": [
-    { "label": "SWORD", "cost": 0, "action": "equip_weapon", "condition": "always", "param": 0 },
-    { "label": "FLAIL", "cost": 0, "action": "equip_weapon", "condition": "always", "param": 1 },
-    { "label": "GUN", "cost": 0, "action": "equip_weapon", "condition": "always", "param": 2 },
+    { "label": "-- ARMOR --", "cost": 0, "action": "none", "condition": "always", "param": 0 },
     { "label": "HUNTER HELM", "cost": 0, "action": "equip_armor", "condition": "always", "param": 0 },
     { "label": "BONE CAP", "cost": 0, "action": "equip_armor", "condition": "always", "param": 1 },
     { "label": "HUNTER MAIL", "cost": 0, "action": "equip_armor", "condition": "always", "param": 34 },

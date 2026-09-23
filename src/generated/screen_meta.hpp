@@ -13,13 +13,12 @@ namespace screens {
 constexpr uint16_t MAGIC = 0x5343;
 constexpr uint8_t VERSION = 1;
 constexpr uint8_t FLAGS = 0x00;
-constexpr uint16_t SIZE = 445;
+constexpr uint16_t SIZE = 841;
 constexpr uint8_t HEADER_SIZE = 8;
 constexpr uint8_t DEF_OFF_OFF = 8;
-constexpr uint16_t ROWS_OFF = 42;
-constexpr uint8_t SCREEN_COUNT = 3;
-constexpr uint16_t ROW_COUNT = 26;
-constexpr uint8_t TIER_COUNT = 3;   // must match core/save.hpp SAVE_TIER_COUNT
+constexpr uint16_t ROWS_OFF = 54;
+constexpr uint8_t SCREEN_COUNT = 4;
+constexpr uint16_t ROW_COUNT = 50;
 
 // Row action ids; src/screen_state.hpp switches on these.
 constexpr uint8_t ACTION_LEAVE = 0;
@@ -32,6 +31,8 @@ constexpr uint8_t ACTION_OPEN_QUESTS = 6;
 constexpr uint8_t ACTION_EQUIP_WEAPON = 7;
 constexpr uint8_t ACTION_OPEN_GEAR = 8;
 constexpr uint8_t ACTION_EQUIP_ARMOR = 9;
+constexpr uint8_t ACTION_FORGE_NODE = 10;
+constexpr uint8_t ACTION_OPEN_FORGE = 11;
 
 // Row condition ids; 0 = always, else the save query in screenCondOk().
 constexpr uint8_t COND_ALWAYS = 0;
@@ -42,25 +43,31 @@ constexpr uint8_t COND_QUEST = 4;
 constexpr uint8_t COND_UPGRADE = 5;
 
 // ScreenRow flags.
+constexpr uint8_t ROW_F_FORGE = 0x08;
 constexpr uint8_t ROW_F_HIDE_LOCKED = 0x01;
 constexpr uint8_t ROW_F_SKILL = 0x04;
 constexpr uint8_t ROW_F_ZENNY = 0x02;
 
 // Screen indices, sorted by id, with the cart offsets the runtime uses.
 constexpr uint8_t SCREEN_HUB = 0;
-constexpr uint16_t SCREEN_HUB_OFF = 14;
-constexpr uint8_t SCREEN_HUB_ROWS = 4;
+constexpr uint16_t SCREEN_HUB_OFF = 16;
+constexpr uint8_t SCREEN_HUB_ROWS = 5;
 constexpr uint8_t SCREEN_HUB_TITLE_LEN = 3;
-constexpr uint16_t SCREEN_HUB_FIRST_ROW = 42;
+constexpr uint16_t SCREEN_HUB_FIRST_ROW = 54;
 constexpr uint8_t SCREEN_QUESTS = 1;
-constexpr uint16_t SCREEN_QUESTS_OFF = 22;
+constexpr uint16_t SCREEN_QUESTS_OFF = 24;
 constexpr uint8_t SCREEN_QUESTS_ROWS = 8;
 constexpr uint8_t SCREEN_QUESTS_TITLE_LEN = 6;
-constexpr uint16_t SCREEN_QUESTS_FIRST_ROW = 89;
+constexpr uint16_t SCREEN_QUESTS_FIRST_ROW = 113;
 constexpr uint8_t SCREEN_GEAR = 2;
-constexpr uint16_t SCREEN_GEAR_OFF = 33;
-constexpr uint8_t SCREEN_GEAR_ROWS = 14;
+constexpr uint16_t SCREEN_GEAR_OFF = 35;
+constexpr uint8_t SCREEN_GEAR_ROWS = 24;
 constexpr uint8_t SCREEN_GEAR_TITLE_LEN = 4;
-constexpr uint16_t SCREEN_GEAR_FIRST_ROW = 236;
+constexpr uint16_t SCREEN_GEAR_FIRST_ROW = 260;
+constexpr uint8_t SCREEN_FORGE = 3;
+constexpr uint16_t SCREEN_FORGE_OFF = 44;
+constexpr uint8_t SCREEN_FORGE_ROWS = 13;
+constexpr uint8_t SCREEN_FORGE_TITLE_LEN = 5;
+constexpr uint16_t SCREEN_FORGE_FIRST_ROW = 641;
 
 }   // namespace screens

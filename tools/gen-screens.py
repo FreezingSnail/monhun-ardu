@@ -31,13 +31,15 @@ Usage:
     --dump      validate + list the compiled screens on stdout; writes nothing
 """
 import argparse
+import importlib.util
 import json
 import os
 import re
 import struct
 import sys
 
-REPO_ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+HERE = os.path.dirname(os.path.abspath(__file__))
+REPO_ROOT = os.path.dirname(HERE)
 DATA_DIR = "data/screens"
 BLOB_REL = "fxdata/tables/screens.bin"
 META_REL = "src/generated/screen_meta.hpp"
@@ -60,14 +62,20 @@ TIER_COUNT = 3   # N_WEAPONS (W_SWORD/W_FLAIL/W_GUN); must match core/save.hpp
 # so the runtime reads them from the generated constants, never literals.
 ACTION_NAMES = ("leave", "buy_upgrade", "take_quest", "turn_in_quest",
                 "none", "hunt", "open_quests",
-                "equip_weapon", "open_gear", "equip_armor")
+                "equip_weapon", "open_gear", "equip_armor",
+                "forge_node", "open_forge")
 COND_NAMES = ("always", "zenny", "flag", "tier", "quest", "upgrade")
 # hide_locked: reserved. zenny: draw the live save.zenny balance in the cost
 # column instead of the row cost (dynamic value token, qs.4 hub display).
 # skill: draw the cached live skill points (ScreenState::skillPoints) in the cost
 # column plus an S/M tier letter next to it (gs.2 GEAR readout); `param` = the
 # armor::SKILL_* index.
-ROW_FLAGS = {"hide_locked": 0x01, "zenny": 0x02, "skill": 0x04}
+ROW_FLAGS = {"hide_locked": 0x01, "zenny": 0x02, "skill": 0x04, "forge": 0x08}
+# Per-screen generated weapon block (ui.4, 5co.4): "weapons": "forge" emits the
+# class headers + forge_node rows (cost column = the upgrade cost), "equip"
+# emits the same tree with equip_weapon rows (no cost; the GEAR list). The rows
+# are built from data/forge/*.json so the tree is authored once.
+WEAPONS_MODES = ("forge", "equip")
 # COND_UPGRADE param packs (unlockFlag << 4) | (weaponIdx << 2) | tier (see
 # screen_state.hpp): unlock 0 = always, else 1-based quest whose done bit gates
 # the tier; weapon 0..TIER_COUNT-1; tier 1..SCREEN_MAX_TIER (2 in data).
@@ -216,9 +224,42 @@ def load_json(errors, path, rel):
     return None
 
 
-def normalize_screen(errors, rel, name, obj, seen_ids):
+def load_forge_module():
+    spec = importlib.util.spec_from_file_location("gen_forge", os.path.join(HERE, "gen-forge.py"))
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+    return module
+
+
+def weapon_rows(errors, ctx, mode, forge_model):
+    """Class headers + one row per node, generated from the forge tree. The
+    `mode` picks the row action (forge_node vs equip_weapon) and whether the
+    cost column carries the upgrade cost (FORGE) or stays 0 (GEAR)."""
+    gen_forge = load_forge_module()
+    rows = []
+    action = ACTION_NAMES.index("forge_node" if mode == "forge" else "equip_weapon")
+    for entry in forge_model["classes"]:
+        rows.append({"label": entry["header"], "cost": 0, "action": ACTION_NAMES.index("none"),
+                     "flags": 0, "cond": COND_NAMES.index("always"), "param": 0})
+        for node in forge_model["nodes"]:
+            if node["class"] != entry["class"]:
+                continue
+            label = gen_forge.row_label(forge_model, node)
+            if len(label) > LABEL_MAX:
+                errors.add(ctx, "weapon row %r exceeds %d chars" % (label, LABEL_MAX))
+                continue
+            rows.append({"label": label,
+                         "cost": node["cost"] if mode == "forge" else 0,
+                         "action": action, "flags": ROW_FLAGS["forge"],
+                         "cond": COND_NAMES.index("always"), "param": node["index"]})
+    if not rows:
+        errors.add(ctx, "weapons: no forge nodes to generate rows from")
+    return rows
+
+
+def normalize_screen(errors, rel, name, obj, seen_ids, forge_model):
     ctx = rel
-    check_keys(errors, ctx, obj, {"id", "title", "rows"})
+    check_keys(errors, ctx, obj, {"id", "title", "rows"}, ("weapons",))
     if not isinstance(obj, dict):
         return None
     stem = os.path.splitext(name)[0]
@@ -230,17 +271,26 @@ def normalize_screen(errors, rel, name, obj, seen_ids):
             errors.add(ctx, "duplicate screen id %d" % screen_id)
         seen_ids.add(screen_id)
     title = read_text(errors, ctx, obj, "title", TITLE_MAX)
+    mode = obj.get("weapons")
+    if mode is not None and mode not in WEAPONS_MODES:
+        errors.add(ctx, "weapons: unknown mode %r (want one of %s)" % (mode, ", ".join(WEAPONS_MODES)))
+        mode = None
     raw_rows = obj.get("rows")
     if not isinstance(raw_rows, list) or not raw_rows:
         errors.add(ctx, "rows: expected a non-empty array")
         raw_rows = []
-    if len(raw_rows) > SCREEN_MAX:
-        errors.add(ctx, "rows: %d exceed the %d row limit" % (len(raw_rows), SCREEN_MAX))
     rows = []
+    if mode is not None:
+        if forge_model is None:
+            errors.add(ctx, "weapons: forge tree unavailable (data/forge/*.json)")
+        else:
+            rows += weapon_rows(errors, ctx, mode, forge_model)
     for i, row in enumerate(raw_rows):
         normalized = normalize_row(errors, "%s.rows[%d]" % (ctx, i), row)
         if normalized is not None:
             rows.append(normalized)
+    if len(rows) > SCREEN_MAX:
+        errors.add(ctx, "rows: %d exceed the %d row limit" % (len(rows), SCREEN_MAX))
     if None in (screen_id, title):
         return None
     return {"name": stem, "id": screen_id, "title": title, "rows": rows}
@@ -255,6 +305,14 @@ def compile_model(errors, root):
     if not names:
         errors.add(DATA_DIR, "no screen JSON files found")
         return None
+    # The forge tree backs the generated FORGE/GEAR weapon row blocks; only load
+    # it when a screen asks (so gen-screens stays independent of data/forge).
+    forge_model = None
+    for name in names:
+        obj = load_json(errors, os.path.join(data_dir, name), "%s/%s" % (DATA_DIR, name))
+        if isinstance(obj, dict) and obj.get("weapons") is not None:
+            forge_model = load_forge_module().load_model(root)
+            break
     screens = []
     seen_ids = set()
     for name in names:
@@ -262,7 +320,7 @@ def compile_model(errors, root):
         obj = load_json(errors, os.path.join(data_dir, name), rel)
         if obj is None:
             continue
-        screen = normalize_screen(errors, rel, name, obj, seen_ids)
+        screen = normalize_screen(errors, rel, name, obj, seen_ids, forge_model)
         if screen is not None:
             screens.append(screen)
     if errors.items:
@@ -340,7 +398,6 @@ def emit_meta_header(model, packed):
     app("constexpr uint16_t ROWS_OFF = %d;" % packed["rows_start"])
     app("constexpr uint8_t SCREEN_COUNT = %d;" % len(screens))
     app("constexpr uint16_t ROW_COUNT = %d;" % sum(counts))
-    app("constexpr uint8_t TIER_COUNT = %d;   // must match core/save.hpp SAVE_TIER_COUNT" % TIER_COUNT)
     app("")
     app("// Row action ids; src/screen_state.hpp switches on these.")
     for i, name in enumerate(ACTION_NAMES):

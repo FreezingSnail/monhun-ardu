@@ -277,8 +277,8 @@ inline void test_zones(FxTest &test) {
     // door still leads to the area hunt (prg.8 removed the pole room).
     SaveBlock beast;
     saveDefaults(beast);
-    beast.weapon = W_GUN;
-    beast.activeQuest = 1;   // slay_sweep (kill, target sweep)
+    beast.equippedNode = forge::NODE_GUN_BASE;   // save v5: equip the gun root
+    beast.activeQuest = 1;                       // slay_sweep (kill, target sweep)
     huntStart(d, beast);
     test.expectEq(static_cast<uint32_t>(d.mode), MODE_HUNT, F("beast hunt mode"));
     test.expectEq(static_cast<uint32_t>(d.weapon), W_GUN, F("beast hunt weapon"));
