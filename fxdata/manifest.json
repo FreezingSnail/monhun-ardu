@@ -788,8 +788,8 @@
     {
       "declaration": "fxdata/screens/Sprites.txt",
       "path": "images/screens/mh_screen_hub_0_128x64.png",
-      "sha256": "eae1fe32d9f57d1b4d6628681acb640d461dfd8d82411642077c580bfb71e86a",
-      "size": 481,
+      "sha256": "576c979a9ec243b9c0382406220ab7a820d12147828558af3b9f6c5205719738",
+      "size": 363,
       "symbol": "mh_screen_hub_0"
     },
     {
@@ -1010,8 +1010,8 @@
     },
     {
       "path": "data/screens/hub.json",
-      "sha256": "93a5ec152f84df4d24b44c37e0548fb69cd5589c2c010c35000a9f4f56c47c57",
-      "size": 461
+      "sha256": "630d394f57d7b1abf339d014df957a3eb014c05fdc6423f6e5d784f6b6bb2ca5",
+      "size": 444
     },
     {
       "path": "data/screens/quests.json",
@@ -1205,8 +1205,8 @@
     },
     {
       "path": "fxdata/screens/Sprites.txt",
-      "sha256": "84614f2803bddc62861ab1163a955e3210357e35f8b62d983ec0631b692c3b28",
-      "size": 108593,
+      "sha256": "5b0262661144198024bc01dd11c894a7ddf8477a8d649704c54e3316723ea35e",
+      "size": 108537,
       "symbols": [
         "mh_screen_hub_0",
         "mh_screen_quests_0",
@@ -1228,7 +1228,7 @@
     },
     {
       "path": "fxdata/tables/cards.bin",
-      "sha256": "82e578f8abdb1916902c9b0218b7e934305f2e5c0a4b37c0f117f98344e80bde",
+      "sha256": "f3ee66cf601d33c9b7629474f890059ac29e78c0364bc3b349a74e36cddc18b8",
       "size": 602,
       "symbol": "mhCards"
     },
@@ -1240,7 +1240,7 @@
     },
     {
       "path": "fxdata/tables/equip.bin",
-      "sha256": "02c8f9c7b0b856393f16841e96d5bea6ab3015ef1c6a1be374bda35f478ed31c",
+      "sha256": "a75638b82ee17fa7ed4957c5f170e5b7e58fddaa25071976d24b1e0a797c7e54",
       "size": 876,
       "symbol": "mhEquip"
     },
@@ -1276,8 +1276,8 @@
     },
     {
       "path": "fxdata/tables/screens.bin",
-      "sha256": "5d5832ca2b749d5ba9c1695ef31a74450ec4a625158b6a4c5763c1e5e50451f6",
-      "size": 863,
+      "sha256": "c5ff2d544d1381d0e7ae65423d50c508102b4593d91b4ec0b965d7f2eb39e951",
+      "size": 881,
       "symbol": "mhScreens"
     },
     {
@@ -1308,17 +1308,17 @@
   "outputs": [
     {
       "path": "fxdata/fxdata-data.bin",
-      "sha256": "c371ce33536d6d4881f1f0031113f3e85628c133c5dde2556eec06d379c5559e",
-      "size": 404249
+      "sha256": "4f78beefc8a92a6cff677754c80468d4c9e7e8fd8ecf8bb6bb9dd4b94b5b0c2d",
+      "size": 404267
     },
     {
       "path": "fxdata/fxdata.bin",
-      "sha256": "714390db1d92035133f327fabacc3a35a841c8366db93ade154ee0317efca9b2",
+      "sha256": "ed04306ac9f231e5f9c468a83dbb39ed2f337911917fd6cea036da36009d08da",
       "size": 404480
     },
     {
       "path": "fxdata/fxdata.h",
-      "sha256": "61fbdfbc9f917fae3500e8fb86b6bb678d45d59f5f0432b4b672330aa2d4ce36",
+      "sha256": "3377497aa52cf14de55e42d62613450ac197bb4d329dfdbe2686592949d3469f",
       "size": 6645
     },
     {
@@ -1328,7 +1328,7 @@
     },
     {
       "path": "fxdata/tables/cards.bin",
-      "sha256": "82e578f8abdb1916902c9b0218b7e934305f2e5c0a4b37c0f117f98344e80bde",
+      "sha256": "f3ee66cf601d33c9b7629474f890059ac29e78c0364bc3b349a74e36cddc18b8",
       "size": 602
     },
     {
@@ -1338,7 +1338,7 @@
     },
     {
       "path": "fxdata/tables/equip.bin",
-      "sha256": "02c8f9c7b0b856393f16841e96d5bea6ab3015ef1c6a1be374bda35f478ed31c",
+      "sha256": "a75638b82ee17fa7ed4957c5f170e5b7e58fddaa25071976d24b1e0a797c7e54",
       "size": 876
     },
     {
@@ -1353,8 +1353,8 @@
     },
     {
       "path": "fxdata/tables/screens.bin",
-      "sha256": "5d5832ca2b749d5ba9c1695ef31a74450ec4a625158b6a4c5763c1e5e50451f6",
-      "size": 863
+      "sha256": "c5ff2d544d1381d0e7ae65423d50c508102b4593d91b4ec0b965d7f2eb39e951",
+      "size": 881
     },
     {
       "path": "fxdata/tables/smith.bin",
@@ -1363,7 +1363,7 @@
     },
     {
       "path": "src/fxdata.h",
-      "sha256": "61fbdfbc9f917fae3500e8fb86b6bb678d45d59f5f0432b4b672330aa2d4ce36",
+      "sha256": "3377497aa52cf14de55e42d62613450ac197bb4d329dfdbe2686592949d3469f",
       "size": 6645
     },
     {
@@ -1408,7 +1408,7 @@
     },
     {
       "path": "src/generated/equip_meta.hpp",
-      "sha256": "d818936c0c17ad9a633d4e5ce08fa1e09844ea37e736e0c7ee205365d5dbfd9e",
+      "sha256": "a8df2b42e3857de3ef1f5fbd058c985fb432d0485015eb0e9af43912e86eb097",
       "size": 22334
     },
     {
@@ -1443,8 +1443,8 @@
     },
     {
       "path": "src/generated/screen_meta.hpp",
-      "sha256": "30bf20c2673d80c36b4fb425ba4121e42d49269eb779d6fe393a6a9960d9ea2c",
-      "size": 3303
+      "sha256": "7c73cb6765d10c267d715495c92d2de80dab33123d0516988a3e0faba4680c89",
+      "size": 3416
     },
     {
       "path": "src/generated/smith_meta.hpp",
@@ -1458,7 +1458,7 @@
     },
     {
       "path": "src/generated/zone_meta.hpp",
-      "sha256": "55c0febbbd3d1d5251fb4b760f855c66e90a64ff55823c5dde92ca76a9961c5c",
+      "sha256": "1e3e24d1c76820fc3ac174a6f427bf4038e4daa8e1b71012fd3601d25e05a35a",
       "size": 8388
     }
   ],

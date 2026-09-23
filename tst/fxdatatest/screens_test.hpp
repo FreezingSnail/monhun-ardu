@@ -13,8 +13,8 @@
 #include "src/screens.hpp"
 #include "src/app_state.hpp"
 #include "src/armor.hpp"
-#include "src/forge_state.hpp"   // forgeNodeApply / forgeReadNode (hbk.3 markers)
-#include "src/fxdata.h"          // mh_screen_forge_* page addresses
+#include "src/forge.hpp"   // forgeNodeApply / forgeReadNode + forge::NODE_* (hbk.3 markers)
+#include "src/fxdata.h"    // mh_screen_forge_* page addresses
 
 #include <stdint.h>
 
@@ -241,10 +241,10 @@ inline void test_screens(FxTest &test) {
     // right-aligned on the same title line: `$` + 1234 at x 104..123.
     test.expectEq(countBits(2, 13, 0, 7) > 0 ? 1 : 0, 1, F("title band ink"));
     test.expectEq(countBits(104, 123, 0, 7) > 0 ? 1 : 0, 1, F("header zenny drawn"));
-    // Row 0 label (baked; selected -> white redraw). Row 0 is HUNT: the live
-    // quest column draws `-` (no active quest) at 120..123.
+    // Row 0 label (baked; selected -> white redraw). Row 0 is HUNT: with no
+    // active quest the live quest column draws nothing.
     test.expectEq(countBits(10, 40, 11, 18) > 0 ? 1 : 0, 1, F("row0 label ink"));
-    test.expectEq(countBits(120, 123, 11, 18) > 0 ? 1 : 0, 1, F("hub quest column dash"));
+    test.expectEq(countBits(104, 123, 11, 18), 0, F("hub quest column empty without a quest"));
     // The hub bakes labels only (costs are 0): rows 1..3 have no cost ink.
     test.expectEq(countBits(104, 123, 20, 27), 0, F("hub row1 no baked cost"));
     test.expectEq(countBits(104, 123, 29, 36), 0, F("hub row2 no baked cost"));
@@ -267,7 +267,8 @@ inline void test_screens(FxTest &test) {
     waitPlane(0);
 
     // -------------------------------------------- ui.5.2 hub chrome pixels
-    // HUNT right column (row 0, y=11): active quest progress `p/n`.
+    // HUNT right column (row 0, y=11): active quest progress `p/n` only
+    // (hbk.9 dropped the no-quest `-` and the READY branch).
     clearFb();
     SaveBlock qs2;
     saveDefaults(qs2);
@@ -278,54 +279,20 @@ inline void test_screens(FxTest &test) {
     drawScreen(hud, qs2, g_gear);
     // "2/3": digits x 112..115 / 120..123, slash 116..119.
     test.expectEq(countBits(112, 123, 11, 18) > 0 ? 1 : 0, 1, F("hunt progress p/n ink"));
-    test.expectEq(countBits(104, 111, 11, 18), 0, F("hunt progress leaves the READY span empty"));
+    test.expectEq(countBits(104, 111, 11, 18), 0, F("hunt progress leaves the 4-digit span empty"));
 
-    // READY when progress >= need: 5 chars right-aligned at x 104..123.
+    // Progress at/over the need still draws `p/n` (READY retired in hbk.9).
     clearFb();
     qs2.progress = 3;
     drawScreen(hud, qs2, g_gear);
-    test.expectEq(countBits(104, 123, 11, 18) > 0 ? 1 : 0, 1, F("hunt READY ink"));
+    test.expectEq(countBits(112, 123, 11, 18) > 0 ? 1 : 0, 1, F("hunt met progress p/n ink"));
+    test.expectEq(countBits(104, 111, 11, 18), 0, F("hunt met progress leaves the 4-digit span empty"));
 
-    // No active quest -> `-` at x 120..123.
+    // No active quest -> the column stays empty (`-` retired in hbk.9).
     clearFb();
     qs2.activeQuest = SAVE_QUEST_NONE;
     drawScreen(hud, qs2, g_gear);
-    test.expectEq(countBits(120, 123, 11, 18) > 0 ? 1 : 0, 1, F("hunt none dash ink"));
-    test.expectEq(countBits(104, 119, 11, 18), 0, F("hunt none leaves the digit span empty"));
-
-    // Bottom strip (y=56): the five skill labels bake at fixed slots
-    // x=20/40/60/80/100 (light); live = the weapon class abbr at x=2 + tier
-    // digit at x=14 and each ACTIVE skill's 2-digit points at slot+12 (ATK ->
-    // x=32..39).
-    clearFb();
-    SaveBlock strip;
-    saveDefaults(strip);
-    strip.equippedNode = forge::NODE_SWORD_BASE;
-    for (uint8_t i = 0; i < armor::SKILL_COUNT; i++) {
-        g_gear.armor.tier[i] = 0;
-        g_gear.armor.points[i] = 0;
-    }
-    g_gear.armor.tier[armor::SKILL_ATTACK_UP] = 1;
-    g_gear.armor.points[armor::SKILL_ATTACK_UP] = 12;
-    ScreenState sh;
-    screenEnter(sh, screens::SCREEN_HUB, strip);
-    drawScreen(sh, strip, g_gear);
-    // Baked ATK label at x 20..31 (the label span is baked, not live).
-    test.expectEq(countBits(20, 31, 56, 63) > 0 ? 1 : 0, 1, F("strip baked ATK label ink"));
-    // Live weapon marker "SWD1" at x 2..17.
-    test.expectEq(countBits(2, 17, 56, 63) > 0 ? 1 : 0, 1, F("strip weapon marker ink"));
-    // Active ATK points "12" at x 32..39 (slot 20 + 12).
-    test.expectEq(countBits(32, 39, 56, 63) > 0 ? 1 : 0, 1, F("strip active ATK points ink"));
-
-    // Inert skills (tier 0) draw no points: the number slots stay empty while
-    // the baked labels remain.
-    clearFb();
-    for (uint8_t i = 0; i < armor::SKILL_COUNT; i++)
-        g_gear.armor.tier[i] = 0;
-    drawScreen(sh, strip, g_gear);
-    test.expectEq(countBits(32, 39, 56, 63), 0, F("strip inert ATK number slot empty"));
-    test.expectEq(countBits(52, 59, 56, 63), 0, F("strip inert DEF number slot empty"));
-    test.expectEq(countBits(20, 31, 56, 63) > 0 ? 1 : 0, 1, F("strip baked labels stay with inert skills"));
+    test.expectEq(countBits(104, 123, 11, 18), 0, F("hunt none leaves the column empty"));
 
     // Page indicator `n/m` bakes into each page at x = 2 + title width + 4
     // (QUESTS title 6 chars -> x=30, shade 2). Plane 1 clears the shade-1 band,
@@ -530,17 +497,19 @@ inline void test_screens(FxTest &test) {
     test.expectEq(countBits(116, 123, 20, 27), 0, F("gear armor no marker"));
 
     // -------------------------------------------- hbk.3 prebaked pages
-    // Page table (docs/ui-design.md): per screen a u8 page count then that many
-    // u24 absolute FX addresses of the baked mh_screen_<name>_<page> layers.
-    // Every shipped screen is prebaked (the legacy text path is deleted).
+    // Page table (docs/ui-design.md, fixed stride hbk.9): one 13-byte slot per
+    // screen -- a u8 page count then 4 x u24 absolute FX addresses of the baked
+    // mh_screen_<name>_<page> layers. Every shipped screen is prebaked.
+    test.expectEq(screens::SCREEN_PAGE_STRIDE, 13, F("page table stride"));
     test.expectEq(screenPageCount(screens::SCREEN_HUB), 1, F("hub page count"));
     test.expectEq(screenPageCount(screens::SCREEN_QUESTS), 2, F("quests page count"));
     test.expectEq(screenPageCount(screens::SCREEN_GEAR), 4, F("gear page count"));
     test.expectEq(screenPageCount(screens::SCREEN_FORGE), 3, F("forge page count"));
-    test.expectEq(screenPageTableOff(screens::SCREEN_HUB), screens::SCREEN_HUB_PAGE_TABLE, F("hub page table off"));
-    test.expectEq(screenPageTableOff(screens::SCREEN_QUESTS), screens::SCREEN_QUESTS_PAGE_TABLE, F("quests page table off"));
-    test.expectEq(screenPageTableOff(screens::SCREEN_GEAR), screens::SCREEN_GEAR_PAGE_TABLE, F("gear page table off"));
-    test.expectEq(screenPageTableOff(screens::SCREEN_FORGE), screens::SCREEN_FORGE_PAGE_TABLE, F("forge page table off"));
+    // The generated per-screen offsets are PAGE_TABLE_OFF + screen * stride.
+    test.expectEq(screens::SCREEN_HUB_PAGE_TABLE, screens::PAGE_TABLE_OFF, F("hub page table off"));
+    test.expectEq(screens::SCREEN_QUESTS_PAGE_TABLE, static_cast<uint16_t>(screens::PAGE_TABLE_OFF + screens::SCREEN_PAGE_STRIDE), F("quests page table off"));
+    test.expectEq(screens::SCREEN_GEAR_PAGE_TABLE, static_cast<uint16_t>(screens::PAGE_TABLE_OFF + 2 * screens::SCREEN_PAGE_STRIDE), F("gear page table off"));
+    test.expectEq(screens::SCREEN_FORGE_PAGE_TABLE, static_cast<uint16_t>(screens::PAGE_TABLE_OFF + 3 * screens::SCREEN_PAGE_STRIDE), F("forge page table off"));
     test.expectEq(screenPageAddr(screens::SCREEN_HUB, 0), mh_screen_hub_0, F("hub page0 addr"));
     test.expectEq(screenPageAddr(screens::SCREEN_QUESTS, 0), mh_screen_quests_0, F("quests page0 addr"));
     test.expectEq(screenPageAddr(screens::SCREEN_QUESTS, 1), mh_screen_quests_1, F("quests page1 addr"));

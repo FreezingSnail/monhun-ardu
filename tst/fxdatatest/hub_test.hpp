@@ -8,7 +8,8 @@
 // pinned by cards_test.
 
 #include "harness/fxtest.hpp"
-#include "src/screens.hpp"   // includes forge.hpp: forgeReadNode/forgeNodeEquipToggle (ui.4)
+#include "src/screens.hpp"
+#include "src/forge.hpp"   // forgeReadNode/forgeNodeEquipToggle + forge::NODE_* (ui.4)
 #include "src/app_state.hpp"
 #include "src/app_setup.hpp"
 #include "src/core/world.hpp"

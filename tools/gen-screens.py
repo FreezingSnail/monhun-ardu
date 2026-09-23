@@ -19,9 +19,10 @@ Blob layout (little-endian, explicit u8/u16, no padding, fixed order):
                     rowCount u8, firstRow u16 (absolute blob offset)
     rows       variable  ScreenRow: labelLen u8, label[labelLen], cost u16,
                     actionId u8, flags u8, condId u8, param u8
-    pageTable  variable  per screen (index order): pageCount u8, then pageCount
-                    x u24 absolute FX addresses of the baked mh_screen_<name>_
-                    <page> layer arrays (0 = not prebaked / unresolved)
+    pageTable  fixed     per screen (index order) one SCREEN_PAGE_STRIDE-byte slot:
+                    pageCount u8, then 4 x u24 absolute FX addresses of the baked
+                    mh_screen_<name>_<page> layer arrays (0 = not prebaked /
+                    unresolved)
 
 The runtime (src/screens.hpp) reads records through core/fxmem.hpp during the
 render/scan window; the host suite uses plain row structs. Action/condition/
@@ -58,7 +59,6 @@ META_REL = "src/generated/screen_meta.hpp"
 SPRITES_REL = "fxdata/screens/Sprites.txt"
 IMAGE_DIR_REL = "images/screens"
 FX_HEADER_REL = "fxdata/fxdata.h"
-SKILLS_REL = "data/skills.json"
 
 MAGIC = 0x5343
 VERSION = 1
@@ -113,14 +113,11 @@ PREBAKE_LAYOUT = {
     "prefix_chars": " +-|",   # tree prefix drawn dark, the name light
     "header_prefix": "--",    # section header rows (class/armor bands)
     "cost_max": 999,      # 3 digits fit left of the marker column
-    # Hub bottom strip (ui.5.2/hbk.3): the five skill abbreviations bake at
-    # fixed slots on the hub page; the device draws only the live weapon class
-    # abbr + tier and each active skill's points (slot + 12).
-    "strip_y": 56,
-    "strip_slot_x0": 20,
-    "strip_slot_w": 20,
 }
-PAGE_MAX = 8              # baked pages per screen (u8 count; 8 x 6 = 48 rows)
+# Baked pages per screen: the fixed 13-byte page-table slot carries 4 u24
+# addresses (4 x 6 = 24 rows), so a prebaked screen may not exceed PAGE_MAX pages.
+PAGE_MAX = 4
+PAGE_STRIDE = 13          # u8 pageCount + PAGE_MAX x u24 addresses per screen slot
 
 # 4-shade palette (1:1 with L4_Triplane; same values as gen-cards/gen-zones).
 CLEAR = (0, 0, 0, 0)
@@ -308,25 +305,6 @@ def load_fxdata_symbols(root):
         return {}
 
 
-def read_skill_abbrs(errors, root):
-    """3-char skill abbreviations (armor::SKILL_* order) for the baked hub strip."""
-    doc = load_json(errors, os.path.join(root, SKILLS_REL), SKILLS_REL)
-    if doc is None:
-        return None
-    raw = doc.get("skills") if isinstance(doc, dict) else None
-    if not isinstance(raw, list) or not raw:
-        errors.add(SKILLS_REL, "skills: expected a non-empty array")
-        return None
-    abbrs = []
-    for i, obj in enumerate(raw):
-        abbr = obj.get("abbr") if isinstance(obj, dict) else None
-        if not isinstance(abbr, str) or not 2 <= len(abbr) <= 4:
-            errors.add("%s: skills[%d].abbr" % (SKILLS_REL, i), "expected a 2..4 char abbr")
-            return None
-        abbrs.append(abbr[:3])
-    return abbrs
-
-
 def weapon_rows(errors, ctx, mode, forge_model):
     """Class headers + one row per node, generated from the forge tree. The
     `mode` picks the row action (forge_node vs equip_weapon) and whether the
@@ -406,7 +384,7 @@ def header_text(label):
     return text if text else label
 
 
-def screen_pages(screen, skill_abbrs):
+def screen_pages(screen):
     """Bake the screen's pages: [(page index, PIL image)], one per 6-row block
     -- exactly the runtime scroll window (page = scroll / 6)."""
     layout = PREBAKE_LAYOUT
@@ -423,12 +401,6 @@ def screen_pages(screen, skill_abbrs):
             draw_text(img, 2 + text_w(screen["title"]) + 4, 0, "%d/%d" % (page + 1, page_count), LIGHT)
         for x in range(PAGE_W):
             img.load()[x, layout["rule_y"]] = LIGHT
-        # Hub bottom strip: the five skill labels bake at fixed slots (the live
-        # weapon marker + points are drawn by the device on the same line).
-        if screen["strip"] and page == 0:
-            for i, abbr in enumerate(skill_abbrs):
-                draw_text(img, layout["strip_slot_x0"] + i * layout["strip_slot_w"],
-                          layout["strip_y"], abbr, LIGHT)
         for i in range(layout["rows_per_page"]):
             index = page * layout["rows_per_page"] + i
             if index >= len(rows):
@@ -513,7 +485,7 @@ def clean_stale_images(screens, root):
 
 def normalize_screen(errors, rel, name, obj, seen_ids, forge_model):
     ctx = rel
-    check_keys(errors, ctx, obj, {"id", "title", "rows"}, ("weapons", "prebake", "strip"))
+    check_keys(errors, ctx, obj, {"id", "title", "rows"}, ("weapons", "prebake"))
     if not isinstance(obj, dict):
         return None
     stem = os.path.splitext(name)[0]
@@ -529,10 +501,6 @@ def normalize_screen(errors, rel, name, obj, seen_ids, forge_model):
     if not isinstance(prebake, bool):
         errors.add(ctx, "prebake: expected a boolean, got %r" % (prebake,))
         prebake = False
-    strip = obj.get("strip", False)
-    if not isinstance(strip, bool):
-        errors.add(ctx, "strip: expected a boolean, got %r" % (strip,))
-        strip = False
     mode = obj.get("weapons")
     if mode is not None and mode not in WEAPONS_MODES:
         errors.add(ctx, "weapons: unknown mode %r (want one of %s)" % (mode, ", ".join(WEAPONS_MODES)))
@@ -563,7 +531,7 @@ def normalize_screen(errors, rel, name, obj, seen_ids, forge_model):
                            % (row["label"], row["cost"], PREBAKE_LAYOUT["cost_max"]))
     if None in (screen_id, title):
         return None
-    return {"name": stem, "id": screen_id, "title": title, "rows": rows, "prebake": prebake, "strip": strip}
+    return {"name": stem, "id": screen_id, "title": title, "rows": rows, "prebake": prebake}
 
 
 def compile_model(errors, root):
@@ -578,16 +546,10 @@ def compile_model(errors, root):
     # The forge tree backs the generated FORGE/GEAR weapon row blocks; only load
     # it when a screen asks (so gen-screens stays independent of data/forge).
     forge_model = None
-    want_skills = False
     for name in names:
         obj = load_json(errors, os.path.join(data_dir, name), "%s/%s" % (DATA_DIR, name))
         if isinstance(obj, dict) and obj.get("weapons") is not None:
             forge_model = load_forge_module().load_model(root)
-        if isinstance(obj, dict) and obj.get("strip"):
-            want_skills = True
-    skill_abbrs = read_skill_abbrs(errors, root) if want_skills else None
-    if want_skills and skill_abbrs is None:
-        errors.add(DATA_DIR, "strip: skill abbreviations unavailable (data/skills.json)")
     screens = []
     seen_ids = set()
     for name in names:
@@ -605,7 +567,7 @@ def compile_model(errors, root):
     # page images are authored here (deterministic RGBA -> PNG -> layer arrays),
     # so a data-only screen edit re-bakes its pages.
     for screen in screens:
-        screen["pages"] = screen_pages(screen, skill_abbrs) if screen["prebake"] else []
+        screen["pages"] = screen_pages(screen) if screen["prebake"] else []
     return {"screens": screens}
 
 
@@ -646,18 +608,24 @@ def pack_blob(errors, screens, fx_symbols, unresolved):
         blob += struct.pack("<H", off)
     blob += def_bytes
     blob += row_bytes
-    # Page table (hbk.2): per screen, u8 pageCount + pageCount x u24 absolute FX
-    # addresses of the baked page layer arrays (0 = not prebaked, or unresolved
-    # on a first generation pass before fxdata-build.py writes fxdata.h).
+    # Page table (hbk.9): per screen one fixed PAGE_STRIDE-byte slot -- u8
+    # pageCount then PAGE_MAX x u24 absolute FX addresses of the baked page layer
+    # arrays (0 = not prebaked, or unresolved on a first generation pass before
+    # fxdata-build.py writes fxdata.h). Fixed stride lets the runtime index a
+    # screen directly instead of walking the variable entries.
     page_table_off = len(blob)
     for screen in screens:
-        blob += bytes([len(screen["pages"])])
-        for page, _img in screen["pages"]:
-            symbol = page_symbol(screen, page)
-            value = fx_symbols.get(symbol)
-            if value is None:
-                unresolved.append(symbol)
-                value = 0
+        pages = screen["pages"]
+        blob += bytes([len(pages)])
+        for slot in range(PAGE_MAX):
+            value = 0
+            if slot < len(pages):
+                symbol = page_symbol(screen, slot)
+                resolved = fx_symbols.get(symbol)
+                if resolved is None:
+                    unresolved.append(symbol)
+                else:
+                    value = resolved
             blob += struct.pack("<I", value)[:3]
     if len(blob) >= 65536:
         errors.add("data", "size limit: blob is %d B, offsets are u16" % len(blob))
@@ -693,11 +661,13 @@ def emit_meta_header(model, packed):
     app("constexpr uint8_t SCREEN_COUNT = %d;" % len(screens))
     app("constexpr uint16_t ROW_COUNT = %d;" % sum(counts))
     app("")
-    app("// Prebaked screen pages (hbk.2): per screen, a u8 page count then that")
-    app("// many u24 absolute FX addresses of the mh_screen_<name>_<page> layer")
-    app("// arrays. pageCount == 0 = the screen renders through the legacy text")
-    app("// path; src/screens.hpp walks the table from PAGE_TABLE_OFF.")
+    app("// Prebaked screen pages (hbk.2/hbk.9): one fixed SCREEN_PAGE_STRIDE-byte")
+    app("// slot per screen, in index order: a u8 page count then SCREEN_PAGE_MAX")
+    app("// u24 absolute FX addresses of the mh_screen_<name>_<page> layer arrays.")
+    app("// pageCount == 0 slots render empty; src/screens.hpp indexes a screen")
+    app("// with PAGE_TABLE_OFF + screen * SCREEN_PAGE_STRIDE.")
     app("constexpr uint16_t PAGE_TABLE_OFF = %d;" % packed["page_table_off"])
+    app("constexpr uint8_t SCREEN_PAGE_STRIDE = %d;" % PAGE_STRIDE)
     app("constexpr uint8_t SCREEN_PAGE_MAX = %d;" % PAGE_MAX)
     app("")
     app("// Row action ids; src/screen_state.hpp switches on these.")
@@ -724,7 +694,7 @@ def emit_meta_header(model, packed):
             % (name, packed["rows_start"] + screen["firstRowRel"]))
         app("constexpr uint8_t SCREEN_%s_PAGES = %d;" % (name, len(screen["pages"])))
         app("constexpr uint16_t SCREEN_%s_PAGE_TABLE = %d;" % (name, page_off))
-        page_off += 1 + 3 * len(screen["pages"])
+        page_off += PAGE_STRIDE
     app("")
     app("}   // namespace screens")
     app("")

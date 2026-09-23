@@ -2,7 +2,6 @@
   "id": 0,
   "title": "HUB",
   "prebake": true,
-  "strip": true,
   "rows": [
     { "label": "HUNT", "cost": 0, "action": "hunt", "condition": "always", "param": 0 },
     { "label": "QUESTS", "cost": 0, "action": "open_quests", "condition": "always", "param": 0 },

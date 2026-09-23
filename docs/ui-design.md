@@ -228,14 +228,14 @@ addresses of the `mh_screen_<name>_<page>` layer arrays.
 |---|---|
 | Title band | rect (0,0,128,8) shade 1 (dark); title text shade 3 (white) at (2,0) |
 | Page indicator | `n/m` shade 2 after the title (2 + title width + 4) when a screen spans >1 page; static per page, so baked |
+| Page table | fixed 13-byte slot per screen (`u8 pageCount` + 4 x `u24` addresses, `SCREEN_PAGE_STRIDE`; hbk.9) -- the device indexes it, no walk |
 | Rule | y=8, full width, shade 2 (light) |
 | Rows | y = 11 + 9*i, 6 per page (same grid as the legacy path) |
 | Section header rows (`action == none`, label starts `--`) | band (0,y-1,128,8) shade 1, frame-stripped text shade 3, centered |
 | Node label | tree prefix chars (` +-|`) shade 2, name shade 2, x=10 |
 | Cost | digits shade 3, right-aligned ending at x=112 (3-digit cap, 999 max) |
 | Marker column | x=118..121, baked empty; live-owned markers only |
-| Hub strip (`"strip": true`) | five skill labels shade 2 at x=20/40/60/80/100, y=56 (live points at slot+12) |
-| Bottom | free (hub strip numbers / live lanes) |
+| Bottom | free (live lanes only; the hub strip was deleted in hbk.9 -- the GEAR slot view owns the loadout readout) |
 
 ### Live overlays (device, per plane, on top of the blit)
 
@@ -249,12 +249,40 @@ addresses of the `mh_screen_<name>_<page>` layer arrays.
   GEAR armor-row markers are deferred (measured +120 B; budget).
 - GEAR skill rows (`ROW_F_SKILL`): the live points number + S/M tier letter at
   the baked cost column (right-aligned at x=112).
-- Hub strip: the live weapon class abbr (x=2) + tree tier digit (x=14) and
-  each active skill's points at its baked slot + 12.
-- Unchanged live chrome: header zenny, hub quest column.
+- (hbk.9 deleted the hub strip: the loadout readout lives on the GEAR slot view.)
+- Unchanged live chrome: header zenny, hub quest column (hbk.9: active-quest
+  `p/n` only -- the READY text and the no-quest `-` were dropped for flash).
 
 Everything else (labels, costs, section bands, tree prefixes) is baked: no
 runtime text layout, no per-row cost math for prebaked screens.
+
+## MH-flow smithy + equipment box (hbk.9–.12)
+
+The baked-page model cannot filter a list cheaply (a dynamic owned-only list
+measured **+590 B** whole-image in the hbk.8 spike: live row render 342, row-map
+walk 126, equip-in-place 126). The wave therefore restructures the screens so
+every list stays static and only small live overlays remain:
+
+- **FORGE (id 3) becomes a submenu**: WEAPON CRAFT / WEAPON UPGRADE / ARMOR
+  FORGE / LEAVE — the MH smithy's separate menus.
+- **CRAFT (id 4)**: flat list of all 9 weapon nodes at their **direct** bill
+  (the pricier from-scratch path), no tree prefixes, no class headers. Cards
+  opened here use the direct bill only, so the row cost equals the charged cost.
+- **UPGRADE (id 5)**: three class rows (SWORD / FLAIL / GUN). Live per row: the
+  owned tier, `>`, the next tier and the upgrade cost — resolved from the
+  highest owned node of that class; blank when nothing is upgradeable. A opens
+  the next node's card (upgrade bill).
+- **ARMOR FORGE (id 6)**: flat list of the five pieces at their recipe zenny;
+  A opens the armor card (craft bill).
+- **GEAR (id 2) becomes the equipment box**: four slot rows (WEAPON / HEAD /
+  BODY / CHARM) + the skill readout + LEAVE. Each slot row shows the *shown
+  candidate's* name (from a generated per-slot candidate table: node/piece ids +
+  label offsets into the screens blob) and its state marker (white = equipped,
+  gray = owned). LR cycles **owned** candidates only, A equips in place (no
+  card). Unowned gear is never listed.
+- Budget: the wave is funded by hbk.9 (hub strip deleted, quest column leaned to
+  active-quest `p/n`, fixed-stride page table) — 29142 B, 554 free before the
+  screens land.
 
 ## Dev feel mode (`make dev`)
 
