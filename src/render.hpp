@@ -976,17 +976,23 @@ static void drawPlayer(const mh::Game &g, int16_t camX, int16_t camY) {
         } else {   // gunshield
             const int16_t shx = static_cast<int16_t>(cx + ((p.fx * 5) >> 4));
             const int16_t shy = static_cast<int16_t>(cy + ((p.fy * 5) >> 4));
-            // 12x16 plate frame, plate at frame local 1,1: shield centre as ref.
-            // Guard selects the fully lit plate via the record's poseMap (frame 1),
-            // the idle plate is frame 0; FRAME() applies the per-plane stride.
-            partDraw(equip::PART_GUN_GUARD, p.stance == mh::ST_GUARD ? equip::POSE_GUARD : equip::POSE_IDLE, face, shx, shy);
             if (p.state == mh::PS_SHOVE) {
-                // poseMap shove = frame 2 of the same plate sheet: the shove plate is
-                // drawn 1 px left inside its cell (anchor 5 vs the idle/guard 6), so
-                // +1 on the reference re-centres the shared record anchor.
-                const int16_t shx2 = static_cast<int16_t>(shx + ((p.fx * 4) >> 4) + 1);
-                const int16_t shy2 = static_cast<int16_t>(shy + ((p.fy * 4) >> 4));
+                // poseMap shove = frame 2 of the same plate sheet, drawn alone so
+                // the shield reads as a bash instead of a wide static plate. p.t
+                // counts 10 -> 1 over the shove (player.hpp PS_SHOVE case), so
+                // thrust = 4 + (p.t * 6) / 10 starts at 10 px (E facing) on the
+                // first tick and retracts to 4 px by the last. The shove plate is
+                // drawn 1 px left inside its cell (anchor 5 vs the idle/guard 6),
+                // so +1 on the reference re-centres the shared record anchor.
+                const int16_t thrust = static_cast<int16_t>(4 + (p.t * 6) / 10);
+                const int16_t shx2 = static_cast<int16_t>(shx + ((p.fx * thrust) >> 4) + 1);
+                const int16_t shy2 = static_cast<int16_t>(shy + ((p.fy * thrust) >> 4));
                 partDraw(equip::PART_GUN_GUARD, equip::POSE_SHOVE, face, shx2, shy2);
+            } else {
+                // 12x16 plate frame, plate at frame local 1,1: shield centre as ref.
+                // Guard selects the fully lit plate via the record's poseMap (frame 1),
+                // the idle plate is frame 0; FRAME() applies the per-plane stride.
+                partDraw(equip::PART_GUN_GUARD, p.stance == mh::ST_GUARD ? equip::POSE_GUARD : equip::POSE_IDLE, face, shx, shy);
             }
             if (p.state == mh::PS_SPECIAL && phase == 1 && a) {
                 // Hitscan arrowshot: slug tracer at the hit reach -- the exact

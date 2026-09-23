@@ -45,6 +45,15 @@
 // the gun's A-special is now a long-reach arrowshot with a tracer slug. Changed
 // cases: 109 (gun special active, E) and 111 (gun special active, W -- the
 // retired reload-bar row, repurposed). Every other case is byte-identical.
+//
+// Bead monhun-ardu-z5i (feel.24) made the gunshield B-tap shove read as a bash:
+// during PS_SHOVE drawPlayer now draws ONLY the shove plate at a forward offset
+// that retracts as p.t counts down, instead of drawing the guard/idle plate
+// plus a static shove plate. It changed exactly one case: 32 (W_GUN, PS_SHOVE,
+// ST_NONE, E; the row the bead text called "case 33" -- the shove case is matrix
+// index 32). Every other case is byte-identical; the new hashes are
+// {0x4f202fb3, 0x670510b3, 0x670510b3} (p.t == 0 in the oracle, the fully
+// retracted 4 px pose with the guard/idle plate gone).
 
 #include "harness/fxtest.hpp"
 #include "src/core/world.hpp"
@@ -164,7 +173,7 @@ static const uint32_t MH_PROGMEM GOLDEN[CASE_COUNT][3] = {
     {0x30469935u, 0x51a89135u, 0x51a89135u},
     {0xe56a836fu, 0x1d4a306fu, 0xb373bcd7u},
     {0xda3dbf1du, 0x61f4b31du, 0xd3ec5e37u},
-    {0x46724db1u, 0x67d445b1u, 0xf8c93455u},
+    {0x4f202fb3u, 0x670510b3u, 0x670510b3u},
     {0xa3cb7b5du, 0x4bf3105du, 0xa45602f7u},
     {0xe56a836fu, 0x1d4a306fu, 0xb845c6bbu},
     {0x474a642du, 0xc098f32du, 0x606e0819u},
