@@ -484,9 +484,10 @@ zone with pool 0 that can never break (an hp-0 zone has no pool to drain, and
 an empty `breakTypes` means the drain can never flip a broken bit), reached
 through the always-unlocked TRAIN POLE quest.
 
-Budget: the wave cost +168 B net (shipped descriptors + generic draw + pole),
-finite because the transitions folded the payback in: the spike measured +296 B
-(26 free), phase 1's legacy-branch deletion brought it to +168, phase 2 -66 B,
-phase 3 -126 B, phase 4's dead-field sweep +4 B of LTO entropy but shrank the
-creature record to 28 B + carve (cart 1262 -> 1257 B). Shipping lands at
-29352/29696 (344 free) with the previous 29374 baseline.
+Budget: the wave ended 22 B *cheaper* than the baseline, because each phase
+folded its payback in rather than shipping in parallel: baseline 29374 (322
+free) -> spike 29670 (+296, 26 free) -> phase 1 migration 29542 -> phase 2
+attack art 29476 -> phase 3 zone part art 29350 -> phase 4 dead-field sweep
+29352. The creature record also shrank to 28 B + carve (cart 1262 -> 1257 B).
+Adding a creature is still not free in the cart image, but the renderer no
+longer grows with it.
