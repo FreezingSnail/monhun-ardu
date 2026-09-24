@@ -8,10 +8,10 @@
 
 namespace combat_expect {
 
-constexpr uint16_t BLOB_SIZE = 1221;
+constexpr uint16_t BLOB_SIZE = 1254;
 constexpr uint8_t ANCHOR_SIZE = 2;
 constexpr uint8_t ART_SIZE = 10;
-constexpr uint8_t ATTACK_SIZE = 24;
+constexpr uint8_t ATTACK_SIZE = 27;
 constexpr uint8_t CARVE_SIZE = 3;
 constexpr uint8_t CREATURE_SIZE = 41;
 constexpr uint8_t GUARD_SIZE = 9;
@@ -63,6 +63,15 @@ constexpr uint16_t ATTACK_HEAVY_BITE_RECOVER = 40;
 constexpr uint16_t ATTACK_HEAVY_BITE_DMG = 10;
 constexpr uint8_t ATTACK_HEAVY_BITE_WALLSTUN = 0;
 constexpr uint8_t ATTACK_HEAVY_BITE_TELL = 1;
+constexpr uint8_t ATTACK_HEAVY_BITE_ART_SHEET = 8;
+constexpr uint8_t ATTACK_HEAVY_BITE_ART_FRAME = 0;
+constexpr uint8_t ATTACK_HEAVY_BITE_ART_MODE = 0;
+constexpr uint8_t ATTACK_HEAVY_TAIL_SPIN_ART_SHEET = 9;
+constexpr uint8_t ATTACK_HEAVY_TAIL_SPIN_ART_FRAME = 0;
+constexpr uint8_t ATTACK_HEAVY_TAIL_SPIN_ART_MODE = 1;
+constexpr uint8_t ATTACK_HEAVY_TAIL_SLAM_ART_SHEET = 8;
+constexpr uint8_t ATTACK_HEAVY_TAIL_SLAM_ART_FRAME = 4;
+constexpr uint8_t ATTACK_HEAVY_TAIL_SLAM_ART_MODE = 0;
 constexpr uint8_t PATTERN_HEAVY_P_TAIL_SLAM_MIN_DIST = 16;
 constexpr uint8_t PATTERN_HEAVY_P_TAIL_SLAM_MAX_DIST = 64;
 constexpr uint8_t PATTERN_HEAVY_P_TAIL_SLAM_CHANCE = 100;
@@ -105,6 +114,15 @@ constexpr uint16_t ATTACK_LUNGE_PECK_RECOVER = 26;
 constexpr uint16_t ATTACK_LUNGE_PECK_DMG = 7;
 constexpr uint8_t ATTACK_LUNGE_PECK_WALLSTUN = 0;
 constexpr uint8_t ATTACK_LUNGE_PECK_TELL = 0;
+constexpr uint8_t ATTACK_LUNGE_PECK_ART_SHEET = 6;
+constexpr uint8_t ATTACK_LUNGE_PECK_ART_FRAME = 0;
+constexpr uint8_t ATTACK_LUNGE_PECK_ART_MODE = 0;
+constexpr uint8_t ATTACK_LUNGE_LEAP_ART_SHEET = 6;
+constexpr uint8_t ATTACK_LUNGE_LEAP_ART_FRAME = 2;
+constexpr uint8_t ATTACK_LUNGE_LEAP_ART_MODE = 0;
+constexpr uint8_t ATTACK_LUNGE_WING_BEAT_ART_SHEET = 6;
+constexpr uint8_t ATTACK_LUNGE_WING_BEAT_ART_FRAME = 4;
+constexpr uint8_t ATTACK_LUNGE_WING_BEAT_ART_MODE = 0;
 constexpr uint8_t PATTERN_LUNGE_P_FLANK_MIN_DIST = 0;
 constexpr uint8_t PATTERN_LUNGE_P_FLANK_MAX_DIST = 32;
 constexpr uint8_t PATTERN_LUNGE_P_FLANK_CHANCE = 100;
@@ -229,6 +247,15 @@ constexpr uint16_t ATTACK_SWEEP_STOMP_RECOVER = 46;
 constexpr uint16_t ATTACK_SWEEP_STOMP_DMG = 9;
 constexpr uint8_t ATTACK_SWEEP_STOMP_WALLSTUN = 0;
 constexpr uint8_t ATTACK_SWEEP_STOMP_TELL = 3;
+constexpr uint8_t ATTACK_SWEEP_STOMP_ART_SHEET = 7;
+constexpr uint8_t ATTACK_SWEEP_STOMP_ART_FRAME = 0;
+constexpr uint8_t ATTACK_SWEEP_STOMP_ART_MODE = 0;
+constexpr uint8_t ATTACK_SWEEP_GORE_ART_SHEET = 7;
+constexpr uint8_t ATTACK_SWEEP_GORE_ART_FRAME = 2;
+constexpr uint8_t ATTACK_SWEEP_GORE_ART_MODE = 0;
+constexpr uint8_t ATTACK_SWEEP_REAR_KICK_ART_SHEET = 7;
+constexpr uint8_t ATTACK_SWEEP_REAR_KICK_ART_FRAME = 4;
+constexpr uint8_t ATTACK_SWEEP_REAR_KICK_ART_MODE = 0;
 constexpr uint8_t PATTERN_SWEEP_P_REAR_KICK_MIN_DIST = 0;
 constexpr uint8_t PATTERN_SWEEP_P_REAR_KICK_MAX_DIST = 30;
 constexpr uint8_t PATTERN_SWEEP_P_REAR_KICK_CHANCE = 100;
@@ -239,12 +266,12 @@ constexpr uint8_t ZONE_SWEEP_APPENDAGE_HP = 240;
 constexpr uint8_t ZONE_SWEEP_APPENDAGE_DMG_MUL = 150;
 constexpr uint8_t ZONE_SWEEP_APPENDAGE_BODY_SHARE = 40;
 
-// sha256 of fxdata/tables/combat.bin: 7a411d9207239e408acd1a77714ecd8f8102e33328c39e982169209e463be791
+// sha256 of fxdata/tables/combat.bin: c6ea01a4679c63ffcb02f871d50f5dc7ac9bd65f4f5f2e2027055ff9b723a090
 constexpr uint8_t BLOB_SHA256[32] = {
-    0x7A, 0x41, 0x1D, 0x92, 0x07, 0x23, 0x9E, 0x40,
-    0x8A, 0xCD, 0x1A, 0x77, 0x71, 0x4E, 0xCD, 0x8F,
-    0x81, 0x02, 0xE3, 0x33, 0x28, 0xC3, 0x9E, 0x98,
-    0x21, 0x69, 0x20, 0x9E, 0x46, 0x3B, 0xE7, 0x91,
+    0xC6, 0xEA, 0x01, 0xA4, 0x67, 0x9C, 0x63, 0xFF,
+    0xCB, 0x02, 0xF8, 0x71, 0xD5, 0x0F, 0x5D, 0xC7,
+    0xAC, 0x9B, 0xD6, 0x5F, 0x4F, 0x5F, 0x2E, 0x20,
+    0x27, 0x05, 0x5F, 0xF9, 0xB7, 0x23, 0xA0, 0x90,
 };
 
 }   // namespace combat_expect

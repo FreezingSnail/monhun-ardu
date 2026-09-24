@@ -35,11 +35,14 @@ Blob layout (little-endian, explicit u8/u16, no padding, fixed section order):
                      staggerOnHit, brokenDmgMul, brokenFlags (bit0 hurtOff,
                      bit1 cue), unlockMask (bit per global attack idx)
     anchor      2 B  ox i8, oy i8
-    attack     24 B  moveType, moveSpeedF, moveDx i8, moveDy i8, facing, phys,
+    attack     27 B  moveType, moveSpeedF, moveDx i8, moveDy i8, facing, phys,
                      elem, onHitEffect, onHitPush i8, onHitStun, stagger, cue,
                      wallStun, firstWindow, windowCount, windup u16, active u16,
                      recover u16, dmg u16, tell (0 dot / 1 line / 2 arc /
-                     3 ring / 4 zone, feel.5)
+                     3 ring / 4 zone, feel.5), artSheet (1-based
+                     data/art_sheets.json index, 0 = no attack overlay),
+                     artFrame (2-facing pose frame base), artMode (0 normal /
+                     1 locked-spin whole-body sheet, bih.4)
     window     10 B  t0 u16, t1 u16, box(ox i8, oy i8, w, h), dmgMul, flags
     pattern     3 B  firstStep, stepCount, guardIdx
     guard       9 B  minDist, maxDist, hpLo, hpHi, playerFlags, cooldown,
@@ -90,6 +93,10 @@ FACINGS = {"track": 0, "lock-at-windup": 1, "lock-away": 2}
 # cached window. 0 (dot) is the shipped 2x2 default; the others outline/point at
 # the covered area. Values mirror src/core/combat.hpp enum Tell.
 TELLS = {"dot": 0, "line": 1, "arc": 2, "ring": 3, "zone": 4}
+# Per-attack whole-body art mode (bih.4): mode 0 draws the attack record's
+# 2-facing art sheet at artFrame (or the authored tell slot during windup); mode
+# 1 draws the locked-spin whole-body sheet (fxtailspin) centred on the body.
+ATTACK_MODES = {"normal": 0, "spin": 1}
 # Guard facing clause: player position relative to the beast's facing vector.
 GUARD_FACINGS = {"behind": 1, "front": 2}
 ON_HIT_EFFECTS = {"none": 0, "trip": 1, "stun": 2}
@@ -124,7 +131,7 @@ SIZES = {
     "SKELETON": 2,
     "ZONE": 13,
     "ANCHOR": 2,
-    "ATTACK": 24,
+    "ATTACK": 27,
     "WINDOW": 10,
     "PATTERN": 3,
     "GUARD": 9,
@@ -360,8 +367,36 @@ def normalize_zone(errors, ctx, obj, attack_ids):
     }
 
 
-def normalize_attack(errors, ctx, obj):
-    check_keys(errors, ctx, obj, {"id", "windup", "active", "recover", "dmg", "phys", "elem", "move", "facing", "windows"}, {"onHit", "stagger", "cue", "wallStun", "tell"})
+def normalize_attack_art(errors, ctx, obj, sheet_names):
+    """Optional per-attack whole-body art (bih.4).
+
+    `sheet` names a data/art_sheets.json entry and packs as its 1-based index
+    (0 = no attack overlay -> the generic base body draws); `frame` is the
+    2-facing pose base (already doubled: 0/2/4); `mode` selects the draw (normal
+    2-facing sheet or the locked-spin whole-body sheet). All optional: an attack
+    without an `art` block packs an all-zero triple (legacy generic body)."""
+    if obj is None:
+        return dict(ZERO_ATTACK_ART)
+    check_keys(errors, ctx, obj, set(), {"sheet", "frame", "mode"})
+    name = obj.get("sheet")
+    index = 0
+    if name is None:
+        pass
+    elif not isinstance(name, str):
+        errors.add(ctx, "sheet: expected a sheet name string")
+    elif sheet_names is None:
+        errors.add(ART_SHEETS_REL, "missing art sheet file (attack art.sheet resolves against it)")
+    elif name not in sheet_names:
+        errors.add(ctx, "sheet: unknown art sheet %r" % name)
+    else:
+        index = sheet_names.index(name) + 1
+    frame = read_int(errors, ctx, obj, "frame", 0, 255, default=0)
+    mode = read_enum(errors, ctx, obj, "mode", ATTACK_MODES, default=0)
+    return {"sheet": index, "frame": frame if frame is not None else 0, "mode": mode if mode is not None else 0}
+
+
+def normalize_attack(errors, ctx, obj, sheet_names=None):
+    check_keys(errors, ctx, obj, {"id", "windup", "active", "recover", "dmg", "phys", "elem", "move", "facing", "windows"}, {"onHit", "stagger", "cue", "wallStun", "tell", "art"})
     active = read_int(errors, ctx, obj, "active", 0, 65535)
     raw_windows = obj.get("windows")
     if not isinstance(raw_windows, list):
@@ -439,6 +474,7 @@ def normalize_attack(errors, ctx, obj):
         # tell: windup telegraph shape (feel.5); "dot" (0) is the shipped default.
         "tell": read_enum(errors, ctx, obj, "tell", TELLS, default=0),
         "windows": windows,
+        "art": normalize_attack_art(errors, ctx + ".art", obj.get("art"), sheet_names),
     }
 
 
@@ -643,6 +679,10 @@ def normalize_art(errors, ctx, obj, sheet_names):
 ZERO_ART = {"sheet": 0, "anchorY": 0, "stride": 0, "idle0": 0, "idleCount": 0,
             "windup": 0, "attack": 0, "recover": 0, "flash": 0, "dead": 0}
 
+# Per-attack art triple (bih.4): sheet index 0 = no attack overlay -> the
+# generic base body draws; frame base 0; normal (non-spin) mode.
+ZERO_ATTACK_ART = {"sheet": 0, "frame": 0, "mode": 0}
+
 
 def normalize_carve(errors, ctx, raw, item_ids):
     """Optional per-creature carve table (prg.3): [{item, count, chance}, ...].
@@ -829,7 +869,7 @@ def compile_model(errors, root):
         attack_ids = set()
         for i, attack in enumerate(raw_attacks):
             ac = "%s.attacks[%d]" % (ctx, i)
-            attack = normalize_attack(errors, ac, attack)
+            attack = normalize_attack(errors, ac, attack, art_sheet_names)
             if attack["id"] is not None:
                 if attack["id"] in attack_ids:
                     errors.add(ac, "duplicate local id '%s'" % attack["id"])
@@ -1136,6 +1176,7 @@ def pack_model(errors, model):
         indices[name] = attack_index[key]
         offsets[name + "_OFF"] = mark("attack")
         first_window = window_index[(key[0], key[1], 0)] if attack["windows"] else 0
+        attack_art = attack["art"]
         record("ATTACK", b"".join([
             u8(attack["moveType"]), u8(attack["moveSpeedF"]), i8(attack["moveDx"]), i8(attack["moveDy"]),
             u8(attack["facing"]), u8(attack["phys"] or 0), u8(attack["elem"] or 0),
@@ -1144,6 +1185,7 @@ def pack_model(errors, model):
             u8(first_window), u8(len(attack["windows"])),
             u16(attack["windup"]), u16(attack["active"]), u16(attack["recover"]), u16(attack["dmg"]),
             u8(attack["tell"] or 0),
+            u8(attack_art["sheet"]), u8(attack_art["frame"]), u8(attack_art["mode"]),
         ]))
 
     # windows
@@ -1326,6 +1368,7 @@ def emit_data_header(model, compiled):
     app("    uint8_t firstWindow, windowCount;")
     app("    uint16_t windup, active, recover, dmg;")
     app("    uint8_t tell;   // windup telegraph shape (0 dot default, feel.5)")
+    app("    uint8_t artSheet, artFrame, artMode;   // whole-body attack art (bih.4)")
     app("};")
     app("")
     app("struct Pattern {")
@@ -1432,13 +1475,15 @@ def emit_data_header(model, compiled):
         elif section == "ATTACKS":
             for entry in layout["attacks"]:
                 attack = entry["attack"]
-                app("    {%d, %d, %d, %d, %d, %d, %d, %d, %d, %d, %d, %d, %d, %d, %d, %d, %d, %d, %d, %d}," % (
+                art = attack["art"]
+                app("    {%d, %d, %d, %d, %d, %d, %d, %d, %d, %d, %d, %d, %d, %d, %d, %d, %d, %d, %d, %d, %d, %d, %d}," % (
                     attack["moveType"], attack["moveSpeedF"], attack["moveDx"], attack["moveDy"],
                     attack["facing"], attack["phys"] or 0, attack["elem"] or 0,
                     attack["onHitEffect"] or 0, attack["onHitPush"] or 0, attack["onHitStun"] or 0,
                     attack["stagger"], attack["cue"] or 0, attack["wallStun"] or 0,
                     entry["first_window"], len(attack["windows"]),
-                    attack["windup"], attack["active"], attack["recover"], attack["dmg"], attack["tell"] or 0))
+                    attack["windup"], attack["active"], attack["recover"], attack["dmg"], attack["tell"] or 0,
+                    art["sheet"], art["frame"], art["mode"]))
         elif section == "WINDOWS":
             for entry in layout["windows"]:
                 window = entry["window"]
@@ -1702,6 +1747,16 @@ def emit_expect_header(model, compiled):
             app("constexpr uint16_t ATTACK_%s_%s_DMG = %d;" % (cid, first_attack["id"].upper(), first_attack["dmg"]))
             app("constexpr uint8_t ATTACK_%s_%s_WALLSTUN = %d;" % (cid, first_attack["id"].upper(), first_attack["wallStun"] or 0))
             app("constexpr uint8_t ATTACK_%s_%s_TELL = %d;" % (cid, first_attack["id"].upper(), first_attack["tell"] or 0))
+        # Per-attack whole-body art pins (bih.4) only for attacks that author a
+        # sheet: a sheet-less attack packs the zero triple (generic body draw)
+        # and emitting dead constants would only bloat the device test image.
+        for attack in creature["attacks"]:
+            art = attack["art"]
+            if art["sheet"] != 0:
+                aid = attack["id"].upper()
+                app("constexpr uint8_t ATTACK_%s_%s_ART_SHEET = %d;" % (cid, aid, art["sheet"]))
+                app("constexpr uint8_t ATTACK_%s_%s_ART_FRAME = %d;" % (cid, aid, art["frame"]))
+                app("constexpr uint8_t ATTACK_%s_%s_ART_MODE = %d;" % (cid, aid, art["mode"]))
         if creature["patterns"]:
             first_pattern = creature["patterns"][0]
             guard = first_pattern["guard"]
@@ -1769,8 +1824,10 @@ def dump_model(model, compiled):
                 detail = "(%d)" % attack["moveSpeedF"]
             elif attack["moveType"] == 3:
                 detail = "(%d,%d)" % (attack["moveDx"], attack["moveDy"])
-            print("  attack %s: windup%d active%d recover%d dmg%d move %s%s windows %d wallStun %d tell %s" % (
-                attack["id"], attack["windup"], attack["active"], attack["recover"], attack["dmg"], move, detail, len(attack["windows"]), attack["wallStun"] or 0, tell))
+            print("  attack %s: windup%d active%d recover%d dmg%d move %s%s windows %d wallStun %d tell %s art(sheet%d frame%d mode%s)" % (
+                attack["id"], attack["windup"], attack["active"], attack["recover"], attack["dmg"], move, detail, len(attack["windows"]), attack["wallStun"] or 0, tell,
+                attack["art"]["sheet"], attack["art"]["frame"],
+                {0: "normal", 1: "spin"}.get(attack["art"]["mode"], "?")))
             for i, window in enumerate(attack["windows"]):
                 box = window["box"]
                 print("    window %d: t[%d,%d] box(%d,%d,%d,%d) dmgMul %d" % (

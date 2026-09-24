@@ -91,7 +91,7 @@ static void setupBeast(Game &g, int8_t kind, int8_t fx, int8_t fy) {
     m.atkIdx = COMBAT_NO_ATTACK;
     // initGame does not clear the combat cache, and setup functions overwrite
     // state/atk without touching facing, so reset it here: a stale lock facing
-    // would flip MON_HEAVY's non-locked bite onto the fxtailspin sheet.
+    // would keep the shared spin-tail overlay / zone-skip paths live.
     g.combat.attack.facing = COMBAT_FACING_TRACK;
     g.tick = 0;
     g.combat.zoneBroken = 0;
@@ -104,6 +104,7 @@ static void setupBeast(Game &g, int8_t kind, int8_t fx, int8_t fy) {
 // checks exclude; `active` is pinned to 20 so t maps to known frames.
 static void setupSpinAttack(Game &g, int8_t fx, int16_t t) {
     setupBeast(g, MON_HEAVY, fx, 0);
+    attackLoad(g, combat::ATTACK_HEAVY_TAIL_SPIN);
     Monster &m = g.monster;
     m.state = MS_ATTACK;
     m.t = t;
@@ -122,6 +123,7 @@ static void setupSpinAttack(Game &g, int8_t fx, int16_t t) {
 // gone, so a full-size box must not erase the plane-2 tip cap or paint any fill.
 static void setupSpinWindup(Game &g, uint8_t window, int8_t fx, int8_t fy = 0) {
     setupBeast(g, MON_HEAVY, fx, fy);
+    attackLoad(g, combat::ATTACK_HEAVY_TAIL_SPIN);
     Monster &m = g.monster;
     m.state = MS_WINDUP;
     m.atkIdx = combat::ATTACK_HEAVY_TAIL_SPIN;
@@ -132,14 +134,16 @@ static void setupSpinWindup(Game &g, uint8_t window, int8_t fx, int8_t fy = 0) {
 }
 
 // nch.8/prg.12: park the chicken (MON_LUNGE) in a peck/leap/wing_beat WINDUP or
-// ATTACK so drawMonster swaps the generic BEAST_POSES frame for the 6-frame
-// fxchickenatk sheet. `tell` is the cached combat.attack.tell the selector reads
-// during MS_WINDUP: an authored tell (1..3) picks that sheet slot, tell 0 (DOT)
-// falls back to the attack-order ordinal (peck 0 / leap 1 / wing 2). The cached
-// window box is shrunk to 1x1 at the body centre (like setupSpinAttack) so the
-// telegraph core stays inside the centre band the facing checks exclude.
+// ATTACK so drawMonster swaps the generic BASE_BODY frame for the 6-frame
+// fxchickenatk sheet (the attack record's artSheet/artFrame, bih.4). `tell` is
+// the cached combat.attack.tell the selector reads during MS_WINDUP: an authored
+// tell (1..3) picks that sheet slot, tell 0 (DOT) falls back to the attack's own
+// artFrame (peck 0 / leap 2 / wing 4). The cached window box is shrunk to 1x1 at
+// the body centre (like setupSpinAttack) so the telegraph core stays inside the
+// centre band the facing checks exclude.
 static void setupChickenAttack(Game &g, uint8_t atk, uint8_t state, int8_t fx, uint8_t tell = 0) {
     setupBeast(g, MON_LUNGE, fx, 0);
+    attackLoad(g, atk);
     Monster &m = g.monster;
     m.state = state;
     m.atkIdx = atk;
@@ -159,14 +163,16 @@ static void setupChickenAttack(Game &g, uint8_t atk, uint8_t state, int8_t fx, u
 }
 
 // nch.10/prg.12: park the bull (MON_SWEEP) in a stomp/gore/rear_kick WINDUP or
-// ATTACK so drawMonster swaps the generic BEAST_POSES frame for the 8-frame
-// fxbullatk sheet. `tell` is the cached combat.attack.tell the selector reads
-// during MS_WINDUP: authored tells pick their sheet slot (1 gore, 2 rear_kick,
-// 3 stomp windup), tell 0 falls back to the attack-order ordinal. The cached
-// window box is shrunk to 1x1 at the body centre so the telegraph core stays
-// clear of the pose checks.
+// ATTACK so drawMonster swaps the generic base frame for the 8-frame fxbullatk
+// sheet (the attack record's artSheet/artFrame, bih.4). `tell` is the cached
+// combat.attack.tell the selector reads during MS_WINDUP: authored tells pick
+// their sheet slot (1 gore, 2 rear_kick, 3 stomp windup), tell 0 falls back to
+// the attack's own artFrame (stomp 0 / gore 2 / rear_kick 4). The cached window
+// box is shrunk to 1x1 at the body centre so the telegraph core stays clear of
+// the pose checks.
 static void setupBullAttack(Game &g, uint8_t atk, uint8_t state, int8_t fx, uint8_t tell = 0) {
     setupBeast(g, MON_SWEEP, fx, 0);
+    attackLoad(g, atk);
     Monster &m = g.monster;
     m.state = state;
     m.atkIdx = atk;
@@ -192,6 +198,7 @@ static void setupBullAttack(Game &g, uint8_t atk, uint8_t state, int8_t fx, uint
 // keeps the telegraph out of the pose checks.
 static void setupHeavyAttack(Game &g, uint8_t state, int8_t fx, uint8_t tell = 0) {
     setupBeast(g, MON_HEAVY, fx, 0);
+    attackLoad(g, combat::ATTACK_HEAVY_BITE);
     Monster &m = g.monster;
     m.state = state;
     m.atkIdx = combat::ATTACK_HEAVY_BITE;
@@ -363,6 +370,39 @@ inline void test_monster_art(FxTest &test) {
     renderMonster(g, 2);
     test.expectEq(countRegionBit(40, 46, 40, 16) > 0 ? 1 : 0, 1, F("windup away south head bottom"));
     test.expectEq(countRegionBit(40, 22, 40, 16), 0, F("windup away south top band clear"));
+
+    // ---- bih.4 attack-art oracle: every authored attack caches its whole-body
+    // sheet/frame/mode from the attack record (attackLoad) -- the data drawMonster
+    // now reads instead of the per-kind beastAtk ordinal chain. The sheet index
+    // is the shared art_sheets table (6 chickenatk, 7 bullatk, 8 heavyatk,
+    // 9 tailspin); the frame is the pre-doubled 2-facing pose base; mode 1 is
+    // the locked spin. Proves the data switch matches the old ordinal math.
+    attackLoad(g, combat::ATTACK_LUNGE_PECK);
+    test.expectEq(g.combat.attack.artSheet, art_sheets::ART_SHEET_FXCHICKENATK, F("peck art sheet"));
+    test.expectEq(g.combat.attack.artFrame, 0, F("peck art frame"));
+    test.expectEq(g.combat.attack.artMode, 0, F("peck art mode"));
+    attackLoad(g, combat::ATTACK_LUNGE_LEAP);
+    test.expectEq(g.combat.attack.artSheet, art_sheets::ART_SHEET_FXCHICKENATK, F("leap art sheet"));
+    test.expectEq(g.combat.attack.artFrame, 2, F("leap art frame"));
+    attackLoad(g, combat::ATTACK_LUNGE_WING_BEAT);
+    test.expectEq(g.combat.attack.artFrame, 4, F("wing_beat art frame"));
+    attackLoad(g, combat::ATTACK_SWEEP_STOMP);
+    test.expectEq(g.combat.attack.artSheet, art_sheets::ART_SHEET_FXBULLATK, F("stomp art sheet"));
+    test.expectEq(g.combat.attack.artFrame, 0, F("stomp art frame"));
+    attackLoad(g, combat::ATTACK_SWEEP_GORE);
+    test.expectEq(g.combat.attack.artFrame, 2, F("gore art frame"));
+    attackLoad(g, combat::ATTACK_SWEEP_REAR_KICK);
+    test.expectEq(g.combat.attack.artFrame, 4, F("rear_kick art frame"));
+    attackLoad(g, combat::ATTACK_HEAVY_BITE);
+    test.expectEq(g.combat.attack.artSheet, art_sheets::ART_SHEET_FXHEAVYATK, F("bite art sheet"));
+    test.expectEq(g.combat.attack.artFrame, 0, F("bite art frame"));
+    test.expectEq(g.combat.attack.artMode, 0, F("bite art mode"));
+    attackLoad(g, combat::ATTACK_HEAVY_TAIL_SLAM);
+    test.expectEq(g.combat.attack.artSheet, art_sheets::ART_SHEET_FXHEAVYATK, F("tail_slam art sheet"));
+    test.expectEq(g.combat.attack.artFrame, 4, F("tail_slam art frame"));
+    attackLoad(g, combat::ATTACK_HEAVY_TAIL_SPIN);
+    test.expectEq(g.combat.attack.artSheet, art_sheets::ART_SHEET_FXTAILSPIN, F("spin art sheet"));
+    test.expectEq(g.combat.attack.artMode, 1, F("spin art mode"));
 
     // ---- nch.8/prg.12 chicken attack overlay: during the peck/leap/wing_beat
     // windup+attack drawMonster swaps the generic BEAST_POSES coil/lunge frame

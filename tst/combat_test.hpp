@@ -325,20 +325,29 @@ void CombatSuite(TestRunner &runner) {
         t.assert(ravager.windup, 0, "ravager windup holds idle0");
         t.assert(ravager.attack, 0, "ravager attack holds idle0");
         t.assert(ravager.recover, 1, "ravager recover frame");
-        // The art sheet table resolves every data/art_sheets.json name in sorted
+        // The art sheet table resolves every data/art_sheets.json name in list
         // order: the index constants are the contract (the device static_assert
-        // in art_sheets.hpp pins each address to the fxdata symbol).
-        t.assert(art_sheets::ART_SHEET_FXMONSTER, 1, "ART_SHEET_FXMONSTER sorts first");
+        // in art_sheets.hpp pins each address to the fxdata symbol). Phase 1
+        // sheets are 1..5; bih.4 appended the 4 attack/spin sheets 6..9.
+        t.assert(art_sheets::ART_SHEET_FXMONSTER, 1, "ART_SHEET_FXMONSTER first");
         t.assert(art_sheets::ART_SHEET_FXMONSTER_HEAVY, 2, "ART_SHEET_FXMONSTER_HEAVY is 1-based");
         t.assert(art_sheets::ART_SHEET_FXMONSTER_LUNGE, 3, "ART_SHEET_FXMONSTER_LUNGE is 1-based");
         t.assert(art_sheets::ART_SHEET_FXMONSTER_SWEEP, 4, "ART_SHEET_FXMONSTER_SWEEP is 1-based");
-        t.assert(art_sheets::ART_SHEET_FXPOLE, 5, "ART_SHEET_FXPOLE last");
-        t.assert(art_sheets::ART_SHEETS_COUNT, 5, "five shipped art sheets");
+        t.assert(art_sheets::ART_SHEET_FXPOLE, 5, "ART_SHEET_FXPOLE is 5th");
+        t.assert(art_sheets::ART_SHEET_FXCHICKENATK, 6, "ART_SHEET_FXCHICKENATK is 6th");
+        t.assert(art_sheets::ART_SHEET_FXBULLATK, 7, "ART_SHEET_FXBULLATK is 7th");
+        t.assert(art_sheets::ART_SHEET_FXHEAVYATK, 8, "ART_SHEET_FXHEAVYATK is 8th");
+        t.assert(art_sheets::ART_SHEET_FXTAILSPIN, 9, "ART_SHEET_FXTAILSPIN last");
+        t.assert(art_sheets::ART_SHEETS_COUNT, 9, "nine shipped art sheets");
         t.assert(art_sheets::ART_SHEET_ADDR_FXMONSTER, art_sheet_fxdata_addr("fxmonster"), "fxmonster address == src/fxdata.h");
         t.assert(art_sheets::ART_SHEET_ADDR_FXMONSTER_HEAVY, art_sheet_fxdata_addr("fxmonster_heavy"), "fxmonster_heavy address == src/fxdata.h");
         t.assert(art_sheets::ART_SHEET_ADDR_FXMONSTER_LUNGE, art_sheet_fxdata_addr("fxmonster_lunge"), "fxmonster_lunge address == src/fxdata.h");
         t.assert(art_sheets::ART_SHEET_ADDR_FXMONSTER_SWEEP, art_sheet_fxdata_addr("fxmonster_sweep"), "fxmonster_sweep address == src/fxdata.h");
         t.assert(art_sheets::ART_SHEET_ADDR_FXPOLE, art_sheet_fxdata_addr("fxpole"), "fxpole address == src/fxdata.h");
+        t.assert(art_sheets::ART_SHEET_ADDR_FXCHICKENATK, art_sheet_fxdata_addr("fxchickenatk"), "fxchickenatk address == src/fxdata.h");
+        t.assert(art_sheets::ART_SHEET_ADDR_FXBULLATK, art_sheet_fxdata_addr("fxbullatk"), "fxbullatk address == src/fxdata.h");
+        t.assert(art_sheets::ART_SHEET_ADDR_FXHEAVYATK, art_sheet_fxdata_addr("fxheavyatk"), "fxheavyatk address == src/fxdata.h");
+        t.assert(art_sheets::ART_SHEET_ADDR_FXTAILSPIN, art_sheet_fxdata_addr("fxtailspin"), "fxtailspin address == src/fxdata.h");
         suite.addTest(t);
     }
 
@@ -385,6 +394,9 @@ void CombatSuite(TestRunner &runner) {
             t.assert(a.recover, h.recover, "attack recover");
             t.assert(a.dmg, h.dmg, "attack dmg");
             t.assert(a.tell, h.tell, "attack tell");
+            t.assert(a.artSheet, h.artSheet, "attack artSheet");
+            t.assert(a.artFrame, h.artFrame, "attack artFrame");
+            t.assert(a.artMode, h.artMode, "attack artMode");
             t.assert(combatAttackWindup(i), h.windup, "attack windup accessor");
             t.assert(combatAttackWallStun(i), h.wallStun, "attack wallStun accessor");
             t.assert(combatAttackFirstWindow(i), h.firstWindow, "attack firstWindow accessor");
@@ -671,6 +683,9 @@ void CombatSuite(TestRunner &runner) {
         t.assert(g.combat.attack.facing, 0, "cache facing track");
         t.assert(g.combat.attack.wallStun, combat_expect::ATTACK_LUNGE_PECK_WALLSTUN, "cache wallStun");
         t.assert(g.combat.attack.tell, combat_expect::ATTACK_LUNGE_PECK_TELL, "cache tell");
+        t.assert(g.combat.attack.artSheet, combat_expect::ATTACK_LUNGE_PECK_ART_SHEET, "cache art sheet");
+        t.assert(g.combat.attack.artFrame, combat_expect::ATTACK_LUNGE_PECK_ART_FRAME, "cache art frame");
+        t.assert(g.combat.attack.artMode, combat_expect::ATTACK_LUNGE_PECK_ART_MODE, "cache art mode");
         t.assert(g.combat.attack.winIdx, combat_data::WINDOW_LUNGE_PECK_0, "cache winIdx");
         t.assert(g.combat.attack.win.t0, 0, "cache window t0");
         t.assert(g.combat.attack.win.t1, 6, "cache window t1");

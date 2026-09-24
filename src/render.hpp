@@ -661,13 +661,13 @@ static void drawMonster(const mh::Game &g, int16_t camX, int16_t camY) {
     const int16_t w = m.w;
     const int16_t h = m.h;
 
-    // Body draw (epic monhun-ardu-bih phase 1): every creature carries a cached
+    // Body draw (epic monhun-ardu-bih phase 2): every creature carries a cached
     // art descriptor seeded by creatureLoad, so the base body -- state frame,
     // idle bob and west mirror -- comes from the art_sheets table with no
-    // per-kind code. The two whole-body replacements are checked FIRST because
-    // they supersede the descriptor: the locked spin sheet and the bespoke
-    // beast attack sheets. The shared tail (stun whirl, telegraph) and the
-    // breakable-zone part overlays are unchanged below.
+    // per-kind code. The whole-body attack replacement is checked FIRST because
+    // it supersedes the descriptor: the attack record's own art (bih.4) selects
+    // the sheet and pose with no per-kind branch. The shared tail (stun whirl,
+    // telegraph) and the breakable-zone part overlays are unchanged below.
     // Locked (spin) tail attack on the longtail (beads monhun-ardu-nch.3/5):
     // MS_ATTACK draws the whole beast from the 8-frame 40x40 fxtailspin sheet,
     // rotated about the body centre in 45-deg steps synced to the active window;
@@ -677,29 +677,25 @@ static void drawMonster(const mh::Game &g, int16_t camX, int16_t camY) {
     // fxtail_spin overlay stays as the windup tell, and the resting fxtail_heavy
     // overlay is skipped in both phases. Trade: the spin sheet has no windup
     // flash frame (the tell + telegraph core carry the timing).
-    const bool spinning = (m.state == mh::MS_WINDUP || m.state == mh::MS_ATTACK) && m.atkIdx != mh::COMBAT_NO_ATTACK && mh::combatFacingLockV(g.combat.attack.facing);
-    const bool spinSheet = spinning && g.monsterKind == mh::MON_HEAVY;
-    // Demo-beast attack overlays (beads monhun-ardu-nch.8/nch.10, prg.12): during
-    // windup+attack the whole chicken/bull/longtail is drawn from its bespoke
-    // 2-facing attack sheet instead of the generic art-descriptor base frame.
-    // The sheet ordinal selects the pose: during attack it is the attack index
-    // relative to the creature's first authored attack (the generated
-    // ATTACK_<CID>_<FIRST> constant, no literal record index); during windup the
-    // prg.11 tell slot wins when authored (tell 1..3). Frame = (ordinal << 1) |
-    // (west). The frame index stays inside every sheet: chicken 3 ordinals
-    // (peck/leap/wing_beat), bull 4 (stomp/gore/rear_kick/stomp windup), heavy 4
-    // (bite/bite windup/spin windup/slam windup; the locked spin branch wins for
-    // the last two). Windup and attack share the pose (the overlays have no
+    const bool attackPose = (m.state == mh::MS_WINDUP || m.state == mh::MS_ATTACK) && m.atkIdx != mh::COMBAT_NO_ATTACK;
+    const bool spinning = attackPose && mh::combatFacingLockV(g.combat.attack.facing);
+    // Attack art from the attack record (beads monhun-ardu-nch.8/nch.10, prg.12;
+    // bih.4): artSheet/artFrame/artMode replace the per-kind beastAtk compare
+    // chain and the MON_HEAVY spinSheet gate. During windup+attack the whole
+    // beast is drawn from the cached attack's whole-body sheet instead of the
+    // generic art-descriptor base frame. mode 0 draws the 2-facing pose at
+    // artFrame (or the authored prg.11 tell slot during windup); mode 1 is the
+    // locked spin. The art is read once at attack start into the cache, so no
+    // per-tick cart read. Windup and attack share the pose (the overlays have no
     // windup-flash frame; the tell + marker carry the timing). Cosmetic only: no
     // hit-test or window change.
-    const bool beastAtk = (g.monsterKind == mh::MON_LUNGE || g.monsterKind == mh::MON_SWEEP || g.monsterKind == mh::MON_HEAVY) && (m.state == mh::MS_WINDUP || m.state == mh::MS_ATTACK) &&
-                          m.atkIdx != mh::COMBAT_NO_ATTACK;
     // Windup tell frame (prg.11): combat.attack.tell selects the bespoke windup
-    // pose on the beast's attack sheet. prg.12 authored tells 1..3; an authored
-    // tell overrides the attack-order ordinal pose and suppresses the core
-    // marker, an unauthored tell (0/4) keeps the ordinal pose + 2x2 core marker.
+    // pose on the attack's sheet. prg.12 authored tells 1..3; an authored tell
+    // overrides the attack's own pose and suppresses the core marker, an
+    // unauthored tell (0/4) keeps the attack pose + 2x2 core marker.
     const uint8_t tellSlot = (m.state == mh::MS_WINDUP) ? mh::tellWindupFrame(g.combat.attack.tell, mh::TELL_FRAMES_AUTHORED) : mh::TELL_WINDUP_NONE;
-    if (spinSheet) {
+    const bool attackSheet = attackPose && g.combat.attack.artMode == 0 && g.combat.attack.artSheet != 0;
+    if (attackPose && g.combat.attack.artMode == 1) {
         // Whole-beast spin sheet: frame 0 is the east silhouette. Windup holds
         // the locked away frame; the attack steps 45 deg clockwise from it each
         // active-window slice, so the beast completes one visible revolution.
@@ -709,22 +705,16 @@ static void drawMonster(const mh::Game &g, int16_t camX, int16_t camY) {
         // spin's tell falls back to the core marker.)
         const uint8_t start8 = static_cast<uint8_t>(fp::dirIndexFromDelta(m.fx, m.fy)) & 7;
         const uint8_t spinF = (m.state == mh::MS_WINDUP) ? start8 : mh::spinSheetFrame(start8, m.t, static_cast<int16_t>(g.combat.attack.active));
-        sprDraw(fxtailspin, static_cast<int16_t>(x + (w >> 1) - 20), static_cast<int16_t>(y + (h >> 1) - 20), FRAME(spinF));
-    } else if (beastAtk) {
-        // Pick the beast's 2-facing attack sheet + its first authored attack
-        // (generated constant) by roster kind, then the ordinal: the authored
-        // tell slot during windup wins over the attack-order offset.
-        uint24_t sheet = fxchickenatk;
-        uint8_t first = combat::ATTACK_LUNGE_PECK;
-        if (g.monsterKind == mh::MON_SWEEP) {
-            sheet = fxbullatk;
-            first = combat::ATTACK_SWEEP_STOMP;
-        } else if (g.monsterKind == mh::MON_HEAVY) {
-            sheet = fxheavyatk;
-            first = combat::ATTACK_HEAVY_BITE;
-        }
-        const uint8_t ordinal = (tellSlot != mh::TELL_WINDUP_NONE) ? tellSlot : static_cast<uint8_t>(m.atkIdx - first);
-        sprDraw(sheet, x, y, FRAME(static_cast<uint8_t>((ordinal << 1) | (m.fx < 0 ? 1 : 0))));
+        sprDraw(artSheetAddr(static_cast<uint8_t>(g.combat.attack.artSheet - 1)), static_cast<int16_t>(x + (w >> 1) - 20), static_cast<int16_t>(y + (h >> 1) - 20), FRAME(spinF));
+    } else if (attackSheet) {
+        // 2-facing attack sheet: the attack's own pose frame, or the authored
+        // tell slot during windup (tell 1..3 -> (tell << 1) | west). An
+        // unauthored tell (0/4) falls back to the attack's artFrame.
+        uint8_t f = g.combat.attack.artFrame;
+        if (tellSlot != mh::TELL_WINDUP_NONE)
+            f = static_cast<uint8_t>(tellSlot << 1);
+        f = static_cast<uint8_t>(f | (m.fx < 0 ? 1 : 0));
+        sprDraw(artSheetAddr(static_cast<uint8_t>(g.combat.attack.artSheet - 1)), x, y, FRAME(f));
     } else {
         drawMonsterBodyGeneric(g, x, y);
     }
@@ -745,12 +735,12 @@ static void drawMonster(const mh::Game &g, int16_t camX, int16_t camY) {
     if (g.combat.creature == combat::CREATURE_HEAVY) {
         if (g.combat.appendZone != mh::COMBAT_NO_ZONE && !spinning)
             drawZonePart(g, x, y, fxtail_heavy, mh::COMBAT_ZONE_APPENDAGE, mh::COMBAT_ZONE_APPENDAGE_BIT);
-    } else if (g.combat.creature == combat::CREATURE_LUNGE && !beastAtk) {
+    } else if (g.combat.creature == combat::CREATURE_LUNGE && !attackSheet) {
         if (g.combat.headZone != mh::COMBAT_NO_ZONE)
             drawZonePart(g, x, y, fxhead_chicken, mh::COMBAT_ZONE_HEAD, mh::COMBAT_ZONE_HEAD_BIT);
         if (g.combat.appendZone != mh::COMBAT_NO_ZONE)
             drawZonePart(g, x, y, fxlegs_chicken, mh::COMBAT_ZONE_APPENDAGE, mh::COMBAT_ZONE_APPENDAGE_BIT);
-    } else if (g.combat.creature == combat::CREATURE_SWEEP && !beastAtk) {
+    } else if (g.combat.creature == combat::CREATURE_SWEEP && !attackSheet) {
         if (g.combat.headZone != mh::COMBAT_NO_ZONE)
             drawZonePart(g, x, y, fxhead_bull, mh::COMBAT_ZONE_HEAD, mh::COMBAT_ZONE_HEAD_BIT);
         if (g.combat.appendZone != mh::COMBAT_NO_ZONE)

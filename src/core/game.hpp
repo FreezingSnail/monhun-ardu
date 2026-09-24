@@ -660,6 +660,9 @@ struct CombatAttackCache {
     uint8_t facing;
     uint8_t wallStun;   // ticks self-stunned on a room-bound clamp (feel.4)
     uint8_t tell;       // windup telegraph shape (feel.5)
+    uint8_t artSheet;   // whole-body attack art sheet index (bih.4; 0 = generic body)
+    uint8_t artFrame;   // 2-facing attack pose frame base (bih.4)
+    uint8_t artMode;    // 0 normal 2-facing sheet, 1 locked-spin whole-body (bih.4)
     uint8_t winIdx;     // index of the cached window in the WINDOWS section
     CombatWindow win;
 };

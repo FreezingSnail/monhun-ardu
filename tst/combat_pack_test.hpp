@@ -468,6 +468,9 @@ void CombatPackSuite(TestRunner &runner) {
             t.assert(b16(blob, o + 19), h.recover, "blob attack recover");
             t.assert(b16(blob, o + 21), h.dmg, "blob attack dmg");
             t.assert(b8(blob, o + 23), h.tell, "blob attack tell");
+            t.assert(b8(blob, o + 24), h.artSheet, "blob attack artSheet");
+            t.assert(b8(blob, o + 25), h.artFrame, "blob attack artFrame");
+            t.assert(b8(blob, o + 26), h.artMode, "blob attack artMode");
         }
         for (uint8_t i = 0; i < combat::WINDOWS_COUNT; i++) {
             const size_t o = static_cast<size_t>(combat::WINDOWS_OFF) + i * combat::WINDOW_SIZE;
@@ -634,8 +637,8 @@ void CombatPackSuite(TestRunner &runner) {
         // the attack record's signed bytes 2/3. feel.10 makes heavy.tail_slam the
         // first shipped hop (dx -56, dy 0); every other attack keeps the signed
         // zeros so an inserted field cannot silently shift moveDx. ATTACK_SIZE is
-        // 24 since feel.5 appended the tell byte (the hop dx/dy offsets 2/3 are
-        // unchanged).
+        // 27 since bih.4 appended the attack art triple (the hop dx/dy offsets
+        // 2/3 are unchanged).
         Test t("attack move delta: hop dx/dy decode signed at offset 2/3");
         for (uint8_t i = 0; i < combat::ATTACKS_COUNT; i++) {
             const size_t o = static_cast<size_t>(combat::ATTACKS_OFF) + i * combat::ATTACK_SIZE;
@@ -651,7 +654,7 @@ void CombatPackSuite(TestRunner &runner) {
                 t.assert(h.moveDy, 0, "shipped moveDy zero (none/lunge)");
             }
         }
-        t.assert(combat::ATTACK_SIZE, 24, "ATTACK_SIZE grew for the tell byte");
+        t.assert(combat::ATTACK_SIZE, 27, "ATTACK_SIZE grew for the attack art triple");
         suite.addTest(t);
     }
 

@@ -5,6 +5,10 @@
     "fxmonster_heavy",
     "fxmonster_lunge",
     "fxmonster_sweep",
-    "fxpole"
+    "fxpole",
+    "fxchickenatk",
+    "fxbullatk",
+    "fxheavyatk",
+    "fxtailspin"
   ]
 }

@@ -63,6 +63,7 @@
       "move": { "type": "lunge", "speedF": 26 },
       "facing": "track",
       "tell": "line",
+      "art": { "sheet": "fxheavyatk", "frame": 0, "mode": "normal" },
       "windows": [
         { "t0": 0, "t1": 8, "box": { "ox": 14, "oy": 0, "w": 18, "h": 14 }, "dmgMul": 100 }
       ],
@@ -81,6 +82,7 @@
       "move": { "type": "none" },
       "facing": "lock-away",
       "tell": "arc",
+      "art": { "sheet": "fxtailspin", "frame": 0, "mode": "spin" },
       "windows": [
         { "t0": 0, "t1": 5, "box": { "ox": -20, "oy": 0, "w": 28, "h": 16 }, "dmgMul": 100 },
         { "t0": 6, "t1": 10, "box": { "ox": 0, "oy": -22, "w": 16, "h": 28 }, "dmgMul": 100 },
@@ -102,6 +104,7 @@
       "move": { "type": "hop", "dx": -56, "dy": 0 },
       "facing": "lock-at-windup",
       "tell": "ring",
+      "art": { "sheet": "fxheavyatk", "frame": 4, "mode": "normal" },
       "windows": [
         { "t0": 0, "t1": 8, "box": { "ox": -16, "oy": 0, "w": 36, "h": 28 }, "dmgMul": 100 }
       ],

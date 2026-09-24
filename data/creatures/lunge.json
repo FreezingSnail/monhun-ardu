@@ -72,6 +72,7 @@
       "move": { "type": "lunge", "speedF": 20 },
       "facing": "track",
       "tell": "dot",
+      "art": { "sheet": "fxchickenatk", "frame": 0, "mode": "normal" },
       "windows": [
         { "t0": 0, "t1": 6, "box": { "ox": 14, "oy": -6, "w": 12, "h": 10 }, "dmgMul": 100 }
       ],
@@ -90,6 +91,7 @@
       "move": { "type": "lunge", "speedF": 48 },
       "facing": "lock-at-windup",
       "tell": "line",
+      "art": { "sheet": "fxchickenatk", "frame": 2, "mode": "normal" },
       "windows": [
         { "t0": 0, "t1": 10, "box": { "ox": 12, "oy": -2, "w": 18, "h": 16 }, "dmgMul": 100 }
       ],
@@ -108,6 +110,7 @@
       "move": { "type": "none" },
       "facing": "track",
       "tell": "arc",
+      "art": { "sheet": "fxchickenatk", "frame": 4, "mode": "normal" },
       "windows": [
         { "t0": 0, "t1": 5, "box": { "ox": -8, "oy": 0, "w": 26, "h": 18 }, "dmgMul": 100 }
       ],

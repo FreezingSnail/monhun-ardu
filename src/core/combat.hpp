@@ -20,8 +20,8 @@
 // two optional zone rects, picks the highest dmgMul (tie -> body, then head,
 // then appendage), drains the zone pool and flips a single broken bit per zone.
 //
-// Cache budget: CombatProfile 24 B + CombatAttackCache 25 B + body box 4 B +
-// 2x CombatZoneCache 22 B + 4 runtime zone bytes + 4 interpreter bytes = 83 B
+// Cache budget: CombatProfile 24 B + CombatAttackCache 28 B + body box 4 B +
+// 2x CombatZoneCache 22 B + 4 runtime zone bytes + 4 interpreter bytes = 86 B
 // on AVR.
 
 #include <stddef.h>
@@ -185,7 +185,8 @@ struct CombatAttackValue {
     uint8_t wallStun;   // ticks self-stunned on a room-bound clamp (feel.4)
     uint8_t firstWindow, windowCount;
     uint16_t windup, active, recover, dmg;
-    uint8_t tell;   // Tell: windup animation-frame selector (feel.5 / prg.11)
+    uint8_t tell;                          // Tell: windup animation-frame selector (feel.5 / prg.11)
+    uint8_t artSheet, artFrame, artMode;   // whole-body attack art (bih.4)
 };
 
 struct CombatPattern {
@@ -259,6 +260,7 @@ struct PkAttack {
     uint8_t firstWindow, windowCount;
     uint16_t windup, active, recover, dmg;
     uint8_t tell;
+    uint8_t artSheet, artFrame, artMode;   // whole-body attack art (bih.4)
 };
 struct PkWindow {
     uint16_t t0, t1;
@@ -309,6 +311,9 @@ static_assert(offsetof(PkAttack, windowCount) == offsetof(PkAttack, firstWindow)
 static_assert(offsetof(PkAttack, wallStun) == offsetof(PkAttack, cue) + 1, "attack wallStun must follow cue");
 static_assert(offsetof(PkAttack, dmg) == offsetof(PkAttack, windup) + 6, "attack timing quad must stay contiguous");
 static_assert(offsetof(PkAttack, tell) == offsetof(PkAttack, dmg) + 2, "attack tell must follow the timing quad");
+static_assert(offsetof(PkAttack, artSheet) == offsetof(PkAttack, tell) + 1, "attack artSheet must follow tell");
+static_assert(offsetof(PkAttack, artFrame) == offsetof(PkAttack, artSheet) + 1, "attack art triple must stay contiguous");
+static_assert(offsetof(PkAttack, artMode) == offsetof(PkAttack, artFrame) + 1, "attack art triple must stay contiguous");
 // Bulk-read cache mirrors: these caches are byte-identical to their packed
 // records, so the reads fetch the whole record in one transaction.
 static_assert(sizeof(CombatZone) == combat::ZONE_SIZE, "zone cache must stay 13 B");
@@ -322,9 +327,9 @@ static_assert(offsetof(CombatGuard, facing) == offsetof(PkGuard, facing), "guard
 static_assert(offsetof(CombatStep, chance) == offsetof(PkStep, chance), "step mirror drift");
 static_assert(offsetof(CombatPattern, guardIdx) == offsetof(PkPattern, guardIdx), "pattern mirror drift");
 static_assert(sizeof(CombatWindow) == 9, "window cache must stay 9 B");
-static_assert(sizeof(CombatAttackCache) == 25, "attack cache must stay 25 B (windup quad + move prefix incl hop dx/dy + facing + wallStun + tell + idx + window)");
+static_assert(sizeof(CombatAttackCache) == 28, "attack cache must stay 28 B (windup quad + move prefix incl hop dx/dy + facing + wallStun + tell + attack art + idx + window)");
 static_assert(sizeof(CombatZoneCache) == 12, "zone cache must stay 12 B");
-static_assert(sizeof(CombatState) == 105, "CombatState must stay 105 B (zones design + collide + static flag + faceHold + turnRate + wallStun + tell + enrage + hop dx/dy + art)");
+static_assert(sizeof(CombatState) == 108, "CombatState must stay 108 B (zones design + collide + static flag + faceHold + turnRate + wallStun + tell + attack art + enrage + hop dx/dy + art)");
 
 // Fake cart pointer: the blob lives below 64 KB (generator hard-fails above).
 inline uint16_t combatCartAddr(uint16_t off) {
@@ -538,6 +543,9 @@ inline CombatAttackValue combatAttackRead(uint8_t i) {
     v.recover = combatReadU16(b + MH_COMBAT_FIELD(detail::PkAttack, recover));
     v.dmg = combatReadU16(b + MH_COMBAT_FIELD(detail::PkAttack, dmg));
     v.tell = combatReadU8(b + MH_COMBAT_FIELD(detail::PkAttack, tell));
+    v.artSheet = combatReadU8(b + MH_COMBAT_FIELD(detail::PkAttack, artSheet));
+    v.artFrame = combatReadU8(b + MH_COMBAT_FIELD(detail::PkAttack, artFrame));
+    v.artMode = combatReadU8(b + MH_COMBAT_FIELD(detail::PkAttack, artMode));
     return v;
 }
 
@@ -847,6 +855,9 @@ inline CombatAttackValue combatAttackRead(uint8_t i) {
     v.recover = a.recover;
     v.dmg = a.dmg;
     v.tell = a.tell;
+    v.artSheet = a.artSheet;
+    v.artFrame = a.artFrame;
+    v.artMode = a.artMode;
     return v;
 }
 
@@ -1085,6 +1096,7 @@ inline uint8_t attackLoad(Game &g, uint8_t attackIdx) {
     const uint16_t fw = combatReadU16(b + static_cast<uint16_t>(offsetof(detail::PkAttack, firstWindow)));
     detail::combatReadBytes(static_cast<uint16_t>(b + offsetof(detail::PkAttack, windup)), &g.combat.attack.windup, 8);
     g.combat.attack.tell = combatReadU8(b + static_cast<uint16_t>(offsetof(detail::PkAttack, tell)));
+    detail::combatReadBytes(static_cast<uint16_t>(b + offsetof(detail::PkAttack, artSheet)), &g.combat.attack.artSheet, 3);
     attackWindowLoad(g, static_cast<uint8_t>(fw & 0xFF));
 #else
     g.combat.attack.windup = combatAttackWindup(attackIdx);
@@ -1098,6 +1110,9 @@ inline uint8_t attackLoad(Game &g, uint8_t attackIdx) {
     g.combat.attack.facing = combatAttackFacing(attackIdx);
     g.combat.attack.wallStun = combatAttackWallStun(attackIdx);
     g.combat.attack.tell = combatAttackTell(attackIdx);
+    g.combat.attack.artSheet = combat_data::ATTACKS[attackIdx].artSheet;
+    g.combat.attack.artFrame = combat_data::ATTACKS[attackIdx].artFrame;
+    g.combat.attack.artMode = combat_data::ATTACKS[attackIdx].artMode;
     attackWindowLoad(g, combatAttackFirstWindow(attackIdx));
 #endif
     return attackIdx;
