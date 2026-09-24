@@ -1,0 +1,9 @@
+{
+  "id": 4,
+  "title": "CRAFT",
+  "prebake": true,
+  "weapons": "craft",
+  "rows": [
+    { "label": "LEAVE", "cost": 0, "action": "leave", "condition": "always", "param": 0 }
+  ]
+}

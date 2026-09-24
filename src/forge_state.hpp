@@ -113,9 +113,12 @@ MH_NOINLINE inline void billDebit(SaveBlock &save, uint16_t cost, const uint8_t 
 }
 
 // The active bill's packed mats + cost: the upgrade bill when the parent is
-// owned (and the node has one), else the direct bill.
-inline const uint8_t *forgeActiveMats(const SaveBlock &save, const ForgeNode &n, uint16_t &cost) {
-    if (forgeParentOwned(save, n)) {
+// owned (and the node has one), else the direct bill. `direct` (hbk.10) forces
+// the direct bill even when the parent is owned -- the CRAFT smithy list bakes
+// and charges the direct cost, so a craft card on SCREEN_CRAFT debits exactly
+// the number the row shows.
+inline const uint8_t *forgeActiveMats(const SaveBlock &save, const ForgeNode &n, uint16_t &cost, bool direct = false) {
+    if (!direct && forgeParentOwned(save, n)) {
         cost = n.cost;
         return &n.mats[0].item;
     }
@@ -130,9 +133,9 @@ struct ForgeBill {
     ForgeMat mats[FORGE_MAT_SLOTS];
 };
 
-inline ForgeBill forgeActiveBill(const SaveBlock &save, const ForgeNode &n) {
+inline ForgeBill forgeActiveBill(const SaveBlock &save, const ForgeNode &n, bool direct = false) {
     ForgeBill b;
-    const bool up = forgeParentOwned(save, n);
+    const bool up = !direct && forgeParentOwned(save, n);
     b.cost = up ? n.cost : n.directCost;
     for (uint8_t i = 0; i < FORGE_MAT_SLOTS; i++)
         b.mats[i] = up ? n.mats[i] : n.directMats[i];
@@ -152,26 +155,27 @@ enum ForgeState : uint8_t {
 };
 
 // Can the save afford the active bill? (pure; used by the state classifier)
-inline bool forgeAffordable(const SaveBlock &save, const ForgeNode &n) {
+inline bool forgeAffordable(const SaveBlock &save, const ForgeNode &n, bool direct = false) {
     uint16_t cost;
-    const uint8_t *mats = forgeActiveMats(save, n, cost);
+    const uint8_t *mats = forgeActiveMats(save, n, cost, direct);
     return billAffordable(save, cost, mats, FORGE_MAT_SLOTS);
 }
 
 // Classify a node against the save. `nodeCount` bounds the node id (the host
-// passes forge::NODE_COUNT; a corrupt cart id classifies DEAD).
-inline ForgeState forgeNodeState(const SaveBlock &save, const ForgeNode &n, uint8_t nodeCount) {
+// passes forge::NODE_COUNT; a corrupt cart id classifies DEAD). `direct` forces
+// the direct path (and bill) even when the parent is owned (hbk.10 CRAFT).
+inline ForgeState forgeNodeState(const SaveBlock &save, const ForgeNode &n, uint8_t nodeCount, bool direct = false) {
     if (n.index >= nodeCount)
         return FORGE_DEAD;
     if (save.equippedNode == n.index)
         return FORGE_EQUIPPED;
     if (saveWeaponOwned(save, n.index))
         return FORGE_OWNED;
-    const bool up = forgeParentOwned(save, n);
+    const bool up = !direct && forgeParentOwned(save, n);
     if (!up && !forgeNodeDirect(n))
         return FORGE_DEAD;   // locked: no owned parent and no direct path
     uint16_t cost;
-    const uint8_t *mats = forgeActiveMats(save, n, cost);
+    const uint8_t *mats = forgeActiveMats(save, n, cost, direct);
     const uint8_t sh = billShort(save, cost, mats, FORGE_MAT_SLOTS);
     if (sh != BILL_OK)
         return sh == BILL_NEED_ZENNY ? FORGE_NEED_ZENNY : FORGE_NEED_PARTS;
@@ -180,21 +184,22 @@ inline ForgeState forgeNodeState(const SaveBlock &save, const ForgeNode &n, uint
 
 // Debit the active bill. Caller re-checks the state so a stale card cannot
 // over-debit. Pure field math, no cart.
-inline void forgeDebit(SaveBlock &save, const ForgeNode &n) {
+inline void forgeDebit(SaveBlock &save, const ForgeNode &n, bool direct = false) {
     uint16_t cost;
-    const uint8_t *mats = forgeActiveMats(save, n, cost);
+    const uint8_t *mats = forgeActiveMats(save, n, cost, direct);
     billDebit(save, cost, mats, FORGE_MAT_SLOTS);
 }
 
 // Forge (or upgrade) a node. Returns true when the save changed and must be
 // persisted. Re-checks the state: only UPGRADE/DIRECT act. An owned parent that
-// is currently equipped moves the equipped id to the child.
-inline bool forgeNodeApply(SaveBlock &save, const ForgeNode &n, uint8_t nodeCount) {
-    const ForgeState st = forgeNodeState(save, n, nodeCount);
+// is currently equipped moves the equipped id to the child. `direct` charges
+// the direct bill even when the parent is owned (hbk.10 CRAFT).
+inline bool forgeNodeApply(SaveBlock &save, const ForgeNode &n, uint8_t nodeCount, bool direct = false) {
+    const ForgeState st = forgeNodeState(save, n, nodeCount, direct);
     if (st != FORGE_UPGRADE && st != FORGE_DIRECT)
         return false;
     const bool wasEquipped = forgeParentOwned(save, n) && save.equippedNode == n.parent;
-    forgeDebit(save, n);
+    forgeDebit(save, n, direct);
     saveSetWeaponOwned(save, n.index);
     if (wasEquipped)
         save.equippedNode = n.index;

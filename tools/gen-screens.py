@@ -79,18 +79,21 @@ TIER_COUNT = 3   # N_WEAPONS (W_SWORD/W_FLAIL/W_GUN); must match core/save.hpp
 ACTION_NAMES = ("leave", "buy_upgrade", "take_quest", "turn_in_quest",
                 "none", "hunt", "open_quests",
                 "equip_weapon", "open_gear", "equip_armor",
-                "forge_node", "open_forge")
+                "forge_node", "open_forge",
+                "open_craft", "open_upgrade", "open_armor_forge")
 COND_NAMES = ("always", "zenny", "flag", "tier", "quest", "upgrade")
 # hide_locked: reserved. skill: draw the cached live skill points
 # (ScreenState::skillPoints) in the cost column plus an S/M tier letter next to
 # it (gs.2 GEAR readout); `param` = the armor::SKILL_* index. The qs.4 zenny
 # dynamic-value token is retired (ui.5): the live balance moved to the header.
 ROW_FLAGS = {"hide_locked": 0x01, "skill": 0x04, "forge": 0x08}
-# Per-screen generated weapon block (ui.4, 5co.4): "weapons": "forge" emits the
-# class headers + forge_node rows (cost column = the upgrade cost), "equip"
-# emits the same tree with equip_weapon rows (no cost; the GEAR list). The rows
-# are built from data/forge/*.json so the tree is authored once.
-WEAPONS_MODES = ("forge", "equip")
+# Per-screen generated weapon block (ui.4, 5co.4; craft mode hbk.10): "forge"
+# emits the class headers + forge_node rows (cost column = the upgrade cost),
+# "equip" emits the same tree with equip_weapon rows (no cost; the GEAR list),
+# "craft" emits FLAT forge_node rows (no headers/prefixes) with cost = the
+# node's directCost -- the CRAFT smithy list. The rows are built from
+# data/forge/*.json so the tree is authored once.
+WEAPONS_MODES = ("forge", "equip", "craft")
 # COND_UPGRADE param packs (unlockFlag << 4) | (weaponIdx << 2) | tier (see
 # screen_state.hpp): unlock 0 = always, else 1-based quest whose done bit gates
 # the tier; weapon 0..TIER_COUNT-1; tier 1..SCREEN_MAX_TIER (2 in data).
@@ -307,27 +310,62 @@ def load_fxdata_symbols(root):
 
 def weapon_rows(errors, ctx, mode, forge_model):
     """Class headers + one row per node, generated from the forge tree. The
-    `mode` picks the row action (forge_node vs equip_weapon) and whether the
-    cost column carries the upgrade cost (FORGE) or stays 0 (GEAR)."""
+    `mode` picks the row action (forge_node vs equip_weapon) and the cost
+    column: FORGE bakes the upgrade cost, GEAR stays 0, CRAFT (hbk.10) bakes
+    the flat direct-forge cost with no headers or tree prefixes."""
     gen_forge = load_forge_module()
     rows = []
-    action = ACTION_NAMES.index("forge_node" if mode == "forge" else "equip_weapon")
+    action = ACTION_NAMES.index("forge_node" if mode in ("forge", "craft") else "equip_weapon")
     for entry in forge_model["classes"]:
-        rows.append({"label": entry["header"], "cost": 0, "action": ACTION_NAMES.index("none"),
-                     "flags": 0, "cond": COND_NAMES.index("always"), "param": 0})
+        if mode != "craft":
+            rows.append({"label": entry["header"], "cost": 0, "action": ACTION_NAMES.index("none"),
+                         "flags": 0, "cond": COND_NAMES.index("always"), "param": 0})
         for node in forge_model["nodes"]:
             if node["class"] != entry["class"]:
                 continue
-            label = gen_forge.row_label(forge_model, node)
+            if mode == "craft":
+                label = node["label"]
+                cost = node["directCost"]
+            else:
+                label = gen_forge.row_label(forge_model, node)
+                cost = node["cost"] if mode == "forge" else 0
             if len(label) > LABEL_MAX:
                 errors.add(ctx, "weapon row %r exceeds %d chars" % (label, LABEL_MAX))
                 continue
-            rows.append({"label": label,
-                         "cost": node["cost"] if mode == "forge" else 0,
-                         "action": action, "flags": ROW_FLAGS["forge"],
+            rows.append({"label": label, "cost": cost, "action": action,
+                         "flags": ROW_FLAGS["forge"],
                          "cond": COND_NAMES.index("always"), "param": node["index"]})
     if not rows:
         errors.add(ctx, "weapons: no forge nodes to generate rows from")
+    return rows
+
+
+def load_armor_module():
+    spec = importlib.util.spec_from_file_location("gen_armor", os.path.join(HERE, "gen-armor.py"))
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+    return module
+
+
+def armor_rows(errors, ctx, armor_model):
+    """One row per data/armor.json piece (hbk.10 ARMOR FORGE list): the piece's
+    `label` + recipe zenny cost + equip_armor action with param = (slot << 5) |
+    piece index. The card gates the craft bill, so the row is always live."""
+    action = ACTION_NAMES.index("equip_armor")
+    rows = []
+    for index, piece in enumerate(armor_model["pieces"]):
+        label = piece.get("label")
+        if label is None:
+            errors.add(ctx, "armor: piece %r has no label" % piece["id"])
+            continue
+        if len(label) > LABEL_MAX:
+            errors.add(ctx, "armor row %r exceeds %d chars" % (label, LABEL_MAX))
+            continue
+        rows.append({"label": label, "cost": piece["zenny"], "action": action,
+                     "flags": 0, "cond": COND_NAMES.index("always"),
+                     "param": (piece["slot"] << 5) | index})
+    if not rows:
+        errors.add(ctx, "armor: no pieces to generate rows from")
     return rows
 
 
@@ -483,9 +521,9 @@ def clean_stale_images(screens, root):
         print("gen-screens: removed stale %s/%s" % (IMAGE_DIR_REL, name))
 
 
-def normalize_screen(errors, rel, name, obj, seen_ids, forge_model):
+def normalize_screen(errors, rel, name, obj, seen_ids, forge_model, armor_model):
     ctx = rel
-    check_keys(errors, ctx, obj, {"id", "title", "rows"}, ("weapons", "prebake"))
+    check_keys(errors, ctx, obj, {"id", "title", "rows"}, ("weapons", "prebake", "armor"))
     if not isinstance(obj, dict):
         return None
     stem = os.path.splitext(name)[0]
@@ -505,6 +543,12 @@ def normalize_screen(errors, rel, name, obj, seen_ids, forge_model):
     if mode is not None and mode not in WEAPONS_MODES:
         errors.add(ctx, "weapons: unknown mode %r (want one of %s)" % (mode, ", ".join(WEAPONS_MODES)))
         mode = None
+    armor = obj.get("armor", False)
+    if not isinstance(armor, bool):
+        errors.add(ctx, "armor: expected a boolean, got %r" % (armor,))
+        armor = False
+    if mode is not None and armor:
+        errors.add(ctx, "weapons/armor: pick one generated row source")
     raw_rows = obj.get("rows")
     if not isinstance(raw_rows, list) or not raw_rows:
         errors.add(ctx, "rows: expected a non-empty array")
@@ -515,6 +559,11 @@ def normalize_screen(errors, rel, name, obj, seen_ids, forge_model):
             errors.add(ctx, "weapons: forge tree unavailable (data/forge/*.json)")
         else:
             rows += weapon_rows(errors, ctx, mode, forge_model)
+    if armor:
+        if armor_model is None:
+            errors.add(ctx, "armor: armor table unavailable (data/armor.json)")
+        else:
+            rows += armor_rows(errors, ctx, armor_model)
     for i, row in enumerate(raw_rows):
         normalized = normalize_row(errors, "%s.rows[%d]" % (ctx, i), row)
         if normalized is not None:
@@ -543,13 +592,17 @@ def compile_model(errors, root):
     if not names:
         errors.add(DATA_DIR, "no screen JSON files found")
         return None
-    # The forge tree backs the generated FORGE/GEAR weapon row blocks; only load
-    # it when a screen asks (so gen-screens stays independent of data/forge).
+    # The forge tree backs the generated FORGE/GEAR/CRAFT weapon row blocks and
+    # the armor table backs the ARMOR FORGE rows; only load each when a screen
+    # asks (so gen-screens stays independent of data/forge + data/armor).
     forge_model = None
+    armor_model = None
     for name in names:
         obj = load_json(errors, os.path.join(data_dir, name), "%s/%s" % (DATA_DIR, name))
         if isinstance(obj, dict) and obj.get("weapons") is not None:
             forge_model = load_forge_module().load_model(root)
+        if isinstance(obj, dict) and obj.get("armor") is True:
+            armor_model = load_armor_module().load_model(root)
     screens = []
     seen_ids = set()
     for name in names:
@@ -557,7 +610,7 @@ def compile_model(errors, root):
         obj = load_json(errors, os.path.join(data_dir, name), rel)
         if obj is None:
             continue
-        screen = normalize_screen(errors, rel, name, obj, seen_ids, forge_model)
+        screen = normalize_screen(errors, rel, name, obj, seen_ids, forge_model, armor_model)
         if screen is not None:
             screens.append(screen)
     if errors.items:

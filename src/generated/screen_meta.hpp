@@ -13,19 +13,19 @@ namespace screens {
 constexpr uint16_t MAGIC = 0x5343;
 constexpr uint8_t VERSION = 1;
 constexpr uint8_t FLAGS = 0x00;
-constexpr uint16_t SIZE = 881;
+constexpr uint16_t SIZE = 1021;
 constexpr uint8_t HEADER_SIZE = 8;
 constexpr uint8_t DEF_OFF_OFF = 8;
-constexpr uint16_t ROWS_OFF = 54;
-constexpr uint8_t SCREEN_COUNT = 4;
-constexpr uint16_t ROW_COUNT = 49;
+constexpr uint16_t ROWS_OFF = 78;
+constexpr uint8_t SCREEN_COUNT = 6;
+constexpr uint16_t ROW_COUNT = 56;
 
 // Prebaked screen pages (hbk.2/hbk.9): one fixed SCREEN_PAGE_STRIDE-byte
 // slot per screen, in index order: a u8 page count then SCREEN_PAGE_MAX
 // u24 absolute FX addresses of the mh_screen_<name>_<page> layer arrays.
 // pageCount == 0 slots render empty; src/screens.hpp indexes a screen
 // with PAGE_TABLE_OFF + screen * SCREEN_PAGE_STRIDE.
-constexpr uint16_t PAGE_TABLE_OFF = 829;
+constexpr uint16_t PAGE_TABLE_OFF = 943;
 constexpr uint8_t SCREEN_PAGE_STRIDE = 13;
 constexpr uint8_t SCREEN_PAGE_MAX = 4;
 
@@ -42,6 +42,9 @@ constexpr uint8_t ACTION_OPEN_GEAR = 8;
 constexpr uint8_t ACTION_EQUIP_ARMOR = 9;
 constexpr uint8_t ACTION_FORGE_NODE = 10;
 constexpr uint8_t ACTION_OPEN_FORGE = 11;
+constexpr uint8_t ACTION_OPEN_CRAFT = 12;
+constexpr uint8_t ACTION_OPEN_UPGRADE = 13;
+constexpr uint8_t ACTION_OPEN_ARMOR_FORGE = 14;
 
 // Row condition ids; 0 = always, else the save query in screenCondOk().
 constexpr uint8_t COND_ALWAYS = 0;
@@ -58,32 +61,46 @@ constexpr uint8_t ROW_F_SKILL = 0x04;
 
 // Screen indices, sorted by id, with the cart offsets the runtime uses.
 constexpr uint8_t SCREEN_HUB = 0;
-constexpr uint16_t SCREEN_HUB_OFF = 16;
+constexpr uint16_t SCREEN_HUB_OFF = 20;
 constexpr uint8_t SCREEN_HUB_ROWS = 4;
 constexpr uint8_t SCREEN_HUB_TITLE_LEN = 3;
-constexpr uint16_t SCREEN_HUB_FIRST_ROW = 54;
+constexpr uint16_t SCREEN_HUB_FIRST_ROW = 78;
 constexpr uint8_t SCREEN_HUB_PAGES = 1;
-constexpr uint16_t SCREEN_HUB_PAGE_TABLE = 829;
+constexpr uint16_t SCREEN_HUB_PAGE_TABLE = 943;
 constexpr uint8_t SCREEN_QUESTS = 1;
-constexpr uint16_t SCREEN_QUESTS_OFF = 24;
+constexpr uint16_t SCREEN_QUESTS_OFF = 28;
 constexpr uint8_t SCREEN_QUESTS_ROWS = 8;
 constexpr uint8_t SCREEN_QUESTS_TITLE_LEN = 6;
-constexpr uint16_t SCREEN_QUESTS_FIRST_ROW = 101;
+constexpr uint16_t SCREEN_QUESTS_FIRST_ROW = 125;
 constexpr uint8_t SCREEN_QUESTS_PAGES = 2;
-constexpr uint16_t SCREEN_QUESTS_PAGE_TABLE = 842;
+constexpr uint16_t SCREEN_QUESTS_PAGE_TABLE = 956;
 constexpr uint8_t SCREEN_GEAR = 2;
-constexpr uint16_t SCREEN_GEAR_OFF = 35;
+constexpr uint16_t SCREEN_GEAR_OFF = 39;
 constexpr uint8_t SCREEN_GEAR_ROWS = 24;
 constexpr uint8_t SCREEN_GEAR_TITLE_LEN = 4;
-constexpr uint16_t SCREEN_GEAR_FIRST_ROW = 248;
+constexpr uint16_t SCREEN_GEAR_FIRST_ROW = 272;
 constexpr uint8_t SCREEN_GEAR_PAGES = 4;
-constexpr uint16_t SCREEN_GEAR_PAGE_TABLE = 855;
+constexpr uint16_t SCREEN_GEAR_PAGE_TABLE = 969;
 constexpr uint8_t SCREEN_FORGE = 3;
-constexpr uint16_t SCREEN_FORGE_OFF = 44;
-constexpr uint8_t SCREEN_FORGE_ROWS = 13;
+constexpr uint16_t SCREEN_FORGE_OFF = 48;
+constexpr uint8_t SCREEN_FORGE_ROWS = 4;
 constexpr uint8_t SCREEN_FORGE_TITLE_LEN = 5;
-constexpr uint16_t SCREEN_FORGE_FIRST_ROW = 629;
-constexpr uint8_t SCREEN_FORGE_PAGES = 3;
-constexpr uint16_t SCREEN_FORGE_PAGE_TABLE = 868;
+constexpr uint16_t SCREEN_FORGE_FIRST_ROW = 653;
+constexpr uint8_t SCREEN_FORGE_PAGES = 1;
+constexpr uint16_t SCREEN_FORGE_PAGE_TABLE = 982;
+constexpr uint8_t SCREEN_CRAFT = 4;
+constexpr uint16_t SCREEN_CRAFT_OFF = 58;
+constexpr uint8_t SCREEN_CRAFT_ROWS = 10;
+constexpr uint8_t SCREEN_CRAFT_TITLE_LEN = 5;
+constexpr uint16_t SCREEN_CRAFT_FIRST_ROW = 723;
+constexpr uint8_t SCREEN_CRAFT_PAGES = 2;
+constexpr uint16_t SCREEN_CRAFT_PAGE_TABLE = 995;
+constexpr uint8_t SCREEN_ARMOR_FORGE = 5;
+constexpr uint16_t SCREEN_ARMOR_FORGE_OFF = 68;
+constexpr uint8_t SCREEN_ARMOR_FORGE_ROWS = 6;
+constexpr uint8_t SCREEN_ARMOR_FORGE_TITLE_LEN = 5;
+constexpr uint16_t SCREEN_ARMOR_FORGE_FIRST_ROW = 846;
+constexpr uint8_t SCREEN_ARMOR_FORGE_PAGES = 1;
+constexpr uint16_t SCREEN_ARMOR_FORGE_PAGE_TABLE = 1008;
 
 }   // namespace screens

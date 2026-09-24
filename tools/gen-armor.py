@@ -82,6 +82,9 @@ RESIST_MAX = 127
 # Card copy bounds (ui.3): the pre-wrapped desc lines the card baker draws.
 DESC_MAX_LINES = 4
 DESC_MAX_LEN = 22
+# Screen row label cap (hbk.10): the ARMOR FORGE list bakes this label into a
+# 16-char row lane (tools/gen-screens.py LABEL_MAX); display-only, never packed.
+LABEL_MAX = 16
 
 NAME_RE = re.compile(r"^[a-z][a-z0-9_]*$")
 MAX_ID = 31
@@ -349,9 +352,23 @@ def normalize_desc(errors, ctx, obj):
     return lines
 
 
+def normalize_label(errors, ctx, obj):
+    """Optional `label`: the uppercase row label tools/gen-screens.py bakes into
+    the ARMOR FORGE list. Validated (1..LABEL_MAX printable ASCII) but never
+    packed into the mhArmor blob; the screen generator reads the JSON directly."""
+    raw = obj.get("label") if isinstance(obj, dict) else None
+    if raw is None:
+        return None
+    if (not isinstance(raw, str) or not 1 <= len(raw) <= LABEL_MAX
+            or any(ord(ch) < 32 or ord(ch) > 126 for ch in raw)):
+        errors.add(ctx, "label: expected 1..%d printable ASCII chars, got %r" % (LABEL_MAX, raw))
+        return None
+    return raw
+
+
 def normalize_piece(errors, ctx, obj, seen_ids, skill_index, item_ids):
     check_keys(errors, ctx, obj, {"id", "slot", "defense", "resist", "skills", "recipe"},
-               ("sheet", "desc"))
+               ("sheet", "desc", "label"))
     if not isinstance(obj, dict):
         return None
     piece_id = read_id(errors, ctx, obj, "id", seen_ids)
@@ -371,6 +388,7 @@ def normalize_piece(errors, ctx, obj, seen_ids, skill_index, item_ids):
     # `desc` is the pre-wrapped card copy (ui.3 card baker reads the JSON
     # directly); validated here, never packed into the mhArmor blob.
     desc = normalize_desc(errors, ctx, obj)
+    label = normalize_label(errors, ctx, obj)
     sheet = obj.get("sheet")
     if sheet is not None and (not isinstance(sheet, str) or not NAME_RE.match(sheet)):
         errors.add(ctx, "sheet: expected a [a-z][a-z0-9_]* symbol, got %r" % (sheet,))
@@ -379,7 +397,7 @@ def normalize_piece(errors, ctx, obj, seen_ids, skill_index, item_ids):
         return None
     return {"id": piece_id, "slot": slot, "defense": defense, "resist": resist,
             "skills": skills, "materials": mats, "zenny": zenny, "sheet": sheet,
-            "desc": desc}
+            "desc": desc, "label": label}
 
 
 def compile_model(errors, root):
@@ -443,6 +461,16 @@ def compile_model(errors, root):
     skill_model["itemIds"] = item_ids
     return {"pieces": pieces, "skills": skill_model["skills"], "thresholds": skill_model["thresholds"],
             "sheets": sheets, "sheetIndex": sheet_index, "itemIds": item_ids}
+
+
+def load_model(root):
+    """Convenience for the other generators (tools/gen-screens.py armor rows):
+    strict compile or None."""
+    errors = Errors()
+    model = compile_model(errors, root)
+    if model is None or errors.items:
+        return None
+    return model
 
 
 def pack_blob(errors, model):

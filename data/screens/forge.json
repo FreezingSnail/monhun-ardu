@@ -1,9 +1,11 @@
 {
-  "id": 4,
+  "id": 3,
   "title": "FORGE",
   "prebake": true,
-  "weapons": "forge",
   "rows": [
+    { "label": "WEAPON CRAFT", "cost": 0, "action": "open_craft", "condition": "always", "param": 0 },
+    { "label": "WEAPON UPGRADE", "cost": 0, "action": "open_upgrade", "condition": "always", "param": 0 },
+    { "label": "ARMOR FORGE", "cost": 0, "action": "open_armor_forge", "condition": "always", "param": 0 },
     { "label": "LEAVE", "cost": 0, "action": "leave", "condition": "always", "param": 0 }
   ]
 }

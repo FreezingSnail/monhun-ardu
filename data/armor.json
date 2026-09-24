@@ -3,6 +3,7 @@
   "pieces": [
     {
       "id": "hunter_helm",
+      "label": "HUNTER HELM",
       "slot": "head",
       "defense": 10,
       "desc": [
@@ -42,6 +43,7 @@
     },
     {
       "id": "bone_cap",
+      "label": "BONE CAP",
       "slot": "head",
       "defense": 6,
       "desc": [
@@ -81,6 +83,7 @@
     },
     {
       "id": "hunter_mail",
+      "label": "HUNTER MAIL",
       "slot": "body",
       "defense": 14,
       "desc": [
@@ -120,6 +123,7 @@
     },
     {
       "id": "bone_mail",
+      "label": "BONE MAIL",
       "slot": "body",
       "defense": 8,
       "desc": [
@@ -159,6 +163,7 @@
     },
     {
       "id": "evade_charm",
+      "label": "EVADE CHARM",
       "slot": "charm",
       "defense": 0,
       "desc": [

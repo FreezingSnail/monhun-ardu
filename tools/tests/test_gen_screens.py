@@ -351,6 +351,117 @@ class GenScreensTests(unittest.TestCase):
         self.assertEqual(off, len(blob) - 3 * 13, "rows end at the page table")
         self.assertEqual(blob[off:], bytes(3 * 13), "no screen prebakes pages")
 
+    def write_items_and_forge(self):
+        os.makedirs(self.path("data", "forge"), exist_ok=True)
+        with open(self.path("data", "items.json"), "w", encoding="utf-8", newline="\n") as handle:
+            json.dump({"version": 1, "items": [
+                {"id": "ore", "kind": "material", "heal": 0, "stam": 0, "sell": 1},
+                {"id": "scale", "kind": "material", "heal": 0, "stam": 0, "sell": 1},
+            ]}, handle, indent=2)
+        with open(self.path("data", "forge", "sword.json"), "w", encoding="utf-8", newline="\n") as handle:
+            json.dump({
+                "class": "sword", "header": "-- SWD --",
+                "nodes": [
+                    {"id": "sword_base", "label": "SWD T1", "parent": None, "direct": True,
+                     "cost": 0, "mats": [], "directCost": 0, "directMats": [],
+                     "dmgMul": 100, "spdMul": 100, "desc": ["BLADE."], "sheet": "mh_weapon_sword"},
+                    {"id": "sword_t1", "label": "SWD T2", "parent": "sword_base", "direct": True,
+                     "cost": 100, "mats": [{"item": "ore", "count": 2}],
+                     "directCost": 180, "directMats": [{"item": "ore", "count": 3}],
+                     "dmgMul": 110, "spdMul": 105, "desc": ["EDGE."], "sheet": "mh_weapon_sword"},
+                ],
+            }, handle, indent=2)
+
+    def test_craft_weapons_rows_flat_direct_cost(self):
+        # hbk.10: "weapons": "craft" emits FLAT forge_node rows (no class headers
+        # or tree prefixes) with cost = the node's directCost, before the LEAVE.
+        self.write_items_and_forge()
+        with open(self.path("data", "screens", "craft.json"), "w", encoding="utf-8", newline="\n") as handle:
+            json.dump({"id": 2, "title": "CRAFT", "weapons": "craft", "rows": [
+                {"label": "LEAVE", "cost": 0, "action": "leave"}]}, handle, indent=2)
+        self.assert_succeeds(self.compile())
+        blob = self.read_bytes(BLOB_REL)
+        meta = self.read(META_REL)
+        self.assertIn("constexpr uint8_t ACTION_OPEN_CRAFT = 12;", meta)
+        self.assertIn("constexpr uint8_t ACTION_OPEN_UPGRADE = 13;", meta)
+        self.assertIn("constexpr uint8_t ACTION_OPEN_ARMOR_FORGE = 14;", meta)
+        offsets = struct.unpack_from("<3H", blob, DEF_OFF)
+        craft = parse_def(blob, offsets[2])
+        self.assertEqual((craft["id"], craft["rowCount"]), (2, 3))
+        rows = []
+        off = craft["firstRow"]
+        for _ in range(craft["rowCount"]):
+            row = parse_row(blob, off)
+            rows.append(row)
+            off += row["size"]
+        # Flat: the first row is the node label, not the "-- SWD --" header.
+        self.assertEqual(rows[0]["label"], "SWD T1")
+        self.assertEqual((rows[0]["action"], rows[0]["flags"], rows[0]["param"], rows[0]["cost"]),
+                         (10, 8, 0, 0))
+        self.assertEqual(rows[1]["label"], "SWD T2")
+        self.assertEqual((rows[1]["param"], rows[1]["cost"]), (1, 180))
+        self.assertEqual(rows[2]["label"], "LEAVE")
+
+    def write_armor_fixture(self):
+        with open(self.path("data", "items.json"), "w", encoding="utf-8", newline="\n") as handle:
+            json.dump({"version": 1, "items": [
+                {"id": "ore", "kind": "material", "heal": 0, "stam": 0, "sell": 1},
+                {"id": "scale", "kind": "material", "heal": 0, "stam": 0, "sell": 1},
+            ]}, handle, indent=2)
+        with open(self.path("data", "skills.json"), "w", encoding="utf-8", newline="\n") as handle:
+            json.dump({"version": 1, "thresholds": {"s": 10, "m": 15}, "skills": [
+                {"id": "attack_up", "kind": "ATTACK_UP", "maxPoints": 15, "perPoint": 1, "abbr": "ATK"},
+            ]}, handle, indent=2)
+        with open(self.path("data", "armor.json"), "w", encoding="utf-8", newline="\n") as handle:
+            json.dump({"version": 1, "pieces": [
+                {"id": "hunter_helm", "label": "HUNTER HELM", "slot": "head", "defense": 10,
+                 "resist": {"fire": 1, "water": 0, "ice": 0, "thunder": -1},
+                 "skills": [{"id": "attack_up", "points": 6}],
+                 "recipe": {"materials": [{"item": "ore", "count": 3}], "zenny": 300}},
+                {"id": "bone_cap", "label": "BONE CAP", "slot": "head", "defense": 6,
+                 "resist": {"fire": 0, "water": 0, "ice": -1, "thunder": 1},
+                 "skills": [{"id": "attack_up", "points": 4}],
+                 "recipe": {"materials": [{"item": "scale", "count": 2}], "zenny": 200}},
+                {"id": "hunter_mail", "label": "HUNTER MAIL", "slot": "body", "defense": 14,
+                 "resist": {"fire": 1, "water": 0, "ice": 0, "thunder": -1},
+                 "skills": [{"id": "attack_up", "points": 6}],
+                 "recipe": {"materials": [{"item": "scale", "count": 3}], "zenny": 400}},
+            ]}, handle, indent=2)
+
+    def test_armor_rows_from_armor_json(self):
+        # hbk.10: "armor": true emits one equip_armor row per data/armor.json
+        # piece: label + recipe zenny + param = (slot << 5) | piece index.
+        self.write_armor_fixture()
+        with open(self.path("data", "screens", "armor_forge.json"), "w", encoding="utf-8", newline="\n") as handle:
+            json.dump({"id": 2, "title": "ARMOR", "armor": True, "rows": [
+                {"label": "LEAVE", "cost": 0, "action": "leave"}]}, handle, indent=2)
+        self.assert_succeeds(self.compile())
+        blob = self.read_bytes(BLOB_REL)
+        offsets = struct.unpack_from("<3H", blob, DEF_OFF)
+        armor = parse_def(blob, offsets[2])
+        self.assertEqual((armor["id"], armor["rowCount"]), (2, 4))
+        rows = []
+        off = armor["firstRow"]
+        for _ in range(armor["rowCount"]):
+            row = parse_row(blob, off)
+            rows.append(row)
+            off += row["size"]
+        self.assertEqual(rows[0]["label"], "HUNTER HELM")
+        self.assertEqual((rows[0]["action"], rows[0]["cost"], rows[0]["param"]), (9, 300, 0))
+        self.assertEqual(rows[1]["label"], "BONE CAP")
+        self.assertEqual((rows[1]["cost"], rows[1]["param"]), (200, 1))
+        self.assertEqual(rows[2]["label"], "HUNTER MAIL")
+        self.assertEqual((rows[2]["cost"], rows[2]["param"]), (400, (1 << 5) | 2))
+        self.assertEqual(rows[3]["label"], "LEAVE")
+
+    def test_weapons_and_armor_together_rejected(self):
+        # A screen picks one generated row source (weapons OR armor).
+        self.write_items_and_forge()
+        with open(self.path("data", "screens", "craft.json"), "w", encoding="utf-8", newline="\n") as handle:
+            json.dump({"id": 2, "title": "BAD", "weapons": "craft", "armor": True, "rows": [
+                {"label": "LEAVE", "cost": 0, "action": "leave"}]}, handle, indent=2)
+        self.assert_fails(self.compile(), "pick one generated row source")
+
     def test_zenny_flag_retired(self):
         # ui.5 retired the qs.4 zenny dynamic-value token (the live balance moved
         # to the list header), so the flag name is no longer accepted.

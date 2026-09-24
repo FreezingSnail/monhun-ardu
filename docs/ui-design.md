@@ -301,3 +301,16 @@ is untouched by a dev session.
 3. `hbk.3` baked `drawScreen` for all four screens: blit + live overlays,
    legacy text path deleted (hbk.4–.7 merged here — the budget only works with
    every screen baked).
+4. `hbk.9` trims: hub strip deleted, quest column leaned to active-quest `p/n`,
+   fixed-stride page table (29142 B, 554 free).
+5. `hbk.10` smithy split: FORGE submenu + CRAFT (flat, direct bill) + ARMOR
+   FORGE, plus the direct-bill flag through the card path.
+6. `hbk.11` UPGRADE screen (3 class rows, live tier + cost).
+7. `hbk.12` GEAR equipment-box slot view (owned-only candidates).
+8. `hbk.8` spike (rejected): the dynamic owned-only list measured +590 B
+   whole-image — see "MH-flow smithy" above.
+
+Device-suite note: a pixel suite must call `arduboy.startGray()` before any
+`waitPlane()` — without the plane ISR running, `waitPlane(n)` spins forever
+(that is what the hbk.10 `test_screens_smithy` hang was). Keep each pixel suite
+in its own `test_*.ino` so its setup frame stays small.

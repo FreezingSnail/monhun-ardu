@@ -77,6 +77,31 @@ void AppSuite(TestRunner &runner) {
     }
 
     {
+        Test t("forge submenu routes to the craft/upgrade/armor screens (hbk.10)");
+        t.assert(appScreenAccept(screens::SCREEN_FORGE, arow(screens::ACTION_OPEN_CRAFT)), APP_NAV_CRAFT, "WEAPON CRAFT row");
+        t.assert(appScreenAccept(screens::SCREEN_FORGE, arow(screens::ACTION_OPEN_UPGRADE)), APP_NAV_UPGRADE, "WEAPON UPGRADE row");
+        t.assert(appScreenAccept(screens::SCREEN_FORGE, arow(screens::ACTION_OPEN_ARMOR_FORGE)), APP_NAV_ARMOR_FORGE, "ARMOR FORGE row");
+        // The open rows only route from the FORGE submenu.
+        t.assert(appScreenAccept(screens::SCREEN_CRAFT, arow(screens::ACTION_OPEN_CRAFT)), APP_NAV_NONE, "open rows are FORGE-only");
+        ScreenState screen;
+        Game g;
+        SaveBlock save;
+        saveDefaults(save);
+        t.assert(appNavApply(APP_NAV_CRAFT, screen, save, g, AT_A), false, "craft nav is not a hunt start");
+        t.assert(screen.screen, screens::SCREEN_CRAFT, "on the craft screen");
+        t.assert(screen.rowCount, screens::SCREEN_CRAFT_ROWS, "craft row count from the meta");
+        t.assert(appNavApply(APP_NAV_ARMOR_FORGE, screen, save, g, AT_A), false, "armor nav is not a hunt start");
+        t.assert(screen.screen, screens::SCREEN_ARMOR_FORGE, "on the armor forge screen");
+        t.assert(screen.rowCount, screens::SCREEN_ARMOR_FORGE_ROWS, "armor row count from the meta");
+        // hbk.11 wires APP_NAV_UPGRADE; until then the row leaves the screen alone.
+        t.assert(appNavApply(APP_NAV_UPGRADE, screen, save, g, AT_A), false, "upgrade nav inert");
+        t.assert(screen.screen, screens::SCREEN_ARMOR_FORGE, "upgrade nav leaves the screen");
+        t.assert(appScreenBack(screens::SCREEN_CRAFT), APP_NAV_HUB, "craft B backs to the hub");
+        t.assert(appScreenBack(screens::SCREEN_ARMOR_FORGE), APP_NAV_HUB, "armor B backs to the hub");
+        suite.addTest(t);
+    }
+
+    {
         Test t("hub GEAR row opens the gear screen; B backs out; LEAVE returns");
         ScreenState screen;
         Game g;

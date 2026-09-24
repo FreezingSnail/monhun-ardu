@@ -81,6 +81,11 @@ struct DetailState {
     bool prevA = false;
     bool prevB = false;
     int8_t navX = 0;
+    // Direct-bill flag (hbk.10): true when the card was opened from the CRAFT
+    // smithy list, so a weapon card forges with the direct bill (cost == the
+    // baked row cost) even when the parent is owned. Set by the sketch after
+    // cardLoad; cardOpen resets it to false.
+    bool direct = false;
     // Cached forge node for a weapon card (filled by src/cards.hpp cardLoad on
     // device, by the test on the host). Unused for armor/quest cards.
     ForgeNode node = {};
@@ -137,6 +142,7 @@ inline void cardOpen(DetailState &s, uint8_t kind, uint8_t index, uint8_t mask) 
     s.prevA = false;
     s.prevB = false;
     s.navX = 0;
+    s.direct = false;   // hbk.10: the sketch sets it for a CRAFT-sourced card
 }
 
 inline void cardClose(DetailState &s) {
@@ -294,9 +300,10 @@ inline bool cardArmorApply(SaveBlock &save, const CardItem &it, const ScreenRow 
 
 // Weapon card hint: an owned node equips/unequips on GEAR; on FORGE an unowned
 // node forges via the active bill (upgrade when the parent is owned, direct
-// otherwise). One classifier feeds the hint and the action.
-inline CardHint forgeHint(const SaveBlock &save, const ForgeNode &node, bool equipAction) {
-    const ForgeState st = forgeNodeState(save, node, forge::NODE_COUNT);
+// otherwise). `direct` (hbk.10) forces the direct bill on a CRAFT card. One
+// classifier feeds the hint and the action.
+inline CardHint forgeHint(const SaveBlock &save, const ForgeNode &node, bool equipAction, bool direct = false) {
+    const ForgeState st = forgeNodeState(save, node, forge::NODE_COUNT, direct);
     if (equipAction)
         return st == FORGE_EQUIPPED ? HINT_UNEQUIP : st == FORGE_OWNED ? HINT_EQUIP : HINT_NONE;
     switch (st) {
@@ -312,7 +319,7 @@ inline CardHint forgeHint(const SaveBlock &save, const ForgeNode &node, bool equ
     }
 }
 
-inline CardHint cardHint(const SaveBlock &save, const ScreenRow &row, const CardItem &it, const ForgeNode &node) {
+inline CardHint cardHint(const SaveBlock &save, const ScreenRow &row, const CardItem &it, const ForgeNode &node, bool direct = false) {
     switch (row.action) {
     case screens::ACTION_EQUIP_ARMOR:
         // ArmorCardState mirrors the HINT_* values 1:1 (ARMOR_DEAD -> NONE).
@@ -320,7 +327,7 @@ inline CardHint cardHint(const SaveBlock &save, const ScreenRow &row, const Card
     case screens::ACTION_EQUIP_WEAPON:
         return forgeHint(save, node, true);
     case screens::ACTION_FORGE_NODE:
-        return forgeHint(save, node, false);
+        return forgeHint(save, node, false, direct);
     case screens::ACTION_TAKE_QUEST:
         return screenCondOk(save, row) ? HINT_ACCEPT : HINT_NONE;
     case screens::ACTION_TURN_IN_QUEST:
@@ -334,7 +341,7 @@ inline CardHint cardHint(const SaveBlock &save, const ScreenRow &row, const Card
 // after every card action (the action may have changed the save the hint reads),
 // so drawCard can just draw the byte without re-classifying per plane.
 inline void cardSetHint(DetailState &s, const SaveBlock &save, const CardItem &it, const ScreenRow &row) {
-    s.hint = static_cast<uint8_t>(cardHint(save, row, it, s.node));
+    s.hint = static_cast<uint8_t>(cardHint(save, row, it, s.node, s.direct));
 }
 
 // Blocked card A (ui.5.2 denied cue): the cached hint is not an actionable verb
@@ -348,13 +355,14 @@ inline bool cardDenied(const DetailState &s) {
 // Card A: one entry for every card kind, switching on the stored row action.
 // Armor crafts/equips from the baked bill; weapon FORGE forges/upgrades (the
 // forge re-checks the bill), GEAR equips/unequips; quest rows take/turn in.
+// `direct` (hbk.10) forces the direct bill on a CRAFT card.
 // Returns true when the save changed (the caller persists once).
-inline bool cardApply(SaveBlock &save, const CardItem &it, const ForgeNode &node, const ScreenRow &row) {
+inline bool cardApply(SaveBlock &save, const CardItem &it, const ForgeNode &node, const ScreenRow &row, bool direct = false) {
     switch (row.action) {
     case screens::ACTION_EQUIP_ARMOR:
         return cardArmorApply(save, it, row);
     case screens::ACTION_FORGE_NODE:
-        return forgeNodeApply(save, node, forge::NODE_COUNT);
+        return forgeNodeApply(save, node, forge::NODE_COUNT, direct);
     case screens::ACTION_EQUIP_WEAPON:
         return forgeNodeEquipToggle(save, node);
     default:

@@ -35,9 +35,12 @@ enum AppNav : int8_t {
     APP_NAV_NONE = 0,
     APP_NAV_HUB,
     APP_NAV_QUESTS,
-    APP_NAV_GEAR,    // hml.3: hub GEAR row (weapon select + armor craft/equip)
-    APP_NAV_FORGE,   // ui.4: hub FORGE row (weapon tree forge/upgrade)
-    APP_NAV_HUNT     // the hub HUNT row: the caller starts the hunt (huntStart)
+    APP_NAV_GEAR,          // hml.3: hub GEAR row (weapon select + armor craft/equip)
+    APP_NAV_FORGE,         // ui.4: hub FORGE row (the smithy submenu, hbk.10)
+    APP_NAV_CRAFT,         // hbk.10: FORGE submenu WEAPON CRAFT row
+    APP_NAV_UPGRADE,       // hbk.10: FORGE submenu WEAPON UPGRADE row (screen in hbk.11)
+    APP_NAV_ARMOR_FORGE,   // hbk.10: FORGE submenu ARMOR FORGE row
+    APP_NAV_HUNT           // the hub HUNT row: the caller starts the hunt (huntStart)
 };
 
 // B: hub is the root (no back destination); quests/gear -> hub.
@@ -46,6 +49,7 @@ inline AppNav appScreenBack(uint8_t screen) {
 }
 
 // A on the cursor row. Hub rows route to a screen (or the menu on LEAVE);
+// the FORGE submenu rows route to the craft/upgrade/armor screens (hbk.10);
 // other screens leave to the hub on a LEAVE row, else APP_NAV_NONE so the
 // caller runs the row's save action (screenApplyAction).
 inline AppNav appScreenAccept(uint8_t screen, const ScreenRow &row) {
@@ -63,6 +67,20 @@ inline AppNav appScreenAccept(uint8_t screen, const ScreenRow &row) {
             return APP_NAV_NONE;   // hub is the root: no leave destination
         default:
             return APP_NAV_NONE;
+        }
+    }
+    if (screen == screens::SCREEN_FORGE) {
+        // hbk.10 smithy submenu: the three open rows route to their screens
+        // (checked before the LEAVE fallthrough).
+        switch (row.action) {
+        case screens::ACTION_OPEN_CRAFT:
+            return APP_NAV_CRAFT;
+        case screens::ACTION_OPEN_UPGRADE:
+            return APP_NAV_UPGRADE;
+        case screens::ACTION_OPEN_ARMOR_FORGE:
+            return APP_NAV_ARMOR_FORGE;
+        default:
+            break;
         }
     }
     if (row.action == screens::ACTION_LEAVE)
@@ -140,6 +158,20 @@ MH_NOINLINE inline bool appNavApply(AppNav nav, ScreenState &screen, const SaveB
         screenReset(screen, screens::SCREEN_FORGE, screens::SCREEN_FORGE_ROWS);
         screen.prevA = in.a;
         screen.prevB = in.b;
+        return false;
+    case APP_NAV_CRAFT:
+        screenReset(screen, screens::SCREEN_CRAFT, screens::SCREEN_CRAFT_ROWS);
+        screen.prevA = in.a;
+        screen.prevB = in.b;
+        return false;
+    case APP_NAV_ARMOR_FORGE:
+        screenReset(screen, screens::SCREEN_ARMOR_FORGE, screens::SCREEN_ARMOR_FORGE_ROWS);
+        screen.prevA = in.a;
+        screen.prevB = in.b;
+        return false;
+    case APP_NAV_UPGRADE:
+        // hbk.11 adds the UPGRADE screen (SCREEN_UPGRADE); until then the
+        // submenu WEAPON UPGRADE row is inert.
         return false;
     case APP_NAV_HUNT:
         // The hub HUNT row: close the screen and report the hunt request. The

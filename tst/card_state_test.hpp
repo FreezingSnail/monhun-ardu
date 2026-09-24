@@ -260,6 +260,73 @@ inline void CardStateSuite(TestRunner &runner) {
         suite.addTest(t);
     }
 
+    // ------------------------------------ craft card direct bill (hbk.10)
+    {
+        Test t("craft card: SCREEN_CRAFT direct flag charges the baked direct bill");
+        ForgeNode child{};
+        child.index = forge::NODE_SWORD_T1;
+        child.parent = forge::NODE_SWORD_BASE;
+        child.flags = forge::FLAG_DIRECT;
+        child.dmgMul = 110;
+        child.spdMul = 105;
+        child.cost = 100;         // upgrade bill (parent owned)
+        child.directCost = 180;   // direct bill (the baked CRAFT row cost)
+        child.mats[0].item = static_cast<uint8_t>(ITEM_ORE + 1);
+        child.mats[0].count = 2;
+        child.directMats[0].item = static_cast<uint8_t>(ITEM_ORE + 1);
+        child.directMats[0].count = 3;
+        ScreenRow craft;
+        craft.cost = 180;
+        craft.action = screens::ACTION_FORGE_NODE;
+        craft.flags = screens::ROW_F_FORGE;
+        craft.cond = screens::COND_ALWAYS;
+        craft.param = forge::NODE_SWORD_T1;
+        craft.unlock = 0;
+        craft.recipe[0].item = 0;
+        craft.recipe[0].count = 0;
+        craft.recipe[1].item = 0;
+        craft.recipe[1].count = 0;
+        const CardItem none{};
+
+        // Default: the root parent is owned -> the upgrade bill (100).
+        SaveBlock up;
+        saveDefaults(up);
+        up.zenny = 1000;
+        up.items[ITEM_ORE] = 10;
+        t.assert(cardHint(up, craft, none, child), HINT_FORGE, "default craft hint");
+        t.assert(cardApply(up, none, child, craft), true, "default craft applies");
+        t.assert(up.zenny, 900, "default charges the upgrade cost");
+        t.assert(up.items[ITEM_ORE], 8, "default charges the upgrade mats");
+
+        // direct=true: the direct bill (180 + ore 3) even with the parent owned.
+        SaveBlock dir;
+        saveDefaults(dir);
+        dir.zenny = 1000;
+        dir.items[ITEM_ORE] = 10;
+        t.assert(cardHint(dir, craft, none, child, true), HINT_FORGE, "direct craft hint");
+        t.assert(cardApply(dir, none, child, craft, true), true, "direct craft applies");
+        t.assert(dir.zenny, 820, "direct charges the baked direct cost");
+        t.assert(dir.items[ITEM_ORE], 7, "direct charges the direct mats");
+
+        // The cached path: cardSetHint/cardApply read DetailState::direct.
+        SaveBlock cached;
+        saveDefaults(cached);
+        cached.zenny = 1000;
+        cached.items[ITEM_ORE] = 10;
+        DetailState d;
+        d.node = child;
+        d.direct = true;
+        cardSetHint(d, cached, none, craft);
+        t.assert(d.hint, HINT_FORGE, "cached direct hint");
+        t.assert(cardApply(cached, none, d.node, craft, d.direct), true, "cached direct applies");
+        t.assert(cached.zenny, 820, "cached direct cost debited");
+        // cardOpen resets the flag to the default false.
+        DetailState fresh;
+        cardOpen(fresh, cards::KIND_WEAPON, cards::CARD_WEAPON_SWORD_T1, 0x07);
+        t.assert(fresh.direct, false, "cardOpen resets direct");
+        suite.addTest(t);
+    }
+
     // ------------------------------------------------ crafted PARTS trim
     {
         Test t("cardArmorMask / cardSetMask: craft drops PARTS, page clamps");

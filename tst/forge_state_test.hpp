@@ -94,6 +94,33 @@ void ForgeSuite(TestRunner &runner) {
     }
 
     {
+        Test t("direct flag (hbk.10): forces the direct bill + path even when the parent is owned");
+        SaveBlock s;
+        saveDefaults(s);
+        s.zenny = 1000;
+        s.items[item::ITEM_ORE] = 10;
+        const ForgeNode child = node(CHILD, ROOT, true, 100, 180, 110, 105, ITEM, 2, ITEM, 3);
+        // Default: the root parent is owned, so the upgrade bill applies.
+        t.assert(forgeNodeState(s, child, forge::NODE_COUNT), FORGE_UPGRADE, "default -> upgrade path");
+        ForgeBill up = forgeActiveBill(s, child);
+        t.assert(up.cost, 100, "default -> upgrade cost");
+        // direct=true: the direct path + bill, parent owned or not.
+        t.assert(forgeNodeState(s, child, forge::NODE_COUNT, true), FORGE_DIRECT, "direct flag -> direct path");
+        ForgeBill directBill = forgeActiveBill(s, child, true);
+        t.assert(directBill.cost, 180, "direct flag -> direct cost");
+        t.assert(directBill.mats[0].count, 3, "direct flag -> direct mats");
+        t.assert(forgeAffordable(s, child, true), true, "direct bill affordable");
+        t.assert(forgeNodeApply(s, child, forge::NODE_COUNT, true), true, "direct forge applies");
+        t.assert(s.zenny, 820, "direct cost debited (1000-180)");
+        t.assert(s.items[item::ITEM_ORE], 7, "direct mats debited (10-3)");
+        t.assert(saveWeaponOwned(s, CHILD), true, "node owned after direct forge");
+        // An owned node still refuses with the direct flag (no re-debit).
+        t.assert(forgeNodeApply(s, child, forge::NODE_COUNT, true), false, "owned node refuses even direct");
+        t.assert(s.zenny, 820, "refused direct forge does not debit");
+        suite.addTest(t);
+    }
+
+    {
         Test t("forgeNodeApply: upgrade debits the parent bill and sets the owned bit");
         SaveBlock s;
         saveDefaults(s);

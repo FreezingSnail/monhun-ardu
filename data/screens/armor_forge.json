@@ -1,0 +1,9 @@
+{
+  "id": 5,
+  "title": "ARMOR",
+  "prebake": true,
+  "armor": true,
+  "rows": [
+    { "label": "LEAVE", "cost": 0, "action": "leave", "condition": "always", "param": 0 }
+  ]
+}

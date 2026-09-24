@@ -14,6 +14,7 @@
 #include "src/app_state.hpp"
 #include "src/armor.hpp"
 #include "src/forge.hpp"   // forgeNodeApply / forgeReadNode + forge::NODE_* (hbk.3 markers)
+#include "src/cards.hpp"   // cardLoad/cardHint/cardApply (hbk.10 craft direct bill)
 #include "src/fxdata.h"    // mh_screen_forge_* page addresses
 
 #include <stdint.h>
@@ -26,6 +27,10 @@ using namespace mh;
 // frame does not fit the sim's tight stack; smith_test.hpp takes the same
 // approach).
 static Game g_gear;
+
+// hbk.10: the smithy suite runs in its own frame, so it parks the same kind of
+// file-scope Game (no extra stack).
+static Game g_smithy;
 
 // ---- EEPROM backends: the real one and a write-counting wrapper ------------
 static uint16_t eepWrites = 0;
@@ -70,12 +75,15 @@ static void waitPlane(uint8_t plane) {
 
 inline void test_screens(FxTest &test) {
     // ------------------------------------------------- generated cart rows
-    // ui.4 (5co.4): the hub gains the FORGE row; hub/quests/gear/forge remain.
-    test.expectEq(screens::SCREEN_COUNT, 4, F("screen count"));
+    // ui.4 (5co.4) added the hub FORGE row; hbk.10 splits FORGE into a smithy
+    // submenu + the CRAFT/ARMOR FORGE screens (dense indices 0..5).
+    test.expectEq(screens::SCREEN_COUNT, 6, F("screen count"));
     test.expectEq(screens::SCREEN_HUB, 0, F("hub index"));
     test.expectEq(screens::SCREEN_QUESTS, 1, F("quests index"));
     test.expectEq(screens::SCREEN_GEAR, 2, F("gear index"));
     test.expectEq(screens::SCREEN_FORGE, 3, F("forge index"));
+    test.expectEq(screens::SCREEN_CRAFT, 4, F("craft index"));
+    test.expectEq(screens::SCREEN_ARMOR_FORGE, 5, F("armor forge index"));
     test.expectEq(screenRowCount(screens::SCREEN_HUB), 4, F("hub row count"));
 
     // Title bytes come from the cart def (id u8, titleLen u8, title chars).
@@ -504,85 +512,187 @@ inline void test_screens(FxTest &test) {
     test.expectEq(screenPageCount(screens::SCREEN_HUB), 1, F("hub page count"));
     test.expectEq(screenPageCount(screens::SCREEN_QUESTS), 2, F("quests page count"));
     test.expectEq(screenPageCount(screens::SCREEN_GEAR), 4, F("gear page count"));
-    test.expectEq(screenPageCount(screens::SCREEN_FORGE), 3, F("forge page count"));
+    test.expectEq(screenPageCount(screens::SCREEN_FORGE), 1, F("forge submenu page count"));
+    test.expectEq(screenPageCount(screens::SCREEN_CRAFT), 2, F("craft page count"));
+    test.expectEq(screenPageCount(screens::SCREEN_ARMOR_FORGE), 1, F("armor forge page count"));
     // The generated per-screen offsets are PAGE_TABLE_OFF + screen * stride.
     test.expectEq(screens::SCREEN_HUB_PAGE_TABLE, screens::PAGE_TABLE_OFF, F("hub page table off"));
     test.expectEq(screens::SCREEN_QUESTS_PAGE_TABLE, static_cast<uint16_t>(screens::PAGE_TABLE_OFF + screens::SCREEN_PAGE_STRIDE), F("quests page table off"));
     test.expectEq(screens::SCREEN_GEAR_PAGE_TABLE, static_cast<uint16_t>(screens::PAGE_TABLE_OFF + 2 * screens::SCREEN_PAGE_STRIDE), F("gear page table off"));
     test.expectEq(screens::SCREEN_FORGE_PAGE_TABLE, static_cast<uint16_t>(screens::PAGE_TABLE_OFF + 3 * screens::SCREEN_PAGE_STRIDE), F("forge page table off"));
+    test.expectEq(screens::SCREEN_CRAFT_PAGE_TABLE, static_cast<uint16_t>(screens::PAGE_TABLE_OFF + 4 * screens::SCREEN_PAGE_STRIDE), F("craft page table off"));
+    test.expectEq(screens::SCREEN_ARMOR_FORGE_PAGE_TABLE, static_cast<uint16_t>(screens::PAGE_TABLE_OFF + 5 * screens::SCREEN_PAGE_STRIDE), F("armor page table off"));
     test.expectEq(screenPageAddr(screens::SCREEN_HUB, 0), mh_screen_hub_0, F("hub page0 addr"));
     test.expectEq(screenPageAddr(screens::SCREEN_QUESTS, 0), mh_screen_quests_0, F("quests page0 addr"));
     test.expectEq(screenPageAddr(screens::SCREEN_QUESTS, 1), mh_screen_quests_1, F("quests page1 addr"));
     test.expectEq(screenPageAddr(screens::SCREEN_GEAR, 0), mh_screen_gear_0, F("gear page0 addr"));
     test.expectEq(screenPageAddr(screens::SCREEN_GEAR, 3), mh_screen_gear_3, F("gear page3 addr"));
     test.expectEq(screenPageAddr(screens::SCREEN_FORGE, 0), mh_screen_forge_0, F("forge page0 addr"));
-    test.expectEq(screenPageAddr(screens::SCREEN_FORGE, 1), mh_screen_forge_1, F("forge page1 addr"));
-    test.expectEq(screenPageAddr(screens::SCREEN_FORGE, 2), mh_screen_forge_2, F("forge page2 addr"));
+    test.expectEq(screenPageAddr(screens::SCREEN_CRAFT, 0), mh_screen_craft_0, F("craft page0 addr"));
+    test.expectEq(screenPageAddr(screens::SCREEN_CRAFT, 1), mh_screen_craft_1, F("craft page1 addr"));
+    test.expectEq(screenPageAddr(screens::SCREEN_ARMOR_FORGE, 0), mh_screen_armor_forge_0, F("armor page0 addr"));
+}
 
-    // Baked FORGE page 0 blit: the y=8 rule row and the full-width title band
-    // only exist in the baked art (the legacy path never draws either).
+// Smithy split (hbk.10): the FORGE submenu + CRAFT + ARMOR FORGE checks live in
+// their own suite function so their stack frame does not overlap test_screens'
+// (the AVR test stack is tight; test_screens' frame is already ~780 B, and a
+// nested callee overflows it).
+inline void test_screens_smithy(FxTest &test) {
+    // --------------------------------------------- hbk.10 FORGE submenu
+    // The FORGE screen is now the smithy submenu: WEAPON CRAFT / WEAPON UPGRADE
+    // / ARMOR FORGE / LEAVE; each open row routes to its screen (UPGRADE lands
+    // in hbk.11, so its route is defined but the screen is inert for now).
+    // One reused ScreenRow keeps the tight suite stack small.
+    ScreenRow srow;
+    test.expectEq(screenRowCount(screens::SCREEN_FORGE), 4, F("submenu row count"));
+    screenReadRow(screenRowOffsetAt(screens::SCREEN_FORGE, 0), srow);
+    test.expectEq(srow.action, screens::ACTION_OPEN_CRAFT, F("submenu row0 open craft"));
+    test.expectEq(appScreenAccept(screens::SCREEN_FORGE, srow), APP_NAV_CRAFT, F("craft row route"));
+    screenReadRow(screenRowOffsetAt(screens::SCREEN_FORGE, 1), srow);
+    test.expectEq(srow.action, screens::ACTION_OPEN_UPGRADE, F("submenu row1 open upgrade"));
+    test.expectEq(appScreenAccept(screens::SCREEN_FORGE, srow), APP_NAV_UPGRADE, F("upgrade row route"));
+    screenReadRow(screenRowOffsetAt(screens::SCREEN_FORGE, 2), srow);
+    test.expectEq(srow.action, screens::ACTION_OPEN_ARMOR_FORGE, F("submenu row2 open armor forge"));
+    test.expectEq(appScreenAccept(screens::SCREEN_FORGE, srow), APP_NAV_ARMOR_FORGE, F("armor row route"));
+    screenReadRow(screenRowOffsetAt(screens::SCREEN_FORGE, 3), srow);
+    test.expectEq(srow.action, screens::ACTION_LEAVE, F("submenu row3 leave"));
+    test.expectEq(appScreenAccept(screens::SCREEN_FORGE, srow), APP_NAV_HUB, F("submenu leave -> hub"));
+
+    // Baked submenu page 0: y=8 rule, full-width title band, unselected baked
+    // label (row 2 "ARMOR FORGE" at y=29..36), live cursor chip on row 0.
+    // Plane ISR drives waitForNextPlane: start the gray mode once (same
+    // discipline as test_screens), else waitPlane() spins forever.
+    arduboy.startGray();
     SaveBlock fsave;
     saveDefaults(fsave);
-    fsave.zenny = 1234;
     ScreenState forge;
     screenEnter(forge, screens::SCREEN_FORGE, fsave);
     waitPlane(0);
     clearFb();
-    drawScreen(forge, fsave, g_gear);
+    drawScreen(forge, fsave, g_smithy);
     test.expectEq(countBits(0, 127, 8, 8) > 0 ? 1 : 0, 1, F("forge baked rule ink"));
     test.expectEq(countBits(0, 127, 0, 7) > 0 ? 1 : 0, 1, F("forge baked title band ink"));
-    // A baked label for an UNSELECTED row (row 2 "+- SWD T2" at y=29..36).
     test.expectEq(countBits(10, 60, 29, 36) > 0 ? 1 : 0, 1, F("forge baked row2 label ink"));
-    // Cursor chip stays live on row 0 (4x4 white at (2,13)).
     test.expectEq(countBits(2, 5, 13, 16), 16, F("forge cursor chip 4x4"));
 
     // Plane 2 lights shade 3 (white) only: the baked white title band and the
-    // white selected-row redraw are ink there, the shade-2 rule/baked labels are
-    // not. Row 0 is a baked-white ACTION_NONE section header, so select the node
-    // row 1 to prove the live white label redraw.
+    // live white selected-row redraw are ink there, the shade-2 rule/labels are
+    // not. Select row 1 (WEAPON UPGRADE) to prove the redraw.
     waitPlane(2);
     clearFb();
     screenEnter(forge, screens::SCREEN_FORGE, fsave);
     forge.cursor = 1;
-    drawScreen(forge, fsave, g_gear);
+    drawScreen(forge, fsave, g_smithy);
     test.expectEq(countBits(0, 127, 0, 7) > 0 ? 1 : 0, 1, F("forge white title band plane2"));
     test.expectEq(countBits(0, 127, 8, 8), 0, F("forge rule skips plane2"));
-    test.expectEq(countBits(10, 60, 20, 27) > 0 ? 1 : 0, 1, F("forge selected node label white plane2"));
+    test.expectEq(countBits(10, 60, 20, 27) > 0 ? 1 : 0, 1, F("forge selected row1 label white plane2"));
     test.expectEq(countBits(10, 60, 29, 36), 0, F("forge unselected baked label skips plane2"));
 
-    // Live FORGE node markers (x=118..121): one 4x4 square, shade 3 (white)
-    // when equipped, shade 2 (light gray) when owned, nothing otherwise. Equip
-    // node 1 (SWD T2, row 2, y=29); node 0 (row 1, y=20) stays owned; node 2
-    // (row 3, y=38) is never forged. Pure save bits, no cart read.
-    // Reuse the FORGE SaveBlock/ScreenState (the suite stack is tight).
-    saveDefaults(fsave);
-    fsave.zenny = 200;
-    fsave.items[ITEM_ORE] = 2;
-    fsave.items[ITEM_SCALE] = 1;
-    ForgeNode swordT1;
-    forgeReadNode(forge::NODE_SWORD_T1, swordT1);
-    test.expectEq(forgeNodeApply(fsave, swordT1, forge::NODE_COUNT), 1, F("forge node 1 applies"));
-    test.expectEq(fsave.equippedNode, forge::NODE_SWORD_T1, F("node 1 becomes equipped"));
+    // --------------------------------------------------- hbk.10 CRAFT list
+    // Flat rows in forge-node order (9 nodes + LEAVE = 10, 2 pages): no class
+    // headers/prefixes, cost = the node's directCost (the baked craft price).
+    test.expectEq(screenRowCount(screens::SCREEN_CRAFT), 10, F("craft row count"));
+    screenReadRow(screenRowOffsetAt(screens::SCREEN_CRAFT, 0), srow);
+    test.expectEq(srow.action, screens::ACTION_FORGE_NODE, F("craft row0 action forge"));
+    test.expectEq(srow.flags, screens::ROW_F_FORGE, F("craft row0 forge flag"));
+    test.expectEq(srow.param, forge::NODE_SWORD_BASE, F("craft row0 param sword root"));
+    test.expectEq(srow.cost, 0, F("craft root cost 0"));
+    screenReadRow(screenRowOffsetAt(screens::SCREEN_CRAFT, 1), srow);
+    test.expectEq(srow.param, forge::NODE_SWORD_T1, F("craft row1 param sword t2"));
+    test.expectEq(srow.cost, 180, F("craft row1 baked direct cost"));
+    screenReadRow(screenRowOffsetAt(screens::SCREEN_CRAFT, 2), srow);
+    test.expectEq(srow.cost, 400, F("craft row2 baked direct cost"));
+    screenReadRow(screenRowOffsetAt(screens::SCREEN_CRAFT, 3), srow);
+    test.expectEq(srow.param, forge::NODE_FLAIL_BASE, F("craft row3 param flail root"));
+    test.expectEq(srow.cost, 0, F("craft flail root cost 0"));
+    screenReadRow(screenRowOffsetAt(screens::SCREEN_CRAFT, 8), srow);
+    test.expectEq(srow.param, forge::NODE_GUN_T2, F("craft row8 param gun t3"));
+    test.expectEq(srow.cost, 360, F("craft row8 baked direct cost"));
+    screenReadRow(screenRowOffsetAt(screens::SCREEN_CRAFT, 9), srow);
+    test.expectEq(srow.action, screens::ACTION_LEAVE, F("craft leave row"));
+
+    // Pixel: page 0 bakes the flat labels (no tree prefix) and the direct
+    // costs; row 1 (SWD T2, y=20) bakes cost 180 ending at x=112, row 0 (root,
+    // cost 0) bakes none. The cursor chip stays live on row 0. Back to plane 0
+    // so the shade-2 baked labels/markers are ink again.
     waitPlane(0);
     clearFb();
-    screenEnter(forge, screens::SCREEN_FORGE, fsave);
-    drawScreen(forge, fsave, g_gear);
-    // Row 1 (node 0, owned): light-gray square at (118,23).
-    test.expectEq(countBits(118, 121, 23, 26) > 0 ? 1 : 0, 1, F("owned node marker ink"));
-    // Row 2 (node 1, equipped): white square at (118,32).
-    test.expectEq(countBits(118, 121, 32, 35) > 0 ? 1 : 0, 1, F("equipped node marker ink"));
-    // Row 3 (node 2, never forged): the marker column stays empty.
-    test.expectEq(countBits(118, 121, 41, 44), 0, F("unforged node marker empty"));
-
-    // Marker shade: plane 2 lights shade 3 only, so the equipped square is ink
-    // there and the owned (shade 2) square is not.
+    screenEnter(forge, screens::SCREEN_CRAFT, fsave);
+    drawScreen(forge, fsave, g_smithy);
+    test.expectEq(countBits(2, 5, 13, 16), 16, F("craft cursor chip 4x4"));
+    test.expectEq(countBits(0, 127, 0, 7) > 0 ? 1 : 0, 1, F("craft baked title band ink"));
+    test.expectEq(countBits(10, 60, 11, 18) > 0 ? 1 : 0, 1, F("craft row0 label ink"));
+    test.expectEq(countBits(100, 111, 20, 27) > 0 ? 1 : 0, 1, F("craft row1 baked cost 180"));
+    test.expectEq(countBits(100, 111, 11, 18), 0, F("craft row0 root has no cost"));
+    // Live node markers on the craft rows (ROW_F_FORGE): the default save owns
+    // and equips the sword root (row 0 -> white) and owns the flail/gun roots;
+    // an unforged child (row 1) leaves the marker column empty.
+    test.expectEq(countBits(118, 121, 14, 17) > 0 ? 1 : 0, 1, F("craft equipped root marker ink"));
+    test.expectEq(countBits(118, 121, 23, 26), 0, F("craft unforged child marker empty"));
+    test.expectEq(countBits(118, 121, 41, 44) > 0 ? 1 : 0, 1, F("craft owned flail root marker ink"));
+    // Plane 2 lights shade 3 only: the equipped (white) root marker is ink, the
+    // owned (shade 2) flail root marker is not.
     waitPlane(2);
     clearFb();
-    screenEnter(forge, screens::SCREEN_FORGE, fsave);
-    drawScreen(forge, fsave, g_gear);
-    test.expectEq(countBits(118, 121, 32, 35) > 0 ? 1 : 0, 1, F("equipped marker lights plane2"));
-    test.expectEq(countBits(118, 121, 23, 26), 0, F("owned marker skips plane2"));
+    screenEnter(forge, screens::SCREEN_CRAFT, fsave);
+    drawScreen(forge, fsave, g_smithy);
+    test.expectEq(countBits(118, 121, 14, 17) > 0 ? 1 : 0, 1, F("craft equipped marker lights plane2"));
+    test.expectEq(countBits(118, 121, 41, 44), 0, F("craft owned marker skips plane2"));
     waitPlane(0);
+
+    // Craft card (hbk.10): a card opened from SCREEN_CRAFT charges the direct
+    // bill baked into the row (cost == the row cost) even though the root
+    // parent is owned.
+    SaveBlock craf;
+    saveDefaults(craf);
+    craf.zenny = 1000;
+    craf.items[ITEM_ORE] = 10;
+    craf.items[ITEM_SCALE] = 2;
+    DetailState cdet;
+    CardItem ccard;
+    screenReadRow(screenRowOffsetAt(screens::SCREEN_CRAFT, 1), srow);   // SWD T2
+    cardLoad(cdet, ccard, cardRowIndex(srow), craf, false);
+    cdet.direct = true;
+    cardSetHint(cdet, craf, ccard, srow);
+    test.expectEq(cdet.hint, HINT_FORGE, F("craft card direct hint"));
+    test.expectEq(cardApply(craf, ccard, cdet.node, srow, cdet.direct), 1, F("craft card applies"));
+    test.expectEq(craf.zenny, 820, F("craft card charges the direct cost"));
+    test.expectEq(static_cast<uint32_t>(craf.items[ITEM_ORE]), 7, F("craft card charges the direct mats"));
+
+    // ---------------------------------------------- hbk.10 ARMOR FORGE list
+    // Rows come from data/armor.json: label + recipe zenny + equip_armor with
+    // param = (slot << 5) | piece; the armor card gates the craft.
+    test.expectEq(screenRowCount(screens::SCREEN_ARMOR_FORGE), 6, F("armor row count"));
+    screenReadRow(screenRowOffsetAt(screens::SCREEN_ARMOR_FORGE, 0), srow);
+    test.expectEq(srow.action, screens::ACTION_EQUIP_ARMOR, F("armor row0 action equip armor"));
+    test.expectEq(srow.param, armor::ARMOR_HUNTER_HELM, F("armor row0 helm param"));
+    test.expectEq(srow.cost, 300, F("armor row0 helm zenny"));
+    test.expectEq(cardRowOpens(srow), 1, F("armor row opens its card"));
+    test.expectEq(cardRowIndex(srow), cards::CARD_ARMOR_HUNTER_HELM, F("armor row0 card index"));
+    screenReadRow(screenRowOffsetAt(screens::SCREEN_ARMOR_FORGE, 1), srow);
+    test.expectEq(srow.param, armor::ARMOR_BONE_CAP, F("armor row1 bone cap param"));
+    test.expectEq(srow.cost, 200, F("armor row1 bone cap zenny"));
+    screenReadRow(screenRowOffsetAt(screens::SCREEN_ARMOR_FORGE, 2), srow);
+    test.expectEq(srow.param, static_cast<uint8_t>((armor::SLOT_BODY << 5) | armor::ARMOR_HUNTER_MAIL), F("armor row2 mail param"));
+    test.expectEq(srow.cost, 400, F("armor row2 mail zenny"));
+    screenReadRow(screenRowOffsetAt(screens::SCREEN_ARMOR_FORGE, 3), srow);
+    test.expectEq(srow.cost, 250, F("armor row3 bone mail zenny"));
+    screenReadRow(screenRowOffsetAt(screens::SCREEN_ARMOR_FORGE, 4), srow);
+    test.expectEq(srow.param, static_cast<uint8_t>((armor::SLOT_CHARM << 5) | armor::ARMOR_EVADE_CHARM), F("armor row4 charm param"));
+    test.expectEq(srow.cost, 600, F("armor row4 charm zenny"));
+    screenReadRow(screenRowOffsetAt(screens::SCREEN_ARMOR_FORGE, 5), srow);
+    test.expectEq(srow.action, screens::ACTION_LEAVE, F("armor leave row"));
+
+    // Pixel: the armor page bakes the labels + zenny costs (row 0 helm 300 at
+    // y=11, row 4 charm 600 at y=47), cursor chip live on row 0.
+    screenEnter(forge, screens::SCREEN_ARMOR_FORGE, fsave);
+    clearFb();
+    drawScreen(forge, fsave, g_smithy);
+    test.expectEq(countBits(2, 5, 13, 16), 16, F("armor cursor chip 4x4"));
+    test.expectEq(countBits(0, 127, 0, 7) > 0 ? 1 : 0, 1, F("armor baked title band ink"));
+    test.expectEq(countBits(10, 60, 11, 18) > 0 ? 1 : 0, 1, F("armor row0 label ink"));
+    test.expectEq(countBits(100, 111, 11, 18) > 0 ? 1 : 0, 1, F("armor row0 baked cost 300"));
+    test.expectEq(countBits(100, 111, 47, 54) > 0 ? 1 : 0, 1, F("armor row4 baked cost 600"));
 }
 
 }   // namespace screenfx

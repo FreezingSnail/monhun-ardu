@@ -585,22 +585,22 @@ constexpr uint8_t DEFAULT_HEAD = PART_HEAD_BASE;
 // Baked absolute sheet offsets (one per referenced part symbol).
 // The blob stores these; a static_assert pins each against fxdata.h so a
 // stale equip.bin (one gen pass behind) cannot ship on AVR.
-constexpr uint32_t SHEET_OFF_MH_BODY_BASE = 141025;
-constexpr uint32_t SHEET_OFF_FXCHIP = 22699;
-constexpr uint32_t SHEET_OFF_FXDEFLECT = 6177;
-constexpr uint32_t SHEET_OFF_FXERASE = 107359;
-constexpr uint32_t SHEET_OFF_FXWHIRL = 86033;
-constexpr uint32_t SHEET_OFF_FXWHIRLRING = 33077;
-constexpr uint32_t SHEET_OFF_FXGUARD = 24577;
-constexpr uint32_t SHEET_OFF_FXRELOAD = 102949;
-constexpr uint32_t SHEET_OFF_MH_HEAD_BANDANA = 117977;
-constexpr uint32_t SHEET_OFF_MH_HEAD_BASE = 162727;
-constexpr uint32_t SHEET_OFF_MH_HEAD_HELM = 137949;
-constexpr uint32_t SHEET_OFF_FXPLAYER = 86493;
-constexpr uint32_t SHEET_OFF_MH_SHADOW_BASE = 144099;
-constexpr uint32_t SHEET_OFF_FXPARRY = 17799;
-constexpr uint32_t SHEET_OFF_FXRIPSPECIAL = 86879;
-constexpr uint32_t SHEET_OFF_FXSLASH = 107987;
+constexpr uint32_t SHEET_OFF_MH_BODY_BASE = 141165;
+constexpr uint32_t SHEET_OFF_FXCHIP = 22839;
+constexpr uint32_t SHEET_OFF_FXDEFLECT = 6317;
+constexpr uint32_t SHEET_OFF_FXERASE = 107499;
+constexpr uint32_t SHEET_OFF_FXWHIRL = 86173;
+constexpr uint32_t SHEET_OFF_FXWHIRLRING = 33217;
+constexpr uint32_t SHEET_OFF_FXGUARD = 24717;
+constexpr uint32_t SHEET_OFF_FXRELOAD = 103089;
+constexpr uint32_t SHEET_OFF_MH_HEAD_BANDANA = 118117;
+constexpr uint32_t SHEET_OFF_MH_HEAD_BASE = 162867;
+constexpr uint32_t SHEET_OFF_MH_HEAD_HELM = 138089;
+constexpr uint32_t SHEET_OFF_FXPLAYER = 86633;
+constexpr uint32_t SHEET_OFF_MH_SHADOW_BASE = 144239;
+constexpr uint32_t SHEET_OFF_FXPARRY = 17939;
+constexpr uint32_t SHEET_OFF_FXRIPSPECIAL = 87019;
+constexpr uint32_t SHEET_OFF_FXSLASH = 108127;
 #if defined(__AVR__)
 static_assert(SHEET_OFF_MH_BODY_BASE == static_cast<uint32_t>(mh_body_base), "equip blob stale: re-run make gen");
 static_assert(SHEET_OFF_FXCHIP == static_cast<uint32_t>(fxchip), "equip blob stale: re-run make gen");

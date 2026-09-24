@@ -53,35 +53,37 @@ inline void test_forge(FxTest &test) {
     test.expectEq(n.parent, forge::NODE_NONE, F("bad node parent none"));
     test.expectEq(n.flags, 0, F("bad node flags clear"));
 
-    // --------------------------------------------------- FORGE row layout
-    test.expectEq(screens::SCREEN_FORGE, 3, F("forge screen index"));
-    test.expectEq(screenRowCount(screens::SCREEN_FORGE), 13, F("forge row count"));
-    ScreenRow hdr, t1, t3, leave;
-    screenReadRow(screenRowOffsetAt(screens::SCREEN_FORGE, 0), hdr);
-    screenReadRow(screenRowOffsetAt(screens::SCREEN_FORGE, 1), t1);
-    screenReadRow(screenRowOffsetAt(screens::SCREEN_FORGE, 3), t3);
-    screenReadRow(screenRowOffsetAt(screens::SCREEN_FORGE, 12), leave);
-    test.expectEq(hdr.action, screens::ACTION_NONE, F("forge header row"));
-    test.expectEq(t1.action, screens::ACTION_FORGE_NODE, F("forge node action"));
-    test.expectEq(t1.param, forge::NODE_SWORD_BASE, F("forge root param"));
-    test.expectEq(t1.cost, 0, F("forge root cost"));
-    test.expectEq(t1.flags, screens::ROW_F_FORGE, F("forge row flag"));
-    test.expectEq(t3.param, forge::NODE_SWORD_T2, F("forge t3 param"));
-    test.expectEq(t3.cost, 250, F("forge t3 cost"));
-    test.expectEq(leave.action, screens::ACTION_LEAVE, F("forge leave row"));
+    // --------------------------------------------------- CRAFT row layout
+    // hbk.10: the FORGE submenu opens the flat CRAFT list (no headers or tree
+    // prefixes); each row carries forge_node + the baked direct cost.
+    test.expectEq(screens::SCREEN_FORGE, 3, F("forge submenu index"));
+    test.expectEq(screens::SCREEN_CRAFT, 4, F("craft screen index"));
+    test.expectEq(screenRowCount(screens::SCREEN_CRAFT), 10, F("craft row count"));
+    ScreenRow t1, t3, leave;
+    screenReadRow(screenRowOffsetAt(screens::SCREEN_CRAFT, 0), t1);
+    screenReadRow(screenRowOffsetAt(screens::SCREEN_CRAFT, 2), t3);
+    screenReadRow(screenRowOffsetAt(screens::SCREEN_CRAFT, 9), leave);
+    test.expectEq(t1.action, screens::ACTION_FORGE_NODE, F("craft node action"));
+    test.expectEq(t1.param, forge::NODE_SWORD_BASE, F("craft root param"));
+    test.expectEq(t1.cost, 0, F("craft root cost"));
+    test.expectEq(t1.flags, screens::ROW_F_FORGE, F("craft row flag"));
+    test.expectEq(t3.param, forge::NODE_SWORD_T2, F("craft t3 param"));
+    test.expectEq(t3.cost, 400, F("craft t3 baked direct cost"));
+    test.expectEq(leave.action, screens::ACTION_LEAVE, F("craft leave row"));
 
     // ---------------------------------------------- card A forges/upgrades
     SaveBlock save;
     saveDefaults(save);
-    save.zenny = 500;
-    save.items[item::ITEM_ORE] = 5;
+    save.zenny = 1000;
+    save.items[item::ITEM_ORE] = 10;
     save.items[item::ITEM_SCALE] = 5;
     save.items[item::ITEM_FANG] = 5;
     test.expectEq(save.equippedNode, forge::NODE_SWORD_BASE, F("sword root equipped by default"));
 
-    // FORGE row 2 is "+- SWD T2" (node 1): the parent (root) is owned -> UP.
+    // CRAFT row 1 (SWD T2, node 1): the parent (root) is owned, so the default
+    // card path takes the upgrade bill (100 + ore 2).
     ScreenRow upRow;
-    screenReadRow(screenRowOffsetAt(screens::SCREEN_FORGE, 2), upRow);
+    screenReadRow(screenRowOffsetAt(screens::SCREEN_CRAFT, 1), upRow);
     DetailState detail;
     CardItem cache;
     cardLoad(detail, cache, cardRowIndex(upRow), save, false);
@@ -92,17 +94,33 @@ inline void test_forge(FxTest &test) {
     test.expectEq(cardApply(save, cache, detail.node, upRow), 1, F("card A forges"));
     test.expectEq(saveWeaponOwned(save, forge::NODE_SWORD_T1), 1, F("node owned"));
     test.expectEq(save.equippedNode, forge::NODE_SWORD_T1, F("equipped followed the upgrade"));
-    test.expectEq(save.zenny, 400, F("upgrade cost debited"));
-    test.expectEq(static_cast<uint32_t>(save.items[item::ITEM_ORE]), 3, F("upgrade ore debited"));
+    test.expectEq(save.zenny, 900, F("upgrade cost debited"));
+    test.expectEq(static_cast<uint32_t>(save.items[item::ITEM_ORE]), 8, F("upgrade ore debited"));
     test.expectEq(cardHint(save, upRow, cache, detail.node), HINT_NONE, F("owned node hint clears"));
 
-    // A direct forge of the grandchild (node 2): its parent (node 1) is owned
-    // now, so this is an upgrade, not a direct bill. Own it first.
+    // A grandchild (node 2, CRAFT row 2): its parent (node 1) is owned now, so
+    // the default bill is the upgrade (250 + ore 3 + fang 1). Own it first.
     ScreenRow grandRow;
-    screenReadRow(screenRowOffsetAt(screens::SCREEN_FORGE, 3), grandRow);
+    screenReadRow(screenRowOffsetAt(screens::SCREEN_CRAFT, 2), grandRow);
     cardLoad(detail, cache, cardRowIndex(grandRow), save, false);
     test.expectEq(cardApply(save, cache, detail.node, grandRow), 1, F("grandchild forges"));
     test.expectEq(saveWeaponOwned(save, forge::NODE_SWORD_T2), 1, F("grandchild owned"));
+    test.expectEq(save.zenny, 650, F("grandchild upgrade debited"));
+
+    // hbk.10 direct bill: the same SWD T2 row opened from SCREEN_CRAFT (the
+    // sketch sets DetailState::direct) charges the baked direct cost (180 +
+    // ore 3) even though the root parent is owned.
+    SaveBlock directSave;
+    saveDefaults(directSave);
+    directSave.zenny = 1000;
+    directSave.items[item::ITEM_ORE] = 10;
+    directSave.items[item::ITEM_SCALE] = 2;   // directMats = ore 3 + scale 2
+    cardLoad(detail, cache, cardRowIndex(upRow), directSave, false);
+    test.expectEq(cardHint(directSave, upRow, cache, detail.node, true), HINT_FORGE, F("direct craft hint"));
+    test.expectEq(cardApply(directSave, cache, detail.node, upRow, true), 1, F("direct craft applies"));
+    test.expectEq(directSave.zenny, 820, F("direct craft cost debited"));
+    test.expectEq(static_cast<uint32_t>(directSave.items[item::ITEM_ORE]), 7, F("direct craft mats debited"));
+    test.expectEq(saveWeaponOwned(directSave, forge::NODE_SWORD_T1), 1, F("direct craft owns the node"));
 
     // ---------------------------------------------- GEAR equip/unequip + save
     ScreenRow gearRow;
@@ -126,7 +144,7 @@ inline void test_forge(FxTest &test) {
     test.expectEq(saveWeaponOwned(back, forge::NODE_SWORD_T1), 1, F("owned persisted"));
     test.expectEq(saveWeaponOwned(back, forge::NODE_SWORD_T2), 1, F("grandchild persisted"));
     test.expectEq(back.equippedNode, forge::NODE_SWORD_T1, F("equipped persisted"));
-    test.expectEq(back.zenny, 150, F("zenny persisted"));
+    test.expectEq(back.zenny, 650, F("zenny persisted"));
 }
 
 }   // namespace forgefx

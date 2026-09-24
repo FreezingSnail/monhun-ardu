@@ -187,6 +187,10 @@ void run() {
         const uint8_t cardIndex = mh::cardRowIndex(row);
         if (cardIndex != mh::CARD_NONE) {
             mh::cardLoad(s_detail, s_card, cardIndex, s_save, false);
+            // hbk.10: a card opened from the CRAFT smithy list forges with the
+            // direct bill (cost == the baked row cost) even when the parent is
+            // owned; every other list keeps the upgrade bill.
+            s_detail.direct = (s_screen.screen == screens::SCREEN_CRAFT);
             s_detailRow = row;
             mh::cardSetHint(s_detail, s_save, s_card, s_detailRow);
             return;

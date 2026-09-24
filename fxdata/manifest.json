@@ -738,24 +738,31 @@
     },
     {
       "declaration": "fxdata/screens/Sprites.txt",
+      "path": "images/screens/mh_screen_armor_forge_0_128x64.png",
+      "sha256": "b4550a825017ead07e2317b5405113aedeca77c7b8638210d83b715d9ece6f0c",
+      "size": 675,
+      "symbol": "mh_screen_armor_forge_0"
+    },
+    {
+      "declaration": "fxdata/screens/Sprites.txt",
+      "path": "images/screens/mh_screen_craft_0_128x64.png",
+      "sha256": "581d12973fd259d15ddb619ed1cad4fdd30c4a5418038e50321aa2445c8d3e37",
+      "size": 624,
+      "symbol": "mh_screen_craft_0"
+    },
+    {
+      "declaration": "fxdata/screens/Sprites.txt",
+      "path": "images/screens/mh_screen_craft_1_128x64.png",
+      "sha256": "9c0f37fcb7e616ac1639aa51a157e16df2f4bf21b8f0602bfaa3ed9b2e0903d8",
+      "size": 482,
+      "symbol": "mh_screen_craft_1"
+    },
+    {
+      "declaration": "fxdata/screens/Sprites.txt",
       "path": "images/screens/mh_screen_forge_0_128x64.png",
-      "sha256": "c0b84bec749fa3e3dde6e5bb75344f63cc2f105d036388c8efd100f065a23c7d",
-      "size": 651,
+      "sha256": "ec0952ffb970fe95fb7e6973238012414227ffc120e26d287c6ba9135ac99fe7",
+      "size": 488,
       "symbol": "mh_screen_forge_0"
-    },
-    {
-      "declaration": "fxdata/screens/Sprites.txt",
-      "path": "images/screens/mh_screen_forge_1_128x64.png",
-      "sha256": "f6f3f713fb5de844df8fe2f122cead8ef560451ae4c5ddf39097b15b6e8e68a5",
-      "size": 651,
-      "symbol": "mh_screen_forge_1"
-    },
-    {
-      "declaration": "fxdata/screens/Sprites.txt",
-      "path": "images/screens/mh_screen_forge_2_128x64.png",
-      "sha256": "018203c50af2698c99593db87fad501900430c78c956f215596f4293f3e57068",
-      "size": 311,
-      "symbol": "mh_screen_forge_2"
     },
     {
       "declaration": "fxdata/screens/Sprites.txt",
@@ -810,8 +817,8 @@
   "inputs": [
     {
       "path": "data/armor.json",
-      "sha256": "cac89f53a5dac9266973519f7c91cf532647f524912797221ce747c8e7a1aa55",
-      "size": 3598
+      "sha256": "7c8aedef12fb0c375053f25dcae5853e8143a725bff2dc5779172b6a4151f290",
+      "size": 3743
     },
     {
       "path": "data/creatures/heavy.json",
@@ -999,13 +1006,23 @@
       "size": 214
     },
     {
-      "path": "data/screens/forge.json",
-      "sha256": "ee72b71de748f74e3eac7247254771ab745d73bcee50ec9d4994370dc7b0f051",
+      "path": "data/screens/armor_forge.json",
+      "sha256": "8620f54de22921126018965b09805209713a8f0ddf2dbb4c913c0e7357e11347",
+      "size": 177
+    },
+    {
+      "path": "data/screens/craft.json",
+      "sha256": "f08d3c1259dfacf537898f0aecff500a938db3461f6d09808b5e18c9229d5cd1",
       "size": 182
     },
     {
+      "path": "data/screens/forge.json",
+      "sha256": "587c35bfaaa2dfee78f001c0a73c7530f1d56fa9f641c046b6fb458ff711bb72",
+      "size": 478
+    },
+    {
       "path": "data/screens/gear.json",
-      "sha256": "6d5386fb8c145c2a0866b40afa165b1a0dfa965066dd3560f8af990eb04cc513",
+      "sha256": "10163458cfa0e5ea7abbe2bab226a06fdba3aa7991af7f798b45e356d8c7582d",
       "size": 1358
     },
     {
@@ -1205,8 +1222,8 @@
     },
     {
       "path": "fxdata/screens/Sprites.txt",
-      "sha256": "5b0262661144198024bc01dd11c894a7ddf8477a8d649704c54e3316723ea35e",
-      "size": 108537,
+      "sha256": "2fa9bf1ffd1e287e3c32db4896f0b8ba8bd64f2b6ccdb81e5bd1c090d930e205",
+      "size": 118804,
       "symbols": [
         "mh_screen_hub_0",
         "mh_screen_quests_0",
@@ -1216,8 +1233,9 @@
         "mh_screen_gear_2",
         "mh_screen_gear_3",
         "mh_screen_forge_0",
-        "mh_screen_forge_1",
-        "mh_screen_forge_2"
+        "mh_screen_craft_0",
+        "mh_screen_craft_1",
+        "mh_screen_armor_forge_0"
       ]
     },
     {
@@ -1228,7 +1246,7 @@
     },
     {
       "path": "fxdata/tables/cards.bin",
-      "sha256": "f3ee66cf601d33c9b7629474f890059ac29e78c0364bc3b349a74e36cddc18b8",
+      "sha256": "2f2501c5b63378b99b76bf88494fab6921079259086291cc50292f7d55dca1d0",
       "size": 602,
       "symbol": "mhCards"
     },
@@ -1240,7 +1258,7 @@
     },
     {
       "path": "fxdata/tables/equip.bin",
-      "sha256": "a75638b82ee17fa7ed4957c5f170e5b7e58fddaa25071976d24b1e0a797c7e54",
+      "sha256": "f50d9efc65e0d9b527898656e59485023eef3fefe02bed0e546bb09ef4849773",
       "size": 876,
       "symbol": "mhEquip"
     },
@@ -1276,8 +1294,8 @@
     },
     {
       "path": "fxdata/tables/screens.bin",
-      "sha256": "c5ff2d544d1381d0e7ae65423d50c508102b4593d91b4ec0b965d7f2eb39e951",
-      "size": 881,
+      "sha256": "087f5995fef8e04947155e43b739ab7ad4280d32a96f630119960aa278653f36",
+      "size": 1021,
       "symbol": "mhScreens"
     },
     {
@@ -1308,18 +1326,18 @@
   "outputs": [
     {
       "path": "fxdata/fxdata-data.bin",
-      "sha256": "4f78beefc8a92a6cff677754c80468d4c9e7e8fd8ecf8bb6bb9dd4b94b5b0c2d",
-      "size": 404267
+      "sha256": "b711b7ad62b1dfb74b9081e7cb40f8fe1438da06a20e6aa4c9aa4961defa104e",
+      "size": 407479
     },
     {
       "path": "fxdata/fxdata.bin",
-      "sha256": "ed04306ac9f231e5f9c468a83dbb39ed2f337911917fd6cea036da36009d08da",
-      "size": 404480
+      "sha256": "9e0bc5dd3b2a036e12912b1f38e9a20920b3c87bca500a72acbffc247e92d0c2",
+      "size": 407552
     },
     {
       "path": "fxdata/fxdata.h",
-      "sha256": "3377497aa52cf14de55e42d62613450ac197bb4d329dfdbe2686592949d3469f",
-      "size": 6645
+      "sha256": "bab7ec93f4cc86a4ddbebb511942cd0a28784f62e2b0082971d0276d3ece86a9",
+      "size": 6700
     },
     {
       "path": "fxdata/tables/armor.bin",
@@ -1328,7 +1346,7 @@
     },
     {
       "path": "fxdata/tables/cards.bin",
-      "sha256": "f3ee66cf601d33c9b7629474f890059ac29e78c0364bc3b349a74e36cddc18b8",
+      "sha256": "2f2501c5b63378b99b76bf88494fab6921079259086291cc50292f7d55dca1d0",
       "size": 602
     },
     {
@@ -1338,7 +1356,7 @@
     },
     {
       "path": "fxdata/tables/equip.bin",
-      "sha256": "a75638b82ee17fa7ed4957c5f170e5b7e58fddaa25071976d24b1e0a797c7e54",
+      "sha256": "f50d9efc65e0d9b527898656e59485023eef3fefe02bed0e546bb09ef4849773",
       "size": 876
     },
     {
@@ -1353,8 +1371,8 @@
     },
     {
       "path": "fxdata/tables/screens.bin",
-      "sha256": "c5ff2d544d1381d0e7ae65423d50c508102b4593d91b4ec0b965d7f2eb39e951",
-      "size": 881
+      "sha256": "087f5995fef8e04947155e43b739ab7ad4280d32a96f630119960aa278653f36",
+      "size": 1021
     },
     {
       "path": "fxdata/tables/smith.bin",
@@ -1363,8 +1381,8 @@
     },
     {
       "path": "src/fxdata.h",
-      "sha256": "3377497aa52cf14de55e42d62613450ac197bb4d329dfdbe2686592949d3469f",
-      "size": 6645
+      "sha256": "bab7ec93f4cc86a4ddbebb511942cd0a28784f62e2b0082971d0276d3ece86a9",
+      "size": 6700
     },
     {
       "path": "src/generated/armor_data.hpp",
@@ -1408,7 +1426,7 @@
     },
     {
       "path": "src/generated/equip_meta.hpp",
-      "sha256": "a8df2b42e3857de3ef1f5fbd058c985fb432d0485015eb0e9af43912e86eb097",
+      "sha256": "b0389167da723aa0aa50c8cdbd1955ae1b9c1286b46e9176947ed56090164cfa",
       "size": 22334
     },
     {
@@ -1443,8 +1461,8 @@
     },
     {
       "path": "src/generated/screen_meta.hpp",
-      "sha256": "7c73cb6765d10c267d715495c92d2de80dab33123d0516988a3e0faba4680c89",
-      "size": 3416
+      "sha256": "4a672d173506a942921953989b8e7c52a74bd7790b0adf4cd4cb5b7c3d2a364b",
+      "size": 4206
     },
     {
       "path": "src/generated/smith_meta.hpp",
@@ -1458,7 +1476,7 @@
     },
     {
       "path": "src/generated/zone_meta.hpp",
-      "sha256": "1e3e24d1c76820fc3ac174a6f427bf4038e4daa8e1b71012fd3601d25e05a35a",
+      "sha256": "0b52a8ec047b0052fa5829b9aa13cf11ed098ea8ddfc1c21bcd0f600d94ce7f2",
       "size": 8388
     }
   ],
