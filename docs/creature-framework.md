@@ -302,7 +302,11 @@ Phases (each gated by `make test` + `fxtest-headless` parity 660/0):
   parked above the body when the hunter passes under the HEAVY):
   `fxhead_chicken`/`fxlegs_chicken` (lunge head/appendage),
   `fxhead_bull`/`fxhooves_bull` (sweep horns/hooves) and the 4t4
-  `fxtail_heavy` (heavy tail). Intact frames repaint the baked part; broken
+  `fxtail_heavy` (heavy tail). The HIT TEST mirrors in the same frame
+  (`combatZoneContains`, `ZONE_CELL_W`; bug fixed 2026-09): it used to rotate
+  the box through the DIR8 offset while the art snapped to the cell, so a
+  west-facing chicken head hitbox sat ~21 px from the drawn head and swings
+  there registered as body. Intact frames repaint the baked part; broken
   frames erase it with shade-0 pixels on all planes and draw the damaged
   variant. HEAVY's resting tail is skipped during the locked spin and the
   chicken/bull parts during their whole-body attack sheets (the posed part is

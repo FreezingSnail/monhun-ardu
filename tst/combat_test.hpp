@@ -532,6 +532,22 @@ void CombatSuite(TestRunner &runner) {
     }
 
     {
+        Test t("zone hitbox mirrors with the 2-facing part art (chicken head bug)");
+        // The zone rect must sit where the part art is painted (drawZonePart):
+        // east at the authored box, west at the cell mirror. The old DIR8
+        // rotation put a west-facing head box ~21 px from the drawn head, so a
+        // swing at the visible head registered as body.
+        const CombatZone head = combatZoneRead(combat_data::ZONE_LUNGE_HEAD);
+        const int16_t cx = static_cast<int16_t>(head.box.ox + head.box.w / 2);
+        const int16_t cy = static_cast<int16_t>(head.box.oy + head.box.h / 2);
+        t.assert(combatZoneContains(0, 0, fp::FP, 0, head.box, cx, cy), 1, "east: authored head box hit");
+        const int16_t wx = static_cast<int16_t>(ZONE_CELL_W - head.box.ox - head.box.w + head.box.w / 2);
+        t.assert(combatZoneContains(0, 0, -fp::FP, 0, head.box, wx, cy), 1, "west: mirrored head box hit");
+        t.assert(combatZoneContains(0, 0, -fp::FP, 0, head.box, static_cast<int16_t>(-head.box.ox), cy), 0, "west: rotated offset is not a hitbox");
+        suite.addTest(t);
+    }
+
+    {
         Test t("attackLoad + attackWindowLoad cache lifecycle");
         Game g;
         creatureLoad(g, combat_data::CREATURE_LUNGE);

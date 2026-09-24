@@ -598,6 +598,10 @@ static inline uint24_t monsterSheet(int8_t kind) {
 // the matching zoneBroken bit. Every sheet's frame height is a multiple of 8 so
 // the SpritesU plus-mask page stride is exact.
 static void drawZonePart(const mh::Game &g, int16_t x, int16_t y, uint24_t sheet, uint8_t zoneIdx, uint8_t zoneBit) {
+    // The hit test mirrors in this exact frame (mh::combatZoneContains,
+    // ZONE_CELL_W): paint and hitbox must agree or a swing at the visible part
+    // registers as body (the chicken head bug).
+    static_assert(mh::ZONE_CELL_W == art_dims::monster_w, "zone cell width drift");
     const mh::CombatBox &zb = g.combat.zone[zoneIdx].box;
     const bool west = g.monster.fx < 0;
     const int16_t ox = static_cast<int16_t>(west ? art_dims::monster_w - zb.ox - zb.w : zb.ox);

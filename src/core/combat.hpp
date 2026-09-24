@@ -1213,19 +1213,20 @@ inline CombatBodyHit combatResolveBodyHit(const Game &g, int32_t base) {
     return r;
 }
 
-// A zone box is a face-relative origin: the world rect origin is the body
-// anchor plus the DIR8 rotation of (ox, oy); the box itself stays axis-aligned
-// (same projection the attack windows use). int32 intermediates keep the
-// rotation exact for any int8 box offset. `bx/by` is the resolver's world
-// anchor (the beast body) and `fx/fy` the explicit facing; the resolver never
-// needs g.monster.fx/fy when the caller passes its own vector.
+// A zone box is a cell-relative rect in the same 2-facing frame the part art is
+// painted in (drawZonePart, src/render.hpp): east at the authored (ox, oy), west
+// at the cell mirror (ZONE_CELL_W - ox - w). The beast sheets are 2-facing, so
+// north/south facings use the same east/west frame; rotating the offset here
+// (the old DIR8 combatFacePoint) detached the hitbox from the visible part on
+// every west-facing beast -- the chicken head bug (a swing at the drawn head
+// registered as body).
+constexpr int16_t ZONE_CELL_W = 32;   // == art_dims::monster_w (render.hpp pins it)
+
 inline bool combatZoneContains(int16_t bx, int16_t by, int16_t fx, int16_t fy, const CombatBox &b, int16_t hx, int16_t hy) {
-    int16_t dx, dy;
-    combatFacePoint(fx, fy, b.ox, b.oy, dx, dy);
-    // Battlefield coords: anchor <= WORLD_W/H (256) and the int8 box rotation
-    // with |fx|,|fy| <= 16 gives |dx|,|dy| <= 254, so x+w <= 511.
-    const int16_t x = static_cast<int16_t>(bx + static_cast<int16_t>(dx));
-    const int16_t y = static_cast<int16_t>(by + static_cast<int16_t>(dy));
+    (void)fy;
+    const int16_t ox = fx < 0 ? static_cast<int16_t>(ZONE_CELL_W - b.ox - b.w) : b.ox;
+    const int16_t x = static_cast<int16_t>(bx + ox);
+    const int16_t y = static_cast<int16_t>(by + b.oy);
     return hx >= x && hx < x + b.w && hy >= y && hy < y + b.h;
 }
 
