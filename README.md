@@ -28,11 +28,11 @@ flashing. Controls are below; no USB serial device comes up while the game runs
 |---|---|
 | Vertical-slice sim | Ported + parity-verified (20 scenes / 1269 ticks / 660 device asserts) |
 | Device render + HUD | Working (block/FX-sprite art; HUD text/FX glyphs + bars — `7y3` clamp fixed). Audio (cue tones) is compiled out of shipping since `hbk.15` (`-DMH_AUDIO=0`, owner call: sound is feel, not loop); the module stays behind the flag and the device suites still exercise it |
-| Host unit tests | `make test` — **6316 passed / 0 failed** |
-| Device tests (Ardens) | 18 suites / 1829 asserts — boot 4, assets 264, audio 9, hud 29, data 348, combat 237, hub 81, monster_art 127, player_art 120, quests 87, screens 189, smith 51, cards 85, tell 18, zones 82, items 35, forge 58, perf 5 — all PASS (the frozen `test_parity` diagnostics image is not a gate; the opening-menu `test_menu`/`test_menu_art` suites and its `mh_menu_*` sheets were deleted with the menu, `isp.1`/`hml.2`) |
+| Host unit tests | `make test` — **6359 passed / 0 failed** |
+| Device tests (Ardens) | 19 suites / ~1960 asserts — boot 4, assets 264, audio 9, hud 29, data 348, combat 237, hub 79, monster_art 127, player_art 120, quests 87, screens 212, screens_smithy 98, smith 51, cards 85, tell 18, zones 82, items 35, forge 63, perf 5 — all PASS (the frozen `test_parity` diagnostics image is not a gate; the opening-menu `test_menu`/`test_menu_art` suites and its `mh_menu_*` sheets were deleted with the menu, `isp.1`/`hml.2`) |
 | Perf gate (`monhun-ardu-8v7`, re-verified through `hbk.3`) | **PASS.** plane 157 Hz (≥135), logic 52 Hz (≥45), render max 3004 µs (≤7407), tick 184 µs, RAM free 609 B (bench) |
 | Perf tooling | Headless Ardens profiler dump (`profiledump=<path>`, local patch) + on-device cycle bench (`test_perf`) |
-| Shipping build | flash **29506 / 29696 B** (190 free), RAM **1798 / 2560 B** (762 free); USB-free, see below |
+| Shipping build | flash **29512 / 29696 B** (184 free), RAM **1799 / 2560 B** (761 free); USB-free + sound off (`-DMH_NO_USB -DMH_AUDIO=0`), see below |
 | FX data image | **404480 B** of 16 MB used (96 KB of it is the 32 prebaked detail-card pages, 30 KB the 10 prebaked screen pages) |
 
 Speculative gameplay status: combat (sword / flail / gunshield), monster FSM,

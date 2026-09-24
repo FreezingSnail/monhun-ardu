@@ -468,6 +468,47 @@ class GenScreensTests(unittest.TestCase):
         self.assertEqual((rows[2]["cost"], rows[2]["param"]), (400, (1 << 5) | 2))
         self.assertEqual(rows[3]["label"], "LEAVE")
 
+    def write_slots_gear(self, action="slot_pick", param=0):
+        self.write_armor_fixture()
+        self.write_items_and_forge()
+        with open(self.path("data", "screens", "gear.json"), "w", encoding="utf-8", newline="\n") as handle:
+            json.dump({"id": 2, "title": "GEAR", "slots": True, "rows": [
+                {"label": "WEAPON", "cost": 0, "action": action, "condition": "always", "param": param},
+                {"label": "LEAVE", "cost": 0, "action": "leave"}]}, handle, indent=2)
+
+    def test_slots_candidate_table(self):
+        # hbk.12: a screen with "slots": true gets a candidate table appended to
+        # the blob -- u8 slotStart[5] (cumulative), 4-byte {u8 id, u24 labelOff}
+        # entries, then the label records; the header exposes its offset. Slot 0
+        # is the forge nodes, slots 1/2/3 the armor pieces by slot.
+        self.write_slots_gear()
+        self.assert_succeeds(self.compile())
+        blob = self.read_bytes(BLOB_REL)
+        meta = self.read(META_REL)
+        self.assertIn("constexpr uint8_t ACTION_SLOT_PICK = 16;", meta)
+        self.assertIn("constexpr uint16_t SCREEN_GEAR_SLOT_TABLE = ", meta)
+        off = int(meta.split("SCREEN_GEAR_SLOT_TABLE = ")[1].split(";")[0])
+        # The slot table trails the page table (3 screens x 13 B) and holds the
+        # 5 entries plus their label records (u8 len + bytes).
+        labels = (1 + 6) + (1 + 6) + (1 + 11) + (1 + 8) + (1 + 11)   # SWD T1/T2, HUNTER HELM, BONE CAP, HUNTER MAIL
+        self.assertEqual(off, len(blob) - (5 + 5 * 4 + labels), "slot table trails the page table")
+        self.assertEqual(list(blob[off:off + 5]), [0, 2, 4, 5, 5], "slotStart cumulative counts")
+        entries = off + 5
+        # slot 0: the two sword nodes, ids 0/1, labels from the node records.
+        self.assertEqual(blob[entries], 0, "weapon cand0 id")
+        self.assertEqual(blob[entries + 4], 1, "weapon cand1 id")
+        label_off = blob[entries + 1] | (blob[entries + 2] << 8) | (blob[entries + 3] << 16)
+        self.assertEqual(blob[label_off:label_off + 7], b"\x06SWD T1", "weapon cand0 label record")
+        # slot 1: head pieces 0,1; slot 2: body piece 2; slot 3: empty.
+        self.assertEqual((blob[entries + 2 * 4], blob[entries + 3 * 4], blob[entries + 4 * 4]),
+                         (0, 1, 2), "armor candidate ids")
+        body_off = blob[entries + 4 * 4 + 1] | (blob[entries + 4 * 4 + 2] << 8) | (blob[entries + 4 * 4 + 3] << 16)
+        self.assertEqual(blob[body_off:body_off + 12], b"\x0bHUNTER MAIL", "body cand0 label record")
+
+    def test_slot_pick_param_out_of_range_rejected(self):
+        self.write_slots_gear(param=4)
+        self.assert_fails(self.compile(), "slot must be 0..3")
+
     def test_weapons_and_armor_together_rejected(self):
         # A screen picks one generated row source (weapons OR armor).
         self.write_items_and_forge()

@@ -5,8 +5,8 @@
 //   * ScreenState: current screen index, cursor, page scroll
 //   * debounced up/down nav (tap/hold feel shared with the deleted opening menu)
 //   * row condition evaluation (quest / crafted)
-//   * the fixed action switch (EQUIP_ARMOR / EQUIP_WEAPON / TAKE_QUEST /
-//     TURN_IN_QUEST / LEAVE)
+//   * the fixed action switch (TAKE_QUEST / TURN_IN_QUEST / LEAVE; armor and
+//     weapon equip are card/slot actions handled in src/screens.hpp)
 //
 // Conditions gate the action (A on a locked row does nothing), so the state
 // machine needs no per-row visibility mask. The cart side (reading ScreenDef/
@@ -19,11 +19,13 @@
 // quest and progress >= need. `param` packs (need << 4) | quest id; the turn-in
 // payout is the row `cost` (the quest's reward, from data/quests/*.json).
 //
-// Gear rows (bead monhun-ardu-mn6.1): the GEAR screen equips crafted armor
-// alongside the weapon rows. COND_CRAFTED is live only when the row's piece
-// has its crafted bit (the (slot << 5) | piece packing), and
-// ACTION_EQUIP_ARMOR calls armorEquipToggle -- true only when the slot changed,
-// so a dead/uncrafted row and a same-piece re-press write nothing.
+// Gear rows (bead monhun-ardu-mn6.1, reworked hbk.12): GEAR is an equipment-box
+// slot view -- four slot_pick rows (weapon/head/body/charm) whose shown
+// candidate + marker come from the blob candidate table and the save bits, and
+// the five live skill rows. A on a slot row rotates to the next owned candidate
+// and equips it in place (screenGearSlotCycle, src/screens.hpp). The old
+// ACTION_EQUIP_ARMOR GEAR rows and their card path are gone; the smithy lists
+// keep the armor/weapon cards.
 //
 // Armor crafting (ui.3.1, 5co.6) moved off the screen rows onto the detail card:
 // the craft bill bakes into the mhCards record and src/card_state.hpp
@@ -44,6 +46,8 @@
 namespace mh {
 
 constexpr uint8_t SCREEN_ROWS = 6;   // rows per page
+// Equipment-box slots on the GEAR screen (hbk.12): weapon/head/body/charm.
+constexpr uint8_t SCREEN_SLOT_COUNT = 4;
 
 // Same d-pad repeat feel as the deleted opening menu: a fresh direction steps
 // at once, a held one waits SCREEN_NAV_DELAY ticks then steps every
@@ -96,6 +100,10 @@ struct ScreenState {
     // screen never shows another save's points.
     uint8_t skillPoints[armor::SKILL_COUNT];
     uint8_t skillTier[armor::SKILL_COUNT];
+    // hbk.12 GEAR equipment-box selection: one index per slot (weapon/head/
+    // body/charm) into that slot's candidate list in the blob table. Resolved
+    // on GEAR entry (screenGearSlotDefaults) and advanced by the A handler.
+    uint8_t slotSel[SCREEN_SLOT_COUNT];
 };
 
 enum ScreenEvent : int8_t {
@@ -166,6 +174,8 @@ MH_NOINLINE inline void screenReset(ScreenState &s, uint8_t screen, uint8_t rowC
         s.skillPoints[i] = 0;
         s.skillTier[i] = 0;
     }
+    for (uint8_t i = 0; i < SCREEN_SLOT_COUNT; i++)
+        s.slotSel[i] = 0;
 }
 
 // One input tick: debounced vertical nav + A/B edges. The caller evaluates the

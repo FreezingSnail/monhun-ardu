@@ -112,9 +112,10 @@ inline void test_cards(FxTest &test) {
     cardReadItem(cards::CARD_QUEST_SLAY_LUNGE, it);
     test.expectEq(cardPageOffset(it, cards::PAGE_PROG), mh_card_quest_slay_lunge_1, F("lunge prog addr"));
 
-    // ------------------------------ GEAR armor list A -> card -> A crafts
-    // ui.3.1 (5co.6): the GEAR armor row opens the card; the card A crafts from
-    // the baked bill (gate + debit + crafted bit) then equips.
+    // ------------------------------ ARMOR FORGE list A -> card -> A crafts
+    // ui.3.1 (5co.6): the ARMOR FORGE armor row opens the card; the card A
+    // crafts from the baked bill (gate + debit + crafted bit) then equips. GEAR
+    // is a slot view now (hbk.12), so the smithy list carries the armor rows.
     SaveBlock save;
     saveDefaults(save);
     save.zenny = 300;
@@ -122,11 +123,11 @@ inline void test_cards(FxTest &test) {
     save.items[item::ITEM_SCALE] = 2;
 
     ScreenRow helm;
-    screenReadRow(screenRowOffsetAt(screens::SCREEN_GEAR, 13), helm);
-    test.expectEq(helm.action, screens::ACTION_EQUIP_ARMOR, F("gear helm row action"));
-    test.expectEq(cardRowOpens(helm), 1, F("gear helm row opens a card"));
-    test.expectEq(cardRowKind(helm), cards::KIND_ARMOR, F("gear helm row card kind"));
-    test.expectEq(cardRowIndex(helm), cards::CARD_ARMOR_HUNTER_HELM, F("gear helm row card index"));
+    screenReadRow(screenRowOffsetAt(screens::SCREEN_ARMOR_FORGE, 0), helm);
+    test.expectEq(helm.action, screens::ACTION_EQUIP_ARMOR, F("armor row action"));
+    test.expectEq(cardRowOpens(helm), 1, F("armor row opens a card"));
+    test.expectEq(cardRowKind(helm), cards::KIND_ARMOR, F("armor row card kind"));
+    test.expectEq(cardRowIndex(helm), cards::CARD_ARMOR_HUNTER_HELM, F("armor row card index"));
 
     DetailState detail;
     CardItem cache;

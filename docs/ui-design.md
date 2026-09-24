@@ -275,15 +275,18 @@ every list stays static and only small live overlays remain:
   the next node's card (upgrade bill).
 - **ARMOR FORGE (id 6)**: flat list of the five pieces at their recipe zenny;
   A opens the armor card (craft bill).
-- **GEAR (id 2) becomes the equipment box**: four slot rows (WEAPON / HEAD /
-  BODY / CHARM) + the skill readout + LEAVE. Each slot row shows the *shown
-  candidate's* name (from a generated per-slot candidate table: node/piece ids +
-  label offsets into the screens blob) and its state marker (white = equipped,
-  gray = owned). LR cycles **owned** candidates only, A equips in place (no
-  card). Unowned gear is never listed.
-- Budget: the wave is funded by hbk.9 (hub strip deleted, quest column leaned to
-  active-quest `p/n`, fixed-stride page table) — 29142 B, 554 free before the
-  screens land.
+- **GEAR (id 2) is the equipment box** (hbk.12): four slot rows (WEAPON /
+  HEAD / BODY / CHARM) + the skill readout + LEAVE. Each slot row shows the
+  *shown candidate's* name (from a generated per-slot candidate table: node/piece
+  ids + label offsets into the screens blob) and its state marker (white =
+  equipped, gray = owned). **A** rotates to the next owned candidate for that
+  slot and equips it in place (no card); a slot with nothing owned shows the
+  baked slot label only, and unowned gear is never listed. The LR cycle is
+  deferred (measured +~70 B; the image sits at 184 free).
+- Budget: the wave is funded by hbk.9 (hub strip deleted, quest column leaned,
+  fixed-stride page table), hbk.13 (UPGRADE slim) and hbk.15 (sound cut,
+  `-DMH_AUDIO=0`) — 28826 B / 870 free before the GEAR slot view, 29512 B /
+  184 free after it.
 
 ## Dev feel mode (`make dev`)
 
@@ -310,7 +313,12 @@ is untouched by a dev session.
    so `hbk.13` slimmed it (per-plane resolve from the generated
    `NODE_UPGRADE_COST[]`, no ScreenState cache, no cart reads) and deleted the
    hub quest column (progress stays on the quest card's PROG page).
-7. `hbk.12` GEAR equipment-box slot view (owned-only candidates).
+7. `hbk.12` GEAR equipment-box slot view (owned-only candidates; A rotates +
+   equips the next owned candidate).
+8. `hbk.14` card overlays + cue cut — reverted when hbk.15's sound cut made
+   the overlays affordable again.
+9. `hbk.15` sound cut: `-DMH_AUDIO=0` in the shipping flags (audio is feel, not
+   loop) + the cue edge detector now guarded; -652 B.
 8. `hbk.8` spike (rejected): the dynamic owned-only list measured +590 B
    whole-image — see "MH-flow smithy" above.
 

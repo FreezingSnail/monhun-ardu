@@ -46,8 +46,8 @@ mh::ScreenState s_screen;
 // Detail-card state (bead monhun-ardu-5co.3): the open card's page machine and
 // the list row that opened it (the card A reuses screenApplyAction with the row,
 // so the packed action/param/recipe context travels with the card). Armor and
-// quest rows open cards; a GEAR weapon row keeps its direct-equip action until
-// the ui.4 forge trees land (temporary scope split, docs/ui-design.md).
+// quest rows open cards; the hbk.12 GEAR slot rows equip in place instead (the
+// smithy lists keep the weapon cards).
 mh::DetailState s_detail;
 mh::ScreenRow s_detailRow;
 // Decoded card record cached at open/refresh so drawCard does not re-read the
@@ -153,10 +153,6 @@ void run() {
             const bool changed = mh::cardApply(s_save, s_card, s_detail.node, s_detailRow);
             if (changed)
                 mh::saveStore(s_save, SAVE_BACKEND);
-            else if (mh::cardDenied(s_detail))
-                // ui.5.2 denied cue: a blocked card A (NEED PARTS / NEED ZENNY /
-                // no action) reuses the low CUE_HURT thunk; no new cue row.
-                mh::audioPlay(mh::CUE_HURT);
             mh::cardLoad(s_detail, s_card, s_detail.index, s_save, true);
             mh::cardSetHint(s_detail, s_save, s_card, s_detailRow);
             if (s_screen.screen == screens::SCREEN_GEAR)
@@ -184,18 +180,24 @@ void run() {
         // from the save + generated tables and forge its card through the normal
         // weapon-card path (the synthesized row's action makes cardRowIndex
         // resolve WEAPON_BASE + node, upgrade bill, FORGE hint). A class with
-        // nothing to upgrade thunks and opens nothing.
+        // nothing to upgrade is a no-op.
         if (row.action == screens::ACTION_UPGRADE_ROW) {
             uint8_t next;
             uint16_t cost;
-            if (!mh::screenUpgradeNext(row.param, s_save, next, cost)) {
-                mh::audioPlay(mh::CUE_HURT);
+            if (!mh::screenUpgradeNext(row.param, s_save, next, cost))
                 return;
-            }
             row.action = screens::ACTION_FORGE_NODE;
             row.param = next;
             row.flags = screens::ROW_F_FORGE;
             row.cost = cost;
+        }
+        // hbk.12 GEAR equipment-box row: A rotates to the next owned candidate
+        // (wrapping) and equips it in place -- no card. Nothing owned in the
+        // slot is a no-op. Falls through to the GEAR readout refresh below.
+        if (row.action == screens::ACTION_SLOT_PICK) {
+            if (!mh::screenGearSlotCycle(s_save, s_screen, row.param))
+                return;
+            mh::saveStore(s_save, SAVE_BACKEND);
         }
         // Armor/quest rows open their prebaked card (even when the action is
         // gated -- the card's hint line shows NEED PARTS / NEED ZENNY). Every
@@ -213,11 +215,8 @@ void run() {
             return;
         }
 #endif
-        if (!mh::screenCondOk(s_save, row)) {
-            // ui.5.2 denied cue: a blocked list A (locked/gated row) thunks.
-            mh::audioPlay(mh::CUE_HURT);
+        if (!mh::screenCondOk(s_save, row))
             return;
-        }
         const mh::AppNav nav = mh::appScreenAccept(s_screen.screen, row);
         if (nav != mh::APP_NAV_NONE) {
             // Hub destination (row, hunt): a hunt start builds the world from
@@ -232,6 +231,9 @@ void run() {
                 s_huntOver = false;
             } else if (s_screen.active && s_screen.screen == screens::SCREEN_GEAR) {
                 // gs.2: entering GEAR fills the live skill readout cache.
+                // hbk.12: the equipment-box slot selections default from the
+                // save (equipped, else first owned, else 0).
+                mh::screenGearSlotDefaults(s_screen, s_save);
                 refreshGearReadout();
             }
             return;

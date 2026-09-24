@@ -122,11 +122,21 @@ inline void test_forge(FxTest &test) {
     test.expectEq(static_cast<uint32_t>(directSave.items[item::ITEM_ORE]), 7, F("direct craft mats debited"));
     test.expectEq(saveWeaponOwned(directSave, forge::NODE_SWORD_T1), 1, F("direct craft owns the node"));
 
-    // ---------------------------------------------- GEAR equip/unequip + save
+    // ---------------------------------------------- weapon equip/unequip + save
+    // hbk.12: GEAR is a slot view (A equips in place), so the weapon-card equip
+    // path is driven here with a synthetic equip row against the cached node.
     ScreenRow gearRow;
-    screenReadRow(screenRowOffsetAt(screens::SCREEN_GEAR, 2), gearRow);   // "+- SWD T2" node 1
-    test.expectEq(gearRow.action, screens::ACTION_EQUIP_WEAPON, F("gear weapon row"));
-    test.expectEq(gearRow.param, forge::NODE_SWORD_T1, F("gear row param node"));
+    gearRow.cost = 0;
+    gearRow.action = screens::ACTION_EQUIP_WEAPON;
+    gearRow.flags = screens::ROW_F_FORGE;
+    gearRow.cond = screens::COND_ALWAYS;
+    gearRow.param = forge::NODE_SWORD_T1;
+    gearRow.unlock = 0;
+    gearRow.recipe[0].item = 0;
+    gearRow.recipe[0].count = 0;
+    gearRow.recipe[1].item = 0;
+    gearRow.recipe[1].count = 0;
+    test.expectEq(cardRowIndex(gearRow), static_cast<uint8_t>(cards::WEAPON_BASE + forge::NODE_SWORD_T1), F("equip row card index"));
     cardLoad(detail, cache, cardRowIndex(gearRow), save, false);
     test.expectEq(cardHint(save, gearRow, cache, detail.node), HINT_EQUIP, F("owned -> equip hint"));
     test.expectEq(cardApply(save, cache, detail.node, gearRow), 1, F("card A equips"));

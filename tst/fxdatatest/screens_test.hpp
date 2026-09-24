@@ -159,17 +159,16 @@ inline void test_screens(FxTest &test) {
     // Hub rows are navigation (app_state.hpp); the save actions are exercised
     // through the quests (take) rows. Weapon equip/forge and armor craft/equip
     // are card actions now (ui.4, ui.3.1), pinned by cards_test/forge_test.
-    ScreenRow q0, gw1;
+    ScreenRow q0, gw0;
     screenReadRow(screenRowOffsetAt(screens::SCREEN_QUESTS, 0), q0);
-    screenReadRow(screenRowOffsetAt(screens::SCREEN_GEAR, 1), gw1);
+    screenReadRow(screenRowOffsetAt(screens::SCREEN_GEAR, 0), gw0);
     SaveBlock act;
     saveDefaults(act);
     test.expectEq(screenCondOk(act, q0), 1, F("take always allowed"));
     test.expectEq(screenApplyAction(act, q0), 1, F("take applies"));
     test.expectEq(saveQuestGet(act, 0, 0), 1, F("quest0 taken"));
-    test.expectEq(gw1.action, screens::ACTION_EQUIP_WEAPON, F("gear row1 is a weapon equip row"));
-    test.expectEq(gw1.flags, screens::ROW_F_FORGE, F("gear weapon row carries ROW_F_FORGE"));
-    test.expectEq(screenApplyAction(act, gw1), 0, F("gear weapon equip is a card action"));
+    test.expectEq(gw0.action, screens::ACTION_SLOT_PICK, F("gear row0 is a slot row"));
+    test.expectEq(screenApplyAction(act, gw0), 0, F("gear slot row is not a screen action"));
     test.expectEq(appScreenAccept(screens::SCREEN_HUB, r0), APP_NAV_HUNT, F("hub HUNT routes to hunt"));
     test.expectEq(appScreenAccept(screens::SCREEN_HUB, r1), APP_NAV_QUESTS, F("hub QUESTS route"));
     test.expectEq(appScreenAccept(screens::SCREEN_HUB, r2), APP_NAV_FORGE, F("hub FORGE route"));
@@ -341,48 +340,122 @@ inline void test_screens(FxTest &test) {
     test.expectEq(countBits(100, 111, 56, 63) > 0 ? 1 : 0, 1, F("quests row5 baked cost 200"));
 
     // ------------------------------------------------------- gear screen
-    // ui.4: the weapon section is the whole tree (class headers + one equip row
-    // per node), then the armor header/rows, then the five skill rows + LEAVE.
-    test.expectEq(screenRowCount(screens::SCREEN_GEAR), 24, F("gear row count"));
-    ScreenRow g0, g1, g5, g9, g13, g17, g18, g23;
+    // hbk.12: GEAR is an equipment-box slot view -- four slot rows
+    // (WEAPON/HEAD/BODY/CHARM) show the selected owned candidate's name + state
+    // marker, and A rotates to the next owned candidate and equips it in place;
+    // then the -- SKILLS -- header, the five live skill rows and LEAVE. The old
+    // 24-row weapon/armor tree is gone (cards stay on CRAFT/UPGRADE/ARMOR
+    // FORGE).
+    test.expectEq(screens::ACTION_SLOT_PICK, 16, F("slot_pick action id"));
+    test.expectEq(screenRowCount(screens::SCREEN_GEAR), 11, F("gear row count"));
+    ScreenRow g0, g1, g2, g3, g4, g5, g9, g10;
     screenReadRow(screenRowOffsetAt(screens::SCREEN_GEAR, 0), g0);
     screenReadRow(screenRowOffsetAt(screens::SCREEN_GEAR, 1), g1);
+    screenReadRow(screenRowOffsetAt(screens::SCREEN_GEAR, 2), g2);
+    screenReadRow(screenRowOffsetAt(screens::SCREEN_GEAR, 3), g3);
+    screenReadRow(screenRowOffsetAt(screens::SCREEN_GEAR, 4), g4);
     screenReadRow(screenRowOffsetAt(screens::SCREEN_GEAR, 5), g5);
     screenReadRow(screenRowOffsetAt(screens::SCREEN_GEAR, 9), g9);
-    screenReadRow(screenRowOffsetAt(screens::SCREEN_GEAR, 13), g13);
-    screenReadRow(screenRowOffsetAt(screens::SCREEN_GEAR, 17), g17);
-    screenReadRow(screenRowOffsetAt(screens::SCREEN_GEAR, 18), g18);
-    screenReadRow(screenRowOffsetAt(screens::SCREEN_GEAR, 23), g23);
-    test.expectEq(g0.action, screens::ACTION_NONE, F("gear row0 class header"));
-    test.expectEq(g1.action, screens::ACTION_EQUIP_WEAPON, F("gear row1 action equip"));
-    test.expectEq(g1.param, forge::NODE_SWORD_BASE, F("gear row1 param sword root"));
-    test.expectEq(g1.flags, screens::ROW_F_FORGE, F("gear row1 forge flag"));
-    test.expectEq(g5.action, screens::ACTION_EQUIP_WEAPON, F("gear row5 action equip"));
-    test.expectEq(g5.param, forge::NODE_FLAIL_BASE, F("gear row5 param flail root"));
-    test.expectEq(g9.action, screens::ACTION_EQUIP_WEAPON, F("gear row9 action equip"));
-    test.expectEq(g9.param, forge::NODE_GUN_BASE, F("gear row9 param gun root"));
-    // Armor rows pack (slot << 5) | pieceIdx; ui.3.1: the card gates craft/equip,
-    // so the row itself is always live.
-    test.expectEq(g13.action, screens::ACTION_EQUIP_ARMOR, F("gear row13 action equip armor"));
-    test.expectEq(g13.cond, screens::COND_ALWAYS, F("gear row13 cond always"));
-    test.expectEq(g13.param, armor::ARMOR_HUNTER_HELM, F("gear row13 param helm"));
-    test.expectEq(g17.param, static_cast<uint8_t>((armor::SLOT_CHARM << 5) | armor::ARMOR_EVADE_CHARM), F("gear row17 param charm"));
-    // gs.2 skill rows: inert (action none, always live) with param = skill idx.
-    test.expectEq(g18.action, screens::ACTION_NONE, F("gear row18 skill action none"));
-    test.expectEq(g18.cond, screens::COND_ALWAYS, F("gear row18 skill cond always"));
-    test.expectEq(g18.flags, screens::ROW_F_SKILL, F("gear row18 skill flag"));
-    test.expectEq(g18.param, armor::SKILL_ATTACK_UP, F("gear row18 attack up"));
-    test.expectEq(g23.action, screens::ACTION_LEAVE, F("gear leave row"));
-    test.expectEq(appScreenAccept(screens::SCREEN_GEAR, g23), APP_NAV_HUB, F("gear leave backs to hub"));
-    test.expectEq(appScreenAccept(screens::SCREEN_GEAR, g18), APP_NAV_NONE, F("gear skill row is inert"));
-    test.expectEq(appScreenAccept(screens::SCREEN_GEAR, g1), APP_NAV_NONE, F("gear equip is a card action"));
-    // Weapon equip/armor craft are card actions now; screenApplyAction stays
-    // inert for them (cards_test/forge_test drive the card path).
+    screenReadRow(screenRowOffsetAt(screens::SCREEN_GEAR, 10), g10);
+    test.expectEq(g0.action, screens::ACTION_SLOT_PICK, F("gear row0 slot pick"));
+    test.expectEq(g0.param, 0, F("gear row0 weapon slot"));
+    test.expectEq(g1.action, screens::ACTION_SLOT_PICK, F("gear row1 slot pick"));
+    test.expectEq(g1.param, 1, F("gear row1 head slot"));
+    test.expectEq(g2.param, 2, F("gear row2 body slot"));
+    test.expectEq(g3.param, 3, F("gear row3 charm slot"));
+    test.expectEq(g4.action, screens::ACTION_NONE, F("gear row4 skills header"));
+    test.expectEq(g4.flags, 0, F("gear skills header has no flag"));
+    test.expectEq(g5.action, screens::ACTION_NONE, F("gear row5 skill action none"));
+    test.expectEq(g5.cond, screens::COND_ALWAYS, F("gear row5 skill cond always"));
+    test.expectEq(g5.flags, screens::ROW_F_SKILL, F("gear row5 skill flag"));
+    test.expectEq(g5.param, armor::SKILL_ATTACK_UP, F("gear row5 attack up"));
+    test.expectEq(g9.param, armor::SKILL_EVADE_WINDOW, F("gear row9 evade skill"));
+    test.expectEq(g10.action, screens::ACTION_LEAVE, F("gear leave row"));
+    test.expectEq(appScreenAccept(screens::SCREEN_GEAR, g10), APP_NAV_HUB, F("gear leave backs to hub"));
+    test.expectEq(appScreenAccept(screens::SCREEN_GEAR, g5), APP_NAV_NONE, F("gear skill row is inert"));
+    test.expectEq(appScreenAccept(screens::SCREEN_GEAR, g0), APP_NAV_NONE, F("gear slot row is a save action"));
+    test.expectEq(cardRowIndex(g0), CARD_NONE, F("gear slot row opens no card"));
     SaveBlock gear;
     saveDefaults(gear);
-    test.expectEq(screenApplyAction(gear, g1), 0, F("gear weapon equip is a card action"));
-    test.expectEq(screenCondOk(gear, g13), 1, F("armor row is always live"));
-    test.expectEq(screenApplyAction(gear, g13), 0, F("armor is a card action, not a screen action"));
+    test.expectEq(screenApplyAction(gear, g0), 0, F("gear slot row is not a screen action"));
+    test.expectEq(screenCondOk(gear, g0), 1, F("gear slot row always live"));
+
+    // ------------------------------------ gear slot candidate table (hbk.12)
+    // Slot 0 = the 9 forge nodes in order; 1/2/3 the armor pieces by slot
+    // (head 0,1 / body 2,3 / charm 4). Labels live in the blob records.
+    test.expectEq(screenGearSlotCount(0), 9, F("weapon slot count"));
+    test.expectEq(screenGearSlotCount(1), 2, F("head slot count"));
+    test.expectEq(screenGearSlotCount(2), 2, F("body slot count"));
+    test.expectEq(screenGearSlotCount(3), 1, F("charm slot count"));
+    uint8_t cid;
+    uint16_t coff;
+    char ctext[SCREEN_TEXT_BUF];
+    screenGearSlotEntry(0, 0, cid, coff);
+    test.expectEq(cid, forge::NODE_SWORD_BASE, F("weapon cand0 id sword root"));
+    test.expectEq(screenReadText(coff + 1, mhFxReadU8(screenCart(coff)), ctext), 6, F("weapon cand0 label len"));
+    test.expectEq(ctext[0], 'S', F("weapon cand0 label S"));
+    test.expectEq(ctext[4], 'T', F("weapon cand0 label T"));
+    screenGearSlotEntry(0, 8, cid, coff);
+    test.expectEq(cid, forge::NODE_GUN_T2, F("weapon cand8 id gun t3"));
+    screenGearSlotEntry(1, 0, cid, coff);
+    test.expectEq(cid, armor::ARMOR_HUNTER_HELM, F("head cand0 helm"));
+    screenGearSlotEntry(1, 1, cid, coff);
+    test.expectEq(cid, armor::ARMOR_BONE_CAP, F("head cand1 bone cap"));
+    screenGearSlotEntry(2, 0, cid, coff);
+    test.expectEq(cid, armor::ARMOR_HUNTER_MAIL, F("body cand0 mail"));
+    screenGearSlotEntry(3, 0, cid, coff);
+    test.expectEq(cid, armor::ARMOR_EVADE_CHARM, F("charm cand0 evade charm"));
+
+    // ------------------------------------ gear slot defaults on entry (hbk.12)
+    // saveDefaults owns the three weapon roots and equips the sword root, so
+    // slot 0 defaults to the equipped root (candidate 0); the armor slots have
+    // nothing crafted -> 0.
+    ScreenState readout;
+    saveDefaults(gear);
+    screenEnter(readout, screens::SCREEN_GEAR, gear);
+    test.expectEq(readout.slotSel[0], 0, F("fresh weapon slot default"));
+    test.expectEq(readout.slotSel[1], 0, F("fresh head slot default"));
+    test.expectEq(readout.slotSel[2], 0, F("fresh body slot default"));
+    test.expectEq(readout.slotSel[3], 0, F("fresh charm slot default"));
+    // A crafted-not-equipped piece defaults its slot to it (first owned).
+    saveSetCrafted(gear, armor::ARMOR_BONE_CAP);
+    screenEnter(readout, screens::SCREEN_GEAR, gear);
+    test.expectEq(readout.slotSel[1], 1, F("crafted bone cap defaults head"));
+    // Equipping the helm moves the default to the equipped candidate.
+    saveSetCrafted(gear, armor::ARMOR_HUNTER_HELM);
+    gear.equip[armor::SLOT_HEAD] = armor::ARMOR_HUNTER_HELM + 1;
+    screenEnter(readout, screens::SCREEN_GEAR, gear);
+    test.expectEq(readout.slotSel[1], 0, F("equipped helm defaults head"));
+
+    // ------------------------------------ gear slot A rotation + equip (hbk.12)
+    // A on the weapon slot rotates to the next owned candidate (the flail root,
+    // candidate 3) and equips it; the save owns all three roots, so the next
+    // presses walk the gun root (6) and wrap back to the sword root (0).
+    saveDefaults(gear);
+    screenEnter(readout, screens::SCREEN_GEAR, gear);
+    test.expectEq(readout.slotSel[0], 0, F("rotation starts on the sword"));
+    test.expectEq(screenGearSlotCycle(gear, readout, 0), 1, F("weapon slot A rotates"));
+    test.expectEq(readout.slotSel[0], 3, F("rotates to the next owned flail"));
+    test.expectEq(gear.equippedNode, forge::NODE_FLAIL_BASE, F("flail root equipped"));
+    test.expectEq(screenGearSlotCycle(gear, readout, 0), 1, F("weapon slot A rotates again"));
+    test.expectEq(readout.slotSel[0], 6, F("rotates to the gun root"));
+    test.expectEq(gear.equippedNode, forge::NODE_GUN_BASE, F("gun root equipped"));
+    test.expectEq(screenGearSlotCycle(gear, readout, 0), 1, F("weapon slot A wraps"));
+    test.expectEq(readout.slotSel[0], 0, F("wraps back to the sword"));
+    test.expectEq(gear.equippedNode, forge::NODE_SWORD_BASE, F("sword re-equipped"));
+    // A slot with nothing owned (and nothing equipped) is a no-op.
+    for (uint8_t i = 0; i < SAVE_OWNED_BYTES; i++)
+        gear.weaponOwned[i] = 0;
+    gear.equippedNode = SAVE_NODE_NONE;
+    test.expectEq(screenGearSlotCycle(gear, readout, 0), 0, F("nothing owned -> no rotation"));
+    // Armor: craft the helm, then the head-slot A equips it (gray -> white).
+    saveDefaults(gear);
+    saveSetCrafted(gear, armor::ARMOR_HUNTER_HELM);
+    screenEnter(readout, screens::SCREEN_GEAR, gear);
+    test.expectEq(readout.slotSel[1], 0, F("head starts on the crafted helm"));
+    test.expectEq(gear.equip[armor::SLOT_HEAD], SAVE_EQUIP_NONE, F("helm not equipped yet"));
+    test.expectEq(screenGearSlotCycle(gear, readout, 1), 1, F("head slot A equips"));
+    test.expectEq(gear.equip[armor::SLOT_HEAD], armor::ARMOR_HUNTER_HELM + 1, F("helm equipped"));
 
     // -------------------------------------- gear skill readout cache (gs.2)
     // Cart armor records -> ScreenState cache: helm (attack_up 6, defense_up 4)
@@ -394,7 +467,6 @@ inline void test_screens(FxTest &test) {
     skillSave.equip[armor::SLOT_HEAD] = armor::ARMOR_HUNTER_HELM + 1;
     skillSave.equip[armor::SLOT_BODY] = armor::ARMOR_HUNTER_MAIL + 1;
     armorApplyToGame(g_gear, skillSave);
-    ScreenState readout;
     screenEnter(readout, screens::SCREEN_GEAR, skillSave);
     screenGearCache(readout, g_gear.armor);
     test.expectEq(readout.skillPoints[armor::SKILL_ATTACK_UP], 12, F("attack points from cart"));
@@ -403,8 +475,8 @@ inline void test_screens(FxTest &test) {
     test.expectEq(readout.skillTier[armor::SKILL_HEALTH_UP], 0, F("health 4 inert"));
     test.expectEq(readout.skillPoints[armor::SKILL_EVADE_WINDOW], 0, F("no charm -> evade 0"));
 
-    // Equipping a piece through the cart gear row moves the readout: mail added
-    // to the helm -> attack 6 -> 12 (crosses S), health 0 -> 4.
+    // Equipping a piece through the gear slot moves the readout: mail added to
+    // the helm -> attack 6 -> 12 (crosses S), health 0 -> 4.
     SaveBlock moveSave;
     saveDefaults(moveSave);
     saveSetCrafted(moveSave, armor::ARMOR_HUNTER_HELM);
@@ -432,63 +504,86 @@ inline void test_screens(FxTest &test) {
     test.expectEq(moveRead.skillTier[armor::SKILL_ATTACK_UP], 2, F("clamped attack is M"));
 
     // Pixel: a skill row draws its points + tier letter at the baked cost column
-    // (right-aligned ending at x=112). ATTACK UP (row 18) is the first row of
-    // page 3 (rows 18..23) at y = 11; 15 points -> 2 digits at x 104..111, the M
+    // (right-aligned ending at x=112). ATTACK UP (row 5) is the last row of
+    // page 0 (y = 11 + 5*9 = 56); 15 points -> 2 digits at 104..111, the M
     // letter just left at 96..99.
     clearFb();
     ScreenState smoke;
     screenEnter(smoke, screens::SCREEN_GEAR, moveSave);
-    smoke.cursor = 18;
-    smoke.scroll = 18;
+    smoke.cursor = 5;
+    smoke.scroll = 0;
     screenGearCache(smoke, g_gear.armor);   // attack 15/M
     drawScreen(smoke, moveSave, g_gear);
-    test.expectEq(countBits(96, 99, 11, 18) > 0 ? 1 : 0, 1, F("skill M letter ink"));
-    test.expectEq(countBits(104, 111, 11, 18) > 0 ? 1 : 0, 1, F("skill points ink"));
+    test.expectEq(countBits(96, 99, 56, 63) > 0 ? 1 : 0, 1, F("skill M letter ink"));
+    test.expectEq(countBits(104, 111, 56, 63) > 0 ? 1 : 0, 1, F("skill points ink"));
 
-    // An inert skill (DEFENSE UP row 19: defense_up 4) draws the points only
-    // (1 digit at 108..111, no tier letter).
+    // An inert skill (DEFENSE UP, row 6) opens page 1 at y=11: defense_up 4
+    // draws the points only (1 digit at 108..111, no tier letter).
     clearFb();
     screenEnter(smoke, screens::SCREEN_GEAR, moveSave);
-    smoke.cursor = 19;
-    smoke.scroll = 18;
+    smoke.cursor = 6;
+    smoke.scroll = 6;
     screenGearCache(smoke, g_gear.armor);
     drawScreen(smoke, moveSave, g_gear);
-    test.expectEq(countBits(108, 111, 20, 27) > 0 ? 1 : 0, 1, F("inert skill points ink"));
-    test.expectEq(countBits(100, 107, 20, 27), 0, F("inert skill no prefix"));
+    test.expectEq(countBits(108, 111, 11, 18) > 0 ? 1 : 0, 1, F("inert skill points ink"));
+    test.expectEq(countBits(100, 107, 11, 18), 0, F("inert skill no prefix"));
 
     // Live skill number straight from the cache: skill 0 (attack_up) = 12 with
-    // no tier -> 2 digits at the baked cost column (104..111), no S/M letter.
+    // no tier -> 2 digits at 104..111, no S/M letter.
     clearFb();
     screenEnter(smoke, screens::SCREEN_GEAR, moveSave);
-    smoke.cursor = 18;
-    smoke.scroll = 18;
+    smoke.cursor = 5;
+    smoke.scroll = 0;
     smoke.skillPoints[armor::SKILL_ATTACK_UP] = 12;
     smoke.skillTier[armor::SKILL_ATTACK_UP] = 0;
     drawScreen(smoke, moveSave, g_gear);
-    test.expectEq(countBits(104, 111, 11, 18) > 0 ? 1 : 0, 1, F("gear skill 12 points ink"));
-    test.expectEq(countBits(96, 103, 11, 18), 0, F("gear skill 12 no tier letter"));
+    test.expectEq(countBits(104, 111, 56, 63) > 0 ? 1 : 0, 1, F("gear skill 12 points ink"));
+    test.expectEq(countBits(96, 103, 56, 63), 0, F("gear skill 12 no tier letter"));
 
-    // Pixel: the gear page draws through the same generic renderer.
+    // Slot pixels (plane 0 lights the shade-1 band + shade-2 baked labels). A
+    // fresh save owns/equips the sword root (row 0 -> name + white marker) but
+    // has nothing crafted, so the HEAD row (y=20) keeps its baked label alone.
     clearFb();
     ScreenState gs;
     screenEnter(gs, screens::SCREEN_GEAR, ps);
     drawScreen(gs, ps, g_gear);
     test.expectEq(countBits(2, 5, 13, 16), 16, F("gear cursor chip 4x4"));
     test.expectEq(countBits(2, 20, 0, 7) > 0 ? 1 : 0, 1, F("gear title ink"));
-    test.expectEq(countBits(10, 60, 11, 18) > 0 ? 1 : 0, 1, F("gear row0 label ink"));
+    test.expectEq(countBits(10, 25, 20, 27) > 0 ? 1 : 0, 1, F("gear HEAD baked label ink"));
+    test.expectEq(countBits(30, 56, 20, 27), 0, F("gear head row no candidate name"));
+    test.expectEq(countBits(118, 121, 23, 26), 0, F("gear head row no marker"));
+    test.expectEq(countBits(118, 121, 14, 17) > 0 ? 1 : 0, 1, F("gear equipped weapon marker ink"));
 
-    // Section header rows bake a full-width dark band (shade 1) behind centered
-    // white text: the SWD header (row 0, band y=10..17) and the ARMOR header
-    // (row 12, page 2, band y=10..17). The legacy path never drew a band.
-    test.expectEq(countBits(110, 127, 10, 17) > 0 ? 1 : 0, 1, F("gear SWD section band ink"));
-    // Page 2 (scroll 12) opens on the ARMOR header at row 12.
+    // Craft the bone cap (head candidate 1) but do not equip: the head row now
+    // shows "BONE CAP" past the baked "HEAD" with the gray owned marker.
+    saveSetCrafted(ps, armor::ARMOR_BONE_CAP);
     clearFb();
     screenEnter(gs, screens::SCREEN_GEAR, ps);
-    gs.scroll = 12;
     drawScreen(gs, ps, g_gear);
-    test.expectEq(countBits(110, 127, 10, 17) > 0 ? 1 : 0, 1, F("gear ARMOR section band ink"));
-    // Armor rows draw no marker (deferred): the marker column stays empty.
-    test.expectEq(countBits(116, 123, 20, 27), 0, F("gear armor no marker"));
+    test.expectEq(countBits(30, 56, 20, 27) > 0 ? 1 : 0, 1, F("gear head candidate name ink"));
+    test.expectEq(countBits(118, 121, 23, 26) > 0 ? 1 : 0, 1, F("gear owned head marker ink"));
+    // Plane 2 lights shade 3 only: the gray (owned) marker is invisible there.
+    waitPlane(2);
+    clearFb();
+    screenEnter(gs, screens::SCREEN_GEAR, ps);
+    drawScreen(gs, ps, g_gear);
+    test.expectEq(countBits(118, 121, 23, 26), 0, F("gear owned marker skips plane2"));
+
+    // Equipping the helm (candidate 0) draws the white marker on plane 2.
+    saveSetCrafted(ps, armor::ARMOR_HUNTER_HELM);
+    ps.equip[armor::SLOT_HEAD] = armor::ARMOR_HUNTER_HELM + 1;
+    clearFb();
+    screenEnter(gs, screens::SCREEN_GEAR, ps);
+    drawScreen(gs, ps, g_gear);
+    test.expectEq(countBits(118, 121, 23, 26) > 0 ? 1 : 0, 1, F("gear equipped head marker white plane2"));
+    waitPlane(0);
+
+    // The -- SKILLS -- header (row 4, band y=46..53) bakes a full-width dark
+    // band behind centered white text.
+    clearFb();
+    screenEnter(gs, screens::SCREEN_GEAR, ps);
+    drawScreen(gs, ps, g_gear);
+    test.expectEq(countBits(110, 127, 46, 53) > 0 ? 1 : 0, 1, F("gear SKILLS section band ink"));
 
     // -------------------------------------------- hbk.3 prebaked pages
     // Page table (docs/ui-design.md, fixed stride hbk.9): one 13-byte slot per
@@ -497,7 +592,7 @@ inline void test_screens(FxTest &test) {
     test.expectEq(screens::SCREEN_PAGE_STRIDE, 13, F("page table stride"));
     test.expectEq(screenPageCount(screens::SCREEN_HUB), 1, F("hub page count"));
     test.expectEq(screenPageCount(screens::SCREEN_QUESTS), 2, F("quests page count"));
-    test.expectEq(screenPageCount(screens::SCREEN_GEAR), 4, F("gear page count"));
+    test.expectEq(screenPageCount(screens::SCREEN_GEAR), 2, F("gear page count"));
     test.expectEq(screenPageCount(screens::SCREEN_FORGE), 1, F("forge submenu page count"));
     test.expectEq(screenPageCount(screens::SCREEN_CRAFT), 2, F("craft page count"));
     test.expectEq(screenPageCount(screens::SCREEN_ARMOR_FORGE), 1, F("armor forge page count"));
@@ -514,7 +609,7 @@ inline void test_screens(FxTest &test) {
     test.expectEq(screenPageAddr(screens::SCREEN_QUESTS, 0), mh_screen_quests_0, F("quests page0 addr"));
     test.expectEq(screenPageAddr(screens::SCREEN_QUESTS, 1), mh_screen_quests_1, F("quests page1 addr"));
     test.expectEq(screenPageAddr(screens::SCREEN_GEAR, 0), mh_screen_gear_0, F("gear page0 addr"));
-    test.expectEq(screenPageAddr(screens::SCREEN_GEAR, 3), mh_screen_gear_3, F("gear page3 addr"));
+    test.expectEq(screenPageAddr(screens::SCREEN_GEAR, 1), mh_screen_gear_1, F("gear page1 addr"));
     test.expectEq(screenPageAddr(screens::SCREEN_FORGE, 0), mh_screen_forge_0, F("forge page0 addr"));
     test.expectEq(screenPageAddr(screens::SCREEN_CRAFT, 0), mh_screen_craft_0, F("craft page0 addr"));
     test.expectEq(screenPageAddr(screens::SCREEN_CRAFT, 1), mh_screen_craft_1, F("craft page1 addr"));

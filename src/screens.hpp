@@ -3,15 +3,17 @@
 // docs/quests-shops.md; prebaked pages: epic monhun-ardu-hbk,
 // docs/ui-design.md "Screen prebake v2"). Device-only (like render.hpp): blits
 // a baked 4-shade page per 6-row window and draws only the live chrome on top
-// (cursor, selected label, node/armor markers, skill numbers, zenny, page
-// indicator), then reads the ScreenDef/ScreenRow records
+// (cursor, selected label, node/armor markers, GEAR slot candidate names +
+// markers, skill numbers, zenny, page indicator), then reads the
+// ScreenDef/ScreenRow records
 // from the mhScreens cart blob during the scan/render window.
 //
 // Layout: the title band, rule, row labels, section bands and costs are baked
 // into the page; rows stay on the y=11 + 9*i grid, 6 per page, scroll by 6. The
 // selected row's label is re-drawn in white over its baked copy (section
-// headers bake centered white text and are skipped). Conditions gate the row
-// action (screen_state.hpp), not the render.
+// headers bake centered white text and are skipped; GEAR slot rows redraw the
+// candidate name instead). Conditions gate the row action (screen_state.hpp),
+// not the render.
 //
 // The pure state machine (nav, conditions, action switch, save) lives in
 // screen_state.hpp so the host suite can exercise it without the cart.
@@ -56,6 +58,14 @@ inline uint8_t screenReadText(uint16_t off, uint8_t len, char *buf) {
     if (n != 0)
         mhFxReadBytes(screenCart(off), reinterpret_cast<uint8_t *>(buf), n);
     return n;
+}
+
+// Draw a buffered label glyph by glyph (the selected-row white redraw and the
+// hbk.12 GEAR slot candidate names); returns the x past the last glyph.
+inline uint8_t screenTextLabel(uint24_t sheet, uint8_t x, uint8_t y, const char *text, uint8_t len) {
+    for (uint8_t i = 0; i < len; i++)
+        x = static_cast<uint8_t>(textPut(sheet, x, y, text[i]));
+    return x;
 }
 
 // Prebaked page table (hbk.3, fixed stride hbk.9, docs/ui-design.md): per screen
@@ -182,10 +192,107 @@ inline bool screenUpgradeNext(uint8_t cls, const SaveBlock &save, uint8_t &next,
     return true;
 }
 
+// ---- hbk.12 GEAR equipment-box slot view -----------------------------------
+// The candidate table (tools/gen-screens.py) at SCREEN_GEAR_SLOT_TABLE: u8
+// slotStart[5] (cumulative counts), then 4-byte {u8 id, u24 labelOff} entries
+// in slot order, then the label records (u8 len + bytes). Slot 0 = the forge
+// nodes, 1/2/3 the armor pieces by slot. Pure cart reads; the draw and the A
+// handler share them.
+inline uint8_t screenGearSlotFirst(uint8_t slot) {
+    return mhFxReadU8(screenCart(static_cast<uint16_t>(screens::SCREEN_GEAR_SLOT_TABLE + slot)));
+}
+
+// MH_NOINLINE: the A handler and the entry default both walk the table, so one
+// shared copy beats two inlined expansions (LTO cost math is whole-image only;
+// this is the measured win).
+MH_NOINLINE inline uint8_t screenGearSlotCount(uint8_t slot) {
+    const uint16_t base = screens::SCREEN_GEAR_SLOT_TABLE;
+    return static_cast<uint8_t>(mhFxReadU8(screenCart(static_cast<uint16_t>(base + slot + 1))) - mhFxReadU8(screenCart(static_cast<uint16_t>(base + slot))));
+}
+
+// One candidate entry: its id (node / piece index) and the absolute blob offset
+// of its label record.
+MH_NOINLINE inline void screenGearSlotEntry(uint8_t slot, uint8_t index, uint8_t &id, uint16_t &labelOff) {
+    const uint16_t off = static_cast<uint16_t>(screens::SCREEN_GEAR_SLOT_TABLE + 5 + static_cast<uint16_t>((screenGearSlotFirst(slot) + index) * 4));
+    id = mhFxReadU8(screenCart(off));
+    const uint16_t lo = mhFxReadU16(reinterpret_cast<const uint16_t *>(screenCart(static_cast<uint16_t>(off + 1))));
+    const uint8_t hi = mhFxReadU8(screenCart(static_cast<uint16_t>(off + 3)));
+    labelOff = static_cast<uint16_t>(lo | (static_cast<uint16_t>(hi) << 8));
+}
+
+// Just the candidate id (the default scan and the A rotation never need the
+// label): one cart read instead of the full entry decode.
+MH_NOINLINE inline uint8_t screenGearSlotId(uint8_t slot, uint8_t index) {
+    return mhFxReadU8(screenCart(static_cast<uint16_t>(screens::SCREEN_GEAR_SLOT_TABLE + 5 + static_cast<uint16_t>((screenGearSlotFirst(slot) + index) * 4))));
+}
+
+// Candidate state: 0 none, 1 owned/crafted, 2 equipped. One decode shared by
+// the entry default, the A rotation and the draw (weapons use the owned bitset
+// + equippedNode; armor slots 1..3 the crafted bit + the 1-based equip id).
+MH_NOINLINE inline uint8_t screenGearSlotState(const SaveBlock &save, uint8_t slot, uint8_t id) {
+    if (slot == 0) {
+        if (save.equippedNode == id)
+            return 2;
+        return saveWeaponOwned(save, id) ? 1 : 0;
+    }
+    if (save.equip[slot - 1] == static_cast<uint8_t>(id + 1))
+        return 2;
+    return saveCrafted(save, id) ? 1 : 0;
+}
+
+// Default slot selection on GEAR entry: the equipped candidate when one is
+// equipped, else the first owned candidate, else index 0. `sel` starts at 0, so
+// "no owned candidate" and "index 0 owned" collapse to the same correct answer
+// (one pass, no sentinel).
+MH_NOINLINE inline void screenGearSlotDefaults(ScreenState &s, const SaveBlock &save) {
+    for (uint8_t slot = 0; slot < SCREEN_SLOT_COUNT; slot++) {
+        const uint8_t count = screenGearSlotCount(slot);
+        uint8_t sel = 0;
+        for (uint8_t i = 0; i < count; i++) {
+            const uint8_t state = screenGearSlotState(save, slot, screenGearSlotId(slot, i));
+            if (state == 2) {
+                sel = i;
+                break;
+            }
+            if (state == 1 && sel == 0)
+                sel = i;
+        }
+        s.slotSel[slot] = sel;
+    }
+}
+
+// A on a GEAR slot row: advance to the next owned candidate (wrapping over the
+// slot's count) and equip it in place -- no card. Returns true when an owned
+// candidate was found (the caller saves); a slot with nothing owned is a no-op.
+inline bool screenGearSlotCycle(SaveBlock &save, ScreenState &s, uint8_t slot) {
+    if (slot >= SCREEN_SLOT_COUNT)
+        return false;
+    const uint8_t count = screenGearSlotCount(slot);
+    if (count == 0)
+        return false;
+    uint8_t index = s.slotSel[slot];
+    for (uint8_t step = 0; step < count; step++) {
+        index = screenCycle(index, 1, count);
+        const uint8_t id = screenGearSlotId(slot, index);
+        if (screenGearSlotState(save, slot, id) == 0)
+            continue;
+        s.slotSel[slot] = index;
+        if (slot == 0) {
+            save.equippedNode = save.equippedNode == id ? SAVE_NODE_NONE : id;
+            return true;
+        }
+        return armorEquipToggle(save, id, static_cast<uint8_t>(slot - 1));
+    }
+    return false;
+}
+
 // Enter a screen: reset cursor/scroll/edges and load its row count off the
-// cart (the pure reset lives in screen_state.hpp screenReset()).
+// cart (the pure reset lives in screen_state.hpp screenReset()). GEAR also
+// resolves its equipment-box slot selections from the save.
 inline void screenEnter(ScreenState &s, uint8_t screen, const SaveBlock &save) {
     screenReset(s, screen, screenRowCount(screen));
+    if (screen == screens::SCREEN_GEAR)
+        screenGearSlotDefaults(s, save);
 }
 
 // gs.2 GEAR skill readout: copy the cached aggregation's per-skill points/tier
@@ -265,17 +372,32 @@ inline void drawScreen(const ScreenState &s, const SaveBlock &save, const Game &
         // Selected row: redraw the label white over its baked shade-2 copy.
         // Section headers (action none, no skill flag) bake centered white text
         // at a different x, so they are skipped; skill rows still highlight.
-        if (selected && (action != screens::ACTION_NONE || (flags & screens::ROW_F_SKILL) != 0)) {
+        // Slot rows redraw the candidate name below instead of the slot label.
+        if (selected && action != screens::ACTION_SLOT_PICK && (action != screens::ACTION_NONE || (flags & screens::ROW_F_SKILL) != 0)) {
             const uint8_t ln = screenReadText(static_cast<uint16_t>(rowOff + 1), labelLen, text);
-            uint8_t lx = SCREEN_LABEL_X;
-            for (uint8_t j = 0; j < ln; j++)
-                lx = static_cast<uint8_t>(textPut(fxfontw, lx, y, text[j]));
+            screenTextLabel(fxfontw, static_cast<uint8_t>(SCREEN_LABEL_X), y, text, ln);
         }
 
         if ((flags & screens::ROW_F_FORGE) != 0) {
-            // FORGE + GEAR weapon rows: node id in `param`; marker from save
+            // FORGE/CRAFT weapon rows: node id in `param`; marker from save
             // bits only.
             screenMarker(save.equippedNode == param, saveWeaponOwned(save, param), static_cast<int16_t>(y));
+        } else if (action == screens::ACTION_SLOT_PICK) {
+            // hbk.12 GEAR equipment-box row: the shown candidate's name over
+            // the baked slot label plus its state marker (white equipped, gray
+            // owned). A slot with nothing owned keeps the baked label alone.
+            // slotSel is always a valid index (entry default + A rotation), so
+            // the draw needs no count clamp.
+            const uint8_t slot = param < SCREEN_SLOT_COUNT ? param : 0;
+            uint8_t id;
+            uint16_t labelOff;
+            screenGearSlotEntry(slot, s.slotSel[slot], id, labelOff);
+            const uint8_t state = screenGearSlotState(save, slot, id);
+            if (state != 0) {
+                const uint8_t ln = screenReadText(static_cast<uint16_t>(labelOff + 1), mhFxReadU8(screenCart(labelOff)), text);
+                screenTextLabel(selected ? fxfontw : fxfontg, static_cast<uint8_t>(SCREEN_LABEL_X), y, text, ln);
+                screenMarker(state == 2, true, static_cast<int16_t>(y));
+            }
         } else if ((flags & screens::ROW_F_SKILL) != 0) {
             // GEAR skill rows: live points + S/M tier letter at the baked cost
             // column. A bad id clamps to skill 0 so a corrupt cart cannot read

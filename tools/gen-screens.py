@@ -23,6 +23,10 @@ Blob layout (little-endian, explicit u8/u16, no padding, fixed order):
                     pageCount u8, then 4 x u24 absolute FX addresses of the baked
                     mh_screen_<name>_<page> layer arrays (0 = not prebaked /
                     unresolved)
+    slotTables variable  per screen with "slots": true, appended after the page
+                    table: u8 slotStart[5] (cumulative candidate counts), then
+                    4-byte {u8 id, u24 labelOff} entries in slot order, then the
+                    label records (u8 len + bytes) the offsets point at
 
 The runtime (src/screens.hpp) reads records through core/fxmem.hpp during the
 render/scan window; the host suite uses plain row structs. Action/condition/
@@ -81,7 +85,8 @@ ACTION_NAMES = ("leave", "buy_upgrade", "take_quest", "turn_in_quest",
                 "equip_weapon", "open_gear", "equip_armor",
                 "forge_node", "open_forge",
                 "open_craft", "open_upgrade", "open_armor_forge",
-                "upgrade_row")   # hbk.11: UPGRADE class row (live tier/cost, param = class)
+                "upgrade_row",   # hbk.11: UPGRADE class row (live tier/cost, param = class)
+                "slot_pick")     # hbk.12: GEAR equipment-slot row (param = slot 0..3)
 COND_NAMES = ("always", "zenny", "flag", "tier", "quest", "upgrade")
 # hide_locked: reserved. skill: draw the cached live skill points
 # (ScreenState::skillPoints) in the cost column plus an S/M tier letter next to
@@ -122,6 +127,16 @@ PREBAKE_LAYOUT = {
 # addresses (4 x 6 = 24 rows), so a prebaked screen may not exceed PAGE_MAX pages.
 PAGE_MAX = 4
 PAGE_STRIDE = 13          # u8 pageCount + PAGE_MAX x u24 addresses per screen slot
+
+# GEAR equipment-box slot view (hbk.12, docs/ui-design.md): a screen with
+# "slots": true gets a candidate table appended to the blob -- u8 slotStart[5]
+# (cumulative counts) then 4-byte {u8 id, u24 labelOff} entries in slot order,
+# then the label records (u8 len + bytes) those offsets point at. Slot 0 is the
+# forge nodes in data order; slots 1/2/3 are the armor pieces grouped by their
+# armor slot (head/body/charm). The runtime (src/screens.hpp) reads it through
+# SCREEN_<NAME>_SLOT_TABLE.
+ARMOR_SLOT_COUNT = 3
+SLOT_COUNT = 1 + ARMOR_SLOT_COUNT   # weapon + head + body + charm
 
 # 4-shade palette (1:1 with L4_Triplane; same values as gen-cards/gen-zones).
 CLEAR = (0, 0, 0, 0)
@@ -254,6 +269,11 @@ def normalize_row(errors, ctx, obj):
         slot = (param >> 5) & 3
         if slot >= 3:
             errors.add(ctx, "param: armor slot must be 0..2, got %d" % slot)
+    if action == ACTION_NAMES.index("slot_pick") and param is not None:
+        # hbk.12: the GEAR slot row packs its equipment-box slot index 0..3
+        # (weapon/head/body/charm); the candidate table lives in the blob.
+        if param >= SLOT_COUNT:
+            errors.add(ctx, "param: slot must be 0..%d, got %d" % (SLOT_COUNT - 1, param))
     if cond == COND_NAMES.index("upgrade") and param is not None:
         # param packs (unlock << 4) | (weapon << 2) | tier (see screen_state.hpp).
         weapon = (param >> 2) & 3
@@ -368,6 +388,33 @@ def armor_rows(errors, ctx, armor_model):
     if not rows:
         errors.add(ctx, "armor: no pieces to generate rows from")
     return rows
+
+
+def slot_candidates(errors, ctx, forge_model, armor_model):
+    """GEAR equipment-box candidate table (hbk.12): SLOT_COUNT lists in slot
+    order. Slot 0 is every forge node in data order (id = node id, label = the
+    node label); slots 1/2/3 are the armor pieces grouped by their armor slot
+    (id = piece index, label = the piece label)."""
+    if forge_model is None:
+        errors.add(ctx, "slots: forge tree unavailable (data/forge/*.json)")
+        return None
+    if armor_model is None:
+        errors.add(ctx, "slots: armor table unavailable (data/armor.json)")
+        return None
+    slots = [[{"id": node["index"], "label": node["label"]} for node in forge_model["nodes"]]]
+    for armor_slot in range(ARMOR_SLOT_COUNT):
+        slots.append([{"id": index, "label": piece.get("label")}
+                      for index, piece in enumerate(armor_model["pieces"])
+                      if piece["slot"] == armor_slot])
+    for slot in slots:
+        for cand in slot:
+            label = cand["label"]
+            if not isinstance(label, str) or not 1 <= len(label) <= LABEL_MAX:
+                errors.add(ctx, "slots: candidate label %r outside 1..%d chars" % (label, LABEL_MAX))
+    if len(slots) != SLOT_COUNT:
+        errors.add(ctx, "slots: expected %d candidate lists, got %d" % (SLOT_COUNT, len(slots)))
+        return None
+    return slots
 
 
 # ------------------------------------------------------- prebaked page art
@@ -524,7 +571,7 @@ def clean_stale_images(screens, root):
 
 def normalize_screen(errors, rel, name, obj, seen_ids, forge_model, armor_model):
     ctx = rel
-    check_keys(errors, ctx, obj, {"id", "title", "rows"}, ("weapons", "prebake", "armor"))
+    check_keys(errors, ctx, obj, {"id", "title", "rows"}, ("weapons", "prebake", "armor", "slots"))
     if not isinstance(obj, dict):
         return None
     stem = os.path.splitext(name)[0]
@@ -548,6 +595,10 @@ def normalize_screen(errors, rel, name, obj, seen_ids, forge_model, armor_model)
     if not isinstance(armor, bool):
         errors.add(ctx, "armor: expected a boolean, got %r" % (armor,))
         armor = False
+    slots = obj.get("slots", False)
+    if not isinstance(slots, bool):
+        errors.add(ctx, "slots: expected a boolean, got %r" % (slots,))
+        slots = False
     if mode is not None and armor:
         errors.add(ctx, "weapons/armor: pick one generated row source")
     raw_rows = obj.get("rows")
@@ -581,7 +632,9 @@ def normalize_screen(errors, rel, name, obj, seen_ids, forge_model, armor_model)
                            % (row["label"], row["cost"], PREBAKE_LAYOUT["cost_max"]))
     if None in (screen_id, title):
         return None
-    return {"name": stem, "id": screen_id, "title": title, "rows": rows, "prebake": prebake}
+    candidates = slot_candidates(errors, ctx, forge_model, armor_model) if slots else None
+    return {"name": stem, "id": screen_id, "title": title, "rows": rows, "prebake": prebake,
+            "slots": slots, "slotCandidates": candidates}
 
 
 def compile_model(errors, root):
@@ -603,6 +656,11 @@ def compile_model(errors, root):
         if isinstance(obj, dict) and obj.get("weapons") is not None:
             forge_model = load_forge_module().load_model(root)
         if isinstance(obj, dict) and obj.get("armor") is True:
+            armor_model = load_armor_module().load_model(root)
+        if isinstance(obj, dict) and obj.get("slots") is True:
+            # hbk.12: the GEAR slot table needs both the forge nodes and the
+            # armor pieces (candidate ids + labels).
+            forge_model = load_forge_module().load_model(root)
             armor_model = load_armor_module().load_model(root)
     screens = []
     seen_ids = set()
@@ -681,11 +739,34 @@ def pack_blob(errors, screens, fx_symbols, unresolved):
                 else:
                     value = resolved
             blob += struct.pack("<I", value)[:3]
+    # Slot candidate tables (hbk.12): appended after the fixed page table so
+    # every existing offset is unchanged. The runtime indexes the table with
+    # SCREEN_<NAME>_SLOT_TABLE.
+    slot_tables = {}
+    for screen in screens:
+        candidates = screen.get("slotCandidates")
+        if not candidates:
+            continue
+        slot_tables[screen["name"]] = len(blob)
+        starts = [0]
+        for slot in candidates:
+            starts.append(starts[-1] + len(slot))
+        blob += bytes(starts)   # u8 slotStart[5] (cumulative)
+        entries_at = len(blob)
+        flat = [cand for slot in candidates for cand in slot]
+        blob += bytes(4 * len(flat))
+        for j, cand in enumerate(flat):
+            label = cand["label"].encode("ascii")
+            label_off = len(blob)
+            blob += bytes([len(label)]) + label
+            entry = entries_at + j * 4
+            blob[entry] = cand["id"]
+            blob[entry + 1:entry + 4] = struct.pack("<I", label_off)[:3]
     if len(blob) >= 65536:
         errors.add("data", "size limit: blob is %d B, offsets are u16" % len(blob))
         return None
     return {"blob": bytes(blob), "def_offsets": def_offsets, "rows_start": rows_start,
-            "page_table_off": page_table_off}
+            "page_table_off": page_table_off, "slot_tables": slot_tables}
 
 
 def emit_meta_header(model, packed):
@@ -749,6 +830,11 @@ def emit_meta_header(model, packed):
         app("constexpr uint8_t SCREEN_%s_PAGES = %d;" % (name, len(screen["pages"])))
         app("constexpr uint16_t SCREEN_%s_PAGE_TABLE = %d;" % (name, page_off))
         page_off += PAGE_STRIDE
+        if screen["name"] in packed["slot_tables"]:
+            app("// hbk.12 equipment-box candidate table: u8 slotStart[%d] then" % SLOT_COUNT)
+            app("// 4-byte {u8 id, u24 labelOff} entries then the label records.")
+            app("constexpr uint16_t SCREEN_%s_SLOT_TABLE = %d;"
+                % (name, packed["slot_tables"][screen["name"]]))
     app("")
     app("}   // namespace screens")
     app("")

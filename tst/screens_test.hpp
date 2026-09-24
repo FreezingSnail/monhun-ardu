@@ -400,11 +400,15 @@ void ScreenSuite(TestRunner &runner) {
             s.skillPoints[i] = static_cast<uint8_t>(i + 1);
             s.skillTier[i] = 2;
         }
+        for (uint8_t i = 0; i < SCREEN_SLOT_COUNT; i++)
+            s.slotSel[i] = 3;
         screenReset(s, screens::SCREEN_GEAR, screens::SCREEN_GEAR_ROWS);
         for (uint8_t i = 0; i < armor::SKILL_COUNT; i++) {
             t.assert(s.skillPoints[i], 0, "reset zeroes points");
             t.assert(s.skillTier[i], 0, "reset zeroes tier");
         }
+        for (uint8_t i = 0; i < SCREEN_SLOT_COUNT; i++)
+            t.assert(s.slotSel[i], 0, "reset zeroes the GEAR slot selection");
         // A skill row flags ROW_F_SKILL and decodes its skill index from param.
         const ScreenRow r = row(0, screens::ACTION_NONE, screens::COND_ALWAYS, armor::SKILL_ATTACK_UP, screens::ROW_F_SKILL);
         t.assert((r.flags & screens::ROW_F_SKILL) != 0, true, "ROW_F_SKILL decodes");
