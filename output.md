@@ -1,74 +1,93 @@
-# monhun-ardu-bih.6 — art draw phase 4: delete legacy kind art code + docs/pins
+# monhun-ardu-ryh.1 — fix: re-enable the player-move push rule in shipping
 
 ## What changed
 
-Sweep + closure for the art-draw epic. Phases 1-3 had already deleted the
-per-kind render machinery; this bead removes the last dead data path (the
-creature-record `sheet` u8) and re-pins everything that moved.
+Owner bug: "roll pushes monster". Root cause (already diagnosed in the bead):
+prg.11 carved the per-tick player-move flag out of the shipping build
+(`MH_PUSH_MOVE` default 0), so `g.playerMoved` was never set and `pushApart`
+fell back to the pre-fix give-way rule — any moving hunter (walk, dodge roll,
+shove) could shove the beast. The host suites forced the flag on via
+`TEST_FLAGS`, so they never covered the shipped default.
 
-Code / data:
+Fix: flip the default to 1 (the default is the fix), and stop forcing it in the
+host build so the suites exercise the real default.
 
-- `src/core/combat.hpp`: dropped the dead `CombatCreature::sheet` /
-  `detail::PkCreature::sheet` byte, the host + AVR
-  `combatCreatureSheet()` accessors, and both `combatCreatureRead` mirror
-  assignments. Creature core 29 B -> 28 B (`CREATURE_CARVE_OFF` 29 -> 28).
-- `tools/gen-combat.py`: creature schema/ABI doc 29 B -> 28 B; `SIZES`
-  `CREATURE = 28 + CARVE*SLOTS`; removed the `sheet` optional JSON key,
-  `read_int`, packed byte, host-mirror field + array-init arg, and the
-  `CREATURE_<id>_SHEET` expect pins; fixed the array-init format arity.
-- `data/creatures/pole.json`: dropped the now-unknown `"sheet": 1` key (the
-  only top-level sheet key in the tree; the `art.sheet` descriptor key stays).
-- `tools/gen-art.py`: `art_dims::beast_*` kept (authoring contract + host pin)
-  with a comment noting the firmware reads each creature's art descriptor.
-- Pins: `tst/combat_pack_test.hpp` (creature decode offsets 22..27, carve 28,
-  enrage quad 24..27), `tst/combat_test.hpp` (dropped the sheet-accessor
-  block), `tst/fxdatatest/combat_test.hpp` (dropped the 3 `*_SHEET` struct
-  fields), `tools/tests/test_gen_combat.py` (size 40, core 28, offsets, byte
-  vectors, static-probe doc).
+- `src/core/game.hpp`: `MH_PUSH_MOVE` default `0 -> 1`; carve comment rewritten
+  (it is no longer a shipping-0 carve — test_parity carves it explicitly).
+- `Makefile`: header comment updated (MH_PUSH_MOVE is no longer a prg.11
+  carve); dropped the now-redundant `-DMH_PUSH_MOVE=1` from `TEST_FLAGS` so the
+  host suite covers the shipping default instead of an override. The other three
+  carves (`MH_STAGE3`/`MH_ROLL_ALT`/`MH_B_BRANCH_BUFFER`) are untouched.
+- `tst/monster_test.hpp`: added the reported regression — a double-tap dodge
+  roll into a parked beast must not move the beast (sampled every tick across
+  the whole roll) and must displace the hunter. The walking case is untouched
+  and stays green.
+- `tst/fxdatatest/combat_test.hpp`: added a shipping-flag guard —
+  `static_assert(PUSH_MOVE_ENABLED, ...)` plus a reported runtime
+  `expectEq(PUSH_MOVE_ENABLED ? 1 : 0, 1, "push-move shipping on")` in
+  `test_combat`, so the default cannot silently regress.
+- Docs corrected where they still claimed the carve was active:
+  `README.md` (shipping note), `docs/feel-design.md` (prg.11 trim table row).
 
-## No per-kind art branch evidence (src/render.hpp)
+`tst/fxdatatest/test_parity.ino` (`#define MH_PUSH_MOVE 0`) is left alone.
 
+## Regression proof (test actually bites)
+
+Host build with the flag forced off
+(`make test TEST_FLAGS="... -DMH_PUSH_MOVE=0"`): `Total Passed: 6793 /
+Total Failed: 2` — the walking case and the new roll case both fail, confirming
+the new test detects the exact shipping regression. Default build: 6795/0.
+
+## Gate (exact tails)
+
+`make gen-check`:
 ```
-$ grep -n "MON_\|monsterSheet\|beastAtk\|spinSheet\b" src/render.hpp
-684:    // bih.4): artSheet/artFrame/artMode replace the per-kind beastAtk compare
-685:    // chain and the MON_HEAVY spinSheet gate. During windup+attack the whole
-```
-
-Only the historical comment mentions the deleted chain — zero per-kind art
-branches remain in `src/render.hpp`. `MON_*` / `monsterKind` remain in
-`game.hpp` / `monster.hpp` / `app_setup.hpp` for sim behavior (allowed).
-`spr::` constants (SPARK_*, WHIRL_DOT, SPIN_*) are all still odr-used.
-
-## Generated two-pass note
-
-The creature record shrinks 5 B (5 creatures), so `mhCombat` and every
-following sheet offset shift by -5. The absolute-offset bakers
-(`gen-equipment` SHEET_OFF_*, `gen-zones` ROOM/PROP off) read the fxdata.h
-header produced by the previous pass, so a single `make gen` bakes stale
-addresses. Needed TWO `make gen` passes to converge (offset deltas -5 applied
-on pass 2), then `make gen-check` PASSES.
-
-## Net delta vs checkpoint f08b286 (29348/29696, 348 free)
-
-- flash: **29352/29696 (344 free) = +4 B** vs the checkpoint.
-- ram: 1814/2560 (unchanged).
-- cart: combat.bin 1262 -> 1257 B. Wave rule (~150 B free floor) satisfied.
-
-The +4 is cart-address codegen entropy (the -5 sheet/table offsets change
-instruction immediates); the deleted accessor + byte are LTO-dead already. No
-shipping code path changed.
-
-## Verification tails
-
-```
-make gen            -> converged: all "(unchanged)" (pass 3)
-make gen-check      -> fxdata_manifest: PASS (162 generated artifacts unchanged)
-make test           -> Total Passed: 6791  Total Failed: 0
-FXTEST_ONLY=test_monster_art make fxtest-headless -> PASSED=180 FAILED=0
-FXTEST_ONLY=test_combat   make fxtest-headless -> PASSED=251 FAILED=0
-make size           -> size: flash=29352/29696 (344 free)  ram=1814/2560
-make size-line      -> size: flash=29352/29696 (344 free)  ram=1814/2560
-make test-tools     -> Ran 373 tests ... OK   (tools test edited)
+gen.sh: FX data + src/fxdata.h regenerated
+fxdata_manifest: PASS (162 generated artifacts unchanged)
 ```
 
-Out of scope (orchestrator): `docs/` updates. No commit/push.
+`make test`:
+```
+Total Passed: 6795
+Total Failed: 0
+```
+
+`FXTEST_ONLY=test_combat make fxtest-headless`:
+```
+combat_test PASSED=252 FAILED=0
+test_combat: PASS
+```
+
+`FXTEST_ONLY=test_monster_art make fxtest-headless`:
+```
+test_monster_art PASSED=180 FAILED=0
+test_monster_art: PASS
+```
+
+`make size`:
+```
+size: .text=29420 .data=50 .bss=1764
+size: flash=29470/29696 (226 free)  ram=1814/2560
+```
+
+`make size-line`:
+```
+size: flash=29470/29696 (226 free)  ram=1814/2560
+```
+
+## Size delta
+
+| | before | after | delta |
+|---|---|---|---|
+| flash | 29352/29696 (344 free) | 29470/29696 (226 free) | **+118 B** |
+| RAM | 1814/2560 | 1814/2560 | +0 B |
+
+Matches the bead's measured +118 B exactly. Headroom 226 free > the ~150 B floor
+(AGENTS.md wave rule) — no trim needed.
+
+## Notes
+
+- No `-DMH_PUSH_MOVE=1` added to `SIZE_FLAGS`; the flipped default is the fix.
+- `MH_STAGE3`/`MH_ROLL_ALT`/`MH_B_BRANCH_BUFFER` carves left as-is.
+- clang-format clean on all changed files.
+- No commit/push (orchestrator owns the wave commit).

@@ -461,7 +461,7 @@ size: .text=28254 .data=20 .bss=1590
 | charge-lite | removed `CHARGE_L2`, the L2 tier + charged-ball release (`weaponChargeShell`/`weaponHasChargeShells`/`fireChargeShot`), the `shot >= 3` charged-ball spawn branch, and the L2 bar state. Kept the single-level melee charge (`charge[0]`, flail `chargeslam1`) and `CHARGE_MIN`; the bar fills to `CHARGE_MIN` in shade 2. The gun has no charge at all now (its only charge was the ball). |
 | tell→animation | removed `drawMonsterTell` + the `render_math` shape helpers (`tellNeedsWindow`/`tellLineDash`/`tellRingHalf`/`tellArcSeg`/`tellRectOrigin`) and `tellOutline`. `combat.attack.tell` is now a windup animation-frame selector (`mh::tellWindupFrame`) consumed by the chicken/bull pose path; unauthored tells draw the legacy 2x2 core marker (`drawAttackMarker`). prg.12 authors the per-attack frames. |
 | B-branch buffer | `MH_B_BRANCH_BUFFER=0` shipping (carve kept; host `TEST_FLAGS` forces 1). A loose A A B no longer queues through recovery/lock. |
-| push-move | `MH_PUSH_MOVE=0` shipping (carve kept; host `TEST_FLAGS` forces 1). `pushApart` falls back to the pre-fix give-way rule. |
+| push-move | `MH_PUSH_MOVE=0` in the prg.11 trim, **re-enabled shipping 2026-09-24** (monhun-ardu-ryh.1, +118 B): the default is now 1. `pushApart` resolves an overlap on the mover's side, so a moving hunter (walk, roll, shove) can never shove the beast. |
 
 The bull stomp's `ring` tell loses its procedural area read (the spike measured
 keeping the static window outline at +144 B, which would drop the reclaim to

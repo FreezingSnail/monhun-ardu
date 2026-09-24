@@ -64,6 +64,13 @@ static_assert(sizeof(CombatPattern) == combat_expect::PATTERN_SIZE, "pattern val
 static_assert(sizeof(CombatStep) == combat_expect::STEP_SIZE, "step value struct must stay packed");
 static_assert(sizeof(CombatSkeleton) == combat_expect::SKELETON_SIZE, "skeleton value struct must stay packed");
 
+// Shipping-default guard (monhun-ardu-ryh.1): the per-tick player-move push
+// rule must be on in a shipping-flag image, or a hunter who moved into a body
+// (walk, dodge roll, shove) silently shoves the beast again. test_combat is
+// compiled with the shipping flags (no carve), so this static assert is the
+// gate the default cannot pass silently.
+static_assert(PUSH_MOVE_ENABLED, "shipping default: player-move push rule must be on (MH_PUSH_MOVE)");
+
 // Expected records read through the cart loader. Values are the generated
 // expect constants where they exist (so a data regen that changes a value
 // fails here too), literals otherwise; `combat::` index constants keep the
@@ -430,6 +437,11 @@ inline void test_combat(FxTest &test) {
     FX::enableOLED();
     arduboy.waitForNextPlane();
     FX::disableOLED();
+
+    // ----------------------------------------- shipping flag guards
+    // Runtime mirror of the PUSH_MOVE_ENABLED static assert above, reported in
+    // the suite output (monhun-ardu-ryh.1).
+    test.expectEq(PUSH_MOVE_ENABLED ? 1u : 0u, 1u, F("push-move shipping on"));
 
     // ------------------------------------------------------- blob header
     // Direct FX reads (not through mhFxRead*, so not in the load counter).

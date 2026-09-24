@@ -1314,6 +1314,44 @@ void MonsterSuite(TestRunner &runner) {
     }
 
     {
+        // Dodge roll into a parked beast (monhun-ardu-ryh.1, owner bug: "roll
+        // pushes monster"): a rolling hunter is a moving hunter, so pushApart
+        // must resolve the overlap on the hunter's side. The beast holds ground
+        // for the whole roll and the hunter is displaced instead. (Before the
+        // fix the shipping default folded the flag out, playerMoved stayed
+        // false and the beast gave way -- the walking case above still passes
+        // because the host build had forced the flag on.)
+        Test t("push rule: dodge roll into a parked beast cannot push the beast");
+        Game g;
+        newHunt(g);
+        Monster &m = g.monster;
+        m.state = MS_RECOVER;
+        m.t = 30000;
+        m.cd = 30000;
+        m.x = g.player.x + 20;   // parked due east, clear of the legs
+        m.y = g.player.y + 4;
+        const int mx0 = m.x;
+        const int my0 = m.y;
+        const int px0 = g.player.x;
+        // double-tap east (press, release, press) -> PS_DODGE, 3.4 px/t east
+        stepHunt(g, Input{1, 0, false, false});
+        stepHunt(g, Input{0, 0, false, false});
+        stepHunt(g, Input{1, 0, false, false});
+        t.assert(g.player.state, PS_DODGE, "double-tap starts the roll");
+        bool beastMoved = false;
+        for (int i = 0; i < 20; i++) {
+            stepHunt(g, Input{0, 0, false, false});
+            if (m.x != mx0 || m.y != my0)
+                beastMoved = true;
+        }
+        Rect pr{g.player.x, g.player.y, g.player.w, g.player.h};
+        t.assert(beastMoved, false, "beast never moved through the whole roll");
+        t.assertGreaterThan(g.player.x, px0, "hunter advanced into the beast");
+        t.assert(!pr.overlaps(monsterCollideRect(g)), true, "hunter resolved out of the collide box");
+        suite.addTest(t);
+    }
+
+    {
         Test t("monster leap attack damages player (mock parity)");
         Game g;
         newHunt(g);

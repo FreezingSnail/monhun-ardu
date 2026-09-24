@@ -47,9 +47,11 @@ charged ball), replaced the procedural tell shapes with a windup
 animation-frame selector (the `tell` byte picks the beast's authored windup
 pose; unauthored tells fall back to the 2x2 core marker until prg.12 authors
 the frames), and carved the A-A-B branch buffer + player-move push flag out of
-shipping (`MH_B_BRANCH_BUFFER=0`, `MH_PUSH_MOVE=0`; the carves stay for tests):
-**−862 B flash**. Perf-verified on device. Remaining: real art pass (`vx2`,
-human), feel tuning (`1to`, human), EEPROM save (`qyb`, deferred).
+shipping (`MH_B_BRANCH_BUFFER=0`; the carve stays for tests): **−862 B flash**.
+Perf-verified on device. The player-move push flag is no longer carved: shipping
+defaults it to 1 (monhun-ardu-ryh.1, +118 B) so a moved hunter can never shove
+the beast. Remaining: real art pass (`vx2`, human), feel tuning (`1to`, human),
+EEPROM save (`qyb`, deferred).
 
 ---
 

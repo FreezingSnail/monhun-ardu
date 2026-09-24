@@ -136,14 +136,16 @@ constexpr bool STAGE3_ENABLED = MH_STAGE3;
 #define MH_CHARGE 1
 #endif
 constexpr bool CHARGE_ENABLED = MH_CHARGE;
-// Player-move carve (push-rule bug fix 2026-09-19): prg.11 turned the shipping
-// default off (the per-tick player-move flag is trimmed for the progression-wave
-// budget; pushApart falls back to the pre-fix give-way rule, so a hunter pressing
-// into a body can shove it). The carve stays: -DMH_PUSH_MOVE=1 re-enables it, and
-// the host suite (Makefile TEST_FLAGS) covers the fix forced on. test_parity
-// (MH_PUSH_MOVE 0) never walked the hunter into the beast either way.
+// Player-move push rule (bug fix 2026-09-19; re-enabled shipping 2026-09-24,
+// monhun-ardu-ryh.1): the per-tick player-move flag makes pushApart resolve a
+// body overlap on the mover's side, so a hunter pressing into a body (walk,
+// dodge roll, shove) is pushed back and can never shove the beast. prg.11 had
+// carved it out of the shipping build for the progression-wave budget, which
+// silently restored the pre-fix give-way rule (owner bug: "roll pushes
+// monster"). The default is the fix now (1); test_parity (MH_PUSH_MOVE 0) never
+// walked the hunter into the beast either way.
 #ifndef MH_PUSH_MOVE
-#define MH_PUSH_MOVE 0
+#define MH_PUSH_MOVE 1
 #endif
 constexpr bool PUSH_MOVE_ENABLED = MH_PUSH_MOVE;
 // Active-room bounds carve (bead monhun-ardu-fie.4, same pattern as MH_SHEATHE):
