@@ -1,0 +1,12 @@
+{
+  "id": 4,
+  "goalKind": "kill",
+  "target": "pole",
+  "need": 1,
+  "desc": [
+    "TRAIN ON THE POST.",
+    "IT NEVER STRIKES BACK."
+  ],
+  "rewardZenny": 0,
+  "unlockFlag": 0
+}

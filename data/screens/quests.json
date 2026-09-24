@@ -10,6 +10,8 @@
     { "label": "GATHER 3 ORE", "cost": 0, "action": "take_quest", "condition": "quest", "param": 2 },
     { "label": "TURN IN 200", "cost": 200, "action": "turn_in_quest", "condition": "quest", "param": 50 },
     { "label": "CRUSH HEAVY", "cost": 0, "action": "take_quest", "condition": "quest", "param": 3 },
-    { "label": "TURN IN 400", "cost": 400, "action": "turn_in_quest", "condition": "quest", "param": 19 }
+    { "label": "TURN IN 400", "cost": 400, "action": "turn_in_quest", "condition": "quest", "param": 19 },
+    { "label": "TRAIN POLE", "cost": 0, "action": "take_quest", "condition": "quest", "param": 4 },
+    { "label": "COMPLETE TRAIN", "cost": 0, "action": "turn_in_quest", "condition": "quest", "param": 20 }
   ]
 }

@@ -13,10 +13,10 @@ namespace quests {
 constexpr uint16_t MAGIC = 0x5153;
 constexpr uint8_t VERSION = 2;
 constexpr uint8_t FLAGS = 0x00;
-constexpr uint16_t SIZE = 44;
+constexpr uint16_t SIZE = 53;
 constexpr uint8_t HEADER_SIZE = 8;
 constexpr uint8_t RECORD_SIZE = 9;
-constexpr uint8_t QUEST_COUNT = 4;
+constexpr uint8_t QUEST_COUNT = 5;
 
 // Record field offsets (QuestDef: id, goalKind, target, need, rewardZenny,
 // rewardItem, rewardCount, unlockFlag).
@@ -39,6 +39,7 @@ constexpr uint8_t TARGET_LUNGE = 0;
 constexpr uint8_t TARGET_SWEEP = 1;
 constexpr uint8_t TARGET_HEAVY = 2;
 constexpr uint8_t TARGET_RAVAGER = 3;
+constexpr uint8_t TARGET_POLE = 4;
 
 // Quest indices, sorted by id, with the cart record offsets the runtime uses.
 constexpr uint8_t QUEST_SLAY_LUNGE = 0;
@@ -49,5 +50,7 @@ constexpr uint8_t QUEST_GATHER_ORE = 2;
 constexpr uint16_t QUEST_GATHER_ORE_OFF = 26;
 constexpr uint8_t QUEST_CRUSH_HEAVY = 3;
 constexpr uint16_t QUEST_CRUSH_HEAVY_OFF = 35;
+constexpr uint8_t QUEST_TRAIN_POLE = 4;
+constexpr uint16_t QUEST_TRAIN_POLE_OFF = 44;
 
 }   // namespace quests

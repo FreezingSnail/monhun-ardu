@@ -61,7 +61,7 @@ static void waitPlane(uint8_t plane) {
 
 inline void test_cards(FxTest &test) {
     // ------------------------------------------------- generated cart records
-    test.expectEq(cards::ITEM_COUNT, 18, F("card item count"));
+    test.expectEq(cards::ITEM_COUNT, 19, F("card item count"));
     test.expectEq(cards::QUEST_BASE, armor::PIECE_COUNT, F("quest base follows the armor prefix"));
     test.expectEq(cards::CARD_ARMOR_HUNTER_HELM, 0, F("helm card index"));
     test.expectEq(cards::CARD_QUEST_SLAY_LUNGE, cards::QUEST_BASE + quests::QUEST_SLAY_LUNGE, F("lunge card index"));

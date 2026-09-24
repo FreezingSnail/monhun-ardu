@@ -17,7 +17,7 @@ Record v2 (9 B, little-endian, explicit u8/u16, no padding, fixed order):
     item idx for gather), need u8, rewardZenny u16, rewardItem u8
     (itemIdx + 1, 0 = none), rewardCount u8, unlockFlag u8
 
-The kill target values mirror MonsterKind (MON_LUNGE..MON_RAVAGER) so Game's
+The kill target values mirror MonsterKind (MON_LUNGE..MON_POLE) so Game's
 kill accounting can compare them directly. A gather target is validated against
 the id list in data/items.json (source order == item index, so the packed
 target is the item idx the runtime uses); a material reward is validated the
@@ -59,7 +59,7 @@ GOAL_KILL = 0
 GOAL_GATHER = 1
 
 # Kill targets, index == MonsterKind (src/core/game.hpp). Keep in sync.
-TARGET_NAMES = ("lunge", "sweep", "heavy", "ravager")
+TARGET_NAMES = ("lunge", "sweep", "heavy", "ravager", "pole")
 
 NAME_RE = re.compile(r"^[a-z][a-z0-9_]*$")
 

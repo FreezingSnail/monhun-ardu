@@ -310,7 +310,7 @@ inline void test_screens(FxTest &test) {
     waitPlane(0);
 
     // -------------------------------------------------- quests board screen
-    test.expectEq(screenRowCount(screens::SCREEN_QUESTS), 8, F("quests row count"));
+    test.expectEq(screenRowCount(screens::SCREEN_QUESTS), 10, F("quests row count"));
     ScreenRow qr0, qr1;
     screenReadRow(screenRowOffsetAt(screens::SCREEN_QUESTS, 0), qr0);
     screenReadRow(screenRowOffsetAt(screens::SCREEN_QUESTS, 1), qr1);

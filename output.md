@@ -1,86 +1,95 @@
-# monhun-ardu-bih.5 — art draw phase 3: zone part art in zone records
+# monhun-ardu-bih.2 — pole spawn path: MON_POLE kind + training quest
 
 ## What changed
 
-Zone part-overlay art is now cart data: each breakable zone carries a 1-based
-`partSheet` index into `data/art_sheets.json`, read once at spawn into its
-`CombatZoneCache` slot. `drawMonster` drops the three per-kind overlay chains
-(MON_HEAVY / MON_LUNGE / MON_SWEEP, 5 sheet constants) for one generic loop over
-the two cached zone slots. The two skip rules are now generic: overlays are
-suppressed whenever the active whole-body draw is an attack-art sheet
-(`g.combat.attack.artSheet != 0`), mode 1 (spin) included.
+The pole creature (shipped statically in the combat blob by bih.1/.5) is now a
+reachable hunt target. No creature/art data changed — only the roster kind, the
+packed defs blob entry, the routing case, and the training quest + its board
+rows.
 
-## Data
+Code / data:
 
-- `data/art_sheets.json`: appended the 5 zone part sheets -> indices 10..14
-  (fxtail_heavy, fxhead_chicken, fxlegs_chicken, fxhead_bull, fxhooves_bull;
-  phase-1 1..5 and bih.4 6..9 indices unchanged).
-- `data/creatures/*.json`: authored `zones.<name>.part` — heavy appendage,
-  lunge head+appendage, sweep head+appendage. ravager/pole stay 0 (no invented
-  art: the ravager's 18x10 fxtail is deliberately not overlaid, the pole's hp-0
-  zone never breaks).
-- `tools/gen-combat.py`: `normalize_zone` resolves the optional `part` name
-  (strict: unknown name and a missing art_sheets.json both fail); ZONE record
-  `13 -> 14 B` (partSheet byte appended); host mirror, data-header row, dump
-  line, meta `ZONE_SIZE` and the blob sha all follow.
-- Zone byte layout: `box(4) hp dmgMul bodyShare breakTypes staggerOnHit
-  brokenDmgMul brokenFlags unlockMask(u16) partSheet`.
+- `src/core/game.hpp`: `MonsterKind` gains `MON_POLE = 4`; the host
+  `MONSTER_DEFS` mirror gains `{MON_POLE, 20, 36, 300, 0, -1}` (atkDist -1 =
+  never lunge; the creature's zero profile already carries attackDist 0, no
+  patterns). Blob comment 33 B -> 55 B.
+- `tools/gen-fxtables.cpp`: the packed AVR `monsterdefs.bin` blob now emits 5
+  entries; `MONSTER_DEFS_BYTES` 44 -> 55 (11 B/entry packed layout unchanged).
+- `src/core/monster.hpp`: `monsterCreatureId()` gains
+  `case MON_POLE -> combat::CREATURE_POLE`; `initMonster` clamp
+  `kind > MON_RAVAGER` -> `kind > MON_POLE`.
+- `data/quests/train_pole.json` (new): `{id:4, goalKind:kill, target:pole,
+  need:1, rewardZenny:0, unlockFlag:0}` (unlockFlag 0 = available from the
+  start; 0 zenny keeps it out of the economy).
+- `tools/gen-quests.py`: `TARGET_NAMES` gains `"pole"` (index 4 == MON_POLE);
+  docstring sync updated.
+- `data/screens/quests.json`: two rows appended —
+  `TRAIN POLE` take (param 4) and `COMPLETE TRAIN` turn-in (param 20 =
+  `(need 1 << 4) | quest 4`, verified against the shipped 48/33/50/19).
 
-## Core
+New interfaces: `MON_POLE` (MonsterKind), `quests::TARGET_POLE`,
+`quests::QUEST_TRAIN_POLE` (+ off), `cards::CARD_QUEST_TRAIN_POLE`. Generated
+symbols referenced everywhere — no literal record indices.
 
-- `src/core/game.hpp`: `CombatZoneCache` +1 B (`partSheet`) -> 13 B, `zone[2]`
-  22 -> 26 B, `CombatState` 108 -> 110 B.
-- `src/core/combat.hpp`: value struct `CombatZone` + `PkZone` gain `partSheet`;
-  host `combatZoneRead` and `combatZoneSeed` project it; `CombatZoneCache`
-  static_assert 12 -> 13, `CombatState` 108 -> 110, zone-cache budget comment.
-  ABI mirrors (`CombatZone == ZONE_SIZE`) stay padding-free on AVR.
+## Exact verification tails
 
-## Render
+- `make gen` — clean. `gen-fxtables: ... monsterdefs.bin (55 B)`.
+  `gen-quests: 5 quests, 53 B blob`. `gen-cards: 19 items, 58 pages,
+  635 B blob`. Two-pass: the first pass baked the new quest card pages
+  (`mh_card_quest_train_pole_0/1`, "unresolved on this pass"), the second
+  resolved them; the equip/art/zone headers then carry shifted addresses.
+- `make gen-check` — `fxdata_manifest: PASS (162 generated artifacts
+  unchanged)`.
+- `make test` — `Total Passed: 6801  Total Failed: 0`.
+- `FXTEST_ONLY=test_quests make fxtest-headless` — `test_quests PASSED=112
+  FAILED=0`, `test_quests: PASS`.
+- `FXTEST_ONLY=test_combat make fxtest-headless` — `combat_test PASSED=251
+  FAILED=0`, `test_combat: PASS`.
+- `FXTEST_ONLY=test_monster_art make fxtest-headless` — `test_monster_art
+  PASSED=180 FAILED=0`, `test_monster_art: PASS`.
+- Full device gate (`make fxtest-headless`, 18 suites) — all PASS:
+  assets 264, audio 9, boot 4, cards 85, combat 251, data 354, forge 63,
+  hub 79, hud 29, items 35, monster_art 180, perf 5, player_art 120,
+  quests 112, screens 227 (screens 212 + screens_smithy 98), smith 51,
+  tell 18, zones 82.
+- `make test-tools` — `Ran 373 tests ... OK`.
+- `make size` / `make size-line` — `flash=29348/29696 (348 free)  ram=1814/2560`.
 
-- `src/render.hpp`: deleted the 3 chains + 5 `fxtail_heavy`/`fxhead_chicken`/
-  `fxlegs_chicken`/`fxhead_bull`/`fxhooves_bull` references; one loop over
-  `g.combat.zone[slot]` draws `artSheetAddr(partSheet - 1)` at the cached
-  face-relative box (drawZonePart unchanged: shared 4-frame
-  `combatPartArtFrame`, phase-0 west cell mirror). Attack-art skip is the single
-  generic `attackArt` predicate; the spin is covered because every spin authors
-  a non-zero attack artSheet (asserted by the existing spin pins).
+## Size delta
 
-## Oracle (before -> after, unchanged)
+Baseline 29350/29696 (346 free), RAM 1814/2560.
 
-`tst/fxdatatest/monster_art_test.hpp`:
-- per-zone `partSheet` pins: chicken head+legs, bull horns+hooves, heavy
-  appendage -> the sheet index constants; heavy head / ravager head+appendage /
-  pole head -> 0.
-- generic attack-art skip: HEAVY's mode-0 bite ATTACK clears the resting-tail
-  east band (x16..39) even though idle inks it; the mode-1 spin skip is already
-  pinned (`spin attack skips resting tail cap`).
-- every existing HEAVY-tail / chicken / bull pixel pin stays green
-  (test_monster_art 170 -> 180 asserts, 0 failed).
+- Flash: **29348/29696 (348 free)** -> **-2 B** whole-image (346 -> 348 free).
+- RAM: unchanged 1814/2560.
+- Data: cart-only (monsterdefs +11 B, quests +9 B, cards +33 B, page layers);
+  no compile-time `HAS_*` fact flipped.
 
-`tst/combat_test.hpp` (host) + `tst/fxdatatest/combat_test.hpp` (device):
-- zone partSheet projection / record spot pins (heavy tail 10, chicken head 11
-  legs 12, bull head 13 hooves 14, ravager 0), cache seed pins, sheet-count
-  9 -> 14 + 5 new address pins.
-- `tools/tests/test_gen_combat.py`: new part emit/validate/requires-file cases;
-  zone payload fixtures 13 -> 14 B; dump-line + host-struct needles.
+Well inside the wave rule (>= ~150 B free; never below).
 
-## Gates
+## Behaviour proof (hard rules)
 
-- `make gen`: PASS (fxdata-data 404597 B, 14 sheets); blob size shifted, so
-  `make gen-check` needed **two passes** (first pass regenerated the cross-blob
-  artifacts + manifest), second pass `PASS (160 generated artifacts unchanged)`.
-- `make test`: `Total Passed: 6767  Total Failed: 0`
-- `FXTEST_ONLY=test_monster_art make fxtest-headless`: `PASSED=180 FAILED=0`
-- `FXTEST_ONLY=test_combat make fxtest-headless`: `PASSED=237 FAILED=0`
-  (`C reads spawn=16 attack=8 guard=2 hit=0 tick256=0 simAtk=9 simTk=0 winSw=1`)
-- `make test-tools`: `Ran 373 tests ... OK`
-- `make size` / `size-line`: `size: .text=29300 .data=50 .bss=1764`
-  **flash=29350/29696 (346 free) ram=1814/2560**
+Host `monster_test` — `MON_POLE over 300 ticks: never attacks, never moves,
+never damages`: with the hunter parked inside the pole's body box for 300
+ticks, 0 attacks chosen (state never WINDUP/ATTACK, atkIdx stays
+COMBAT_NO_ATTACK), pole x/y pinned at spawn (140, 40), player hp unchanged,
+`over` stays OVER_NONE. Also `initMonster(MON_POLE)` pins static=1, spd 0,
+no pattern list.
 
-## Budget
+Device `test_combat` — pole head zone: `combatZoneRead(ZONE_POLE_HEAD)` hp 0,
+dmgMul 140, bodyShare 100, no break types; a top-band hit resolves
+COMBAT_ZONE_HEAD at 140% (dmg 14), the pool never breaks (`zoneBroken` stays
+0); a hit below the 8-px head band resolves the body at 100%.
 
-Checkpoint 29476 (220 free) -> **29350 (346 free): net -126 B flash** (the
-per-kind chains + 5 render constants cost less than the zone byte + generic
-loop). RAM +2 B (`CombatZoneCache` 12 -> 13 x2). Well above the ~150 B reserve.
+Quest E2E (device `test_quests`): take row 8 (param 4) -> kill one real pole
+through the death hook (progress 1) -> turn-in row 9 (param 20) pays 0 zenny,
+sets the done bit, clears the active slot.
 
-No commit/push.
+## Deviations
+
+- The two-pass gen was required because the new quest card pages shift every
+  post-card cart address (equip/art/zone headers). Reported above.
+- `tst/fxdatatest/cards_test.hpp` `ITEM_COUNT` pin 18 -> 19 (the new quest card
+  shifts `WEAPON_BASE`; `WEAPON_BASE == QUEST_BASE + QUEST_COUNT` already
+  derives).
+
+No commit/push (orchestrator's job).

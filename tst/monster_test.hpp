@@ -108,6 +108,19 @@ void MonsterSuite(TestRunner &runner) {
         t.assert(MONSTER_DEFS[2].hp, 320, "heavy hp");
         t.assert(MONSTER_DEFS[2].spd, 3, "heavy spd");
         t.assert(MONSTER_DEFS[2].atkDist, 24, "heavy atkDist");
+        t.assert(MONSTER_DEFS[3].kind, MON_RAVAGER, "ravager kind");
+        t.assert(MONSTER_DEFS[3].w, 32, "ravager w");
+        t.assert(MONSTER_DEFS[3].h, 24, "ravager h");
+        t.assert(MONSTER_DEFS[3].hp, 260, "ravager hp");
+        t.assert(MONSTER_DEFS[3].spd, 6, "ravager spd");
+        t.assert(MONSTER_DEFS[3].atkDist, 24, "ravager atkDist");
+        // bih.2: the training pole is a still, harmless prop (spd 0, no attacks).
+        t.assert(MONSTER_DEFS[4].kind, MON_POLE, "pole kind");
+        t.assert(MONSTER_DEFS[4].w, 20, "pole w");
+        t.assert(MONSTER_DEFS[4].h, 36, "pole h");
+        t.assert(MONSTER_DEFS[4].hp, 300, "pole hp");
+        t.assert(MONSTER_DEFS[4].spd, 0, "pole spd 0 (never moves)");
+        t.assert(MONSTER_DEFS[4].atkDist, -1, "pole atkDist never lunges");
         suite.addTest(t);
     }
 
@@ -159,6 +172,62 @@ void MonsterSuite(TestRunner &runner) {
         t.assert(g3.combat.body.h, 24, "legacy cached box h");
         t.assert(g3.monster.hp, 1800, "legacy hp");
         t.assert(g3.monster.spd, 6, "legacy speed");
+        suite.addTest(t);
+    }
+
+    {
+        // bih.2: MON_POLE routes to the pole creature record. The def mirrors the
+        // blob (w/h/hp/spd); the body box, static flag, empty attack list and
+        // zero pattern list all come from the creature/profile caches.
+        Test t("initMonster(MON_POLE): pole creature loads static, spd 0, no attacks");
+        Game g;
+        newGame(g, W_SWORD, MODE_HUNT, MON_POLE);
+        Monster &m = g.monster;
+        t.assert(g.monsterKind, MON_POLE, "kind recorded");
+        t.assert(monsterCreatureId(MON_POLE), combat::CREATURE_POLE, "kind maps to pole creature");
+        t.assert(m.w, 20, "pole body width");
+        t.assert(m.h, 36, "pole body height");
+        t.assert(g.combat.body.w, 20, "pole cached box w");
+        t.assert(g.combat.body.h, 36, "pole cached box h");
+        t.assert(m.hp, 300, "pole hp from creature");
+        t.assert(m.hpMax, 300, "pole hpMax");
+        t.assert(m.spd, 0, "pole never moves");
+        t.assert(g.combat.isStatic, 1, "pole is a static prop");
+        t.assert(g.combat.patternIdx, COMBAT_NO_PATTERN, "pole has no pattern list");
+        t.assert(m.atkIdx, COMBAT_NO_ATTACK, "pole spawns with no attack");
+        suite.addTest(t);
+    }
+
+    {
+        // bih.2: hard rule -- the pole must be genuinely still and harmless. Over
+        // 300 ticks with the hunter parked right next to it: (a) it picks no
+        // attack, (b) it does not move, (c) the hunter takes no damage.
+        Test t("MON_POLE over 300 ticks: never attacks, never moves, never damages");
+        Game g;
+        newGame(g, W_SWORD, MODE_HUNT, MON_POLE);
+        Monster &m = g.monster;
+        // Park the hunter adjacent to the pole (inside its body box) and keep the
+        // player pinned there so the pole cannot drift and any hit would land.
+        const int16_t hx = m.x;
+        const int16_t hy = static_cast<int16_t>(m.y + m.h + 2);
+        const uint8_t hp0 = g.player.hp;
+        uint8_t attacksChosen = 0;
+        for (int i = 0; i < 300; i++) {
+            g.player.x = hx;
+            g.player.y = hy;
+            g.player.vx = 0;
+            g.player.vy = 0;
+            stepHunt(g, Input{0, 0, false, false});
+            if (m.state == MS_WINDUP || m.state == MS_ATTACK)
+                attacksChosen++;
+            if (m.atkIdx != COMBAT_NO_ATTACK)
+                attacksChosen++;
+        }
+        t.assert(attacksChosen, 0, "pole picked no attack over 300 ticks");
+        t.assert(m.x, 140, "pole x never moved (spawn 140)");
+        t.assert(m.y, 40, "pole y never moved (spawn 40)");
+        t.assert(g.player.hp, hp0, "adjacent hunter took no damage");
+        t.assert(g.over, OVER_NONE, "no hunt end from the pole");
         suite.addTest(t);
     }
 

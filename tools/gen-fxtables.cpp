@@ -5,7 +5,7 @@
 //
 // Deterministic: fixed traversal, little-endian bytes, no timestamps. Output
 // sizes are asserted per struct (WeaponDef 329, Attack 23, Branch 27, ShellDef
-// 15, MonsterAttack 17, MonsterDef 11) and per file (987 / 34 / 44).
+// 15, MonsterAttack 17, MonsterDef 11) and per file (987 / 34 / 55).
 //
 // Usage: gen-fxtables [outdir]   (default: fxdata/tables)
 
@@ -26,7 +26,7 @@ namespace {
 
 constexpr size_t WEAPON_DEFS_BYTES = 987;
 constexpr size_t MONSTER_ATTACKS_BYTES = 34;
-constexpr size_t MONSTER_DEFS_BYTES = 44;
+constexpr size_t MONSTER_DEFS_BYTES = 55;
 constexpr size_t SIN65_BYTES = 65;
 
 std::vector<uint8_t> g_bytes;
@@ -169,7 +169,7 @@ int main(int argc, char **argv) {
     writeFile(outDir + "monsterattacks.bin", g_bytes);
 
     g_bytes.clear();
-    for (int m = 0; m < 4; m++)
+    for (int m = 0; m < 5; m++)
         putMonsterDef(MONSTER_DEFS[m]);
     require(g_bytes.size() == MONSTER_DEFS_BYTES, "monsterdefs total");
     writeFile(outDir + "monsterdefs.bin", g_bytes);

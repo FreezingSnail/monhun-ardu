@@ -809,6 +809,40 @@ inline void test_combat(FxTest &test) {
         test.expectEq(combatGuardPasses(g, combat::PATTERN_RAVAGER_P_ENRAGED, en), 0, F("intact tail not enraged"));
     }
 
+    // ------------------------------- pole zone (bih.2, static prop)
+    // The training post ships one weak zone in the top band (140%), pool 0 with
+    // no break types: a hit there resolves head at 140% and the pool never
+    // breaks (static props take no knockback either).
+    {
+        const CombatZone head = combatZoneRead(combat::ZONE_POLE_HEAD);
+        test.expectEq(head.hp, combat_expect::ZONE_POLE_HEAD_HP, F("pole head hp 0"));
+        test.expectEq(head.dmgMul, combat_expect::ZONE_POLE_HEAD_DMG_MUL, F("pole head dmgMul 140"));
+        test.expectEq(head.bodyShare, combat_expect::ZONE_POLE_HEAD_BODY_SHARE, F("pole head bodyShare"));
+        test.expectEq(head.breakTypes, 0, F("pole head no break types"));
+
+        creatureLoad(g, combat::CREATURE_POLE);
+        test.expectEq(g.combat.isStatic, 1, F("pole cached static"));
+        test.expectEq(g.combat.headZone, combat::ZONE_POLE_HEAD, F("pole head zone index"));
+        test.expectEq(g.combat.appendZone, COMBAT_NO_ZONE, F("pole no appendage zone"));
+        test.expectEq(g.combat.zoneBroken, 0, F("pole zones intact"));
+
+        g.monster.x = 100;
+        g.monster.y = 40;
+        g.monster.fx = 16;
+        g.monster.fy = 0;
+        // Head band box is (ox 5, oy 0, 10x8): hit at (110, 44) is inside it.
+        const CombatBodyHit headHit = combatZoneHitResolve(g, 10, PHYS_SLASH, 110, 44);
+        test.expectEq(headHit.zone, COMBAT_ZONE_HEAD, F("pole head zone wins"));
+        test.expectEq(headHit.mul, 140, F("pole head multiplier"));
+        test.expectEq(headHit.dmg, 14, F("pole head body share 100 -> 14"));
+        test.expectEq(g.combat.zoneBroken, 0, F("pole head pool never breaks"));
+
+        // A body-band hit (below the 8-px head band) resolves the plain body.
+        const CombatBodyHit bodyHit = combatZoneHitResolve(g, 10, PHYS_SLASH, 110, 60);
+        test.expectEq(bodyHit.zone, COMBAT_NO_ZONE, F("pole below head is body"));
+        test.expectEq(bodyHit.mul, 100, F("pole body multiplier neutral"));
+    }
+
     // ------------------------------- multi-window refresh (ljj.8)
     {
         initMonster(g, MON_RAVAGER);

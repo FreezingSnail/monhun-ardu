@@ -305,6 +305,20 @@ void QuestSuite(TestRunner &runner) {
     }
 
     {
+        // bih.2: the training quest targets the pole. The generated target enum
+        // mirrors MonsterKind, and the pole kill counts through the same hook.
+        Test t("train_pole quest target: MON_POLE counts on a pole kill");
+        t.assert(quests::TARGET_POLE, MON_POLE, "target pole == roster MON_POLE");
+        t.assert(quests::QUEST_TRAIN_POLE, 4, "train_pole is the fifth quest (id 4)");
+        Game g;
+        killBeast(g, MON_POLE);
+        t.assert(g.over, OVER_WIN, "pole died");
+        t.assert(g.monster.state, MS_DEAD, "dead state");
+        t.assert(g.questProgress, 1, "pole kill counted");
+        suite.addTest(t);
+    }
+
+    {
         Test t("a gather goal never counts a kill");
         Game g;
         initGame(g, W_SWORD);

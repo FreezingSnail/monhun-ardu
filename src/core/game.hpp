@@ -768,22 +768,24 @@ inline int16_t monsterAttackHh(const MonsterAttack *a) {
     return mhFxReadI16(&a->hh);
 }
 
-// Monster roster (bead monhun-ardu-6zb.1): the three demo beast variants.
-// Index 0 (LUNGE) is the legacy parity default: its def reproduces the values
-// initMonster() used to hardcode. atkDist is the lunge/sweep split distance;
-// a negative value means "never lunge" (SWEEP always sweeps).
+// Monster roster (bead monhun-ardu-6zb.1): the demo beast variants plus the
+// static training pole (bih.2). Index 0 (LUNGE) is the legacy parity default:
+// its def reproduces the values initMonster() used to hardcode. atkDist is the
+// lunge/sweep split distance; a negative value means "never lunge" (SWEEP always
+// sweeps).
 enum MonsterKind : int8_t {
     MON_LUNGE = 0,
     MON_SWEEP = 1,
     MON_HEAVY = 2,
-    MON_RAVAGER = 3   // ljj.6: first breakable-part creature (data/creatures/ravager.json)
+    MON_RAVAGER = 3,   // ljj.6: first breakable-part creature (data/creatures/ravager.json)
+    MON_POLE = 4       // bih.2: the static training post (data/creatures/pole.json), spd 0 / no attacks
 };
 struct MonsterDef {
     int8_t kind;
     int16_t w, h, hp, spd, atkDist;
 };
 
-// On AVR the roster lives on the FX cart as one packed 33 B blob (bead
+// On AVR the roster lives on the FX cart as one packed 55 B blob (bead
 // monhun-ardu-6zb.1), addressed through the same fake-pointer shim as
 // WEAPON_DEFS / MONSTER_ATTACKS.
 #if defined(__AVR__)
@@ -796,11 +798,9 @@ struct FxMonsterDefsRom {
 };
 constexpr FxMonsterDefsRom MONSTER_DEFS = {};
 #else
-MH_PROGMEM const MonsterDef MONSTER_DEFS[4] = {
-    {MON_LUNGE, 32, 24, 200, 5, 32},
-    {MON_SWEEP, 28, 22, 150, 7, -1},
-    {MON_HEAVY, 40, 28, 320, 3, 24},
-    {MON_RAVAGER, 32, 24, 260, 6, 24},
+MH_PROGMEM const MonsterDef MONSTER_DEFS[5] = {
+    {MON_LUNGE, 32, 24, 200, 5, 32},   {MON_SWEEP, 28, 22, 150, 7, -1}, {MON_HEAVY, 40, 28, 320, 3, 24},
+    {MON_RAVAGER, 32, 24, 260, 6, 24}, {MON_POLE, 20, 36, 300, 0, -1},   // bih.2: still, no attacks (atkDist -1 = never lunge)
 };
 #endif   // __AVR__
 

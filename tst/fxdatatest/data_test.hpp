@@ -468,6 +468,15 @@ inline void test_data(FxTest &test) {
     test.expectEq(monsterDefHp(md2), 320, F("heavy def hp"));
     test.expectEq(monsterDefSpd(md2), 3, F("heavy def spd"));
     test.expectEq(monsterDefAtkDist(md2), 24, F("heavy def atkDist"));
+
+    // bih.2: the training pole is the fifth roster record (spd 0, never lunges).
+    const MonsterDef *md4 = &MONSTER_DEFS[4];
+    test.expectEq(monsterDefKind(md4), MON_POLE, F("pole def kind"));
+    test.expectEq(monsterDefW(md4), 20, F("pole def w"));
+    test.expectEq(monsterDefH(md4), 36, F("pole def h"));
+    test.expectEq(monsterDefHp(md4), 300, F("pole def hp"));
+    test.expectEq(monsterDefSpd(md4), 0, F("pole def spd"));
+    test.expectEq(monsterDefAtkDist(md4), -1, F("pole def atkDist"));
 }
 
 }   // namespace data

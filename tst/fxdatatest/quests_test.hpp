@@ -22,16 +22,18 @@ static const SaveBackend REAL_BACKEND = {saveEepromRead, saveEepromWrite};
 
 inline void test_quests(FxTest &test) {
     // --------------------------------------------------- cart quest records
-    test.expectEq(quests::QUEST_COUNT, 4, F("quest count"));
+    test.expectEq(quests::QUEST_COUNT, 5, F("quest count"));
     test.expectEq(quests::TARGET_LUNGE, MON_LUNGE, F("target lunge == roster"));
     test.expectEq(quests::TARGET_SWEEP, MON_SWEEP, F("target sweep == roster"));
     test.expectEq(quests::TARGET_HEAVY, MON_HEAVY, F("target heavy == roster"));
+    test.expectEq(quests::TARGET_POLE, MON_POLE, F("target pole == roster"));
 
-    QuestDef d0, d1, d2, d3;
+    QuestDef d0, d1, d2, d3, d4;
     questReadDef(quests::QUEST_SLAY_LUNGE, d0);
     questReadDef(quests::QUEST_SLAY_SWEEP, d1);
     questReadDef(quests::QUEST_GATHER_ORE, d2);
     questReadDef(quests::QUEST_CRUSH_HEAVY, d3);
+    questReadDef(quests::QUEST_TRAIN_POLE, d4);
     test.expectEq(d0.id, 0, F("q0 id"));
     test.expectEq(d0.goalKind, quests::GOAL_KILL, F("q0 goal kill"));
     test.expectEq(d0.target, MON_LUNGE, F("q0 target"));
@@ -64,9 +66,17 @@ inline void test_quests(FxTest &test) {
     test.expectEq(d3.rewardItem, static_cast<uint8_t>(ITEM_SCALE + 1), F("q3 scale material"));
     test.expectEq(d3.rewardCount, 2, F("q3 scale count"));
     test.expectEq(d3.unlockFlag, 3, F("q3 unlock chain"));
+    test.expectEq(d4.id, 4, F("q4 id"));
+    test.expectEq(d4.goalKind, quests::GOAL_KILL, F("q4 goal kill"));
+    test.expectEq(d4.target, MON_POLE, F("q4 target pole"));
+    test.expectEq(d4.need, 1, F("q4 need"));
+    test.expectEq(d4.rewardZenny, 0, F("q4 no zenny reward"));
+    test.expectEq(d4.rewardItem, 0, F("q4 no material"));
+    test.expectEq(d4.rewardCount, 0, F("q4 no material count"));
+    test.expectEq(d4.unlockFlag, 0, F("q4 unlock 0 (available from the start)"));
 
     // Board rows: take/reward pairs, reward in cost, need nibble in param.
-    test.expectEq(screenRowCount(screens::SCREEN_QUESTS), 8, F("board rows"));
+    test.expectEq(screenRowCount(screens::SCREEN_QUESTS), 10, F("board rows"));
     ScreenRow take0, turn0;
     screenReadRow(screenRowOffsetAt(screens::SCREEN_QUESTS, 0), take0);
     screenReadRow(screenRowOffsetAt(screens::SCREEN_QUESTS, 1), turn0);
@@ -177,6 +187,39 @@ inline void test_quests(FxTest &test) {
     test.expectEq(static_cast<uint32_t>(save.items[ITEM_ORE]), 2, F("ore material reward granted"));
     test.expectEq(saveQuestGet(save, 2, 1), 1, F("gather done bit set"));
     test.expectEq(screenCondOk(save, take3), 1, F("chain unlock: quest 3 live after gather done"));
+
+    // --------------------------- E2E: training-pole quest (bih.2)
+    // Quest 4 is unlocked from the start (unlockFlag 0), targets the pole, and
+    // needs one kill. Take it from the board (rows 8/9), kill a real pole, then
+    // turn it in for 0 zenny (no economy effect).
+    saveDefaults(save);
+    ScreenRow take4, turn4;
+    screenReadRow(screenRowOffsetAt(screens::SCREEN_QUESTS, 8), take4);
+    screenReadRow(screenRowOffsetAt(screens::SCREEN_QUESTS, 9), turn4);
+    test.expectEq(take4.action, screens::ACTION_TAKE_QUEST, F("pole take action"));
+    test.expectEq(take4.param, 4, F("pole take param is quest 4"));
+    test.expectEq(take4.unlock, d4.unlockFlag, F("pole take unlock from def"));
+    test.expectEq(turn4.action, screens::ACTION_TURN_IN_QUEST, F("pole turn action"));
+    test.expectEq(turn4.param, 20, F("pole turn param (need 1 << 4 | quest 4)"));
+    test.expectEq(turn4.cost, d4.rewardZenny, F("pole turn cost == reward (0)"));
+    test.expectEq(screenCondOk(save, take4), 1, F("pole take row live from the start"));
+    test.expectEq(screenApplyAction(save, take4), 1, F("pole take applies"));
+    test.expectEq(save.activeQuest, 4, F("pole active quest set"));
+
+    newGame(g, W_SWORD, MODE_HUNT, MON_POLE);
+    g.questGoalKind = static_cast<int8_t>(d4.goalKind);
+    g.questTarget = static_cast<int8_t>(d4.target);
+    g.questNeed = d4.need;
+    g.questProgress = save.progress;
+    damageMonster(g, 2000, g.monster.x, g.monster.y);
+    test.expectEq(g.over, OVER_WIN, F("pole hunt win"));
+    test.expectEq(g.questProgress, 1, F("pole kill counted"));
+    save.progress = g.questProgress;
+    test.expectEq(screenCondOk(save, turn4), 1, F("pole turn row live at need"));
+    test.expectEq(screenApplyAction(save, turn4), 1, F("pole turn-in applies"));
+    test.expectEq(save.zenny, 0, F("pole reward pays no zenny"));
+    test.expectEq(saveQuestGet(save, 4, 1), 1, F("pole done bit set"));
+    test.expectEq(save.activeQuest, SAVE_QUEST_NONE, F("pole active cleared"));
 
     // Corrupt magic -> safe defaults (active none).
     saveEepromWrite(SAVE_EEPROM_ADDR, 0x00);

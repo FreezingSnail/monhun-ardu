@@ -49,6 +49,8 @@ static uint8_t monsterCreatureId(int8_t kind) {
         return combat::CREATURE_HEAVY;
     case MON_RAVAGER:
         return combat::CREATURE_RAVAGER;
+    case MON_POLE:
+        return combat::CREATURE_POLE;
     default:
         return combat::CREATURE_LUNGE;
     }
@@ -277,7 +279,7 @@ static void initMonster(Game &g, int8_t kind = 0) {
     // whole-image; the callees still take `g` directly.
     Game *gp = &g;
     __asm__("" : "+r"(gp));
-    if (kind < 0 || kind > MON_RAVAGER)
+    if (kind < 0 || kind > MON_POLE)
         kind = 0;
     gp->monsterKind = kind;
     const uint8_t creatureId = creatureLoad(g, monsterCreatureId(kind));

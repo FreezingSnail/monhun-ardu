@@ -479,6 +479,20 @@
     },
     {
       "declaration": "fxdata/cards/Sprites.txt",
+      "path": "images/cards/mh_card_quest_train_pole_0_128x64.png",
+      "sha256": "672a5eb9e7d76e517fb659b7e1aea1c1cd5fff40951352cc897dc3860a02ac58",
+      "size": 572,
+      "symbol": "mh_card_quest_train_pole_0"
+    },
+    {
+      "declaration": "fxdata/cards/Sprites.txt",
+      "path": "images/cards/mh_card_quest_train_pole_1_128x64.png",
+      "sha256": "145d27298fd180360b0a7d2515eee2d402a2d8e8d4a0a9fe203388af297e04ff",
+      "size": 416,
+      "symbol": "mh_card_quest_train_pole_1"
+    },
+    {
+      "declaration": "fxdata/cards/Sprites.txt",
       "path": "images/cards/mh_card_weapon_flail_base_0_128x64.png",
       "sha256": "d55fdfda78d6ccc3233ddfe4f16c7d7b0bfc394500050c1ea738c44e4e06ceb0",
       "size": 474,
@@ -795,8 +809,8 @@
     {
       "declaration": "fxdata/screens/Sprites.txt",
       "path": "images/screens/mh_screen_quests_1_128x64.png",
-      "sha256": "6a2e4ea334a8a26b0beb3b4e1434e9c3c9a13ef7d4a541ba1264acd86de611c7",
-      "size": 459,
+      "sha256": "71f3f10dce6cdcba285cee1dfb561c2775e5f244e3055a526e244729ec119ba5",
+      "size": 602,
       "symbol": "mh_screen_quests_1"
     },
     {
@@ -1009,6 +1023,11 @@
       "size": 214
     },
     {
+      "path": "data/quests/train_pole.json",
+      "sha256": "3c5f32e3c325cefcef59e342dbf61c8f5892cb7dfaef73b31e3251ba6609c52c",
+      "size": 180
+    },
+    {
       "path": "data/screens/armor_forge.json",
       "sha256": "8620f54de22921126018965b09805209713a8f0ddf2dbb4c913c0e7357e11347",
       "size": 177
@@ -1035,8 +1054,8 @@
     },
     {
       "path": "data/screens/quests.json",
-      "sha256": "740e074d4bd9dce369c657a9ef37aa1cc8125cb83c8b178ba05f056cd629506f",
-      "size": 905
+      "sha256": "dfc462702d54a8ab7e25eb9bf2061c73c6783d3edcecc0c3190d7e949b334cd7",
+      "size": 1113
     },
     {
       "path": "data/screens/upgrade.json",
@@ -1128,8 +1147,8 @@
     },
     {
       "path": "fxdata/cards/Sprites.txt",
-      "sha256": "763ffc5a0f2f5bbf859d0ff876e8bfa1da535f417ef35cc7a607a5e965bd2594",
-      "size": 579105,
+      "sha256": "96897e4e06f162cd406f446ca1566117c08cee05e1510ac4cef24182855284ae",
+      "size": 599799,
       "symbols": [
         "mh_card_armor_hunter_helm_0",
         "mh_card_armor_hunter_helm_1",
@@ -1163,6 +1182,8 @@
         "mh_card_quest_crush_heavy_0",
         "mh_card_quest_crush_heavy_1",
         "mh_card_quest_crush_heavy_2",
+        "mh_card_quest_train_pole_0",
+        "mh_card_quest_train_pole_1",
         "mh_card_weapon_sword_base_0",
         "mh_card_weapon_sword_base_2",
         "mh_card_weapon_sword_t1_0",
@@ -1230,8 +1251,8 @@
     },
     {
       "path": "fxdata/screens/Sprites.txt",
-      "sha256": "dbac07d048b975468a2dbf32a94f658f6788ba65edaeead21fe32104f1120b0d",
-      "size": 107134,
+      "sha256": "573768f3b0210852ec3362b133934f22ac49060aa9cfb1cd1d59d04a7167f4e1",
+      "size": 107332,
       "symbols": [
         "mh_screen_hub_0",
         "mh_screen_quests_0",
@@ -1253,8 +1274,8 @@
     },
     {
       "path": "fxdata/tables/cards.bin",
-      "sha256": "c90fc1e348b78679ffa2f2ab493ae348a2aba6851bf0663bf2e25dfac5fa712c",
-      "size": 602,
+      "sha256": "afb3ed037b23e5a3efa2a44bac66a953af84c211c96be67281226b7652e33d45",
+      "size": 635,
       "symbol": "mhCards"
     },
     {
@@ -1265,7 +1286,7 @@
     },
     {
       "path": "fxdata/tables/equip.bin",
-      "sha256": "9fa7b8110bff8d715267102230d6625f9ec320e3d56bb59d963597562c73ad6c",
+      "sha256": "2a1f4c16588659ccf6661cacb86d16c435560e0a0e9943bc88ef24ae07d4c1ca",
       "size": 876,
       "symbol": "mhEquip"
     },
@@ -1289,20 +1310,20 @@
     },
     {
       "path": "fxdata/tables/monsterdefs.bin",
-      "sha256": "a7c8f317b0b528ce0745287852ac3cfc7a8fb4f61b8495f3e02681726c0a8bda",
-      "size": 44,
+      "sha256": "5aabbc3c70b935a66e349e44e95afe104c7b36b79009d54aa040e0206724467d",
+      "size": 55,
       "symbol": "mhMonsterDefs"
     },
     {
       "path": "fxdata/tables/quests.bin",
-      "sha256": "9c37593e273c409ec039486d29130e729cebc24cebc1d4489b0153db701d7c1c",
-      "size": 44,
+      "sha256": "6a42db3485e6f9546ee136f3d30fddcc48b3689b1b99c17265686633e0ed97af",
+      "size": 53,
       "symbol": "mhQuests"
     },
     {
       "path": "fxdata/tables/screens.bin",
-      "sha256": "fb2482454c5ffcd00742be02221c3ef897239a049220dcce76f5de60ec64df71",
-      "size": 1042,
+      "sha256": "c816a04d1fee5d46bc1c274c4db3a4f744818d3d34f96cfa2609ecacbe02f16d",
+      "size": 1080,
       "symbol": "mhScreens"
     },
     {
@@ -1333,18 +1354,18 @@
   "outputs": [
     {
       "path": "fxdata/fxdata-data.bin",
-      "sha256": "f8fd05721c67ca0b28edd1fbae955b34e85871bca87165b308af12fbd00efafb",
-      "size": 404597
+      "sha256": "7a2cbe21a054d77952813fd2dfddc278b0b5d2ea4c048ebf16e1d608649e6c30",
+      "size": 410832
     },
     {
       "path": "fxdata/fxdata.bin",
-      "sha256": "7f9ef7e01ebc114f9be84d48aa8d48fcf6d7258049925657b565311f0dcada17",
-      "size": 404736
+      "sha256": "3c967be4405eaf2551fd4313eb88d50745295d13672918203a7b2e7601b2aa13",
+      "size": 410880
     },
     {
       "path": "fxdata/fxdata.h",
-      "sha256": "ae787812b6896877d5d32011cee3ba7c76638a3121333a0b107a618930f8825c",
-      "size": 6655
+      "sha256": "2895d11e8800d23440b3906b2a0797fbff954aa15f13c23b3ff9434523387b27",
+      "size": 6771
     },
     {
       "path": "fxdata/tables/armor.bin",
@@ -1353,8 +1374,8 @@
     },
     {
       "path": "fxdata/tables/cards.bin",
-      "sha256": "c90fc1e348b78679ffa2f2ab493ae348a2aba6851bf0663bf2e25dfac5fa712c",
-      "size": 602
+      "sha256": "afb3ed037b23e5a3efa2a44bac66a953af84c211c96be67281226b7652e33d45",
+      "size": 635
     },
     {
       "path": "fxdata/tables/combat.bin",
@@ -1363,7 +1384,7 @@
     },
     {
       "path": "fxdata/tables/equip.bin",
-      "sha256": "9fa7b8110bff8d715267102230d6625f9ec320e3d56bb59d963597562c73ad6c",
+      "sha256": "2a1f4c16588659ccf6661cacb86d16c435560e0a0e9943bc88ef24ae07d4c1ca",
       "size": 876
     },
     {
@@ -1373,13 +1394,13 @@
     },
     {
       "path": "fxdata/tables/quests.bin",
-      "sha256": "9c37593e273c409ec039486d29130e729cebc24cebc1d4489b0153db701d7c1c",
-      "size": 44
+      "sha256": "6a42db3485e6f9546ee136f3d30fddcc48b3689b1b99c17265686633e0ed97af",
+      "size": 53
     },
     {
       "path": "fxdata/tables/screens.bin",
-      "sha256": "fb2482454c5ffcd00742be02221c3ef897239a049220dcce76f5de60ec64df71",
-      "size": 1042
+      "sha256": "c816a04d1fee5d46bc1c274c4db3a4f744818d3d34f96cfa2609ecacbe02f16d",
+      "size": 1080
     },
     {
       "path": "fxdata/tables/smith.bin",
@@ -1388,8 +1409,8 @@
     },
     {
       "path": "src/fxdata.h",
-      "sha256": "ae787812b6896877d5d32011cee3ba7c76638a3121333a0b107a618930f8825c",
-      "size": 6655
+      "sha256": "2895d11e8800d23440b3906b2a0797fbff954aa15f13c23b3ff9434523387b27",
+      "size": 6771
     },
     {
       "path": "src/generated/armor_data.hpp",
@@ -1413,13 +1434,13 @@
     },
     {
       "path": "src/generated/art_sheets.hpp",
-      "sha256": "f26c256b42f06fa7fd7b05db39d5ca5c00145685e1cca0d27f1212cc6bed52c6",
+      "sha256": "82bdd29d236fdcf56d35832dee26a56722150a5810b62d08899c923012e9ac7b",
       "size": 4044
     },
     {
       "path": "src/generated/card_meta.hpp",
-      "sha256": "833f89e8bb4a0cff08ec2cc5cd4400bab331a23c4962681d35c266e4fb898fe1",
-      "size": 4810
+      "sha256": "c49b8c599a3be72be509575027050dd4e8b7b999318425aa0bf3b232df653662",
+      "size": 4909
     },
     {
       "path": "src/generated/combat_data.hpp",
@@ -1438,7 +1459,7 @@
     },
     {
       "path": "src/generated/equip_meta.hpp",
-      "sha256": "f6e862968982eb16b621e8c93db31c83de0e66f95180f2d854ea3eb50a29e652",
+      "sha256": "c30d08443e9efb0f3b4c3fa5133e7acd6fbaed301971d2260ea5a7b01b714222",
       "size": 22334
     },
     {
@@ -1468,13 +1489,13 @@
     },
     {
       "path": "src/generated/quest_meta.hpp",
-      "sha256": "cc850c09d6125e61b39a8bce30dbe594bab07a7d1d3104c1a8829483fd709520",
-      "size": 1943
+      "sha256": "6008e6855bc8bebefc556ab654cf231a0bcc2bc9fcbb47a1266cdb66e8ab97bf",
+      "size": 2064
     },
     {
       "path": "src/generated/screen_meta.hpp",
-      "sha256": "36808a5699a1a752ce2c79b559c7765752a4d045d5add536b3ca6ac20cbceb79",
-      "size": 4784
+      "sha256": "5503241ffe088a10e8f5bad71d29c3cac4e603bc943f94b08f4d9f9e008fcca7",
+      "size": 4785
     },
     {
       "path": "src/generated/smith_meta.hpp",
@@ -1488,7 +1509,7 @@
     },
     {
       "path": "src/generated/zone_meta.hpp",
-      "sha256": "a100fc577e576734600ee44cf218035321d4736e9149ad2cdfb68c72064f2d55",
+      "sha256": "4293cad3073c128ca4eac880b6d7bb85af39088fb5472136fd5ad90f0073def8",
       "size": 8388
     }
   ],
