@@ -416,7 +416,8 @@ by the card hint line, not a list token column (ui.4.1 trim).
 make test               # host unit tests (6316 asserts)
 make fxtest-headless    # Ardens device tests (18 suites; FXTEST_ONLY=test_combat for one)
 make size               # whole-image flash/RAM report + compile-time data facts
-make dev                # dev feel build: unlimited crafting, EEPROM untouched
+make dev                # dev feel build: unlimited crafting, EEPROM untouched,
+                        #   then opens Ardens on it (like make debug)
 make gen-check          # regen determinism + generated header sync
 make build              # compile shipping sketch (output in dist/)
 make debug              # build, then open Ardens debugger (ELF + DWARF) with FX image

@@ -51,13 +51,17 @@ mini:
 
 # Dev feel build (hbk.1): shipping flags + -DMH_DEV=1 -- unlimited crafting,
 # fresh 9999-zenny/99-item defaults, EEPROM never touched. Not for releases.
+# Launches Ardens on the dev ELF + FX image, like `make debug` (the compile
+# keeps DWARF, so F5/F8 stepping works).
 dev:
 	arduino-cli compile --fqbn "arduboy-homemade:avr:arduboy-fx" --optimize-for-debug --output-dir dist \
-	    --build-property compiler.cpp.extra_flags="-mcall-prologues -mrelax -DMH_NO_USB -DMH_DEV=1" \
+	    --build-property compiler.cpp.extra_flags="-mcall-prologues -mrelax -DMH_NO_USB -DMH_AUDIO=0 -DMH_DEV=1" \
 	    --build-property compiler.c.extra_flags="-mrelax" \
 	    --build-property compiler.c.elf.extra_flags="-mrelax"
 	@elf=dist/monhun-ardu.ino.elf; \
 	$(AVR_SIZE) -A "$$elf" | awk '$$1==".text"{t=$$2} $$1==".data"{d=$$2} $$1==".bss"{b=$$2} END {flash=t+d; ram=d+b; printf "dev size: flash=%d/%d (%d free)  ram=%d/2560\n", flash, 29696, 29696-flash, ram}'
+	@test -f "$(FXDATA_BIN)" || { echo "dev: FX data image missing at $(FXDATA_BIN); run make gen" >&2; exit 1; }
+	"$(ARDENS)" display=ssd1306 fxport=d1 file=dist/monhun-ardu.ino.elf file=$(FXDATA_BIN)
 
 gen:
 	./tools/gen.sh
