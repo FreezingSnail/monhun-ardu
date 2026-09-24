@@ -1344,5 +1344,58 @@ void MonsterSuite(TestRunner &runner) {
         suite.addTest(t);
     }
 
+    {
+        Test t("static pole (bih): no attack/drift, hit push + shove leave it in place");
+        Game g;
+        newHunt(g);   // wires Game::target; then swap the loaded creature to the pole
+        const uint8_t loaded = creatureLoad(g, combat::CREATURE_POLE);
+        t.assert(loaded, combat::CREATURE_POLE, "creatureLoad returns the pole index");
+        t.assert(g.combat.isStatic, 1, "pole caches the static flag");
+        t.assert(g.combat.art.sheet, combat_expect::CREATURE_POLE_ART_SHEET, "pole art sheet cached");
+        const CombatSpawn spawn = combatCreatureSpawnRead(combat::CREATURE_POLE);
+        Monster &m = g.monster;
+        // Park the hunter far away so pushApart does not resolve an overlap;
+        // the pole itself must not move for any other reason.
+        g.player.x = 8;
+        g.player.y = 8;
+        m.x = 120;
+        m.y = 40;
+        m.subX = 0;
+        m.subY = 0;
+        m.w = g.combat.body.w;
+        m.h = g.combat.body.h;
+        m.hp = static_cast<int16_t>(spawn.hp);
+        m.hpMax = m.hp;
+        m.spd = spawn.spd;
+        m.state = MS_IDLE;
+        m.t = 0;
+        m.cd = 0;
+        m.stun = 0;
+        m.hitFlash = 0;
+        m.atkIdx = COMBAT_NO_ATTACK;
+        g.combat.attack.facing = COMBAT_FACING_TRACK;
+        // 300 idle ticks: the zero profile + zero speed keep it planted and the
+        // empty pattern list means chooseAttack is never reachable. Record the
+        // position after the first tick (clamp is idempotent), then prove it
+        // never drifts.
+        updateMonster(g);
+        const int16_t bx = g.monster.x;
+        const int16_t by = g.monster.y;
+        for (int i = 0; i < 299; i++)
+            updateMonster(g);
+        t.assert(g.monster.atkIdx, COMBAT_NO_ATTACK, "pole never picks an attack");
+        t.assert(g.monster.x, bx, "pole x unchanged over 300 ticks");
+        t.assert(g.monster.y, by, "pole y unchanged over 300 ticks");
+        // A landed player hit with push must not move the static prop.
+        monsterOnHit(g, 5, static_cast<int16_t>(bx + 10), static_cast<int16_t>(by + 18), 20, 0);
+        t.assert(g.monster.x, bx, "pole x unchanged after hit push");
+        t.assert(g.monster.y, by, "pole y unchanged after hit push");
+        // A gunshield shove is absorbed too.
+        monsterOnShove(g, 1, 0, 20, 0);
+        t.assert(g.monster.x, bx, "pole x unchanged after shove");
+        t.assert(g.monster.y, by, "pole y unchanged after shove");
+        suite.addTest(t);
+    }
+
     runner.addTestSuite(suite);
 }

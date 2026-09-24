@@ -13,6 +13,7 @@
 #include "core/world.hpp"
 #include "core/sin256.hpp"            // 256 B sine LUT -> 65 B quarter wave + sign folding (42n.7)
 #include "generated/art_dims.hpp"     // frame layout + core dims for the FX sheets
+#include "generated/art_sheets.hpp"   // creature art sheet address table (bih)
 #include "generated/equip_meta.hpp"   // gen-art part tables (sheet/frame/anchor) for drawPlayer
 #include "generated/armor_meta.hpp"   // ARMOR_* piece ids for the armor head layer (arm.2)
 
@@ -45,16 +46,6 @@ namespace mh {
 // are left-to-right strips and FRAME(i) == i*3 + currentPlane() selects the
 // current plane's data, so one draw call per plane composites the 4 shades.
 namespace spr {
-// 32x24 monster sheets (epic monhun-ardu-nch): one sheet per demo beast, all
-// sharing this frame layout -- four states facing east, then the same four
-// facing west. Which sheet is drawn is picked by the roster kind
-// (monsterSheet() below), so the state/frame math stays single-sourced.
-constexpr uint8_t MON_IDLE = 0;
-constexpr uint8_t MON_RECOVER = 1;
-constexpr uint8_t MON_FLASH = 2;
-constexpr uint8_t MON_DEAD = 3;
-constexpr uint8_t MON_WEST = 4;
-
 // 4x4 spark, light gray / white.
 constexpr uint8_t SPARK_LIGHT = 0;
 constexpr uint8_t SPARK_BRIGHT = 1;
@@ -566,21 +557,6 @@ static inline void drawFade(const Game &g) {
 }
 #endif   // MH_ROOM_BOUNDS
 
-// Per-creature monster sheet (epic monhun-ardu-nch): the demo roster's beast
-// kind selects the fxdata sheet authored by tools/gen-art.py; RAVAGER keeps the
-// legacy flat sheet its tail part overlays. Frame layout is identical across
-// sheets, so only the sprite base changes -- the state/facing mapping below is
-// untouched (no per-state code).
-static inline uint24_t monsterSheet(int8_t kind) {
-    if (kind == mh::MON_SWEEP)
-        return fxmonster_sweep;
-    if (kind == mh::MON_HEAVY)
-        return fxmonster_heavy;
-    if (kind == mh::MON_RAVAGER)
-        return fxmonster;
-    return fxmonster_lunge;
-}
-
 // Zone part-art overlay (bead monhun-ardu-kt7.6): draw one breakable zone's
 // part from its 4-frame combatPartArtFrame sheet (east intact / east broken /
 // west intact / west broken). The 32x24 beast sheets are 2-facing (east / west
@@ -636,6 +612,46 @@ static void drawAttackMarker(const mh::Game &g, int16_t x, int16_t y) {
     blk(static_cast<int16_t>(ax - 1), static_cast<int16_t>(ay - 1), 2, 2, 2);
 }
 
+// Generic art-descriptor body draw (epic monhun-ardu-bih): every creature draws
+// its base body from the art_sheets.hpp address table (cached art.sheet seeded
+// by creatureLoad) instead of a per-kind branch. The frame resolve is the shared
+// rule: dead -> dead; hitFlash/windup-flash -> flash; windup -> windup; attack ->
+// attack; recover -> recover; else idle0 + (idleCount ? (tick/8) % idleCount :
+// 0); a west-facing creature (fx < 0) with a mirror stride adds it. drawMonster
+// checks the spin/attack whole-body sheets first; the shared tail (stun whirl +
+// telegraph) and the zone part overlays are unchanged.
+static inline uint24_t artSheetAddr(uint8_t index) {
+#if defined(__AVR__)
+    const uint8_t *p = reinterpret_cast<const uint8_t *>(&art_sheets::ART_SHEETS[index]);
+    return static_cast<uint24_t>(pgm_read_byte(p)) | (static_cast<uint24_t>(pgm_read_byte(p + 1)) << 8) | (static_cast<uint24_t>(pgm_read_byte(p + 2)) << 16);
+#else
+    (void)index;
+    return 0;
+#endif
+}
+
+MH_NOINLINE static void drawMonsterBodyGeneric(const mh::Game &g, int16_t x, int16_t y) {
+    const mh::Monster &m = g.monster;
+    const mh::CombatArt &a = g.combat.art;
+    const bool windupFlash = (m.state == mh::MS_WINDUP) && (((m.windupMax - m.t) / 4) % 2 == 0);
+    uint8_t f;
+    if (m.state == mh::MS_DEAD)
+        f = a.dead;
+    else if (m.hitFlash > 0 || windupFlash)
+        f = a.flash;
+    else if (m.state == mh::MS_WINDUP)
+        f = a.windup;
+    else if (m.state == mh::MS_ATTACK)
+        f = a.attack;
+    else if (m.state == mh::MS_RECOVER)
+        f = a.recover;
+    else
+        f = static_cast<uint8_t>(a.idle0 + (a.idleCount ? (g.tick / 8) % a.idleCount : 0));
+    if (m.fx < 0 && a.stride)
+        f = static_cast<uint8_t>(f + a.stride);
+    sprDraw(artSheetAddr(static_cast<uint8_t>(a.sheet - 1)), x, static_cast<int16_t>(y + a.anchorY), FRAME(f));
+}
+
 // Mock drawMonster(): dead heap, feet, body, head + eyes, stun sparkle, and the
 // windup/attack telegraph box.
 static void drawMonster(const mh::Game &g, int16_t camX, int16_t camY) {
@@ -645,12 +661,13 @@ static void drawMonster(const mh::Game &g, int16_t camX, int16_t camY) {
     const int16_t w = m.w;
     const int16_t h = m.h;
 
-    // Zone overlay art is not drawn yet: the tail sheet exists (combatPartArtFrame)
-    // but the body/feet/head/eyes are baked per state/facing into the sprite, so
-    // a broken tail is not overlaid here.
-    // Body, feet, head and eyes are baked per state/facing into the sprite;
-    // recover dims the body, windup flash and hit flash whiten it.
-    const bool flashing = (m.state == mh::MS_WINDUP) && (((m.windupMax - m.t) / 4) % 2 == 0);
+    // Body draw (epic monhun-ardu-bih phase 1): every creature carries a cached
+    // art descriptor seeded by creatureLoad, so the base body -- state frame,
+    // idle bob and west mirror -- comes from the art_sheets table with no
+    // per-kind code. The two whole-body replacements are checked FIRST because
+    // they supersede the descriptor: the locked spin sheet and the bespoke
+    // beast attack sheets. The shared tail (stun whirl, telegraph) and the
+    // breakable-zone part overlays are unchanged below.
     // Locked (spin) tail attack on the longtail (beads monhun-ardu-nch.3/5):
     // MS_ATTACK draws the whole beast from the 8-frame 40x40 fxtailspin sheet,
     // rotated about the body centre in 45-deg steps synced to the active window;
@@ -664,7 +681,7 @@ static void drawMonster(const mh::Game &g, int16_t camX, int16_t camY) {
     const bool spinSheet = spinning && g.monsterKind == mh::MON_HEAVY;
     // Demo-beast attack overlays (beads monhun-ardu-nch.8/nch.10, prg.12): during
     // windup+attack the whole chicken/bull/longtail is drawn from its bespoke
-    // 2-facing attack sheet instead of the generic BEAST_POSES coil/lunge frame.
+    // 2-facing attack sheet instead of the generic art-descriptor base frame.
     // The sheet ordinal selects the pose: during attack it is the attack index
     // relative to the creature's first authored attack (the generated
     // ATTACK_<CID>_<FIRST> constant, no literal record index); during windup the
@@ -682,36 +699,6 @@ static void drawMonster(const mh::Game &g, int16_t camX, int16_t camY) {
     // tell overrides the attack-order ordinal pose and suppresses the core
     // marker, an unauthored tell (0/4) keeps the ordinal pose + 2x2 core marker.
     const uint8_t tellSlot = (m.state == mh::MS_WINDUP) ? mh::tellWindupFrame(g.combat.attack.tell, mh::TELL_FRAMES_AUTHORED) : mh::TELL_WINDUP_NONE;
-    uint8_t f;
-    if (g.monsterKind == mh::MON_RAVAGER) {
-        // Legacy fxmonster sheet: idle/recover/flash/dead x facing.
-        uint8_t state = spr::MON_IDLE;
-        if (m.state == mh::MS_RECOVER)
-            state = spr::MON_RECOVER;
-        if (m.hitFlash > 0 || flashing)
-            state = spr::MON_FLASH;
-        if (m.state == mh::MS_DEAD)
-            state = spr::MON_DEAD;
-        f = static_cast<uint8_t>(state + (m.fx >= 0 ? 0 : spr::MON_WEST));
-    } else {
-        // Animated demo sheets (BEAST_POSES order; west = +beast_stride). The
-        // idle bob steps every 8 ticks; windup/attack carry the coil->lunge
-        // pose pair. Purely cosmetic: the telegraph window math does not move.
-        if (m.state == mh::MS_DEAD)
-            f = art_dims::beast_dead_frame;
-        else if (m.hitFlash > 0 || flashing)
-            f = art_dims::beast_flash_frame;
-        else if (m.state == mh::MS_WINDUP)
-            f = art_dims::beast_windup_frame;
-        else if (m.state == mh::MS_ATTACK)
-            f = art_dims::beast_attack_frame;
-        else if (m.state == mh::MS_RECOVER)
-            f = art_dims::beast_recover_frame;
-        else
-            f = static_cast<uint8_t>(art_dims::beast_idle0_frame + ((g.tick / 8) % art_dims::beast_idle_count));
-        if (m.fx < 0)
-            f = static_cast<uint8_t>(f + art_dims::beast_stride);
-    }
     if (spinSheet) {
         // Whole-beast spin sheet: frame 0 is the east silhouette. Windup holds
         // the locked away frame; the attack steps 45 deg clockwise from it each
@@ -739,7 +726,7 @@ static void drawMonster(const mh::Game &g, int16_t camX, int16_t camY) {
         const uint8_t ordinal = (tellSlot != mh::TELL_WINDUP_NONE) ? tellSlot : static_cast<uint8_t>(m.atkIdx - first);
         sprDraw(sheet, x, y, FRAME(static_cast<uint8_t>((ordinal << 1) | (m.fx < 0 ? 1 : 0))));
     } else {
-        sprDraw(monsterSheet(g.monsterKind), x, y, FRAME(f));
+        drawMonsterBodyGeneric(g, x, y);
     }
     if (m.state == mh::MS_DEAD)
         return;
@@ -751,16 +738,19 @@ static void drawMonster(const mh::Game &g, int16_t camX, int16_t camY) {
     // carries the posed tail); the chicken/bull parts during their whole-body
     // attack sheets (fxchickenatk / fxbullatk already draw the posed part).
     // RAVAGER keeps the legacy 18x10 fxtail unoverlaid (not a multiple-of-8
-    // SpritesU page stride), exactly as before.
-    if (g.monsterKind == mh::MON_HEAVY) {
+    // SpritesU page stride), exactly as before. Keyed off the loaded creature
+    // record (not the roster kind): the pole draft test parks a fxpole creature
+    // under the MON_LUNGE kind, and only the real chicken/bull/longtail records
+    // ship these part sheets. Phase 3 moves the part sheets into zone records.
+    if (g.combat.creature == combat::CREATURE_HEAVY) {
         if (g.combat.appendZone != mh::COMBAT_NO_ZONE && !spinning)
             drawZonePart(g, x, y, fxtail_heavy, mh::COMBAT_ZONE_APPENDAGE, mh::COMBAT_ZONE_APPENDAGE_BIT);
-    } else if (g.monsterKind == mh::MON_LUNGE && !beastAtk) {
+    } else if (g.combat.creature == combat::CREATURE_LUNGE && !beastAtk) {
         if (g.combat.headZone != mh::COMBAT_NO_ZONE)
             drawZonePart(g, x, y, fxhead_chicken, mh::COMBAT_ZONE_HEAD, mh::COMBAT_ZONE_HEAD_BIT);
         if (g.combat.appendZone != mh::COMBAT_NO_ZONE)
             drawZonePart(g, x, y, fxlegs_chicken, mh::COMBAT_ZONE_APPENDAGE, mh::COMBAT_ZONE_APPENDAGE_BIT);
-    } else if (g.monsterKind == mh::MON_SWEEP && !beastAtk) {
+    } else if (g.combat.creature == combat::CREATURE_SWEEP && !beastAtk) {
         if (g.combat.headZone != mh::COMBAT_NO_ZONE)
             drawZonePart(g, x, y, fxhead_bull, mh::COMBAT_ZONE_HEAD, mh::COMBAT_ZONE_HEAD_BIT);
         if (g.combat.appendZone != mh::COMBAT_NO_ZONE)

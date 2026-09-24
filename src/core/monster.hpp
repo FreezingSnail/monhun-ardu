@@ -243,13 +243,18 @@ static void monsterOnHit(Game &g, uint8_t dmg, int16_t hx, int16_t hy, uint8_t p
     }
     if (effect == 1 && m.stun < 70)
         m.stun = 70;   // trip
-    if (push)
+    // Static props (bih: the training pole) never give way to a hit: the
+    // creatureLoad-cached isStatic flag gates the knockback push. Damage/stun
+    // still apply.
+    if (push && !g.combat.isStatic)
         knockMonsterAway(g, m, hx, hy, static_cast<int16_t>(push));
 }
 
-// Target::onShove — gunshield shove: beast always gives way.
+// Target::onShove — gunshield shove: beast always gives way. A static prop
+// absorbs the shove (no drift); the freeze still applies.
 static void monsterOnShove(Game &g, int8_t dirX, int8_t dirY, uint8_t amount, uint8_t freeze) {
-    fp::addMove(g.monster, dirX, dirY, amount);
+    if (!g.combat.isStatic)
+        fp::addMove(g.monster, dirX, dirY, amount);
     if (g.freeze < freeze)
         g.freeze = freeze;
 }

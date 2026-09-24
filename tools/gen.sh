@@ -120,6 +120,12 @@ python3 tools/convert-sprite.py ../images/equip -s 4 -o ../fxdata/equip/
 python3 Arduboy-Python-Utilities/fxdata-build.py fxdata/fxdata.txt
 cp fxdata/fxdata.h src/fxdata.h
 
+# Creature art sheet table (epic monhun-ardu-bih phase 0): resolve
+# data/art_sheets.json names to the freshly packed src/fxdata.h addresses and
+# emit src/generated/art_sheets.hpp. MUST run POST-pack so the table address
+# static_asserts are never stale.
+python3 tools/gen-art-sheets.py
+
 # Record deterministic image<->fxdata provenance: every images/**/*.png must be
 # declared exactly once by an included fxdata/*/Sprites.txt and every declared
 # symbol must have an image. Validation runs first, then the manifest is

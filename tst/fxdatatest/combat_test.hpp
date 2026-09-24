@@ -327,23 +327,23 @@ inline void test_combat(FxTest &test) {
     test.expectEq(static_cast<uint16_t>(version) | (static_cast<uint16_t>(flags) << 8), static_cast<uint16_t>(combat::VERSION) | (static_cast<uint16_t>(combat::FLAGS) << 8),
                   F("header version+flags"));
 
-    static const uint16_t counts[10] = {
-        combat::CREATURES_COUNT, combat::PROFILES_COUNT, combat::SKELETONS_COUNT, combat::ZONES_COUNT,  combat::ANCHORS_COUNT,
-        combat::ATTACKS_COUNT,   combat::WINDOWS_COUNT,  combat::PATTERNS_COUNT,  combat::GUARDS_COUNT, combat::STEPS_COUNT,
+    static const uint16_t counts[11] = {
+        combat::CREATURES_COUNT, combat::PROFILES_COUNT, combat::SKELETONS_COUNT, combat::ZONES_COUNT, combat::ANCHORS_COUNT, combat::ATTACKS_COUNT,
+        combat::WINDOWS_COUNT,   combat::PATTERNS_COUNT, combat::GUARDS_COUNT,    combat::STEPS_COUNT, combat::ART_COUNT,
     };
-    for (uint8_t i = 0; i < 10; i++) {
+    for (uint8_t i = 0; i < 11; i++) {
         FX::seekData(mhCombat + 4 + static_cast<uint24_t>(i) * 2);
         const uint8_t lo = FX::readPendingUInt8();
         const uint8_t hi = FX::readEnd();
         test.expectEqIdx(static_cast<uint16_t>(lo | (static_cast<uint16_t>(hi) << 8)), counts[i], F("header count"), i);
     }
-    for (uint8_t i = 0; i < 4; i++) {
-        FX::seekData(mhCombat + 4 + static_cast<uint24_t>(10 + i) * 2);
+    for (uint8_t i = 0; i < 3; i++) {
+        FX::seekData(mhCombat + 4 + static_cast<uint24_t>(11 + i) * 2);
         const uint8_t lo = FX::readPendingUInt8();
         const uint8_t hi = FX::readEnd();
         test.expectEqIdx(static_cast<uint16_t>(lo | (static_cast<uint16_t>(hi) << 8)), 0, F("reserved count"), i);
     }
-    test.expectEq(combat::STEPS_OFF + static_cast<uint16_t>(combat::STEP_SIZE) * combat::STEPS_COUNT, combat::SIZE, F("sections end at size"));
+    test.expectEq(combat::ART_OFF + static_cast<uint16_t>(combat::ART_SIZE) * combat::ART_COUNT, combat::SIZE, F("sections end at size"));
     test.expectEq(combat_expect::BLOB_SIZE, combat::SIZE, F("expect blob size"));
 
     // ------------------------------------ per-record spot checks vs expect

@@ -14,9 +14,35 @@
 #include "test.hpp"
 #include "../src/core/world.hpp"                // game + player + projectiles + monster (combat) + addEffect
 #include "../src/generated/art_dims.hpp"        // fxtail frame layout (combatPartArtFrame)
+#include "../src/generated/art_sheets.hpp"      // creature art sheet table (bih)
 #include "../src/generated/combat_expect.hpp"   // pinned zone spot values
 
+#include <cstdio>
+#include <cstdlib>
+#include <string>
+
 using namespace mh;
+
+// Host half of "the art sheet address equals the fxdata constant": parse the
+// committed src/fxdata.h and return the named symbol's cart address. The device
+// static_asserts in art_sheets.hpp pin the PROGMEM table to the same symbol
+// (host cannot include fxdata.h: uint24_t/PROGMEM are AVR-only).
+static uint32_t art_sheet_fxdata_addr(const char *name) {
+    FILE *f = fopen("src/fxdata.h", "rb");
+    if (f == nullptr)
+        return 0;
+    std::string text;
+    char buf[4096];
+    size_t n;
+    while ((n = fread(buf, 1, sizeof(buf), f)) > 0)
+        text.append(buf, n);
+    fclose(f);
+    const std::string decl = "constexpr uint24_t " + std::string(name) + " = ";
+    const size_t at = text.find(decl);
+    if (at == std::string::npos)
+        return 0;
+    return static_cast<uint32_t>(strtoul(text.c_str() + at + decl.size(), nullptr, 16));
+}
 
 void CombatSuite(TestRunner &runner) {
     TestSuite suite("Combat loader (src/core/combat.hpp): host structs, caches, guards, routing");
@@ -147,8 +173,10 @@ void CombatSuite(TestRunner &runner) {
         // prg.8 removed the static pole record and its head zone: the four demo
         // beasts carry the 7 shipped zones (heavy tail, ravager head/appendage,
         // lunge head/appendage, sweep head/appendage).
-        t.assert(combat::ZONES_COUNT, 7, "heavy tail + ravager + lunge + sweep zones");
-        t.assert(combat::CREATURES_COUNT, 4, "4 demo beasts (static pole removed)");
+        // prg.8 removed the static pole record; bih re-adds it as the first
+        // art-descriptor customer (5 creatures, its head zone = 8th zone).
+        t.assert(combat::ZONES_COUNT, 8, "heavy tail + ravager + lunge + sweep + pole head zones");
+        t.assert(combat::CREATURES_COUNT, 5, "4 demo beasts + static pole (bih)");
         t.assert(combat::SKELETONS_COUNT, 5, "bull/chicken/longtail/quad + pole skeleton");
         t.assert(combat::ATTACKS_COUNT, 11, "3x2 shipped + ravager bite/tail_sweep + chicken wing_beat + sweep rear_kick + heavy tail_slam (feel.10)");
         t.assert(combat::WINDOWS_COUNT, 16, "single-window attacks + ravager 2 + tail_spin 4 + sweep stomp 1/gore 2 + wing_beat + rear_kick + tail_slam");
@@ -217,19 +245,100 @@ void CombatSuite(TestRunner &runner) {
 
     {
         Test t("creature record decode: static/sheet/brokenBody accessors");
-        // prg.8 removed the static pole record; the four demo beasts are all
-        // dynamic (flags bit0 clear) with the default sheet and no brokenBody.
+        // bih: the four demo beasts are dynamic (flags bit0 clear) with the
+        // default sheet and no brokenBody; the training pole is the static prop.
         for (uint8_t i = 0; i < combat::CREATURES_COUNT; i++) {
             const CombatCreature c = combatCreatureRead(i);
+            if (combatCreatureStatic(i))
+                continue;
             t.assert(combatCreatureStatic(i), 0, "beast not static");
             t.assert(c.flags, combatCreatureFlags(i), "creature flags accessor");
             t.assert(c.sheet, combatCreatureSheet(i), "creature sheet accessor");
             t.assert(c.brokenW, combatCreatureBrokenW(i), "creature brokenW accessor");
             t.assert(c.brokenH, combatCreatureBrokenH(i), "creature brokenH accessor");
         }
+        t.assert(combatCreatureStatic(combat_data::CREATURE_POLE), 1, "pole is static");
         t.assert(combatCreatureSheet(combat_data::CREATURE_LUNGE), 0, "beast default sheet 0");
         t.assert(combatCreatureBrokenW(combat_data::CREATURE_LUNGE), 0, "beast no brokenBody w");
         t.assert(combatCreatureBrokenH(combat_data::CREATURE_LUNGE), 0, "beast no brokenBody h");
+        suite.addTest(t);
+    }
+
+    {
+        Test t("art descriptors: per-creature records, cache seed, sheet table");
+        // Every creature packs an ART record (bih); phase 1 migrated the 4
+        // beasts too, so every record resolves its sheet index from
+        // data/art_sheets.json.
+        for (uint8_t i = 0; i < combat::CREATURES_COUNT; i++) {
+            const combat_data::Art &h = combat_data::ART[i];
+            CombatArt a;
+            combatCreatureArtRead(i, a);
+            t.assert(a.sheet, h.sheet, "art sheet == host mirror");
+            t.assert(a.anchorY, h.anchorY, "art anchorY == host mirror");
+            t.assert(a.stride, h.stride, "art stride == host mirror");
+            t.assert(a.idle0, h.idle0, "art idle0 == host mirror");
+            t.assert(a.idleCount, h.idleCount, "art idleCount == host mirror");
+            t.assert(a.windup, h.windup, "art windup == host mirror");
+            t.assert(a.attack, h.attack, "art attack == host mirror");
+            t.assert(a.recover, h.recover, "art recover == host mirror");
+            t.assert(a.flash, h.flash, "art flash == host mirror");
+            t.assert(a.dead, h.dead, "art dead == host mirror");
+        }
+        t.assert(combat::ART_SIZE, 10, "art record is 10 B");
+        t.assert(sizeof(CombatArt), combat::ART_SIZE, "CombatArt ABI size");
+        // Offset/index generation: ART is 1:1 with CREATURES and appended last.
+        t.assert(combat::ART_OFF, combat::STEPS_OFF + combat::STEP_SIZE * combat::STEPS_COUNT, "art section appended after steps");
+        t.assert(combat::ART_OFF + combat::ART_SIZE * combat::ART_COUNT, combat::SIZE, "art ends the blob");
+        t.assert(combat::ART_POLE, combat_data::CREATURE_POLE, "art index tracks creature order");
+        t.assert(combat::ART_POLE_OFF, combat::ART_OFF + combat::ART_POLE * combat::ART_SIZE, "art offset = base + index*size");
+        // Pole spot values (bih): fxpole index, flash frame 1, no mirror.
+        t.assert(combat_expect::CREATURE_POLE_ART_SHEET, art_sheets::ART_SHEET_FXPOLE, "pole art sheet index");
+        t.assert(combat_expect::CREATURE_POLE_ART_FLASH, 1, "pole flash frame");
+        t.assert(combat_expect::CREATURE_POLE_ART_STRIDE, 0, "pole no mirror stride");
+        t.assert(combat_expect::CREATURE_POLE_ART_DEAD, 0, "pole dead frame 0");
+        // Phase 1: the 4 beasts carry their sheet/layout, mirroring the legacy
+        // frame map. LUNGE/SWEEP/HEAVY share it (idle0 0, 2 idle frames, flash
+        // 5, dead 6, west stride 7); RAVAGER holds idle0 for windup/attack with
+        // stride 4 and recover 1 / flash 2 / dead 3 (legacy fxmonster layout).
+        t.assert(combat_expect::CREATURE_LUNGE_ART_SHEET, art_sheets::ART_SHEET_FXMONSTER_LUNGE, "lunge sheet");
+        t.assert(combat_expect::CREATURE_LUNGE_ART_STRIDE, 7, "lunge west stride");
+        t.assert(combat_expect::CREATURE_LUNGE_ART_IDLE_COUNT, 2, "lunge idle bob");
+        t.assert(combat_expect::CREATURE_LUNGE_ART_FLASH, 5, "lunge flash frame");
+        t.assert(combat_expect::CREATURE_LUNGE_ART_DEAD, 6, "lunge dead frame");
+        t.assert(combat_expect::CREATURE_SWEEP_ART_SHEET, art_sheets::ART_SHEET_FXMONSTER_SWEEP, "sweep sheet");
+        t.assert(combat_expect::CREATURE_SWEEP_ART_STRIDE, 7, "sweep west stride");
+        t.assert(combat_expect::CREATURE_HEAVY_ART_SHEET, art_sheets::ART_SHEET_FXMONSTER_HEAVY, "heavy sheet");
+        t.assert(combat_expect::CREATURE_HEAVY_ART_IDLE_COUNT, 2, "heavy idle bob");
+        t.assert(combat_expect::CREATURE_RAVAGER_ART_SHEET, art_sheets::ART_SHEET_FXMONSTER, "ravager sheet");
+        t.assert(combat_expect::CREATURE_RAVAGER_ART_STRIDE, 4, "ravager west stride");
+        t.assert(combat_expect::CREATURE_RAVAGER_ART_IDLE_COUNT, 0, "ravager no idle bob");
+        t.assert(combat_expect::CREATURE_RAVAGER_ART_FLASH, 2, "ravager flash frame");
+        t.assert(combat_expect::CREATURE_RAVAGER_ART_DEAD, 3, "ravager dead frame");
+        // The cache seed carries the full frame map (windup/attack/recover are
+        // not in the expect pins).
+        CombatArt lunge, ravager;
+        combatCreatureArtRead(combat_data::CREATURE_LUNGE, lunge);
+        t.assert(lunge.windup, 2, "lunge windup frame");
+        t.assert(lunge.attack, 3, "lunge attack frame");
+        t.assert(lunge.recover, 4, "lunge recover frame");
+        combatCreatureArtRead(combat_data::CREATURE_RAVAGER, ravager);
+        t.assert(ravager.windup, 0, "ravager windup holds idle0");
+        t.assert(ravager.attack, 0, "ravager attack holds idle0");
+        t.assert(ravager.recover, 1, "ravager recover frame");
+        // The art sheet table resolves every data/art_sheets.json name in sorted
+        // order: the index constants are the contract (the device static_assert
+        // in art_sheets.hpp pins each address to the fxdata symbol).
+        t.assert(art_sheets::ART_SHEET_FXMONSTER, 1, "ART_SHEET_FXMONSTER sorts first");
+        t.assert(art_sheets::ART_SHEET_FXMONSTER_HEAVY, 2, "ART_SHEET_FXMONSTER_HEAVY is 1-based");
+        t.assert(art_sheets::ART_SHEET_FXMONSTER_LUNGE, 3, "ART_SHEET_FXMONSTER_LUNGE is 1-based");
+        t.assert(art_sheets::ART_SHEET_FXMONSTER_SWEEP, 4, "ART_SHEET_FXMONSTER_SWEEP is 1-based");
+        t.assert(art_sheets::ART_SHEET_FXPOLE, 5, "ART_SHEET_FXPOLE last");
+        t.assert(art_sheets::ART_SHEETS_COUNT, 5, "five shipped art sheets");
+        t.assert(art_sheets::ART_SHEET_ADDR_FXMONSTER, art_sheet_fxdata_addr("fxmonster"), "fxmonster address == src/fxdata.h");
+        t.assert(art_sheets::ART_SHEET_ADDR_FXMONSTER_HEAVY, art_sheet_fxdata_addr("fxmonster_heavy"), "fxmonster_heavy address == src/fxdata.h");
+        t.assert(art_sheets::ART_SHEET_ADDR_FXMONSTER_LUNGE, art_sheet_fxdata_addr("fxmonster_lunge"), "fxmonster_lunge address == src/fxdata.h");
+        t.assert(art_sheets::ART_SHEET_ADDR_FXMONSTER_SWEEP, art_sheet_fxdata_addr("fxmonster_sweep"), "fxmonster_sweep address == src/fxdata.h");
+        t.assert(art_sheets::ART_SHEET_ADDR_FXPOLE, art_sheet_fxdata_addr("fxpole"), "fxpole address == src/fxdata.h");
         suite.addTest(t);
     }
 

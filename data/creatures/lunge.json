@@ -1,6 +1,18 @@
 {
   "id": "lunge",
   "skeleton": "chicken",
+  "art": {
+    "sheet": "fxmonster_lunge",
+    "anchorY": 0,
+    "stride": 7,
+    "idle0": 0,
+    "idleCount": 2,
+    "windup": 2,
+    "attack": 3,
+    "recover": 4,
+    "flash": 5,
+    "dead": 6
+  },
   "stats": { "w": 32, "h": 24, "hp": 1800, "spd": 6, "spawnX": 200, "spawnY": 40 },
   "collide": { "ox": 9, "oy": 11, "w": 12, "h": 13 },
   "carve": [

@@ -1,6 +1,18 @@
 {
   "id": "ravager",
   "skeleton": "quad_32x24",
+  "art": {
+    "sheet": "fxmonster",
+    "anchorY": 0,
+    "stride": 4,
+    "idle0": 0,
+    "idleCount": 0,
+    "windup": 0,
+    "attack": 0,
+    "recover": 1,
+    "flash": 2,
+    "dead": 3
+  },
   "stats": { "w": 32, "h": 24, "hp": 2400, "spd": 6, "spawnX": 200, "spawnY": 40 },
   "carve": [
     { "item": "fang", "count": 1, "chance": 100 },

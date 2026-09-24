@@ -1,150 +1,147 @@
-# monhun-ardu-hbk.12 — GEAR equipment-box slot view (owned-only candidates)
+# monhun-ardu-bih.3 — art draw phase 1: migrate the 4 beasts' base sheet/layout to descriptors
 
-Status: **DONE.** The shipping image links at **29512 / 29696 (184 free)**, RAM
-1799/2560. Delta vs HEAD (28826, 870 free) is **+686 B** (the +712 B slot view
-minus the 26 B denied-cue trim). No commit/push.
+Status: **DONE (gates green).** Shipping image links at **29542 / 29696 (154
+free)**, RAM 1809/2560. No commit/push.
 
-Design expected ~230 free; the implementation lands 184 free (a ~46 B gap over
-the hand estimate). 184 free is above the ~150 floor. **LR cycle (+~70 B) would
-NOT hold 150 free** (184 - 70 = 114). The hub header zenny block (86 B) was not
-cut.
+## Net whole-image delta (the payback)
+
+| build | flash | free |
+|---|---|---|
+| baseline HEAD 33d02fd (given) | 29374 | 322 |
+| spike monhun-ardu-bih.1 (in tree) | 29670 | 26 |
+| this bead (phase 1) | **29542** | **154** |
+
+- **Net vs the spike: −128 B** (the deleted legacy per-kind base branch).
+- **Net vs baseline: +168 B** (the descriptor machinery the spike added is not
+  yet fully paid back).
+- `make size`: `.text=29492 .data=50 .bss=1759`;
+  `flash=29542/29696 (154 free) ram=1809/2560`.
+
+Headroom: **154 free ≥ the ~150 B wave floor — PASS, but only 4 B of margin.**
+Not blocked; flagged for the wave. Remaining deletable payback (deliberately left
+for later phases per the epic): phase 2 = `beastAtk` + `spinSheet` gates and
+their sheet ordinals → attack records; phase 3 = the three zone part-overlay
+chains → zone records; phase 4 = `art_dims` beast_* constants, docs/pins.
 
 ## What changed
 
-1. **`data/screens/gear.json`** — GEAR is now `"slots": true` with 11 rows
-   (2 baked pages): four slot rows (WEAPON / HEAD / BODY / CHARM, action
-   `slot_pick`, param 0..3), the `-- SKILLS --` header, the five `skill` rows
-   and LEAVE. The old `"weapons": "equip"` 24-row tree and the 5 armor rows are
-   gone.
+### Data
+- **`data/art_sheets.json`**: grew 1 → 5 names, **sorted**:
+  `fxmonster, fxmonster_heavy, fxmonster_lunge, fxmonster_sweep, fxpole`
+  (so `fxpole` moves from index 1 to 5; every index is derived by
+  `gen-art-sheets.py`, so the table and the records stay consistent).
+- **`data/creatures/{lunge,sweep,heavy,ravager}.json`**: added the frozen `art`
+  blocks matching the legacy code exactly:
+  - lunge/sweep/heavy: `sheet fxmonster_{lunge,sweep,heavy}`, anchorY 0,
+    stride 7, idle0 0, idleCount 2, windup 2, attack 3, recover 4, flash 5,
+    dead 6.
+  - ravager: `sheet fxmonster` (legacy sheet), anchorY 0, stride 4, idle0 0,
+    idleCount 0, windup 0, attack 0, recover 1, flash 2, dead 3 (no idle bob;
+    windup/attack hold the idle frame).
+- All 5 creatures now pack a non-zero ART record. The cart blob **size is
+  unchanged** (1221 B — the 5×10 B ART section already existed from the spike),
+  so no stale-address repack was needed; `make gen` converged in one pass and
+  `make gen-check` then reported 160 generated artifacts unchanged.
 
-2. **`tools/gen-screens.py`**
-   - `ACTION_NAMES` appends `slot_pick` (`ACTION_SLOT_PICK = 16`); `slot_pick`
-     params are validated 0..3.
-   - New `slots` key (optional bool) + `slot_candidates()`: slot 0 = the 9 forge
-     nodes in data order (id = node id, label = node label); slots 1/2/3 = the
-     armor pieces grouped by armor slot (id = piece index, label from
-     `data/armor.json`). Loads both the forge and armor models when a screen
-     asks.
-   - `pack_blob()` appends each slots screen's candidate table **after** the
-     fixed page table (so every existing offset is unchanged): `u8 slotStart[5]`
-     (cumulative) then 4-byte `{u8 id, u24 labelOff}` entries then the label
-     records (`u8 len + bytes`) the offsets point at. `emit_meta_header()`
-     emits `SCREEN_GEAR_SLOT_TABLE` (869) and `SIZE` 1042.
+### Render (`src/render.hpp`)
+- **Deleted the legacy base draw**: the `monsterSheet()` per-kind sheet chain,
+  the `MON_RAVAGER` legacy frame branch, the `BEAST_POSES` frame math, the
+  `spr::MON_IDLE/RECOVER/FLASH/DEAD/WEST` constants, and the now-dead `flashing`
+  local and `generic` routing flag.
+- `drawMonster` now checks the two whole-body replacements **first** (they
+  supersede the body), then falls through to the descriptor draw:
+  `if (spinSheet) fxtailspin … else if (beastAtk) bespoke attack sheet …
+  else drawMonsterBodyGeneric(g, x, y)`. The spin/`beastAtk` selection math is
+  unchanged.
+- Zone part-overlay chains stay (phase 3) but are now gated on the **loaded
+  creature record** (`g.combat.creature == CREATURE_HEAVY/LUNGE/SWEEP`) instead
+  of `g.monsterKind` and the removed `!generic` flag. This is required: the pole
+  draft test parks a `fxpole` creature under `MON_LUNGE`, and the old kind gate
+  would have painted chicken head/leg overlays onto the pole once `!generic`
+  was dropped. Real beasts map 1:1 kind→creature, so their pixels are unchanged.
 
-3. **`src/screen_state.hpp`** — `SCREEN_SLOT_COUNT = 4`; `ScreenState::slotSel[4]`
-   zeroed by `screenReset()`; header comments refreshed.
+### Tests (permanent, native framework)
+- **Device `tst/fxdatatest/monster_art_test.hpp`**: added the phase-1 oracle
+  **before** switching: per-beast base-body pins (idle = DARK body on plane 0 /
+  not plane 2; flash = `hitFlash` → WHITE flash frame on plane 2; west = the
+  mirrored frame flips the east mark to the west cell / swaps body↔head shade),
+  for all four beasts, at coordinates outside each beast's zone-overlay boxes.
+  Validated green against the legacy path first, then again after migration.
+  The pole `art.sheet` pin now uses `art_sheets::ART_SHEET_FXPOLE`.
+- **Host `tst/combat_test.hpp`**: art block now asserts the 4 beast descriptors
+  (sheets, strides, idle/flash/dead frames, ravager recover/windup/attack) plus
+  the sorted sheet table (5 sheets, `FXMONSTER` first, `FXPOLE` last) and the
+  host half of every `ART_SHEET_ADDR_<NAME> == src/fxdata.h` check.
 
-4. **`src/screens.hpp`**
-   - `screenTextLabel()` helper (draws a buffered label, used by the selected-row
-     white redraw and the slot names).
-   - Slot table readers: `screenGearSlotFirst/Count/Id/Entry` + a single
-     `screenGearSlotState(save, slot, id)` (0 none / 1 owned-crafted /
-     2 equipped). The table walkers are `MH_NOINLINE` (measured win: three
-     inlined copies cost ~90 B more).
-   - `screenGearSlotDefaults()` — GEAR entry default per slot: equipped
-     candidate, else first owned, else 0 (single pass; `sel == 0` doubles as
-     "not found" because the fallback is 0). `screenEnter()` calls it for GEAR.
-   - `screenGearSlotCycle()` — A on a slot row: advance `slotSel[slot]` to the
-     next owned candidate (wrapping), then equip in place (weapons toggle
-     `equippedNode` to `SAVE_NODE_NONE`, armor `armorEquipToggle`); false when
-     nothing is owned.
-   - `drawScreen()` — new `ACTION_SLOT_PICK` branch: resolve the shown candidate
-     entry, draw its name with `screenTextLabel` at `SCREEN_LABEL_X`
-     (`fxfontg`, or `fxfontw` when selected) and `screenMarker` at x=118
-     (white equipped / gray owned). Nothing owned -> the baked slot label stays.
-     Slot rows are excluded from the generic white label redraw (the candidate
-     name replaces it).
-
-5. **`monhun-ardu.ino`**
-   - New `ACTION_SLOT_PICK` dispatch: `screenGearSlotCycle` -> `saveStore`, then
-     falls through to the existing GEAR readout refresh (no card). Nothing owned
-     -> plain return.
-   - GEAR entry now calls `screenGearSlotDefaults` before `refreshGearReadout`.
-   - **Denied-cue trim**: all three `mh::audioPlay(mh::CUE_HURT)` call sites
-     (blocked card A, nothing-to-upgrade UPGRADE row, gated list row) are now
-     plain returns.
-
-6. **Tests**
-   - `tst/fxdatatest/screens_test.hpp` — GEAR pins rewritten for the slot view:
-     11 rows / action ids / baked slot + skill rows; the candidate table
-     (counts 9/2/2/1, ids, label records); entry defaults (fresh save ->
-     equipped sword root; crafted-not-equipped -> first owned; equipped ->
-     equipped); A rotation walks the owned roots 0 -> 3 -> 6 -> 0 and equips
-     each, nothing-owned is a no-op, armor A equips a crafted piece; slot
-     pixels (baked HEAD label alone on a fresh save, "BONE CAP" + gray marker
-     after crafting, white marker on plane 2 after equipping, SKILLS band);
-     skill-row pixel rows moved to ATTACK UP row 5 (y=56) / DEFENSE UP row 6
-     (y=11); GEAR page count 4 -> 2 and the page-3 address pin -> page 1.
-   - `tst/fxdatatest/cards_test.hpp` — the armor card E2E reads
-     `SCREEN_ARMOR_FORGE` row 0 (GEAR carries no armor rows now).
-   - `tst/fxdatatest/forge_test.hpp` — the weapon equip/unequip block drives a
-     synthetic `ACTION_EQUIP_WEAPON` row (GEAR has no weapon rows).
-   - `tst/fxdatatest/hub_test.hpp` — the flail-equip E2E presses A on the GEAR
-     WEAPON slot row (`screenGearSlotCycle`) instead of an equip row.
-   - `tst/screens_test.hpp` — `screenReset` zeroes `slotSel`.
-   - `tools/tests/test_gen_screens.py` — new `test_slots_candidate_table`
-     (table layout + label records) and `test_slot_pick_param_out_of_range_rejected`.
-
-## Command tails (final tree)
+## Verification (tails)
 
 ```
 $ make gen
-gen-screens: 7 screens, 47 rows, 10 pages, 1042 B blob (magic 0x5343 version 1)
+gen-art-sheets: 5 sheets
+gen-art-sheets: src/generated/art_sheets.hpp
+fxdata_manifest: wrote fxdata/manifest.json (115 images, 76 inputs, 32 outputs)
 
 $ make gen-check
-fxdata_manifest: PASS (159 generated artifacts unchanged)
+fxdata_manifest: PASS (160 generated artifacts unchanged)
 
 $ make test
-Total Passed: 6359
+Total Passed: 6667
 Total Failed: 0
 
-$ make test-tools
-Ran 360 tests in 21.622s
-OK
-
-$ FXTEST_ONLY=test_screens make fxtest-headless
-test_screens PASSED=212 FAILED=0
+$ FXTEST_ONLY=test_monster_art make fxtest-headless
+Sketch uses 26170 bytes (88%)
+test_monster_art PASSED=153 FAILED=0
 P
-test_screens: PASS
+test_monster_art: PASS
 
-$ FXTEST_ONLY=test_screens_smithy make fxtest-headless
-test_screens_smithy PASSED=98 FAILED=0
+$ FXTEST_ONLY=test_combat make fxtest-headless
+Sketch uses 27920 bytes (94%)
+C reads spawn=16 attack=7 guard=2 hit=0 tick256=0 simAtk=8 simTk=0 winSw=1
+combat_test PASSED=237 FAILED=0
 P
+test_combat: PASS
 
-$ FXTEST_ONLY=test_hub make fxtest-headless
-test_hub PASSED=79 FAILED=0
-P
-
-$ FXTEST_ONLY=test_cards make fxtest-headless
-test_cards PASSED=85 FAILED=0
-P
-
-$ FXTEST_ONLY=test_forge make fxtest-headless
-test_forge PASSED=63 FAILED=0
-P
-
-$ make size-line
-Sketch uses 29512 bytes (99%) of program storage space. Maximum is 29696 bytes.
-Global variables use 1799 bytes (70%) of dynamic memory, leaving 761 bytes for local variables. Maximum is 2560 bytes.
-size: flash=29512/29696 (184 free)  ram=1799/2560
+$ make size
+size: .text=29492 .data=50 .bss=1759
+size: flash=29542/29696 (154 free)  ram=1809/2560
+size: data facts: HAS_CARVE:true HAS_ENRAGE:true HAS_GUARD_CHANCE:false ...
 ```
 
-## Generated set
+Pole parity: every pre-existing HEAVY/LUNGE/SWEEP/RAVAGER pixel pin stays green
+through the descriptor path (153/153). `make test-tools` also OK (366 tests).
 
-`make gen` reached a fixpoint (page addresses resolve from the previous
-`fxdata.h`, so it took two passes). The FX layout shrank (screens blob
-1094 -> 1042, GEAR pages 4 -> 2, fxdata.bin 410624 -> 404480) so the absolute
-offsets in `fxdata/tables/cards.bin`, `equip.bin`, `src/generated/equip_meta.hpp`
-and `src/generated/zone_meta.hpp` shifted accordingly; all are regenerated
-together and `gen-check` is green.
+## Phase 1 pixel oracle (real `drawMonster`, device triplane)
 
-## Numbers
+Rendered through the shipping `drawMonster` (`startGray()` before `waitPlane()`,
+each shade checked on a plane where it is ink). Cell origin `(BX,BY)=(40,28)`.
 
-- size: **29512/29696 (184 free)**, delta **+686 B** vs HEAD 28826.
-- LR cycle (+~70 B) -> 114 free: **would not** hold 150.
-- RAM: 1799/2560 (slotSel adds 4 B).
+- **LUNGE** tail `(BX+3,BY+8)`: plane 0 = 1 / plane 2 = 0 idle; plane 2 = 1
+  flash; west `(BX+3,BY+8)` = 0 and `(BX+29,BY+8)` = 1.
+- **SWEEP** tail `(BX+2,BY+12)`: plane 0 = 1 / plane 2 = 0 idle; plane 2 = 1
+  flash; west plane 2 = 1 (head reaches the cell).
+- **HEAVY** tail `(BX+1,BY+14)`: plane 0 = 1 / plane 2 = 0 idle; plane 2 = 1
+  flash; west `(BX+1,BY+14)` = 0 and `(BX+29,BY+14)` = 1.
+- **RAVAGER** body `(BX+10,BY+10)`: plane 0 = 1 / plane 2 = 0 idle; plane 2 = 1
+  flash; east head `(BX+24,BY+8)` plane 2 = 1, west plane 2 = 0.
 
-## Wall time
+## Interfaces
 
-- worker total: ~26 min (session 22:52 -> 23:18), including ~8 `make size-line`
-  trim iterations and the 5 device-suite compiles+runs.
+- Unchanged from the spike: `combat::ART_*`, `combat_data::Art`/`ART[]`,
+  `combat_expect::CREATURE_<ID>_ART_*`, `mh::CombatArt`,
+  `mh::combatCreatureArtRead`, `Game::combat.art`, `art_sheets::ART_SHEET_<NAME>`
+  / `ART_SHEETS_COUNT` / `ART_SHEET_ADDR_<NAME>` / `ART_SHEETS[]`.
+- Removed: `mh::render`-local `monsterSheet(int8_t)` and `spr::MON_*`.
+- `drawMonster` body routing is now unconditional descriptor draw (spin/attack
+  sheet branches still win first); zone overlays gate on `Game::combat.creature`.
+
+## Notes / deviations
+
+- **Sheet order**: the design's parenthetical ("keep fxpole last or sorted") is
+  satisfied by the **sorted** list; fxpole is index 5. The existing pole
+  `art.sheet` numeric pins were updated to the derived values
+  (`ART_SHEET_FXPOLE`, count 5) — pixel pins untouched.
+- Zone overlays were re-keyed off `Game::combat.creature` (see above); behavior
+  for the four shipped beasts is identical, and it keeps the pole free of beast
+  part overlays without depending on bead .2's `MON_POLE`.
+- No `float`/`double`; no new cart reads in the paint path (art is seeded once in
+  `creatureLoad`).

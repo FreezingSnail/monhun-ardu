@@ -12,7 +12,7 @@
 namespace combat_data {
 
 constexpr uint8_t VERSION = 1;
-constexpr uint16_t BLOB_SIZE = 1093;
+constexpr uint16_t BLOB_SIZE = 1221;
 
 struct Box {
     int8_t ox;
@@ -84,6 +84,12 @@ struct Carve {
     uint8_t item, count, chance;   // count 0 = empty slot
 };
 
+struct Art {
+    uint8_t sheet;   // 1-based index into art_sheets.hpp; 0 = legacy per-kind draw
+    int8_t anchorY;  // art draw offset from the body-box top
+    uint8_t stride, idle0, idleCount, windup, attack, recover, flash, dead;
+};
+
 struct Creature {
     uint8_t skeletonIdx, profileIdx;
     uint8_t headZone, appendZone;
@@ -101,6 +107,11 @@ struct Creature {
 
 // Index constants (creatures sorted by id; attacks, windows, patterns and
 // steps keep source order inside each creature).
+constexpr uint8_t ART_HEAVY = 0;
+constexpr uint8_t ART_LUNGE = 1;
+constexpr uint8_t ART_POLE = 2;
+constexpr uint8_t ART_RAVAGER = 3;
+constexpr uint8_t ART_SWEEP = 4;
 constexpr uint8_t ATTACK_HEAVY_BITE = 0;
 constexpr uint8_t ATTACK_HEAVY_TAIL_SLAM = 2;
 constexpr uint8_t ATTACK_HEAVY_TAIL_SPIN = 1;
@@ -114,8 +125,9 @@ constexpr uint8_t ATTACK_SWEEP_REAR_KICK = 10;
 constexpr uint8_t ATTACK_SWEEP_STOMP = 8;
 constexpr uint8_t CREATURE_HEAVY = 0;
 constexpr uint8_t CREATURE_LUNGE = 1;
-constexpr uint8_t CREATURE_RAVAGER = 2;
-constexpr uint8_t CREATURE_SWEEP = 3;
+constexpr uint8_t CREATURE_POLE = 2;
+constexpr uint8_t CREATURE_RAVAGER = 3;
+constexpr uint8_t CREATURE_SWEEP = 4;
 constexpr uint8_t GUARD_HEAVY_P_BITE = 3;
 constexpr uint8_t GUARD_HEAVY_P_BITE_SPIN = 1;
 constexpr uint8_t GUARD_HEAVY_P_SPIN = 2;
@@ -189,21 +201,24 @@ constexpr uint8_t WINDOW_SWEEP_STOMP_0 = 12;
 constexpr uint8_t ZONE_HEAVY_APPENDAGE = 0;
 constexpr uint8_t ZONE_LUNGE_APPENDAGE = 2;
 constexpr uint8_t ZONE_LUNGE_HEAD = 1;
-constexpr uint8_t ZONE_RAVAGER_APPENDAGE = 4;
-constexpr uint8_t ZONE_RAVAGER_HEAD = 3;
-constexpr uint8_t ZONE_SWEEP_APPENDAGE = 6;
-constexpr uint8_t ZONE_SWEEP_HEAD = 5;
+constexpr uint8_t ZONE_POLE_HEAD = 3;
+constexpr uint8_t ZONE_RAVAGER_APPENDAGE = 5;
+constexpr uint8_t ZONE_RAVAGER_HEAD = 4;
+constexpr uint8_t ZONE_SWEEP_APPENDAGE = 7;
+constexpr uint8_t ZONE_SWEEP_HEAD = 6;
 
-inline constexpr std::array<Creature, 4> CREATURES = {{
+inline constexpr std::array<Creature, 5> CREATURES = {{
     {2, 0, 255, 0, 0, 3, 0, 4, 40, 28, 5, {-8, 3, 48, 22}, 2800, 200, 40, 0, 0, 0, 0, 0, 0, 0, 0, {{7, 1, 100}, {4, 1, 55}, {5, 1, 25}, {0, 0, 0}}},
     {1, 1, 1, 2, 3, 3, 4, 4, 32, 24, 6, {9, 11, 12, 13}, 1800, 200, 40, 0, 0, 0, 0, 0, 0, 0, 0, {{4, 1, 100}, {5, 1, 45}, {0, 0, 0}, {0, 0, 0}}},
-    {4, 2, 3, 4, 6, 2, 8, 3, 32, 24, 6, {0, 0, 32, 24}, 2400, 200, 40, 0, 0, 0, 0, 0, 0, 0, 0, {{6, 1, 100}, {7, 1, 45}, {4, 2, 30}, {0, 0, 0}}},
-    {0, 3, 5, 6, 8, 3, 11, 4, 28, 22, 7, {1, 14, 26, 8}, 1500, 200, 40, 0, 0, 0, 0, 40, 130, 6, 0, {{5, 1, 100}, {6, 1, 40}, {0, 0, 0}, {0, 0, 0}}},
+    {3, 2, 3, 255, 0, 0, 0, 0, 20, 36, 0, {0, 0, 20, 36}, 300, 140, 40, 1, 1, 0, 0, 0, 0, 0, 0, {{0, 0, 0}, {0, 0, 0}, {0, 0, 0}, {0, 0, 0}}},
+    {4, 3, 4, 5, 6, 2, 8, 3, 32, 24, 6, {0, 0, 32, 24}, 2400, 200, 40, 0, 0, 0, 0, 0, 0, 0, 0, {{6, 1, 100}, {7, 1, 45}, {4, 2, 30}, {0, 0, 0}}},
+    {0, 4, 6, 7, 8, 3, 11, 4, 28, 22, 7, {1, 14, 26, 8}, 1500, 200, 40, 0, 0, 0, 0, 40, 130, 6, 0, {{5, 1, 100}, {6, 1, 40}, {0, 0, 0}, {0, 0, 0}}},
 }};
 
-inline constexpr std::array<Profile, 4> PROFILES = {{
+inline constexpr std::array<Profile, 5> PROFILES = {{
     {36, 12, 42, 8, 10, 6, 10, 0, 0, 2, 10, 1, 55, 40, 90, 140, 24, 0},
     {36, 16, 42, 8, 10, 6, 10, 60, 2, 3, 6, 1, 48, 60, 90, 140, 24, 30},
+    {0, 0, 0, 0, 1, 0, 1, 0, 0, 1, 0, 0, 0, 0, 0, 0, 0, 0},
     {36, 24, 42, 8, 10, 6, 10, 60, 1, 3, 8, 2, 50, 30, 90, 120, 24, 24},
     {36, 18, 42, 8, 10, 6, 10, 80, 1, 3, 10, 1, 55, 40, 90, 140, 24, 24},
 }};
@@ -216,10 +231,11 @@ inline constexpr std::array<Skeleton, 5> SKELETONS = {{
     {8, 2},
 }};
 
-inline constexpr std::array<Zone, 7> ZONES = {{
+inline constexpr std::array<Zone, 8> ZONES = {{
     {{-24, 0, 24, 16}, 240, 150, 40, 1, 30, 200, 3, 2, 0},
     {{18, 0, 11, 7}, 160, 130, 100, 1, 12, 130, 1, 0, 0},
     {{9, 0, 9, 24}, 240, 150, 40, 1, 30, 200, 3, 16, 0},
+    {{5, 0, 10, 8}, 0, 140, 100, 0, 0, 140, 0, 0, 0},
     {{20, 4, 12, 12}, 160, 130, 100, 1, 12, 130, 1, 0, 0},
     {{-14, 8, 18, 10}, 240, 150, 40, 1, 30, 200, 3, 128, 0},
     {{17, -4, 12, 10}, 160, 130, 100, 1, 12, 130, 1, 0, 0},
@@ -328,6 +344,14 @@ inline constexpr std::array<Step, 19> STEPS = {{
     {0, 9, 0, 70},
     {0, 8, 0, 100},
     {0, 9, 0, 100},
+}};
+
+inline constexpr std::array<Art, 5> ART = {{
+    {2, 0, 7, 0, 2, 2, 3, 4, 5, 6},
+    {3, 0, 7, 0, 2, 2, 3, 4, 5, 6},
+    {5, 0, 0, 0, 0, 0, 0, 0, 1, 0},
+    {1, 0, 4, 0, 0, 0, 0, 1, 2, 3},
+    {4, 0, 7, 0, 2, 2, 3, 4, 5, 6},
 }};
 
 }   // namespace combat_data

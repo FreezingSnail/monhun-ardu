@@ -47,6 +47,9 @@ Blob layout (little-endian, explicit u8/u16, no padding, fixed section order):
                      2 front)
     step        4 B  kind (0 ATK / 1 WAIT), ref (attackIdx or ticks), after,
                      chance
+    art        10 B  sheetIdx (1-based into data/art_sheets.json, 0 = none ->
+                     legacy per-kind draw), anchorY i8, stride, idle0,
+                     idleCount, windup, attack, recover, flash, dead
 
 Usage:
     python3 tools/gen-combat.py [--root DIR] [--dump]
@@ -66,6 +69,7 @@ REPO_ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 SKELETONS_REL = "data/skeletons.json"
 CREATURES_REL = "data/creatures"
 ITEMS_REL = "data/items.json"
+ART_SHEETS_REL = "data/art_sheets.json"
 BLOB_REL = "fxdata/tables/combat.bin"
 DATA_HPP_REL = "src/generated/combat_data.hpp"
 META_HPP_REL = "src/generated/combat_meta.hpp"
@@ -126,6 +130,11 @@ SIZES = {
     "GUARD": 9,
     "STEP": 4,
     "CARVE": CARVE_SIZE,
+    # Epic monhun-ardu-bih: the per-creature art descriptor appended after every
+    # other section (ART_COUNT == CREATURES_COUNT). The sheet field is a 1-based
+    # index into data/art_sheets.json; render resolves it to a cart address via
+    # the post-pack src/generated/art_sheets.hpp table.
+    "ART": 10,
 }
 SECTION_RECORD = {
     "CREATURES": "CREATURE",
@@ -138,9 +147,11 @@ SECTION_RECORD = {
     "PATTERNS": "PATTERN",
     "GUARDS": "GUARD",
     "STEPS": "STEP",
+    "ART": "ART",
 }
 SECTION_ORDER = list(SECTION_RECORD)
-RESERVED_COUNTS = 4
+# 11 section counts now (the ART count takes the first reserved u16), 3 reserved.
+RESERVED_COUNTS = 3
 
 _MISSING = object()
 
@@ -556,6 +567,83 @@ def load_item_ids(errors, root):
     return None if errors.items else ids
 
 
+def load_art_sheets(errors, root):
+    """Ordered art sheet names from data/art_sheets.json (epic monhun-ardu-bih).
+
+    A creature's `art.sheet` resolves to a 1-based index in this list (the ART
+    record stores the index, never a cart address; the address table is emitted
+    post-pack into src/generated/art_sheets.hpp). Only needed when a creature
+    authors an `art` block, so lightweight schema fixtures stay valid without
+    the file."""
+    path = os.path.join(root, ART_SHEETS_REL)
+    if not os.path.isfile(path):
+        return None
+    doc = load_json(errors, path)
+    if doc is None:
+        return None
+    check_keys(errors, ART_SHEETS_REL, doc, {"version", "sheets"})
+    read_int(errors, ART_SHEETS_REL, doc, "version", 1, 1)
+    raw_sheets = doc.get("sheets")
+    if not isinstance(raw_sheets, list) or not raw_sheets:
+        errors.add(ART_SHEETS_REL, "sheets: expected a non-empty array")
+        return None
+    names = []
+    seen = set()
+    for i, name in enumerate(raw_sheets):
+        ctx = "%s: sheets[%d]" % (ART_SHEETS_REL, i)
+        if not isinstance(name, str) or not ID_RE.match(name):
+            errors.add(ctx, "expected a sheet name matching [a-z][a-z0-9_]*")
+            continue
+        if name in seen:
+            errors.add(ctx, "duplicate art sheet '%s'" % name)
+        seen.add(name)
+        names.append(name)
+    return None if errors.items else names
+
+
+ART_FIELDS = ("sheet", "anchorY", "stride", "idle0", "idleCount", "windup", "attack", "recover", "flash", "dead")
+
+
+def normalize_art(errors, ctx, obj, sheet_names):
+    """Optional per-creature art descriptor (epic monhun-ardu-bih).
+
+    `sheet` names a data/art_sheets.json entry and packs as its 1-based index.
+    Every frame slot is required so a future creature cannot silently inherit a
+    half-authored record; the field order is the packed ART record order."""
+    check_keys(errors, ctx, obj, set(ART_FIELDS))
+    name = obj.get("sheet")
+    if name is None:
+        errors.add(ctx, "sheet: required")
+        index = 0
+    elif not isinstance(name, str):
+        errors.add(ctx, "sheet: expected a sheet name string")
+        index = 0
+    elif sheet_names is None:
+        errors.add(ART_SHEETS_REL, "missing art sheet file (art.sheet resolves against it)")
+        index = 0
+    elif name not in sheet_names:
+        errors.add(ctx, "sheet: unknown art sheet %r" % name)
+        index = 0
+    else:
+        index = sheet_names.index(name) + 1
+    return {
+        "sheet": index,
+        "anchorY": read_int(errors, ctx, obj, "anchorY", -128, 127),
+        "stride": read_int(errors, ctx, obj, "stride", 0, 255),
+        "idle0": read_int(errors, ctx, obj, "idle0", 0, 255),
+        "idleCount": read_int(errors, ctx, obj, "idleCount", 0, 255),
+        "windup": read_int(errors, ctx, obj, "windup", 0, 255),
+        "attack": read_int(errors, ctx, obj, "attack", 0, 255),
+        "recover": read_int(errors, ctx, obj, "recover", 0, 255),
+        "flash": read_int(errors, ctx, obj, "flash", 0, 255),
+        "dead": read_int(errors, ctx, obj, "dead", 0, 255),
+    }
+
+
+ZERO_ART = {"sheet": 0, "anchorY": 0, "stride": 0, "idle0": 0, "idleCount": 0,
+            "windup": 0, "attack": 0, "recover": 0, "flash": 0, "dead": 0}
+
+
 def normalize_carve(errors, ctx, raw, item_ids):
     """Optional per-creature carve table (prg.3): [{item, count, chance}, ...].
 
@@ -690,6 +778,7 @@ def compile_model(errors, root):
         return None
     skeletons_by_id = {skeleton["id"]: skeleton for skeleton in skeletons}
     item_ids = load_item_ids(errors, root)
+    art_sheet_names = load_art_sheets(errors, root)
     creatures = []
     creature_ids = set()
     for name in creature_files:
@@ -699,7 +788,7 @@ def compile_model(errors, root):
         if obj is None:
             continue
         check_keys(errors, ctx, obj, {"id", "skeleton", "stats"},
-                   {"profile", "attacks", "patterns", "zones", "collide", "static", "sheet", "carve"})
+                   {"profile", "attacks", "patterns", "zones", "collide", "static", "sheet", "carve", "art"})
         is_static = bool(read_bool(errors, ctx, obj, "static", default=0))
         sheet_id = read_int(errors, ctx, obj, "sheet", 0, 255, default=0)
         cid = read_id(errors, ctx, obj, "id")
@@ -779,6 +868,7 @@ def compile_model(errors, root):
                 pattern_ids.add(pattern["id"])
             patterns.append(pattern)
         carve = normalize_carve(errors, ctx + ".carve", obj.get("carve"), item_ids)
+        art = normalize_art(errors, ctx + ".art", obj.get("art"), art_sheet_names) if "art" in obj else dict(ZERO_ART)
         creatures.append({
             "id": cid,
             "skeleton": skeleton,
@@ -800,6 +890,7 @@ def compile_model(errors, root):
             "zones": zones,
             "patterns": patterns,
             "carve": carve,
+            "art": art,
         })
     if errors.items:
         return None
@@ -920,6 +1011,7 @@ def pack_model(errors, model):
         "ATTACKS": len(layout["attacks"]), "WINDOWS": len(layout["windows"]),
         "PATTERNS": len(layout["patterns"]), "GUARDS": len(layout["guards"]),
         "STEPS": len(layout["steps"]),
+        "ART": len(layout["creatures"]),
     }
     for section, count in counts.items():
         if count > 255:
@@ -1117,6 +1209,22 @@ def pack_model(errors, model):
             ref = step["ref"] if step["ref"] is not None else 0
         record("STEP", u8(step["kind"]) + u8(ref) + u8(step["after"] or 0) + u8(step["chance"] or 100))
 
+    # art (epic monhun-ardu-bih): one 10 B descriptor per creature, appended
+    # after every other section so all existing offsets stay stable. Index order
+    # matches the CREATURES section (1:1), so the runtime reads ART_OFF + i*SIZE.
+    section_off["ART"] = mark("art")
+    for i, entry in enumerate(layout["creatures"]):
+        creature = entry["creature"]
+        art = creature["art"]
+        cid = creature["id"]
+        indices["ART_%s" % cid.upper()] = i
+        offsets["ART_%s_OFF" % cid.upper()] = mark("art")
+        record("ART", b"".join([
+            u8(art["sheet"]), i8(art["anchorY"]), u8(art["stride"]), u8(art["idle0"]),
+            u8(art["idleCount"]), u8(art["windup"]), u8(art["attack"]), u8(art["recover"]),
+            u8(art["flash"]), u8(art["dead"]),
+        ]))
+
     header = bytearray(u16(MAGIC) + u8(VERSION) + u8(FLAGS))
     for section in SECTION_ORDER:
         header.extend(u16(section_count[section]))
@@ -1238,6 +1346,12 @@ def emit_data_header(model, compiled):
     app("    uint8_t item, count, chance;   // count 0 = empty slot")
     app("};")
     app("")
+    app("struct Art {")
+    app("    uint8_t sheet;   // 1-based index into art_sheets.hpp; 0 = legacy per-kind draw")
+    app("    int8_t anchorY;  // art draw offset from the body-box top")
+    app("    uint8_t stride, idle0, idleCount, windup, attack, recover, flash, dead;")
+    app("};")
+    app("")
     app("struct Creature {")
     app("    uint8_t skeletonIdx, profileIdx;")
     app("    uint8_t headZone, appendZone;")
@@ -1354,6 +1468,12 @@ def emit_data_header(model, compiled):
                 else:
                     ref = step["ref"] if step["ref"] is not None else 0
                 app("    {%d, %d, %d, %d}," % (step["kind"], ref, step["after"] or 0, step["chance"] or 100))
+        elif section == "ART":
+            for entry in layout["creatures"]:
+                art = entry["creature"]["art"]
+                app("    {%d, %d, %d, %d, %d, %d, %d, %d, %d, %d}," % (
+                    art["sheet"], art["anchorY"], art["stride"], art["idle0"], art["idleCount"],
+                    art["windup"], art["attack"], art["recover"], art["flash"], art["dead"]))
         app("}};")
         app("")
     app("}   // namespace combat_data")
@@ -1455,8 +1575,8 @@ def emit_meta_header(model, compiled):
     app("#pragma once")
     app("// Generated by tools/gen-combat.py -- do not edit.")
     app("//")
-    app("// Combat blob ABI: header (magic u16, version u8, flags u8, 10x u16 counts")
-    app("// + 4x u16 reserved) then fixed-size record arrays, little-endian, explicit")
+    app("// Combat blob ABI: header (magic u16, version u8, flags u8, 11x u16 counts")
+    app("// + 3x u16 reserved) then fixed-size record arrays, little-endian, explicit")
     app("// u8/u16, no padding. Offsets are absolute byte offsets into the mhCombat")
     app("// raw_t section (fxdata/fxdata.txt): on AVR the loader reads mhCombat + off.")
     app("")
@@ -1535,6 +1655,18 @@ def emit_expect_header(model, compiled):
         app("constexpr uint8_t CREATURE_%s_PATTERNS = %d;" % (cid, len(creature["patterns"])))
         app("constexpr uint8_t CREATURE_%s_STATIC = %d;" % (cid, creature["static"]))
         app("constexpr uint8_t CREATURE_%s_SHEET = %d;" % (cid, creature["sheet"]))
+        # Art descriptor pins (epic monhun-ardu-bih) only for creatures that
+        # author one: every other creature packs an all-zero record (legacy draw)
+        # and emitting ~9 dead constants each would bloat the device test image.
+        art = creature["art"]
+        if art["sheet"] != 0:
+            app("constexpr uint8_t CREATURE_%s_ART_SHEET = %d;" % (cid, art["sheet"]))
+            app("constexpr int8_t CREATURE_%s_ART_ANCHOR_Y = %d;" % (cid, art["anchorY"]))
+            app("constexpr uint8_t CREATURE_%s_ART_STRIDE = %d;" % (cid, art["stride"]))
+            app("constexpr uint8_t CREATURE_%s_ART_IDLE0 = %d;" % (cid, art["idle0"]))
+            app("constexpr uint8_t CREATURE_%s_ART_IDLE_COUNT = %d;" % (cid, art["idleCount"]))
+            app("constexpr uint8_t CREATURE_%s_ART_FLASH = %d;" % (cid, art["flash"]))
+            app("constexpr uint8_t CREATURE_%s_ART_DEAD = %d;" % (cid, art["dead"]))
         broken_body = creature["brokenBody"] or {"w": 0, "h": 0}
         app("constexpr uint8_t CREATURE_%s_BROKEN_W = %d;" % (cid, broken_body["w"]))
         app("constexpr uint8_t CREATURE_%s_BROKEN_H = %d;" % (cid, broken_body["h"]))
@@ -1610,6 +1742,11 @@ def dump_model(model, compiled):
             enrage["hpPct"], enrage["spdMul"], enrage["faceHold"], enrage["cue"] or 0, zones or "-"))
         carve = " ".join("item%d x%d @%d%%" % (c["item"], c["count"], c["chance"]) for c in creature["carve"])
         print("  carve: %s" % (carve or "-"))
+        art = creature["art"]
+        if art["sheet"]:
+            print("  art: sheet%d anchorY%d stride%d idle%d+%d windup%d attack%d recover%d flash%d dead%d" % (
+                art["sheet"], art["anchorY"], art["stride"], art["idle0"], art["idleCount"],
+                art["windup"], art["attack"], art["recover"], art["flash"], art["dead"]))
         print("  profile: engage%d keep%d attack%d circle%d/%d retreat%d/%d stagger%d/%d/%d faceHold%d turnRate%d cd%d+%d spawn%d/%d stun%d" % (
             profile["engageDist"], profile["keepDist"], profile["attackDist"],
             profile["circleNum"], profile["circleDen"], profile["retreatNum"], profile["retreatDen"],

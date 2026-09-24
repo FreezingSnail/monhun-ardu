@@ -563,13 +563,15 @@ class GenCombatTests(unittest.TestCase):
         self.assertEqual(meta["PATTERNS_COUNT"], 1)
         self.assertEqual(meta["GUARDS_COUNT"], 1)
         self.assertEqual(meta["STEPS_COUNT"], 2)
-        for i in range(4):
-            self.assertEqual(self.read_int16(blob, 24 + i * 2), 0)
+        self.assertEqual(meta["ART_COUNT"], 1)
+        for i in range(3):
+            self.assertEqual(self.read_int16(blob, 26 + i * 2), 0)
+        self.assertEqual(self.read_int16(blob, 24), meta["ART_COUNT"])
         # sections must tile the blob without gaps or padding.
         sections = ["CREATURES", "PROFILES", "SKELETONS", "ZONES", "ANCHORS",
-                    "ATTACKS", "WINDOWS", "PATTERNS", "GUARDS", "STEPS"]
+                    "ATTACKS", "WINDOWS", "PATTERNS", "GUARDS", "STEPS", "ART"]
         records = ["CREATURE", "PROFILE", "SKELETON", "ZONE", "ANCHOR",
-                   "ATTACK", "WINDOW", "PATTERN", "GUARD", "STEP"]
+                   "ATTACK", "WINDOW", "PATTERN", "GUARD", "STEP", "ART"]
         for i, section in enumerate(sections):
             end = meta["%s_OFF" % section] + meta["%s_SIZE" % records[i]] * meta["%s_COUNT" % section]
             if i + 1 < len(sections):
@@ -688,6 +690,97 @@ class GenCombatTests(unittest.TestCase):
         self.assertIn("constexpr uint8_t CREATURE_POLE_BROKEN_W = 20;", expect)
         self.assertIn("constexpr uint8_t CREATURE_POLE_BROKEN_H = 36;", expect)
 
+    # ------------------------------------------------------------- art (bih)
+
+    def write_art_sheets(self, names):
+        with open(self.path("data", "art_sheets.json"), "w", encoding="utf-8", newline="\n") as handle:
+            json.dump({"version": 1, "sheets": names}, handle, indent=2)
+            handle.write("\n")
+
+    def test_art_default_empty_no_pins(self):
+        # A creature with no art block packs an all-zero ART record (sheet 0 =
+        # legacy draw) and emits no per-creature art pins (device-image budget).
+        self.assert_succeeds(self.compile())
+        meta = self.meta_constants()
+        self.assertEqual(meta["ART_SIZE"], 10, "art record is 10 B")
+        self.assertEqual(meta["ART_COUNT"], 1, "one art record per creature")
+        self.assertEqual(meta["ART_BEAST_OFF"], meta["STEPS_OFF"] + meta["STEP_SIZE"] * meta["STEPS_COUNT"], "art appended after steps")
+        self.assertEqual(meta["ART_BEAST_OFF"] + meta["ART_SIZE"] * meta["ART_COUNT"], meta["SIZE"], "art ends the blob")
+        blob = self.blob()
+        self.assertEqual(blob[meta["ART_BEAST_OFF"]:meta["ART_BEAST_OFF"] + 10], bytes([0] * 10), "empty art defaults")
+        self.assertNotIn("CREATURE_BEAST_ART_", self.read(EXPECT_REL))
+
+    def test_art_emit_validate_and_dump(self):
+        self.write_art_sheets(["fxpole", "fxbeast"])
+        self.mutate("data/creatures/beast.json",
+                    lambda doc: doc.__setitem__("art", {
+                        "sheet": "fxbeast", "anchorY": -3, "stride": 7,
+                        "idle0": 0, "idleCount": 2, "windup": 5, "attack": 6,
+                        "recover": 4, "flash": 8, "dead": 9,
+                    }))
+        self.assert_succeeds(self.compile())
+        meta = self.meta_constants()
+        o = meta["ART_BEAST_OFF"]
+        blob = self.blob()
+        # sheet resolves 1-based in list order (fxbeast -> 2); anchorY i8.
+        self.assertEqual(blob[o:o + 10], bytes([2, 0xFD, 7, 0, 2, 5, 6, 4, 8, 9]))
+        expect = self.read(EXPECT_REL)
+        self.assertIn("constexpr uint8_t CREATURE_BEAST_ART_SHEET = 2;", expect)
+        self.assertIn("constexpr int8_t CREATURE_BEAST_ART_ANCHOR_Y = -3;", expect)
+        self.assertIn("constexpr uint8_t CREATURE_BEAST_ART_STRIDE = 7;", expect)
+        self.assertIn("constexpr uint8_t CREATURE_BEAST_ART_FLASH = 8;", expect)
+        self.assertIn("constexpr uint8_t CREATURE_BEAST_ART_DEAD = 9;", expect)
+        self.assertIn("art: sheet2 anchorY-3 stride7 idle0+2 windup5 attack6 recover4 flash8 dead9", self.compile("--dump").stdout)
+        # The host mirror carries the same Art row.
+        self.assertIn("std::array<Art, 1> ART", self.read(DATA_REL))
+
+    def test_art_unknown_sheet_rejected(self):
+        self.write_art_sheets(["fxpole"])
+        self.mutate("data/creatures/beast.json",
+                    lambda doc: doc.__setitem__("art", {
+                        "sheet": "missing", "anchorY": 0, "stride": 0,
+                        "idle0": 0, "idleCount": 0, "windup": 0, "attack": 0,
+                        "recover": 0, "flash": 0, "dead": 0,
+                    }))
+        self.assert_fails(self.compile(), "art: sheet: unknown art sheet 'missing'")
+
+    def test_art_requires_sheet_file(self):
+        # An authored art block with no data/art_sheets.json fails loudly.
+        self.mutate("data/creatures/beast.json",
+                    lambda doc: doc.__setitem__("art", {
+                        "sheet": "fxpole", "anchorY": 0, "stride": 0,
+                        "idle0": 0, "idleCount": 0, "windup": 0, "attack": 0,
+                        "recover": 0, "flash": 0, "dead": 0,
+                    }))
+        self.assert_fails(self.compile(), "missing art sheet file (art.sheet resolves against it)")
+
+    def test_art_missing_and_unknown_keys_rejected(self):
+        self.write_art_sheets(["fxpole"])
+        self.mutate("data/creatures/beast.json",
+                    lambda doc: doc.__setitem__("art", {"sheet": "fxpole", "anchorY": 0}))
+        self.assert_fails(self.compile(), "art: missing key 'stride'")
+        self.mutate("data/creatures/beast.json",
+                    lambda doc: doc.__setitem__("art", {
+                        "sheet": "fxpole", "anchorY": 0, "stride": 0, "idle0": 0,
+                        "idleCount": 0, "windup": 0, "attack": 0, "recover": 0,
+                        "flash": 0, "dead": 0, "loop": 1}))
+        self.assert_fails(self.compile(), "art: unknown key 'loop'")
+
+    def test_art_range_and_integer_only(self):
+        self.write_art_sheets(["fxpole"])
+        self.mutate("data/creatures/beast.json",
+                    lambda doc: doc.__setitem__("art", {
+                        "sheet": "fxpole", "anchorY": 200, "stride": 0, "idle0": 0,
+                        "idleCount": 0, "windup": 0, "attack": 0, "recover": 0,
+                        "flash": 0, "dead": 0}))
+        self.assert_fails(self.compile(), "art: anchorY: out of range -128..127: 200")
+        self.mutate("data/creatures/beast.json",
+                    lambda doc: doc.__setitem__("art", {
+                        "sheet": "fxpole", "anchorY": 0, "stride": 1.5, "idle0": 0,
+                        "idleCount": 0, "windup": 0, "attack": 0, "recover": 0,
+                        "flash": 0, "dead": 0}))
+        self.assert_fails(self.compile(), "art: stride: expected an integer, got 1.5")
+
     def test_static_omitted_collections_rejected_for_dynamic(self):
         # A dynamic creature still needs non-empty attacks/patterns.
         self.mutate("data/creatures/beast.json", lambda doc: doc.__setitem__("attacks", []))
@@ -704,7 +797,7 @@ class GenCombatTests(unittest.TestCase):
                 expect[match.group(2)] = int(match.group(3), 0)
         meta = self.meta_constants()
         for record in ("CREATURE", "PROFILE", "SKELETON", "ZONE", "ANCHOR",
-                       "ATTACK", "WINDOW", "PATTERN", "GUARD", "STEP"):
+                       "ATTACK", "WINDOW", "PATTERN", "GUARD", "STEP", "ART"):
             self.assertEqual(expect["%s_SIZE" % record], meta["%s_SIZE" % record])
         self.assertEqual(expect["BLOB_SIZE"], len(blob))
         self.assertEqual(expect["CREATURE_SIZE"], 41)
@@ -732,8 +825,8 @@ class GenCombatTests(unittest.TestCase):
         self.assert_succeeds(self.compile())
         text = self.read(DATA_REL)
         for needle in ("struct Creature {", "struct Attack {", "struct Guard {", "struct Window {",
-                       "struct Zone {", "struct Carve {", "carve[4]", "std::array<Creature, 1> CREATURES", "std::array<Attack, 1> ATTACKS",
-                       "std::array<Guard, 1> GUARDS", "std::array<Step, 2> STEPS"):
+                       "struct Zone {", "struct Carve {", "struct Art {", "carve[4]", "std::array<Creature, 1> CREATURES", "std::array<Attack, 1> ATTACKS",
+                       "std::array<Guard, 1> GUARDS", "std::array<Step, 2> STEPS", "std::array<Art, 1> ART"):
             self.assertIn(needle, text)
         self.assertIn("constexpr uint8_t CREATURE_BEAST = 0;", text)
         self.assertIn("constexpr uint8_t ATTACK_BEAST_JAB = 0;", text)

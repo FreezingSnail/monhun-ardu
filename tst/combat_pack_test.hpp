@@ -189,8 +189,8 @@ void CombatPackSuite(TestRunner &runner) {
         t.assert(combat_expect::BLOB_SIZE, combat::SIZE, "expect blob size");
         t.assert(combat_data::VERSION, combat::VERSION, "host data version");
 
-        // Header counts: 10 little-endian u16 after magic/version/flags, then 4
-        // reserved (0).
+        // Header counts: 11 little-endian u16 after magic/version/flags (the ART
+        // count took the first reserved slot), then 3 reserved (0).
         t.assert(b16(blob, 4), combat::CREATURES_COUNT, "count creatures");
         t.assert(b16(blob, 6), combat::PROFILES_COUNT, "count profiles");
         t.assert(b16(blob, 8), combat::SKELETONS_COUNT, "count skeletons");
@@ -201,8 +201,9 @@ void CombatPackSuite(TestRunner &runner) {
         t.assert(b16(blob, 18), combat::PATTERNS_COUNT, "count patterns");
         t.assert(b16(blob, 20), combat::GUARDS_COUNT, "count guards");
         t.assert(b16(blob, 22), combat::STEPS_COUNT, "count steps");
-        for (uint8_t i = 0; i < 4; i++)
-            t.assert(b16(blob, 24 + i * 2), 0, "reserved header count");
+        t.assert(b16(blob, 24), combat::ART_COUNT, "count art");
+        for (uint8_t i = 0; i < 3; i++)
+            t.assert(b16(blob, 26 + i * 2), 0, "reserved header count");
 
         // Sections tile the blob with no gaps or padding.
         t.assert(combat::CREATURES_OFF, combat::HEADER_SIZE, "creatures start after header");
@@ -215,7 +216,8 @@ void CombatPackSuite(TestRunner &runner) {
         t.assert(combat::PATTERNS_OFF, combat::WINDOWS_OFF + combat::WINDOW_SIZE * combat::WINDOWS_COUNT, "windows tile");
         t.assert(combat::GUARDS_OFF, combat::PATTERNS_OFF + combat::PATTERN_SIZE * combat::PATTERNS_COUNT, "patterns tile");
         t.assert(combat::STEPS_OFF, combat::GUARDS_OFF + combat::GUARD_SIZE * combat::GUARDS_COUNT, "guards tile");
-        t.assert(combat::STEPS_OFF + combat::STEP_SIZE * combat::STEPS_COUNT, combat::SIZE, "steps end at blob size");
+        t.assert(combat::ART_OFF, combat::STEPS_OFF + combat::STEP_SIZE * combat::STEPS_COUNT, "steps tile into art");
+        t.assert(combat::ART_OFF + combat::ART_SIZE * combat::ART_COUNT, combat::SIZE, "art ends at blob size");
 
         Sha256 sha;
         sha.init();
@@ -233,6 +235,11 @@ void CombatPackSuite(TestRunner &runner) {
             {"CREATURE_LUNGE", combat::CREATURE_LUNGE_OFF, combat::CREATURES_OFF, combat::CREATURE_LUNGE, combat::CREATURE_SIZE, combat::CREATURES_COUNT},
             {"CREATURE_RAVAGER", combat::CREATURE_RAVAGER_OFF, combat::CREATURES_OFF, combat::CREATURE_RAVAGER, combat::CREATURE_SIZE, combat::CREATURES_COUNT},
             {"CREATURE_SWEEP", combat::CREATURE_SWEEP_OFF, combat::CREATURES_OFF, combat::CREATURE_SWEEP, combat::CREATURE_SIZE, combat::CREATURES_COUNT},
+            {"ART_HEAVY", combat::ART_HEAVY_OFF, combat::ART_OFF, combat::ART_HEAVY, combat::ART_SIZE, combat::ART_COUNT},
+            {"ART_LUNGE", combat::ART_LUNGE_OFF, combat::ART_OFF, combat::ART_LUNGE, combat::ART_SIZE, combat::ART_COUNT},
+            {"ART_POLE", combat::ART_POLE_OFF, combat::ART_OFF, combat::ART_POLE, combat::ART_SIZE, combat::ART_COUNT},
+            {"ART_RAVAGER", combat::ART_RAVAGER_OFF, combat::ART_OFF, combat::ART_RAVAGER, combat::ART_SIZE, combat::ART_COUNT},
+            {"ART_SWEEP", combat::ART_SWEEP_OFF, combat::ART_OFF, combat::ART_SWEEP, combat::ART_SIZE, combat::ART_COUNT},
             {"PROFILE_HEAVY", combat::PROFILE_HEAVY_OFF, combat::PROFILES_OFF, combat::CREATURE_HEAVY, combat::PROFILE_SIZE, combat::PROFILES_COUNT},
             {"PROFILE_LUNGE", combat::PROFILE_LUNGE_OFF, combat::PROFILES_OFF, combat::CREATURE_LUNGE, combat::PROFILE_SIZE, combat::PROFILES_COUNT},
             {"PROFILE_RAVAGER", combat::PROFILE_RAVAGER_OFF, combat::PROFILES_OFF, combat::CREATURE_RAVAGER, combat::PROFILE_SIZE, combat::PROFILES_COUNT},
@@ -405,6 +412,21 @@ void CombatPackSuite(TestRunner &runner) {
             const combat_data::Skeleton &h = combat_data::SKELETONS[i];
             t.assert(b8(blob, o + 0), h.firstAnchor, "blob skeleton firstAnchor");
             t.assert(b8(blob, o + 1), h.anchorCount, "blob skeleton anchorCount");
+        }
+        // bih: 10 B art descriptor per creature, appended after the steps.
+        for (uint8_t i = 0; i < combat::ART_COUNT; i++) {
+            const size_t o = static_cast<size_t>(combat::ART_OFF) + i * combat::ART_SIZE;
+            const combat_data::Art &h = combat_data::ART[i];
+            t.assert(b8(blob, o + 0), h.sheet, "blob art sheet");
+            t.assert(bi8(blob, o + 1), h.anchorY, "blob art anchorY");
+            t.assert(b8(blob, o + 2), h.stride, "blob art stride");
+            t.assert(b8(blob, o + 3), h.idle0, "blob art idle0");
+            t.assert(b8(blob, o + 4), h.idleCount, "blob art idleCount");
+            t.assert(b8(blob, o + 5), h.windup, "blob art windup");
+            t.assert(b8(blob, o + 6), h.attack, "blob art attack");
+            t.assert(b8(blob, o + 7), h.recover, "blob art recover");
+            t.assert(b8(blob, o + 8), h.flash, "blob art flash");
+            t.assert(b8(blob, o + 9), h.dead, "blob art dead");
         }
         for (uint8_t i = 0; i < combat::ZONES_COUNT; i++) {
             const size_t o = static_cast<size_t>(combat::ZONES_OFF) + i * combat::ZONE_SIZE;

@@ -613,6 +613,17 @@ struct CombatEnrage {
     uint8_t fired;   // one-shot latch
 };
 
+// Art descriptor (epic monhun-ardu-bih): the per-creature ART record cached at
+// spawn. sheet is a 1-based index into the generated art_sheets.hpp table
+// (0 = none -> the legacy per-kind draw path). anchorY offsets the art from the
+// body-box top; stride is the west frame offset (0 = no mirror); the remaining
+// slots are frame indices into the sheet. Field order is the packed ART ABI.
+struct CombatArt {
+    uint8_t sheet;
+    int8_t anchorY;
+    uint8_t stride, idle0, idleCount, windup, attack, recover, flash, dead;
+};
+
 // One hit window (blob ABI order minus the reserved flags byte, which the
 // loader does not cache: always 0 today and never read).
 struct CombatWindow {
@@ -690,6 +701,7 @@ struct CombatState {
     uint8_t stepT;         // 8-bit countdown: step `after`/WAIT ticks cap at 255
     uint8_t stagger;       // stagger meter accumulator (profile.staggerMax = 0 -> unused)
     CombatEnrage enrage;   // 5 B AVR: one-shot HP-threshold escalation cache
+    CombatArt art;         // 10 B AVR: art descriptor read once at spawn (bih)
 };
 
 // Monster attack table — byte-for-byte port of mock/game.js MONSTER_ATTACKS.

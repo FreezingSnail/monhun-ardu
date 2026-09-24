@@ -205,6 +205,31 @@ static void setupHeavyAttack(Game &g, uint8_t state, int8_t fx, uint8_t tell = 0
     g.combat.attack.win.box.h = 1;
 }
 
+// bih: the training pole is the first art-descriptor creature. Spawn the demo
+// beast (to wire Game::target), then swap the combat caches to the pole record
+// and park it at the standard cell origin. creatureLoad caches art.sheet = 1, so
+// drawMonster routes through the generic art-table path.
+static void setupPole(Game &g, int8_t fx, int8_t fy) {
+    newGame(g, W_SWORD, MODE_HUNT, MON_LUNGE);
+    creatureLoad(g, combat::CREATURE_POLE);
+    Monster &m = g.monster;
+    m.x = BX;
+    m.y = 20;
+    m.subX = 0;
+    m.subY = 0;
+    m.w = g.combat.body.w;
+    m.h = g.combat.body.h;
+    m.fx = fx;
+    m.fy = fy;
+    m.state = MS_IDLE;
+    m.stun = 0;
+    m.hitFlash = 0;
+    m.atkIdx = COMBAT_NO_ATTACK;
+    g.combat.attack.facing = COMBAT_FACING_TRACK;
+    g.tick = 0;
+    g.combat.zoneBroken = 0;
+}
+
 inline void test_monster_art(FxTest &test) {
     arduboy.startGray();
 
@@ -589,6 +614,104 @@ inline void test_monster_art(FxTest &test) {
     setupBeast(g, MON_SWEEP, 0, 16);
     renderMonster(g, 2);
     test.expectEq(countRegionBit(static_cast<uint8_t>(BX + 4), static_cast<uint8_t>(BY + 17), 12, 16), 0, F("bull horns south no rotated band"));
+
+    // ---- bih phase 1 base-body oracle: the 4 beasts' BASE draw (no attack
+    // sheet) must be pixel-identical before and after their sheet/layout moves
+    // to art descriptors. Three facts per beast, all chosen OUTSIDE that beast's
+    // zone-overlay boxes so the pin isolates the baked body frame:
+    //   idle:  the DARK body lights plane 0 and not plane 2
+    //   flash: hitFlash > 0 swaps in the WHITE flash frame (plane 2 ink)
+    //   west:  fx < 0 selects the mirrored frame (the east mark clears and the
+    //          west mark / head-vs-body shade appears)
+    // LUNGE/SWEEP/HEAVY share the 7-frame layout (idle0 0, +2 idle, flash +5,
+    // stride 7); RAVAGER holds idle0 for windup/attack with stride 4.
+    // Chicken (LUNGE) tail plume x3: dark idle, white flash, mirror to x29.
+    setupBeast(g, MON_LUNGE, 16, 0);
+    renderMonster(g, 0);
+    test.expectEq(bitAt(BX + 3, BY + 8), 1, F("lunge idle tail plane0"));
+    renderMonster(g, 2);
+    test.expectEq(bitAt(BX + 3, BY + 8), 0, F("lunge idle tail not white"));
+    setupBeast(g, MON_LUNGE, 16, 0);
+    g.monster.hitFlash = 4;
+    renderMonster(g, 2);
+    test.expectEq(bitAt(BX + 3, BY + 8), 1, F("lunge flash tail white"));
+    setupBeast(g, MON_LUNGE, -16, 0);
+    renderMonster(g, 0);
+    test.expectEq(bitAt(BX + 3, BY + 8), 0, F("lunge idle west tail cleared"));
+    test.expectEq(bitAt(BX + 29, BY + 8), 1, F("lunge idle west tail plane0"));
+
+    // Bull (SWEEP) tail x2 y12: dark body east; the west frame's head lands over
+    // the same cell (white), so plane 2 flips with the facing.
+    setupBeast(g, MON_SWEEP, 16, 0);
+    renderMonster(g, 0);
+    test.expectEq(bitAt(BX + 2, BY + 12), 1, F("sweep idle tail plane0"));
+    renderMonster(g, 2);
+    test.expectEq(bitAt(BX + 2, BY + 12), 0, F("sweep idle tail not white"));
+    setupBeast(g, MON_SWEEP, 16, 0);
+    g.monster.hitFlash = 4;
+    renderMonster(g, 2);
+    test.expectEq(bitAt(BX + 2, BY + 12), 1, F("sweep flash tail white"));
+    setupBeast(g, MON_SWEEP, -16, 0);
+    renderMonster(g, 2);
+    test.expectEq(bitAt(BX + 2, BY + 12), 1, F("sweep idle west head white"));
+
+    // Longtail (HEAVY) tail base x1 y14: dark idle, white flash, mirror to x29
+    // (x1 y14 sits below the west head/snout at y3..12, so only the east frame
+    // inks it; the 24x16 appendage overlay sits left of the cell entirely).
+    setupBeast(g, MON_HEAVY, 16, 0);
+    renderMonster(g, 0);
+    test.expectEq(bitAt(BX + 1, BY + 14), 1, F("heavy idle tail plane0"));
+    renderMonster(g, 2);
+    test.expectEq(bitAt(BX + 1, BY + 14), 0, F("heavy idle tail not white"));
+    setupBeast(g, MON_HEAVY, 16, 0);
+    g.monster.hitFlash = 4;
+    renderMonster(g, 2);
+    test.expectEq(bitAt(BX + 1, BY + 14), 1, F("heavy flash tail white"));
+    setupBeast(g, MON_HEAVY, -16, 0);
+    renderMonster(g, 0);
+    test.expectEq(bitAt(BX + 1, BY + 14), 0, F("heavy idle west tail cleared"));
+    test.expectEq(bitAt(BX + 29, BY + 14), 1, F("heavy idle west tail plane0"));
+
+    // Ravager (legacy fxmonster sheet) body x10 y10: dark idle, white flash; the
+    // east head (white) at x24 y8 flips to the west body (dark) under the mirror.
+    setupBeast(g, MON_RAVAGER, 16, 0);
+    renderMonster(g, 0);
+    test.expectEq(bitAt(BX + 10, BY + 10), 1, F("ravager idle body plane0"));
+    renderMonster(g, 2);
+    test.expectEq(bitAt(BX + 10, BY + 10), 0, F("ravager idle body not white"));
+    setupBeast(g, MON_RAVAGER, 16, 0);
+    g.monster.hitFlash = 4;
+    renderMonster(g, 2);
+    test.expectEq(bitAt(BX + 10, BY + 10), 1, F("ravager flash body white"));
+    setupBeast(g, MON_RAVAGER, 16, 0);
+    renderMonster(g, 2);
+    test.expectEq(bitAt(BX + 24, BY + 8), 1, F("ravager idle east head white"));
+    setupBeast(g, MON_RAVAGER, -16, 0);
+    renderMonster(g, 2);
+    test.expectEq(bitAt(BX + 24, BY + 8), 0, F("ravager idle west body not white"));
+
+    // ---- bih generic art-descriptor path: the pole draws from the fxpole
+    // sheet (20x40 at the body origin, anchorY 0) instead of any beast sheet.
+    // Idle frame 0 has a LIGHT head (rows 0..15) and a DARK shaft (rows 12..35)
+    // with the BLACK ground plate at rows 34..35; the legacy 32x24 beast cell is
+    // only 20 px wide for the pole, so its right band (x BX+20..BX+31) must stay
+    // clear of the 32-px beast sheet, and the pole's below-cell shaft proves the
+    // 40-tall sheet blitted. hitFlash > 0 selects the flash frame (WHITE head).
+    setupPole(g, 16, 0);
+    test.expectEq(g.combat.art.sheet, art_sheets::ART_SHEET_FXPOLE, F("pole art sheet cached"));
+    renderMonster(g, 0);
+    test.expectEq(bitAt(BX + 5, BY + 2), 1, F("pole idle head light plane0"));
+    test.expectEq(bitAt(BX + 5, BY + 26), 1, F("pole shaft below beast cell plane0"));
+    test.expectEq(countRegionBit(static_cast<uint8_t>(BX + 20), static_cast<uint8_t>(BY), 12, 24), 0, F("no beast sheet in cell"));
+    renderMonster(g, 2);
+    test.expectEq(bitAt(BX + 5, BY + 2), 0, F("pole idle head not white"));
+
+    setupPole(g, 16, 0);
+    g.monster.hitFlash = 4;
+    renderMonster(g, 2);
+    test.expectEq(bitAt(BX + 5, BY + 2), 1, F("pole hit flash white plane2"));
+    renderMonster(g, 0);
+    test.expectEq(countRegionBit(static_cast<uint8_t>(BX + 20), static_cast<uint8_t>(BY), 12, 24), 0, F("no beast sheet flash in cell"));
 }
 
 }   // namespace monsterart

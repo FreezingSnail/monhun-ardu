@@ -49,6 +49,7 @@ GENERATED_GLOBS = (
     "fxdata/fxdata.h",
     "src/fxdata.h",
     "src/generated/**/*",
+    "src/generated/art_sheets.hpp",
     MANIFEST_REL,
 )
 

@@ -277,8 +277,12 @@ struct PkGuard {
 struct PkStep {
     uint8_t kind, ref, after, chance;
 };
+struct PkArt {
+    uint8_t sheet;
+    int8_t anchorY;
+    uint8_t stride, idle0, idleCount, windup, attack, recover, flash, dead;
+};
 #pragma pack(pop)
-
 static_assert(sizeof(PkCreature) == combat::CREATURE_SIZE, "creature ABI drift");
 static_assert(sizeof(PkCarve) == combat::CARVE_SIZE, "carve ABI drift");
 static_assert(offsetof(PkCreature, carve) == combat::CREATURE_CARVE_OFF, "creature carve table offset drift");
@@ -291,6 +295,7 @@ static_assert(sizeof(PkWindow) == combat::WINDOW_SIZE, "window ABI drift");
 static_assert(sizeof(PkPattern) == combat::PATTERN_SIZE, "pattern ABI drift");
 static_assert(sizeof(PkGuard) == combat::GUARD_SIZE, "guard ABI drift");
 static_assert(sizeof(PkStep) == combat::STEP_SIZE, "step ABI drift");
+static_assert(sizeof(PkArt) == combat::ART_SIZE, "art ABI drift");
 // Packed-pair reads: creature size fields and the pattern head are adjacent
 // pairs; attackLoad's scalar burst relies on the same layout as before.
 static_assert(offsetof(PkCreature, h) == offsetof(PkCreature, w) + 1, "creature size pair must stay adjacent");
@@ -319,7 +324,7 @@ static_assert(offsetof(CombatPattern, guardIdx) == offsetof(PkPattern, guardIdx)
 static_assert(sizeof(CombatWindow) == 9, "window cache must stay 9 B");
 static_assert(sizeof(CombatAttackCache) == 25, "attack cache must stay 25 B (windup quad + move prefix incl hop dx/dy + facing + wallStun + tell + idx + window)");
 static_assert(sizeof(CombatZoneCache) == 12, "zone cache must stay 12 B");
-static_assert(sizeof(CombatState) == 95, "CombatState must stay 95 B (zones design + collide + static flag + faceHold + turnRate + wallStun + tell + enrage + hop dx/dy)");
+static_assert(sizeof(CombatState) == 105, "CombatState must stay 105 B (zones design + collide + static flag + faceHold + turnRate + wallStun + tell + enrage + hop dx/dy + art)");
 
 // Fake cart pointer: the blob lives below 64 KB (generator hard-fails above).
 inline uint16_t combatCartAddr(uint16_t off) {
@@ -465,6 +470,15 @@ inline CombatCarve combatCarveRead(uint8_t creatureId, uint8_t slot) {
     const uint16_t b = static_cast<uint16_t>(combat::CREATURES_OFF + creatureId * combat::CREATURE_SIZE + combat::CREATURE_CARVE_OFF + slot * combat::CARVE_SIZE);
     detail::combatReadBytes(b, &v, sizeof(v));
     return v;
+}
+
+// One art descriptor (bih): 10 contiguous bytes at ART_OFF + creature*SIZE,
+// one bulk cart read at spawn. Bad ids fall back to creature 0 like the spawn
+// read, so the cache is always a valid (default-legacy) descriptor.
+inline void combatCreatureArtRead(uint8_t i, CombatArt &art) {
+    if (i >= combat::CREATURES_COUNT)
+        i = 0;
+    detail::combatReadBytes(static_cast<uint16_t>(combat::ART_OFF + i * combat::ART_SIZE), &art, sizeof(art));
 }
 
 // Profile is a byte-identical 23 B mirror: one bulk read at spawn.
@@ -727,6 +741,24 @@ inline CombatCarve combatCarveRead(uint8_t creatureId, uint8_t slot) {
     v.count = c.count;
     v.chance = c.chance;
     return v;
+}
+
+// Host art read (bih): identity projection of the generated mirror; bad ids
+// fall back to creature 0 like the device read.
+inline void combatCreatureArtRead(uint8_t i, CombatArt &art) {
+    if (i >= combat::CREATURES_COUNT)
+        i = 0;
+    const combat_data::Art &a = combat_data::ART[i];
+    art.sheet = a.sheet;
+    art.anchorY = a.anchorY;
+    art.stride = a.stride;
+    art.idle0 = a.idle0;
+    art.idleCount = a.idleCount;
+    art.windup = a.windup;
+    art.attack = a.attack;
+    art.recover = a.recover;
+    art.flash = a.flash;
+    art.dead = a.dead;
 }
 
 inline CombatProfile combatProfileRead(uint8_t i) {
@@ -1011,6 +1043,7 @@ inline uint8_t creatureLoad(Game &g, uint8_t creatureId) {
     g.combat.collide = combatCreatureCollideBox(creatureId);
     g.combat.isStatic = combatCreatureStatic(creatureId);
     combatCreatureEnrageRead(creatureId, g.combat.enrage);   // feel.6; fired latched to 0 by reset
+    combatCreatureArtRead(creatureId, g.combat.art);         // bih: one cart burst; seed of the generic draw
     if (ZONES_ENABLED) {
         combatZoneSeed(g, COMBAT_ZONE_HEAD, g.combat.headZone);
         combatZoneSeed(g, COMBAT_ZONE_APPENDAGE, g.combat.appendZone);
