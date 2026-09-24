@@ -280,6 +280,20 @@ class GenScreensTests(unittest.TestCase):
         row = parse_row(blob, hub["firstRow"])
         self.assertEqual(row["action"], 8, "open_gear action id")
 
+    def test_upgrade_row_action_compiles(self):
+        # hbk.11: the UPGRADE class-row action is the next free action id (15);
+        # the row packs the weapon class index in `param`.
+        self.mutate("data/screens/hub.json",
+                    lambda doc: doc["rows"][0].update({"action": "upgrade_row", "condition": "always",
+                                                       "param": 2}))
+        self.assert_succeeds(self.compile())
+        meta = self.read(META_REL)
+        self.assertIn("constexpr uint8_t ACTION_UPGRADE_ROW = 15;", meta)
+        blob = self.read_bytes(BLOB_REL)
+        hub = parse_def(blob, struct.unpack_from("<H", blob, DEF_OFF)[0])
+        row = parse_row(blob, hub["firstRow"])
+        self.assertEqual((row["action"], row["param"]), (15, 2), "upgrade_row id + class param")
+
     def test_equip_armor_action_compiles_and_slot_checked(self):
         # ui.3.1: the GEAR armor row opens the card; param packs (slot << 5) | piece.
         self.mutate("data/screens/hub.json",

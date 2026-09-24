@@ -250,8 +250,9 @@ addresses of the `mh_screen_<name>_<page>` layer arrays.
 - GEAR skill rows (`ROW_F_SKILL`): the live points number + S/M tier letter at
   the baked cost column (right-aligned at x=112).
 - (hbk.9 deleted the hub strip: the loadout readout lives on the GEAR slot view.)
-- Unchanged live chrome: header zenny, hub quest column (hbk.9: active-quest
-  `p/n` only -- the READY text and the no-quest `-` were dropped for flash).
+- Live chrome: header zenny. (hbk.9 leaned the hub quest column to active-quest
+  `p/n`; hbk.13 deleted it -- quest progress shows on the quest card's PROG
+  page and the QUESTS screen.)
 
 Everything else (labels, costs, section bands, tree prefixes) is baked: no
 runtime text layout, no per-row cost math for prebaked screens.
@@ -305,7 +306,10 @@ is untouched by a dev session.
    fixed-stride page table (29142 B, 554 free).
 5. `hbk.10` smithy split: FORGE submenu + CRAFT (flat, direct bill) + ARMOR
    FORGE, plus the direct-bill flag through the card path.
-6. `hbk.11` UPGRADE screen (3 class rows, live tier + cost).
+6. `hbk.11` UPGRADE screen (3 class rows, live tier + cost) — measured +528 B,
+   so `hbk.13` slimmed it (per-plane resolve from the generated
+   `NODE_UPGRADE_COST[]`, no ScreenState cache, no cart reads) and deleted the
+   hub quest column (progress stays on the quest card's PROG page).
 7. `hbk.12` GEAR equipment-box slot view (owned-only candidates).
 8. `hbk.8` spike (rejected): the dynamic owned-only list measured +590 B
    whole-image — see "MH-flow smithy" above.

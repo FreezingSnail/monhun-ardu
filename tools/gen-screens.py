@@ -80,7 +80,8 @@ ACTION_NAMES = ("leave", "buy_upgrade", "take_quest", "turn_in_quest",
                 "none", "hunt", "open_quests",
                 "equip_weapon", "open_gear", "equip_armor",
                 "forge_node", "open_forge",
-                "open_craft", "open_upgrade", "open_armor_forge")
+                "open_craft", "open_upgrade", "open_armor_forge",
+                "upgrade_row")   # hbk.11: UPGRADE class row (live tier/cost, param = class)
 COND_NAMES = ("always", "zenny", "flag", "tier", "quest", "upgrade")
 # hide_locked: reserved. skill: draw the cached live skill points
 # (ScreenState::skillPoints) in the cost column plus an S/M tier letter next to

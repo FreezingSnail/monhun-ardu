@@ -65,6 +65,11 @@ constexpr uint16_t NODE_GUN_T2_OFF = 144;
 constexpr uint8_t NODE_DEPTH[NODE_COUNT] = {0, 1, 2, 0, 1, 2, 0, 1, 2};
 constexpr uint8_t NODE_BRANCH[NODE_COUNT] = {0, 0, 0, 0, 0, 0, 0, 0, 0};
 
+// Per-node upgrade cost (the forge bill's zenny, N_COST_OFF). The UPGRADE
+// screen resolves a class's next node and reads its cost here instead of a
+// runtime cart seek per row (hbk.13).
+constexpr uint16_t NODE_UPGRADE_COST[NODE_COUNT] = {0, 100, 250, 0, 120, 280, 0, 90, 220};
+
 // Class first-node index: NODE_<CLASS>_FIRST + n walks the class nodes in
 // data order (the FORGE/GEAR generated row blocks).
 constexpr uint8_t NODE_SWORD_FIRST = 0;

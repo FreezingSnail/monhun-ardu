@@ -214,6 +214,7 @@ class GenForgeTests(unittest.TestCase):
             "constexpr uint8_t NODE_FLAIL_FIRST = 4;",
             "constexpr uint8_t NODE_DEPTH[NODE_COUNT] = {0, 1, 2, 2, 0, 1};",
             "constexpr uint8_t NODE_BRANCH[NODE_COUNT] = {0, 0, 0, 1, 0, 0};",
+            "constexpr uint16_t NODE_UPGRADE_COST[NODE_COUNT] = {0, 100, 250, 320, 0, 120};",
         ):
             self.assertIn(needle, meta)
         # The retired smith spine map is gone (save v5 has no migration).

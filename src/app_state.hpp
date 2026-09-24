@@ -170,8 +170,12 @@ MH_NOINLINE inline bool appNavApply(AppNav nav, ScreenState &screen, const SaveB
         screen.prevB = in.b;
         return false;
     case APP_NAV_UPGRADE:
-        // hbk.11 adds the UPGRADE screen (SCREEN_UPGRADE); until then the
-        // submenu WEAPON UPGRADE row is inert.
+        // hbk.11: the FORGE submenu WEAPON UPGRADE row opens the UPGRADE screen
+        // (3 class rows with a live tier/cost cache; the sketch fills it after
+        // this nav, like the GEAR readout).
+        screenReset(screen, screens::SCREEN_UPGRADE, screens::SCREEN_UPGRADE_ROWS);
+        screen.prevA = in.a;
+        screen.prevB = in.b;
         return false;
     case APP_NAV_HUNT:
         // The hub HUNT row: close the screen and report the hunt request. The

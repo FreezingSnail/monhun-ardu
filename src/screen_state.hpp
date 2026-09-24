@@ -37,6 +37,7 @@
 #include "quest_state.hpp"
 #include "upgrade_state.hpp"
 #include "generated/screen_meta.hpp"
+#include "generated/forge_meta.hpp"   // forge::WEAPON_* / NODE_* (weapon rows)
 #include "generated/armor_meta.hpp"   // armor::PIECE_COUNT / SKILL_COUNT (arm.2, gs.2)
 #include "armor_state.hpp"            // armorEquipToggle (arm.2)
 

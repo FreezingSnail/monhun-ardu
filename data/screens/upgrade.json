@@ -1,0 +1,11 @@
+{
+  "id": 6,
+  "title": "UPGRADE",
+  "prebake": true,
+  "rows": [
+    { "label": "SWORD", "cost": 0, "action": "upgrade_row", "condition": "always", "param": 0 },
+    { "label": "FLAIL", "cost": 0, "action": "upgrade_row", "condition": "always", "param": 1 },
+    { "label": "GUN", "cost": 0, "action": "upgrade_row", "condition": "always", "param": 2 },
+    { "label": "LEAVE", "cost": 0, "action": "leave", "condition": "always", "param": 0 }
+  ]
+}

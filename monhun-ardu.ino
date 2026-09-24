@@ -180,6 +180,23 @@ void run() {
         mh::ScreenRow row;
         if (!mh::screenCursorRow(s_screen, row))
             return;
+        // hbk.11/hbk.13 UPGRADE rows: resolve the class's next node straight
+        // from the save + generated tables and forge its card through the normal
+        // weapon-card path (the synthesized row's action makes cardRowIndex
+        // resolve WEAPON_BASE + node, upgrade bill, FORGE hint). A class with
+        // nothing to upgrade thunks and opens nothing.
+        if (row.action == screens::ACTION_UPGRADE_ROW) {
+            uint8_t next;
+            uint16_t cost;
+            if (!mh::screenUpgradeNext(row.param, s_save, next, cost)) {
+                mh::audioPlay(mh::CUE_HURT);
+                return;
+            }
+            row.action = screens::ACTION_FORGE_NODE;
+            row.param = next;
+            row.flags = screens::ROW_F_FORGE;
+            row.cost = cost;
+        }
         // Armor/quest rows open their prebaked card (even when the action is
         // gated -- the card's hint line shows NEED PARTS / NEED ZENNY). Every
         // other row keeps the direct-action path below.

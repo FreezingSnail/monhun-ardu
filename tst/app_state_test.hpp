@@ -93,9 +93,11 @@ void AppSuite(TestRunner &runner) {
         t.assert(appNavApply(APP_NAV_ARMOR_FORGE, screen, save, g, AT_A), false, "armor nav is not a hunt start");
         t.assert(screen.screen, screens::SCREEN_ARMOR_FORGE, "on the armor forge screen");
         t.assert(screen.rowCount, screens::SCREEN_ARMOR_FORGE_ROWS, "armor row count from the meta");
-        // hbk.11 wires APP_NAV_UPGRADE; until then the row leaves the screen alone.
-        t.assert(appNavApply(APP_NAV_UPGRADE, screen, save, g, AT_A), false, "upgrade nav inert");
-        t.assert(screen.screen, screens::SCREEN_ARMOR_FORGE, "upgrade nav leaves the screen");
+        // hbk.11 wires APP_NAV_UPGRADE to the UPGRADE screen (the cache fill is
+        // the device cart path's job, so this host nav stays cart-free).
+        t.assert(appNavApply(APP_NAV_UPGRADE, screen, save, g, AT_A), false, "upgrade nav is not a hunt start");
+        t.assert(screen.screen, screens::SCREEN_UPGRADE, "on the upgrade screen");
+        t.assert(screen.rowCount, screens::SCREEN_UPGRADE_ROWS, "upgrade row count from the meta");
         t.assert(appScreenBack(screens::SCREEN_CRAFT), APP_NAV_HUB, "craft B backs to the hub");
         t.assert(appScreenBack(screens::SCREEN_ARMOR_FORGE), APP_NAV_HUB, "armor B backs to the hub");
         suite.addTest(t);

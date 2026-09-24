@@ -438,6 +438,12 @@ def emit_meta_header(model, blob):
     app("constexpr uint8_t NODE_BRANCH[NODE_COUNT] = {%s};"
         % ", ".join(str(n["branch"]) for n in nodes))
     app("")
+    app("// Per-node upgrade cost (the forge bill's zenny, N_COST_OFF). The UPGRADE")
+    app("// screen resolves a class's next node and reads its cost here instead of a")
+    app("// runtime cart seek per row (hbk.13).")
+    app("constexpr uint16_t NODE_UPGRADE_COST[NODE_COUNT] = {%s};"
+        % ", ".join(str(n["cost"]) for n in nodes))
+    app("")
     app("// Class first-node index: NODE_<CLASS>_FIRST + n walks the class nodes in")
     app("// data order (the FORGE/GEAR generated row blocks).")
     for entry in model["classes"]:

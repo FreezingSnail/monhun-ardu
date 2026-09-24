@@ -77,13 +77,14 @@ inline void test_screens(FxTest &test) {
     // ------------------------------------------------- generated cart rows
     // ui.4 (5co.4) added the hub FORGE row; hbk.10 splits FORGE into a smithy
     // submenu + the CRAFT/ARMOR FORGE screens (dense indices 0..5).
-    test.expectEq(screens::SCREEN_COUNT, 6, F("screen count"));
+    test.expectEq(screens::SCREEN_COUNT, 7, F("screen count"));
     test.expectEq(screens::SCREEN_HUB, 0, F("hub index"));
     test.expectEq(screens::SCREEN_QUESTS, 1, F("quests index"));
     test.expectEq(screens::SCREEN_GEAR, 2, F("gear index"));
     test.expectEq(screens::SCREEN_FORGE, 3, F("forge index"));
     test.expectEq(screens::SCREEN_CRAFT, 4, F("craft index"));
     test.expectEq(screens::SCREEN_ARMOR_FORGE, 5, F("armor forge index"));
+    test.expectEq(screens::SCREEN_UPGRADE, 6, F("upgrade index"));
     test.expectEq(screenRowCount(screens::SCREEN_HUB), 4, F("hub row count"));
 
     // Title bytes come from the cart def (id u8, titleLen u8, title chars).
@@ -249,10 +250,10 @@ inline void test_screens(FxTest &test) {
     // right-aligned on the same title line: `$` + 1234 at x 104..123.
     test.expectEq(countBits(2, 13, 0, 7) > 0 ? 1 : 0, 1, F("title band ink"));
     test.expectEq(countBits(104, 123, 0, 7) > 0 ? 1 : 0, 1, F("header zenny drawn"));
-    // Row 0 label (baked; selected -> white redraw). Row 0 is HUNT: with no
-    // active quest the live quest column draws nothing.
+    // Row 0 label (baked; selected -> white redraw). Row 0 is HUNT: the row
+    // shows its baked label alone (hbk.13 dropped the live quest column).
     test.expectEq(countBits(10, 40, 11, 18) > 0 ? 1 : 0, 1, F("row0 label ink"));
-    test.expectEq(countBits(104, 123, 11, 18), 0, F("hub quest column empty without a quest"));
+    test.expectEq(countBits(104, 123, 11, 18), 0, F("hub row0 no live column"));
     // The hub bakes labels only (costs are 0): rows 1..3 have no cost ink.
     test.expectEq(countBits(104, 123, 20, 27), 0, F("hub row1 no baked cost"));
     test.expectEq(countBits(104, 123, 29, 36), 0, F("hub row2 no baked cost"));
@@ -274,9 +275,9 @@ inline void test_screens(FxTest &test) {
     test.expectEq(countBits(116, 123, 0, 7) > 0 ? 1 : 0, 1, F("zenny 0 `$`+digit drawn"));
     waitPlane(0);
 
-    // -------------------------------------------- ui.5.2 hub chrome pixels
-    // HUNT right column (row 0, y=11): active quest progress `p/n` only
-    // (hbk.9 dropped the no-quest `-` and the READY branch).
+    // --------------------------------------- hub row 0 has no live column
+    // hbk.13 dropped the hub quest progress column: an active quest no longer
+    // draws `p/n` on the HUNT row (progress stays on the quest card + board).
     clearFb();
     SaveBlock qs2;
     saveDefaults(qs2);
@@ -285,22 +286,7 @@ inline void test_screens(FxTest &test) {
     ScreenState hud;
     screenEnter(hud, screens::SCREEN_HUB, qs2);
     drawScreen(hud, qs2, g_gear);
-    // "2/3": digits x 112..115 / 120..123, slash 116..119.
-    test.expectEq(countBits(112, 123, 11, 18) > 0 ? 1 : 0, 1, F("hunt progress p/n ink"));
-    test.expectEq(countBits(104, 111, 11, 18), 0, F("hunt progress leaves the 4-digit span empty"));
-
-    // Progress at/over the need still draws `p/n` (READY retired in hbk.9).
-    clearFb();
-    qs2.progress = 3;
-    drawScreen(hud, qs2, g_gear);
-    test.expectEq(countBits(112, 123, 11, 18) > 0 ? 1 : 0, 1, F("hunt met progress p/n ink"));
-    test.expectEq(countBits(104, 111, 11, 18), 0, F("hunt met progress leaves the 4-digit span empty"));
-
-    // No active quest -> the column stays empty (`-` retired in hbk.9).
-    clearFb();
-    qs2.activeQuest = SAVE_QUEST_NONE;
-    drawScreen(hud, qs2, g_gear);
-    test.expectEq(countBits(104, 123, 11, 18), 0, F("hunt none leaves the column empty"));
+    test.expectEq(countBits(104, 123, 11, 18), 0, F("hub row0 no live quest column"));
 
     // Page indicator `n/m` bakes into each page at x = 2 + title width + 4
     // (QUESTS title 6 chars -> x=30, shade 2). Plane 1 clears the shade-1 band,
@@ -515,6 +501,7 @@ inline void test_screens(FxTest &test) {
     test.expectEq(screenPageCount(screens::SCREEN_FORGE), 1, F("forge submenu page count"));
     test.expectEq(screenPageCount(screens::SCREEN_CRAFT), 2, F("craft page count"));
     test.expectEq(screenPageCount(screens::SCREEN_ARMOR_FORGE), 1, F("armor forge page count"));
+    test.expectEq(screenPageCount(screens::SCREEN_UPGRADE), 1, F("upgrade page count"));
     // The generated per-screen offsets are PAGE_TABLE_OFF + screen * stride.
     test.expectEq(screens::SCREEN_HUB_PAGE_TABLE, screens::PAGE_TABLE_OFF, F("hub page table off"));
     test.expectEq(screens::SCREEN_QUESTS_PAGE_TABLE, static_cast<uint16_t>(screens::PAGE_TABLE_OFF + screens::SCREEN_PAGE_STRIDE), F("quests page table off"));
@@ -522,6 +509,7 @@ inline void test_screens(FxTest &test) {
     test.expectEq(screens::SCREEN_FORGE_PAGE_TABLE, static_cast<uint16_t>(screens::PAGE_TABLE_OFF + 3 * screens::SCREEN_PAGE_STRIDE), F("forge page table off"));
     test.expectEq(screens::SCREEN_CRAFT_PAGE_TABLE, static_cast<uint16_t>(screens::PAGE_TABLE_OFF + 4 * screens::SCREEN_PAGE_STRIDE), F("craft page table off"));
     test.expectEq(screens::SCREEN_ARMOR_FORGE_PAGE_TABLE, static_cast<uint16_t>(screens::PAGE_TABLE_OFF + 5 * screens::SCREEN_PAGE_STRIDE), F("armor page table off"));
+    test.expectEq(screens::SCREEN_UPGRADE_PAGE_TABLE, static_cast<uint16_t>(screens::PAGE_TABLE_OFF + 6 * screens::SCREEN_PAGE_STRIDE), F("upgrade page table off"));
     test.expectEq(screenPageAddr(screens::SCREEN_HUB, 0), mh_screen_hub_0, F("hub page0 addr"));
     test.expectEq(screenPageAddr(screens::SCREEN_QUESTS, 0), mh_screen_quests_0, F("quests page0 addr"));
     test.expectEq(screenPageAddr(screens::SCREEN_QUESTS, 1), mh_screen_quests_1, F("quests page1 addr"));
@@ -531,6 +519,7 @@ inline void test_screens(FxTest &test) {
     test.expectEq(screenPageAddr(screens::SCREEN_CRAFT, 0), mh_screen_craft_0, F("craft page0 addr"));
     test.expectEq(screenPageAddr(screens::SCREEN_CRAFT, 1), mh_screen_craft_1, F("craft page1 addr"));
     test.expectEq(screenPageAddr(screens::SCREEN_ARMOR_FORGE, 0), mh_screen_armor_forge_0, F("armor page0 addr"));
+    test.expectEq(screenPageAddr(screens::SCREEN_UPGRADE, 0), mh_screen_upgrade_0, F("upgrade page0 addr"));
 }
 
 // Smithy split (hbk.10): the FORGE submenu + CRAFT + ARMOR FORGE checks live in
@@ -693,6 +682,96 @@ inline void test_screens_smithy(FxTest &test) {
     test.expectEq(countBits(10, 60, 11, 18) > 0 ? 1 : 0, 1, F("armor row0 label ink"));
     test.expectEq(countBits(100, 111, 11, 18) > 0 ? 1 : 0, 1, F("armor row0 baked cost 300"));
     test.expectEq(countBits(100, 111, 47, 54) > 0 ? 1 : 0, 1, F("armor row4 baked cost 600"));
+
+    // ------------------------------------------------- hbk.11 UPGRADE screen
+    // Dense index 6, 4 rows: SWORD/FLAIL/GUN carry the upgrade_row action with
+    // param = class id, LEAVE exits. The baked page holds labels only (cost 0);
+    // the tier pair and upgrade cost are live, resolved from the save + the
+    // generated NODE_UPGRADE_COST table (hbk.13).
+    test.expectEq(screens::SCREEN_UPGRADE, 6, F("upgrade screen index"));
+    test.expectEq(screenRowCount(screens::SCREEN_UPGRADE), 4, F("upgrade row count"));
+    screenReadRow(screenRowOffsetAt(screens::SCREEN_UPGRADE, 0), srow);
+    test.expectEq(srow.action, screens::ACTION_UPGRADE_ROW, F("upgrade row0 action"));
+    test.expectEq(srow.param, forge::WEAPON_SWORD, F("upgrade row0 param sword"));
+    test.expectEq(cardRowOpens(srow), 0, F("upgrade row opens no baked card"));
+    screenReadRow(screenRowOffsetAt(screens::SCREEN_UPGRADE, 1), srow);
+    test.expectEq(srow.param, forge::WEAPON_FLAIL, F("upgrade row1 param flail"));
+    screenReadRow(screenRowOffsetAt(screens::SCREEN_UPGRADE, 2), srow);
+    test.expectEq(srow.param, forge::WEAPON_GUN, F("upgrade row2 param gun"));
+    screenReadRow(screenRowOffsetAt(screens::SCREEN_UPGRADE, 3), srow);
+    test.expectEq(srow.action, screens::ACTION_LEAVE, F("upgrade leave row"));
+
+    // Resolve (hbk.13): a save owning no weapon node has nothing to upgrade.
+    uint8_t next;
+    uint16_t cost;
+    saveDefaults(fsave);
+    for (uint8_t i = 0; i < SAVE_OWNED_BYTES; i++)
+        fsave.weaponOwned[i] = 0;
+    screenEnter(forge, screens::SCREEN_UPGRADE, fsave);
+    test.expectEq(static_cast<uint32_t>(screenUpgradeNext(forge::WEAPON_SWORD, fsave, next, cost)), 0, F("no owned node -> no sword upgrade"));
+    test.expectEq(static_cast<uint32_t>(screenUpgradeNext(forge::WEAPON_GUN, fsave, next, cost)), 0, F("no owned node -> no gun upgrade"));
+
+    // Pixel (plane 0): the baked SWORD label is ink; with nothing upgradeable
+    // the live tier pair and cost columns stay empty.
+    waitPlane(0);
+    clearFb();
+    drawScreen(forge, fsave, g_smithy);
+    test.expectEq(countBits(10, 40, 11, 18) > 0 ? 1 : 0, 1, F("upgrade SWORD baked label ink"));
+    test.expectEq(countBits(SCREEN_UPGRADE_X, SCREEN_UPGRADE_X + 11, 11, 18), 0, F("upgrade blank tier pair"));
+    test.expectEq(countBits(100, 111, 11, 18), 0, F("upgrade blank row no cost"));
+
+    // Own the SWORD root: the row targets the next node (owned tier 1, next
+    // tier 2, upgrade cost 100 from NODE_UPGRADE_COST). Other classes stay blank.
+    saveSetWeaponOwned(fsave, forge::NODE_SWORD_BASE);
+    screenEnter(forge, screens::SCREEN_UPGRADE, fsave);
+    test.expectEq(static_cast<uint32_t>(screenUpgradeNext(forge::WEAPON_SWORD, fsave, next, cost)), 1, F("sword root -> next exists"));
+    test.expectEq(next, forge::NODE_SWORD_T1, F("sword root -> next T1"));
+    test.expectEq(cost, 100, F("sword T1 cost 100"));
+    test.expectEq(static_cast<uint32_t>(screenUpgradeNext(forge::WEAPON_FLAIL, fsave, next, cost)), 0, F("flail still blank"));
+    clearFb();
+    drawScreen(forge, fsave, g_smithy);
+    test.expectEq(countBits(SCREEN_UPGRADE_X, SCREEN_UPGRADE_X + 11, 11, 18) > 0 ? 1 : 0, 1, F("upgrade tier pair ink"));
+    test.expectEq(countBits(SCREEN_UPGRADE_X + 4, SCREEN_UPGRADE_X + 7, 11, 18) > 0 ? 1 : 0, 1, F("upgrade tier separator ink"));
+    test.expectEq(countBits(100, 111, 11, 18) > 0 ? 1 : 0, 1, F("upgrade cost 100 ink"));
+    test.expectEq(countBits(SCREEN_UPGRADE_X, SCREEN_UPGRADE_X + 11, 20, 27), 0, F("upgrade flail row blank"));
+
+    // Owning T1 too advances the target (cost 250); owning the whole spine
+    // leaves the row blank again.
+    saveSetWeaponOwned(fsave, forge::NODE_SWORD_T1);
+    screenEnter(forge, screens::SCREEN_UPGRADE, fsave);
+    test.expectEq(static_cast<uint32_t>(screenUpgradeNext(forge::WEAPON_SWORD, fsave, next, cost)), 1, F("sword T1 -> next exists"));
+    test.expectEq(next, forge::NODE_SWORD_T2, F("sword T1 -> next T2"));
+    test.expectEq(cost, 250, F("sword T2 cost 250"));
+    saveSetWeaponOwned(fsave, forge::NODE_SWORD_T2);
+    screenEnter(forge, screens::SCREEN_UPGRADE, fsave);
+    test.expectEq(static_cast<uint32_t>(screenUpgradeNext(forge::WEAPON_SWORD, fsave, next, cost)), 0, F("maxed sword no upgrade"));
+
+    // Card path (hbk.11/hbk.13): the sketch resolves the next node and opens
+    // its card; A forges the upgrade bill (zenny + mats).
+    saveDefaults(craf);
+    craf.zenny = 1000;
+    craf.items[ITEM_ORE] = 10;
+    craf.items[ITEM_SCALE] = 5;
+    screenEnter(forge, screens::SCREEN_UPGRADE, craf);   // fresh save owns the roots
+    test.expectEq(static_cast<uint32_t>(screenUpgradeNext(forge::WEAPON_SWORD, craf, next, cost)), 1, F("upgrade next resolves"));
+    const uint8_t unode = next;
+    test.expectEq(unode, forge::NODE_SWORD_T1, F("upgrade next is T1"));
+    srow.action = screens::ACTION_FORGE_NODE;
+    srow.param = unode;
+    srow.cond = screens::COND_ALWAYS;
+    srow.flags = screens::ROW_F_FORGE;
+    test.expectEq(cardRowIndex(srow), static_cast<uint8_t>(cards::WEAPON_BASE + unode), F("upgrade row card index"));
+    cardLoad(cdet, ccard, cardRowIndex(srow), craf, false);
+    cardSetHint(cdet, craf, ccard, srow);
+    test.expectEq(cdet.hint, HINT_FORGE, F("upgrade card forge hint"));
+    test.expectEq(cardApply(craf, ccard, cdet.node, srow, false), 1, F("upgrade card applies"));
+    test.expectEq(craf.zenny, 900, F("upgrade charges its bill"));
+    test.expectEq(static_cast<uint32_t>(craf.items[ITEM_ORE]), 8, F("upgrade charges the mats"));
+    // The draw reads the save directly (no cache), so the forged node advances
+    // with no rebuild: the next resolve now targets T2.
+    test.expectEq(static_cast<uint32_t>(screenUpgradeNext(forge::WEAPON_SWORD, craf, next, cost)), 1, F("forged -> next exists"));
+    test.expectEq(next, forge::NODE_SWORD_T2, F("draw tracks the forge to T2"));
+    test.expectEq(cost, 250, F("draw tracks cost 250"));
 }
 
 }   // namespace screenfx

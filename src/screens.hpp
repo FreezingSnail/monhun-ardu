@@ -3,8 +3,8 @@
 // docs/quests-shops.md; prebaked pages: epic monhun-ardu-hbk,
 // docs/ui-design.md "Screen prebake v2"). Device-only (like render.hpp): blits
 // a baked 4-shade page per 6-row window and draws only the live chrome on top
-// (cursor, selected label, node/armor markers, quest progress, skill numbers,
-// zenny, page indicator), then reads the ScreenDef/ScreenRow records
+// (cursor, selected label, node/armor markers, skill numbers, zenny, page
+// indicator), then reads the ScreenDef/ScreenRow records
 // from the mhScreens cart blob during the scan/render window.
 //
 // Layout: the title band, rule, row labels, section bands and costs are baked
@@ -19,6 +19,7 @@
 #include "render.hpp"
 #include "screen_state.hpp"
 #include "quest.hpp"          // questReadDef: quest unlock + reward for COND_QUEST rows (dlp.2)
+#include "forge.hpp"          // forge::NODE_UPGRADE_COST + NODE_*_FIRST (hbk.13 UPGRADE rows)
 #include "core/progmem.hpp"   // MH_PROGMEM + mhPgmReadU8 for the chrome strings
 
 namespace mh {
@@ -28,11 +29,14 @@ constexpr int16_t SCREEN_ROW_Y0 = 11;   // first of 6 rows, 9 px pitch
 constexpr int16_t SCREEN_ROW_H = 9;
 constexpr int16_t SCREEN_LABEL_X = 10;   // past the cursor tile
 constexpr int16_t SCREEN_CURSOR_X = 2;
-// Live-chrome right edge (header zenny + hub quest progress), right-aligned on
-// the title/row lane. The baked cost column ends further left (SCREEN_BAKE_COST_RIGHT)
-// so the live marker column x=118..121 stays clear.
+// Live-chrome right edge (header zenny), right-aligned on the title/row lane.
+// The baked cost column ends further left (SCREEN_BAKE_COST_RIGHT) so the live
+// marker column x=118..121 stays clear.
 constexpr int16_t SCREEN_COST_RIGHT = 124;
 constexpr int16_t SCREEN_BAKE_COST_RIGHT = 112;   // baked cost / live skill digits end here
+// hbk.11 UPGRADE rows: left edge of the live `owned>next` tier pair (3 glyph
+// cells, 12 px); the upgrade cost right-aligns to SCREEN_BAKE_COST_RIGHT.
+constexpr int16_t SCREEN_UPGRADE_X = 48;
 
 // Fake cart pointer for a byte offset into the mhScreens raw_t section.
 inline const uint8_t *screenCart(uint16_t off) {
@@ -145,10 +149,42 @@ inline bool screenCursorRow(const ScreenState &s, ScreenRow &row) {
     return true;
 }
 
+// First forge-node id of a class (forge::WEAPON_*), from the generated tree
+// constants (the class spines are three contiguous nodes, so the id is class*3
+// -- the static_asserts pin the generated layout).
+inline uint8_t screenClassFirst(uint8_t cls) {
+    return static_cast<uint8_t>(cls * 3);
+}
+static_assert(forge::NODE_SWORD_FIRST == 0 && forge::NODE_FLAIL_FIRST == 3 && forge::NODE_GUN_FIRST == 6, "class spines are three contiguous nodes (screenClassFirst)");
+
+// Resolve a class's upgrade target from the save + generated tables (hbk.13):
+// walk the three-node spine and take the highest owned node; when it exists and
+// is not the last tier, next = node + 1 and cost = NODE_UPGRADE_COST[next]. A
+// fresh class spine owns only its root, so the next node is the first upgrade; a
+// maxed spine (or one owning nothing) returns false. drawScreen and the sketch's
+// UPGRADE row both call this, so the row always tracks the save with no
+// ScreenState cache to refresh.
+inline bool screenUpgradeNext(uint8_t cls, const SaveBlock &save, uint8_t &next, uint16_t &cost) {
+    if (cls >= forge::WEAPON_COUNT)
+        return false;
+    const uint8_t first = screenClassFirst(cls);
+    const uint8_t last = static_cast<uint8_t>(first + 2);
+    // Walk the spine; the last owned node found is the highest.
+    uint8_t owned = 0xFF;
+    for (uint8_t node = first; node <= last; node++) {
+        if (saveWeaponOwned(save, node))
+            owned = node;
+    }
+    if (owned == 0xFF || owned == last)
+        return false;   // nothing owned, or the class is maxed
+    next = static_cast<uint8_t>(owned + 1);
+    cost = forge::NODE_UPGRADE_COST[next];
+    return true;
+}
+
 // Enter a screen: reset cursor/scroll/edges and load its row count off the
 // cart (the pure reset lives in screen_state.hpp screenReset()).
 inline void screenEnter(ScreenState &s, uint8_t screen, const SaveBlock &save) {
-    (void)save;
     screenReset(s, screen, screenRowCount(screen));
 }
 
@@ -163,24 +199,10 @@ inline void screenGearCache(ScreenState &s, const ArmorAgg &agg) {
     }
 }
 
-// ---- hub quest column (ui.5.2, leaned hbk.9) -------------------------------
-// The HUNT row's live right column: the active quest's progress pair (p/n),
-// right-aligned like the cost it replaces and white when the row is selected
-// (fxfontw) / light gray otherwise (fxfontg). The quest `need` comes from the
-// cart def, `progress` from the save; a save with no active quest draws nothing.
-inline void drawHubQuestColumn(const SaveBlock &save, uint8_t y, bool selected) {
-    if (save.activeQuest == SAVE_QUEST_NONE)
-        return;
-    const uint24_t sheet = selected ? fxfontw : fxfontg;
-    QuestDef def;
-    questReadDef(save.activeQuest, def);
-    const uint8_t pd = hudDigits(save.progress);
-    const uint8_t nd = hudDigits(def.need);
-    const uint8_t x = static_cast<uint8_t>(SCREEN_COST_RIGHT - (pd + 1 + nd) * 4);
-    drawNumber(x, y, save.progress, selected ? 3 : 2);
-    textPut(sheet, static_cast<int16_t>(x + pd * 4), y, '/');
-    drawNumber(static_cast<int16_t>(x + (pd + 1) * 4), y, def.need, selected ? 3 : 2);
-}
+// ---- hub quest column (retired hbk.13) -------------------------------------
+// The live hub quest progress column (ui.5.2, leaned hbk.9) is gone: the HUNT
+// row shows its baked label alone. Quest progress stays visible on the quest
+// card's PROG page and the QUESTS board.
 
 // Live marker column (x=118..121): one 4x4 square whose shade is the state --
 // white (3) when equipped, light gray (2) when owned/crafted, nothing
@@ -266,9 +288,25 @@ inline void drawScreen(const ScreenState &s, const SaveBlock &save, const Game &
             if (tier != 0)
                 textPut(selected ? fxfontw : fxfontg, static_cast<int16_t>(costX - 8), y, tier == 2 ? 'M' : 'S');
             drawNumber(costX, y, value, selected ? 3 : 2);
-        } else if (s.screen == screens::SCREEN_HUB && i == 0) {
-            // Hub HUNT row: live quest progress instead of a baked cost.
-            drawHubQuestColumn(save, y, selected);
+        } else if (action == screens::ACTION_UPGRADE_ROW) {
+            // hbk.11/hbk.13 UPGRADE class row: resolve the class's next node
+            // straight from the save + generated tables (`owned>next` + its
+            // upgrade cost). false = nothing upgradeable, so the baked label
+            // stays alone. Single tier digits draw through textPut (the digits
+            // are 1..3) to keep the inlined drawNumber copies down; only the
+            // cost keeps the variable-width path.
+            uint8_t next;
+            uint16_t cost;
+            if (screenUpgradeNext(param, save, next, cost)) {
+                const uint8_t ownedTier = static_cast<uint8_t>(next - screenClassFirst(param));
+                const uint24_t sheet = selected ? fxfontw : fxfontg;
+                uint8_t tx = static_cast<uint8_t>(SCREEN_UPGRADE_X);
+                tx = static_cast<uint8_t>(textPut(sheet, tx, y, static_cast<char>('0' + ownedTier)));
+                tx = static_cast<uint8_t>(textPut(sheet, tx, y, '>'));
+                textPut(sheet, tx, y, static_cast<char>('0' + ownedTier + 1));
+                const uint8_t digits = hudDigits(static_cast<int16_t>(cost));
+                drawNumber(static_cast<int16_t>(SCREEN_BAKE_COST_RIGHT - digits * 4), y, static_cast<int16_t>(cost), selected ? 3 : 2);
+            }
         }
     }
 }
