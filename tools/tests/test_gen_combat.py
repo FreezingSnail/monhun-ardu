@@ -102,8 +102,8 @@ class GenCombatTests(unittest.TestCase):
         result = self.compile("--dump")
         self.assert_succeeds(result)
         self.assertIn("creature beast (skeleton beast_16x12, stats w16 h12 hp80 spd4, spawn 100,32, collide body, enrage hpPct0 spdMul0 faceHold0 cue0) zones appendage D150 HP30 S40 ST20 head D120 HP10 S100 ST5", result.stdout)
-        self.assertIn("zone head: box(10,2,6,6) dmgMul 120 hp 10 share 100 break 0x02 stagger 5 brokenOverride 120 hurtOff 1 disable -", result.stdout)
-        self.assertIn("zone appendage: box(-6,4,8,4) dmgMul 150 hp 30 share 40 break 0x01 stagger 20 brokenOverride 200 hurtOff 1 disable jab", result.stdout)
+        self.assertIn("zone head: box(10,2,6,6) dmgMul 120 hp 10 share 100 break 0x02 stagger 5 partSheet 0 brokenOverride 120 hurtOff 1 disable -", result.stdout)
+        self.assertIn("zone appendage: box(-6,4,8,4) dmgMul 150 hp 30 share 40 break 0x01 stagger 20 partSheet 0 brokenOverride 200 hurtOff 1 disable jab", result.stdout)
         self.assertIn("attack jab: windup20 active6 recover30 dmg7 move lunge(20) windows 1 wallStun 0", result.stdout)
         self.assertIn("window 0: t[0,6] box(8,0,12,10) dmgMul 100", result.stdout)
         self.assertIn("pattern p_jab: guard minDist0 maxDist36 hp[0,100] player0x01 cd0 chance100 zonesBroken appendage facing any", result.stdout)
@@ -605,11 +605,12 @@ class GenCombatTests(unittest.TestCase):
         skeleton = blob[meta["SKELETON_BEAST_16X12_OFF"]:meta["SKELETON_BEAST_16X12_OFF"] + meta["SKELETON_SIZE"]]
         self.assertEqual(skeleton, bytes([0, 1]))
 
+        # 14 B zone: 13 legacy bytes then the bih.5 partSheet byte (0 = no part).
         head = blob[meta["ZONE_BEAST_HEAD_OFF"]:meta["ZONE_BEAST_HEAD_OFF"] + meta["ZONE_SIZE"]]
-        self.assertEqual(head, bytes([10, 2, 6, 6, 10, 120, 100, 2, 5, 120, 1, 0, 0]))
+        self.assertEqual(head, bytes([10, 2, 6, 6, 10, 120, 100, 2, 5, 120, 1, 0, 0, 0]))
 
         tail = blob[meta["ZONE_BEAST_APPENDAGE_OFF"]:meta["ZONE_BEAST_APPENDAGE_OFF"] + meta["ZONE_SIZE"]]
-        self.assertEqual(tail, bytes([0xFA, 4, 8, 4, 30, 150, 40, 1, 20, 200, 3, 1, 0]))
+        self.assertEqual(tail, bytes([0xFA, 4, 8, 4, 30, 150, 40, 1, 20, 200, 3, 1, 0, 0]))
 
         attack = blob[meta["ATTACK_BEAST_JAB_OFF"]:meta["ATTACK_BEAST_JAB_OFF"] + meta["ATTACK_SIZE"]]
         # 27 B attack: 12 scalars (cue then the feel.4 wallStun byte), then
@@ -680,10 +681,10 @@ class GenCombatTests(unittest.TestCase):
 
         head = blob[meta["ZONE_POLE_HEAD_OFF"]:meta["ZONE_POLE_HEAD_OFF"] + meta["ZONE_SIZE"]]
         # box -128,0,255,16; hp 0 (omitted), dmgMul 140, bodyShare 100 (default),
-        # no breakTypes/broken/stagger.
-        self.assertEqual(head, bytes([0x80, 0, 255, 16, 0, 140, 100, 0, 0, 140, 0, 0, 0]))
+        # no breakTypes/broken/stagger/part.
+        self.assertEqual(head, bytes([0x80, 0, 255, 16, 0, 140, 100, 0, 0, 140, 0, 0, 0, 0]))
         append = blob[meta["ZONE_POLE_APPENDAGE_OFF"]:meta["ZONE_POLE_APPENDAGE_OFF"] + meta["ZONE_SIZE"]]
-        self.assertEqual(append, bytes([20, 8, 8, 12, 40, 101, 100, 2, 0, 101, 1, 0, 0]))
+        self.assertEqual(append, bytes([20, 8, 8, 12, 40, 101, 100, 2, 0, 101, 1, 0, 0, 0]))
 
         expect = self.read(EXPECT_REL)
         self.assertIn("constexpr uint8_t CREATURE_POLE_STATIC = 1;", expect)
@@ -817,6 +818,32 @@ class GenCombatTests(unittest.TestCase):
                     lambda doc: doc["attacks"][0].__setitem__("art", {"sheet": "fxpole", "bogus": 1}))
         self.assert_fails(self.compile(), "art: unknown key 'bogus'")
 
+    # ------------------------------------------------------- zone part (bih.5)
+
+    def test_zone_part_emit_and_dump(self):
+        # A zone's optional `part` names a data/art_sheets.json entry and packs
+        # as its 1-based index in the 14th zone byte; the record grows by one.
+        self.write_art_sheets(["fxpole", "fxtail"])
+        self.mutate("data/creatures/beast.json",
+                    lambda doc: doc["zones"]["appendage"].__setitem__("part", "fxtail"))
+        self.assert_succeeds(self.compile())
+        meta = self.meta_constants()
+        self.assertEqual(meta["ZONE_SIZE"], 14, "zone grew by the part sheet byte")
+        self.assertEqual(self.blob()[meta["ZONE_BEAST_APPENDAGE_OFF"] + 13], 2, "zone part sheet index (1-based)")
+        self.assertEqual(self.blob()[meta["ZONE_BEAST_HEAD_OFF"] + 13], 0, "unauthored zone part is 0")
+        self.assertIn("partSheet 2", self.compile("--dump").stdout)
+
+    def test_zone_part_unknown_sheet_rejected(self):
+        self.write_art_sheets(["fxpole"])
+        self.mutate("data/creatures/beast.json",
+                    lambda doc: doc["zones"]["head"].__setitem__("part", "missing"))
+        self.assert_fails(self.compile(), "part: unknown art sheet 'missing'")
+
+    def test_zone_part_requires_sheet_file(self):
+        self.mutate("data/creatures/beast.json",
+                    lambda doc: doc["zones"]["head"].__setitem__("part", "fxpole"))
+        self.assert_fails(self.compile(), "missing art sheet file (zone part resolves against it)")
+
     def test_static_omitted_collections_rejected_for_dynamic(self):
         # A dynamic creature still needs non-empty attacks/patterns.
         self.mutate("data/creatures/beast.json", lambda doc: doc.__setitem__("attacks", []))
@@ -861,7 +888,7 @@ class GenCombatTests(unittest.TestCase):
         self.assert_succeeds(self.compile())
         text = self.read(DATA_REL)
         for needle in ("struct Creature {", "struct Attack {", "struct Guard {", "struct Window {",
-                       "struct Zone {", "struct Carve {", "struct Art {", "carve[4]", "std::array<Creature, 1> CREATURES", "std::array<Attack, 1> ATTACKS",
+                       "struct Zone {", "uint8_t partSheet;", "struct Carve {", "struct Art {", "carve[4]", "std::array<Creature, 1> CREATURES", "std::array<Attack, 1> ATTACKS",
                        "std::array<Guard, 1> GUARDS", "std::array<Step, 2> STEPS", "std::array<Art, 1> ART"):
             self.assertIn(needle, text)
         self.assertIn("constexpr uint8_t CREATURE_BEAST = 0;", text)

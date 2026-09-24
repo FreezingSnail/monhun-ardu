@@ -1,63 +1,86 @@
-# monhun-ardu-bih.4 — art draw phase 2: attack art in attack records
+# monhun-ardu-bih.5 — art draw phase 3: zone part art in zone records
 
 ## What changed
 
-Attack art moved into the attack records; the per-kind `beastAtk` compare chain
-and the `MON_HEAVY` `spinSheet` gate are deleted from `drawMonster`.
+Zone part-overlay art is now cart data: each breakable zone carries a 1-based
+`partSheet` index into `data/art_sheets.json`, read once at spawn into its
+`CombatZoneCache` slot. `drawMonster` drops the three per-kind overlay chains
+(MON_HEAVY / MON_LUNGE / MON_SWEEP, 5 sheet constants) for one generic loop over
+the two cached zone slots. The two skip rules are now generic: overlays are
+suppressed whenever the active whole-body draw is an attack-art sheet
+(`g.combat.attack.artSheet != 0`), mode 1 (spin) included.
 
-- **data (`+3 B/attack` cart, 11 attacks = +33 B)**: each attack may author
-  `art: { sheet, frame, mode }`. `sheet` resolves against `data/art_sheets.json`
-  (1-based index, 0 = no overlay); `frame` is the pre-doubled 2-facing pose base;
-  `mode` is `normal` (0) or `spin` (1). Packed as attack bytes 24/25/26;
-  `ATTACK_SIZE` 24 -> 27.
-- **authored**: lunge peck/leap/wing_beat -> `fxchickenatk` frames 0/2/4 mode 0;
-  sweep stomp/gore/rear_kick -> `fxbullatk` 0/2/4 mode 0; heavy bite 0 / tail_slam
-  4 `fxheavyatk`, tail_spin -> `fxtailspin` mode 1. Ravager/pole attacks stay
-  sheet 0 (generic body), as before.
-- **data/art_sheets.json**: appended `fxchickenatk`(6) `fxbullatk`(7)
-  `fxheavyatk`(8) `fxtailspin`(9). Phase-1 indices 1..5 unchanged.
-- **cache**: `CombatAttackCache` gains `artSheet/artFrame/artMode` (+3 B RAM),
-  read once at `attackLoad` (one extra 3-byte burst); `CombatState` 105 -> 108.
-- **render**: `attackPose` (WINDUP/ATTACK + atkIdx) selects `artMode == 1`
-  (spin draw via the art table) / `artMode == 0 && artSheet` (2-facing sheet,
-  windup tell 1..3 -> `(tell << 1) | west`, unauthored tell -> `artFrame | west`)
-  / else the phase-1 generic body. Zone-overlay skip keyed on the new
-  `attackSheet` flag instead of `beastAtk`.
-- **oracle**: `tst/fxdatatest/monster_art_test.hpp` setups now `attackLoad()` the
-  real records; added a per-attack art-sheet/frame/mode pin block (all 9 beast
-  attacks, east+west pose pixels already pinned). All existing pins kept green.
+## Data
 
-## Verification (exact tails)
+- `data/art_sheets.json`: appended the 5 zone part sheets -> indices 10..14
+  (fxtail_heavy, fxhead_chicken, fxlegs_chicken, fxhead_bull, fxhooves_bull;
+  phase-1 1..5 and bih.4 6..9 indices unchanged).
+- `data/creatures/*.json`: authored `zones.<name>.part` — heavy appendage,
+  lunge head+appendage, sweep head+appendage. ravager/pole stay 0 (no invented
+  art: the ravager's 18x10 fxtail is deliberately not overlaid, the pole's hp-0
+  zone never breaks).
+- `tools/gen-combat.py`: `normalize_zone` resolves the optional `part` name
+  (strict: unknown name and a missing art_sheets.json both fail); ZONE record
+  `13 -> 14 B` (partSheet byte appended); host mirror, data-header row, dump
+  line, meta `ZONE_SIZE` and the blob sha all follow.
+- Zone byte layout: `box(4) hp dmgMul bodyShare breakTypes staggerOnHit
+  brokenDmgMul brokenFlags unlockMask(u16) partSheet`.
 
-- `make gen` (x2, then `make gen-check` single-pass stable): the +33 B cart
-  shift moved the equip/screens/cards/zone page offsets, so a second gen pass was
-  required before `gen-check`:
-  `fxdata_manifest: PASS (160 generated artifacts unchanged)`
-- `make test`: `Total Passed: 6744  Total Failed: 0`
-- `make test-tools`: `Ran 370 tests ... OK`
-- `FXTEST_ONLY=test_monster_art make fxtest-headless`:
-  `test_monster_art PASSED=170 FAILED=0` / `test_monster_art: PASS`
-- `FXTEST_ONLY=test_combat make fxtest-headless`:
-  `combat_test PASSED=237 FAILED=0` / `test_combat: PASS`
-- `FXTEST_ONLY=test_tell make fxtest-headless`: `test_tell PASSED=18 FAILED=0`
-- `make size` / `make size-line`:
-  `size: flash=29476/29696 (220 free)  ram=1812/2560`
+## Core
 
-## Net delta vs phase-1 checkpoint (29542 / 154 free)
+- `src/core/game.hpp`: `CombatZoneCache` +1 B (`partSheet`) -> 13 B, `zone[2]`
+  22 -> 26 B, `CombatState` 108 -> 110 B.
+- `src/core/combat.hpp`: value struct `CombatZone` + `PkZone` gain `partSheet`;
+  host `combatZoneRead` and `combatZoneSeed` project it; `CombatZoneCache`
+  static_assert 12 -> 13, `CombatState` 108 -> 110, zone-cache budget comment.
+  ABI mirrors (`CombatZone == ZONE_SIZE`) stay padding-free on AVR.
 
-- **flash 29476/29696 = 220 free -> -66 B whole-image (154 -> 220 free)**, despite
-  +33 B cart attack art + 12 B art-sheet table. The deleted `beastAtk` sheet/ordinal
-  compare chain and `spinSheet` kind gate paid for the data. Above the ~150 B floor.
-- **RAM 1809 -> 1812 (+3 B)** = the three cached attack-art bytes.
-- Host test_image / device test images: test_monster_art 27260 B, test_combat 28006 B.
+## Render
 
-## Notes / interfaces
+- `src/render.hpp`: deleted the 3 chains + 5 `fxtail_heavy`/`fxhead_chicken`/
+  `fxlegs_chicken`/`fxhead_bull`/`fxhooves_bull` references; one loop over
+  `g.combat.zone[slot]` draws `artSheetAddr(partSheet - 1)` at the cached
+  face-relative box (drawZonePart unchanged: shared 4-frame
+  `combatPartArtFrame`, phase-0 west cell mirror). Attack-art skip is the single
+  generic `attackArt` predicate; the spin is covered because every spin authors
+  a non-zero attack artSheet (asserted by the existing spin pins).
 
-- `CombatAttackCache.artSheet/artFrame/artMode` (new), `combat::ATTACK_SIZE = 27`,
-  generated `ATTACK_<CID>_<AID>_ART_{SHEET,FRAME,MODE}` expect pins.
-- `art_sheets::ART_SHEET_FXCHICKENATK/FXBULLATK/FXHEAVYATK/FXTAILSPIN` +
-  `ART_SHEETS_COUNT = 9`.
-- Phase 3 (bih.5) can now move the chicken/bull/heavy zone part sheets into zone
-  records; `attackSheet` is the hook the zone-overlay skip uses.
+## Oracle (before -> after, unchanged)
 
-No git commit/push (orchestrator owns it).
+`tst/fxdatatest/monster_art_test.hpp`:
+- per-zone `partSheet` pins: chicken head+legs, bull horns+hooves, heavy
+  appendage -> the sheet index constants; heavy head / ravager head+appendage /
+  pole head -> 0.
+- generic attack-art skip: HEAVY's mode-0 bite ATTACK clears the resting-tail
+  east band (x16..39) even though idle inks it; the mode-1 spin skip is already
+  pinned (`spin attack skips resting tail cap`).
+- every existing HEAVY-tail / chicken / bull pixel pin stays green
+  (test_monster_art 170 -> 180 asserts, 0 failed).
+
+`tst/combat_test.hpp` (host) + `tst/fxdatatest/combat_test.hpp` (device):
+- zone partSheet projection / record spot pins (heavy tail 10, chicken head 11
+  legs 12, bull head 13 hooves 14, ravager 0), cache seed pins, sheet-count
+  9 -> 14 + 5 new address pins.
+- `tools/tests/test_gen_combat.py`: new part emit/validate/requires-file cases;
+  zone payload fixtures 13 -> 14 B; dump-line + host-struct needles.
+
+## Gates
+
+- `make gen`: PASS (fxdata-data 404597 B, 14 sheets); blob size shifted, so
+  `make gen-check` needed **two passes** (first pass regenerated the cross-blob
+  artifacts + manifest), second pass `PASS (160 generated artifacts unchanged)`.
+- `make test`: `Total Passed: 6767  Total Failed: 0`
+- `FXTEST_ONLY=test_monster_art make fxtest-headless`: `PASSED=180 FAILED=0`
+- `FXTEST_ONLY=test_combat make fxtest-headless`: `PASSED=237 FAILED=0`
+  (`C reads spawn=16 attack=8 guard=2 hit=0 tick256=0 simAtk=9 simTk=0 winSw=1`)
+- `make test-tools`: `Ran 373 tests ... OK`
+- `make size` / `size-line`: `size: .text=29300 .data=50 .bss=1764`
+  **flash=29350/29696 (346 free) ram=1814/2560**
+
+## Budget
+
+Checkpoint 29476 (220 free) -> **29350 (346 free): net -126 B flash** (the
+per-kind chains + 5 render constants cost less than the zone byte + generic
+loop). RAM +2 B (`CombatZoneCache` 12 -> 13 x2). Well above the ~150 B reserve.
+
+No commit/push.

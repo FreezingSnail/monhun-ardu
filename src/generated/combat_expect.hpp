@@ -8,7 +8,7 @@
 
 namespace combat_expect {
 
-constexpr uint16_t BLOB_SIZE = 1254;
+constexpr uint16_t BLOB_SIZE = 1262;
 constexpr uint8_t ANCHOR_SIZE = 2;
 constexpr uint8_t ART_SIZE = 10;
 constexpr uint8_t ATTACK_SIZE = 27;
@@ -20,7 +20,7 @@ constexpr uint8_t PROFILE_SIZE = 24;
 constexpr uint8_t SKELETON_SIZE = 2;
 constexpr uint8_t STEP_SIZE = 4;
 constexpr uint8_t WINDOW_SIZE = 10;
-constexpr uint8_t ZONE_SIZE = 13;
+constexpr uint8_t ZONE_SIZE = 14;
 constexpr uint8_t CARVE_SLOTS = 4;
 constexpr uint8_t CREATURE_CORE_SIZE = 29;
 
@@ -266,12 +266,12 @@ constexpr uint8_t ZONE_SWEEP_APPENDAGE_HP = 240;
 constexpr uint8_t ZONE_SWEEP_APPENDAGE_DMG_MUL = 150;
 constexpr uint8_t ZONE_SWEEP_APPENDAGE_BODY_SHARE = 40;
 
-// sha256 of fxdata/tables/combat.bin: c6ea01a4679c63ffcb02f871d50f5dc7ac9bd65f4f5f2e2027055ff9b723a090
+// sha256 of fxdata/tables/combat.bin: d5851203db661219c52252f2b45dbb3c427baab8b0621e77c784fda2436750f6
 constexpr uint8_t BLOB_SHA256[32] = {
-    0xC6, 0xEA, 0x01, 0xA4, 0x67, 0x9C, 0x63, 0xFF,
-    0xCB, 0x02, 0xF8, 0x71, 0xD5, 0x0F, 0x5D, 0xC7,
-    0xAC, 0x9B, 0xD6, 0x5F, 0x4F, 0x5F, 0x2E, 0x20,
-    0x27, 0x05, 0x5F, 0xF9, 0xB7, 0x23, 0xA0, 0x90,
+    0xD5, 0x85, 0x12, 0x03, 0xDB, 0x66, 0x12, 0x19,
+    0xC5, 0x22, 0x52, 0xF2, 0xB4, 0x5D, 0xBB, 0x3C,
+    0x42, 0x7B, 0xAA, 0xB8, 0xB0, 0x62, 0x1E, 0x77,
+    0xC7, 0x84, 0xFD, 0xA2, 0x43, 0x67, 0x50, 0xF6,
 };
 
 }   // namespace combat_expect

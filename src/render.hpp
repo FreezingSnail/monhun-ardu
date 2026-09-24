@@ -619,7 +619,7 @@ static void drawAttackMarker(const mh::Game &g, int16_t x, int16_t y) {
 // attack; recover -> recover; else idle0 + (idleCount ? (tick/8) % idleCount :
 // 0); a west-facing creature (fx < 0) with a mirror stride adds it. drawMonster
 // checks the spin/attack whole-body sheets first; the shared tail (stun whirl +
-// telegraph) and the zone part overlays are unchanged.
+// telegraph) and the zone part overlays (data-driven, bih.5) follow.
 static inline uint24_t artSheetAddr(uint8_t index) {
 #if defined(__AVR__)
     const uint8_t *p = reinterpret_cast<const uint8_t *>(&art_sheets::ART_SHEETS[index]);
@@ -667,7 +667,8 @@ static void drawMonster(const mh::Game &g, int16_t camX, int16_t camY) {
     // per-kind code. The whole-body attack replacement is checked FIRST because
     // it supersedes the descriptor: the attack record's own art (bih.4) selects
     // the sheet and pose with no per-kind branch. The shared tail (stun whirl,
-    // telegraph) and the breakable-zone part overlays are unchanged below.
+    // telegraph) and the breakable-zone part overlays (data-driven, bih.5)
+    // follow below.
     // Locked (spin) tail attack on the longtail (beads monhun-ardu-nch.3/5):
     // MS_ATTACK draws the whole beast from the 8-frame 40x40 fxtailspin sheet,
     // rotated about the body centre in 45-deg steps synced to the active window;
@@ -695,6 +696,11 @@ static void drawMonster(const mh::Game &g, int16_t camX, int16_t camY) {
     // unauthored tell (0/4) keeps the attack pose + 2x2 core marker.
     const uint8_t tellSlot = (m.state == mh::MS_WINDUP) ? mh::tellWindupFrame(g.combat.attack.tell, mh::TELL_FRAMES_AUTHORED) : mh::TELL_WINDUP_NONE;
     const bool attackSheet = attackPose && g.combat.attack.artMode == 0 && g.combat.attack.artSheet != 0;
+    // Generic zone-part-overlay skip (bih.5): whenever an attack-art sheet is
+    // the active whole-body draw the sheet already carries the posed part, so
+    // every zone overlay is suppressed -- mode 0 poses and the mode 1 spin sheet
+    // alike (a spin always authors a non-zero artSheet).
+    const bool attackArt = attackPose && g.combat.attack.artSheet != 0;
     if (attackPose && g.combat.attack.artMode == 1) {
         // Whole-beast spin sheet: frame 0 is the east silhouette. Windup holds
         // the locked away frame; the attack steps 45 deg clockwise from it each
@@ -722,29 +728,23 @@ static void drawMonster(const mh::Game &g, int16_t camX, int16_t camY) {
         return;
 
     // Breakable-zone part overlays (monhun-ardu-4t4 heavy tail; kt7.6 chicken and
-    // bull). Each sheet draws its part at the zone's cached face-relative box
-    // origin (drawZonePart), i.e. the same world rect the hit test uses. Skips:
-    // HEAVY's resting tail during the locked spin (the rotating fxtailspin sheet
-    // carries the posed tail); the chicken/bull parts during their whole-body
-    // attack sheets (fxchickenatk / fxbullatk already draw the posed part).
-    // RAVAGER keeps the legacy 18x10 fxtail unoverlaid (not a multiple-of-8
-    // SpritesU page stride), exactly as before. Keyed off the loaded creature
-    // record (not the roster kind): the pole draft test parks a fxpole creature
-    // under the MON_LUNGE kind, and only the real chicken/bull/longtail records
-    // ship these part sheets. Phase 3 moves the part sheets into zone records.
-    if (g.combat.creature == combat::CREATURE_HEAVY) {
-        if (g.combat.appendZone != mh::COMBAT_NO_ZONE && !spinning)
-            drawZonePart(g, x, y, fxtail_heavy, mh::COMBAT_ZONE_APPENDAGE, mh::COMBAT_ZONE_APPENDAGE_BIT);
-    } else if (g.combat.creature == combat::CREATURE_LUNGE && !attackSheet) {
-        if (g.combat.headZone != mh::COMBAT_NO_ZONE)
-            drawZonePart(g, x, y, fxhead_chicken, mh::COMBAT_ZONE_HEAD, mh::COMBAT_ZONE_HEAD_BIT);
-        if (g.combat.appendZone != mh::COMBAT_NO_ZONE)
-            drawZonePart(g, x, y, fxlegs_chicken, mh::COMBAT_ZONE_APPENDAGE, mh::COMBAT_ZONE_APPENDAGE_BIT);
-    } else if (g.combat.creature == combat::CREATURE_SWEEP && !attackSheet) {
-        if (g.combat.headZone != mh::COMBAT_NO_ZONE)
-            drawZonePart(g, x, y, fxhead_bull, mh::COMBAT_ZONE_HEAD, mh::COMBAT_ZONE_HEAD_BIT);
-        if (g.combat.appendZone != mh::COMBAT_NO_ZONE)
-            drawZonePart(g, x, y, fxhooves_bull, mh::COMBAT_ZONE_APPENDAGE, mh::COMBAT_ZONE_APPENDAGE_BIT);
+    // bull; bih.5 data path). Each cached zone slot carries a 1-based art_sheets
+    // index (partSheet) for the part art baked into the beast sheet, seeded from
+    // the zone record at spawn; one generic loop draws every zone that authors
+    // one, at the zone's cached face-relative box origin (drawZonePart), i.e.
+    // the same world rect the hit test uses. No per-creature key: RAVAGER and
+    // POLE simply pack partSheet 0 (the ravager's 18x10 fxtail is deliberately
+    // not overlaid, the pole's hp-0 zone never breaks). The only skip is the
+    // generic attack-art rule above: the whole-body attack sheet already draws
+    // the posed part, spin sheet included.
+    if (!attackArt) {
+        for (uint8_t slot = 0; slot < mh::COMBAT_ZONE_SLOTS; slot++) {
+            const uint8_t part = g.combat.zone[slot].partSheet;
+            if (part == 0)
+                continue;
+            const uint8_t bit = (slot == mh::COMBAT_ZONE_HEAD) ? mh::COMBAT_ZONE_HEAD_BIT : mh::COMBAT_ZONE_APPENDAGE_BIT;
+            drawZonePart(g, x, y, artSheetAddr(static_cast<uint8_t>(part - 1)), slot, bit);
+        }
     }
 
     if (m.stun > 0) {

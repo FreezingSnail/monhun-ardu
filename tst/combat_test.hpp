@@ -160,6 +160,7 @@ void CombatSuite(TestRunner &runner) {
             t.assert(p.brokenFlags, h.brokenFlags, "zone brokenFlags");
             t.assert(p.unlockMaskLo, h.unlockMaskLo, "zone unlockMaskLo");
             t.assert(p.unlockMaskHi, h.unlockMaskHi, "zone unlockMaskHi");
+            t.assert(p.partSheet, h.partSheet, "zone partSheet");
         }
         suite.addTest(t);
     }
@@ -328,7 +329,8 @@ void CombatSuite(TestRunner &runner) {
         // The art sheet table resolves every data/art_sheets.json name in list
         // order: the index constants are the contract (the device static_assert
         // in art_sheets.hpp pins each address to the fxdata symbol). Phase 1
-        // sheets are 1..5; bih.4 appended the 4 attack/spin sheets 6..9.
+        // sheets are 1..5; bih.4 appended the 4 attack/spin sheets 6..9; bih.5
+        // appended the 5 zone part overlay sheets 10..14.
         t.assert(art_sheets::ART_SHEET_FXMONSTER, 1, "ART_SHEET_FXMONSTER first");
         t.assert(art_sheets::ART_SHEET_FXMONSTER_HEAVY, 2, "ART_SHEET_FXMONSTER_HEAVY is 1-based");
         t.assert(art_sheets::ART_SHEET_FXMONSTER_LUNGE, 3, "ART_SHEET_FXMONSTER_LUNGE is 1-based");
@@ -337,8 +339,13 @@ void CombatSuite(TestRunner &runner) {
         t.assert(art_sheets::ART_SHEET_FXCHICKENATK, 6, "ART_SHEET_FXCHICKENATK is 6th");
         t.assert(art_sheets::ART_SHEET_FXBULLATK, 7, "ART_SHEET_FXBULLATK is 7th");
         t.assert(art_sheets::ART_SHEET_FXHEAVYATK, 8, "ART_SHEET_FXHEAVYATK is 8th");
-        t.assert(art_sheets::ART_SHEET_FXTAILSPIN, 9, "ART_SHEET_FXTAILSPIN last");
-        t.assert(art_sheets::ART_SHEETS_COUNT, 9, "nine shipped art sheets");
+        t.assert(art_sheets::ART_SHEET_FXTAILSPIN, 9, "ART_SHEET_FXTAILSPIN is 9th");
+        t.assert(art_sheets::ART_SHEET_FXTAIL_HEAVY, 10, "ART_SHEET_FXTAIL_HEAVY is 10th");
+        t.assert(art_sheets::ART_SHEET_FXHEAD_CHICKEN, 11, "ART_SHEET_FXHEAD_CHICKEN is 11th");
+        t.assert(art_sheets::ART_SHEET_FXLEGS_CHICKEN, 12, "ART_SHEET_FXLEGS_CHICKEN is 12th");
+        t.assert(art_sheets::ART_SHEET_FXHEAD_BULL, 13, "ART_SHEET_FXHEAD_BULL is 13th");
+        t.assert(art_sheets::ART_SHEET_FXHOOVES_BULL, 14, "ART_SHEET_FXHOOVES_BULL last");
+        t.assert(art_sheets::ART_SHEETS_COUNT, 14, "fourteen shipped art sheets");
         t.assert(art_sheets::ART_SHEET_ADDR_FXMONSTER, art_sheet_fxdata_addr("fxmonster"), "fxmonster address == src/fxdata.h");
         t.assert(art_sheets::ART_SHEET_ADDR_FXMONSTER_HEAVY, art_sheet_fxdata_addr("fxmonster_heavy"), "fxmonster_heavy address == src/fxdata.h");
         t.assert(art_sheets::ART_SHEET_ADDR_FXMONSTER_LUNGE, art_sheet_fxdata_addr("fxmonster_lunge"), "fxmonster_lunge address == src/fxdata.h");
@@ -348,6 +355,11 @@ void CombatSuite(TestRunner &runner) {
         t.assert(art_sheets::ART_SHEET_ADDR_FXBULLATK, art_sheet_fxdata_addr("fxbullatk"), "fxbullatk address == src/fxdata.h");
         t.assert(art_sheets::ART_SHEET_ADDR_FXHEAVYATK, art_sheet_fxdata_addr("fxheavyatk"), "fxheavyatk address == src/fxdata.h");
         t.assert(art_sheets::ART_SHEET_ADDR_FXTAILSPIN, art_sheet_fxdata_addr("fxtailspin"), "fxtailspin address == src/fxdata.h");
+        t.assert(art_sheets::ART_SHEET_ADDR_FXTAIL_HEAVY, art_sheet_fxdata_addr("fxtail_heavy"), "fxtail_heavy address == src/fxdata.h");
+        t.assert(art_sheets::ART_SHEET_ADDR_FXHEAD_CHICKEN, art_sheet_fxdata_addr("fxhead_chicken"), "fxhead_chicken address == src/fxdata.h");
+        t.assert(art_sheets::ART_SHEET_ADDR_FXLEGS_CHICKEN, art_sheet_fxdata_addr("fxlegs_chicken"), "fxlegs_chicken address == src/fxdata.h");
+        t.assert(art_sheets::ART_SHEET_ADDR_FXHEAD_BULL, art_sheet_fxdata_addr("fxhead_bull"), "fxhead_bull address == src/fxdata.h");
+        t.assert(art_sheets::ART_SHEET_ADDR_FXHOOVES_BULL, art_sheet_fxdata_addr("fxhooves_bull"), "fxhooves_bull address == src/fxdata.h");
         suite.addTest(t);
     }
 
@@ -649,6 +661,8 @@ void CombatSuite(TestRunner &runner) {
         t.assert(g.combat.zone[1].breakTypes, PHYS_SLASH, "tail breakTypes seeded");
         t.assert(g.combat.zone[1].staggerOnHit, tail.staggerOnHit, "tail stagger seeded");
         t.assert(g.combat.zone[1].unlockMask, static_cast<uint16_t>(tail.unlockMaskLo) | (static_cast<uint16_t>(tail.unlockMaskHi) << 8), "tail unlockMask seeded");
+        t.assert(g.combat.zone[0].partSheet, 0, "ravager head part sheet 0 (bih.5)");
+        t.assert(g.combat.zone[1].partSheet, 0, "ravager tail part sheet 0 (bih.5)");
         suite.addTest(t);
     }
 
@@ -1327,6 +1341,9 @@ void CombatSuite(TestRunner &runner) {
         creatureLoad(g, combat_data::CREATURE_HEAVY);
         t.assert(g.combat.appendZone, combat_data::ZONE_HEAVY_APPENDAGE, "heavy append zone index");
         t.assert(g.combat.zone[COMBAT_ZONE_APPENDAGE].hp, z.hp, "heavy tail pool seeded");
+        t.assert(z.partSheet, art_sheets::ART_SHEET_FXTAIL_HEAVY, "heavy tail part sheet (bih.5)");
+        t.assert(g.combat.zone[COMBAT_ZONE_APPENDAGE].partSheet, art_sheets::ART_SHEET_FXTAIL_HEAVY, "heavy tail part sheet seeded");
+        t.assert(g.combat.zone[COMBAT_ZONE_HEAD].partSheet, 0, "heavy head part sheet 0");
         // Broken tail disables tail_spin but leaves bite available.
         t.assert(combatAttackDisabled(g, combat_data::ATTACK_HEAVY_TAIL_SPIN), 0, "spin enabled intact");
         t.assert(combatAttackDisabled(g, combat_data::ATTACK_HEAVY_BITE), 0, "bite enabled intact");

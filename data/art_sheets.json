@@ -9,6 +9,11 @@
     "fxchickenatk",
     "fxbullatk",
     "fxheavyatk",
-    "fxtailspin"
+    "fxtailspin",
+    "fxtail_heavy",
+    "fxhead_chicken",
+    "fxlegs_chicken",
+    "fxhead_bull",
+    "fxhooves_bull"
   ]
 }

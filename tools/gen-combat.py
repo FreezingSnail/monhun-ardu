@@ -31,9 +31,11 @@ Blob layout (little-endian, explicit u8/u16, no padding, fixed section order):
                      cdBase u16, cdJitter u16, spawnT u16,
                      spawnCd u16, stunRecoverT u16, staggerRecoverT u16
     skeleton    2 B  firstAnchor, anchorCount
-    zone       12 B  box(ox i8, oy i8, w, h), hp, dmgMul, bodyShare, breakTypes,
+    zone       14 B  box(ox i8, oy i8, w, h), hp, dmgMul, bodyShare, breakTypes,
                      staggerOnHit, brokenDmgMul, brokenFlags (bit0 hurtOff,
-                     bit1 cue), unlockMask (bit per global attack idx)
+                     bit1 cue), unlockMask u16 (bit per global attack idx),
+                     partSheet (1-based data/art_sheets.json index for the
+                     zone's baked part overlay, 0 = none, bih.5)
     anchor      2 B  ox i8, oy i8
     attack     27 B  moveType, moveSpeedF, moveDx i8, moveDy i8, facing, phys,
                      elem, onHitEffect, onHitPush i8, onHitStun, stagger, cue,
@@ -129,7 +131,7 @@ SIZES = {
     "CREATURE": 29 + CARVE_SIZE * CARVE_SLOTS,
     "PROFILE": 24,
     "SKELETON": 2,
-    "ZONE": 13,
+    "ZONE": 14,
     "ANCHOR": 2,
     "ATTACK": 27,
     "WINDOW": 10,
@@ -333,12 +335,12 @@ def normalize_enrage(errors, ctx, obj):
     }
 
 
-def normalize_zone(errors, ctx, obj, attack_ids):
+def normalize_zone(errors, ctx, obj, attack_ids, sheet_names):
     # Static props omit the pool (hp 0 = never drains/breaks); bodyShare
     # defaults to 100 and hurtOn to true. The record itself has no intact
     # hurtOn field (only the broken override), so those keys are validation
     # only, kept for authoring clarity.
-    check_keys(errors, ctx, obj, {"box", "dmgMul"}, {"hp", "bodyShare", "breakTypes", "hurtOn", "staggerOnHit", "broken"})
+    check_keys(errors, ctx, obj, {"box", "dmgMul"}, {"hp", "bodyShare", "breakTypes", "hurtOn", "staggerOnHit", "broken", "part"})
     dmg_mul = read_int(errors, ctx, obj, "dmgMul", 0, 255)
     broken = obj.get("broken")
     broken_dmg = dmg_mul if dmg_mul is not None else 100
@@ -352,8 +354,23 @@ def normalize_zone(errors, ctx, obj, attack_ids):
         broken_hurt_off = 0 if hurt else 1
         broken_cue = read_enum(errors, ctx + ".broken", broken, "cue", CUES, default=0) or 0
         broken_disable = read_attack_id_list(errors, ctx + ".broken", broken, "disableAttacks", attack_ids)
+    # Optional zone part overlay (bih.5): `part` names a data/art_sheets.json
+    # entry and packs as its 1-based index (0 = no overlay art for this zone).
+    part_name = obj.get("part")
+    part_sheet = 0
+    if part_name is None:
+        pass
+    elif not isinstance(part_name, str):
+        errors.add(ctx, "part: expected a sheet name string")
+    elif sheet_names is None:
+        errors.add(ART_SHEETS_REL, "missing art sheet file (zone part resolves against it)")
+    elif part_name not in sheet_names:
+        errors.add(ctx, "part: unknown art sheet %r" % part_name)
+    else:
+        part_sheet = sheet_names.index(part_name) + 1
     return {
         "box": normalize_box(errors, ctx + ".box", obj.get("box")),
+        "partSheet": part_sheet,
         "dmgMul": dmg_mul,
         "hp": read_int(errors, ctx, obj, "hp", 0, 255, default=0),
         "bodyShare": read_int(errors, ctx, obj, "bodyShare", 0, 255, default=100),
@@ -886,7 +903,7 @@ def compile_model(errors, root):
                         errors.add(ctx, "zones: unknown zone '%s' (want head or appendage)" % name_key)
                         continue
                     zc = "%s.zones.%s" % (ctx, name_key)
-                    zones[name_key] = normalize_zone(errors, zc, raw_zones[name_key], attack_ids)
+                    zones[name_key] = normalize_zone(errors, zc, raw_zones[name_key], attack_ids, art_sheet_names)
         raw_patterns = obj.get("patterns")
         if raw_patterns is None:
             if not is_static:
@@ -1156,6 +1173,7 @@ def pack_model(errors, model):
             i8(box["ox"]), i8(box["oy"]), u8(box["w"]), u8(box["h"]),
             u8(zone["hp"]), u8(zone["dmgMul"]), u8(zone["bodyShare"]), u8(zone["breakTypes"] or 0),
             u8(zone["staggerOnHit"]), u8(zone["brokenDmgMul"]), u8(broken_flags), u16(unlock),
+            u8(zone["partSheet"]),
         ]))
 
     # anchors
@@ -1351,6 +1369,7 @@ def emit_data_header(model, compiled):
     app("    Box box;")
     app("    uint8_t hp, dmgMul, bodyShare, breakTypes, staggerOnHit;")
     app("    uint8_t brokenDmgMul, brokenFlags, unlockMaskLo, unlockMaskHi;")
+    app("    uint8_t partSheet;   // 1-based art sheet index; 0 = no part overlay")
     app("};")
     app("")
     app("struct Anchor {")
@@ -1465,10 +1484,11 @@ def emit_data_header(model, compiled):
                 box = zone["box"]
                 broken_flags = (0x01 if zone["brokenHurtOff"] else 0) | (0x02 if zone["brokenCue"] else 0)
                 unlock = entry["unlock"]
-                app("    {{%d, %d, %d, %d}, %d, %d, %d, %d, %d, %d, %d, %d, %d}," % (
+                app("    {{%d, %d, %d, %d}, %d, %d, %d, %d, %d, %d, %d, %d, %d, %d}," % (
                     box["ox"], box["oy"], box["w"], box["h"], zone["hp"], zone["dmgMul"],
                     zone["bodyShare"], zone["breakTypes"] or 0, zone["staggerOnHit"],
-                    zone["brokenDmgMul"], broken_flags, unlock & 0xFF, (unlock >> 8) & 0xFF))
+                    zone["brokenDmgMul"], broken_flags, unlock & 0xFF, (unlock >> 8) & 0xFF,
+                    zone["partSheet"]))
         elif section == "ANCHORS":
             for entry in layout["anchors"]:
                 app("    {%d, %d}," % (entry["anchor"]["ox"], entry["anchor"]["oy"]))
@@ -1812,10 +1832,10 @@ def dump_model(model, compiled):
             if name not in creature["zones"]:
                 continue
             zone = creature["zones"][name]
-            print("  zone %s: box(%d,%d,%d,%d) dmgMul %d hp %d share %d break 0x%02X stagger %d brokenOverride %d hurtOff %d disable %s" % (
+            print("  zone %s: box(%d,%d,%d,%d) dmgMul %d hp %d share %d break 0x%02X stagger %d partSheet %d brokenOverride %d hurtOff %d disable %s" % (
                 name, zone["box"]["ox"], zone["box"]["oy"], zone["box"]["w"], zone["box"]["h"],
                 zone["dmgMul"], zone["hp"], zone["bodyShare"], zone["breakTypes"], zone["staggerOnHit"],
-                zone["brokenDmgMul"], zone["brokenHurtOff"], ",".join(zone["brokenDisable"]) or "-"))
+                zone["partSheet"], zone["brokenDmgMul"], zone["brokenHurtOff"], ",".join(zone["brokenDisable"]) or "-"))
         for attack in creature["attacks"]:
             move = {0: "none", 1: "lunge", 2: "charge", 3: "hop"}[attack["moveType"]]
             tell = {0: "dot", 1: "line", 2: "arc", 3: "ring", 4: "zone"}.get(attack["tell"] or 0, "?")

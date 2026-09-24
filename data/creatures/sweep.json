@@ -30,6 +30,7 @@
   "zones": {
     "head": {
       "box": { "ox": 17, "oy": -4, "w": 12, "h": 10 },
+      "part": "fxhead_bull",
       "dmgMul": 130,
       "hp": 160,
       "bodyShare": 100,
@@ -40,6 +41,7 @@
     },
     "appendage": {
       "box": { "ox": 4, "oy": 12, "w": 20, "h": 10 },
+      "part": "fxhooves_bull",
       "dmgMul": 150,
       "hp": 240,
       "bodyShare": 40,

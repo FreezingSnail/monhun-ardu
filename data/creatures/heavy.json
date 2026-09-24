@@ -42,6 +42,7 @@
   "zones": {
     "appendage": {
       "box": { "ox": -24, "oy": 0, "w": 24, "h": 16 },
+      "part": "fxtail_heavy",
       "dmgMul": 150,
       "hp": 240,
       "bodyShare": 40,

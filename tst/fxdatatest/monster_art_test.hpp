@@ -655,6 +655,37 @@ inline void test_monster_art(FxTest &test) {
     renderMonster(g, 2);
     test.expectEq(countRegionBit(static_cast<uint8_t>(BX + 4), static_cast<uint8_t>(BY + 17), 12, 16), 0, F("bull horns south no rotated band"));
 
+    // ---- bih.5 zone part data: each beast's breakable zone caches its part
+    // overlay sheet from the zone record (seeded by creatureLoad), so the
+    // generic overlay loop selects the same art the per-kind chain did. The
+    // heavy appendage, lunge head+appendage and sweep head+appendage carry a
+    // 1-based art_sheets index; a zone without part art (heavy head, every
+    // ravager/pole zone) packs 0 and draws no overlay.
+    setupBeast(g, MON_HEAVY, 16, 0);
+    test.expectEq(g.combat.zone[COMBAT_ZONE_APPENDAGE].partSheet, art_sheets::ART_SHEET_FXTAIL_HEAVY, F("heavy appendage part sheet"));
+    test.expectEq(g.combat.zone[COMBAT_ZONE_HEAD].partSheet, 0, F("heavy head no part sheet"));
+    setupBeast(g, MON_LUNGE, 16, 0);
+    test.expectEq(g.combat.zone[COMBAT_ZONE_HEAD].partSheet, art_sheets::ART_SHEET_FXHEAD_CHICKEN, F("lunge head part sheet"));
+    test.expectEq(g.combat.zone[COMBAT_ZONE_APPENDAGE].partSheet, art_sheets::ART_SHEET_FXLEGS_CHICKEN, F("lunge appendage part sheet"));
+    setupBeast(g, MON_SWEEP, 16, 0);
+    test.expectEq(g.combat.zone[COMBAT_ZONE_HEAD].partSheet, art_sheets::ART_SHEET_FXHEAD_BULL, F("sweep head part sheet"));
+    test.expectEq(g.combat.zone[COMBAT_ZONE_APPENDAGE].partSheet, art_sheets::ART_SHEET_FXHOOVES_BULL, F("sweep appendage part sheet"));
+    setupBeast(g, MON_RAVAGER, 16, 0);
+    test.expectEq(g.combat.zone[COMBAT_ZONE_HEAD].partSheet, 0, F("ravager head no part sheet"));
+    test.expectEq(g.combat.zone[COMBAT_ZONE_APPENDAGE].partSheet, 0, F("ravager appendage no part sheet"));
+    setupPole(g, 16, 0);
+    test.expectEq(g.combat.zone[COMBAT_ZONE_HEAD].partSheet, 0, F("pole head no part sheet"));
+
+    // ---- bih.5 generic overlay skip: whenever an attack-art sheet is the
+    // active whole-body draw (artSheet != 0), every zone overlay is suppressed
+    // -- the sheet already carries the posed part. HEAVY's non-locked bite is
+    // mode 0 art (fxheavyatk at the cell origin), so the resting tail overlay's
+    // east band (left of the 32-px cell, engine x16..39) must stay clear even
+    // though it inks that band at rest. (The locked-spin skip is pinned above.)
+    setupHeavyAttack(g, MS_ATTACK, 16, 0);
+    renderMonster(g, 0);
+    test.expectEq(countRegionBit(static_cast<uint8_t>(E_TAIL_X), static_cast<uint8_t>(TAIL_Y), TAIL_W, TAIL_H), 0, F("heavy attack skips tail overlay"));
+
     // ---- bih phase 1 base-body oracle: the 4 beasts' BASE draw (no attack
     // sheet) must be pixel-identical before and after their sheet/layout moves
     // to art descriptors. Three facts per beast, all chosen OUTSIDE that beast's

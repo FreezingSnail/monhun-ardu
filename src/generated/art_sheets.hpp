@@ -16,7 +16,7 @@
 
 namespace art_sheets {
 
-constexpr uint8_t ART_SHEETS_COUNT = 9;
+constexpr uint8_t ART_SHEETS_COUNT = 14;
 constexpr uint8_t ART_SHEET_FXMONSTER = 1;
 constexpr uint8_t ART_SHEET_FXMONSTER_HEAVY = 2;
 constexpr uint8_t ART_SHEET_FXMONSTER_LUNGE = 3;
@@ -26,17 +26,27 @@ constexpr uint8_t ART_SHEET_FXCHICKENATK = 6;
 constexpr uint8_t ART_SHEET_FXBULLATK = 7;
 constexpr uint8_t ART_SHEET_FXHEAVYATK = 8;
 constexpr uint8_t ART_SHEET_FXTAILSPIN = 9;
+constexpr uint8_t ART_SHEET_FXTAIL_HEAVY = 10;
+constexpr uint8_t ART_SHEET_FXHEAD_CHICKEN = 11;
+constexpr uint8_t ART_SHEET_FXLEGS_CHICKEN = 12;
+constexpr uint8_t ART_SHEET_FXHEAD_BULL = 13;
+constexpr uint8_t ART_SHEET_FXHOOVES_BULL = 14;
 
 // Host-readable u24 addresses (list order), for the address-table tests.
-constexpr uint32_t ART_SHEET_ADDR_FXMONSTER = 0x0047EB;
-constexpr uint32_t ART_SHEET_ADDR_FXMONSTER_HEAVY = 0x011BDB;
-constexpr uint32_t ART_SHEET_ADDR_FXMONSTER_LUNGE = 0x00EEAB;
-constexpr uint32_t ART_SHEET_ADDR_FXMONSTER_SWEEP = 0x0062F5;
-constexpr uint32_t ART_SHEET_ADDR_FXPOLE = 0x005A4F;
-constexpr uint32_t ART_SHEET_ADDR_FXCHICKENATK = 0x010E59;
-constexpr uint32_t ART_SHEET_ADDR_FXBULLATK = 0x013B5D;
-constexpr uint32_t ART_SHEET_ADDR_FXHEAVYATK = 0x015653;
-constexpr uint32_t ART_SHEET_ADDR_FXTAILSPIN = 0x002147;
+constexpr uint32_t ART_SHEET_ADDR_FXMONSTER = 0x0047F3;
+constexpr uint32_t ART_SHEET_ADDR_FXMONSTER_HEAVY = 0x011BE3;
+constexpr uint32_t ART_SHEET_ADDR_FXMONSTER_LUNGE = 0x00EEB3;
+constexpr uint32_t ART_SHEET_ADDR_FXMONSTER_SWEEP = 0x0062FD;
+constexpr uint32_t ART_SHEET_ADDR_FXPOLE = 0x005A57;
+constexpr uint32_t ART_SHEET_ADDR_FXCHICKENATK = 0x010E61;
+constexpr uint32_t ART_SHEET_ADDR_FXBULLATK = 0x013B65;
+constexpr uint32_t ART_SHEET_ADDR_FXHEAVYATK = 0x01565B;
+constexpr uint32_t ART_SHEET_ADDR_FXTAILSPIN = 0x00214F;
+constexpr uint32_t ART_SHEET_ADDR_FXTAIL_HEAVY = 0x01685D;
+constexpr uint32_t ART_SHEET_ADDR_FXHEAD_CHICKEN = 0x01521D;
+constexpr uint32_t ART_SHEET_ADDR_FXLEGS_CHICKEN = 0x018003;
+constexpr uint32_t ART_SHEET_ADDR_FXHEAD_BULL = 0x016CDF;
+constexpr uint32_t ART_SHEET_ADDR_FXHOOVES_BULL = 0x014D67;
 
 #if defined(__AVR__)
 // Cart sheet addresses in list order: index = ART_SHEET_<NAME> - 1.
@@ -50,6 +60,11 @@ MH_PROGMEM constexpr uint24_t ART_SHEETS[ART_SHEETS_COUNT] = {
     fxbullatk,
     fxheavyatk,
     fxtailspin,
+    fxtail_heavy,
+    fxhead_chicken,
+    fxlegs_chicken,
+    fxhead_bull,
+    fxhooves_bull,
 };
 static_assert(ART_SHEETS[0] == fxmonster, "art sheet fxmonster stale: re-run make gen");
 static_assert(ART_SHEETS[1] == fxmonster_heavy, "art sheet fxmonster_heavy stale: re-run make gen");
@@ -60,6 +75,11 @@ static_assert(ART_SHEETS[5] == fxchickenatk, "art sheet fxchickenatk stale: re-r
 static_assert(ART_SHEETS[6] == fxbullatk, "art sheet fxbullatk stale: re-run make gen");
 static_assert(ART_SHEETS[7] == fxheavyatk, "art sheet fxheavyatk stale: re-run make gen");
 static_assert(ART_SHEETS[8] == fxtailspin, "art sheet fxtailspin stale: re-run make gen");
+static_assert(ART_SHEETS[9] == fxtail_heavy, "art sheet fxtail_heavy stale: re-run make gen");
+static_assert(ART_SHEETS[10] == fxhead_chicken, "art sheet fxhead_chicken stale: re-run make gen");
+static_assert(ART_SHEETS[11] == fxlegs_chicken, "art sheet fxlegs_chicken stale: re-run make gen");
+static_assert(ART_SHEETS[12] == fxhead_bull, "art sheet fxhead_bull stale: re-run make gen");
+static_assert(ART_SHEETS[13] == fxhooves_bull, "art sheet fxhooves_bull stale: re-run make gen");
 #endif
 
 }   // namespace art_sheets

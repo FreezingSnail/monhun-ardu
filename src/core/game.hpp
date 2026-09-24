@@ -680,6 +680,7 @@ struct CombatZoneCache {
     uint8_t breakTypes;
     uint8_t staggerOnHit;
     uint16_t unlockMask;   // attacks disabled while this zone is broken (bit per global idx)
+    uint8_t partSheet;     // 1-based art sheet index for the part overlay (bih.5; 0 = none)
 };
 
 // Combat runtime state: which creature was loaded, the implicit body box (the
@@ -693,7 +694,7 @@ struct CombatState {
     CombatAttackCache attack;                  // 21 B AVR
     CombatBox body;                            // 4 B AVR
     CombatBox collide;                         // 4 B AVR: body-collision rect
-    CombatZoneCache zone[COMBAT_ZONE_SLOTS];   // 20 B AVR
+    CombatZoneCache zone[COMBAT_ZONE_SLOTS];   // 26 B AVR
     uint8_t headZone;                          // global ZONE index or COMBAT_NO_ZONE
     uint8_t appendZone;
     uint8_t creature;     // index into CREATURES

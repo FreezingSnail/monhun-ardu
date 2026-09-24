@@ -12,7 +12,7 @@
 namespace combat_data {
 
 constexpr uint8_t VERSION = 1;
-constexpr uint16_t BLOB_SIZE = 1254;
+constexpr uint16_t BLOB_SIZE = 1262;
 
 struct Box {
     int8_t ox;
@@ -47,6 +47,7 @@ struct Zone {
     Box box;
     uint8_t hp, dmgMul, bodyShare, breakTypes, staggerOnHit;
     uint8_t brokenDmgMul, brokenFlags, unlockMaskLo, unlockMaskHi;
+    uint8_t partSheet;   // 1-based art sheet index; 0 = no part overlay
 };
 
 struct Anchor {
@@ -233,14 +234,14 @@ inline constexpr std::array<Skeleton, 5> SKELETONS = {{
 }};
 
 inline constexpr std::array<Zone, 8> ZONES = {{
-    {{-24, 0, 24, 16}, 240, 150, 40, 1, 30, 200, 3, 2, 0},
-    {{18, 0, 11, 7}, 160, 130, 100, 1, 12, 130, 1, 0, 0},
-    {{9, 0, 9, 24}, 240, 150, 40, 1, 30, 200, 3, 16, 0},
-    {{5, 0, 10, 8}, 0, 140, 100, 0, 0, 140, 0, 0, 0},
-    {{20, 4, 12, 12}, 160, 130, 100, 1, 12, 130, 1, 0, 0},
-    {{-14, 8, 18, 10}, 240, 150, 40, 1, 30, 200, 3, 128, 0},
-    {{17, -4, 12, 10}, 160, 130, 100, 1, 12, 130, 1, 0, 0},
-    {{4, 12, 20, 10}, 240, 150, 40, 1, 30, 200, 3, 0, 1},
+    {{-24, 0, 24, 16}, 240, 150, 40, 1, 30, 200, 3, 2, 0, 10},
+    {{18, 0, 11, 7}, 160, 130, 100, 1, 12, 130, 1, 0, 0, 11},
+    {{9, 0, 9, 24}, 240, 150, 40, 1, 30, 200, 3, 16, 0, 12},
+    {{5, 0, 10, 8}, 0, 140, 100, 0, 0, 140, 0, 0, 0, 0},
+    {{20, 4, 12, 12}, 160, 130, 100, 1, 12, 130, 1, 0, 0, 0},
+    {{-14, 8, 18, 10}, 240, 150, 40, 1, 30, 200, 3, 128, 0, 0},
+    {{17, -4, 12, 10}, 160, 130, 100, 1, 12, 130, 1, 0, 0, 13},
+    {{4, 12, 20, 10}, 240, 150, 40, 1, 30, 200, 3, 0, 1, 14},
 }};
 
 inline constexpr std::array<Anchor, 10> ANCHORS = {{

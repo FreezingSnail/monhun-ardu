@@ -21,7 +21,7 @@
 // then appendage), drains the zone pool and flips a single broken bit per zone.
 //
 // Cache budget: CombatProfile 24 B + CombatAttackCache 28 B + body box 4 B +
-// 2x CombatZoneCache 22 B + 4 runtime zone bytes + 4 interpreter bytes = 86 B
+// 2x CombatZoneCache 26 B + 4 runtime zone bytes + 4 interpreter bytes = 90 B
 // on AVR.
 
 #include <stddef.h>
@@ -156,6 +156,7 @@ struct CombatZone {
     uint8_t hp, dmgMul, bodyShare, breakTypes, staggerOnHit;
     uint8_t brokenDmgMul, brokenFlags;
     uint8_t unlockMaskLo, unlockMaskHi;   // u16 bit per global attack idx (feel.10)
+    uint8_t partSheet;                    // 1-based art sheet index for the part overlay (bih.5; 0 = none)
 };
 
 struct CombatAnchor {
@@ -246,6 +247,7 @@ struct PkZone {
     uint8_t hp, dmgMul, bodyShare, breakTypes, staggerOnHit;
     uint8_t brokenDmgMul, brokenFlags;
     uint8_t unlockMaskLo, unlockMaskHi;
+    uint8_t partSheet;   // bih.5 zone part overlay sheet index (0 = none)
 };
 struct PkAnchor {
     int8_t ox, oy;
@@ -316,7 +318,7 @@ static_assert(offsetof(PkAttack, artFrame) == offsetof(PkAttack, artSheet) + 1, 
 static_assert(offsetof(PkAttack, artMode) == offsetof(PkAttack, artFrame) + 1, "attack art triple must stay contiguous");
 // Bulk-read cache mirrors: these caches are byte-identical to their packed
 // records, so the reads fetch the whole record in one transaction.
-static_assert(sizeof(CombatZone) == combat::ZONE_SIZE, "zone cache must stay 13 B");
+static_assert(sizeof(CombatZone) == combat::ZONE_SIZE, "zone cache must stay 14 B");
 static_assert(sizeof(CombatGuard) == combat::GUARD_SIZE, "guard cache must stay 9 B");
 static_assert(sizeof(CombatStep) == combat::STEP_SIZE, "step cache must stay 4 B");
 static_assert(sizeof(CombatPattern) == combat::PATTERN_SIZE, "pattern cache must stay 3 B");
@@ -328,8 +330,9 @@ static_assert(offsetof(CombatStep, chance) == offsetof(PkStep, chance), "step mi
 static_assert(offsetof(CombatPattern, guardIdx) == offsetof(PkPattern, guardIdx), "pattern mirror drift");
 static_assert(sizeof(CombatWindow) == 9, "window cache must stay 9 B");
 static_assert(sizeof(CombatAttackCache) == 28, "attack cache must stay 28 B (windup quad + move prefix incl hop dx/dy + facing + wallStun + tell + attack art + idx + window)");
-static_assert(sizeof(CombatZoneCache) == 12, "zone cache must stay 12 B");
-static_assert(sizeof(CombatState) == 108, "CombatState must stay 108 B (zones design + collide + static flag + faceHold + turnRate + wallStun + tell + attack art + enrage + hop dx/dy + art)");
+static_assert(sizeof(CombatZoneCache) == 13, "zone cache must stay 13 B");
+static_assert(sizeof(CombatState) == 110,
+              "CombatState must stay 110 B (zones design + collide + static flag + faceHold + turnRate + wallStun + tell + attack art + enrage + hop dx/dy + art + zone part sheets)");
 
 // Fake cart pointer: the blob lives below 64 KB (generator hard-fails above).
 inline uint16_t combatCartAddr(uint16_t off) {
@@ -821,6 +824,7 @@ inline CombatZone combatZoneRead(uint8_t i) {
     v.brokenFlags = z.brokenFlags;
     v.unlockMaskLo = z.unlockMaskLo;
     v.unlockMaskHi = z.unlockMaskHi;
+    v.partSheet = z.partSheet;
     return v;
 }
 
@@ -1038,6 +1042,7 @@ inline void combatZoneSeed(Game &g, uint8_t slot, uint8_t zoneIdx) {
     c.breakTypes = z.breakTypes;
     c.staggerOnHit = z.staggerOnHit;
     c.unlockMask = static_cast<uint16_t>(z.unlockMaskLo) | (static_cast<uint16_t>(z.unlockMaskHi) << 8);
+    c.partSheet = z.partSheet;
 }
 
 // creatureLoad: read the creature profile index + full profile record + body

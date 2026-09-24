@@ -23,6 +23,7 @@
 #include "src/core/monster.hpp"       // migration A: sim consumes the attack cache
 #include "src/core/projectiles.hpp"   // addEffect (playerHurt side)
 #include "src/generated/combat_expect.hpp"
+#include "src/generated/art_sheets.hpp"   // zone part overlay sheet indexes (bih.5)
 
 #include <avr/pgmspace.h>
 #include <stdint.h>
@@ -146,7 +147,7 @@ static const CombatCreature kCreatures[] PROGMEM = {
 static const uint8_t kZoneIds[] PROGMEM = {combat::ZONE_HEAVY_APPENDAGE, combat::ZONE_LUNGE_HEAD,   combat::ZONE_LUNGE_APPENDAGE,  combat::ZONE_SWEEP_HEAD,
                                            combat::ZONE_SWEEP_APPENDAGE, combat::ZONE_RAVAGER_HEAD, combat::ZONE_RAVAGER_APPENDAGE};
 static const CombatZone kZones[] PROGMEM = {
-    // box, hp, dmgMul, bodyShare, breakTypes, staggerOnHit, brokenDmgMul, brokenFlags, unlockMaskLo, unlockMaskHi
+    // box, hp, dmgMul, bodyShare, breakTypes, staggerOnHit, brokenDmgMul, brokenFlags, unlockMaskLo, unlockMaskHi, partSheet
     {{-24, 0, 24, 16},
      combat_expect::ZONE_HEAVY_APPENDAGE_HP,
      combat_expect::ZONE_HEAVY_APPENDAGE_DMG_MUL,
@@ -156,8 +157,19 @@ static const CombatZone kZones[] PROGMEM = {
      200,
      COMBAT_BROKEN_HURT_OFF | COMBAT_BROKEN_CUE,
      static_cast<uint8_t>((1u << combat::ATTACK_HEAVY_TAIL_SPIN) & 0xFFu),
-     static_cast<uint8_t>(((1u << combat::ATTACK_HEAVY_TAIL_SPIN) >> 8) & 0xFFu)},
-    {{18, 0, 11, 7}, combat_expect::ZONE_LUNGE_HEAD_HP, combat_expect::ZONE_LUNGE_HEAD_DMG_MUL, combat_expect::ZONE_LUNGE_HEAD_BODY_SHARE, PHYS_SLASH, 12, 130, COMBAT_BROKEN_HURT_OFF, 0},
+     static_cast<uint8_t>(((1u << combat::ATTACK_HEAVY_TAIL_SPIN) >> 8) & 0xFFu),
+     art_sheets::ART_SHEET_FXTAIL_HEAVY},
+    {{18, 0, 11, 7},
+     combat_expect::ZONE_LUNGE_HEAD_HP,
+     combat_expect::ZONE_LUNGE_HEAD_DMG_MUL,
+     combat_expect::ZONE_LUNGE_HEAD_BODY_SHARE,
+     PHYS_SLASH,
+     12,
+     130,
+     COMBAT_BROKEN_HURT_OFF,
+     0,
+     0,
+     art_sheets::ART_SHEET_FXHEAD_CHICKEN},
     {{9, 0, 9, 24},
      combat_expect::ZONE_LUNGE_APPENDAGE_HP,
      combat_expect::ZONE_LUNGE_APPENDAGE_DMG_MUL,
@@ -167,8 +179,19 @@ static const CombatZone kZones[] PROGMEM = {
      200,
      COMBAT_BROKEN_HURT_OFF | COMBAT_BROKEN_CUE,
      static_cast<uint8_t>((1u << combat::ATTACK_LUNGE_LEAP) & 0xFFu),
-     static_cast<uint8_t>(((1u << combat::ATTACK_LUNGE_LEAP) >> 8) & 0xFFu)},
-    {{17, -4, 12, 10}, combat_expect::ZONE_SWEEP_HEAD_HP, combat_expect::ZONE_SWEEP_HEAD_DMG_MUL, combat_expect::ZONE_SWEEP_HEAD_BODY_SHARE, PHYS_SLASH, 12, 130, COMBAT_BROKEN_HURT_OFF, 0},
+     static_cast<uint8_t>(((1u << combat::ATTACK_LUNGE_LEAP) >> 8) & 0xFFu),
+     art_sheets::ART_SHEET_FXLEGS_CHICKEN},
+    {{17, -4, 12, 10},
+     combat_expect::ZONE_SWEEP_HEAD_HP,
+     combat_expect::ZONE_SWEEP_HEAD_DMG_MUL,
+     combat_expect::ZONE_SWEEP_HEAD_BODY_SHARE,
+     PHYS_SLASH,
+     12,
+     130,
+     COMBAT_BROKEN_HURT_OFF,
+     0,
+     0,
+     art_sheets::ART_SHEET_FXHEAD_BULL},
     {{4, 12, 20, 10},
      combat_expect::ZONE_SWEEP_APPENDAGE_HP,
      combat_expect::ZONE_SWEEP_APPENDAGE_DMG_MUL,
@@ -178,8 +201,9 @@ static const CombatZone kZones[] PROGMEM = {
      200,
      COMBAT_BROKEN_HURT_OFF | COMBAT_BROKEN_CUE,
      static_cast<uint8_t>((1u << combat::ATTACK_SWEEP_STOMP) & 0xFFu),
-     static_cast<uint8_t>(((1u << combat::ATTACK_SWEEP_STOMP) >> 8) & 0xFFu)},
-    {{20, 4, 12, 12}, combat_expect::ZONE_RAVAGER_HEAD_HP, combat_expect::ZONE_RAVAGER_HEAD_DMG_MUL, combat_expect::ZONE_RAVAGER_HEAD_BODY_SHARE, PHYS_SLASH, 12, 130, COMBAT_BROKEN_HURT_OFF, 0},
+     static_cast<uint8_t>(((1u << combat::ATTACK_SWEEP_STOMP) >> 8) & 0xFFu),
+     art_sheets::ART_SHEET_FXHOOVES_BULL},
+    {{20, 4, 12, 12}, combat_expect::ZONE_RAVAGER_HEAD_HP, combat_expect::ZONE_RAVAGER_HEAD_DMG_MUL, combat_expect::ZONE_RAVAGER_HEAD_BODY_SHARE, PHYS_SLASH, 12, 130, COMBAT_BROKEN_HURT_OFF, 0, 0, 0},
     {{-14, 8, 18, 10},
      combat_expect::ZONE_RAVAGER_APPENDAGE_HP,
      combat_expect::ZONE_RAVAGER_APPENDAGE_DMG_MUL,
@@ -189,7 +213,8 @@ static const CombatZone kZones[] PROGMEM = {
      200,
      COMBAT_BROKEN_HURT_OFF | COMBAT_BROKEN_CUE,
      static_cast<uint8_t>((1u << combat::ATTACK_RAVAGER_TAIL_SWEEP) & 0xFFu),
-     static_cast<uint8_t>(((1u << combat::ATTACK_RAVAGER_TAIL_SWEEP) >> 8) & 0xFFu)},
+     static_cast<uint8_t>(((1u << combat::ATTACK_RAVAGER_TAIL_SWEEP) >> 8) & 0xFFu),
+     0},
 };
 
 static const uint8_t kAttackIds[] PROGMEM = {combat::ATTACK_HEAVY_BITE,  combat::ATTACK_HEAVY_TAIL_SPIN, combat::ATTACK_HEAVY_TAIL_SLAM, combat::ATTACK_LUNGE_PECK,
