@@ -12,7 +12,7 @@
 namespace combat_data {
 
 constexpr uint8_t VERSION = 1;
-constexpr uint16_t BLOB_SIZE = 1262;
+constexpr uint16_t BLOB_SIZE = 1257;
 
 struct Box {
     int8_t ox;
@@ -101,7 +101,6 @@ struct Creature {
     Box collide;   // body-collision rect (legs-only for the chicken)
     uint16_t hp, spawnX, spawnY;
     uint8_t flags;   // bit0: static prop (pole); no FSM/attacks
-    uint8_t sheet;   // art sheet id (0 = default monster sheet)
     uint8_t brokenW, brokenH;   // target rect on break (0 = unchanged)
     uint8_t enrageHpPct, enrageSpdMul, enrageFaceHold, enrageCue;   // hpPct 0 = disabled
     Carve carve[4];   // prg.3 drop table; count 0 slots are inert
@@ -210,11 +209,11 @@ constexpr uint8_t ZONE_SWEEP_APPENDAGE = 7;
 constexpr uint8_t ZONE_SWEEP_HEAD = 6;
 
 inline constexpr std::array<Creature, 5> CREATURES = {{
-    {2, 0, 255, 0, 0, 3, 0, 4, 40, 28, 5, {-8, 3, 48, 22}, 2800, 200, 40, 0, 0, 0, 0, 0, 0, 0, 0, {{7, 1, 100}, {4, 1, 55}, {5, 1, 25}, {0, 0, 0}}},
-    {1, 1, 1, 2, 3, 3, 4, 4, 32, 24, 6, {9, 11, 12, 13}, 1800, 200, 40, 0, 0, 0, 0, 0, 0, 0, 0, {{4, 1, 100}, {5, 1, 45}, {0, 0, 0}, {0, 0, 0}}},
-    {3, 2, 3, 255, 0, 0, 0, 0, 20, 36, 0, {0, 0, 20, 36}, 300, 140, 40, 1, 1, 0, 0, 0, 0, 0, 0, {{0, 0, 0}, {0, 0, 0}, {0, 0, 0}, {0, 0, 0}}},
-    {4, 3, 4, 5, 6, 2, 8, 3, 32, 24, 6, {0, 0, 32, 24}, 2400, 200, 40, 0, 0, 0, 0, 0, 0, 0, 0, {{6, 1, 100}, {7, 1, 45}, {4, 2, 30}, {0, 0, 0}}},
-    {0, 4, 6, 7, 8, 3, 11, 4, 28, 22, 7, {1, 14, 26, 8}, 1500, 200, 40, 0, 0, 0, 0, 40, 130, 6, 0, {{5, 1, 100}, {6, 1, 40}, {0, 0, 0}, {0, 0, 0}}},
+    {2, 0, 255, 0, 0, 3, 0, 4, 40, 28, 5, {-8, 3, 48, 22}, 2800, 200, 40, 0, 0, 0, 0, 0, 0, 0, {{7, 1, 100}, {4, 1, 55}, {5, 1, 25}, {0, 0, 0}}},
+    {1, 1, 1, 2, 3, 3, 4, 4, 32, 24, 6, {9, 11, 12, 13}, 1800, 200, 40, 0, 0, 0, 0, 0, 0, 0, {{4, 1, 100}, {5, 1, 45}, {0, 0, 0}, {0, 0, 0}}},
+    {3, 2, 3, 255, 0, 0, 0, 0, 20, 36, 0, {0, 0, 20, 36}, 300, 140, 40, 1, 0, 0, 0, 0, 0, 0, {{0, 0, 0}, {0, 0, 0}, {0, 0, 0}, {0, 0, 0}}},
+    {4, 3, 4, 5, 6, 2, 8, 3, 32, 24, 6, {0, 0, 32, 24}, 2400, 200, 40, 0, 0, 0, 0, 0, 0, 0, {{6, 1, 100}, {7, 1, 45}, {4, 2, 30}, {0, 0, 0}}},
+    {0, 4, 6, 7, 8, 3, 11, 4, 28, 22, 7, {1, 14, 26, 8}, 1500, 200, 40, 0, 0, 0, 40, 130, 6, 0, {{5, 1, 100}, {6, 1, 40}, {0, 0, 0}, {0, 0, 0}}},
 }};
 
 inline constexpr std::array<Profile, 5> PROFILES = {{

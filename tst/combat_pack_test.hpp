@@ -370,13 +370,12 @@ void CombatPackSuite(TestRunner &runner) {
             t.assert(b16(blob, o + 17), h.spawnX, "blob creature spawnX");
             t.assert(b16(blob, o + 19), h.spawnY, "blob creature spawnY");
             t.assert(b8(blob, o + 21), h.flags, "blob creature flags");
-            t.assert(b8(blob, o + 22), h.sheet, "blob creature sheet");
-            t.assert(b8(blob, o + 23), h.brokenW, "blob creature brokenW");
-            t.assert(b8(blob, o + 24), h.brokenH, "blob creature brokenH");
-            t.assert(b8(blob, o + 25), h.enrageHpPct, "blob creature enrageHpPct");
-            t.assert(b8(blob, o + 26), h.enrageSpdMul, "blob creature enrageSpdMul");
-            t.assert(b8(blob, o + 27), h.enrageFaceHold, "blob creature enrageFaceHold");
-            t.assert(b8(blob, o + 28), h.enrageCue, "blob creature enrageCue");
+            t.assert(b8(blob, o + 22), h.brokenW, "blob creature brokenW");
+            t.assert(b8(blob, o + 23), h.brokenH, "blob creature brokenH");
+            t.assert(b8(blob, o + 24), h.enrageHpPct, "blob creature enrageHpPct");
+            t.assert(b8(blob, o + 25), h.enrageSpdMul, "blob creature enrageSpdMul");
+            t.assert(b8(blob, o + 26), h.enrageFaceHold, "blob creature enrageFaceHold");
+            t.assert(b8(blob, o + 27), h.enrageCue, "blob creature enrageCue");
             // prg.3: fixed carve tail (item/count/chance per slot).
             for (uint8_t slot = 0; slot < combat::CARVE_SLOTS; slot++) {
                 const size_t co = o + combat::CREATURE_CARVE_OFF + slot * combat::CARVE_SIZE;
@@ -534,14 +533,14 @@ void CombatPackSuite(TestRunner &runner) {
         // disabled (halves 0) on every shipped creature. The decode loop above
         // pins it against the host struct; no expect constants exist while no
         // data authors the phase.
-        t.assert(b8(blob, static_cast<size_t>(combat::CREATURE_LUNGE_OFF) + 25), 0, "shipped lunge enrage hpPct 0");
-        t.assert(b8(blob, static_cast<size_t>(combat::CREATURE_LUNGE_OFF) + 26), 0, "shipped lunge enrage spdMul 0");
-        t.assert(b8(blob, static_cast<size_t>(combat::CREATURE_LUNGE_OFF) + 27), 0, "shipped lunge enrage faceHold 0");
-        t.assert(b8(blob, static_cast<size_t>(combat::CREATURE_LUNGE_OFF) + 28), 0, "shipped lunge enrage cue 0");
-        // prg.3: the carve tail sits after the enrage quad (CREATURE_CARVE_OFF 29)
+        t.assert(b8(blob, static_cast<size_t>(combat::CREATURE_LUNGE_OFF) + 24), 0, "shipped lunge enrage hpPct 0");
+        t.assert(b8(blob, static_cast<size_t>(combat::CREATURE_LUNGE_OFF) + 25), 0, "shipped lunge enrage spdMul 0");
+        t.assert(b8(blob, static_cast<size_t>(combat::CREATURE_LUNGE_OFF) + 26), 0, "shipped lunge enrage faceHold 0");
+        t.assert(b8(blob, static_cast<size_t>(combat::CREATURE_LUNGE_OFF) + 27), 0, "shipped lunge enrage cue 0");
+        // prg.3: the carve tail sits after the enrage quad (CREATURE_CARVE_OFF 28)
         // and is pinned against combat_expect for every creature that authored a
         // table. Slots are item/count/chance triples.
-        t.assert(combat::CREATURE_CARVE_OFF, 29, "carve tail follows the creature core");
+        t.assert(combat::CREATURE_CARVE_OFF, 28, "carve tail follows the creature core");
         t.assert(combat::CARVE_SIZE, 3, "carve slot is item/count/chance");
         t.assert(b8(blob, static_cast<size_t>(combat::CREATURE_LUNGE_OFF) + combat::CREATURE_CARVE_OFF + 0), combat_expect::CREATURE_LUNGE_CARVE0_ITEM, "expect lunge carve0 item");
         t.assert(b8(blob, static_cast<size_t>(combat::CREATURE_LUNGE_OFF) + combat::CREATURE_CARVE_OFF + 1), combat_expect::CREATURE_LUNGE_CARVE0_COUNT, "expect lunge carve0 count");
@@ -626,9 +625,9 @@ void CombatPackSuite(TestRunner &runner) {
         t.assert(b8(blob, static_cast<size_t>(combat::ATTACK_SWEEP_GORE_OFF) + 23), 1, "expect gore line tell");
         t.assert(b8(blob, static_cast<size_t>(combat::ATTACK_SWEEP_GORE_OFF) + 12), 70, "expect gore wallStun");
         t.assert(b8(blob, static_cast<size_t>(combat::ATTACK_SWEEP_REAR_KICK_OFF) + 23), 2, "expect rear_kick arc tell");
-        t.assert(b8(blob, static_cast<size_t>(combat::CREATURE_SWEEP_OFF) + 25), combat_expect::CREATURE_SWEEP_ENRAGE_HP_PCT, "expect sweep enrage hpPct");
-        t.assert(b8(blob, static_cast<size_t>(combat::CREATURE_SWEEP_OFF) + 26), combat_expect::CREATURE_SWEEP_ENRAGE_SPD_MUL, "expect sweep enrage spdMul");
-        t.assert(b8(blob, static_cast<size_t>(combat::CREATURE_SWEEP_OFF) + 27), combat_expect::CREATURE_SWEEP_ENRAGE_FACE_HOLD, "expect sweep enrage faceHold");
+        t.assert(b8(blob, static_cast<size_t>(combat::CREATURE_SWEEP_OFF) + 24), combat_expect::CREATURE_SWEEP_ENRAGE_HP_PCT, "expect sweep enrage hpPct");
+        t.assert(b8(blob, static_cast<size_t>(combat::CREATURE_SWEEP_OFF) + 25), combat_expect::CREATURE_SWEEP_ENRAGE_SPD_MUL, "expect sweep enrage spdMul");
+        t.assert(b8(blob, static_cast<size_t>(combat::CREATURE_SWEEP_OFF) + 26), combat_expect::CREATURE_SWEEP_ENRAGE_FACE_HOLD, "expect sweep enrage faceHold");
         suite.addTest(t);
     }
 

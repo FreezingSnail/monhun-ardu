@@ -19,10 +19,10 @@ resolvable local refs, unique local ids and u8/u16 section limits.
 Blob layout (little-endian, explicit u8/u16, no padding, fixed section order):
 
     header     32 B  magic u16, version u8, flags u8, 10x u16 counts + 4x u16 reserved
-    creature   29 B  skeletonIdx, profileIdx, headZone, appendZone,
+    creature   28 B  skeletonIdx, profileIdx, headZone, appendZone,
                      firstAttack, attackCount, firstPattern, patternCount,
                      w, h, spd, collide(ox i8, oy i8, w, h),
-                     hp u16, spawnX u16, spawnY u16, flags, sheet,
+                     hp u16, spawnX u16, spawnY u16, flags,
                      brokenW, brokenH, enrage(hpPct, spdMul, faceHold, cue)
     profile    24 B  engageDist, keepDist, attackDist, circleNum, circleDen,
                      retreatNum, retreatDen, staggerMax, staggerDecay,
@@ -128,7 +128,7 @@ ZONE_APPENDAGE = 0x02
 COMBAT_NO_ZONE = 0xFF
 
 SIZES = {
-    "CREATURE": 29 + CARVE_SIZE * CARVE_SLOTS,
+    "CREATURE": 28 + CARVE_SIZE * CARVE_SLOTS,
     "PROFILE": 24,
     "SKELETON": 2,
     "ZONE": 14,
@@ -845,9 +845,8 @@ def compile_model(errors, root):
         if obj is None:
             continue
         check_keys(errors, ctx, obj, {"id", "skeleton", "stats"},
-                   {"profile", "attacks", "patterns", "zones", "collide", "static", "sheet", "carve", "art"})
+                   {"profile", "attacks", "patterns", "zones", "collide", "static", "carve", "art"})
         is_static = bool(read_bool(errors, ctx, obj, "static", default=0))
-        sheet_id = read_int(errors, ctx, obj, "sheet", 0, 255, default=0)
         cid = read_id(errors, ctx, obj, "id")
         if cid is not None:
             if cid != os.path.splitext(name)[0]:
@@ -930,7 +929,6 @@ def compile_model(errors, root):
             "id": cid,
             "skeleton": skeleton,
             "static": 1 if is_static else 0,
-            "sheet": sheet_id,
             "stats": {
                 "w": read_int(errors, ctx + ".stats", stats, "w", 1, 255),
                 "h": read_int(errors, ctx + ".stats", stats, "h", 1, 255),
@@ -1119,7 +1117,7 @@ def pack_model(errors, model):
             u8(stats["w"]), u8(stats["h"]), u8(stats["spd"]),
             i8(collide["ox"]), i8(collide["oy"]), u8(collide["w"]), u8(collide["h"]),
             u16(stats["hp"]), u16(stats["spawnX"]), u16(stats["spawnY"]),
-            u8(creature["static"]), u8(creature["sheet"]), u8(broken_body["w"]), u8(broken_body["h"]),
+            u8(creature["static"]), u8(broken_body["w"]), u8(broken_body["h"]),
             u8(enrage["hpPct"]), u8(enrage["spdMul"]), u8(enrage["faceHold"]), u8(enrage["cue"] or 0),
             bytes(carve_bytes),
         ]))
@@ -1423,7 +1421,6 @@ def emit_data_header(model, compiled):
     app("    Box collide;   // body-collision rect (legs-only for the chicken)")
     app("    uint16_t hp, spawnX, spawnY;")
     app("    uint8_t flags;   // bit0: static prop (pole); no FSM/attacks")
-    app("    uint8_t sheet;   // art sheet id (0 = default monster sheet)")
     app("    uint8_t brokenW, brokenH;   // target rect on break (0 = unchanged)")
     app("    uint8_t enrageHpPct, enrageSpdMul, enrageFaceHold, enrageCue;   // hpPct 0 = disabled")
     app("    Carve carve[%d];   // prg.3 drop table; count 0 slots are inert" % CARVE_SLOTS)
@@ -1450,14 +1447,14 @@ def emit_data_header(model, compiled):
                     carve[slot]["item"] if slot < len(carve) else 0,
                     carve[slot]["count"] if slot < len(carve) else 0,
                     carve[slot]["chance"] if slot < len(carve) else 0) for slot in range(CARVE_SLOTS))
-                app("    {%d, %d, %d, %d, %d, %d, %d, %d, %d, %d, %d, {%d, %d, %d, %d}, %d, %d, %d, %d, %d, %d, %d, %d, %d, %d, %d, {%s}}," % (
+                app("    {%d, %d, %d, %d, %d, %d, %d, %d, %d, %d, %d, {%d, %d, %d, %d}, %d, %d, %d, %d, %d, %d, %d, %d, %d, %d, {%s}}," % (
                     model["skeletons"].index(creature["skeleton"]), compiled["indices"]["CREATURE_%s" % creature["id"].upper()],
                     entry["head_zone"], entry["append_zone"], entry["first_attack"], len(creature["attacks"]),
                     entry["first_pattern"], len(creature["patterns"]),
                     stats["w"], stats["h"], stats["spd"],
                     collide["ox"], collide["oy"], collide["w"], collide["h"],
                     stats["hp"], stats["spawnX"], stats["spawnY"],
-                    creature["static"], creature["sheet"], broken_body["w"], broken_body["h"],
+                    creature["static"], broken_body["w"], broken_body["h"],
                     enrage["hpPct"], enrage["spdMul"], enrage["faceHold"], enrage["cue"] or 0,
                     carve_init))
         elif section == "PROFILES":
@@ -1719,7 +1716,6 @@ def emit_expect_header(model, compiled):
         app("constexpr uint8_t CREATURE_%s_ATTACKS = %d;" % (cid, len(creature["attacks"])))
         app("constexpr uint8_t CREATURE_%s_PATTERNS = %d;" % (cid, len(creature["patterns"])))
         app("constexpr uint8_t CREATURE_%s_STATIC = %d;" % (cid, creature["static"]))
-        app("constexpr uint8_t CREATURE_%s_SHEET = %d;" % (cid, creature["sheet"]))
         # Art descriptor pins (epic monhun-ardu-bih) only for creatures that
         # author one: every other creature packs an all-zero record (legacy draw)
         # and emitting ~9 dead constants each would bloat the device test image.

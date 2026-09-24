@@ -72,7 +72,7 @@ static const uint8_t kCreatureIds[] PROGMEM = {combat::CREATURE_HEAVY, combat::C
 static const CombatCreature kCreatures[] PROGMEM = {
     // skeletonIdx, profileIdx, headZone, appendZone, firstAttack, attackCount,
     // firstPattern, patternCount, w, h, spd, collide, hp, spawnX, spawnY,
-    // flags, sheet, brokenW, brokenH, enrageHpPct/SpdMul/FaceHold/Cue
+    // flags, brokenW, brokenH, enrageHpPct/SpdMul/FaceHold/Cue
     {combat::SKELETON_LONGTAIL,
      0,
      COMBAT_NO_ZONE,
@@ -89,7 +89,6 @@ static const CombatCreature kCreatures[] PROGMEM = {
      200,
      40,
      combat_expect::CREATURE_HEAVY_STATIC,
-     combat_expect::CREATURE_HEAVY_SHEET,
      combat_expect::CREATURE_HEAVY_BROKEN_W,
      combat_expect::CREATURE_HEAVY_BROKEN_H,
      0,
@@ -112,7 +111,6 @@ static const CombatCreature kCreatures[] PROGMEM = {
      200,
      40,
      combat_expect::CREATURE_LUNGE_STATIC,
-     combat_expect::CREATURE_LUNGE_SHEET,
      combat_expect::CREATURE_LUNGE_BROKEN_W,
      combat_expect::CREATURE_LUNGE_BROKEN_H,
      0,
@@ -135,7 +133,6 @@ static const CombatCreature kCreatures[] PROGMEM = {
      200,
      40,
      combat_expect::CREATURE_SWEEP_STATIC,
-     combat_expect::CREATURE_SWEEP_SHEET,
      combat_expect::CREATURE_SWEEP_BROKEN_W,
      combat_expect::CREATURE_SWEEP_BROKEN_H,
      combat_expect::CREATURE_SWEEP_ENRAGE_HP_PCT,

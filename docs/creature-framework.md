@@ -433,3 +433,60 @@ nch.7:
   box move the `monster_sweep_hit` scene, where the mock loads the bull's
   single-window `stomp` (the C++ override loads the same record) and
   `tst/fxdatatest/parity_fixtures.hpp` is regenerated in the same change.
+
+## Monster art descriptors (bead bih, 2026-09-24)
+
+Before this wave every art decision in `drawMonster` was per-kind code: a
+`monsterSheet(kind)` compare chain, a `MON_RAVAGER` legacy frame branch, a
+`beastAtk` chain (sheet + `ATTACK_<CID>_<FIRST>` ordinal per kind), a
+`MON_HEAVY` spin gate and three zone part-overlay chains. Adding a creature
+cost a branch, not data. The pole test monster alone would have needed a new
+kind branch in the renderer.
+
+Now the art is cart data read once at spawn:
+
+- **Creature descriptor** (`ART`, 10 B/creature): `sheet` (1-based index into
+  the sheet table; 0 = none), `anchorY` (art draw offset from the body-box top;
+  the pole's 20x40 art uses 0 while the 32x24 beasts are 0 too), `stride` (west
+  frame offset; 0 = no mirror), `idle0`, `idleCount`, `windup`, `attack`,
+  `recover`, `flash`, `dead`. Cached in `Game::combat.art` by `creatureLoad`
+  (`CombatState` +10 B), so the draw pass never reads the cart for the body.
+- **Sheet table**: `src/generated/art_sheets.hpp` -- `ART_SHEET_<NAME>` indices
+  plus the `ART_SHEETS[]` u24 address table, generated **post-pack** from
+  `data/art_sheets.json` (the list order is the index order), so a sheet move
+  can never leave a stale address behind. A per-entry `static_assert` pins the
+  table to the named `fxdata.h` constant.
+- **Attack art** (`ATTACK_SIZE` 27 B): `artSheet` / `artFrame` / `artMode`.
+  Mode 0 draws the attack's 2-facing sheet at `artFrame` (an authored windup
+  tell 1..3 wins during windup, otherwise the attack pose), mode 1 runs the
+  shared locked-spin math on the attack's sheet (`tail_spin` -> `fxtailspin`).
+  Cached in `CombatAttackCache` at attack start (+3 B RAM).
+- **Zone part art** (`ZONE` 14 B): `partSheet`, a 1-based index for the
+  breakable-part overlay, drawn through the shared 4-frame
+  `combatPartArtFrame` convention (east intact / east broken / west intact /
+  west broken) at the zone box. Overlays are skipped while an attack-art sheet
+  is drawing or during the mode-1 spin -- both sheets already carry the posed
+  part -- so no per-zone flags are needed.
+
+The frame rule is one function (`drawMonsterBodyGeneric`): dead -> `dead`;
+hit flash or the windup flash phase -> `flash`; windup / attack / recover ->
+their frames; otherwise `idle0 + (idleCount ? (tick / 8) % idleCount : 0)`, and
+a west-facing creature with a stride adds it. `monsterKind` is now only a sim
+concept -- the renderer never branches on it.
+
+**Adding a creature is data.** Append the sheet name to
+`data/art_sheets.json`, add the creature JSON with an `art` block (plus per
+attack `art` blocks and per zone `part` names as needed) and run `make gen`.
+It becomes a hunt target when its kind is wired (`MonsterKind` + the packed
+defs blob + `monsterCreatureId`) and a quest targets it -- see `pole` for the
+worked example: static, spd 0, no attacks/patterns, `hp` 300, a 140% top weak
+zone with pool 0 that can never break (an hp-0 zone has no pool to drain, and
+an empty `breakTypes` means the drain can never flip a broken bit), reached
+through the always-unlocked TRAIN POLE quest.
+
+Budget: the wave cost +168 B net (shipped descriptors + generic draw + pole),
+finite because the transitions folded the payback in: the spike measured +296 B
+(26 free), phase 1's legacy-branch deletion brought it to +168, phase 2 -66 B,
+phase 3 -126 B, phase 4's dead-field sweep +4 B of LTO entropy but shrank the
+creature record to 28 B + carve (cart 1262 -> 1257 B). Shipping lands at
+29352/29696 (344 free) with the previous 29374 baseline.

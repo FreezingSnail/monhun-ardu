@@ -245,21 +245,19 @@ void CombatSuite(TestRunner &runner) {
     }
 
     {
-        Test t("creature record decode: static/sheet/brokenBody accessors");
-        // bih: the four demo beasts are dynamic (flags bit0 clear) with the
-        // default sheet and no brokenBody; the training pole is the static prop.
+        Test t("creature record decode: static/brokenBody accessors");
+        // bih: the four demo beasts are dynamic (flags bit0 clear) with no
+        // brokenBody; the training pole is the static prop.
         for (uint8_t i = 0; i < combat::CREATURES_COUNT; i++) {
             const CombatCreature c = combatCreatureRead(i);
             if (combatCreatureStatic(i))
                 continue;
             t.assert(combatCreatureStatic(i), 0, "beast not static");
             t.assert(c.flags, combatCreatureFlags(i), "creature flags accessor");
-            t.assert(c.sheet, combatCreatureSheet(i), "creature sheet accessor");
             t.assert(c.brokenW, combatCreatureBrokenW(i), "creature brokenW accessor");
             t.assert(c.brokenH, combatCreatureBrokenH(i), "creature brokenH accessor");
         }
         t.assert(combatCreatureStatic(combat_data::CREATURE_POLE), 1, "pole is static");
-        t.assert(combatCreatureSheet(combat_data::CREATURE_LUNGE), 0, "beast default sheet 0");
         t.assert(combatCreatureBrokenW(combat_data::CREATURE_LUNGE), 0, "beast no brokenBody w");
         t.assert(combatCreatureBrokenH(combat_data::CREATURE_LUNGE), 0, "beast no brokenBody h");
         suite.addTest(t);

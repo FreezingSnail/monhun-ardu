@@ -2,7 +2,6 @@
   "id": "pole",
   "skeleton": "pole",
   "static": true,
-  "sheet": 1,
   "stats": {
     "w": 20,
     "h": 36,

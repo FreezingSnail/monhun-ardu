@@ -142,7 +142,6 @@ struct CombatCreature {
     CombatBox collide;   // body-collision rect (legs-only for the chicken)
     uint16_t hp, spawnX, spawnY;
     uint8_t flags;                                                  // bit0: static prop (pole); no FSM/attacks
-    uint8_t sheet;                                                  // art sheet id (0 = default monster sheet)
     uint8_t brokenW, brokenH;                                       // target rect on break (0 = unchanged)
     uint8_t enrageHpPct, enrageSpdMul, enrageFaceHold, enrageCue;   // feel.6 (hpPct 0 = disabled)
 };
@@ -227,7 +226,7 @@ struct PkCreature {
     int8_t collideOx, collideOy;
     uint8_t collideW, collideH;
     uint16_t hp, spawnX, spawnY;
-    uint8_t flags, sheet, brokenW, brokenH;
+    uint8_t flags, brokenW, brokenH;
     uint8_t enrageHpPct, enrageSpdMul, enrageFaceHold, enrageCue;
     PkCarve carve[combat::CARVE_SLOTS];   // prg.3 drop table (count 0 = empty)
 };
@@ -382,7 +381,6 @@ inline CombatCreature combatCreatureRead(uint8_t i) {
     v.spawnX = combatReadU16(b + MH_COMBAT_FIELD(detail::PkCreature, spawnX));
     v.spawnY = combatReadU16(b + MH_COMBAT_FIELD(detail::PkCreature, spawnY));
     v.flags = combatReadU8(b + MH_COMBAT_FIELD(detail::PkCreature, flags));
-    v.sheet = combatReadU8(b + MH_COMBAT_FIELD(detail::PkCreature, sheet));
     v.brokenW = combatReadU8(b + MH_COMBAT_FIELD(detail::PkCreature, brokenW));
     v.brokenH = combatReadU8(b + MH_COMBAT_FIELD(detail::PkCreature, brokenH));
     // Enrage quad (feel.6): hpPct/spdMul then faceHold/cue, two adjacent u16.
@@ -443,10 +441,6 @@ inline uint8_t combatCreatureFlags(uint8_t i) {
 
 inline uint8_t combatCreatureStatic(uint8_t i) {
     return static_cast<uint8_t>(combatCreatureFlags(i) & 0x01);
-}
-
-inline uint8_t combatCreatureSheet(uint8_t i) {
-    return combatReadU8(static_cast<uint16_t>(combat::CREATURES_OFF + i * combat::CREATURE_SIZE + MH_COMBAT_FIELD(detail::PkCreature, sheet)));
 }
 
 inline uint8_t combatCreatureBrokenW(uint8_t i) {
@@ -660,7 +654,6 @@ inline CombatCreature combatCreatureRead(uint8_t i) {
     v.spawnX = c.spawnX;
     v.spawnY = c.spawnY;
     v.flags = c.flags;
-    v.sheet = c.sheet;
     v.brokenW = c.brokenW;
     v.brokenH = c.brokenH;
     v.enrageHpPct = c.enrageHpPct;
@@ -714,10 +707,6 @@ inline uint8_t combatCreatureFlags(uint8_t i) {
 
 inline uint8_t combatCreatureStatic(uint8_t i) {
     return static_cast<uint8_t>(combat_data::CREATURES[i].flags & 0x01);
-}
-
-inline uint8_t combatCreatureSheet(uint8_t i) {
-    return combat_data::CREATURES[i].sheet;
 }
 
 inline uint8_t combatCreatureBrokenW(uint8_t i) {

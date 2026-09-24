@@ -238,15 +238,15 @@ class GenCombatTests(unittest.TestCase):
         self.assert_succeeds(self.compile())
         meta = self.meta_constants()
         o = meta["CREATURE_BEAST_OFF"]
-        self.assertEqual(meta["CREATURE_SIZE"], 41, "creature record grew for the prg.3 carve tail")
-        self.assertEqual(self.blob()[o + 25:o + 29], bytes([0, 0, 0, 0]), "enrage defaults to disabled")
-        self.assertEqual(self.blob()[o + 29:o + 41], bytes([0] * 12), "carve tail defaults to empty slots")
+        self.assertEqual(meta["CREATURE_SIZE"], 40, "creature record after the dead sheet byte")
+        self.assertEqual(self.blob()[o + 24:o + 28], bytes([0, 0, 0, 0]), "enrage defaults to disabled")
+        self.assertEqual(self.blob()[o + 28:o + 40], bytes([0] * 12), "carve tail defaults to empty slots")
         # No expect pins while the creature disables enrage (device-image budget).
         self.assertNotIn("CREATURE_BEAST_ENRAGE_", self.read(EXPECT_REL))
         self.mutate("data/creatures/beast.json",
                     lambda doc: doc["stats"].__setitem__("enrage", {"hpPct": 40, "spdMul": 150, "faceHold": 8, "cue": "part_break"}))
         self.assert_succeeds(self.compile())
-        self.assertEqual(self.blob()[o + 25:o + 29], bytes([40, 150, 8, 2]), "enrage emitted hpPct/spdMul/faceHold/cue")
+        self.assertEqual(self.blob()[o + 24:o + 28], bytes([40, 150, 8, 2]), "enrage emitted hpPct/spdMul/faceHold/cue")
         expect = self.read(EXPECT_REL)
         self.assertIn("constexpr uint8_t CREATURE_BEAST_ENRAGE_HP_PCT = 40;", expect)
         self.assertIn("constexpr uint8_t CREATURE_BEAST_ENRAGE_SPD_MUL = 150;", expect)
@@ -589,12 +589,13 @@ class GenCombatTests(unittest.TestCase):
         meta = self.meta_constants()
 
         creature = blob[meta["CREATURE_BEAST_OFF"]:meta["CREATURE_BEAST_OFF"] + meta["CREATURE_SIZE"]]
-        # 41 B creature record: stats then the default collide box (body 16x12
+        # 40 B creature record: stats then the default collide box (body 16x12
         # at the origin) then hp/spawnX/spawnY (epic monhun-ardu-nch), then the
-        # static/sheet/brokenBody fields (6zb.6; 0 = dynamic, default sheet, no
-        # broken shrink), then the feel.6 enrage quad (all 0 = disabled) and the
-        # prg.3 carve tail (4 empty item/count/chance slots).
-        self.assertEqual(creature, bytes([0, 0, 0, 1, 0, 1, 0, 1, 16, 12, 4, 0, 0, 16, 12, 80, 0, 100, 0, 32, 0, 0, 0, 0, 0, 0, 0, 0, 0] + [0] * 12))
+        # static/brokenBody fields (6zb.6; 0 = dynamic, no broken shrink), then
+        # the feel.6 enrage quad (all 0 = disabled) and the prg.3 carve tail (4
+        # empty item/count/chance slots). The dead per-kind sheet byte was
+        # dropped in bih.6 (the art descriptor replaced it).
+        self.assertEqual(creature, bytes([0, 0, 0, 1, 0, 1, 0, 1, 16, 12, 4, 0, 0, 16, 12, 80, 0, 100, 0, 32, 0, 0, 0, 0, 0, 0, 0, 0] + [0] * 12))
 
         profile = blob[meta["PROFILE_BEAST_OFF"]:meta["PROFILE_BEAST_OFF"] + meta["PROFILE_SIZE"]]
         # 24 B profile: 12 u8 scalars (zoneFlags, the nch.4 faceHold byte, then
@@ -637,13 +638,12 @@ class GenCombatTests(unittest.TestCase):
         self.assertEqual(anchor, bytes([0, 0]))
 
     def test_static_creature_record(self):
-        # A static prop: no profile/attacks/patterns keys at all, sheet id,
-        # optional brokenBody, optional zone hp/bodyShare (defaults 0/100).
+        # A static prop: no profile/attacks/patterns keys at all, optional
+        # brokenBody, optional zone hp/bodyShare (defaults 0/100).
         doc = {
             "id": "pole",
             "skeleton": "beast_16x12",
             "static": True,
-            "sheet": 3,
             "stats": {"w": 20, "h": 36, "hp": 0, "spd": 0, "spawnX": 140, "spawnY": 40,
                       "brokenBody": {"w": 20, "h": 36}},
             "zones": {
@@ -667,11 +667,11 @@ class GenCombatTests(unittest.TestCase):
         o = meta["CREATURE_POLE_OFF"]
         rec = blob[o:o + meta["CREATURE_SIZE"]]
         # skeleton, profile(=creature idx), head/append zone, no attacks/patterns,
-        # body 20x36, default collide, hp/spawn, static flags, sheet, brokenBody,
+        # body 20x36, default collide, hp/spawn, static flags, brokenBody,
         # then the inert feel.6 enrage quad and the prg.3 carve tail (empty).
         self.assertEqual(rec, bytes([0, 1, 2, 3, 0, 0, 0, 0, 20, 36, 0,
                                      0, 0, 20, 36, 0, 0, 140, 0, 40, 0,
-                                     1, 3, 20, 36, 0, 0, 0, 0] + [0] * 12))
+                                     1, 20, 36, 0, 0, 0, 0] + [0] * 12))
 
         # Static profile is inert (all zero, denominators 1, zoneFlags 0x03).
         p = meta["PROFILE_POLE_OFF"]
@@ -688,7 +688,6 @@ class GenCombatTests(unittest.TestCase):
 
         expect = self.read(EXPECT_REL)
         self.assertIn("constexpr uint8_t CREATURE_POLE_STATIC = 1;", expect)
-        self.assertIn("constexpr uint8_t CREATURE_POLE_SHEET = 3;", expect)
         self.assertIn("constexpr uint8_t CREATURE_POLE_BROKEN_W = 20;", expect)
         self.assertIn("constexpr uint8_t CREATURE_POLE_BROKEN_H = 36;", expect)
 
@@ -863,8 +862,8 @@ class GenCombatTests(unittest.TestCase):
                        "ATTACK", "WINDOW", "PATTERN", "GUARD", "STEP", "ART"):
             self.assertEqual(expect["%s_SIZE" % record], meta["%s_SIZE" % record])
         self.assertEqual(expect["BLOB_SIZE"], len(blob))
-        self.assertEqual(expect["CREATURE_SIZE"], 41)
-        self.assertEqual(expect["CREATURE_CORE_SIZE"], 29)
+        self.assertEqual(expect["CREATURE_SIZE"], 40)
+        self.assertEqual(expect["CREATURE_CORE_SIZE"], 28)
         self.assertEqual(expect["CARVE_SIZE"], 3)
         self.assertEqual(expect["CARVE_SLOTS"], 4)
         self.assertEqual(expect["CREATURE_BEAST_HP"], 80)
@@ -904,8 +903,8 @@ class GenCombatTests(unittest.TestCase):
         meta = self.meta_constants()
         self.assertEqual(meta["CARVE_SIZE"], 3, "carve slot is item/count/chance")
         self.assertEqual(meta["CARVE_SLOTS"], 4, "four fixed slots")
-        self.assertEqual(meta["CREATURE_CARVE_OFF"], 29, "carve tail follows the creature core")
-        self.assertEqual(self.blob()[meta["CREATURE_BEAST_OFF"] + 29:meta["CREATURE_BEAST_OFF"] + 41], bytes([0] * 12), "empty tail")
+        self.assertEqual(meta["CREATURE_CARVE_OFF"], 28, "carve tail follows the creature core")
+        self.assertEqual(self.blob()[meta["CREATURE_BEAST_OFF"] + 28:meta["CREATURE_BEAST_OFF"] + 40], bytes([0] * 12), "empty tail")
         self.assertIn("constexpr bool HAS_CARVE = false;", self.read(META_REL))
         self.assertIn("constexpr uint8_t CREATURE_BEAST_CARVES = 0;", self.read(EXPECT_REL))
         self.assertNotIn("CREATURE_BEAST_CARVE0_", self.read(EXPECT_REL))

@@ -1893,7 +1893,9 @@ def emit_dims_header(dims, icons, path):
     L.append("constexpr int16_t monster_h = %d;" % dims.monster.h)
     # Demo beast animation layout (BEAST_POSES order, east base; west = +stride).
     L.append("")
-    L.append("// Demo beast sheet layout (tools/gen-art.py BEAST_POSES).")
+    L.append("// Demo beast sheet layout (tools/gen-art.py BEAST_POSES). Authoring")
+    L.append("// contract + host pin only: the firmware draws each creature from its")
+    L.append("// per-creature art descriptor (data/creatures/*.json -> combat ART).")
     L.append("constexpr uint8_t beast_stride = %d;" % BEAST_STRIDE)
     L.append("constexpr uint8_t beast_idle_count = 2;")
     for i, pose in enumerate(BEAST_POSES):

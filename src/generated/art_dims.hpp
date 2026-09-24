@@ -80,7 +80,9 @@ constexpr int16_t monster_sweep_reach = 17;
 constexpr int16_t monster_w = 32;
 constexpr int16_t monster_h = 24;
 
-// Demo beast sheet layout (tools/gen-art.py BEAST_POSES).
+// Demo beast sheet layout (tools/gen-art.py BEAST_POSES). Authoring
+// contract + host pin only: the firmware draws each creature from its
+// per-creature art descriptor (data/creatures/*.json -> combat ART).
 constexpr uint8_t beast_stride = 7;
 constexpr uint8_t beast_idle_count = 2;
 constexpr uint8_t beast_idle0_frame = 0;
