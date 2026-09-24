@@ -34,7 +34,12 @@ full: gen build
 # compile only (build/mini/size/debug inherit these flags). The Ardens fxtest
 # build (fxtest-build) is a separate arduino-cli invocation with stock flags, so
 # its sketches keep the core main and captureserial still works.
-SIZE_FLAGS = --build-property compiler.cpp.extra_flags="-mcall-prologues -mrelax -DMH_NO_USB" \
+#
+# -DMH_AUDIO=0 (hbk.15, owner call): compiles src/audio.hpp down to no-ops and
+# drops the beeper (tone engine + TIMER3 ISR + cue edge detector), measured
+# -692 B flash. Sound is feel, not loop; the module stays in the tree behind the
+# flag (default 1), and the device test builds keep it so test_audio still runs.
+SIZE_FLAGS = --build-property compiler.cpp.extra_flags="-mcall-prologues -mrelax -DMH_NO_USB -DMH_AUDIO=0" \
     --build-property compiler.c.extra_flags="-mrelax" \
     --build-property compiler.c.elf.extra_flags="-mrelax"
 

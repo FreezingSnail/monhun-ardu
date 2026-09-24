@@ -132,6 +132,7 @@ static void audioPlay(uint8_t) {
 }
 #endif
 
+#if MH_AUDIO
 static void audioSnapshot(AudioState &s, const Game &g) {
     s.tick = g.tick;
     s.monsterHp = g.monster.hp;
@@ -208,5 +209,11 @@ static void audioUpdate(AudioState &s, const Game &g) {
 
     audioSnapshot(s, g);
 }
+#else
+// Muted shipping build (hbk.15 -DMH_AUDIO=0): the cue edge detector is gone
+// with the beeper; the sketch keeps calling this, so it stays a no-op.
+static void audioUpdate(AudioState &, const Game &) {
+}
+#endif
 
 }   // namespace mh

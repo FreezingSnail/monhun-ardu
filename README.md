@@ -27,7 +27,7 @@ flashing. Controls are below; no USB serial device comes up while the game runs
 | Item | State |
 |---|---|
 | Vertical-slice sim | Ported + parity-verified (20 scenes / 1269 ticks / 660 device asserts) |
-| Device render + HUD + audio | Working (block/FX-sprite art, cue tones; HUD text/FX glyphs + bars — `7y3` clamp fixed) |
+| Device render + HUD | Working (block/FX-sprite art; HUD text/FX glyphs + bars — `7y3` clamp fixed). Audio (cue tones) is compiled out of shipping since `hbk.15` (`-DMH_AUDIO=0`, owner call: sound is feel, not loop); the module stays behind the flag and the device suites still exercise it |
 | Host unit tests | `make test` — **6316 passed / 0 failed** |
 | Device tests (Ardens) | 18 suites / 1829 asserts — boot 4, assets 264, audio 9, hud 29, data 348, combat 237, hub 81, monster_art 127, player_art 120, quests 87, screens 189, smith 51, cards 85, tell 18, zones 82, items 35, forge 58, perf 5 — all PASS (the frozen `test_parity` diagnostics image is not a gate; the opening-menu `test_menu`/`test_menu_art` suites and its `mh_menu_*` sheets were deleted with the menu, `isp.1`/`hml.2`) |
 | Perf gate (`monhun-ardu-8v7`, re-verified through `hbk.3`) | **PASS.** plane 157 Hz (≥135), logic 52 Hz (≥45), render max 3004 µs (≤7407), tick 184 µs, RAM free 609 B (bench) |
@@ -129,6 +129,9 @@ directly in 1/16-px units and integrated by straight addition.
   effects, HUD, and the fixed 128x64 card blit (`cardBlit`).
 - `src/audio.hpp` — cue detector diffing `Game` edges after `stepGame()`;
   non-blocking one-shot tones via ArduboyTones (Timer3, no Timer1 conflict).
+  Shipping builds set `-DMH_AUDIO=0` (hbk.15): the module compiles to a no-op
+  `audioUpdate` and the beeper is dropped (measured -652 B); the flag defaults
+  to 1 so the host/device suites keep the real module.
   Mute with `-DMH_AUDIO=0`.
 - **USB-free shipping main** (`monhun-ardu.ino`, `-DMH_NO_USB`): shipping builds
   compile the sketch's own `main()` so the core archive's `main.cpp.o` is never
