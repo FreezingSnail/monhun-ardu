@@ -491,3 +491,57 @@ attack art 29476 -> phase 3 zone part art 29350 -> phase 4 dead-field sweep
 29352. The creature record also shrank to 28 B + carve (cart 1262 -> 1257 B).
 Adding a creature is still not free in the cart image, but the renderer no
 longer grows with it.
+
+## Hitbox masks (epic ryh, 2026-09-24)
+
+The hand-authored zone boxes drifted from both the art and the hunter's reach:
+the chicken head sat at the sprite's top while the swing centre lands 9 px lower
+(zero head hits from any distance), and every zone box was the part-art *frame*
+size rather than the drawn extent. Masks replace the numbers.
+
+**Source** `images/masks/<sheet>_<cellW>x<cellH>.png`: one facing (east -- the
+packer mirrors the west twins via `images/blocks/layout.json`), three bands
+top-to-bottom, rectangles only:
+
+| band | palette | feeds |
+|---|---|---|
+| collision | yellow = solid | `collide` box (blocking, `pushApart`) |
+| hitbox | orange/violet/cyan/magenta = window 1..N | single-window attack rects |
+| hurtbox | red = head, blue = appendage, green = body | zone rects + the body box |
+
+**Pipeline**: `tools/gen-hitboxes.py` validates the masks and derives
+`build/hitboxes.json` -> `gen-art.py` crops each breakable-part overlay sheet to
+the mask bbox -> `gen-combat.py` packs the unchanged 14 B zone / 4 B body / 4 B
+collide records. The zone rect's origin *is* the part-art anchor, so the hit box
+and the broken-part overlay share one source by construction (the mirror-drift
+class of bug is gone, not patched). `make hitboxes-render` bootstraps a missing
+mask from the shipped JSON and writes the composite review PNG (sprite row +
+mask rows + boxes on the art) to `build/scratch/hitbox_review.png`.
+
+**Derived**: body box, zone rects, collide box, single-window attack rects. The
+creature JSON keeps behaviour only (`dmgMul`, `hp`, `bodyShare`, `breakTypes`,
+`broken.*`, `staggerOnHit`, `disableAttacks`).
+
+**Validations** (hard fail): mask dims vs the cell; every region one solid rect;
+zones disjoint (they may sit over the body rect, which is the implicit fallback
+painted underneath); hurtbox/collision identical on every column; hitbox columns
+mapped through each attack's `art.frame`; body == the sprite's stats.
+
+**Guard**: `tst/hitbox_reach_test.hpp` scans legal hunter stances through the
+real `meleeHitbox` math and asserts every zone is hittable from at least one of
+them (no escape-hatch flag -- which stance works is the player's problem), and
+pins derived hit rect == part-art rect.
+
+Tightened boxes landed this way: chicken appendage (9,0,9,24) -> (9,13,9,9) and
+collide -> (9,13,9,9); bull head (17,-4,12,10) -> (21,4,8,8), hooves
+(4,12,20,10) -> (4,18,20,5); heavy tail (-24,0,24,16) -> (-24,4,24,11). The
+ravager keeps its shipped boxes (its zones have no part art) and the pole keeps
+its 20x36 body inside the 20x40 cell.
+
+Still hand-authored: multi-window attack windows (sweep `gore`, ravager
+`tail_sweep`, heavy `tail_spin`) until a multi-window mask encoding is decided;
+the player hurtbox/weapon hitboxes and room rects (props/doors/gather/heal) are
+follow-on phases of the same epic.
+
+Adding a creature is now: behaviour JSON + east-only sprite sheet + the three
+mask bands + an `art_sheets` entry (plus a kind/quest if it must be reachable).
