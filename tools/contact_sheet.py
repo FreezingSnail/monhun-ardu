@@ -99,8 +99,9 @@ WINDOW_COLORS = [BLACK, DARK, MID]
 
 # prg.11: `tell` is a windup animation-frame selector, not a procedural shape.
 # The sheet names the window class each tell selects so a reviewer can confirm
-# the windup pose matches the hit window; unauthored frames fall back to the 2x2
-# core marker (prg.12 authors the per-attack frames on the FX cart).
+# the windup pose matches the hit window; the pose is the beast's own sprite art
+# (prg.12 authors the per-attack frames on the FX cart; the procedural markers
+# were removed, monhun-ardu-nup).
 TELL_CLASS = {
     "dot": "core",
     "line": "ray",

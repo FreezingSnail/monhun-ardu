@@ -11,22 +11,20 @@ namespace mh {
 // `combat.attack.tell` is a windup animation-frame selector, not a procedural
 // shape. The authored pose lives on the beast's attack sheet (fxchickenatk /
 // fxbullatk / fxtail_spin / BEAST_POSES); prg.12 authors the per-attack frames.
-// Until a tell has an authored frame the render keeps the legacy shade-2 2x2
-// core marker at the cached window centre (the MS_ATTACK 4x4 shade-3 marker is
-// unchanged).
+// Every telegraph is the beast's own sprite art -- there is no procedural marker.
 //
 // tell 0 is the generic coil (BEAST_POSES windup, always available). tell 1..N
 // select bespoke per-attack windup frames when the beast carries them; a tell
-// beyond the authored set has no drawn pose.
+// beyond the authored set (4) has no bespoke pose and keeps the attack's own
+// windup frame.
 
-// Sentinel: no authored windup frame for this tell (render draws the core
-// marker instead).
+// Sentinel: no bespoke windup frame for this tell (render keeps the attack pose).
 constexpr uint8_t TELL_WINDUP_NONE = 0xFF;
 // Number of bespoke windup frames the beast sheets carry. prg.12 authored the
 // per-attack windup poses on fxchickenatk (slots 1..2), fxbullatk (slots 1..3)
-// and fxheavyatk (slots 1..3), so a tell 1..3 now selects an authored pose and
-// suppresses the legacy core marker; tell 0 stays the generic coil + core
-// marker. Host/device tests pass a synthetic count to pin the selector.
+// and fxheavyatk (slots 1..3), so a tell 1..3 now selects an authored pose;
+// tell 0 stays the generic coil and tell 4 (ZONE) keeps the attack's windup
+// frame. Host/device tests pass a synthetic count to pin the selector.
 constexpr uint8_t TELL_FRAMES_AUTHORED = 3;
 
 // True when `tell` selects a bespoke windup frame on a sheet that carries

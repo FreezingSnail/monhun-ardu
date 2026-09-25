@@ -586,32 +586,6 @@ static void drawZonePart(const mh::Game &g, int16_t x, int16_t y, uint24_t sheet
     sprDraw(sheet, static_cast<int16_t>(x + ox), static_cast<int16_t>(y + zb.oy), FRAME(f));
 }
 
-// Windup/attack marker (prg.11). The per-attack telegraph is now an animation
-// frame selected by combat.attack.tell (mh::tellWindupFrame); until a tell has
-// an authored frame (prg.12) the legacy 2x2 shade-2 core marker draws at the
-// cached window centre. MS_ATTACK keeps the unchanged 4x4 shade-3 marker. `x,y`
-// is the monster's screen top-left; the window + tell come from the cache, so no
-// cart read happens during paint.
-static void drawAttackMarker(const mh::Game &g, int16_t x, int16_t y) {
-    const mh::Monster &m = g.monster;
-    if (m.atkIdx == mh::COMBAT_NO_ATTACK)
-        return;
-    const mh::CombatBox &b = g.combat.attack.win.box;
-    int16_t dx, dy;
-    mh::combatFaceOffset(m.fx, m.fy, b, dx, dy);
-    const int16_t ax = static_cast<int16_t>(x + (m.w >> 1) + dx);
-    const int16_t ay = static_cast<int16_t>(y + (m.h >> 1) + dy);
-    if (m.state == mh::MS_ATTACK) {
-        blk(static_cast<int16_t>(ax - 2), static_cast<int16_t>(ay - 2), 4, 4, 3);
-        return;
-    }
-    // MS_WINDUP: an authored tell frame carries the area read; otherwise the
-    // legacy shade-2 core marker.
-    if (mh::tellHasAuthoredFrame(g.combat.attack.tell, mh::TELL_FRAMES_AUTHORED))
-        return;
-    blk(static_cast<int16_t>(ax - 1), static_cast<int16_t>(ay - 1), 2, 2, 2);
-}
-
 // Generic art-descriptor body draw (epic monhun-ardu-bih): every creature draws
 // its base body from the art_sheets.hpp address table (cached art.sheet seeded
 // by creatureLoad) instead of a per-kind branch. The frame resolve is the shared
@@ -619,7 +593,7 @@ static void drawAttackMarker(const mh::Game &g, int16_t x, int16_t y) {
 // attack; recover -> recover; else idle0 + (idleCount ? (tick/8) % idleCount :
 // 0); a west-facing creature (fx < 0) with a mirror stride adds it. drawMonster
 // checks the spin/attack whole-body sheets first; the shared tail (stun whirl +
-// telegraph) and the zone part overlays (data-driven, bih.5) follow.
+// spin tell overlay) and the zone part overlays (data-driven, bih.5) follow.
 static inline uint24_t artSheetAddr(uint8_t index) {
 #if defined(__AVR__)
     const uint8_t *p = reinterpret_cast<const uint8_t *>(&art_sheets::ART_SHEETS[index]);
@@ -652,8 +626,7 @@ MH_NOINLINE static void drawMonsterBodyGeneric(const mh::Game &g, int16_t x, int
     sprDraw(artSheetAddr(static_cast<uint8_t>(a.sheet - 1)), x, static_cast<int16_t>(y + a.anchorY), FRAME(f));
 }
 
-// Mock drawMonster(): dead heap, feet, body, head + eyes, stun sparkle, and the
-// windup/attack telegraph box.
+// Mock drawMonster(): dead heap, feet, body, head + eyes, and stun sparkle.
 static void drawMonster(const mh::Game &g, int16_t camX, int16_t camY) {
     const mh::Monster &m = g.monster;
     const int16_t x = static_cast<int16_t>(rndPx(m.x, m.subX) - camX);
@@ -667,7 +640,7 @@ static void drawMonster(const mh::Game &g, int16_t camX, int16_t camY) {
     // per-kind code. The whole-body attack replacement is checked FIRST because
     // it supersedes the descriptor: the attack record's own art (bih.4) selects
     // the sheet and pose with no per-kind branch. The shared tail (stun whirl,
-    // telegraph) and the breakable-zone part overlays (data-driven, bih.5)
+    // spin tell overlay) and the breakable-zone part overlays (data-driven, bih.5)
     // follow below.
     // Locked (spin) tail attack on the longtail (beads monhun-ardu-nch.3/5):
     // MS_ATTACK draws the whole beast from the 8-frame 40x40 fxtailspin sheet,
@@ -677,7 +650,7 @@ static void drawMonster(const mh::Game &g, int16_t camX, int16_t camY) {
     // directions -- the 2-facing E/W beast sheet cannot show N/S. The small
     // fxtail_spin overlay stays as the windup tell, and the resting fxtail_heavy
     // overlay is skipped in both phases. Trade: the spin sheet has no windup
-    // flash frame (the tell + telegraph core carry the timing).
+    // flash frame (the tell overlay carries the timing).
     const bool attackPose = (m.state == mh::MS_WINDUP || m.state == mh::MS_ATTACK) && m.atkIdx != mh::COMBAT_NO_ATTACK;
     const bool spinning = attackPose && mh::combatFacingLockV(g.combat.attack.facing);
     // Attack art from the attack record (beads monhun-ardu-nch.8/nch.10, prg.12;
@@ -688,12 +661,12 @@ static void drawMonster(const mh::Game &g, int16_t camX, int16_t camY) {
     // artFrame (or the authored prg.11 tell slot during windup); mode 1 is the
     // locked spin. The art is read once at attack start into the cache, so no
     // per-tick cart read. Windup and attack share the pose (the overlays have no
-    // windup-flash frame; the tell + marker carry the timing). Cosmetic only: no
+    // windup-flash frame; the tell pose carries the timing). Cosmetic only: no
     // hit-test or window change.
     // Windup tell frame (prg.11): combat.attack.tell selects the bespoke windup
     // pose on the attack's sheet. prg.12 authored tells 1..3; an authored tell
-    // overrides the attack's own pose and suppresses the core marker, an
-    // unauthored tell (0/4) keeps the attack pose + 2x2 core marker.
+    // overrides the attack's own pose, an unauthored tell (0/4) keeps the attack
+    // pose (dot 0 is the generic coil). No procedural marker.
     const uint8_t tellSlot = (m.state == mh::MS_WINDUP) ? mh::tellWindupFrame(g.combat.attack.tell, mh::TELL_FRAMES_AUTHORED) : mh::TELL_WINDUP_NONE;
     const bool attackSheet = attackPose && g.combat.attack.artMode == 0 && g.combat.attack.artSheet != 0;
     // Generic zone-part-overlay skip (bih.5): whenever an attack-art sheet is
@@ -708,7 +681,7 @@ static void drawMonster(const mh::Game &g, int16_t camX, int16_t camY) {
         // The sheet is 40x40 with the body centre at (20,20), so it is centred
         // on the body box centre. No per-tick cart read: sheet constant + frame
         // math only. (The tell selector cannot index this 8-direction sheet; the
-        // spin's tell falls back to the core marker.)
+        // fxtail_spin overlay carries the spin tell.)
         const uint8_t start8 = static_cast<uint8_t>(fp::dirIndexFromDelta(m.fx, m.fy)) & 7;
         const uint8_t spinF = (m.state == mh::MS_WINDUP) ? start8 : mh::spinSheetFrame(start8, m.t, static_cast<int16_t>(g.combat.attack.active));
         sprDraw(artSheetAddr(static_cast<uint8_t>(g.combat.attack.artSheet - 1)), static_cast<int16_t>(x + (w >> 1) - 20), static_cast<int16_t>(y + (h >> 1) - 20), FRAME(spinF));
@@ -771,14 +744,6 @@ static void drawMonster(const mh::Game &g, int16_t camX, int16_t camY) {
             sf = (sdy < 0) ? spr::SPIN_NORTH : spr::SPIN_SOUTH;
         sprDraw(fxtail_spin, static_cast<int16_t>(x + (w >> 1) - 12), static_cast<int16_t>(y + (h >> 1) - 12), FRAME(sf));
     }
-
-    // Telegraph at the cached window (prg.11): the tell is now an animation
-    // frame selector, so this draws only the shared core marker. MS_ATTACK keeps
-    // the 4x4 shade-3 marker; MS_WINDUP draws the legacy 2x2 shade-2 core until
-    // prg.12 authors a per-tell pose. Drawn from the cache, so no cart read
-    // happens during paint.
-    if (m.state == mh::MS_WINDUP || m.state == mh::MS_ATTACK)
-        drawAttackMarker(g, x, y);
 }
 
 // The gen-art part records live in the mhEquip cart blob (equip_meta.hpp holds

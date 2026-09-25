@@ -72,9 +72,9 @@ enum MoveType : uint8_t {
 };
 // Per-attack windup animation-frame selector (tools/gen-combat.py TELLS,
 // feel.5; prg.11 turned the shapes into frame ids). The render uses this to pick
-// the beast's bespoke windup pose (mh::tellWindupFrame) and falls back to the
-// legacy 2x2 core marker when the frame is unauthored. DOT (0) is the generic
-// coil / core marker; the id order mirrors the authored tell order.
+// the beast's bespoke windup pose (mh::tellWindupFrame); a tell with no bespoke
+// pose keeps the attack's own windup frame. DOT (0) is the generic coil; the id
+// order mirrors the authored tell order.
 enum Tell : uint8_t {
     TELL_DOT = 0,
     TELL_LINE = 1,

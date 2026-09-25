@@ -28,11 +28,11 @@ flashing. Controls are below; no USB serial device comes up while the game runs
 |---|---|
 | Vertical-slice sim | Ported + parity-verified (20 scenes / 1269 ticks / 660 device asserts) |
 | Device render + HUD | Working (block/FX-sprite art; HUD text/FX glyphs + bars — `7y3` clamp fixed). Audio (cue tones) is compiled out of shipping since `hbk.15` (`-DMH_AUDIO=0`, owner call: sound is feel, not loop); the module stays behind the flag and the device suites still exercise it |
-| Host unit tests | `make test` — **6359 passed / 0 failed** |
-| Device tests (Ardens) | 19 suites / ~1960 asserts — boot 4, assets 264, audio 9, hud 29, data 348, combat 237, hub 79, monster_art 127, player_art 120, quests 87, screens 212, screens_smithy 98, smith 51, cards 85, tell 18, zones 82, items 35, forge 63, perf 5 — all PASS (the frozen `test_parity` diagnostics image is not a gate; the opening-menu `test_menu`/`test_menu_art` suites and its `mh_menu_*` sheets were deleted with the menu, `isp.1`/`hml.2`) |
+| Host unit tests | `make test` — **6830 passed / 0 failed** |
+| Device tests (Ardens) | 19 suites / 2069 asserts — boot 4, assets 264, audio 9, hud 29, data 356, combat 252, hub 79, monster_art 182, player_art 120, quests 112, screens 212, screens_smithy 98, smith 51, cards 85, zones 82, items 35, forge 63, wire 31, perf 5 — all PASS (the frozen `test_parity` diagnostics image is not a gate; the opening-menu `test_menu`/`test_menu_art` suites and its `mh_menu_*` sheets were deleted with the menu, `isp.1`/`hml.2`; the `test_tell` marker suite was deleted with the markers, `nup`) |
 | Perf gate (`monhun-ardu-8v7`, re-verified through `hbk.3`) | **PASS.** plane 157 Hz (≥135), logic 52 Hz (≥45), render max 3004 µs (≤7407), tick 184 µs, RAM free 609 B (bench) |
 | Perf tooling | Headless Ardens profiler dump (`profiledump=<path>`, local patch) + on-device cycle bench (`test_perf`) |
-| Shipping build | flash **29374 / 29696 B** (322 free), RAM **1799 / 2560 B** (761 free); USB-free + sound off (`-DMH_NO_USB -DMH_AUDIO=0`), see below |
+| Shipping build | flash **29118 / 29696 B** (578 free), RAM **1814 / 2560 B** (746 free); USB-free + sound off (`-DMH_NO_USB -DMH_AUDIO=0`), see below |
 | FX data image | **404480 B** of 16 MB used (96 KB of it is the 32 prebaked detail-card pages, 30 KB the 10 prebaked screen pages) |
 
 Speculative gameplay status: combat (sword / flail / gunshield), monster FSM,
@@ -45,8 +45,8 @@ field is kept (the shipping ground; only the room-image blit would cover it).
 The prg.11 trim then cut charge to a single melee level (no `CHARGE_L2`, no
 charged ball), replaced the procedural tell shapes with a windup
 animation-frame selector (the `tell` byte picks the beast's authored windup
-pose; unauthored tells fall back to the 2x2 core marker until prg.12 authors
-the frames), and carved the A-A-B branch buffer + player-move push flag out of
+pose; telegraphs are sprite art only — the 2x2/4x4 core markers were removed,
+monhun-ardu-nup), and carved the A-A-B branch buffer + player-move push flag out of
 shipping (`MH_B_BRANCH_BUFFER=0`; the carve stays for tests): **−862 B flash**.
 Perf-verified on device. The player-move push flag is no longer carved: shipping
 defaults it to 1 (monhun-ardu-ryh.1, +118 B) so a moved hunter can never shove

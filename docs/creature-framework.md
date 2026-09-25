@@ -378,8 +378,10 @@ The long-tail's inherited generic `lunge`/`sweep` (initial-creature boxes, the
 - Selection: `tail_spin` at dist <= 30 (nch.4; `keepDist` 12 holds the band),
   `bite` beyond; breaking the tail (`zones.appendage`) disables `tail_spin` and
   forces `bite`. `faceHold` 10 commits the facing so the hunter can flank.
-- Telegraphs are the core marker at the cached window centre (windup 2x2 shade 2,
-  attack 4x4 shade 3). The nch.1 full-window block fill read as a debug hurt
+- Telegraphs are the beast's own sprite art: the windup tell pose (authored frame
+  for tells 1..3, generic coil for dot), the `fxtail_spin` overlay, and the
+  rotating fxtailspin sheet in attack. The procedural 2x2/4x4 core markers were
+  removed (monhun-ardu-nup). The nch.1 full-window block fill read as a debug hurt
   zone on playtest and was removed in nch.2; the fixed 32x24 telegraph sheet is
   gone since nch.1.
 - Mock parity: bite/tailSpin use a new `windows[]`/lock path in `MONSTER_ATTACKS`
@@ -393,8 +395,8 @@ replaced by a two-attack kit, same treatment as the long-tail nch.1:
 
 - `peck` — close jab (windup 22 / active 6 / recover 30, dmg 7, lunge speedF 18),
   window 12x10 @ ox 14, oy -6, **`facing: track`**. The window box is the real
-  hit test and the telegraph (the device draws the cached window box for every
-  `windows[]` attack; the fixed 32x24 sheet is gone since nch.1).
+  hit test; the telegraph is the beast's windup pose art (the fixed 32x24 sheet
+  is gone since nch.1).
 - `leap` — committed long lunge (windup 34 / active 10 / recover 48, dmg 12,
   lunge speedF 42), window 18x16 @ ox 12, oy -2, **`facing: lock-at-windup`**:
   the tracked vector is frozen through windup + attack, so the hunter can step

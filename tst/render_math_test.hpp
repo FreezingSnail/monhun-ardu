@@ -1,9 +1,9 @@
 #pragma once
 // Host unit test for the pure spin-sheet frame selector (bead
-// monhun-ardu-nch.3) and the per-attack telegraph geometry (bead
+// monhun-ardu-nch.3) and the per-attack windup tell selector (bead
 // monhun-ardu-feel.5). src/render_math.hpp is Arduino-free and src/render.hpp is
-// device-only, so this suite pins the exact rect/scalar math the device tell
-// draw consumes; the Ardens tell_test pins the resulting framebuffer bytes.
+// device-only, so this suite pins the exact selector math; the Ardens
+// monster_art suite pins the resulting framebuffer bytes.
 #include "test.hpp"
 #include "../src/render_math.hpp"
 #include "../src/core/combat.hpp"   // enum Tell shape ids

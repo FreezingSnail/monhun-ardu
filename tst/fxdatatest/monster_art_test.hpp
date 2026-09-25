@@ -100,8 +100,8 @@ static void setupBeast(Game &g, int8_t kind, int8_t fx, int8_t fy) {
 // nch.3: park HEAVY in the locked tail_spin ACTIVE phase so drawMonster uses
 // the rotating 8-frame fxtailspin body sheet (frame = dir8(lock facing) +
 // t*8/active). The cached window box is shrunk to 1x1 at the body centre (ox/oy
-// zeroed) so the 4x4 telegraph core sits inside the centre band the quadrant
-// checks exclude; `active` is pinned to 20 so t maps to known frames.
+// zeroed); the window no longer paints, so nothing lands in the centre band the
+// quadrant checks exclude; `active` is pinned to 20 so t maps to known frames.
 static void setupSpinAttack(Game &g, int8_t fx, int16_t t) {
     setupBeast(g, MON_HEAVY, fx, 0);
     attackLoad(g, combat::ATTACK_HEAVY_TAIL_SPIN);
@@ -139,8 +139,8 @@ static void setupSpinWindup(Game &g, uint8_t window, int8_t fx, int8_t fy = 0) {
 // the cached combat.attack.tell the selector reads during MS_WINDUP: an authored
 // tell (1..3) picks that sheet slot, tell 0 (DOT) falls back to the attack's own
 // artFrame (peck 0 / leap 2 / wing 4). The cached window box is shrunk to 1x1 at
-// the body centre (like setupSpinAttack) so the telegraph core stays inside the
-// centre band the facing checks exclude.
+// the body centre (like setupSpinAttack); the window no longer paints, so the
+// centre band the facing checks exclude stays clear.
 static void setupChickenAttack(Game &g, uint8_t atk, uint8_t state, int8_t fx, uint8_t tell = 0) {
     setupBeast(g, MON_LUNGE, fx, 0);
     attackLoad(g, atk);
@@ -168,8 +168,8 @@ static void setupChickenAttack(Game &g, uint8_t atk, uint8_t state, int8_t fx, u
 // combat.attack.tell the selector reads during MS_WINDUP: authored tells pick
 // their sheet slot (1 gore, 2 rear_kick, 3 stomp windup), tell 0 falls back to
 // the attack's own artFrame (stomp 0 / gore 2 / rear_kick 4). The cached window
-// box is shrunk to 1x1 at the body centre so the telegraph core stays clear of
-// the pose checks.
+// box is shrunk to 1x1 at the body centre (the window no longer paints, so it
+// stays clear of the pose checks).
 static void setupBullAttack(Game &g, uint8_t atk, uint8_t state, int8_t fx, uint8_t tell = 0) {
     setupBeast(g, MON_SWEEP, fx, 0);
     attackLoad(g, atk);
@@ -194,8 +194,8 @@ static void setupBullAttack(Game &g, uint8_t atk, uint8_t state, int8_t fx, uint
 // prg.12: park the longtail (MON_HEAVY) in a non-locked bite WINDUP so the
 // selector swaps the generic BEAST_POSES frame for the 8-frame fxheavyatk sheet
 // (the locked tail_spin/tail_slam keep the rotating fxtailspin sheet and never
-// reach it). tell 1 (LINE) picks the bite windup slot; the shrunk 1x1 window
-// keeps the telegraph out of the pose checks.
+// reach it). tell 1 (LINE) picks the bite windup slot; the shrunk 1x1 window no
+// longer paints, so it stays out of the pose checks.
 static void setupHeavyAttack(Game &g, uint8_t state, int8_t fx, uint8_t tell = 0) {
     setupBeast(g, MON_HEAVY, fx, 0);
     attackLoad(g, combat::ATTACK_HEAVY_BITE);
@@ -453,7 +453,7 @@ inline void test_monster_art(FxTest &test) {
     // ---- prg.12 authored windup (selector): the wing_beat tell is arc (2) and
     // selects sheet slot 2 (frame 4 E). The near wing sweeps out behind as a
     // BLACK feather-row panel while the head stays level (rows 3..8) and the
-    // feet stay planted. The authored tell suppresses the core marker.
+    // feet stay planted. The art carries the whole tell.
     setupChickenAttack(g, combat::ATTACK_LUNGE_WING_BEAT, MS_WINDUP, 16, TELL_ARC);
     renderMonster(g, 2);
     test.expectEq(bitAt(BX + 27, BY + 5), 1, F("chicken wing windup level head white"));
@@ -461,6 +461,20 @@ inline void test_monster_art(FxTest &test) {
     renderMonster(g, 0);
     test.expectEq(bitAt(BX + 2, BY + 13), 0, F("chicken wing windup feather black eraser"));
     test.expectEq(bitAt(BX + 12, BY + 21), 1, F("chicken wing windup foot planted"));
+
+    // ---- monhun-ardu-nup: the procedural 2x2/4x4 window-centre markers are gone
+    // (telegraphs are sprite art only). The windup 2x2 rect sits at body centre
+    // (56,40) -> x55..56, y39..40; the MS_ATTACK 4x4 surrounds it x54..57,
+    // y38..41. Assert clear for an authored windup (arc slot 2) and a dot-tell
+    // windup (attack pose), each on a plane the pose art does not reach: plane 1
+    // for the dot pose (catches a stray shade-2 rect) and plane 2 for the arc pose
+    // (white only; catches a stray shade-3 rect).
+    setupChickenAttack(g, combat::ATTACK_LUNGE_PECK, MS_WINDUP, 16, TELL_DOT);
+    renderMonster(g, 1);
+    test.expectEq(countRegionBit(54, 38, 4, 4), 0, F("dot-tell windup no centre marker"));
+    setupChickenAttack(g, combat::ATTACK_LUNGE_WING_BEAT, MS_WINDUP, 16, TELL_ARC);
+    renderMonster(g, 2);
+    test.expectEq(countRegionBit(54, 38, 4, 4), 0, F("authored windup no centre marker"));
 
     // ---- nch.10/prg.12 bull attack overlay: during the stomp/gore/rear_kick
     // windup+attack drawMonster swaps the generic BEAST_POSES coil/lunge frame
