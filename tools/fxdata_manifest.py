@@ -32,6 +32,7 @@ FXDATA_REL = "fxdata/fxdata.txt"
 # before and after the pipeline run to catch staleness and nondeterminism.
 GENERATED_GLOBS = (
     "images/blocks/*.png",
+    "images/blocks/layout.json",
     "images/fonts/*.png",
     "images/equip/*.png",
     "images/maps/*.png",

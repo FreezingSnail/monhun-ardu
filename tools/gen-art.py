@@ -134,6 +134,35 @@ def strip(frames, w, h):
     return sheet
 
 
+def flip(img):
+    """The west twin of an east-authored frame: a horizontal mirror."""
+    return img.transpose(Image.FLIP_LEFT_RIGHT)
+
+
+def compose(blocks, w, h):
+    """Composite one frame's blk() rects onto an empty w x h canvas."""
+    img = new(w, h)
+    for color, dx, dy, bw, bh in blocks:
+        rect(img, dx, dy, bw, bh, color)
+    return img
+
+
+# Mirror-derived sheet registry (bead monhun-ardu-ryh.2). Keyed by the packed
+# PNG symbol ("fx<id>"); value = (east-only source image, packed frame plan). The
+# plan lists the shipped frames as (source_frame_index, mirror), so the packer
+# (tools/convert-sprite.py, fed images/blocks/layout.json) rebuilds the shipped
+# sheet from the one-facing source. Frames that are NOT the mirror of an east
+# frame stay authored explicitly and are not registered here: the ravager's
+# asymmetric feet (all four west frames are drawn) and the facing-independent
+# dead heap (a symmetric frame mirrors to itself; an asymmetric one is reused
+# unflipped). See the exception notes on monster_frames() and _beast_sheet().
+MIRROR_SOURCES = {}
+
+
+def register_mirror(symbol, src_frames, w, h, plan):
+    MIRROR_SOURCES[symbol] = (strip(src_frames, w, h), plan)
+
+
 # ------------------------------------------------------------------ dims JSON
 
 
@@ -406,10 +435,8 @@ def tail_defs():
 # turns around. Height 16 is a multiple of 8 because SpritesU's plus-mask frame
 # stride is (h >> 3) pages (the legacy 18x10 fxtail is never drawn). Frame order
 # is the combatPartArtFrame() contract: east intact, east broken, west intact,
-# west broken; the broken frames keep only the root stub. West frames are the
-# horizontal mirror (x -> 24 - x - w) of the east art.
-def _mirror_rect(rects, w):
-    return [(c, w - x - bw, y, bw, bh) for c, x, y, bw, bh in rects]
+# west broken; the broken frames keep only the root stub. Only the east pair is
+# authored (ryh.2): the packer mirrors each column into the west twin.
 
 
 # ---- HEAVY tail-spin overlay (bead monhun-ardu-nch.1). The spin attack whips
@@ -459,16 +486,16 @@ def tail_heavy_defs():
         (DARK, 17, 5, 7, 9),     # root stub only
         (LIGHT, 20, 4, 4, 2),    # stump highlight
     ]
-    return [
-        east_intact,
-        east_broken,
-        _mirror_rect(east_intact, 24),
-        _mirror_rect(east_broken, 24),
-    ]
+    return _zone_part_defs("tail_heavy", east_intact, east_broken, 24, 16)
 
 
 def monster_frames():
-    # 0..3 facing east (head right), 4..7 facing west (head left)
+    # Ravager (legacy fxmonster sheet). EXCEPTION to one-facing/mirror (ryh.2):
+    # its alive frames carry four identical feet rects (x = 3,11,19,27) that are
+    # NOT x-mirror-symmetric, so each west frame is deliberately NOT the mirror
+    # of its east twin and must stay authored explicitly. Both facings are drawn
+    # here; the packer writes the file unchanged (no mirror plan is registered).
+    # 0..3 facing east (head right), 4..7 facing west (head left).
     states = [
         (DARK, WHITE),   # idle / attack
         (LIGHT, LIGHT),  # recover
@@ -487,10 +514,10 @@ def monster_frames():
 # fxmonster sheet (its tail part overlays it). The state shade rules are the
 # legacy ones (idle dark body + white head, recover light, windup/hit flash
 # white) and the dead heap stays on the same dark/light palette. Shapes are
-# authored facing east and mirrored for west, so both facings come from one
-# source. The ground shadow row and the body/head/eye layers all stay inside the
-# 32x24 cell.
-def _beast_frame(draw, dead_draw, body, head, east, dead=False, dx=0, dy=0):
+# authored facing east only (ryh.2): the packer mirrors each column into the
+# west twin, so both facings come from one source. The ground shadow row and the
+# body/head/eye layers all stay inside the 32x24 cell.
+def _beast_frame(draw, dead_draw, body, head, dead=False, dx=0, dy=0):
     img = new(32, 24)
     if dead:
         dead_draw(img)
@@ -498,10 +525,9 @@ def _beast_frame(draw, dead_draw, body, head, east, dead=False, dx=0, dy=0):
 
     def put(x, y, w, h, color):
         # dx/dy are the animation pose offsets (bob/coil/lunge); the ground
-        # shadow stays planted, west mirrors the horizontal shift. Poses that
-        # push ink past the cell edge are clipped (placeholder poses only).
-        xs = (32 - x - w) if not east else x
-        xs += dx if east else -dx
+        # shadow stays planted. Poses that push ink past the cell edge are
+        # clipped (placeholder poses only).
+        xs = x + dx
         ys = y + dy
         px = img.load()
         for yy in range(max(0, ys), min(24, ys + h)):
@@ -682,27 +708,26 @@ BEAST_FRAMES = len(BEAST_POSES)
 BEAST_STRIDE = BEAST_FRAMES   # west frames start at +stride
 
 
-def _beast_frames(draw, dead_draw):
-    # East frames 0..BEAST_FRAMES-1 (head right), then the same west (head
-    # left); the order follows BEAST_POSES so art_dims bases stay in sync.
-    frames = []
-    for east in (True, False):
-        for name, body, head, dx, dy in BEAST_POSES:
-            frames.append(_beast_frame(draw, dead_draw, body, head, east,
-                                       dead=(name == "dead"), dx=dx, dy=dy))
-    return frames
+def _beast_east(draw, dead_draw):
+    """The seven east frames (head right) in BEAST_POSES order."""
+    return [_beast_frame(draw, dead_draw, body, head, dead=(name == "dead"), dx=dx, dy=dy)
+            for name, body, head, dx, dy in BEAST_POSES]
 
 
-def chicken_frames():
-    return _beast_frames(_chicken_east, _chicken_dead)
+def _beast_sheet(draw, dead_draw):
+    """East frames + packed frame plan (ryh.2).
 
-
-def bull_frames():
-    return _beast_frames(_bull_east, _bull_dead)
-
-
-def longtail_frames():
-    return _beast_frames(_longtail_east, _longtail_dead)
+    The shipped sheet is 14 frames: BEAST_POSES east (0..6), then the mirrored
+    west twins of poses 0..5, then the dead heap. The dead heap is
+    facing-independent (drawn once, identical for both facings) so it is NOT the
+    mirror of the east dead frame: it is reused unflipped (plan source index 6,
+    mirror False). Returns (source frames, shipped frames, plan); the caller
+    writes the 7-frame one-facing source and registers the plan for the packer.
+    """
+    east = _beast_east(draw, dead_draw)
+    ship = list(east) + [flip(east[i]) for i in range(6)] + [east[6]]
+    plan = [(i, False) for i in range(7)] + [(i, True) for i in range(6)] + [(6, False)]
+    return east, ship, plan
 
 
 # ---- Chicken attack sheet (bead monhun-ardu-nch.8; prg.12 windup frames). The
@@ -713,8 +738,9 @@ def longtail_frames():
 # rows 4..9 with the body leaned 1 px, leap to rows 3..8 off the raised body);
 # wing_beat crouches and sweeps the near wing out behind the body as a wide
 # horizontal panel while the head stays level, so the arc sweep reads apart from
-# the two jabs. Frames are authored east and mirrored by the _beast_frame put
-# wrapper, exactly like the idle/windup/attack frames. Windup and attack share
+# the two jabs. Frames are authored east only (ryh.2) and the west twins are
+# produced by the packer's mirror, exactly like the idle/windup/attack frames.
+# Windup and attack share
 # the pose: the overlay has no windup-flash frame, so the telegraph window +
 # tell carry the timing (same trade as fxtailspin).
 def _chicken_attack_east(put, body, head, mode):
@@ -858,16 +884,31 @@ def _chicken_attack_pose(mode):
     return draw
 
 
+def _attack_sheet(symbol, poses, dead_draw):
+    """Interleaved attack sheet: shipped = [pose0 E, pose0 W, pose1 E, ...].
+
+    Only the east poses are authored (ryh.2); the west frames are the mirrored
+    east images, registered for the packer. Returns the shipped block frames.
+    """
+    src = [_beast_frame(draw, dead_draw, DARK, WHITE) for draw in poses]
+    frames = []
+    plan = []
+    for i, img in enumerate(src):
+        frames.append(_image_blocks(img))
+        plan.append((i, False))
+        frames.append(_image_blocks(flip(img)))
+        plan.append((i, True))
+    register_mirror(symbol, src, 32, 24, plan)
+    return frames
+
+
 def chickenatk_frames():
     """[peck E, peck W, leap E, leap W, wing E, wing W] as rect-block frame defs,
     so check_sheets/render_icon re-composite each authored pose exactly (the
-    tailspin icon pattern)."""
-    frames = []
-    for mode in (0, 1, 2):
-        for east in (True, False):
-            frames.append(_image_blocks(
-                _beast_frame(_chicken_attack_pose(mode), _chicken_dead, DARK, WHITE, east)))
-    return frames
+    tailspin icon pattern). Only the three east poses are authored; the west
+    frames are mirrored and packed by convert-sprite."""
+    return _attack_sheet("fxchickenatk", [_chicken_attack_pose(m) for m in (0, 1, 2)],
+                         _chicken_dead)
 
 
 # ---- Bull attack sheet (bead monhun-ardu-nch.10; prg.12 windup frames). The
@@ -881,7 +922,7 @@ def chickenatk_frames():
 # drives the horns forward, leans the body 1 px and raises the tail; the
 # rear_kick bucks with the hind legs kicked back off the ground; the stomp windup
 # rears on the planted hind legs with both front hooves high and spread. Frames
-# are authored east and mirrored by the _beast_frame put wrapper.
+# are authored east only (ryh.2); the packer mirrors the west twins.
 def _bull_attack_east(put, body, head, mode):
     hi, lo = _beast_tone(body)
 
@@ -1037,13 +1078,10 @@ def _bull_attack_pose(mode):
 def bullatk_frames():
     """[stomp E, stomp W, gore E, gore W, rear_kick E/W, stomp_windup E/W] as
     rect-block frame defs, so check_sheets/render_icon re-composite each authored
-    pose exactly (the tailspin/chickenatk icon pattern)."""
-    frames = []
-    for mode in (0, 1, 2, 3):
-        for east in (True, False):
-            frames.append(_image_blocks(
-                _beast_frame(_bull_attack_pose(mode), _bull_dead, DARK, WHITE, east)))
-    return frames
+    pose exactly (the tailspin/chickenatk icon pattern). Only the east poses are
+    authored; the west frames are mirrored and packed by convert-sprite."""
+    return _attack_sheet("fxbullatk", [_bull_attack_pose(m) for m in (0, 1, 2, 3)],
+                         _bull_dead)
 
 
 # ---- Heavy attack sheet (bead monhun-ardu-prg.12). The longtail is drawn from
@@ -1052,7 +1090,7 @@ def bullatk_frames():
 # 2 tail_spin windup (arc), 3 tail_slam windup (ring). The locked tail_spin/
 # tail_slam branch wins in drawMonster, so only ordinals 0/1 draw; 2/3 author the
 # remaining slots so the selector can never leave the sheet. Frames are authored
-# east and mirrored by the _beast_frame put wrapper.
+# east only (ryh.2); the packer mirrors the west twins.
 def _heavy_attack_east(put, body, head, mode):
     hi, lo = _beast_tone(body)
 
@@ -1141,13 +1179,11 @@ def _heavy_attack_pose(mode):
 
 def heavyatk_frames():
     """[bite E, bite W, bite_windup E/W, spin_windup E/W, slam_windup E/W] as
-    rect-block frame defs (the tailspin/chickenatk icon pattern)."""
-    frames = []
-    for mode in (0, 1, 2, 3):
-        for east in (True, False):
-            frames.append(_image_blocks(
-                _beast_frame(_heavy_attack_pose(mode), _longtail_dead, DARK, WHITE, east)))
-    return frames
+    rect-block frame defs (the tailspin/chickenatk icon pattern). Only the east
+    poses are authored; the west frames are mirrored and packed by
+    convert-sprite."""
+    return _attack_sheet("fxheavyatk", [_heavy_attack_pose(m) for m in (0, 1, 2, 3)],
+                         _longtail_dead)
 
 
 # ---- Breakable-zone part overlays (bead monhun-ardu-kt7.6). Same treatment as
@@ -1162,9 +1198,20 @@ def heavyatk_frames():
 # coordinates (part cell pixel - zone box origin), clipped to the frame: the
 # muzzle / lower head outside a frame stays baked and visible. Every height is a
 # multiple of 8 so SpritesU's plus-mask page stride is exact.
-def _zone_part_defs(east_intact, east_broken, w):
-    return [east_intact, east_broken,
-            _mirror_rect(east_intact, w), _mirror_rect(east_broken, w)]
+def _zone_part_defs(id_, east_intact, east_broken, w, h):
+    """East intact/broken part frames; the packer mirrors the west twin.
+
+    Returns the shipped frame block lists (combatPartArtFrame order: east intact,
+    east broken, west intact, west broken). The west frames are produced by
+    mirroring the east images (not drawn twice), and the east pair + plan are
+    registered so the one-facing source PNG is written and packer-fed. Every
+    height is a multiple of 8 so SpritesU's plus-mask page stride is exact.
+    """
+    src = [compose(east_intact, w, h), compose(east_broken, w, h)]
+    register_mirror("fx" + id_, src, w, h,
+                    [(0, False), (1, False), (0, True), (1, True)])
+    return [_image_blocks(src[0]), _image_blocks(src[1]),
+            _image_blocks(flip(src[0])), _image_blocks(flip(src[1]))]
 
 
 def head_chicken_defs():
@@ -1183,7 +1230,7 @@ def head_chicken_defs():
         (LIGHT, 0, 1, 3, 1),     # stump highlight
         (BLACK, 3, 0, 2, 2),     # wound notch
     ]
-    return _zone_part_defs(east_intact, east_broken, 11)
+    return _zone_part_defs("head_chicken", east_intact, east_broken, 11, 8)
 
 
 def legs_chicken_defs():
@@ -1221,7 +1268,7 @@ def legs_chicken_defs():
         (LIGHT, 7, 13, 1, 1),    # stump highlight
         (BLACK, 1, 15, 7, 1),    # torn lower edge
     ]
-    return _zone_part_defs(east_intact, east_broken, 9)
+    return _zone_part_defs("legs_chicken", east_intact, east_broken, 9, 24)
 
 
 def head_bull_defs():
@@ -1246,7 +1293,7 @@ def head_bull_defs():
         (DARK, 8, 11, 2, 3),     # far horn stump
         (BLACK, 6, 9, 2, 2),     # snapped gap
     ]
-    return _zone_part_defs(east_intact, east_broken, 12)
+    return _zone_part_defs("head_bull", east_intact, east_broken, 12, 16)
 
 
 def hooves_bull_defs():
@@ -1285,13 +1332,13 @@ def hooves_bull_defs():
         (LIGHT, 6, 8, 1, 1),
         (LIGHT, 14, 8, 1, 1),
     ]
-    return _zone_part_defs(east_intact, east_broken, 20)
+    return _zone_part_defs("hooves_bull", east_intact, east_broken, 20, 16)
 
 
 # ---- HEAVY real spin sheet (bead monhun-ardu-nch.3). The whole longtail
 # silhouette rotates a full revolution during the locked tail_spin attack, so
 # the windup tell (fxtail_spin) is joined by this 8-frame 40x40 body sheet drawn
-# in its place. Frame 0 is the east idle beast (longtail_frames()[0], 32x24)
+# in its place. Frame 0 is the east idle beast (_beast_east()[0], 32x24)
 # centred in the 40x40 plus-mask cell at (4,8); the body cell centre (16,12)
 # lands on the spin cell centre (20,20). Frame i is frame 0 rotated i*45 deg
 # clockwise about that centre. The whole authored cell rotates, shadow
@@ -1365,7 +1412,7 @@ def _image_blocks(img):
 
 def tailspin_frames():
     base = new(40, 40)
-    base.paste(longtail_frames()[0], (4, 8))
+    base.paste(_beast_east(_longtail_east, _longtail_dead)[0], (4, 8))
     return [_image_blocks(_rotate_cw(base, i)) for i in range(8)]
 
 
@@ -1718,9 +1765,12 @@ def render_all(dims):
     # Beast/pole scene art.
     sheets["player"] = strip(player_frames(), 16, 16)
     sheets["monster"] = strip(monster_frames(), 32, 24)
-    sheets["monster_lunge"] = strip(chicken_frames(), 32, 24)
-    sheets["monster_sweep"] = strip(bull_frames(), 32, 24)
-    sheets["monster_heavy"] = strip(longtail_frames(), 32, 24)
+    for body, draw, dead in (("monster_lunge", _chicken_east, _chicken_dead),
+                             ("monster_sweep", _bull_east, _bull_dead),
+                             ("monster_heavy", _longtail_east, _longtail_dead)):
+        east, ship, plan = _beast_sheet(draw, dead)
+        sheets[body] = strip(ship, 32, 24)
+        register_mirror("fx" + body, east, 32, 24, plan)
     sheets["pole"] = strip([pole_frame(False), pole_frame(True)], 20, 40)
     sheets["pole_sever"] = strip(pole_variant_frames(pole_sever_frame), 24, 40)
     sheets["pole_break"] = strip(pole_variant_frames(pole_break_frame), 24, 40)
@@ -1733,7 +1783,13 @@ def render_all(dims):
     sheets["spark"] = strip([spark_frame(LIGHT), spark_frame(WHITE)], 4, 4)
     sheets["fontw"] = font_sheet(WHITE)
     sheets["fontg"] = font_sheet(LIGHT)
-    return icons, sheets
+    # One-facing sources (ryh.2): in-scope sheets are written as their east-only
+    # source; every other sheet's source is the shipped image itself.
+    sources = {}
+    for body, img in sheets.items():
+        entry = MIRROR_SOURCES.get("fx" + body)
+        sources[body] = entry[0] if entry is not None else img
+    return icons, sheets, sources
 
 
 def png_name(fname):
@@ -1814,9 +1870,9 @@ def sheet_kind(body):
     return "blocks"
 
 
-def check_disk(sheets, icons):
+def check_disk(sources, icons):
     """Re-read every written PNG and compare it pixel-for-pixel."""
-    for body, img in sheets.items():
+    for body, img in sources.items():
         directory = os.path.join(ROOT, "images", sheet_kind(body))
         path = os.path.join(directory, sheet_filename(body, img, icons))
         disk = Image.open(path).convert("RGBA")
@@ -1824,6 +1880,22 @@ def check_disk(sheets, icons):
             raise SystemExit("gen-art: %s on disk %s, want %s" % (path, disk.size, img.size))
         if disk.tobytes() != img.tobytes():
             raise SystemExit("gen-art: %s on disk differs from authored pixels" % path)
+
+
+def emit_pack_layout(path):
+    """images/blocks/layout.json: the mirror pack plan the converter reads.
+
+    Only sheets registered in MIRROR_SOURCES appear. Each entry lists the packed
+    frames in shipped order as [source_frame_index, mirror]; a frame whose west
+    twin is not the mirror of an east frame (ravager feet, the dead heap) is
+    absent -- those sheets ship authored in full and are packed in order.
+    """
+    plan = {}
+    for symbol, (_, frames) in sorted(MIRROR_SOURCES.items()):
+        plan[symbol] = [[int(i), bool(m)] for i, m in frames]
+    data = json.dumps({"version": 1, "sheets": plan}, indent=2, sort_keys=True) + "\n"
+    with open(path, "w", encoding="utf-8", newline="\n") as handle:
+        handle.write(data)
 
 
 def ascii_dump(sheets, icons):
@@ -1980,27 +2052,29 @@ def main():
         os.makedirs(directory, exist_ok=True)
     os.makedirs(gen_dir, exist_ok=True)
 
-    icons, sheets = render_all(dims)
+    icons, sheets, sources = render_all(dims)
     defs = icons
     check_sheets(defs, sheets)
     check_hud_identity(sheets)
 
     names = {kind: set() for kind in dirs}
-    for body, img in sheets.items():
+    for body, img in sources.items():
         names[sheet_kind(body)].add(sheet_filename(body, img, defs))
     clean_stale(dirs["blocks"], names["blocks"], "fx")
     clean_stale(dirs["fonts"], names["fonts"], "fx")
 
-    for body, img in sheets.items():
+    for body, img in sources.items():
         img.save(os.path.join(dirs[sheet_kind(body)], sheet_filename(body, img, defs)))
-    check_disk(sheets, defs)
+    check_disk(sources, defs)
 
+    emit_pack_layout(os.path.join(dirs["blocks"], "layout.json"))
     emit_dims_header(dims, icons, os.path.join(gen_dir, "art_dims.hpp"))
 
     n_blocks = len(sheets) - 2
     print("gen-art: wrote %d block sheets (%d overlay/effect icons) + 2 font sheets" %
           (n_blocks, len(icons)))
     print("gen-art: pixel check OK (%d sheets, disk-exact)" % len(sheets))
+    print("gen-art: %d mirror-packed sheets (one-facing sources)" % len(MIRROR_SOURCES))
     if args.dump:
         print(ascii_dump(sheets, defs))
 

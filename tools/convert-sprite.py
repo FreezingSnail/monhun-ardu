@@ -2,6 +2,7 @@ from PIL import Image
 import os
 import argparse
 import io
+import json
 import re
 
 
@@ -15,7 +16,7 @@ def get_mask(rgba):
     return 1 if rgba[3] >= 128 else 0
 
 
-def convert(fname, shades, sw=None, sh=None, num=None):
+def convert(fname, shades, sw=None, sh=None, num=None, plan=None):
 
     if not (shades >= 2 and shades <= 4):
         print('shades argument must be 2, 3, or 4')
@@ -38,7 +39,9 @@ def convert(fname, shades, sw=None, sh=None, num=None):
         sh = h
     nw = w // sw
     nh = h // sh
-    if num is None:
+    if plan is not None:
+        num = len(plan)
+    elif num is None:
         num = nw * nh
     sp = (sh + 7) // 8
 
@@ -51,13 +54,25 @@ def convert(fname, shades, sw=None, sh=None, num=None):
     # two bytes and then draws from image + 2, so the blob must start with them.
     bytes = bytearray([sw, sh])
 
+    # One-facing source + packer mirror (bead monhun-ardu-ryh.2): when a plan is
+    # given (images/blocks/layout.json) it lists the packed frames as
+    # (source_frame_index, mirror) in shipped order, so each west frame is read
+    # as its east twin mirrored instead of being authored twice. Without a plan
+    # the source frames are packed in order (fonts/equip/legacy sheets).
     for n in range(num):
-        bx = (n % nw) * sw
-        by = (n // nw) * sh
+        if plan is not None:
+            src, mirror = plan[n]
+        else:
+            src, mirror = n, False
+        if not 0 <= src < nw * nh:
+            print('%s: frame %d source %d out of range' % (fname, n, src))
+            return None
+        bx = (src % nw) * sw
+        by = (src // nw) * sh
         for shade in range(shades - 1):
             for p in range(sp):
                 for ix in range(sw):
-                    x = bx + ix
+                    x = bx + (sw - 1 - ix if mirror else ix)
                     byte = 0
                     mask = 0
                     for iy in range(8):
@@ -76,8 +91,8 @@ def convert(fname, shades, sw=None, sh=None, num=None):
     return bytes
 
 
-def convert_header(fname, sym, shades=2, sw=None, sh=None, num=None):
-    bytes = convert(fname, shades, sw, sh, num)
+def convert_header(fname, sym, shades=2, sw=None, sh=None, num=None, plan=None):
+    bytes = convert(fname, shades, sw, sh, num, plan)
     if bytes is None:
         return
     f = io.StringIO()
@@ -133,12 +148,22 @@ def main():
     script_dir = os.path.dirname(os.path.abspath(__file__))
     dir_path = os.path.join(script_dir, args.dirpath)
 
+    # One-facing source + packer mirror (bead monhun-ardu-ryh.2): layout.json in
+    # the source directory (written by tools/gen-art.py) lists the packed frames
+    # of each mirrored sheet as (source_frame, mirror). Sheets absent from it are
+    # packed in source order.
+    layout = {}
+    layout_path = os.path.join(dir_path, "layout.json")
+    if os.path.isfile(layout_path):
+        with open(layout_path, encoding="utf-8") as handle:
+            layout = json.load(handle).get("sheets", {})
+
     for filename in os.listdir(dir_path):
         filepath = os.path.join(script_dir, args.dirpath, filename)
         if os.path.isfile(filepath) and pattern.match(filename):
             file_details = parse_filename(filename)
             out = convert_header(filepath,  file_details[0], args.shades, file_details[1],
-                                 file_details[2])
+                                 file_details[2], plan=layout.get(file_details[0]))
             all_buffers += out
             # print(filename, len(out), len(all_buffers))
 

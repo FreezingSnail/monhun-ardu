@@ -11,15 +11,15 @@
     {
       "declaration": "fxdata/blocks/Sprites.txt",
       "path": "images/blocks/fxbullatk_32x24.png",
-      "sha256": "ee8d1301f96eb13fcbac01750c1ec35f36b3f1a3edb34432697432f5b5279a45",
-      "size": 982,
+      "sha256": "d658e55ffeef5b0a986587abbd3e0db80cc0511baf42918426657bbb9a836dc2",
+      "size": 618,
       "symbol": "fxbullatk"
     },
     {
       "declaration": "fxdata/blocks/Sprites.txt",
       "path": "images/blocks/fxchickenatk_32x24.png",
-      "sha256": "ad6be8509b7bca5dfcf64a6f27932df32a253021ec47c697ce8da012f68713e7",
-      "size": 846,
+      "sha256": "667e3a6b905038825d2a5805311a0da08912fff547a0557337fafb6f2fcbe09f",
+      "size": 530,
       "symbol": "fxchickenatk"
     },
     {
@@ -53,29 +53,29 @@
     {
       "declaration": "fxdata/blocks/Sprites.txt",
       "path": "images/blocks/fxhead_bull_12x16.png",
-      "sha256": "2eeeacf5790d74d3f1f9a4dfe15592c980aee9d658b4518ab2eabdf9c48a2701",
-      "size": 193,
+      "sha256": "8b012b21c6619747e77ed25d77c3c092a3509a9945cd2551d9cbe14a7e12c2e3",
+      "size": 154,
       "symbol": "fxhead_bull"
     },
     {
       "declaration": "fxdata/blocks/Sprites.txt",
       "path": "images/blocks/fxhead_chicken_11x8.png",
-      "sha256": "ab94fef09605ffd9bd743cb08703b6cc4b08288e3dbc15e12a0e4fe71ac3717d",
-      "size": 169,
+      "sha256": "af0bc239fc60252f04af5714a6c7a44b1606fd4580cacd22dc206374736a7c11",
+      "size": 137,
       "symbol": "fxhead_chicken"
     },
     {
       "declaration": "fxdata/blocks/Sprites.txt",
       "path": "images/blocks/fxheavyatk_32x24.png",
-      "sha256": "163c20789e34a818b84199a30d3a22446f8c42c42784f8f76f9330c0df4d39d8",
-      "size": 732,
+      "sha256": "3b27e61c0fc54e073a9eb5ddef7c4374e2d301f9f86ccd1978f439014a8b8af5",
+      "size": 503,
       "symbol": "fxheavyatk"
     },
     {
       "declaration": "fxdata/blocks/Sprites.txt",
       "path": "images/blocks/fxhooves_bull_20x16.png",
-      "sha256": "911f5aa5b207eb5f7947bec16f0c23e05e2a3d1ea0e54f78c440367d935c53de",
-      "size": 196,
+      "sha256": "a90489a53977bd606e36923224ee7eae9a1c1b78ac83b7e9df01cf96dc1b1f57",
+      "size": 152,
       "symbol": "fxhooves_bull"
     },
     {
@@ -88,8 +88,8 @@
     {
       "declaration": "fxdata/blocks/Sprites.txt",
       "path": "images/blocks/fxlegs_chicken_9x24.png",
-      "sha256": "9935191cf77b60d5f97695c471906ce2cfd782ec09730a52da9d9c45bfd8ac60",
-      "size": 210,
+      "sha256": "d8e56d45b99f48ab041a63e5eff73b4fa351b1a51b72233f5d1b40bc991b2e6d",
+      "size": 167,
       "symbol": "fxlegs_chicken"
     },
     {
@@ -102,22 +102,22 @@
     {
       "declaration": "fxdata/blocks/Sprites.txt",
       "path": "images/blocks/fxmonster_heavy_32x24.png",
-      "sha256": "e10b8c46a1dac56f37fd3e6f332adcc511c588c6ebdddb9a038d48846c149467",
-      "size": 1100,
+      "sha256": "9fee36f6c96446784979f0ff283d1e472ddbb8a675c315c1aa79b371ead32661",
+      "size": 648,
       "symbol": "fxmonster_heavy"
     },
     {
       "declaration": "fxdata/blocks/Sprites.txt",
       "path": "images/blocks/fxmonster_lunge_32x24.png",
-      "sha256": "a6ad0e7c1c9d169466ce1c7d9701cf64fd0a3708013bfb410a9f8f5ddaf38cec",
-      "size": 1259,
+      "sha256": "b916e99393906be60569d7c1c3ffa37998cc14ab55bdf16cbaf21f5d067e92d8",
+      "size": 761,
       "symbol": "fxmonster_lunge"
     },
     {
       "declaration": "fxdata/blocks/Sprites.txt",
       "path": "images/blocks/fxmonster_sweep_32x24.png",
-      "sha256": "98c2f19340b700d54427a1abbef75dbb7503c1cbaa1b255755a46c0bf42031ef",
-      "size": 1198,
+      "sha256": "87abf5e58bf2a4c07f92a2e845c687835a204f695d33736789cf71f47543664d",
+      "size": 688,
       "symbol": "fxmonster_sweep"
     },
     {
@@ -207,8 +207,8 @@
     {
       "declaration": "fxdata/blocks/Sprites.txt",
       "path": "images/blocks/fxtail_heavy_24x16.png",
-      "sha256": "c4fcebb96d981e52721644261d77f1f05fe50f6b87cb92f8057e2d34d0f6a52f",
-      "size": 238,
+      "sha256": "1130c24efc8be9bfaaee2c914316e58a9eeb4f7e796d926d5d90b6fc69803104",
+      "size": 180,
       "symbol": "fxtail_heavy"
     },
     {
