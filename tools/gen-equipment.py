@@ -823,19 +823,31 @@ def chain(img, facing, u0, v0, u1, v1):
 
 
 def shield(img, facing, u, v, lit):
-    """Gunshield plate: dark rim, light/white face, black slot at the centre.
-    Inverse-mapped so diagonal facings stay a solid plate (holes were the owner
-    bug: stance/fire/diagonal cells rasterized as a checkerboard)."""
-    w, h = 4, 12
+    """Gunshield plate: a player-sized 12x16 face with dark rim and a 4x4
+    gunport (dark ring, black hole) on the barrel line. The plate stays
+    portrait at every facing -- like the retired fxguard overlay the owner
+    asked to match ("big shield, player sized, gunport in the middle") -- and
+    only its anchor slides along the facing vector."""
+    hw, hh = 6, 8
     face = WHITE if lit else LIGHT
+    cx, cy = wpt(facing, u, v)
 
     def color(du, dv):
-        if not (-w // 2 <= du < w // 2 + 2 and -h // 2 - 1 <= dv < h // 2 + 2):
+        if not (-hw <= du < hw and -hh <= dv < hh):
             return None
-        return DARK if (du >= w // 2 or dv <= -h // 2 - 1 or dv >= h // 2 + 1) else face
+        return DARK if (du <= -hw or du >= hw - 1 or dv <= -hh or dv >= hh - 1) else face
 
-    fill_weapon(img, facing, u, v, color)
-    put(img, *wpt(facing, u + w // 2, v), BLACK)
+    for dv in range(-hh, hh):
+        for du in range(-hw, hw):
+            col = color(du, dv)
+            if col is not None:
+                put(img, cx + du, cy + dv, col)
+
+    # Gunport on the barrel line (v + 1), so the shot art fires through it.
+    px, py = wpt(facing, u, v + 1)
+    for dv in range(-3, 4):
+        for du in range(-3, 4):
+            put(img, px + du, py + dv, BLACK if (abs(du) <= 2 and abs(dv) <= 2) else DARK)
 
 
 # Combo chain cut directions, in chain order (slot 0..2): the moveset's own
@@ -1051,34 +1063,36 @@ def gun_cell(row, facing):
         if active:
             wline(img, facing, -reach, 0, -reach + 2, 0, DARK, 3)        # wrist
             if mode == "shot":
-                # rifle shot: barrel forward + flash at the muzzle. The render
-                # references this row at the hand for the arrowshot special, so
-                # the flash sits on the muzzle, not on the 44 px hitscan box.
-                wline(img, facing, -3, 1, 4, 1, DARK, 3)                 # barrel
-                # chunky muzzle star: the outer rays at w=2 read on every
-                # facing; 1 px rays degenerated to specks at 45 deg
-                for du, dv in ((8, 1), (6, -1), (6, 3)):
-                    wline(img, facing, 5, 1, du, dv, WHITE, 2)
-                wline(img, facing, 5, 1, 2, 1, WHITE, 1)
-                dot(img, *wpt(facing, 5, 1), WHITE, 1)
+                # rifle shot through the gunport: barrel from behind the plate
+                # out past its front edge (u=10 at the stance offset), muzzle
+                # star ahead of the plate. The render references this row at the
+                # hand for the arrowshot special, so the flash sits on the
+                # muzzle, not on the 44 px hitscan box.
+                wline(img, facing, -4, 1, 9, 1, DARK, 3)                 # barrel
+                for du, dv in ((13, 1), (11, -2), (11, 4)):
+                    wline(img, facing, 9, 1, du, dv, WHITE, 2)
+                # shot glow trailing back into the port; also keeps bright ink
+                # inside the cell-space hit box the tool test pins
+                wline(img, facing, 9, 1, 3, 1, WHITE, 1)
+                dot(img, *wpt(facing, 9, 1), WHITE, 1)
             else:
                 shield(img, facing, 0, 0, lit=False)
                 for v in (-3, 3):
                     wline(img, facing, max(-15.5, -reach - 4), v, max(-13.5, -reach - 1), v, DARK, 1)
         else:
             shield(img, facing, 4, 0, lit=False)
-            wline(img, facing, -3, 1, 1, 1, DARK, 3)                     # barrel
+            wline(img, facing, -4, 1, 6, 1, DARK, 3)                     # barrel
             warc(img, facing, 0, 0, 7, a_start, a_start + (a_active - a_start) * 0.5, DARK, 1, 5)
         return img
-    if row == 0:      # idle: plate up, barrel low
+    if row == 0:      # idle: plate up, barrel through the port
         shield(img, facing, 4, 0, lit=False)
-        wline(img, facing, -4, 2, 1, 2, DARK, 3)
+        wline(img, facing, -4, 1, 6, 1, DARK, 3)
     elif row == 1:    # recover: plate low
         shield(img, facing, 3, 1, lit=False)
-        wline(img, facing, -3, 2, 2, 2, DARK, 3)
+        wline(img, facing, -4, 2, 5, 2, DARK, 3)
     elif row == WEAPON_ROW_STANCE:   # guard: fully lit plate
         shield(img, facing, 4, 0, lit=True)
-        wline(img, facing, -4, 2, 1, 2, DARK, 3)
+        wline(img, facing, -4, 1, 6, 1, DARK, 3)
     elif row == WEAPON_ROW_DEFENSE:  # shove: plate thrust (render adds the offset)
         shield(img, facing, 6, 0, lit=True)
         for v in (-3, 3):

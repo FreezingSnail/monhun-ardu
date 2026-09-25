@@ -72,6 +72,14 @@
 // stun plate rows + the diagonal flail armor row). Idle/recover rows whose ball
 // or plate sits on integer weapon-space coordinates (15, 16, 19, 26, 30, 36) and
 // every sword case are byte-identical.
+//
+// Big-shield rework (owner follow-up on ngf: "should be a big shield, player
+// sized with gunport in the middle"): the gun plate is now a portrait 12x16
+// screen-space face with a dark rim and a 4x4 gunport (dark ring, black hole)
+// on the barrel line, anchored along the facing vector instead of rotated in
+// weapon space, and the shot rows fire through the port. Changed cases: the
+// whole gun block 27-36 (every case draws the plate or the shot art); flail and
+// sword rows are byte-identical.
 
 #include "harness/fxtest.hpp"
 #include "src/core/world.hpp"
@@ -186,17 +194,17 @@ static const uint32_t MH_PROGMEM GOLDEN[CASE_COUNT][3] = {
     {0x8d9143a8u, 0xaf90a6a8u, 0xd6ace58au},
     {0x863cd611u, 0x91b922a3u, 0x8a63f356u},
     {0x5588d356u, 0x2a256461u, 0x2a256461u},
-    {0xcb7e92ceu, 0x9a6b2301u, 0xc4e88a35u},
-    {0x781778acu, 0x628c88a1u, 0x964204b5u},
-    {0xc6095092u, 0xcfb6a4c2u, 0xcb2869d8u},
-    {0xa69dc7e3u, 0x3e21ab2du, 0x6b9e00c9u},
-    {0x5e23e219u, 0x52d053bbu, 0x0c0befa9u},
-    {0xacc6b519u, 0xdba38be0u, 0xdfdbc454u},
-    {0x781feaedu, 0x9587e8b3u, 0xcecbbcf5u},
-    {0x04356bbbu, 0xae318b0du, 0x033b61f8u},
-    {0xc270fdeeu, 0x3fca8317u, 0x4e51a8dau},
-    {0xcb7e92ceu, 0x9a6b2301u, 0xc4e88a35u},
-    // arm.2 armor head layer (cases 37..39); ngf rasterization regen.
+    {0xb1e00324u, 0x4fe4dd92u, 0x3d19f395u},
+    {0xa6dab4b2u, 0x18bcf540u, 0x00347405u},
+    {0x60f18d7fu, 0x09458678u, 0xb6d14f15u},
+    {0x55c8dcffu, 0xd2160e4eu, 0x6b9e00c9u},
+    {0xc3bf1d9fu, 0x139b91a5u, 0x38760c77u},
+    {0xfe8e47f6u, 0x797be7c5u, 0xac6bb291u},
+    {0x45f02787u, 0xf0ebd249u, 0x414ba017u},
+    {0x46587adau, 0x06b04ed8u, 0x5959ea7du},
+    {0x7ef6f612u, 0x4d1b04bfu, 0xc9855c92u},
+    {0xb1e00324u, 0x4fe4dd92u, 0x3d19f395u},
+    // arm.2 armor head layer (cases 37..39); big-shield regen.
     {0x23e552ecu, 0x71a79146u, 0xe8971baeu},
     {0x51522cf2u, 0x5e50a808u, 0x6391cf40u},
     {0x965e4d66u, 0x3c4ef065u, 0x3c4ef065u},
