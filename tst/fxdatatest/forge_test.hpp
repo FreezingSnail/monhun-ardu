@@ -58,11 +58,11 @@ inline void test_forge(FxTest &test) {
     // prefixes); each row carries forge_node + the baked direct cost.
     test.expectEq(screens::SCREEN_FORGE, 3, F("forge submenu index"));
     test.expectEq(screens::SCREEN_CRAFT, 4, F("craft screen index"));
-    test.expectEq(screenRowCount(screens::SCREEN_CRAFT), 10, F("craft row count"));
+    test.expectEq(screenRowCount(screens::SCREEN_CRAFT), 14, F("craft row count"));
     ScreenRow t1, t3, leave;
     screenReadRow(screenRowOffsetAt(screens::SCREEN_CRAFT, 0), t1);
     screenReadRow(screenRowOffsetAt(screens::SCREEN_CRAFT, 2), t3);
-    screenReadRow(screenRowOffsetAt(screens::SCREEN_CRAFT, 9), leave);
+    screenReadRow(screenRowOffsetAt(screens::SCREEN_CRAFT, 13), leave);
     test.expectEq(t1.action, screens::ACTION_FORGE_NODE, F("craft node action"));
     test.expectEq(t1.param, forge::NODE_SWORD_BASE, F("craft root param"));
     test.expectEq(t1.cost, 0, F("craft root cost"));

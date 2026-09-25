@@ -61,14 +61,14 @@ static void waitPlane(uint8_t plane) {
 
 inline void test_cards(FxTest &test) {
     // ------------------------------------------------- generated cart records
-    test.expectEq(cards::ITEM_COUNT, 19, F("card item count"));
+    test.expectEq(cards::ITEM_COUNT, 23, F("card item count"));
     test.expectEq(cards::QUEST_BASE, armor::PIECE_COUNT, F("quest base follows the armor prefix"));
     test.expectEq(cards::CARD_ARMOR_HUNTER_HELM, 0, F("helm card index"));
     test.expectEq(cards::CARD_QUEST_SLAY_LUNGE, cards::QUEST_BASE + quests::QUEST_SLAY_LUNGE, F("lunge card index"));
     // ui.4: weapon cards follow the quests; the last node is the last card.
     test.expectEq(cards::WEAPON_BASE, cards::QUEST_BASE + quests::QUEST_COUNT, F("weapon base follows the quests"));
     test.expectEq(cards::CARD_WEAPON_SWORD_BASE, cards::WEAPON_BASE + forge::NODE_SWORD_BASE, F("sword root card index"));
-    test.expectEq(cards::CARD_WEAPON_GUN_T2, cards::ITEM_COUNT - 1, F("last weapon node is the last card"));
+    test.expectEq(cards::CARD_WEAPON_GUN_BRACE, cards::ITEM_COUNT - 1, F("last weapon node is the last card"));
 
     CardItem it;
     cardReadItem(cards::CARD_ARMOR_HUNTER_HELM, it);

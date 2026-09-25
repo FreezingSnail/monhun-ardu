@@ -1047,6 +1047,136 @@ def gun_move_art(record, slot):
     return -40, 10, "thrust"
 
 
+def gun_plate(style, img, facing, u, v, lit):
+    """Variant shield silhouettes (bead ht8): screen-space plate anchored at
+    wpt(facing, u, v), dark rim, lit/light face, 4x4 gunport on the v line.
+    Returns (port_x, port_y, front_u): the port centre and the plate's forward
+    edge in weapon-space u, so the shot art can start its muzzle past it."""
+    cx, cy = wpt(facing, u, v)
+    face = WHITE if lit else LIGHT
+
+    def port(px, py):
+        for dy in range(-2, 3):
+            for dx in range(-2, 3):
+                put(img, px + dx, py + dy, BLACK if (abs(dx) <= 1 and abs(dy) <= 1) else DARK)
+
+    if style == "buckler":       # round, r=8
+        for dy in range(-8, 9):
+            for dx in range(-8, 9):
+                d2 = dx * dx + dy * dy
+                if d2 > 64:
+                    continue
+                put(img, cx + dx, cy + dy, DARK if d2 > 49 else face)
+        for dx in (-5, -4, -3):
+            put(img, cx + dx, cy - 6, WHITE)
+            put(img, cx - 6, cy + dx, WHITE)
+        port(cx, cy)
+        return cx, cy, u + 8
+    if style == "kite":          # wide shoulders tapering to a rounded point
+        for dy in range(-9, 11):
+            t = (dy + 9) / 19.0
+            half = max(1, int(5 - 4.4 * t))
+            for dx in range(-half, half + 1):
+                if dy == -9 and abs(dx) >= half:
+                    continue
+                put(img, cx + dx, cy + dy, DARK if (abs(dx) == half or dy == 10) else face)
+        for dx in range(-3, 4):
+            put(img, cx + dx, cy - 8, WHITE)
+        for dy in range(-6, 5):
+            put(img, cx - 3, cy + dy, WHITE)
+        port(cx, cy - 1)
+        return cx, cy - 1, u + 5
+    if style == "tower":         # 9x18 slab, tapered bottom, chamfered top
+        for dy in range(-9, 10):
+            half = 4 if dy < 6 else 3
+            for dx in range(-half, half + 1):
+                if dy == -9 and abs(dx) >= half:
+                    continue
+                put(img, cx + dx, cy + dy, DARK if (abs(dx) == half or dy in (-9, 9)) else face)
+        for dx in range(-2, 3):
+            put(img, cx + dx, cy - 7, WHITE)
+        for dy in range(-6, 4):
+            put(img, cx - 2, cy + dy, WHITE)
+        port(cx, cy)
+        return cx, cy, u + 4
+    # brace: chamfered slab, two braces, pointed bottom
+    for dy in range(-9, 9):
+        half = 5 if dy > -9 else 4
+        for dx in range(-half, half + 1):
+            if dy == -9 and abs(dx) >= half:
+                continue
+            put(img, cx + dx, cy + dy, DARK if (abs(dx) == half or dy == -9) else face)
+    for dy, ex in ((9, 4), (10, 3), (11, 2)):
+        for dx in range(-ex, ex + 1):
+            put(img, cx + dx, cy + dy, DARK if abs(dx) == ex else face)
+    for dx in range(-3, 4):
+        put(img, cx + dx, cy - 3, DARK)
+        put(img, cx + dx, cy + 4, DARK)
+    for dx in range(-2, 3):
+        put(img, cx + dx, cy - 8, WHITE)
+    for dy in range(-7, 3):
+        put(img, cx - 4, cy + dy, WHITE)
+    port(cx, cy)
+    return cx, cy, u + 5
+
+
+def gun_variant_cell(style, row, facing):
+    """One 32x32 gunshield variant cell: the style plate plus barrel; muzzle
+    flash on the shot actives, plate strike on the bashes. Same row table as
+    gun_cell (docs/weapon-art.md)."""
+    img = new(32, 32)
+    last_move_row = WEAPON_ROW_MOVE0 + 2 * WEAPON_SLOTS - 1
+    if WEAPON_ROW_MOVE0 <= row <= last_move_row:
+        slot = (row - WEAPON_ROW_MOVE0) // 2
+        record = move_record(2, slot)
+        if record is None or not record["hw"]:
+            return None
+        a_start, a_active, mode = gun_move_art(record, slot)
+        reach = record["reach"]
+        active = (row - WEAPON_ROW_MOVE0) % 2 == 1
+        if active:
+            if mode == "shot":
+                # The stance plate is drawn by the render under this row; the
+                # muzzle starts at its forward edge and the star sits past it.
+                _px, _py, front = gun_plate(style, new(32, 32), facing, 4, 0, True)
+                wline(img, facing, front - 2, 0, front + 4, 0, DARK, 3)
+                for du, dv in ((front + 7, 0), (front + 5, -3), (front + 5, 3)):
+                    wline(img, facing, front + 4, 0, du, dv, WHITE, 2)
+                wline(img, facing, front + 4, 0, front, 0, WHITE, 1)
+                dot(img, *wpt(facing, front + 4, 0), WHITE, 1)
+            else:
+                wline(img, facing, -reach, 0, -reach + 2, 0, DARK, 3)
+                gun_plate(style, img, facing, 0, 0, False)
+                for v in (-3, 3):
+                    wline(img, facing, max(-15.5, -reach - 4), v, max(-13.5, -reach - 1), v, DARK, 1)
+        else:
+            gun_plate(style, img, facing, 4, 0, False)
+            wline(img, facing, -4, 0, 4, 0, DARK, 3)
+            warc(img, facing, 0, 0, 7, a_start, a_start + (a_active - a_start) * 0.5, DARK, 1, 5)
+        return img
+    if row == 0:      # idle
+        gun_plate(style, img, facing, 4, 0, False)
+        wline(img, facing, -4, 0, 4, 0, DARK, 3)
+    elif row == 1:    # recover
+        gun_plate(style, img, facing, 3, 1, False)
+        wline(img, facing, -4, 1, 3, 1, DARK, 3)
+    elif row == WEAPON_ROW_STANCE:   # guard: fully lit plate
+        gun_plate(style, img, facing, 4, 0, True)
+        wline(img, facing, -4, 0, 4, 0, DARK, 3)
+    elif row == WEAPON_ROW_DEFENSE:  # shove: plate thrust (render adds the offset)
+        gun_plate(style, img, facing, 6, 0, True)
+        for v in (-3, 3):
+            wline(img, facing, -6, v, -2, v, DARK, 1)
+    elif row == WEAPON_ROW_DODGE:    # tucked
+        gun_plate(style, img, facing, 3, 3, False)
+    elif row == WEAPON_ROW_STUN:     # dropped
+        wline(img, facing, -2, 3, 1, 3, DARK, 3)
+        gun_plate(style, img, facing, 4, 5, False)
+    else:
+        return None
+    return img
+
+
 def gun_cell(row, facing):
     """One 32x32 gunshield pose cell: shield plate + barrel; muzzle flash on the
     shot actives, plate strike on the bashes."""
@@ -1111,6 +1241,12 @@ WEAPON_ART = {
     "weapon_sword": sword_cell,
     "weapon_flail": flail_cell,
     "weapon_gun": gun_cell,
+    # Craftable gunshield variants (bead ht8): one plate style per item, same
+    # row table (docs/weapon-art.md).
+    "weapon_gun_buckler": lambda row, facing: gun_variant_cell("buckler", row, facing),
+    "weapon_gun_kite": lambda row, facing: gun_variant_cell("kite", row, facing),
+    "weapon_gun_tower": lambda row, facing: gun_variant_cell("tower", row, facing),
+    "weapon_gun_brace": lambda row, facing: gun_variant_cell("brace", row, facing),
 }
 
 

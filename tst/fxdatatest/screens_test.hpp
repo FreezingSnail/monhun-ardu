@@ -381,9 +381,9 @@ inline void test_screens(FxTest &test) {
     test.expectEq(screenCondOk(gear, g0), 1, F("gear slot row always live"));
 
     // ------------------------------------ gear slot candidate table (hbk.12)
-    // Slot 0 = the 9 forge nodes in order; 1/2/3 the armor pieces by slot
+    // Slot 0 = the 13 forge nodes in order; 1/2/3 the armor pieces by slot
     // (head 0,1 / body 2,3 / charm 4). Labels live in the blob records.
-    test.expectEq(screenGearSlotCount(0), 9, F("weapon slot count"));
+    test.expectEq(screenGearSlotCount(0), 13, F("weapon slot count"));
     test.expectEq(screenGearSlotCount(1), 2, F("head slot count"));
     test.expectEq(screenGearSlotCount(2), 2, F("body slot count"));
     test.expectEq(screenGearSlotCount(3), 1, F("charm slot count"));
@@ -594,7 +594,7 @@ inline void test_screens(FxTest &test) {
     test.expectEq(screenPageCount(screens::SCREEN_QUESTS), 2, F("quests page count"));
     test.expectEq(screenPageCount(screens::SCREEN_GEAR), 2, F("gear page count"));
     test.expectEq(screenPageCount(screens::SCREEN_FORGE), 1, F("forge submenu page count"));
-    test.expectEq(screenPageCount(screens::SCREEN_CRAFT), 2, F("craft page count"));
+    test.expectEq(screenPageCount(screens::SCREEN_CRAFT), 3, F("craft page count"));
     test.expectEq(screenPageCount(screens::SCREEN_ARMOR_FORGE), 1, F("armor forge page count"));
     test.expectEq(screenPageCount(screens::SCREEN_UPGRADE), 1, F("upgrade page count"));
     // The generated per-screen offsets are PAGE_TABLE_OFF + screen * stride.
@@ -673,9 +673,9 @@ inline void test_screens_smithy(FxTest &test) {
     test.expectEq(countBits(10, 60, 29, 36), 0, F("forge unselected baked label skips plane2"));
 
     // --------------------------------------------------- hbk.10 CRAFT list
-    // Flat rows in forge-node order (9 nodes + LEAVE = 10, 2 pages): no class
+    // Flat rows in forge-node order (13 nodes + LEAVE = 14, 3 pages): no class
     // headers/prefixes, cost = the node's directCost (the baked craft price).
-    test.expectEq(screenRowCount(screens::SCREEN_CRAFT), 10, F("craft row count"));
+    test.expectEq(screenRowCount(screens::SCREEN_CRAFT), 14, F("craft row count"));
     screenReadRow(screenRowOffsetAt(screens::SCREEN_CRAFT, 0), srow);
     test.expectEq(srow.action, screens::ACTION_FORGE_NODE, F("craft row0 action forge"));
     test.expectEq(srow.flags, screens::ROW_F_FORGE, F("craft row0 forge flag"));
@@ -692,7 +692,7 @@ inline void test_screens_smithy(FxTest &test) {
     screenReadRow(screenRowOffsetAt(screens::SCREEN_CRAFT, 8), srow);
     test.expectEq(srow.param, forge::NODE_GUN_T2, F("craft row8 param gun t3"));
     test.expectEq(srow.cost, 360, F("craft row8 baked direct cost"));
-    screenReadRow(screenRowOffsetAt(screens::SCREEN_CRAFT, 9), srow);
+    screenReadRow(screenRowOffsetAt(screens::SCREEN_CRAFT, 13), srow);
     test.expectEq(srow.action, screens::ACTION_LEAVE, F("craft leave row"));
 
     // Pixel: page 0 bakes the flat labels (no tree prefix) and the direct

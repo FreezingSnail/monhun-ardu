@@ -26,13 +26,25 @@
       "direct": true,
       "cost": 90,
       "mats": [
-        { "item": "bug", "count": 2 },
-        { "item": "scale", "count": 1 }
+        {
+          "item": "bug",
+          "count": 2
+        },
+        {
+          "item": "scale",
+          "count": 1
+        }
       ],
       "directCost": 160,
       "directMats": [
-        { "item": "bug", "count": 3 },
-        { "item": "scale", "count": 2 }
+        {
+          "item": "bug",
+          "count": 3
+        },
+        {
+          "item": "scale",
+          "count": 2
+        }
       ],
       "dmgMul": 108,
       "spdMul": 100,
@@ -49,13 +61,25 @@
       "direct": true,
       "cost": 220,
       "mats": [
-        { "item": "bug", "count": 3 },
-        { "item": "tail", "count": 1 }
+        {
+          "item": "bug",
+          "count": 3
+        },
+        {
+          "item": "tail",
+          "count": 1
+        }
       ],
       "directCost": 360,
       "directMats": [
-        { "item": "bug", "count": 5 },
-        { "item": "tail", "count": 2 }
+        {
+          "item": "bug",
+          "count": 5
+        },
+        {
+          "item": "tail",
+          "count": 2
+        }
       ],
       "dmgMul": 120,
       "spdMul": 105,
@@ -64,6 +88,146 @@
         "Piercing rounds."
       ],
       "sheet": "mh_weapon_gun"
+    },
+    {
+      "id": "gun_buckler",
+      "label": "GN BUCKLER",
+      "parent": "gun_base",
+      "direct": true,
+      "cost": 120,
+      "mats": [
+        {
+          "item": "bug",
+          "count": 2
+        },
+        {
+          "item": "scale",
+          "count": 1
+        }
+      ],
+      "directCost": 200,
+      "directMats": [
+        {
+          "item": "bug",
+          "count": 4
+        },
+        {
+          "item": "scale",
+          "count": 2
+        }
+      ],
+      "dmgMul": 96,
+      "spdMul": 118,
+      "desc": [
+        "ROUND SHIELD.",
+        "Quick hands."
+      ],
+      "sheet": "mh_weapon_gun_buckler"
+    },
+    {
+      "id": "gun_kite",
+      "label": "GN KITE",
+      "parent": "gun_base",
+      "direct": true,
+      "cost": 150,
+      "mats": [
+        {
+          "item": "bug",
+          "count": 2
+        },
+        {
+          "item": "tail",
+          "count": 1
+        }
+      ],
+      "directCost": 240,
+      "directMats": [
+        {
+          "item": "bug",
+          "count": 3
+        },
+        {
+          "item": "tail",
+          "count": 2
+        }
+      ],
+      "dmgMul": 104,
+      "spdMul": 104,
+      "desc": [
+        "WIDE COVER.",
+        "Balanced shot."
+      ],
+      "sheet": "mh_weapon_gun_kite"
+    },
+    {
+      "id": "gun_tower",
+      "label": "GN TOWER",
+      "parent": "gun_base",
+      "direct": true,
+      "cost": 220,
+      "mats": [
+        {
+          "item": "scale",
+          "count": 2
+        },
+        {
+          "item": "tail",
+          "count": 1
+        }
+      ],
+      "directCost": 340,
+      "directMats": [
+        {
+          "item": "scale",
+          "count": 4
+        },
+        {
+          "item": "tail",
+          "count": 2
+        }
+      ],
+      "dmgMul": 114,
+      "spdMul": 94,
+      "desc": [
+        "TALL PLATE.",
+        "Heavy shot."
+      ],
+      "sheet": "mh_weapon_gun_tower"
+    },
+    {
+      "id": "gun_brace",
+      "label": "GN BRACE",
+      "parent": "gun_base",
+      "direct": true,
+      "cost": 280,
+      "mats": [
+        {
+          "item": "scale",
+          "count": 3
+        },
+        {
+          "item": "tail",
+          "count": 2
+        }
+      ],
+      "directCost": 420,
+      "directMats": [
+        {
+          "item": "scale",
+          "count": 5
+        },
+        {
+          "item": "tail",
+          "count": 3
+        }
+      ],
+      "dmgMul": 124,
+      "spdMul": 86,
+      "desc": [
+        "BRACED FRAME.",
+        "Hardest hit."
+      ],
+      "sheet": "mh_weapon_gun_brace"
     }
   ]
 }

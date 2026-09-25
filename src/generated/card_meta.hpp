@@ -17,10 +17,10 @@ namespace cards {
 constexpr uint16_t MAGIC = 0x4341;
 constexpr uint8_t VERSION = 1;
 constexpr uint8_t FLAGS = 0x00;
-constexpr uint16_t SIZE = 635;
+constexpr uint16_t SIZE = 767;
 constexpr uint8_t HEADER_SIZE = 8;
 constexpr uint8_t ITEM_SIZE = 33;
-constexpr uint8_t ITEM_COUNT = 19;
+constexpr uint8_t ITEM_COUNT = 23;
 constexpr uint8_t PAGE_MAX = 4;
 constexpr uint8_t OVERLAY_MAX = 2;
 
@@ -109,6 +109,14 @@ constexpr uint8_t CARD_WEAPON_GUN_T1 = 17;
 constexpr uint16_t CARD_WEAPON_GUN_T1_OFF = 569;
 constexpr uint8_t CARD_WEAPON_GUN_T2 = 18;
 constexpr uint16_t CARD_WEAPON_GUN_T2_OFF = 602;
+constexpr uint8_t CARD_WEAPON_GUN_BUCKLER = 19;
+constexpr uint16_t CARD_WEAPON_GUN_BUCKLER_OFF = 635;
+constexpr uint8_t CARD_WEAPON_GUN_KITE = 20;
+constexpr uint16_t CARD_WEAPON_GUN_KITE_OFF = 668;
+constexpr uint8_t CARD_WEAPON_GUN_TOWER = 21;
+constexpr uint16_t CARD_WEAPON_GUN_TOWER_OFF = 701;
+constexpr uint8_t CARD_WEAPON_GUN_BRACE = 22;
+constexpr uint16_t CARD_WEAPON_GUN_BRACE_OFF = 734;
 
 // Page image symbols live in fxdata/fxdata.h (mh_card_<kind>_<name>_<page>);
 // the runtime seeks them from the record's baked u24 offsets, so no

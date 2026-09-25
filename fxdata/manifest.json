@@ -563,6 +563,69 @@
     },
     {
       "declaration": "fxdata/cards/Sprites.txt",
+      "path": "images/cards/mh_card_weapon_gun_brace_0_128x64.png",
+      "sha256": "cce0b8774f33efc61f033948dbf287453dc7e50034e2c9428047bebd9d6622aa",
+      "size": 421,
+      "symbol": "mh_card_weapon_gun_brace_0"
+    },
+    {
+      "declaration": "fxdata/cards/Sprites.txt",
+      "path": "images/cards/mh_card_weapon_gun_brace_1_128x64.png",
+      "sha256": "883d48042ac5af322fa102e67d5537d55256c458fb554bd6719b80ebfd134f3c",
+      "size": 682,
+      "symbol": "mh_card_weapon_gun_brace_1"
+    },
+    {
+      "declaration": "fxdata/cards/Sprites.txt",
+      "path": "images/cards/mh_card_weapon_gun_brace_2_128x64.png",
+      "sha256": "228f9af46e6cc960415a93bef7b767b1c751aead4db95a76e70abc8796742681",
+      "size": 391,
+      "symbol": "mh_card_weapon_gun_brace_2"
+    },
+    {
+      "declaration": "fxdata/cards/Sprites.txt",
+      "path": "images/cards/mh_card_weapon_gun_buckler_0_128x64.png",
+      "sha256": "c1348c3e0388621fce303ed3ff994925dce93c60bdddf59dc339dffcb1de44b1",
+      "size": 450,
+      "symbol": "mh_card_weapon_gun_buckler_0"
+    },
+    {
+      "declaration": "fxdata/cards/Sprites.txt",
+      "path": "images/cards/mh_card_weapon_gun_buckler_1_128x64.png",
+      "sha256": "833c109b80bd2ad181b8fb11a4b844afd1f21883894a76170c626bf7f7d15b10",
+      "size": 677,
+      "symbol": "mh_card_weapon_gun_buckler_1"
+    },
+    {
+      "declaration": "fxdata/cards/Sprites.txt",
+      "path": "images/cards/mh_card_weapon_gun_buckler_2_128x64.png",
+      "sha256": "d7348b4271c44af1002933e2e97bf00a815c6200adbb85f996bc66f8b97a8f80",
+      "size": 415,
+      "symbol": "mh_card_weapon_gun_buckler_2"
+    },
+    {
+      "declaration": "fxdata/cards/Sprites.txt",
+      "path": "images/cards/mh_card_weapon_gun_kite_0_128x64.png",
+      "sha256": "d0bd5978cbd841da19a6a2592634275decdd2c165ebd95b123a94e3651595e9e",
+      "size": 424,
+      "symbol": "mh_card_weapon_gun_kite_0"
+    },
+    {
+      "declaration": "fxdata/cards/Sprites.txt",
+      "path": "images/cards/mh_card_weapon_gun_kite_1_128x64.png",
+      "sha256": "bdd3bdc051b6bedac2b0b2c5b27f7b3243228a8c69fa4eca6d755460a52e74d3",
+      "size": 668,
+      "symbol": "mh_card_weapon_gun_kite_1"
+    },
+    {
+      "declaration": "fxdata/cards/Sprites.txt",
+      "path": "images/cards/mh_card_weapon_gun_kite_2_128x64.png",
+      "sha256": "345aa6c5fee4f2bde8d73be180033cc437f936ba9faa7c5b3f2d84e46ecf545f",
+      "size": 381,
+      "symbol": "mh_card_weapon_gun_kite_2"
+    },
+    {
+      "declaration": "fxdata/cards/Sprites.txt",
       "path": "images/cards/mh_card_weapon_gun_t1_0_128x64.png",
       "sha256": "205010df151b0c12b95c980a9a56962be108ba450a3d097eba8ffe90c22e22dc",
       "size": 465,
@@ -602,6 +665,27 @@
       "sha256": "3bee6a6c781649ae151ae67eabc53484ac031e327958f6660335309ca9ffb0b0",
       "size": 373,
       "symbol": "mh_card_weapon_gun_t2_2"
+    },
+    {
+      "declaration": "fxdata/cards/Sprites.txt",
+      "path": "images/cards/mh_card_weapon_gun_tower_0_128x64.png",
+      "sha256": "7c5b844c2162be70c4db7c03648277f19303cc870234b42ef9278026f0381b16",
+      "size": 406,
+      "symbol": "mh_card_weapon_gun_tower_0"
+    },
+    {
+      "declaration": "fxdata/cards/Sprites.txt",
+      "path": "images/cards/mh_card_weapon_gun_tower_1_128x64.png",
+      "sha256": "84a58bedb1459684c61bfea22a405ebb33a2ebbaab3af43ebff4b34a26ead9e7",
+      "size": 696,
+      "symbol": "mh_card_weapon_gun_tower_1"
+    },
+    {
+      "declaration": "fxdata/cards/Sprites.txt",
+      "path": "images/cards/mh_card_weapon_gun_tower_2_128x64.png",
+      "sha256": "c8299a4c5471a1a08287619e3b7a739f1d555b0e736e47a9135706671a9ce461",
+      "size": 378,
+      "symbol": "mh_card_weapon_gun_tower_2"
     },
     {
       "declaration": "fxdata/cards/Sprites.txt",
@@ -717,6 +801,34 @@
     },
     {
       "declaration": "fxdata/equip/Sprites.txt",
+      "path": "images/equip/mh_weapon_gun_brace_32x32.png",
+      "sha256": "07696f057dbbfcfd3fd8cbe07aa48c824420fe7ebf23a47e86af8f86106f2e97",
+      "size": 8907,
+      "symbol": "mh_weapon_gun_brace"
+    },
+    {
+      "declaration": "fxdata/equip/Sprites.txt",
+      "path": "images/equip/mh_weapon_gun_buckler_32x32.png",
+      "sha256": "b682051cb5027d4db79892495e98386b32c0a9313c587d4c8ab20869413f80a2",
+      "size": 10551,
+      "symbol": "mh_weapon_gun_buckler"
+    },
+    {
+      "declaration": "fxdata/equip/Sprites.txt",
+      "path": "images/equip/mh_weapon_gun_kite_32x32.png",
+      "sha256": "4685f7500deff2c1b1ceb1ca5f35f1d4511b13ebcff9f69eb2b8b042505d9d1b",
+      "size": 8714,
+      "symbol": "mh_weapon_gun_kite"
+    },
+    {
+      "declaration": "fxdata/equip/Sprites.txt",
+      "path": "images/equip/mh_weapon_gun_tower_32x32.png",
+      "sha256": "bb686720e24d56159fc5255cf02e8124899cd865b996c4fd575d2e529663c286",
+      "size": 7973,
+      "symbol": "mh_weapon_gun_tower"
+    },
+    {
+      "declaration": "fxdata/equip/Sprites.txt",
       "path": "images/equip/mh_weapon_sword_32x32.png",
       "sha256": "6135016eacedec09bb2d9d486074420e887ecb65205bb587203d958ba166dc25",
       "size": 8465,
@@ -760,16 +872,23 @@
     {
       "declaration": "fxdata/screens/Sprites.txt",
       "path": "images/screens/mh_screen_craft_0_128x64.png",
-      "sha256": "581d12973fd259d15ddb619ed1cad4fdd30c4a5418038e50321aa2445c8d3e37",
-      "size": 624,
+      "sha256": "08bebbe3ea899a3c746299989de6d5acf07c96af711b1ab11282bb09fe779c3d",
+      "size": 625,
       "symbol": "mh_screen_craft_0"
     },
     {
       "declaration": "fxdata/screens/Sprites.txt",
       "path": "images/screens/mh_screen_craft_1_128x64.png",
-      "sha256": "9c0f37fcb7e616ac1639aa51a157e16df2f4bf21b8f0602bfaa3ed9b2e0903d8",
-      "size": 482,
+      "sha256": "d12efc6a3311209fd7ed4502aaa0ab88257792b9af02b86f60bb94a7fcdf3734",
+      "size": 651,
       "symbol": "mh_screen_craft_1"
+    },
+    {
+      "declaration": "fxdata/screens/Sprites.txt",
+      "path": "images/screens/mh_screen_craft_2_128x64.png",
+      "sha256": "b568074c7e45a7f6b58a6845dd0f6f84599ffd2b20fcfe5a092a85b67326f349",
+      "size": 404,
+      "symbol": "mh_screen_craft_2"
     },
     {
       "declaration": "fxdata/screens/Sprites.txt",
@@ -928,6 +1047,26 @@
       "size": 438
     },
     {
+      "path": "data/equipment/weapon_gun_brace.json",
+      "sha256": "c972e0239a638a1e23ec3a5202ebb5283357b8d2a3e7235df6d1a5a1eb38dd7e",
+      "size": 474
+    },
+    {
+      "path": "data/equipment/weapon_gun_buckler.json",
+      "sha256": "92078d2ae06f1315d5f2659b79a534ce7c7972e9a41be518a913ef80e0d939d2",
+      "size": 478
+    },
+    {
+      "path": "data/equipment/weapon_gun_kite.json",
+      "sha256": "64579ad72e08ce6c6a4bb7b0e45773ac7d57e17d70ded70967ca33f6780dde1c",
+      "size": 472
+    },
+    {
+      "path": "data/equipment/weapon_gun_tower.json",
+      "sha256": "178fe29ddd3271478f475f28386e0dac3e6bc2a00385ca02bd8520b0bcdff70b",
+      "size": 474
+    },
+    {
       "path": "data/equipment/weapon_sword.json",
       "sha256": "7b9371ecf18b51f05554bf02745f1bde92313bfd1ff9290358508f736a472ed7",
       "size": 442
@@ -939,8 +1078,8 @@
     },
     {
       "path": "data/forge/gun.json",
-      "sha256": "9c499befecf762a26d3776b08a0acd2d0fc404facabb6a78df2d6ddfb275b081",
-      "size": 1440
+      "sha256": "7147401dce44771b9632e8ced29abb8a26c67185bd0aadc0f420fee08679c616",
+      "size": 4211
     },
     {
       "path": "data/forge/sword.json",
@@ -1102,8 +1241,8 @@
     },
     {
       "path": "fxdata/cards/Sprites.txt",
-      "sha256": "96897e4e06f162cd406f446ca1566117c08cee05e1510ac4cef24182855284ae",
-      "size": 599799,
+      "sha256": "94fcec7838df68554865b61d8f41c50f48cf6db653bdf91a3200bb7d33c773f8",
+      "size": 724195,
       "symbols": [
         "mh_card_armor_hunter_helm_0",
         "mh_card_armor_hunter_helm_1",
@@ -1162,14 +1301,27 @@
         "mh_card_weapon_gun_t1_2",
         "mh_card_weapon_gun_t2_0",
         "mh_card_weapon_gun_t2_1",
-        "mh_card_weapon_gun_t2_2"
+        "mh_card_weapon_gun_t2_2",
+        "mh_card_weapon_gun_buckler_0",
+        "mh_card_weapon_gun_buckler_1",
+        "mh_card_weapon_gun_buckler_2",
+        "mh_card_weapon_gun_kite_0",
+        "mh_card_weapon_gun_kite_1",
+        "mh_card_weapon_gun_kite_2",
+        "mh_card_weapon_gun_tower_0",
+        "mh_card_weapon_gun_tower_1",
+        "mh_card_weapon_gun_tower_2",
+        "mh_card_weapon_gun_brace_0",
+        "mh_card_weapon_gun_brace_1",
+        "mh_card_weapon_gun_brace_2"
       ]
     },
     {
       "path": "fxdata/equip/Sprites.txt",
-      "sha256": "5114782f1457d62520c0ebf0b2294d4ad7511f930a70d2c04043fe6c55ac04ae",
-      "size": 2662547,
+      "sha256": "6f6d111984c6d402e259e8eaac70dd94ead0132630b4846c0ef15099b403698d",
+      "size": 6146404,
       "symbols": [
+        "mh_weapon_gun_tower",
         "mh_head_bandana",
         "mh_weapon_sword",
         "mh_head_helm",
@@ -1178,7 +1330,10 @@
         "mh_shadow_base",
         "mh_weapon_gun",
         "mh_head_base",
-        "mh_weapon_flail"
+        "mh_weapon_gun_brace",
+        "mh_weapon_gun_buckler",
+        "mh_weapon_flail",
+        "mh_weapon_gun_kite"
       ]
     },
     {
@@ -1206,8 +1361,8 @@
     },
     {
       "path": "fxdata/screens/Sprites.txt",
-      "sha256": "573768f3b0210852ec3362b133934f22ac49060aa9cfb1cd1d59d04a7167f4e1",
-      "size": 107332,
+      "sha256": "266d46116fb44b0f045ccaff741f451248520e1f43cabe79da66e4fd48e34c90",
+      "size": 118073,
       "symbols": [
         "mh_screen_hub_0",
         "mh_screen_quests_0",
@@ -1217,6 +1372,7 @@
         "mh_screen_forge_0",
         "mh_screen_craft_0",
         "mh_screen_craft_1",
+        "mh_screen_craft_2",
         "mh_screen_armor_forge_0",
         "mh_screen_upgrade_0"
       ]
@@ -1229,8 +1385,8 @@
     },
     {
       "path": "fxdata/tables/cards.bin",
-      "sha256": "c641410ddde85deb8aa620745b6ee8e67ca5da9adc4112e6d03cecf4f5d718e1",
-      "size": 635,
+      "sha256": "b3a51aa2a3f3ec96917311e1eafa27d6c5f58f48617726d2569ab0d9440b6684",
+      "size": 767,
       "symbol": "mhCards"
     },
     {
@@ -1241,14 +1397,14 @@
     },
     {
       "path": "fxdata/tables/equip.bin",
-      "sha256": "584258b67a72ddb5dd0439a756946c25e08c08103ee868dafe254c6c99f6ff25",
-      "size": 573,
+      "sha256": "4e4d898d854d25bb490708ec7da37a3cfd58f0b86d33c4481f194ea0d6b5cc2a",
+      "size": 733,
       "symbol": "mhEquip"
     },
     {
       "path": "fxdata/tables/forge.bin",
-      "sha256": "a771ad2bc3482f45981276f73be7c26cb5a14192758c44b500b97043edc5a676",
-      "size": 161,
+      "sha256": "7ab2876671a2ab5916cb96da68bfdacd42e707fae70f883abf7bc104bbe2f561",
+      "size": 229,
       "symbol": "mhForge"
     },
     {
@@ -1277,8 +1433,8 @@
     },
     {
       "path": "fxdata/tables/screens.bin",
-      "sha256": "0d10a15fcf4e643875b41339198f01ccf0e8f019bccf609bfd20af051d05e931",
-      "size": 1080,
+      "sha256": "bd6032d2159cb1ede0fb8693851928b22504bfaffea219ec395826a7ce89c2d5",
+      "size": 1194,
       "symbol": "mhScreens"
     },
     {
@@ -1369,18 +1525,18 @@
   "outputs": [
     {
       "path": "fxdata/fxdata-data.bin",
-      "sha256": "cb54ed51e8c2a8dc03f054ece5d807a712fc43375975bd9d75880ab61e78dda8",
-      "size": 852590
+      "sha256": "49988ea59f18be29a615f278b8d4eb542c3927c1b1cdccb1122249c76770a013",
+      "size": 1556560
     },
     {
       "path": "fxdata/fxdata.bin",
-      "sha256": "3cc2be6da933693a81d739a0bf1d9156aa5a73e1c16325a6eb7be17dccfc7ace",
-      "size": 852736
+      "sha256": "d44a3dd77b90242297fa0c0b0ffd2c4a5a7c7995a496f975af3a26bbaf7fc8d3",
+      "size": 1556736
     },
     {
       "path": "fxdata/fxdata.h",
-      "sha256": "93a03aa6fcd541c3307fecffa049242a05a17124055ca7b758941377bf290001",
-      "size": 6771
+      "sha256": "98cea95543b5f09988b9ccebbc58df48496f55e5f50142c96e1cec5709451387",
+      "size": 7725
     },
     {
       "path": "fxdata/tables/armor.bin",
@@ -1389,8 +1545,8 @@
     },
     {
       "path": "fxdata/tables/cards.bin",
-      "sha256": "c641410ddde85deb8aa620745b6ee8e67ca5da9adc4112e6d03cecf4f5d718e1",
-      "size": 635
+      "sha256": "b3a51aa2a3f3ec96917311e1eafa27d6c5f58f48617726d2569ab0d9440b6684",
+      "size": 767
     },
     {
       "path": "fxdata/tables/combat.bin",
@@ -1399,8 +1555,8 @@
     },
     {
       "path": "fxdata/tables/equip.bin",
-      "sha256": "584258b67a72ddb5dd0439a756946c25e08c08103ee868dafe254c6c99f6ff25",
-      "size": 573
+      "sha256": "4e4d898d854d25bb490708ec7da37a3cfd58f0b86d33c4481f194ea0d6b5cc2a",
+      "size": 733
     },
     {
       "path": "fxdata/tables/items.bin",
@@ -1414,8 +1570,8 @@
     },
     {
       "path": "fxdata/tables/screens.bin",
-      "sha256": "0d10a15fcf4e643875b41339198f01ccf0e8f019bccf609bfd20af051d05e931",
-      "size": 1080
+      "sha256": "bd6032d2159cb1ede0fb8693851928b22504bfaffea219ec395826a7ce89c2d5",
+      "size": 1194
     },
     {
       "path": "fxdata/tables/smith.bin",
@@ -1424,8 +1580,8 @@
     },
     {
       "path": "src/fxdata.h",
-      "sha256": "93a03aa6fcd541c3307fecffa049242a05a17124055ca7b758941377bf290001",
-      "size": 6771
+      "sha256": "98cea95543b5f09988b9ccebbc58df48496f55e5f50142c96e1cec5709451387",
+      "size": 7725
     },
     {
       "path": "src/generated/armor_data.hpp",
@@ -1449,13 +1605,13 @@
     },
     {
       "path": "src/generated/art_sheets.hpp",
-      "sha256": "cd9cb8741c1793d4b965e0515c3fca5654b586acaeaee63a31da890ab638f497",
+      "sha256": "11ddd69725c15ecd3fbfb3f8ad28d2908c99ea14d5565da3b4e1a1a3df465287",
       "size": 4044
     },
     {
       "path": "src/generated/card_meta.hpp",
-      "sha256": "c49b8c599a3be72be509575027050dd4e8b7b999318425aa0bf3b232df653662",
-      "size": 4909
+      "sha256": "bb4f787a9eb2261a9c10b0f13a4ddf4c80c8594d0b01d4e91e1c4c2ced4cee17",
+      "size": 5303
     },
     {
       "path": "src/generated/combat_data.hpp",
@@ -1474,13 +1630,13 @@
     },
     {
       "path": "src/generated/equip_meta.hpp",
-      "sha256": "f09ca15567053b50a166e4b4ad6bb4896bc3e631219931c6dc6c72a5b0363e59",
-      "size": 16172
+      "sha256": "d54175bd0389f51fd0a7d453dfa86221a268bbda4ecd0977d0a640c53e650593",
+      "size": 20410
     },
     {
       "path": "src/generated/forge_meta.hpp",
-      "sha256": "cb7064f738fa934fa70eb1a81ab43b178f5ba1c44983ab667648f9a3792c43fd",
-      "size": 3195
+      "sha256": "28d8e675d5897dca825cf6fb1458ee3bedf0e8ce0374e33cab56e5a72281de11",
+      "size": 3577
     },
     {
       "path": "src/generated/items_data.hpp",
@@ -1514,7 +1670,7 @@
     },
     {
       "path": "src/generated/screen_meta.hpp",
-      "sha256": "5503241ffe088a10e8f5bad71d29c3cac4e603bc943f94b08f4d9f9e008fcca7",
+      "sha256": "f7181da35012f1d35f4ec8ef87daead8eb4a07f58b57c361349652b1432a89fd",
       "size": 4785
     },
     {
@@ -1529,8 +1685,8 @@
     },
     {
       "path": "src/generated/zone_meta.hpp",
-      "sha256": "c361847021e3b0df7a3b6dade9d074c35930caac931db984d542452bf3536cab",
-      "size": 8388
+      "sha256": "5d111b74208a73b0e89b8dc4f82ce6178a0a98debaab38b4a11a77ba5b16de42",
+      "size": 8390
     }
   ],
   "schema_version": 1

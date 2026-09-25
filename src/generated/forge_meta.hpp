@@ -14,10 +14,10 @@ namespace forge {
 constexpr uint16_t MAGIC = 0x4647;
 constexpr uint8_t VERSION = 1;
 constexpr uint8_t FLAGS = 0x00;
-constexpr uint16_t SIZE = 161;
+constexpr uint16_t SIZE = 229;
 constexpr uint8_t HEADER_SIZE = 8;
 constexpr uint8_t RECORD_SIZE = 17;
-constexpr uint8_t NODE_COUNT = 9;
+constexpr uint8_t NODE_COUNT = 13;
 constexpr uint8_t WEAPON_COUNT = 3;
 constexpr uint8_t MAT_SLOTS = 2;
 constexpr uint8_t NODE_NONE = 0xFF;
@@ -59,16 +59,24 @@ constexpr uint8_t NODE_GUN_T1 = 7;
 constexpr uint16_t NODE_GUN_T1_OFF = 127;
 constexpr uint8_t NODE_GUN_T2 = 8;
 constexpr uint16_t NODE_GUN_T2_OFF = 144;
+constexpr uint8_t NODE_GUN_BUCKLER = 9;
+constexpr uint16_t NODE_GUN_BUCKLER_OFF = 161;
+constexpr uint8_t NODE_GUN_KITE = 10;
+constexpr uint16_t NODE_GUN_KITE_OFF = 178;
+constexpr uint8_t NODE_GUN_TOWER = 11;
+constexpr uint16_t NODE_GUN_TOWER_OFF = 195;
+constexpr uint8_t NODE_GUN_BRACE = 12;
+constexpr uint16_t NODE_GUN_BRACE_OFF = 212;
 
 // Tree shape per node index: depth (root 0) and sibling ordinal. The FORGE
 // row labels bake the prefixes from these at gen time; host tests read them.
-constexpr uint8_t NODE_DEPTH[NODE_COUNT] = {0, 1, 2, 0, 1, 2, 0, 1, 2};
-constexpr uint8_t NODE_BRANCH[NODE_COUNT] = {0, 0, 0, 0, 0, 0, 0, 0, 0};
+constexpr uint8_t NODE_DEPTH[NODE_COUNT] = {0, 1, 2, 0, 1, 2, 0, 1, 2, 1, 1, 1, 1};
+constexpr uint8_t NODE_BRANCH[NODE_COUNT] = {0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 2, 3, 4};
 
 // Per-node upgrade cost (the forge bill's zenny, N_COST_OFF). The UPGRADE
 // screen resolves a class's next node and reads its cost here instead of a
 // runtime cart seek per row (hbk.13).
-constexpr uint16_t NODE_UPGRADE_COST[NODE_COUNT] = {0, 100, 250, 0, 120, 280, 0, 90, 220};
+constexpr uint16_t NODE_UPGRADE_COST[NODE_COUNT] = {0, 100, 250, 0, 120, 280, 0, 90, 220, 120, 150, 220, 280};
 
 // Class first-node index: NODE_<CLASS>_FIRST + n walks the class nodes in
 // data order (the FORGE/GEAR generated row blocks).
