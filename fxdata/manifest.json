@@ -1389,6 +1389,11 @@
       "path": "images/masks/fxpole_20x40.png",
       "sha256": "25b9cdbc2d805d1195fd5c3a94c53ebcfaffefb32e4ba02d62aa3afb42c07980",
       "size": 235
+    },
+    {
+      "path": "images/masks/mh_player_base_16x16.png",
+      "sha256": "351abb9dd1a9a954402264b1fd9ce91fa2e9258a84b1843364e15b651b8ac5f1",
+      "size": 1572
     }
   ],
   "outputs": [
@@ -1526,6 +1531,11 @@
       "path": "src/generated/items_meta.hpp",
       "sha256": "c31d89172333de2f10f7a9da2184d2fcf1575564690f4dead966e0d0f26ed360",
       "size": 1807
+    },
+    {
+      "path": "src/generated/player_boxes.hpp",
+      "sha256": "81b24ccc158404817601f3177597bd46035312d223d04eeddd6079d08a02c371",
+      "size": 1687
     },
     {
       "path": "src/generated/quest_meta.hpp",

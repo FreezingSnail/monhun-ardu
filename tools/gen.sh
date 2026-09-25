@@ -18,18 +18,21 @@ python3 tools/gen-items.py
 # and compile-time name tables can use the ids without the packed blob offsets.
 python3 tools/gen-items-ids.py
 
+# Hitbox masks (epic monhun-ardu-ryh, beads ryh.3/ryh.5): derive every creature
+# box from the artist-painted images/masks/*.png into build/hitboxes.json and
+# the player body/attack boxes into src/generated/player_boxes.hpp. MUST run
+# before the fxdump build below (game.hpp includes player_boxes.hpp) and before
+# gen-art.py (which crops the breakable-part overlay sheets to the mask bbox)
+# and gen-combat.py (which packs the mask-derived zone/body/collide/window
+# records).
+python3 tools/gen-hitboxes.py
+
 # Dump the core table dimensions (attack hw/hh/reach, monster hw/hh, whirl
 # radii) as JSON for gen-art.py. Host g++; the dumper includes the same
 # src/core/game.hpp the firmware uses, so art never duplicates a number.
 mkdir -p build
 g++ -std=c++17 -O2 -w tools/fxdump.cpp -o build/fxdump
 ./build/fxdump > build/fxdump.json
-
-# Hitbox masks (epic monhun-ardu-ryh, bead ryh.3): derive every creature box from
-# the artist-painted images/masks/*.png into build/hitboxes.json. Runs before
-# gen-art.py (which crops the breakable-part overlay sheets to the mask bbox) and
-# gen-combat.py (which packs the mask-derived zone/body/collide/window records).
-python3 tools/gen-hitboxes.py
 
 # Author source PNGs from mock/game.js shapes + FONT (deterministic). The
 # overlay/effect sheets are derived from build/fxdump.json; the same run emits

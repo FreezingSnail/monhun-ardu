@@ -10,10 +10,11 @@
 #include "progmem.hpp"
 #include "fp.hpp"
 #include "input.hpp"
-#include "fxmem.hpp"                      // FX cart offsets + mhFxRead* field readers (identity on host)
-#include "../generated/combat_meta.hpp"   // data facts (HAS_ZONES) gate the zone caches
-#include "../generated/items_meta.hpp"    // item ids/kinds + inventory cap (prg.2)
-#include "../armor_state.hpp"             // ArmorAgg: equipped-piece stat cache (arm.2)
+#include "fxmem.hpp"                       // FX cart offsets + mhFxRead* field readers (identity on host)
+#include "../generated/combat_meta.hpp"    // data facts (HAS_ZONES) gate the zone caches
+#include "../generated/items_meta.hpp"     // item ids/kinds + inventory cap (prg.2)
+#include "../generated/player_boxes.hpp"   // player body/attack boxes from the mask (ryh.5)
+#include "../armor_state.hpp"              // ArmorAgg: equipped-piece stat cache (arm.2)
 
 // Per-image zones carve (mirrors MH_AUDIO in src/audio.hpp): the on-device
 // perf bench and parity scenes run only MON_LUNGE/SWEEP/HEAVY, which never run a
@@ -273,6 +274,14 @@ struct WeaponDef {
     ShellDef chargeShells[2];   // held-A release shells (ynb); dead after the prg.11 carve
 };
 
+// Player attack boxes (reach, hw, hh) are authored in the painted mask
+// images/masks/mh_player_base_16x16.png and reach this table through
+// src/generated/player_boxes.hpp (bead monhun-ardu-ryh.5). MH_PLAYER_BOX(w, i)
+// splices the three mask-derived fields into an Attack literal; the second
+// index is the mask column order (attacks 0..2, special, roll, alt,
+// charge 0..1, branches 0..2).
+#define MH_PLAYER_BOX(w, i) playerboxes::ATTACKS[w][i].reach, playerboxes::ATTACKS[w][i].hw, playerboxes::ATTACKS[w][i].hh
+
 // On AVR the table lives on the FX cart as one packed 987 B blob (bead
 // monhun-ardu-ynb: 759 B base + 3 x 76 B charge/chargeShells per weapon): the shim below exposes the same `WEAPON_DEFS[i]` /
 // `&WEAPON_DEFS[i]` syntax, but every element is a fake 16-bit pointer into
@@ -297,50 +306,56 @@ MH_PROGMEM const WeaponDef WEAPON_DEFS[3] = {
     {
         W_SWORD,
         14,
-        {{3, 5, 8, 9, 13, 12, 10, 9, 0, 0, 0, false, ATK_NONE}, {3, 5, 8, 10, 13, 12, 10, 9, 0, 0, 0, false, ATK_NONE}, {5, 6, 14, 17, 16, 18, 14, 15, 0, 0, 0, false, ATK_NONE}},
-        {4, 6, 16, 24, 18, 20, 16, 20, 0, 0, 0, false, ATK_NONE},
-        {{1, ST_NONE, 0, {3, 5, 12, 12, 18, 14, 12, 10, 42, 0, 0, false, ATK_STEPSLASH}},
-         {2, ST_NONE, 0, {5, 7, 15, 20, 12, 28, 26, 16, 0, 0, 0, false, ATK_SPINCUT}},
-         {3, ST_NONE, 0, {8, 4, 20, 26, 16, 20, 22, 18, 0, 0, 0, false, ATK_NONE}}},
+        {{3, 5, 8, 9, MH_PLAYER_BOX(0, 0), 9, 0, 0, 0, false, ATK_NONE},
+         {3, 5, 8, 10, MH_PLAYER_BOX(0, 1), 9, 0, 0, 0, false, ATK_NONE},
+         {5, 6, 14, 17, MH_PLAYER_BOX(0, 2), 15, 0, 0, 0, false, ATK_NONE}},
+        {4, 6, 16, 24, MH_PLAYER_BOX(0, 3), 20, 0, 0, 0, false, ATK_NONE},
+        {{1, ST_NONE, 0, {3, 5, 12, 12, MH_PLAYER_BOX(0, 8), 10, 42, 0, 0, false, ATK_STEPSLASH}},
+         {2, ST_NONE, 0, {5, 7, 15, 20, MH_PLAYER_BOX(0, 9), 16, 0, 0, 0, false, ATK_SPINCUT}},
+         {3, ST_NONE, 0, {8, 4, 20, 26, MH_PLAYER_BOX(0, 10), 18, 0, 0, 0, false, ATK_NONE}}},
         true,
         {{0, 0, 0, 0, 0, 0, 0, 0}, {0, 0, 0, 0, 0, 0, 0, 0}},
-        {4, 5, 10, 12, 15, 16, 14, 10, 0, 0, 0, false, ATK_NONE},                                                   // rollslash
-        {6, 4, 12, 14, 22, 10, 10, 12, 20, 0, 0, false, ATK_NONE},                                                  // thrust (lunge 20)
-        {{0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, false, ATK_NONE}, {0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, false, ATK_NONE}},   // no charge
-        {{0, 0, 0, 0, 0, 0, 0, 0}, {0, 0, 0, 0, 0, 0, 0, 0}},                                                       // no charge shells
+        {4, 5, 10, 12, MH_PLAYER_BOX(0, 4), 10, 0, 0, 0, false, ATK_NONE},                                                                  // rollslash
+        {6, 4, 12, 14, MH_PLAYER_BOX(0, 5), 12, 20, 0, 0, false, ATK_NONE},                                                                 // thrust (lunge 20)
+        {{0, 0, 0, 0, MH_PLAYER_BOX(0, 6), 0, 0, 0, 0, false, ATK_NONE}, {0, 0, 0, 0, MH_PLAYER_BOX(0, 7), 0, 0, 0, 0, false, ATK_NONE}},   // no charge
+        {{0, 0, 0, 0, 0, 0, 0, 0}, {0, 0, 0, 0, 0, 0, 0, 0}},                                                                               // no charge shells
     },
     // flail: slow momentum chain, deflect step, whirl stance + ball throw
     {
         W_FLAIL,
         12,
-        {{8, 6, 9, 14, 19, 20, 16, 13, 0, 0, 0, false, ATK_NONE}, {6, 6, 9, 17, 21, 22, 16, 12, 0, 0, 0, false, ATK_NONE}, {5, 7, 15, 25, 24, 24, 20, 17, 0, 0, 0, false, ATK_NONE}},
-        {4, 8, 14, 27, 32, 14, 18, 22, 0, 0, 0, false, ATK_NONE},
-        {{1, ST_WHIRL, 50, {0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, false, ATK_NONE}},
-         {2, ST_NONE, 0, {5, 6, 16, 12, 22, 22, 14, 14, 0, 0, 1, false, ATK_TRIP}},
-         {3, ST_NONE, 0, {10, 6, 24, 32, 24, 32, 24, 24, 0, 12, 1, false, ATK_NONE}}},
+        {{8, 6, 9, 14, MH_PLAYER_BOX(1, 0), 13, 0, 0, 0, false, ATK_NONE},
+         {6, 6, 9, 17, MH_PLAYER_BOX(1, 1), 12, 0, 0, 0, false, ATK_NONE},
+         {5, 7, 15, 25, MH_PLAYER_BOX(1, 2), 17, 0, 0, 0, false, ATK_NONE}},
+        {4, 8, 14, 27, MH_PLAYER_BOX(1, 3), 22, 0, 0, 0, false, ATK_NONE},
+        {{1, ST_WHIRL, 50, {0, 0, 0, 0, MH_PLAYER_BOX(1, 8), 0, 0, 0, 0, false, ATK_NONE}},
+         {2, ST_NONE, 0, {5, 6, 16, 12, MH_PLAYER_BOX(1, 9), 14, 0, 0, 1, false, ATK_TRIP}},
+         {3, ST_NONE, 0, {10, 6, 24, 32, MH_PLAYER_BOX(1, 10), 24, 0, 12, 1, false, ATK_NONE}}},
         false,
         {{0, 0, 0, 0, 0, 0, 0, 0}, {0, 0, 0, 0, 0, 0, 0, 0}},
-        {4, 6, 13, 15, 20, 24, 16, 10, 0, 0, 0, false, ATK_NONE},     // rollsweep
-        {6, 6, 14, 18, 22, 30, 14, 14, 0, 0, 0, false, ATK_NONE},     // widesweep
-        {{4, 6, 14, 24, 26, 28, 18, 14, 0, 0, 0, false, ATK_NONE},    // chargeslam1
-         {5, 8, 20, 36, 28, 34, 24, 22, 0, 0, 1, false, ATK_NONE}},   // chargeslam2 (trip)
-        {{0, 0, 0, 0, 0, 0, 0, 0}, {0, 0, 0, 0, 0, 0, 0, 0}},         // no charge shells
+        {4, 6, 13, 15, MH_PLAYER_BOX(1, 4), 10, 0, 0, 0, false, ATK_NONE},     // rollsweep
+        {6, 6, 14, 18, MH_PLAYER_BOX(1, 5), 14, 0, 0, 0, false, ATK_NONE},     // widesweep
+        {{4, 6, 14, 24, MH_PLAYER_BOX(1, 6), 14, 0, 0, 0, false, ATK_NONE},    // chargeslam1
+         {5, 8, 20, 36, MH_PLAYER_BOX(1, 7), 22, 0, 0, 1, false, ATK_NONE}},   // chargeslam2 (trip)
+        {{0, 0, 0, 0, 0, 0, 0, 0}, {0, 0, 0, 0, 0, 0, 0, 0}},                  // no charge shells
     },
     // gunshield: slow walk, shove, guard stance + gun (ball / scatter)
     {
         W_GUN,
         7,
-        {{5, 4, 11, 6, 11, 14, 12, 8, 0, 0, 0, false, ATK_NONE}, {5, 4, 11, 7, 11, 14, 12, 8, 0, 0, 0, false, ATK_NONE}, {7, 5, 15, 11, 13, 16, 14, 13, 0, 0, 0, false, ATK_NONE}},
-        {6, 4, 16, 12, 44, 8, 6, 14, 0, 0, 0, false, ATK_NONE},   // arrowshot: hitscan special (reach 44)
-        {{1, ST_NONE, 0, {4, 5, 16, 22, 15, 18, 16, 6, 0, 0, 0, true, ATK_POINTBLANK}},
-         {2, ST_NONE, 0, {4, 4, 12, 9, 14, 16, 14, 8, 0, 12, 0, false, ATK_GUARDBASH}},
-         {3, ST_NONE, 0, {6, 3, 20, 30, 16, 24, 18, 16, 0, 16, 0, false, ATK_NONE}}},
+        {{5, 4, 11, 6, MH_PLAYER_BOX(2, 0), 8, 0, 0, 0, false, ATK_NONE},
+         {5, 4, 11, 7, MH_PLAYER_BOX(2, 1), 8, 0, 0, 0, false, ATK_NONE},
+         {7, 5, 15, 11, MH_PLAYER_BOX(2, 2), 13, 0, 0, 0, false, ATK_NONE}},
+        {6, 4, 16, 12, MH_PLAYER_BOX(2, 3), 14, 0, 0, 0, false, ATK_NONE},   // arrowshot: hitscan special (reach 44)
+        {{1, ST_NONE, 0, {4, 5, 16, 22, MH_PLAYER_BOX(2, 8), 6, 0, 0, 0, true, ATK_POINTBLANK}},
+         {2, ST_NONE, 0, {4, 4, 12, 9, MH_PLAYER_BOX(2, 9), 8, 0, 12, 0, false, ATK_GUARDBASH}},
+         {3, ST_NONE, 0, {6, 3, 20, 30, MH_PLAYER_BOX(2, 10), 16, 0, 16, 0, false, ATK_NONE}}},
         true,
         {{2, 28, 35, 7, 6, 70, 6, 1}, {5, 7, 42, 4, 4, 30, 5, 3}},
-        {3, 4, 12, 8, 14, 16, 14, 8, 30, 10, 0, false, ATK_NONE},                                                   // shieldbash (lunge 30, push 10)
-        {4, 5, 14, 10, 15, 18, 16, 9, 18, 14, 0, false, ATK_NONE},                                                  // shieldcharge (lunge 18, push 14)
-        {{0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, false, ATK_NONE}, {0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, false, ATK_NONE}},   // no melee charge
-        {{0, 34, 45, 7, 6, 70, 12, 1}, {0, 46, 55, 8, 8, 70, 18, 1}},                                               // charge ball L1/L2
+        {3, 4, 12, 8, MH_PLAYER_BOX(2, 4), 8, 30, 10, 0, false, ATK_NONE},                                                                  // shieldbash (lunge 30, push 10)
+        {4, 5, 14, 10, MH_PLAYER_BOX(2, 5), 9, 18, 14, 0, false, ATK_NONE},                                                                 // shieldcharge (lunge 18, push 14)
+        {{0, 0, 0, 0, MH_PLAYER_BOX(2, 6), 0, 0, 0, 0, false, ATK_NONE}, {0, 0, 0, 0, MH_PLAYER_BOX(2, 7), 0, 0, 0, 0, false, ATK_NONE}},   // no melee charge
+        {{0, 34, 45, 7, 6, 70, 12, 1}, {0, 46, 55, 8, 8, 70, 18, 1}},                                                                       // charge ball L1/L2
     },
 };
 #endif   // __AVR__

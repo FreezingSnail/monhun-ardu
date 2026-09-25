@@ -22,8 +22,11 @@ void Player::init(int8_t weapon) {
     (void)weapon;
     x = 96;
     y = 60;
-    w = 16;
-    h = 16;
+    // Body box authored in images/masks/mh_player_base_16x16.png and generated
+    // into src/generated/player_boxes.hpp (bead ryh.5): 16x16 at the shipped
+    // values, tightenable by the artist with no code change.
+    w = playerboxes::BODY_W;
+    h = playerboxes::BODY_H;
     subX = 0;
     subY = 0;
     remX = 0;

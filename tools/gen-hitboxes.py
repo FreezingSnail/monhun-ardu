@@ -50,6 +50,17 @@ the creature JSON; only geometry moves here. An attack with more than one window
 (a multi-window kit: sweep gore, ravager tail_sweep, heavy tail_spin) is left
 hand-authored until phase 2 decides its encoding, so its mask column stays blank.
 
+PLAYER MASK (bead ryh.5)
+------------------------
+`images/masks/mh_player_base_16x16.png` has no creature JSON: its cell is the
+16x16 player body cell, the collision/hurtbox bands are column-invariant (one
+hurt region, the green body), and the hitbox band carries one column per weapon
+attack entry, in table order (attacks 0..2, special, roll, alt, charge 0..1,
+branches 0..2) for the three weapons -- 33 columns. The converter writes the
+player body/collide box and a per-attack (reach, hw, hh) table to
+`src/generated/player_boxes.hpp`, which game.hpp's WEAPON_DEFS and the player's
+body literals read. A blank column is an all-zero attack (no box).
+
 VALIDATION (all hard failures)
 ------------------------------
 1. mask dims == cell x source columns (x3 bands); every mask symbol resolves;
@@ -93,6 +104,24 @@ COLLIDE_COLORS = {(255, 255, 0): "solid"}
 WINDOW_COLORS = [(255, 128, 0), (128, 0, 255), (0, 255, 255), (255, 0, 255)]
 BAND_PALETTE = {"collision": COLLIDE_COLORS, "hitbox": dict(zip(WINDOW_COLORS, [1, 2, 3, 4])),
                 "hurtbox": HURT_COLORS}
+
+# Player mask (epic monhun-ardu-ryh, bead ryh.5). The player has no creature
+# JSON, so its mask is resolved by symbol: cell 16x16 (the body cell), the
+# collision/hurtbox bands column-invariant, and the hitbox columns one per
+# WeaponDef attack entry so every weapon arc is paintable. The generated header
+# (src/generated/player_boxes.hpp) is what game.hpp's WEAPON_DEFS and
+# Player::init read; the column order below is the ABI the two sides share.
+PLAYER_SYMBOL = "mh_player_base"
+PLAYER_HEADER_REL = "src/generated/player_boxes.hpp"
+# One entry per weapon, in mask hitbox-column order: attacks[0..2], special,
+# roll, alt, charge[0..1], branches[0..2].
+PLAYER_ENTRY_COLUMNS = (
+    ("attacks", 0), ("attacks", 1), ("attacks", 2), ("special", 0),
+    ("roll", 0), ("alt", 0), ("charge", 0), ("charge", 1),
+    ("branch", 0), ("branch", 1), ("branch", 2),
+)
+PLAYER_WEAPON_COUNT = 3
+PLAYER_NCOLS = PLAYER_WEAPON_COUNT * len(PLAYER_ENTRY_COLUMNS)
 
 # Palette reverse maps for review images.
 REV = {
@@ -428,6 +457,113 @@ def _attack_cell_matches_stats(parsed, creature, label):
                         "centre is body-relative)" % (label, parsed["cell"], stats["w"], stats["h"]))
 
 
+# ----------------------------------------------------------------- player mask
+
+
+def derive_player(parsed, label):
+    """Validate + derive the player body/collide box and one rect (or none) per
+    mask hitbox column. The player has no hurt zones: one solid hurt region (the
+    body painted green) is the whole contract."""
+    found = parsed["bands"]["hurtbox"][0]
+    zones = {}
+    for color, points in found.items():
+        if points:
+            zones[HURT_COLORS[color]] = _region_stats(label, "hurtbox", 0, color, points, solid=True)
+    extra = sorted(n for n in zones if n != "body")
+    if extra:
+        raise MaskError("%s: player mask paints %s (the player has no hurt zones)"
+                        % (label, ", ".join(extra)))
+    body = zones.get("body")
+    if body is None:
+        raise MaskError("%s: player hurtbox band paints no body region" % label)
+    if body["w"] <= 0 or body["h"] <= 0:
+        raise MaskError("%s: player body box %s is empty" % (label, box_tuple(body)))
+    _leaves_frame(label, "body", body, parsed)
+    collide = collide_region(parsed, label)
+    if collide is None:
+        collide = {"ox": body["ox"], "oy": body["oy"], "w": body["w"], "h": body["h"]}
+    _leaves_frame(label, "collide", collide, parsed)
+    columns = []
+    for col in range(parsed["ncols"]):
+        regions = window_regions(parsed, col, label)
+        if len(regions) > 1:
+            raise MaskError("%s: hitbox col %d paints %d windows (player attacks are single-window)"
+                            % (label, col, len(regions)))
+        columns.append(regions[0] if regions else None)
+    if len(columns) != PLAYER_NCOLS:
+        raise MaskError("%s: player mask has %d hitbox columns, want %d (one per attack entry)"
+                        % (label, len(columns), PLAYER_NCOLS))
+    return body, collide, columns
+
+
+def cell_rect_to_attack(box, body, label, col):
+    """Mask hit rect -> the packed attack box (reach, hw, hh). The rect is the
+    sim's meleeHitbox() rect for an east-facing hunter: centred vertically on the
+    body centre, offset `reach` along x. A rect that is not vertically centred
+    cannot be represented (meleeHitbox has no vertical offset field)."""
+    cx = body["ox"] + body["w"] // 2
+    cy = body["oy"] + body["h"] // 2
+    hw, hh = box["w"], box["h"]
+    want_oy = cy - (hh >> 1)
+    if box["oy"] != want_oy:
+        raise MaskError("%s: hitbox col %d rect %s is not centred on the body y (want oy %d)"
+                        % (label, col, box_tuple(box), want_oy))
+    return [box["ox"] - cx + (hw >> 1), hw, hh]
+
+
+def _player_header_text(body, collide, columns):
+    lines = []
+    lines.append("// Generated by tools/gen-hitboxes.py from")
+    lines.append("// images/masks/mh_player_base_16x16.png (make gen). Do not hand-edit:")
+    lines.append("// paint the mask and regenerate. The player body/collide box and")
+    lines.append("// every weapon attack box (reach/hw/hh) come from this header;")
+    lines.append("// game.hpp WEAPON_DEFS and Player::init read it.")
+    lines.append("#pragma once")
+    lines.append("")
+    lines.append("#include <stdint.h>")
+    lines.append("")
+    lines.append("namespace mh {")
+    lines.append("namespace playerboxes {")
+    lines.append("")
+    lines.append("// Player body box (the mask's green hurtbox region; its origin is the")
+    lines.append("// art anchor, same contract as the creature zone boxes). collide is")
+    lines.append("// the yellow region, the box syncMonsterTarget/pushApart resolve")
+    lines.append("// against.")
+    lines.append("constexpr int16_t BODY_OX = %d;" % body["ox"])
+    lines.append("constexpr int16_t BODY_OY = %d;" % body["oy"])
+    lines.append("constexpr int16_t BODY_W = %d;" % body["w"])
+    lines.append("constexpr int16_t BODY_H = %d;" % body["h"])
+    lines.append("constexpr int16_t COLLIDE_OX = %d;" % collide["ox"])
+    lines.append("constexpr int16_t COLLIDE_OY = %d;" % collide["oy"])
+    lines.append("constexpr int16_t COLLIDE_W = %d;" % collide["w"])
+    lines.append("constexpr int16_t COLLIDE_H = %d;" % collide["h"])
+    lines.append("")
+    lines.append("// One attack: reach (centre offset along the facing vector), hw/hh (the")
+    lines.append("// melee box size). A zero box is an entry the mask leaves blank.")
+    lines.append("struct Box {")
+    lines.append("    int16_t reach, hw, hh;")
+    lines.append("};")
+    lines.append("")
+    lines.append("// Per weapon, mask hitbox-column order: attacks[0..2], special, roll,")
+    lines.append("// alt, charge[0..1], branches[0..2].")
+    lines.append("constexpr Box ATTACKS[%d][%d] = {" % (PLAYER_WEAPON_COUNT, len(PLAYER_ENTRY_COLUMNS)))
+    for w in range(PLAYER_WEAPON_COUNT):
+        base = w * len(PLAYER_ENTRY_COLUMNS)
+        rows = []
+        for i in range(len(PLAYER_ENTRY_COLUMNS)):
+            box = columns[base + i]
+            if box is None:
+                rows.append("{0, 0, 0}")
+            else:
+                rows.append("{%d, %d, %d}" % (box[0], box[1], box[2]))
+        lines.append("    {" + ", ".join(rows) + "},")
+    lines.append("};")
+    lines.append("")
+    lines.append("}  // namespace playerboxes")
+    lines.append("}  // namespace mh")
+    return "\n".join(lines) + "\n"
+
+
 # ----------------------------------------------------------------------- main
 
 
@@ -437,9 +573,22 @@ def process(root):
     masks = discover_masks(root)
     hitboxes = {}
     masked = set()
+    player = None
 
     for symbol in sorted(masks):
         path, cell_w, cell_h = masks[symbol]
+        if symbol == PLAYER_SYMBOL:
+            parsed = parse_mask(path, symbol, cell_w, cell_h, PLAYER_NCOLS)
+            body, collide, columns = derive_player(parsed, path)
+            attacks = [cell_rect_to_attack(b, body, path, i) if b is not None else [0, 0, 0]
+                       for i, b in enumerate(columns)]
+            player = {"body": body, "collide": collide, "attacks": attacks}
+            header = os.path.join(root, PLAYER_HEADER_REL)
+            os.makedirs(os.path.dirname(header), exist_ok=True)
+            with open(header, "w", encoding="utf-8", newline="\n") as handle:
+                handle.write(_player_header_text(body, collide, attacks))
+            print("gen-hitboxes: player boxes -> %s" % PLAYER_HEADER_REL)
+            continue
         cid, role = resolve_symbol(creatures, symbol)
         creature = creatures[cid]
         ncols = source_columns(blocks, symbol)
@@ -465,6 +614,8 @@ def process(root):
 
     out = {"version": 2, "bands": list(BANDS),
            "creatures": {cid: hitboxes[cid] for cid in sorted(hitboxes)}}
+    if player is not None:
+        out["player"] = player
     path = os.path.join(root, OUT_REL)
     os.makedirs(os.path.dirname(path), exist_ok=True)
     with open(path, "w", encoding="utf-8", newline="\n") as handle:
