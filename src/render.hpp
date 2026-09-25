@@ -914,6 +914,16 @@ static inline uint8_t weaponMoveSlot(const mh::Player &p, const mh::Attack *a) {
     return p.chain > 2 ? 2 : static_cast<uint8_t>(p.chain);
 }
 
+// Sheet offset for one weapon: generated constants, folded at compile time (no
+// RAM table on AVR).
+static inline uint24_t weaponSheet(uint8_t weapon) {
+    if (weapon == mh::W_SWORD)
+        return static_cast<uint24_t>(equip::SHEET_OFF_MH_WEAPON_SWORD);
+    if (weapon == mh::W_FLAIL)
+        return static_cast<uint24_t>(equip::SHEET_OFF_MH_WEAPON_FLAIL);
+    return static_cast<uint24_t>(equip::SHEET_OFF_MH_WEAPON_GUN);
+}
+
 static void drawPlayer(const mh::Game &g, int16_t camX, int16_t camY) {
     const mh::Player &p = g.player;
     const int16_t x = static_cast<int16_t>(rndPx(p.x, p.subX) - camX);
@@ -951,109 +961,80 @@ static void drawPlayer(const mh::Game &g, int16_t camX, int16_t camY) {
         phase = p.t < startup ? 0 : (p.t < startup + active ? 1 : 2);
     }
 
-    // Stowed: skip the weapon overlay entirely (body + head only), exactly like
-    // mock drawPlayer()'s `if (p.sheathed) {}` branch.
+    // Weapon overlay (docs/weapon-art.md): all three weapons share the row
+    // table; per-weapon branches add only their extra parts (riposte rim, whirl
+    // ring/ball, arrowshot tracer) and pick the stance rows.
     if (!p.sheathed) {
-        if (g.weapon == mh::W_SWORD) {
-            // Row per move slot (docs/weapon-art.md): startup rows are
-            // hand-centred, active rows box-centred on the same point the
-            // melee test resolves against.
-            uint8_t row = wpn::ROW_IDLE;
-            int16_t rx = cx;
-            int16_t ry = cy;
-            if (a) {
-                const int16_t reach = mh::attackReach(a);
-                const int16_t hx = static_cast<int16_t>(cx + ((p.fx * reach) >> 4));
-                const int16_t hy = static_cast<int16_t>(cy + ((p.fy * reach) >> 4));
-                const uint8_t base = mhPgmReadU8(&wpn::MOVE_ROW[0][weaponMoveSlot(p, a)]);
-                if (phase == 1) {
-                    row = static_cast<uint8_t>(base + 1);
+        const uint24_t sheet = weaponSheet(g.weapon);
+        // Row per move slot: startup rows are hand-centred, active rows
+        // box-centred on the point the melee test resolves against. The gun's
+        // arrowshot is muzzle-referenced instead: its box is the hitscan reach,
+        // not a hit area (docs/weapon-art.md).
+        uint8_t row = wpn::ROW_IDLE;
+        int16_t rx = cx;
+        int16_t ry = cy;
+        if (a) {
+            const int16_t reach = mh::attackReach(a);
+            const int16_t hx = static_cast<int16_t>(cx + ((p.fx * reach) >> 4));
+            const int16_t hy = static_cast<int16_t>(cy + ((p.fy * reach) >> 4));
+            const uint8_t base = mhPgmReadU8(&wpn::MOVE_ROW[g.weapon][weaponMoveSlot(p, a)]);
+            if (phase == 1) {
+                row = static_cast<uint8_t>(base + 1);
+                if (!(g.weapon == mh::W_GUN && p.state == mh::PS_SPECIAL)) {
                     rx = hx;
                     ry = hy;
-                } else if (phase == 0) {
-                    row = base;
-                } else {
-                    row = wpn::ROW_RECOVER;
                 }
-                if (p.state == mh::PS_SPECIAL && p.riposteT > 0)
-                    weaponRowDraw(equip::SHEET_OFF_MH_WEAPON_SWORD, wpn::ROW_RIM, face, hx, hy);
-            } else if (p.stance == mh::ST_PARRY) {
-                row = wpn::ROW_STANCE;
-            } else if (p.state == mh::PS_DODGE) {
-                row = wpn::ROW_DODGE;
-            } else if (p.state == mh::PS_STUN) {
-                row = wpn::ROW_STUN;
-            }
-            weaponRowDraw(equip::SHEET_OFF_MH_WEAPON_SWORD, row, face, rx, ry);
-        } else if (g.weapon == mh::W_FLAIL) {
-            if (p.stance == mh::ST_WHIRL) {
-                // Mock drawPlayer() whirl: six 2x2 light dots on the exact ellipse
-                // (cx + round(cos(a)*20), cy + round(sin(a)*14)) at ring angle
-                // a = tick*0.35 rad + i*60deg, then the white ball at tick*0.55 rad.
-                // The rates fold to 256-units/turn as ANG_WHIRL_RING/BALL
-                // (0.35 rad -> 14, 0.55 -> 22), and the ellipse radii come from
-                // art_dims (fxdump), so the mock stays the orbit reference.
-                //
-                // The 6 dots are pre-composited into one 24-phase sprite by
-                // tools/gen-art.py (bead monhun-ardu-836) using the same SIN65 Q4
-                // table + mulQ4 rounding, so one ring blit replaces six. Phase =
-                // the ring angle's bin: (ang * phases) >> 8; the baked frames sit
-                // at the bin centres, so the worst-case angular error is
-                // 256/(2*phases) units -- the intentional quantization.
-                const uint8_t ang = static_cast<uint8_t>(p.whirlTick * ANG_WHIRL_RING);
-                const uint8_t phase = static_cast<uint8_t>((static_cast<uint16_t>(ang) * art_dims::whirlring_frames) >> 8);
-                partVariantDraw(equip::PART_FLAIL_RING, phase, cx, cy);
-                const uint8_t ba = static_cast<uint8_t>(p.whirlTick * ANG_WHIRL_BALL);
-                partDraw(equip::PART_FLAIL_BALL, equip::POSE_WHIRL, face, cx + mulQ4(cos256(ba), 20), cy + mulQ4(sin256(ba), 14));
-            } else if (p.state == mh::PS_ATTACK || p.state == mh::PS_SPECIAL) {
-                if (a) {
-                    int16_t reach = mh::attackReach(a);
-                    if (phase != 1)
-                        reach = static_cast<int16_t>(reach / 2);   // mock 0.5 chain
-                    // 1x1 light dots from the reach/aim math (8-way facing, halved
-                    // startup/recovery reach, trip branch reach 12); the ball is
-                    // the 4x4 white chip, both at the mock's exact positions.
-                    for (int8_t i = 1; i <= 3; i++) {
-                        const int16_t rr = static_cast<int16_t>((reach * i) >> 2);
-                        partDraw(equip::PART_FLAIL_CHAIN, equip::POSE_IDLE, face, static_cast<int16_t>(cx + ((p.fx * rr) >> 4)), static_cast<int16_t>(cy + ((p.fy * rr) >> 4)));
-                    }
-                    partDraw(equip::PART_CHIP_BALL, equip::POSE_IDLE, face, static_cast<int16_t>(cx + ((p.fx * reach) >> 4)), static_cast<int16_t>(cy + ((p.fy * reach) >> 4)));
-                }
+            } else if (phase == 0) {
+                row = base;
             } else {
-                partDraw(equip::PART_FLAIL_CHAIN, equip::POSE_IDLE, face, static_cast<int16_t>(cx + ((p.fx * 4) >> 4)), static_cast<int16_t>(cy + ((p.fy * 4) >> 4)));
-                partDraw(equip::PART_SWORD_CHIP, equip::POSE_IDLE, face, static_cast<int16_t>(cx + ((p.fx * 9) >> 4)), static_cast<int16_t>(cy + ((p.fy * 9) >> 4)));
+                row = wpn::ROW_RECOVER;
             }
-            if (p.state == mh::PS_DEFLECT) {
-                // Two light bars; frame centred on the 16 px body.
-                partDraw(equip::PART_DEFLECT, equip::POSE_DEFLECT, face, cx, cy);
-            }
-        } else {   // gunshield
-            const int16_t shx = static_cast<int16_t>(cx + ((p.fx * 5) >> 4));
-            const int16_t shy = static_cast<int16_t>(cy + ((p.fy * 5) >> 4));
-            if (p.state == mh::PS_SHOVE) {
-                // poseMap shove = frame 2 of the same plate sheet, drawn alone so
-                // the shield reads as a bash instead of a wide static plate. p.t
-                // counts 10 -> 1 over the shove (player.hpp PS_SHOVE case), so
-                // thrust = 4 + (p.t * 6) / 10 starts at 10 px (E facing) on the
-                // first tick and retracts to 4 px by the last. The shove plate is
-                // drawn 1 px left inside its cell (anchor 5 vs the idle/guard 6),
-                // so +1 on the reference re-centres the shared record anchor.
-                const int16_t thrust = static_cast<int16_t>(4 + (p.t * 6) / 10);
-                const int16_t shx2 = static_cast<int16_t>(shx + ((p.fx * thrust) >> 4) + 1);
-                const int16_t shy2 = static_cast<int16_t>(shy + ((p.fy * thrust) >> 4));
-                partDraw(equip::PART_GUN_GUARD, equip::POSE_SHOVE, face, shx2, shy2);
-            } else {
-                // 12x16 plate frame, plate at frame local 1,1: shield centre as ref.
-                // Guard selects the fully lit plate via the record's poseMap (frame 1),
-                // the idle plate is frame 0; FRAME() applies the per-plane stride.
-                partDraw(equip::PART_GUN_GUARD, p.stance == mh::ST_GUARD ? equip::POSE_GUARD : equip::POSE_IDLE, face, shx, shy);
-            }
-            if (p.state == mh::PS_SPECIAL && phase == 1 && a) {
+            if (g.weapon == mh::W_SWORD && p.state == mh::PS_SPECIAL && p.riposteT > 0)
+                weaponRowDraw(sheet, wpn::ROW_RIM, face, hx, hy);
+            if (g.weapon == mh::W_GUN && p.state == mh::PS_SPECIAL && phase == 1) {
                 // Hitscan arrowshot: slug tracer at the hit reach -- the exact
                 // point meleeHitbox resolves against, so the read never lies.
-                const int16_t reach = mh::attackReach(a);
-                sprDraw(fxball, static_cast<int16_t>(cx + ((p.fx * reach) >> 4) - 3), static_cast<int16_t>(cy + ((p.fy * reach) >> 4) - 4), FRAME(0));
+                sprDraw(fxball, static_cast<int16_t>(hx - 3), static_cast<int16_t>(hy - 4), FRAME(0));
             }
+        } else if (p.stance != mh::ST_NONE) {
+            row = wpn::ROW_STANCE;
+        } else if (p.state == mh::PS_DODGE) {
+            row = wpn::ROW_DODGE;
+        } else if (p.state == mh::PS_DEFLECT || p.state == mh::PS_SHOVE) {
+            row = wpn::ROW_DEFENSE;
+            if (g.weapon == mh::W_GUN) {
+                // Shove retract (player.hpp PS_SHOVE): p.t counts 10 -> 1, so the
+                // thrust runs 10 -> 4 px along the facing and the plate retracts.
+                const int16_t thrust = static_cast<int16_t>(4 + (p.t * 6) / 10);
+                rx = static_cast<int16_t>(rx + ((p.fx * thrust) >> 4));
+                ry = static_cast<int16_t>(ry + ((p.fy * thrust) >> 4));
+            }
+        } else if (p.state == mh::PS_STUN) {
+            row = wpn::ROW_STUN;
+        }
+        // Guard stays up while the gun fires from the stance (B held).
+        if (a && g.weapon == mh::W_GUN && p.stance != mh::ST_NONE)
+            weaponRowDraw(sheet, wpn::ROW_STANCE, face, cx, cy);
+        weaponRowDraw(sheet, row, face, rx, ry);
+        if (g.weapon == mh::W_FLAIL && p.stance == mh::ST_WHIRL) {
+            // Mock drawPlayer() whirl: six 2x2 light dots on the exact ellipse
+            // (cx + round(cos(a)*20), cy + round(sin(a)*14)) at ring angle
+            // a = tick*0.35 rad + i*60deg, then the white ball at tick*0.55 rad.
+            // The rates fold to 256-units/turn as ANG_WHIRL_RING/BALL
+            // (0.35 rad -> 14, 0.55 -> 22), and the ellipse radii come from
+            // art_dims (fxdump), so the mock stays the orbit reference.
+            //
+            // The 6 dots are pre-composited into one 24-phase sprite by
+            // tools/gen-art.py (bead monhun-ardu-836) using the same SIN65 Q4
+            // table + mulQ4 rounding, so one ring blit replaces six. Phase =
+            // the ring angle's bin: (ang * phases) >> 8; the baked frames sit
+            // at the bin centres, so the worst-case angular error is
+            // 256/(2*phases) units -- the intentional quantization.
+            const uint8_t ang = static_cast<uint8_t>(p.whirlTick * ANG_WHIRL_RING);
+            const uint8_t ring = static_cast<uint8_t>((static_cast<uint16_t>(ang) * art_dims::whirlring_frames) >> 8);
+            const uint8_t ba = static_cast<uint8_t>(p.whirlTick * ANG_WHIRL_BALL);
+            partVariantDraw(equip::PART_FLAIL_RING, ring, cx, cy);
+            partDraw(equip::PART_FLAIL_BALL, equip::POSE_WHIRL, face, cx + mulQ4(cos256(ba), 20), cy + mulQ4(sin256(ba), 14));
         }
     }   // !p.sheathed
 

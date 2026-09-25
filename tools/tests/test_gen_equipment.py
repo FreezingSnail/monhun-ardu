@@ -352,10 +352,10 @@ class GenEquipmentTests(unittest.TestCase):
 """
 
     @staticmethod
-    def move(reach, hw, hh, mid=0, active=5, lunge=0):
+    def move(reach, hw, hh, mid=0, active=5, lunge=0, push=0, effect=0, shell=0):
         return {"startup": 3, "active": active, "recover": 8, "dmg": 5, "reach": reach,
-                "hw": hw, "hh": hh, "stam": 5, "lunge": lunge, "push": 0,
-                "effect": 0, "shell": 0, "id": mid}
+                "hw": hw, "hh": hh, "stam": 5, "lunge": lunge, "push": push,
+                "effect": effect, "shell": shell, "id": mid}
 
     def install_mirror_sword(self):
         """Turn the fixture's weapon_sword into a mirror-authored sheet plus the
@@ -378,13 +378,31 @@ class GenEquipmentTests(unittest.TestCase):
             "roll": self.move(15, 16, 14, mid=7),
             "charge": [self.move(0, 0, 0), self.move(0, 0, 0)],
         }
-        zero = {"name": "x", "attacks": [self.move(0, 0, 0)] * 3,
-                "special": self.move(0, 0, 0), "branches": [self.move(0, 0, 0)] * 3,
-                "alt": self.move(0, 0, 0), "roll": self.move(0, 0, 0),
-                "charge": [self.move(0, 0, 0)] * 2}
+        flail = {
+            "name": "flail",
+            "attacks": [self.move(19, 20, 16), self.move(21, 22, 16), self.move(24, 24, 20)],
+            "special": self.move(32, 14, 18),
+            "branches": [self.move(0, 0, 0),
+                         self.move(22, 22, 14, mid=3, effect=1),
+                         self.move(24, 32, 24, mid=9, active=6)],
+            "alt": self.move(22, 30, 14, mid=6),
+            "roll": self.move(20, 24, 16, mid=7),
+            "charge": [self.move(26, 28, 18, mid=8), self.move(0, 0, 0)],
+        }
+        gun = {
+            "name": "gunshield",
+            "attacks": [self.move(11, 14, 12), self.move(11, 14, 12), self.move(13, 16, 14)],
+            "special": self.move(44, 8, 6),
+            "branches": [self.move(16, 22, 6, mid=4, shell=1),
+                         self.move(14, 16, 14, mid=5, push=12),
+                         self.move(16, 24, 18, mid=9)],
+            "alt": self.move(15, 18, 16, mid=6, lunge=18, push=14),
+            "roll": self.move(14, 16, 14, mid=7, lunge=30, push=10),
+            "charge": [self.move(0, 0, 0), self.move(0, 0, 0)],
+        }
         os.makedirs(self.path("build"), exist_ok=True)
         with open(self.path("build", "fxdump.json"), "w", encoding="utf-8", newline="\n") as handle:
-            json.dump({"weapons": [sword, zero, zero]}, handle)
+            json.dump({"weapons": [sword, flail, gun]}, handle)
         self.write_text("src/core/game.hpp", self.ATK_ENUM)
 
     def test_mirror_source_authors_sheet_and_layout_plan(self):
@@ -431,37 +449,38 @@ class GenEquipmentTests(unittest.TestCase):
         return ge
 
     def test_mirror_art_inks_the_active_boxes(self):
-        # The art derives each move from the fixture's move records: every
+        # Every weapon's art derives each move from the fixture's records: every
         # active row must ink its hit box and the box front half
-        # (docs/weapon-art.md). Startup rows keep the blade on the hunter's side
-        # of the box (no ink in the box's front half).
+        # (docs/weapon-art.md); startup rows must differ from the strike row.
         self.install_mirror_sword()
         ge = self.load_art_module()
         ge.ATK_IDS = ge.load_atk_ids(self.case)
         ge.WEAPON_MOVES = ge.load_weapon_moves(self.case)
-        for slot, record in enumerate(ge.WEAPON_MOVES[0]):
-            if record is None or not record["hw"]:
-                continue
-            hw, hh = record["hw"], record["hh"]
-            box = [(x, y) for y in range(16 - hh // 2, 16 + (hh + 1) // 2)
-                   for x in range(16 - hw // 2, 16 + (hw + 1) // 2)]
-            for row, what in ((ge.WEAPON_ROW_MOVE0 + 2 * slot, "startup"),
-                              (ge.WEAPON_ROW_MOVE0 + 2 * slot + 1, "active")):
-                img = ge.sword_cell(row, 0)
-                self.assertIsNotNone(img, "slot %d %s: no art" % (slot, what))
-                px = img.load()
-                inside = [(x, y) for (x, y) in box if px[x, y][3] > 0]
-                if what == "active":
-                    self.assertTrue(inside, "slot %d active: no ink in the hit box" % slot)
-                    self.assertTrue(any(x > 16 for x, _ in inside),
-                                    "slot %d active: no ink in the box front half" % slot)
-                    self.assertTrue(any(px[x, y] == (255, 255, 255, 255) for (x, y) in inside),
-                                    "slot %d active: no blade core in the hit box" % slot)
-                else:
-                    self.assertTrue(any(px[x, y][3] > 0 for (x, y) in box),
-                                    "slot %d startup: no ink near the box" % slot)
-                    self.assertNotEqual(img.tobytes(), ge.sword_cell(row + 1, 0).tobytes(),
-                                        "slot %d: startup equals active" % slot)
+        for weapon, item in enumerate(("weapon_sword", "weapon_flail", "weapon_gun")):
+            art = ge.WEAPON_ART[item]
+            for slot, record in enumerate(ge.WEAPON_MOVES[weapon]):
+                if record is None or not record["hw"]:
+                    continue
+                hw, hh = record["hw"], record["hh"]
+                box = [(x, y) for y in range(16 - hh // 2, 16 + (hh + 1) // 2)
+                       for x in range(16 - hw // 2, 16 + (hw + 1) // 2)]
+                for row, what in ((ge.WEAPON_ROW_MOVE0 + 2 * slot, "startup"),
+                                  (ge.WEAPON_ROW_MOVE0 + 2 * slot + 1, "active")):
+                    img = art(row, 0)
+                    self.assertIsNotNone(img, "%s slot %d %s: no art" % (item, slot, what))
+                    px = img.load()
+                    inside = [(x, y) for (x, y) in box if px[x, y][3] > 0]
+                    if what == "active":
+                        self.assertTrue(inside, "%s slot %d active: no ink in the hit box" % (item, slot))
+                        self.assertTrue(any(x > 16 for x, _ in inside),
+                                        "%s slot %d active: no ink in the box front half" % (item, slot))
+                        self.assertTrue(any(px[x, y][3] and px[x, y][0] >= 170 for (x, y) in inside),
+                                        "%s slot %d active: no bright core in the hit box" % (item, slot))
+                    else:
+                        self.assertTrue(any(px[x, y][3] > 0 for (x, y) in box),
+                                        "%s slot %d startup: no ink near the box" % (item, slot))
+                        self.assertNotEqual(img.tobytes(), art(row + 1, 0).tobytes(),
+                                            "%s slot %d: startup equals active" % (item, slot))
 
 
 LAYERED_FIXTURE = os.path.join(HERE, "fixtures", "gen_equipment", "layered")

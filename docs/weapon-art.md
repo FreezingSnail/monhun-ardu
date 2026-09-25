@@ -1,11 +1,11 @@
 # Weapon art pass — sword / flail / gunshield sheets (design freeze)
 
-Status: design accepted (2026-09-25). Supersedes the legacy block-overlay weapon
-draw (fxslash / fxguard / fxwhirl chain) for the three player weapons.
+Status: landed (2026-09-25, epic monhun-ardu-bhp). All three weapon sheets are
+authored and the render draws them; the legacy block overlays are retired.
 
 Goal: every player weapon draws from **its own authored 32x32 sheet** in the
 equipment format, with one art pose per **move** (combo chain, special, branch,
-roll, alt, charge) instead of the current shared grey boxes / plate, so the
+roll, alt, charge) instead of the old shared grey boxes / plate, so the
 silhouette tells the move before the box lands.
 
 ## Sheet format (the "new image format" applied to equipment)
@@ -126,20 +126,25 @@ angle, and the tooling test asserts ink in the box and across its front half.
 
 ## Render changes
 
-- `drawPlayer` picks the weapon rows through `weaponRowDraw(sheet, row, face,
-  rx, ry)`: the sheet offset is a generated constant
-  (`equip::SHEET_OFF_MH_WEAPON_<W>`), the cell (32x32) and anchor (16,16) are
-  fixed by the equipment schema, so the weapon path skips the cart part-record
-  read. The part record stays for the catalog + tests.
-- Attack rows come from `wpn::MOVE_ROW[w][weaponMoveSlot(p, a)] + phase`; state
-  rows from the table above. Startup/state rows are referenced at the player
-  centre, active rows at the hitbox centre.
-- Retire the legacy gen-art records once the sheets cover their draw sites:
-  `sword_slash`, `sword_parry`, `sword_riposte`, `sword_chip`, `gun_guard`,
-  `gun_reload`, `flail_chain`, `flail_ball`, `chip_ball`, `deflect`, and the
-  fxslash/fxguard/fxparry/fxripspecial/fxwhirl(chain/ball) block sheets.
-  Kept: `flail_ring` (24-phase orbit, 48x32 cell), `flail_stun`, `erase`.
-- Delete the per-weapon overlay branches in `drawPlayer` that those records fed.
+- One path for all three weapons: `weaponSheet(g.weapon)` picks the generated
+  sheet constant, `weaponRowDraw(sheet, row, face, rx, ry)` draws the row (cell
+  32x32 / anchor 16,16 are fixed by the schema, so no cart record read). Attack
+  rows come from `wpn::MOVE_ROW[w][weaponMoveSlot(p, a)] + phase`; state rows
+  from the table above. Startup/state rows are referenced at the player centre,
+  active rows at the hitbox centre.
+- Extras stay per weapon: sword riposte rim (row 26 over the special active),
+  flail whirl ring/ball + stun sparkle, gun arrowshot tracer + the guard plate
+  staying up while the shot fires from the stance. The gun's arrowshot active
+  row is **muzzle-referenced** (hand) because its box is the hitscan reach, not
+  a hit area.
+- Retired equip records (deleted): `sword_slash`, `sword_parry`,
+  `sword_riposte`, `sword_chip`, `chip_ball`, `gun_guard`, `gun_reload`,
+  `flail_chain`, `deflect`. Kept: `flail_ring` (24-phase orbit), `flail_ball`,
+  `flail_stun`, `erase`.
+- Follow-up: the block sheets those records fed (`fxslash`, `fxguard`,
+  `fxparry`, `fxripspecial`, `fxchip`, `fxdeflect`, `fxreload`, and the
+  chain-only `fxwhirl` frames) are dead cart data and get their own cleanup bead
+  (`monhun-ardu-bhp.8`) with the `art_dims` / asset-test sweep.
 
 ## Verification
 
@@ -151,6 +156,7 @@ angle, and the tooling test asserts ink in the box and across its front half.
   validations fail loudly.
 - `tools/gen-hitboxes.py --render` / `build/scratch/` composite review PNG shows
   art + mask boxes for eyeballing before device flash.
-- Budget: `make size-line` after each layer; the wave plans against
-  `free - 300 B` (baseline 29426/29696, 270 free at design freeze) and must not
-  land below ~150 B free. Spike reports the whole-image delta before the wave.
+- Budget: landed at **29160/29696 (536 free)**, 266 B below the design-freeze
+  baseline (29426) — the shared row path + deleted legacy overlay code paid for
+  the new tables. Art lives in the cart (16 MB, 404 KB -> 733 KB used); MCU
+  flash is the only real budget.

@@ -17,13 +17,13 @@ namespace equip {
 constexpr uint16_t MAGIC = 0x4551;
 constexpr uint8_t VERSION = 1;
 constexpr uint8_t FLAGS = 0x00;
-constexpr uint16_t SIZE = 897;
+constexpr uint16_t SIZE = 573;
 constexpr uint8_t HEADER_SIZE = 8;
 constexpr uint8_t ITEM_SIZE = 19;
 constexpr uint8_t FACINGS = 8;
 constexpr uint8_t SLOT_COUNT = 6;
 constexpr uint8_t POSE_COUNT = 12;
-constexpr uint8_t ITEM_COUNT = 23;
+constexpr uint8_t ITEM_COUNT = 14;
 
 // Slots, in draw order (docs/equipment-framework.md).
 constexpr uint8_t SLOT_PLAYER = 0;
@@ -55,100 +55,69 @@ constexpr uint8_t ORDER_POSE = 2;
 
 // Item indices, sorted by id.
 constexpr uint8_t ITEM_BODY_BASE = 0;
-constexpr uint8_t ITEM_CHIP_BALL = 1;
-constexpr uint8_t ITEM_DEFLECT = 2;
-constexpr uint8_t ITEM_ERASE = 3;
-constexpr uint8_t ITEM_FLAIL_BALL = 4;
-constexpr uint8_t ITEM_FLAIL_CHAIN = 5;
-constexpr uint8_t ITEM_FLAIL_RING = 6;
-constexpr uint8_t ITEM_FLAIL_STUN = 7;
-constexpr uint8_t ITEM_GUN_GUARD = 8;
-constexpr uint8_t ITEM_GUN_RELOAD = 9;
-constexpr uint8_t ITEM_HEAD_BANDANA = 10;
-constexpr uint8_t ITEM_HEAD_BASE = 11;
-constexpr uint8_t ITEM_HEAD_HELM = 12;
-constexpr uint8_t ITEM_PLAYER_BASE = 13;
-constexpr uint8_t ITEM_PLAYER_BODY = 14;
-constexpr uint8_t ITEM_SHADOW_BASE = 15;
-constexpr uint8_t ITEM_SWORD_CHIP = 16;
-constexpr uint8_t ITEM_SWORD_PARRY = 17;
-constexpr uint8_t ITEM_SWORD_RIPOSTE = 18;
-constexpr uint8_t ITEM_SWORD_SLASH = 19;
-constexpr uint8_t ITEM_WEAPON_FLAIL = 20;
-constexpr uint8_t ITEM_WEAPON_GUN = 21;
-constexpr uint8_t ITEM_WEAPON_SWORD = 22;
+constexpr uint8_t ITEM_ERASE = 1;
+constexpr uint8_t ITEM_FLAIL_BALL = 2;
+constexpr uint8_t ITEM_FLAIL_RING = 3;
+constexpr uint8_t ITEM_FLAIL_STUN = 4;
+constexpr uint8_t ITEM_HEAD_BANDANA = 5;
+constexpr uint8_t ITEM_HEAD_BASE = 6;
+constexpr uint8_t ITEM_HEAD_HELM = 7;
+constexpr uint8_t ITEM_PLAYER_BASE = 8;
+constexpr uint8_t ITEM_PLAYER_BODY = 9;
+constexpr uint8_t ITEM_SHADOW_BASE = 10;
+constexpr uint8_t ITEM_WEAPON_FLAIL = 11;
+constexpr uint8_t ITEM_WEAPON_GUN = 12;
+constexpr uint8_t ITEM_WEAPON_SWORD = 13;
 
 // Sheet symbol names (fxdata/equip/Sprites.txt -> fxdata.h uint24_t offsets).
 constexpr const char *SHEET_BODY_BASE = "mh_body_base";
-constexpr const char *SHEET_CHIP_BALL = "fxchip";
-constexpr const char *SHEET_DEFLECT = "fxdeflect";
 constexpr const char *SHEET_ERASE = "fxerase";
 constexpr const char *SHEET_FLAIL_BALL = "fxwhirl";
-constexpr const char *SHEET_FLAIL_CHAIN = "fxwhirl";
 constexpr const char *SHEET_FLAIL_RING = "fxwhirlring";
 constexpr const char *SHEET_FLAIL_STUN = "fxwhirl";
-constexpr const char *SHEET_GUN_GUARD = "fxguard";
-constexpr const char *SHEET_GUN_RELOAD = "fxreload";
 constexpr const char *SHEET_HEAD_BANDANA = "mh_head_bandana";
 constexpr const char *SHEET_HEAD_BASE = "mh_head_base";
 constexpr const char *SHEET_HEAD_HELM = "mh_head_helm";
 constexpr const char *SHEET_PLAYER_BASE = "mh_player_base";
 constexpr const char *SHEET_PLAYER_BODY = "fxplayer";
 constexpr const char *SHEET_SHADOW_BASE = "mh_shadow_base";
-constexpr const char *SHEET_SWORD_CHIP = "fxchip";
-constexpr const char *SHEET_SWORD_PARRY = "fxparry";
-constexpr const char *SHEET_SWORD_RIPOSTE = "fxripspecial";
-constexpr const char *SHEET_SWORD_SLASH = "fxslash";
 constexpr const char *SHEET_WEAPON_FLAIL = "mh_weapon_flail";
 constexpr const char *SHEET_WEAPON_GUN = "mh_weapon_gun";
 constexpr const char *SHEET_WEAPON_SWORD = "mh_weapon_sword";
 
 // Per-item catalog, indexed by the ITEM_* constants above.
 constexpr uint8_t ITEM_SLOT[ITEM_COUNT] = {
-    2, 4, 5, 5, 4, 4, 4, 5,
-    4, 4, 3, 3, 3, 0, 2, 1,
-    4, 4, 4, 4, 4, 4, 4,
+    2, 5, 4, 4, 5, 3, 3, 3,
+    0, 2, 1, 4, 4, 4,
 };
 constexpr uint8_t ITEM_ORDER[ITEM_COUNT] = {
-    1, 2, 2, 2, 2, 2, 2, 2,
-    2, 2, 0, 0, 0, 0, 2, 0,
-    2, 2, 2, 2, 1, 1, 1,
+    1, 2, 2, 2, 2, 0, 0, 0,
+    0, 2, 0, 1, 1, 1,
 };
 constexpr uint8_t ITEM_FRAMES[ITEM_COUNT] = {
-    16, 2, 1, 1, 4, 4, 24, 4,
-    3, 1, 8, 8, 8, 8, 2, 1,
-    1, 1, 1, 5, 24, 24, 216,
+    16, 1, 4, 24, 4, 8, 8, 8,
+    8, 2, 1, 216, 216, 216,
 };
 constexpr uint8_t ITEM_CELL_W[ITEM_COUNT] = {
-    16, 8, 24, 4, 8, 8, 48, 8,
-    12, 10, 16, 16, 16, 16, 16, 16,
-    8, 24, 24, 32, 32, 32, 32,
+    16, 4, 8, 48, 8, 16, 16, 16,
+    16, 16, 16, 32, 32, 32,
 };
 constexpr uint8_t ITEM_CELL_H[ITEM_COUNT] = {
-    16, 8, 16, 16, 4, 4, 32, 4,
-    16, 8, 16, 16, 16, 16, 16, 16,
-    8, 16, 24, 32, 32, 32, 32,
+    16, 16, 4, 32, 4, 16, 16, 16,
+    16, 16, 16, 32, 32, 32,
 };
 constexpr int8_t ITEM_ANCHOR_X[ITEM_COUNT] = {
-    8, 2, 12, 2, 2, 0, 24, 0,
-    6, 5, 8, 8, 8, 8, 8, 8,
-    1, 12, 2, 16, 16, 16, 16,
+    8, 2, 2, 24, 0, 8, 8, 8,
+    8, 8, 8, 16, 16, 16,
 };
 constexpr int8_t ITEM_ANCHOR_Y[ITEM_COUNT] = {
-    8, 2, 8, 5, 2, 0, 16, 0,
-    8, 14, 8, 8, 8, 8, 8, 8,
-    1, 12, 2, 16, 16, 16, 16,
+    8, 5, 2, 16, 0, 8, 8, 8,
+    8, 8, 8, 16, 16, 16,
 };
 
 // Pose -> phase row, resolved. All rows are 0 for single-row sheets.
 constexpr uint8_t POSE_ROW_BODY_BASE[POSE_COUNT] = {
     0, 0, 0, 0, 0, 0, 0, 0, 1, 0, 0, 0,
-};
-constexpr uint8_t POSE_ROW_CHIP_BALL[POSE_COUNT] = {
-    1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1,
-};
-constexpr uint8_t POSE_ROW_DEFLECT[POSE_COUNT] = {
-    0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
 };
 constexpr uint8_t POSE_ROW_ERASE[POSE_COUNT] = {
     0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
@@ -156,20 +125,11 @@ constexpr uint8_t POSE_ROW_ERASE[POSE_COUNT] = {
 constexpr uint8_t POSE_ROW_FLAIL_BALL[POSE_COUNT] = {
     1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1,
 };
-constexpr uint8_t POSE_ROW_FLAIL_CHAIN[POSE_COUNT] = {
-    2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2,
-};
 constexpr uint8_t POSE_ROW_FLAIL_RING[POSE_COUNT] = {
     0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
 };
 constexpr uint8_t POSE_ROW_FLAIL_STUN[POSE_COUNT] = {
     3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3,
-};
-constexpr uint8_t POSE_ROW_GUN_GUARD[POSE_COUNT] = {
-    0, 0, 0, 0, 0, 0, 1, 2, 0, 0, 0, 0,
-};
-constexpr uint8_t POSE_ROW_GUN_RELOAD[POSE_COUNT] = {
-    0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
 };
 constexpr uint8_t POSE_ROW_HEAD_BANDANA[POSE_COUNT] = {
     0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
@@ -189,23 +149,11 @@ constexpr uint8_t POSE_ROW_PLAYER_BODY[POSE_COUNT] = {
 constexpr uint8_t POSE_ROW_SHADOW_BASE[POSE_COUNT] = {
     0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
 };
-constexpr uint8_t POSE_ROW_SWORD_CHIP[POSE_COUNT] = {
-    0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
-};
-constexpr uint8_t POSE_ROW_SWORD_PARRY[POSE_COUNT] = {
-    0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
-};
-constexpr uint8_t POSE_ROW_SWORD_RIPOSTE[POSE_COUNT] = {
-    0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
-};
-constexpr uint8_t POSE_ROW_SWORD_SLASH[POSE_COUNT] = {
-    0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
-};
 constexpr uint8_t POSE_ROW_WEAPON_FLAIL[POSE_COUNT] = {
-    0, 0, 1, 2, 0, 0, 0, 0, 0, 0, 0, 0,
+    0, 2, 3, 1, 22, 22, 22, 24, 23, 24, 25, 0,
 };
 constexpr uint8_t POSE_ROW_WEAPON_GUN[POSE_COUNT] = {
-    0, 0, 1, 2, 0, 0, 0, 0, 0, 0, 0, 0,
+    0, 2, 3, 1, 22, 22, 22, 24, 23, 24, 25, 0,
 };
 constexpr uint8_t POSE_ROW_WEAPON_SWORD[POSE_COUNT] = {
     0, 2, 3, 1, 22, 22, 22, 24, 23, 24, 25, 0,
@@ -227,34 +175,6 @@ constexpr uint8_t FRAME_BODY_BASE[POSE_COUNT][FACINGS] = {
     {0, 1, 2, 3, 4, 5, 6, 7},
     {0, 1, 2, 3, 4, 5, 6, 7},
     {0, 1, 2, 3, 4, 5, 6, 7},
-};
-constexpr uint8_t FRAME_CHIP_BALL[POSE_COUNT][FACINGS] = {
-    {1, 1, 1, 1, 1, 1, 1, 1},
-    {1, 1, 1, 1, 1, 1, 1, 1},
-    {1, 1, 1, 1, 1, 1, 1, 1},
-    {1, 1, 1, 1, 1, 1, 1, 1},
-    {1, 1, 1, 1, 1, 1, 1, 1},
-    {1, 1, 1, 1, 1, 1, 1, 1},
-    {1, 1, 1, 1, 1, 1, 1, 1},
-    {1, 1, 1, 1, 1, 1, 1, 1},
-    {1, 1, 1, 1, 1, 1, 1, 1},
-    {1, 1, 1, 1, 1, 1, 1, 1},
-    {1, 1, 1, 1, 1, 1, 1, 1},
-    {1, 1, 1, 1, 1, 1, 1, 1},
-};
-constexpr uint8_t FRAME_DEFLECT[POSE_COUNT][FACINGS] = {
-    {0, 0, 0, 0, 0, 0, 0, 0},
-    {0, 0, 0, 0, 0, 0, 0, 0},
-    {0, 0, 0, 0, 0, 0, 0, 0},
-    {0, 0, 0, 0, 0, 0, 0, 0},
-    {0, 0, 0, 0, 0, 0, 0, 0},
-    {0, 0, 0, 0, 0, 0, 0, 0},
-    {0, 0, 0, 0, 0, 0, 0, 0},
-    {0, 0, 0, 0, 0, 0, 0, 0},
-    {0, 0, 0, 0, 0, 0, 0, 0},
-    {0, 0, 0, 0, 0, 0, 0, 0},
-    {0, 0, 0, 0, 0, 0, 0, 0},
-    {0, 0, 0, 0, 0, 0, 0, 0},
 };
 constexpr uint8_t FRAME_ERASE[POSE_COUNT][FACINGS] = {
     {0, 0, 0, 0, 0, 0, 0, 0},
@@ -284,20 +204,6 @@ constexpr uint8_t FRAME_FLAIL_BALL[POSE_COUNT][FACINGS] = {
     {1, 1, 1, 1, 1, 1, 1, 1},
     {1, 1, 1, 1, 1, 1, 1, 1},
 };
-constexpr uint8_t FRAME_FLAIL_CHAIN[POSE_COUNT][FACINGS] = {
-    {2, 2, 2, 2, 2, 2, 2, 2},
-    {2, 2, 2, 2, 2, 2, 2, 2},
-    {2, 2, 2, 2, 2, 2, 2, 2},
-    {2, 2, 2, 2, 2, 2, 2, 2},
-    {2, 2, 2, 2, 2, 2, 2, 2},
-    {2, 2, 2, 2, 2, 2, 2, 2},
-    {2, 2, 2, 2, 2, 2, 2, 2},
-    {2, 2, 2, 2, 2, 2, 2, 2},
-    {2, 2, 2, 2, 2, 2, 2, 2},
-    {2, 2, 2, 2, 2, 2, 2, 2},
-    {2, 2, 2, 2, 2, 2, 2, 2},
-    {2, 2, 2, 2, 2, 2, 2, 2},
-};
 constexpr uint8_t FRAME_FLAIL_RING[POSE_COUNT][FACINGS] = {
     {0, 0, 0, 0, 0, 0, 0, 0},
     {0, 0, 0, 0, 0, 0, 0, 0},
@@ -325,34 +231,6 @@ constexpr uint8_t FRAME_FLAIL_STUN[POSE_COUNT][FACINGS] = {
     {3, 3, 3, 3, 3, 3, 3, 3},
     {3, 3, 3, 3, 3, 3, 3, 3},
     {3, 3, 3, 3, 3, 3, 3, 3},
-};
-constexpr uint8_t FRAME_GUN_GUARD[POSE_COUNT][FACINGS] = {
-    {0, 0, 0, 0, 0, 0, 0, 0},
-    {0, 0, 0, 0, 0, 0, 0, 0},
-    {0, 0, 0, 0, 0, 0, 0, 0},
-    {0, 0, 0, 0, 0, 0, 0, 0},
-    {0, 0, 0, 0, 0, 0, 0, 0},
-    {0, 0, 0, 0, 0, 0, 0, 0},
-    {1, 1, 1, 1, 1, 1, 1, 1},
-    {2, 2, 2, 2, 2, 2, 2, 2},
-    {0, 0, 0, 0, 0, 0, 0, 0},
-    {0, 0, 0, 0, 0, 0, 0, 0},
-    {0, 0, 0, 0, 0, 0, 0, 0},
-    {0, 0, 0, 0, 0, 0, 0, 0},
-};
-constexpr uint8_t FRAME_GUN_RELOAD[POSE_COUNT][FACINGS] = {
-    {0, 0, 0, 0, 0, 0, 0, 0},
-    {0, 0, 0, 0, 0, 0, 0, 0},
-    {0, 0, 0, 0, 0, 0, 0, 0},
-    {0, 0, 0, 0, 0, 0, 0, 0},
-    {0, 0, 0, 0, 0, 0, 0, 0},
-    {0, 0, 0, 0, 0, 0, 0, 0},
-    {0, 0, 0, 0, 0, 0, 0, 0},
-    {0, 0, 0, 0, 0, 0, 0, 0},
-    {0, 0, 0, 0, 0, 0, 0, 0},
-    {0, 0, 0, 0, 0, 0, 0, 0},
-    {0, 0, 0, 0, 0, 0, 0, 0},
-    {0, 0, 0, 0, 0, 0, 0, 0},
 };
 constexpr uint8_t FRAME_HEAD_BANDANA[POSE_COUNT][FACINGS] = {
     {0, 1, 2, 3, 4, 5, 6, 7},
@@ -438,88 +316,32 @@ constexpr uint8_t FRAME_SHADOW_BASE[POSE_COUNT][FACINGS] = {
     {0, 0, 0, 0, 0, 0, 0, 0},
     {0, 0, 0, 0, 0, 0, 0, 0},
 };
-constexpr uint8_t FRAME_SWORD_CHIP[POSE_COUNT][FACINGS] = {
-    {0, 0, 0, 0, 0, 0, 0, 0},
-    {0, 0, 0, 0, 0, 0, 0, 0},
-    {0, 0, 0, 0, 0, 0, 0, 0},
-    {0, 0, 0, 0, 0, 0, 0, 0},
-    {0, 0, 0, 0, 0, 0, 0, 0},
-    {0, 0, 0, 0, 0, 0, 0, 0},
-    {0, 0, 0, 0, 0, 0, 0, 0},
-    {0, 0, 0, 0, 0, 0, 0, 0},
-    {0, 0, 0, 0, 0, 0, 0, 0},
-    {0, 0, 0, 0, 0, 0, 0, 0},
-    {0, 0, 0, 0, 0, 0, 0, 0},
-    {0, 0, 0, 0, 0, 0, 0, 0},
-};
-constexpr uint8_t FRAME_SWORD_PARRY[POSE_COUNT][FACINGS] = {
-    {0, 0, 0, 0, 0, 0, 0, 0},
-    {0, 0, 0, 0, 0, 0, 0, 0},
-    {0, 0, 0, 0, 0, 0, 0, 0},
-    {0, 0, 0, 0, 0, 0, 0, 0},
-    {0, 0, 0, 0, 0, 0, 0, 0},
-    {0, 0, 0, 0, 0, 0, 0, 0},
-    {0, 0, 0, 0, 0, 0, 0, 0},
-    {0, 0, 0, 0, 0, 0, 0, 0},
-    {0, 0, 0, 0, 0, 0, 0, 0},
-    {0, 0, 0, 0, 0, 0, 0, 0},
-    {0, 0, 0, 0, 0, 0, 0, 0},
-    {0, 0, 0, 0, 0, 0, 0, 0},
-};
-constexpr uint8_t FRAME_SWORD_RIPOSTE[POSE_COUNT][FACINGS] = {
-    {0, 0, 0, 0, 0, 0, 0, 0},
-    {0, 0, 0, 0, 0, 0, 0, 0},
-    {0, 0, 0, 0, 0, 0, 0, 0},
-    {0, 0, 0, 0, 0, 0, 0, 0},
-    {0, 0, 0, 0, 0, 0, 0, 0},
-    {0, 0, 0, 0, 0, 0, 0, 0},
-    {0, 0, 0, 0, 0, 0, 0, 0},
-    {0, 0, 0, 0, 0, 0, 0, 0},
-    {0, 0, 0, 0, 0, 0, 0, 0},
-    {0, 0, 0, 0, 0, 0, 0, 0},
-    {0, 0, 0, 0, 0, 0, 0, 0},
-    {0, 0, 0, 0, 0, 0, 0, 0},
-};
-constexpr uint8_t FRAME_SWORD_SLASH[POSE_COUNT][FACINGS] = {
-    {0, 0, 0, 0, 0, 0, 0, 0},
-    {0, 0, 0, 0, 0, 0, 0, 0},
-    {0, 0, 0, 0, 0, 0, 0, 0},
-    {0, 0, 0, 0, 0, 0, 0, 0},
-    {0, 0, 0, 0, 0, 0, 0, 0},
-    {0, 0, 0, 0, 0, 0, 0, 0},
-    {0, 0, 0, 0, 0, 0, 0, 0},
-    {0, 0, 0, 0, 0, 0, 0, 0},
-    {0, 0, 0, 0, 0, 0, 0, 0},
-    {0, 0, 0, 0, 0, 0, 0, 0},
-    {0, 0, 0, 0, 0, 0, 0, 0},
-    {0, 0, 0, 0, 0, 0, 0, 0},
-};
 constexpr uint8_t FRAME_WEAPON_FLAIL[POSE_COUNT][FACINGS] = {
     {0, 1, 2, 3, 4, 5, 6, 7},
-    {0, 1, 2, 3, 4, 5, 6, 7},
-    {8, 9, 10, 11, 12, 13, 14, 15},
     {16, 17, 18, 19, 20, 21, 22, 23},
-    {0, 1, 2, 3, 4, 5, 6, 7},
-    {0, 1, 2, 3, 4, 5, 6, 7},
-    {0, 1, 2, 3, 4, 5, 6, 7},
-    {0, 1, 2, 3, 4, 5, 6, 7},
-    {0, 1, 2, 3, 4, 5, 6, 7},
-    {0, 1, 2, 3, 4, 5, 6, 7},
-    {0, 1, 2, 3, 4, 5, 6, 7},
+    {24, 25, 26, 27, 28, 29, 30, 31},
+    {8, 9, 10, 11, 12, 13, 14, 15},
+    {176, 177, 178, 179, 180, 181, 182, 183},
+    {176, 177, 178, 179, 180, 181, 182, 183},
+    {176, 177, 178, 179, 180, 181, 182, 183},
+    {192, 193, 194, 195, 196, 197, 198, 199},
+    {184, 185, 186, 187, 188, 189, 190, 191},
+    {192, 193, 194, 195, 196, 197, 198, 199},
+    {200, 201, 202, 203, 204, 205, 206, 207},
     {0, 1, 2, 3, 4, 5, 6, 7},
 };
 constexpr uint8_t FRAME_WEAPON_GUN[POSE_COUNT][FACINGS] = {
     {0, 1, 2, 3, 4, 5, 6, 7},
-    {0, 1, 2, 3, 4, 5, 6, 7},
-    {8, 9, 10, 11, 12, 13, 14, 15},
     {16, 17, 18, 19, 20, 21, 22, 23},
-    {0, 1, 2, 3, 4, 5, 6, 7},
-    {0, 1, 2, 3, 4, 5, 6, 7},
-    {0, 1, 2, 3, 4, 5, 6, 7},
-    {0, 1, 2, 3, 4, 5, 6, 7},
-    {0, 1, 2, 3, 4, 5, 6, 7},
-    {0, 1, 2, 3, 4, 5, 6, 7},
-    {0, 1, 2, 3, 4, 5, 6, 7},
+    {24, 25, 26, 27, 28, 29, 30, 31},
+    {8, 9, 10, 11, 12, 13, 14, 15},
+    {176, 177, 178, 179, 180, 181, 182, 183},
+    {176, 177, 178, 179, 180, 181, 182, 183},
+    {176, 177, 178, 179, 180, 181, 182, 183},
+    {192, 193, 194, 195, 196, 197, 198, 199},
+    {184, 185, 186, 187, 188, 189, 190, 191},
+    {192, 193, 194, 195, 196, 197, 198, 199},
+    {200, 201, 202, 203, 204, 205, 206, 207},
     {0, 1, 2, 3, 4, 5, 6, 7},
 };
 constexpr uint8_t FRAME_WEAPON_SWORD[POSE_COUNT][FACINGS] = {
@@ -543,29 +365,22 @@ constexpr uint8_t FRAME_WEAPON_SWORD[POSE_COUNT][FACINGS] = {
 // then the u16 variant index table and the variant frame bytes.
 // Little-endian; read on device through core/fxmem.hpp during the
 // render pass (src/render.hpp partDraw/partFrame).
-constexpr uint8_t PART_COUNT = 20;
+constexpr uint8_t PART_COUNT = 13;
 constexpr uint8_t PART_BODY_BASE = 0;
-constexpr uint8_t PART_CHIP_BALL = 1;
-constexpr uint8_t PART_DEFLECT = 2;
-constexpr uint8_t PART_ERASE = 3;
-constexpr uint8_t PART_FLAIL_BALL = 4;
-constexpr uint8_t PART_FLAIL_CHAIN = 5;
-constexpr uint8_t PART_FLAIL_RING = 6;
-constexpr uint8_t PART_FLAIL_STUN = 7;
-constexpr uint8_t PART_GUN_GUARD = 8;
-constexpr uint8_t PART_GUN_RELOAD = 9;
-constexpr uint8_t PART_HEAD_BANDANA = 10;
-constexpr uint8_t PART_HEAD_BASE = 11;
-constexpr uint8_t PART_HEAD_HELM = 12;
-constexpr uint8_t PART_PLAYER_BODY = 13;
-constexpr uint8_t PART_SHADOW_BASE = 14;
-constexpr uint8_t PART_SWORD_CHIP = 15;
-constexpr uint8_t PART_SWORD_PARRY = 16;
-constexpr uint8_t PART_SWORD_RIPOSTE = 17;
-constexpr uint8_t PART_SWORD_SLASH = 18;
-constexpr uint8_t PART_WEAPON_SWORD = 19;
+constexpr uint8_t PART_ERASE = 1;
+constexpr uint8_t PART_FLAIL_BALL = 2;
+constexpr uint8_t PART_FLAIL_RING = 3;
+constexpr uint8_t PART_FLAIL_STUN = 4;
+constexpr uint8_t PART_HEAD_BANDANA = 5;
+constexpr uint8_t PART_HEAD_BASE = 6;
+constexpr uint8_t PART_HEAD_HELM = 7;
+constexpr uint8_t PART_PLAYER_BODY = 8;
+constexpr uint8_t PART_SHADOW_BASE = 9;
+constexpr uint8_t PART_WEAPON_FLAIL = 10;
+constexpr uint8_t PART_WEAPON_GUN = 11;
+constexpr uint8_t PART_WEAPON_SWORD = 12;
 
-constexpr uint16_t PARTS_OFF = 445;
+constexpr uint16_t PARTS_OFF = 274;
 constexpr uint8_t PART_SIZE = 19;
 constexpr uint8_t PART_SHEET_OFF = 0;             // u24
 constexpr uint8_t PART_ANCHOR_X_OFF = 3;          // i8
@@ -573,9 +388,9 @@ constexpr uint8_t PART_ANCHOR_Y_OFF = 4;          // i8
 constexpr uint8_t PART_ORDER_OFF = 5;             // u8 ORDER_*
 constexpr uint8_t PART_FRAMES_OFF = 6;            // u8
 constexpr uint8_t PART_FRAME_OFF = 7;             // u8[POSE_COUNT]
-constexpr uint16_t PART_VARIANT_OFFSETS_OFF = 825;
-constexpr uint16_t PART_VARIANT_DATA_OFF = 867;
-constexpr uint8_t PART_VARIANT_COUNT = 30;
+constexpr uint16_t PART_VARIANT_OFFSETS_OFF = 521;
+constexpr uint16_t PART_VARIANT_DATA_OFF = 549;
+constexpr uint8_t PART_VARIANT_COUNT = 24;
 
 // Default draw set (data/equipment/sets/default.json): the render
 // slot loop draws these part ids, so re-skinning the player is a
@@ -586,40 +401,30 @@ constexpr uint8_t DEFAULT_HEAD = PART_HEAD_BASE;
 // Baked absolute sheet offsets (one per referenced part symbol).
 // The blob stores these; a static_assert pins each against fxdata.h so a
 // stale equip.bin (one gen pass behind) cannot ship on AVR.
-constexpr uint32_t SHEET_OFF_MH_BODY_BASE = 288606;
-constexpr uint32_t SHEET_OFF_FXCHIP = 23618;
-constexpr uint32_t SHEET_OFF_FXDEFLECT = 6614;
-constexpr uint32_t SHEET_OFF_FXERASE = 106716;
-constexpr uint32_t SHEET_OFF_FXWHIRL = 86424;
-constexpr uint32_t SHEET_OFF_FXWHIRLRING = 34430;
-constexpr uint32_t SHEET_OFF_FXGUARD = 25496;
-constexpr uint32_t SHEET_OFF_FXRELOAD = 102306;
-constexpr uint32_t SHEET_OFF_MH_HEAD_BANDANA = 118102;
-constexpr uint32_t SHEET_OFF_MH_HEAD_BASE = 310308;
-constexpr uint32_t SHEET_OFF_MH_HEAD_HELM = 285530;
-constexpr uint32_t SHEET_OFF_FXPLAYER = 86884;
-constexpr uint32_t SHEET_OFF_MH_SHADOW_BASE = 291680;
-constexpr uint32_t SHEET_OFF_FXPARRY = 18236;
-constexpr uint32_t SHEET_OFF_FXRIPSPECIAL = 87270;
-constexpr uint32_t SHEET_OFF_FXSLASH = 107344;
-constexpr uint32_t SHEET_OFF_MH_WEAPON_SWORD = 119640;
+constexpr uint32_t SHEET_OFF_MH_BODY_BASE = 288282;
+constexpr uint32_t SHEET_OFF_FXERASE = 106392;
+constexpr uint32_t SHEET_OFF_FXWHIRL = 86100;
+constexpr uint32_t SHEET_OFF_FXWHIRLRING = 34106;
+constexpr uint32_t SHEET_OFF_MH_HEAD_BANDANA = 117778;
+constexpr uint32_t SHEET_OFF_MH_HEAD_BASE = 457440;
+constexpr uint32_t SHEET_OFF_MH_HEAD_HELM = 285206;
+constexpr uint32_t SHEET_OFF_FXPLAYER = 86560;
+constexpr uint32_t SHEET_OFF_MH_SHADOW_BASE = 291356;
+constexpr uint32_t SHEET_OFF_MH_WEAPON_FLAIL = 458978;
+constexpr uint32_t SHEET_OFF_MH_WEAPON_GUN = 291550;
+constexpr uint32_t SHEET_OFF_MH_WEAPON_SWORD = 119316;
 #if defined(__AVR__)
 static_assert(SHEET_OFF_MH_BODY_BASE == static_cast<uint32_t>(mh_body_base), "equip blob stale: re-run make gen");
-static_assert(SHEET_OFF_FXCHIP == static_cast<uint32_t>(fxchip), "equip blob stale: re-run make gen");
-static_assert(SHEET_OFF_FXDEFLECT == static_cast<uint32_t>(fxdeflect), "equip blob stale: re-run make gen");
 static_assert(SHEET_OFF_FXERASE == static_cast<uint32_t>(fxerase), "equip blob stale: re-run make gen");
 static_assert(SHEET_OFF_FXWHIRL == static_cast<uint32_t>(fxwhirl), "equip blob stale: re-run make gen");
 static_assert(SHEET_OFF_FXWHIRLRING == static_cast<uint32_t>(fxwhirlring), "equip blob stale: re-run make gen");
-static_assert(SHEET_OFF_FXGUARD == static_cast<uint32_t>(fxguard), "equip blob stale: re-run make gen");
-static_assert(SHEET_OFF_FXRELOAD == static_cast<uint32_t>(fxreload), "equip blob stale: re-run make gen");
 static_assert(SHEET_OFF_MH_HEAD_BANDANA == static_cast<uint32_t>(mh_head_bandana), "equip blob stale: re-run make gen");
 static_assert(SHEET_OFF_MH_HEAD_BASE == static_cast<uint32_t>(mh_head_base), "equip blob stale: re-run make gen");
 static_assert(SHEET_OFF_MH_HEAD_HELM == static_cast<uint32_t>(mh_head_helm), "equip blob stale: re-run make gen");
 static_assert(SHEET_OFF_FXPLAYER == static_cast<uint32_t>(fxplayer), "equip blob stale: re-run make gen");
 static_assert(SHEET_OFF_MH_SHADOW_BASE == static_cast<uint32_t>(mh_shadow_base), "equip blob stale: re-run make gen");
-static_assert(SHEET_OFF_FXPARRY == static_cast<uint32_t>(fxparry), "equip blob stale: re-run make gen");
-static_assert(SHEET_OFF_FXRIPSPECIAL == static_cast<uint32_t>(fxripspecial), "equip blob stale: re-run make gen");
-static_assert(SHEET_OFF_FXSLASH == static_cast<uint32_t>(fxslash), "equip blob stale: re-run make gen");
+static_assert(SHEET_OFF_MH_WEAPON_FLAIL == static_cast<uint32_t>(mh_weapon_flail), "equip blob stale: re-run make gen");
+static_assert(SHEET_OFF_MH_WEAPON_GUN == static_cast<uint32_t>(mh_weapon_gun), "equip blob stale: re-run make gen");
 static_assert(SHEET_OFF_MH_WEAPON_SWORD == static_cast<uint32_t>(mh_weapon_sword), "equip blob stale: re-run make gen");
 #endif
 

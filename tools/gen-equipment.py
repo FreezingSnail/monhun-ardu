@@ -766,10 +766,9 @@ def load_weapon_moves(root, path=None):
 
 
 def move_record(weapon, slot):
-    record = WEAPON_MOVES[weapon][slot]
-    if record is None:
-        raise SystemExit("gen-equipment: weapon %d slot %d has no move record" % (weapon, slot))
-    return record
+    """The move record for a slot, or None when the weapon has no such move
+    (the flail has no branch-b; its slot row stays blank)."""
+    return WEAPON_MOVES[weapon][slot]
 
 
 def blade(img, facing, u0, v0, u1, v1, core=WHITE):
@@ -777,6 +776,37 @@ def blade(img, facing, u0, v0, u1, v1, core=WHITE):
     wline(img, facing, u0, v0, u1, v1, DARK, 3)
     wline(img, facing, u0, v0, u1, v1, core, 1)
     dot(img, *wpt(facing, u1, v1), core, 1)
+
+
+def ball(img, facing, u, v, r, core=WHITE):
+    """Flail head: dark rim, bright core (per-pixel, no brush shift)."""
+    inner = (r - 1) * (r - 1)
+    for dv in range(-r, r + 1):
+        for du in range(-r, r + 1):
+            d2 = du * du + dv * dv
+            if d2 <= r * r:
+                put(img, *wpt(facing, u + du, v + dv), core if d2 <= inner else DARK)
+
+
+def chain(img, facing, u0, v0, u1, v1):
+    """Three chain dots between the hand and the ball (clamped to the cell)."""
+    for i in (1, 2, 3):
+        f = i / 4.0
+        u = u0 + (u1 - u0) * f
+        v = v0 + (v1 - v0) * f
+        if -15 <= u <= 15:
+            dot(img, *wpt(facing, u, v), DARK, 2)
+
+
+def shield(img, facing, u, v, lit):
+    """Gunshield plate: dark rim, light/white face, black slot at the centre."""
+    w, h = 4, 12
+    face = WHITE if lit else LIGHT
+    for dv in range(-h // 2 - 1, h // 2 + 2):
+        for du in range(-w // 2, w // 2 + 2):
+            edge = du >= w // 2 or dv <= -h // 2 - 1 or dv >= h // 2 + 1
+            put(img, *wpt(facing, u + du, v + dv), DARK if edge else face)
+    put(img, *wpt(facing, u + w // 2, v), BLACK)
 
 
 # Combo chain cut directions, in chain order (slot 0..2): the moveset's own
@@ -819,7 +849,7 @@ def sword_cell(row, facing):
     if WEAPON_ROW_MOVE0 <= row <= last_move_row:
         slot = (row - WEAPON_ROW_MOVE0) // 2
         record = move_record(0, slot)
-        if not record["hw"]:
+        if record is None or not record["hw"]:
             return None   # unused slot (sword has no charge): blank row
         a_start, a_active = sword_move_art(record, slot)
         reach, hw, hh = record["reach"], record["hw"], record["hh"]
@@ -878,8 +908,163 @@ def sword_cell(row, facing):
     return img
 
 
+def flail_move_art(record, slot):
+    """(startup angle, active angle) for one flail move, from the record."""
+    atk_id = record["id"]
+    if record["effect"]:
+        return -40, 60            # trip: low sweep (effect 1)
+    if atk_id == ATK_IDS["ATK_BRANCH2"]:
+        return -140, 80           # finisher: overhead slam
+    if atk_id == ATK_IDS["ATK_ROLL"]:
+        return -110, 30           # roll sweep
+    if atk_id == ATK_IDS["ATK_ALT"]:
+        return -30, 20            # wide sweep opener
+    if atk_id == ATK_IDS["ATK_CHARGE"]:
+        return -150, 70           # charge slam
+    if atk_id == ATK_IDS["ATK_NONE"] and slot == 3:
+        return -90, -10           # special: big throw
+    if atk_id == ATK_IDS["ATK_NONE"] and slot < 3:
+        return ((-120, -30), (140, 25), (-160, 60))[slot]
+    hw, hh = record["hw"], record["hh"]
+    if hw >= hh + 8:
+        return -50, 25            # wide box: horizontal sweep
+    if hh >= hw + 8:
+        return -140, 80           # tall box: overhead
+    return -100, 40
+
+
+def flail_cell(row, facing):
+    """One 32x32 flail pose cell. The ball is the strike mass (at the hit box
+    centre on active rows); the chain runs back to the hand."""
+    img = new(32, 32)
+    last_move_row = WEAPON_ROW_MOVE0 + 2 * WEAPON_SLOTS - 1
+    if WEAPON_ROW_MOVE0 <= row <= last_move_row:
+        slot = (row - WEAPON_ROW_MOVE0) // 2
+        record = move_record(1, slot)
+        if record is None or not record["hw"]:
+            return None
+        a_start, a_active = flail_move_art(record, slot)
+        reach, hw, hh = record["reach"], record["hw"], record["hh"]
+        radius = 2 + min(3, hh // 8)
+        active = (row - WEAPON_ROW_MOVE0) % 2 == 1
+        steps = 4 + min(8, record["active"])
+        if active:
+            pu, pv = -reach, 0
+            wline(img, facing, pu, pv, pu + 2, pv, DARK, 3)              # wrist
+            span = a_active - a_start
+            if abs(span) > 20:
+                warc(img, facing, pu, pv, reach - 1, a_start, a_active, DARK, 1, steps)
+                # In-cell sweep echo + ball ghosts: the hand is off-cell for the
+                # long reaches, so the arc alone would not read here.
+                warc(img, facing, 0, 0, min(12, hw // 2 + 1), a_start, a_active, DARK, 1, steps)
+                if abs(span) > 40:
+                    for f in (0.33, 0.66):
+                        ga = a_start + span * f
+                        ball(img, facing, 9 * _cosdir(ga), 9 * _sindir(ga),
+                             max(2, radius - 2), core=LIGHT)
+            ball(img, facing, 0, 0, radius)
+            chain(img, facing, pu + 2, pv, -radius, 0)
+            if record["lunge"]:
+                for v in (-3, 3):
+                    wline(img, facing, max(-15.5, -hw / 2 - 6), v, max(-13.5, -hw / 2 - 2), v, DARK, 1)
+        else:
+            ball(img, facing, 1 + 8 * _cosdir(a_start), 8 * _sindir(a_start), radius)
+            chain(img, facing, 0, 0, 1 + 8 * _cosdir(a_start), 8 * _sindir(a_start))
+            warc(img, facing, 0, 0, 8, a_start, a_start + (a_active - a_start) * 0.5, DARK, 1, steps)
+        return img
+    if row == 0:      # idle: chain and ball resting forward-down
+        ball(img, facing, 9, 5, 3)
+        chain(img, facing, 0, 0, 9, 5)
+    elif row == 1:    # recover: ball low
+        ball(img, facing, 7, 8, 3)
+        chain(img, facing, 0, 0, 7, 8)
+    elif row == WEAPON_ROW_STANCE:   # whirl base: hand + slack chain (ring/ball are parts)
+        wline(img, facing, -3, 0, 1, 0, DARK, 3)
+        chain(img, facing, 1, 0, 8, -2)
+    elif row == WEAPON_ROW_DEFENSE:  # deflect: two light bars in front
+        wline(img, facing, -3, 0, 1, 0, DARK, 3)
+        wline(img, facing, 4, -6, 4, 6, LIGHT, 1)
+        wline(img, facing, 7, -7, 7, 7, LIGHT, 1)
+    elif row == WEAPON_ROW_DODGE:    # tucked
+        ball(img, facing, 4, 7, 3)
+        chain(img, facing, 0, 0, 4, 7)
+    elif row == WEAPON_ROW_STUN:     # slack chain, ball dropped
+        ball(img, facing, 5, 10, 3)
+        wline(img, facing, 1, 0, 5, 10, DARK, 1)
+    else:
+        return None
+    return img
+
+
+def gun_move_art(record, slot):
+    """(startup angle, active angle, mode) for one gunshield move. Mode:
+    'shot' (shell/muzzle), 'bash' (shield strike), 'thrust' (flat shield hit)."""
+    if record["shell"] or record["reach"] >= 24:
+        return -20, 0, "shot"
+    if record["push"]:
+        return -30, 0, "bash"
+    return -40, 10, "thrust"
+
+
+def gun_cell(row, facing):
+    """One 32x32 gunshield pose cell: shield plate + barrel; muzzle flash on the
+    shot actives, plate strike on the bashes."""
+    img = new(32, 32)
+    last_move_row = WEAPON_ROW_MOVE0 + 2 * WEAPON_SLOTS - 1
+    if WEAPON_ROW_MOVE0 <= row <= last_move_row:
+        slot = (row - WEAPON_ROW_MOVE0) // 2
+        record = move_record(2, slot)
+        if record is None or not record["hw"]:
+            return None
+        a_start, a_active, mode = gun_move_art(record, slot)
+        reach = record["reach"]
+        active = (row - WEAPON_ROW_MOVE0) % 2 == 1
+        if active:
+            wline(img, facing, -reach, 0, -reach + 2, 0, DARK, 3)        # wrist
+            if mode == "shot":
+                # rifle shot: barrel forward + flash at the muzzle. The render
+                # references this row at the hand for the arrowshot special, so
+                # the flash sits on the muzzle, not on the 44 px hitscan box.
+                wline(img, facing, -3, 1, 4, 1, DARK, 3)                 # barrel
+                for du, dv in ((8, 1), (6, -1), (6, 3), (2, 1)):
+                    wline(img, facing, 5, 1, du, dv, WHITE, 1)
+                dot(img, *wpt(facing, 5, 1), WHITE, 1)
+            else:
+                shield(img, facing, 0, 0, lit=False)
+                for v in (-3, 3):
+                    wline(img, facing, max(-15.5, -reach - 4), v, max(-13.5, -reach - 1), v, DARK, 1)
+        else:
+            shield(img, facing, 4, 0, lit=False)
+            wline(img, facing, -3, 1, 1, 1, DARK, 3)                     # barrel
+            warc(img, facing, 0, 0, 7, a_start, a_start + (a_active - a_start) * 0.5, DARK, 1, 5)
+        return img
+    if row == 0:      # idle: plate up, barrel low
+        shield(img, facing, 4, 0, lit=False)
+        wline(img, facing, -4, 2, 1, 2, DARK, 3)
+    elif row == 1:    # recover: plate low
+        shield(img, facing, 3, 1, lit=False)
+        wline(img, facing, -3, 2, 2, 2, DARK, 3)
+    elif row == WEAPON_ROW_STANCE:   # guard: fully lit plate
+        shield(img, facing, 4, 0, lit=True)
+        wline(img, facing, -4, 2, 1, 2, DARK, 3)
+    elif row == WEAPON_ROW_DEFENSE:  # shove: plate thrust (render adds the offset)
+        shield(img, facing, 6, 0, lit=True)
+        for v in (-3, 3):
+            wline(img, facing, -6, v, -2, v, DARK, 1)
+    elif row == WEAPON_ROW_DODGE:    # tucked
+        shield(img, facing, 3, 3, lit=False)
+    elif row == WEAPON_ROW_STUN:     # dropped
+        wline(img, facing, -2, 3, 1, 3, DARK, 3)
+        shield(img, facing, 4, 5, lit=False)
+    else:
+        return None
+    return img
+
+
 WEAPON_ART = {
     "weapon_sword": sword_cell,
+    "weapon_flail": flail_cell,
+    "weapon_gun": gun_cell,
 }
 
 
