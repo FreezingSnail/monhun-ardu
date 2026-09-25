@@ -21,6 +21,37 @@ void putNum(const char *key, long v) {
     printf("\"%s\": %ld", key, v);
 }
 
+// Full attack record (docs/weapon-art.md): the weapon art derives each move's
+// pose from these fields, never from copied literals. Same table the firmware
+// and the sim read.
+void putAttackFull(const Attack *a) {
+    putNum("startup", attackStartup(a));
+    printf(", ");
+    putNum("active", attackActive(a));
+    printf(", ");
+    putNum("recover", attackRecover(a));
+    printf(", ");
+    putNum("dmg", attackDmg(a));
+    printf(", ");
+    putNum("reach", attackReach(a));
+    printf(", ");
+    putNum("hw", attackHw(a));
+    printf(", ");
+    putNum("hh", attackHh(a));
+    printf(", ");
+    putNum("stam", attackStam(a));
+    printf(", ");
+    putNum("lunge", attackLunge(a));
+    printf(", ");
+    putNum("push", attackPush(a));
+    printf(", ");
+    putNum("effect", attackEffect(a));
+    printf(", ");
+    putNum("shell", attackShell(a) ? 1 : 0);
+    printf(", ");
+    putNum("id", attackId(a));
+}
+
 }   // namespace
 
 int main() {
@@ -36,21 +67,13 @@ int main() {
         for (int a = 0; a < 3; a++) {
             const Attack *atk = weaponAttack(d, a);
             printf("        {");
-            putNum("hw", attackHw(atk));
-            printf(", ");
-            putNum("hh", attackHh(atk));
-            printf(", ");
-            putNum("reach", attackReach(atk));
+            putAttackFull(atk);
             printf("}%s\n", a < 2 ? "," : "");
         }
         printf("      ],\n");
         const Attack *sp = weaponSpecial(d);
         printf("      \"special\": {");
-        putNum("hw", attackHw(sp));
-        printf(", ");
-        putNum("hh", attackHh(sp));
-        printf(", ");
-        putNum("reach", attackReach(sp));
+        putAttackFull(sp);
         printf("},\n");
         // Branch attacks (combo follow-ups): same fields plus the AtkId so the
         // art pipeline can tell an attack branch (id != ATK_NONE) from a stance
@@ -59,14 +82,26 @@ int main() {
         for (int b = 0; b < 3; b++) {
             const Attack *br = branchAtk(weaponBranch(d, b));
             printf("        {");
-            putNum("id", attackId(br));
-            printf(", ");
-            putNum("hw", attackHw(br));
-            printf(", ");
-            putNum("hh", attackHh(br));
-            printf(", ");
-            putNum("reach", attackReach(br));
+            putAttackFull(br);
             printf("}%s\n", b < 2 ? "," : "");
+        }
+        printf("      ],\n");
+        // Roll out of evade, direction+A alt opener and the charge melee slots:
+        // the render picks their art rows too (docs/weapon-art.md slots 7..9).
+        const Attack *roll = weaponRoll(d);
+        printf("      \"roll\": {");
+        putAttackFull(roll);
+        printf("},\n");
+        const Attack *alt = weaponAlt(d);
+        printf("      \"alt\": {");
+        putAttackFull(alt);
+        printf("},\n");
+        printf("      \"charge\": [\n");
+        for (int c = 0; c < 2; c++) {
+            const Attack *ca = weaponCharge(d, c);
+            printf("        {");
+            putAttackFull(ca);
+            printf("}%s\n", c < 1 ? "," : "");
         }
         printf("      ]\n");
         printf("    }%s\n", w < 2 ? "," : "");

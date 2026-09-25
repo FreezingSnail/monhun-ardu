@@ -337,9 +337,29 @@ class GenEquipmentTests(unittest.TestCase):
 
     # ------------------------------------------------------- mirror weapons
 
-    def install_mirror_sword(self, boxes=None):
-        """Turn the fixture's weapon_sword into a mirror-authored sheet +
-        the build/hitboxes.json the weapon art derives its boxes from."""
+    ATK_ENUM = """enum AtkId : int8_t {
+    ATK_NONE = 0,
+    ATK_STEPSLASH,
+    ATK_SPINCUT,
+    ATK_TRIP,
+    ATK_POINTBLANK,
+    ATK_GUARDBASH,
+    ATK_ALT,
+    ATK_ROLL,
+    ATK_CHARGE,
+    ATK_BRANCH2
+};
+"""
+
+    @staticmethod
+    def move(reach, hw, hh, mid=0, active=5, lunge=0):
+        return {"startup": 3, "active": active, "recover": 8, "dmg": 5, "reach": reach,
+                "hw": hw, "hh": hh, "stam": 5, "lunge": lunge, "push": 0,
+                "effect": 0, "shell": 0, "id": mid}
+
+    def install_mirror_sword(self):
+        """Turn the fixture's weapon_sword into a mirror-authored sheet plus the
+        fxdump/game.hpp inputs the weapon art derives its poses from."""
         def patch(doc):
             doc["source"] = "mirror"
             doc["frames"] = 216
@@ -347,10 +367,25 @@ class GenEquipmentTests(unittest.TestCase):
                               "attack_recover": 1, "parry": 22, "whirl": 22, "guard": 22,
                               "shove": 24, "dodge": 23, "deflect": 24, "stun": 25, "dead": 0}
         self.mutate("data/equipment/weapon_sword.json", patch)
+        sword = {
+            "name": "sword",
+            "attacks": [self.move(13, 12, 10), self.move(13, 12, 10), self.move(16, 18, 14)],
+            "special": self.move(18, 20, 16),
+            "branches": [self.move(18, 14, 12, mid=1),
+                         self.move(12, 28, 26, mid=2, active=7),
+                         self.move(16, 20, 22, mid=9, active=4)],
+            "alt": self.move(22, 10, 10, mid=6, lunge=20),
+            "roll": self.move(15, 16, 14, mid=7),
+            "charge": [self.move(0, 0, 0), self.move(0, 0, 0)],
+        }
+        zero = {"name": "x", "attacks": [self.move(0, 0, 0)] * 3,
+                "special": self.move(0, 0, 0), "branches": [self.move(0, 0, 0)] * 3,
+                "alt": self.move(0, 0, 0), "roll": self.move(0, 0, 0),
+                "charge": [self.move(0, 0, 0)] * 2}
         os.makedirs(self.path("build"), exist_ok=True)
-        with open(self.path("build", "hitboxes.json"), "w", encoding="utf-8", newline="\n") as handle:
-            json.dump({"version": 1, "bands": {}, "creatures": {},
-                       "player": {"attacks": boxes or [[8, 8, 8]] * 33}}, handle)
+        with open(self.path("build", "fxdump.json"), "w", encoding="utf-8", newline="\n") as handle:
+            json.dump({"weapons": [sword, zero, zero]}, handle)
+        self.write_text("src/core/game.hpp", self.ATK_ENUM)
 
     def test_mirror_source_authors_sheet_and_layout_plan(self):
         self.install_mirror_sword()
@@ -389,30 +424,44 @@ class GenEquipmentTests(unittest.TestCase):
                     lambda doc: doc.update({"id": "weapon_axe", "sheet": "mh_weapon_axe"}))
         self.assert_fails(self.compile(), "no weapon art spec")
 
-    def test_mirror_art_inks_the_active_boxes(self):
-        # Synthetic boxes (unit scope): every move's startup/active row must ink
-        # its hit box centre and the box front half (docs/weapon-art.md).
+    def load_art_module(self):
         spec = importlib.util.spec_from_file_location("gen_equipment", TOOL)
         ge = importlib.util.module_from_spec(spec)
         spec.loader.exec_module(ge)
-        boxes = []
-        for w in range(3):
-            for i in range(11):
-                boxes.append([6 + w * 4 + i, 8 + (i % 4) * 2, 6 + (i % 3) * 4])
-        ge.PLAYER_BOXES = boxes
-        for slot, index in ge.WEAPON_BOX_SLOT[0].items():
-            reach, hw, hh = boxes[index]
+        return ge
+
+    def test_mirror_art_inks_the_active_boxes(self):
+        # The art derives each move from the fixture's move records: every
+        # active row must ink its hit box and the box front half
+        # (docs/weapon-art.md). Startup rows keep the blade on the hunter's side
+        # of the box (no ink in the box's front half).
+        self.install_mirror_sword()
+        ge = self.load_art_module()
+        ge.ATK_IDS = ge.load_atk_ids(self.case)
+        ge.WEAPON_MOVES = ge.load_weapon_moves(self.case)
+        for slot, record in enumerate(ge.WEAPON_MOVES[0]):
+            if record is None or not record["hw"]:
+                continue
+            hw, hh = record["hw"], record["hh"]
+            box = [(x, y) for y in range(16 - hh // 2, 16 + (hh + 1) // 2)
+                   for x in range(16 - hw // 2, 16 + (hw + 1) // 2)]
             for row, what in ((ge.WEAPON_ROW_MOVE0 + 2 * slot, "startup"),
                               (ge.WEAPON_ROW_MOVE0 + 2 * slot + 1, "active")):
                 img = ge.sword_cell(row, 0)
                 self.assertIsNotNone(img, "slot %d %s: no art" % (slot, what))
                 px = img.load()
-                inside = [(x, y) for y in range(16 - hh // 2, 16 + (hh + 1) // 2)
-                          for x in range(16 - hw // 2, 16 + (hw + 1) // 2) if px[x, y][3] > 0]
+                inside = [(x, y) for (x, y) in box if px[x, y][3] > 0]
                 if what == "active":
                     self.assertTrue(inside, "slot %d active: no ink in the hit box" % slot)
                     self.assertTrue(any(x > 16 for x, _ in inside),
                                     "slot %d active: no ink in the box front half" % slot)
+                    self.assertTrue(any(px[x, y] == (255, 255, 255, 255) for (x, y) in inside),
+                                    "slot %d active: no blade core in the hit box" % slot)
+                else:
+                    self.assertTrue(any(px[x, y][3] > 0 for (x, y) in box),
+                                    "slot %d startup: no ink near the box" % slot)
+                    self.assertNotEqual(img.tobytes(), ge.sword_cell(row + 1, 0).tobytes(),
+                                        "slot %d: startup equals active" % slot)
 
 
 LAYERED_FIXTURE = os.path.join(HERE, "fixtures", "gen_equipment", "layered")

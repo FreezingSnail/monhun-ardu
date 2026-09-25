@@ -609,6 +609,7 @@ WEAPON_SRC_FACINGS = (0, 1, 2, 6, 7)   # DIR8 order used in the source columns
 # packed column -> (source column, mirror), per row
 WEAPON_MIRROR_PLAN = ((0, False), (1, False), (2, False), (1, True), (0, True), (4, True), (3, False), (4, False))
 WEAPON_ROW_MOVE0 = 2                   # slot s -> startup 2 + 2*s, active 3 + 2*s
+WEAPON_SLOTS = 10                      # combo 0..2, special, branch a/b, finisher, alt, roll, charge
 WEAPON_ROW_STANCE = 22
 WEAPON_ROW_DODGE = 23
 WEAPON_ROW_DEFENSE = 24                # flail deflect / gun shove
@@ -696,35 +697,79 @@ def _sindir(deg):
     return math.sin(math.radians(deg))
 
 
-# Player attack boxes (reach, hw, hh) from build/hitboxes.json, filled by
-# run(). The art derives each active pose from the mask-derived box, never from
-# a copied number (docs/weapon-art.md; build/hitboxes.json is written by
-# gen-hitboxes.py earlier in gen.sh).
-PLAYER_BOXES = None
-
-# weapon index -> move slot -> player_boxes ATTACKS index (docs/weapon-art.md)
-WEAPON_BOX_SLOT = {
-    0: {0: 0, 1: 1, 2: 2, 3: 3, 4: 8, 5: 9, 6: 10, 7: 5, 8: 4},
-}
+# Move records for the three weapons, loaded from build/fxdump.json (the host
+# dump of src/core/game.hpp, written earlier in gen.sh): the art derives every
+# pose from the move's own fields -- reach/hw/hh/lunge/effect/id -- never from
+# copied literals (docs/weapon-art.md). AtkId names are parsed from game.hpp so
+# the slot fold here cannot drift from src/render.hpp wpn::ATK_SLOT.
 WEAPON_COUNT = 3
-PER_WEAPON_BOXES = 11
+WEAPON_MOVES = None   # [weapon][slot] -> record dict, filled by run()
+ATK_IDS = None        # {"ATK_NONE": 0, ...}, parsed from src/core/game.hpp
 
 
-def load_player_boxes(root):
-    path = os.path.join(root, "build", "hitboxes.json")
+def load_atk_ids(root):
+    path = os.path.join(root, "src", "core", "game.hpp")
+    with open(path, encoding="utf-8") as handle:
+        text = handle.read()
+    match = re.search(r"enum AtkId\s*:\s*int8_t\s*\{(.*?)\};", text, re.S)
+    if not match:
+        raise SystemExit("gen-equipment: no AtkId enum in %s" % path)
+    ids = {}
+    value = 0
+    body = re.sub(r"//[^\n]*", "", match.group(1))
+    for token in body.split(","):
+        token = token.strip()
+        if not token:
+            continue
+        if "=" in token:
+            name, raw = token.split("=")
+            name, value = name.strip(), int(raw.strip())
+        else:
+            name = token
+        ids[name] = value
+        value += 1
+    return ids
+
+
+def load_weapon_moves(root, path=None):
+    """build/fxdump.json -> [weapon][slot] move records (docs/weapon-art.md).
+
+    Slot map: 0..2 combo, 3 special, 4 branch-a (STEPSLASH/TRIP/POINTBLANK),
+    5 branch-b (SPINCUT/GUARDBASH), 6 finisher (BRANCH2), 7 alt, 8 roll,
+    9 charge[0]. A zero-box branch (flail's whirl stance) never claims a slot.
+    """
+    if path is None:
+        path = os.path.join(root, "build", "fxdump.json")
     with open(path, encoding="utf-8") as handle:
         doc = json.load(handle)
-    boxes = doc["player"]["attacks"]
-    if len(boxes) != WEAPON_COUNT * PER_WEAPON_BOXES:
-        raise SystemExit("gen-equipment: build/hitboxes.json player boxes: %d, want %d"
-                         % (len(boxes), WEAPON_COUNT * PER_WEAPON_BOXES))
-    return boxes
+    if len(doc["weapons"]) != WEAPON_COUNT:
+        raise SystemExit("gen-equipment: fxdump weapons: %d, want %d"
+                         % (len(doc["weapons"]), WEAPON_COUNT))
+    slot_ids = {
+        4: (ATK_IDS["ATK_STEPSLASH"], ATK_IDS["ATK_TRIP"], ATK_IDS["ATK_POINTBLANK"]),
+        5: (ATK_IDS["ATK_SPINCUT"], ATK_IDS["ATK_GUARDBASH"]),
+        6: (ATK_IDS["ATK_BRANCH2"],),
+    }
+    moves = []
+    for weapon in doc["weapons"]:
+        recs = [None] * 10
+        recs[0], recs[1], recs[2] = weapon["attacks"]
+        recs[3] = weapon["special"]
+        for slot, wanted in slot_ids.items():
+            for branch in weapon["branches"]:
+                if branch["id"] in wanted and branch["hw"]:
+                    recs[slot] = branch
+                    break
+        recs[7], recs[8], recs[9] = weapon["alt"], weapon["roll"], weapon["charge"][0]
+        moves.append(recs)
+    return moves
 
 
-def player_box(weapon, slot):
-    index = WEAPON_BOX_SLOT[weapon][slot]
-    reach, hw, hh = PLAYER_BOXES[weapon * PER_WEAPON_BOXES + index]
-    return reach, hw, hh
+def move_record(weapon, slot):
+    record = WEAPON_MOVES[weapon][slot]
+    if record is None:
+        raise SystemExit("gen-equipment: weapon %d slot %d has no move record" % (weapon, slot))
+    return record
 
 
 def blade(img, facing, u0, v0, u1, v1, core=WHITE):
@@ -734,15 +779,54 @@ def blade(img, facing, u0, v0, u1, v1, core=WHITE):
     dot(img, *wpt(facing, u1, v1), core, 1)
 
 
+# Combo chain cut directions, in chain order (slot 0..2): the moveset's own
+# order picks the alternation; the box aspect and id pick everything else.
+SWORD_COMBO_ANGLES = ((-120, -35), (150, 30), (-150, 80))
+
+
+def sword_move_art(record, slot):
+    """(startup angle, active angle) for one sword move, from the record.
+
+    Identity first (id says spin/step/roll/alt/finisher), geometry second
+    (tall box = overhead, wide box = horizontal), chain order third.
+    """
+    atk_id = record["id"]
+    if atk_id == ATK_IDS["ATK_SPINCUT"]:
+        return -120, 0            # spin-cut: full turn
+    if atk_id == ATK_IDS["ATK_STEPSLASH"]:
+        return -70, 0             # step-slash: forward drive
+    if atk_id == ATK_IDS["ATK_ROLL"]:
+        return -100, 25           # roll slash: low cut
+    if atk_id == ATK_IDS["ATK_ALT"]:
+        return -35, 0             # thrust opener (lunge streak carries the drive)
+    if atk_id == ATK_IDS["ATK_BRANCH2"]:
+        return -140, 85           # finisher: overhead slam
+    if atk_id == ATK_IDS["ATK_NONE"] and slot < 3:
+        return SWORD_COMBO_ANGLES[slot]
+    hw, hh = record["hw"], record["hh"]
+    if hh >= hw + 6:
+        return -130, 80           # tall box: overhead cut
+    if hw >= hh + 6:
+        return -35, 20            # wide box: horizontal cut
+    return -90, 45                # diagonal
+
+
 def sword_cell(row, facing):
     """One 32x32 sword pose cell (grip at the cell centre on hand rows, hitbox
     centre on active rows — docs/weapon-art.md reference table)."""
     img = new(32, 32)
-    last_move_row = WEAPON_ROW_MOVE0 + 2 * len(SWORD_MOVES) - 1
+    last_move_row = WEAPON_ROW_MOVE0 + 2 * WEAPON_SLOTS - 1
     if WEAPON_ROW_MOVE0 <= row <= last_move_row:
-        slot, a_start, a_active = SWORD_MOVES[(row - WEAPON_ROW_MOVE0) // 2]
-        reach, hw, hh = player_box(0, slot)
+        slot = (row - WEAPON_ROW_MOVE0) // 2
+        record = move_record(0, slot)
+        if not record["hw"]:
+            return None   # unused slot (sword has no charge): blank row
+        a_start, a_active = sword_move_art(record, slot)
+        reach, hw, hh = record["reach"], record["hw"], record["hh"]
         active = (row - WEAPON_ROW_MOVE0) % 2 == 1
+        # The swing trail/frame count comes from the move's active window, so a
+        # longer-lived hit reads as a wider sweep.
+        steps = 4 + min(8, record["active"])
         if active:
             # Box-centred: the cell centre is the hitbox centre. The blade lies
             # in the box, rotated to the strike angle; the dark arc is the swing
@@ -750,15 +834,26 @@ def sword_cell(row, facing):
             pu, pv = -reach, 0
             half = hw / 2.0
             wline(img, facing, pu, pv, pu + 2, pv, DARK, 3)          # wrist
-            warc(img, facing, pu, pv, reach - 1, a_start, a_active, DARK, 1, 8)
+            if abs(a_active - a_start) > 20:
+                warc(img, facing, pu, pv, reach - 1, a_start, a_active, DARK, 1, steps)
+            else:
+                # pure thrust: straight trail from the hand to the box
+                wline(img, facing, pu + 2, pv, -half, 0, DARK, 1)
             blade(img, facing,
                   -half * _cosdir(a_active), -half * _sindir(a_active),
                   half * _cosdir(a_active), half * _sindir(a_active))
+            if record["lunge"]:
+                # the move drives the hunter forward: dash streaks at the box's
+                # near side (clamped inside the 32x32 cell)
+                for v in (-3, 3):
+                    wline(img, facing, max(-15.5, -half - 6), v, max(-13.5, -half - 2), v, DARK, 1)
         else:
             wline(img, facing, -2, 0, 1, 0, DARK, 3)             # grip
             blade(img, facing, 1, 0,
                   1 + 8 * _cosdir(a_start), 8 * _sindir(a_start))
-            warc(img, facing, 0, 0, 9, a_start, a_active, DARK, 1, 6)
+            # wind-up arc stops halfway to the strike angle, so the startup row
+            # never reads as the hit
+            warc(img, facing, 0, 0, 9, a_start, a_start + (a_active - a_start) * 0.5, DARK, 1, steps)
         return img
     if row == 0:      # idle: blade resting forward-down
         wline(img, facing, -3, 0, 1, 0, DARK, 3)
@@ -1151,11 +1246,13 @@ def run(root, dump):
         print("gen-equipment: %d items, %d B blob" % (len(items), len(blob)))
         return 0
 
-    global PLAYER_BOXES
+    global ATK_IDS, WEAPON_MOVES
     if any(item["mirror"] for item in items):
-        # Authored weapon sheets derive their active poses from the mask boxes;
-        # trees without one (unit fixtures) never reach this.
-        PLAYER_BOXES = load_player_boxes(root)
+        # Authored weapon sheets derive their poses from the move records; the
+        # AtkId names come from game.hpp so the slot fold cannot drift from the
+        # render. Trees without either (unit fixtures) never reach this.
+        ATK_IDS = load_atk_ids(root)
+        WEAPON_MOVES = load_weapon_moves(root)
     images_dir = os.path.join(root, IMAGES_REL)
     os.makedirs(images_dir, exist_ok=True)
     wrote = set()

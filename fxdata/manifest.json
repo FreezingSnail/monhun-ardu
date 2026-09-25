@@ -718,8 +718,8 @@
     {
       "declaration": "fxdata/equip/Sprites.txt",
       "path": "images/equip/mh_weapon_sword_32x32.png",
-      "sha256": "618ac95fbc09674e4d98d31cf1359a905028c3ff02768c4590e8f0e2af10cbcf",
-      "size": 8753,
+      "sha256": "6135016eacedec09bb2d9d486074420e887ecb65205bb587203d958ba166dc25",
+      "size": 8465,
       "symbol": "mh_weapon_sword"
     },
     {
@@ -1212,7 +1212,7 @@
     },
     {
       "path": "fxdata/equip/Sprites.txt",
-      "sha256": "c8073fe64666d684d0942b4bcaf94958545bb45dcdb9919b7cd94c500777f148",
+      "sha256": "eacfeeba29c8fc0027cf332935fbc6c47ffe45736b74884a1facc2fbbd412d87",
       "size": 1114259,
       "symbols": [
         "mh_head_bandana",
@@ -1414,12 +1414,12 @@
   "outputs": [
     {
       "path": "fxdata/fxdata-data.bin",
-      "sha256": "f3c4bf57bae93f25ca3356f3959e1f78ce366c56358b53ef79973b9930261ee6",
+      "sha256": "3feb4d343a83fdfcd7320dbea14f48b66840ce523a18220e8ded0053988c3ec7",
       "size": 557992
     },
     {
       "path": "fxdata/fxdata.bin",
-      "sha256": "e7a0a4377c2be43c79f2536b16cfb34617d740591e7811af6c55ed5125962712",
+      "sha256": "1ea77192cee609a07ba4cb0d97ef2d23958819985c70d7c8314eae8976e9b0e3",
       "size": 558080
     },
     {

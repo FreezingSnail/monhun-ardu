@@ -94,8 +94,14 @@ angle, and the tooling test asserts ink in the box and across its front half.
 
 - **Boxes are the contract.** `src/generated/player_boxes.hpp` (mask
   `images/masks/mh_player_base_16x16.png`) owns reach/hw/hh; never copy numbers
-  into the art code. The generator reads `build/hitboxes.json` /
-  `player_boxes.hpp` and derives each active pose from the box.
+  into the art code.
+- **Move records are the source.** `tools/fxdump.cpp` emits every weapon attack
+  (startup/active/recover/reach/hw/hh/lunge/push/effect/id; roll/alt/charge
+  included) into `build/fxdump.json`; the generator derives each pose from that
+  record — identity (spin/step/roll/alt/finisher) first, box geometry second,
+  chain order third — and never from a hand-written angle table. AtkId names are
+  parsed from `src/core/game.hpp`, so the tool's slot fold cannot drift from
+  `src/render.hpp wpn::ATK_SLOT`.
 - **Telegraph discipline** (same rule as creatures, `docs/dev-flow.md`): the
   startup row must read as "wind-up" (weapon pulled off the hit vector), the
   active row must read as the strike; the hitbox rect is covered on active rows
