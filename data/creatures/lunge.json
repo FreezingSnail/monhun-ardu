@@ -57,7 +57,9 @@
     "stunRecoverT": 24,
     "staggerMax": 60,
     "staggerDecay": 2,
-    "staggerRecoverT": 30
+    "staggerRecoverT": 30,
+    "restAfter": 2,
+    "restT": 110
   },
   "attacks": [
     {

@@ -20,8 +20,8 @@
 // two optional zone rects, picks the highest dmgMul (tie -> body, then head,
 // then appendage), drains the zone pool and flips a single broken bit per zone.
 //
-// Cache budget: CombatProfile 24 B + CombatAttackCache 28 B + body box 4 B +
-// 2x CombatZoneCache 26 B + 4 runtime zone bytes + 4 interpreter bytes = 90 B
+// Cache budget: CombatProfile 26 B + CombatAttackCache 28 B + body box 4 B +
+// 2x CombatZoneCache 26 B + 4 runtime zone bytes + 4 interpreter bytes = 92 B
 // on AVR.
 
 #include <stddef.h>
@@ -236,6 +236,7 @@ struct PkProfile {
     uint8_t staggerMax, staggerDecay, zoneFlags, faceHold;
     uint8_t turnRate;
     uint16_t cdBase, cdJitter, spawnT, spawnCd, stunRecoverT, staggerRecoverT;
+    uint8_t restAfter, restT;   // dzr chain-gated stationary rest (0 = disabled)
 };
 struct PkSkeleton {
     uint8_t firstAnchor, anchorCount;
@@ -330,8 +331,8 @@ static_assert(offsetof(CombatPattern, guardIdx) == offsetof(PkPattern, guardIdx)
 static_assert(sizeof(CombatWindow) == 9, "window cache must stay 9 B");
 static_assert(sizeof(CombatAttackCache) == 28, "attack cache must stay 28 B (windup quad + move prefix incl hop dx/dy + facing + wallStun + tell + attack art + idx + window)");
 static_assert(sizeof(CombatZoneCache) == 13, "zone cache must stay 13 B");
-static_assert(sizeof(CombatState) == 110,
-              "CombatState must stay 110 B (zones design + collide + static flag + faceHold + turnRate + wallStun + tell + attack art + enrage + hop dx/dy + art + zone part sheets)");
+static_assert(sizeof(CombatState) == 112,
+              "CombatState must stay 112 B (zones design + collide + static flag + faceHold + turnRate + wallStun + tell + attack art + enrage + hop dx/dy + art + zone part sheets + rest)");
 
 // Fake cart pointer: the blob lives below 64 KB (generator hard-fails above).
 inline uint16_t combatCartAddr(uint16_t off) {
@@ -483,7 +484,7 @@ inline void combatCreatureArtRead(uint8_t i, CombatArt &art) {
     detail::combatReadBytes(static_cast<uint16_t>(combat::ART_OFF + i * combat::ART_SIZE), &art, sizeof(art));
 }
 
-// Profile is a byte-identical 23 B mirror: one bulk read at spawn.
+// Profile is a byte-identical 26 B mirror: one bulk read at spawn.
 inline CombatProfile combatProfileRead(uint8_t i) {
     CombatProfile v;
     detail::combatReadBytes(static_cast<uint16_t>(combat::PROFILES_OFF + i * combat::PROFILE_SIZE), &v, sizeof(v));
@@ -782,6 +783,8 @@ inline CombatProfile combatProfileRead(uint8_t i) {
     v.spawnCd = p.spawnCd;
     v.stunRecoverT = p.stunRecoverT;
     v.staggerRecoverT = p.staggerRecoverT;
+    v.restAfter = p.restAfter;
+    v.restT = p.restT;
     return v;
 }
 

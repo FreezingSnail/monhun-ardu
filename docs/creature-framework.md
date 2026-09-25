@@ -179,7 +179,7 @@ Profile (per creature, RAM-cached, ~26 B):
 
 ```
 engageDist, keepDist, attackDist, circleNum/Den, retreatNum/Den,
-cdBase, cdJitter, spawnT, spawnCd, stunRecoverT, faceHold
+cdBase, cdJitter, spawnT, spawnCd, stunRecoverT, faceHold, restAfter/restT
 ```
 
 - Decision tick: in PURSUE with `cd <= 0 && dist < attackDist`, evaluate
@@ -192,6 +192,10 @@ cdBase, cdJitter, spawnT, spawnCd, stunRecoverT, faceHold
   `hitFlash--` → dead return → face/dist recompute → stun check/return → FSM.
 - `pushApart`, world clamp and deflect/parry stuns stay native — not
   pattern-expressible.
+- Chain-gated stationary rest (`dzr`): after `restAfter` completed attacks the
+  beast parks in `IDLE` for `restT` ticks (cd 0) instead of re-entering
+  `PURSUE`, giving the hunter a real punish window; `restAfter 0` (shipped
+  default) never rests. Only the chicken authors 2 / 110.
 - Stagger meter: `profile.staggerMax` (0 = disabled → shipped 3 unchanged),
   `staggerDecay`, `staggerRecoverT`. Hits add attack `stagger` × part mods; on
   reaching max → cancel pattern → `STAGGER` for `staggerRecoverT`, reset meter.

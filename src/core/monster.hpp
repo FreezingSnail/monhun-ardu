@@ -358,6 +358,7 @@ static void initMonster(Game &g, int8_t kind = 0) {
     m.circleDir = 1;
     m.spd = spawn.spd;
     m.faceT = 0;   // nch.4: refresh facing on the first update tick
+    m.chain = 0;   // dzr: no completed attacks yet
     gp->over = OVER_NONE;
     gp->target.onHit = monsterOnHit;
     gp->target.onShove = monsterOnShove;
@@ -772,10 +773,24 @@ static void updateMonster(Game &g) {
             }
         }
         if (m.t > active + recover) {
-            m.state = MS_PURSUE;
-            const uint16_t jitter = pr.cdJitter;
-            m.cd = static_cast<int16_t>(pr.cdBase + (jitter ? static_cast<uint16_t>(gp->tick) % jitter : 0));
-            m.circleDir = (gp->tick % 2) ? 1 : -1;
+            // dzr: chain-gated stationary rest. Every completed attack advances
+            // the chain; once profile.restAfter is reached the beast stands
+            // still (MS_IDLE) for restT ticks with cd 0 -- the punish window.
+            // restAfter 0 (all shipped beasts but the chicken) keeps today's
+            // PURSUE release byte-identical. MS_IDLE expiry does not touch cd,
+            // so the spawn IDLE keeps spawnCd and a rest resumes into PURSUE.
+            m.chain++;
+            if (pr.restAfter != 0 && m.chain >= pr.restAfter) {
+                m.chain = 0;
+                m.state = MS_IDLE;
+                m.t = static_cast<int16_t>(pr.restT);
+                m.cd = 0;
+            } else {
+                m.state = MS_PURSUE;
+                const uint16_t jitter = pr.cdJitter;
+                m.cd = static_cast<int16_t>(pr.cdBase + (jitter ? static_cast<uint16_t>(gp->tick) % jitter : 0));
+                m.circleDir = (gp->tick % 2) ? 1 : -1;
+            }
         }
         break;
     }

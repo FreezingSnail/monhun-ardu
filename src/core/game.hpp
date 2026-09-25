@@ -610,13 +610,14 @@ struct CombatBox {
 // combat.hpp's COMBAT_ZONE_COUNT/bit constants mirror this order.
 constexpr uint8_t COMBAT_ZONE_SLOTS = 2;
 
-// Full profile record mirror (18 fields, blob ABI order). Read whole at spawn
+// Full profile record mirror (20 fields, blob ABI order). Read whole at spawn
 // and cached; the interpreter consumes the cache at decision time. zoneFlags
 // carries the per-creature zone presence bits (build/zones-design.md). faceHold
 // (nch.4) is the turn-commitment cadence: 0 recomputes facing every tick, >0
 // refreshes it only every faceHold ticks. turnRate (feel.14) bounds how many
 // DIR8 steps the refreshed facing may rotate toward the player (0 = legacy
-// snap).
+// snap). restAfter/restT (dzr) are the chain-gated stationary rest: after
+// restAfter completed attacks the beast stands still for restT ticks; 0 = off.
 struct CombatProfile {
     uint8_t engageDist, keepDist, attackDist;
     uint8_t circleNum, circleDen, retreatNum, retreatDen;
@@ -624,6 +625,7 @@ struct CombatProfile {
     uint8_t faceHold;
     uint8_t turnRate;
     uint16_t cdBase, cdJitter, spawnT, spawnCd, stunRecoverT, staggerRecoverT;
+    uint8_t restAfter, restT;
 };
 
 // Creature enrage phase (feel.6): one-shot escalation cached at spawn, applied
@@ -715,7 +717,7 @@ struct CombatZoneCache {
 // and the single broken bit per zone. The pattern step cursor
 // (stepIdx + 256-tick countdown stepT) and stagger meter are unchanged.
 struct CombatState {
-    CombatProfile profile;                     // 24 B AVR
+    CombatProfile profile;                     // 26 B AVR
     CombatAttackCache attack;                  // 21 B AVR
     CombatBox body;                            // 4 B AVR
     CombatBox collide;                         // 4 B AVR: body-collision rect
@@ -886,6 +888,10 @@ struct Monster : fp::FpBody {
     // every tick; >0 = faceT counts down and facing refreshes at 0. Lock modes
     // (windup/attack of a lock attack) still freeze facing regardless.
     uint8_t faceT;
+    // Chain counter (dzr): completed attacks since the last rest. The MS_ATTACK
+    // release increments it; profile.restAfter > 0 and chain >= restAfter opens
+    // a stationary MS_IDLE rest and resets it. restAfter 0 keeps it inert.
+    uint8_t chain;
 };
 
 struct Game {

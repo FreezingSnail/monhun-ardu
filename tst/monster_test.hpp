@@ -817,6 +817,70 @@ void MonsterSuite(TestRunner &runner) {
     }
 
     {
+        // dzr: the chicken's chain-gated stationary rest. Two completed parked
+        // attacks advance the chain; the second (restAfter 2) opens a stationary
+        // MS_IDLE window (restT ticks, cd 0) instead of releasing straight into
+        // PURSUE. With the hunter inside the threat band the beast would circle
+        // in PURSUE, so an unchanged x/y over the rest pins the punish window.
+        Test t("dzr: chicken rests stationary after restAfter attacks, then resumes");
+        Game g;
+        newGame(g, W_SWORD, MODE_HUNT, MON_LUNGE);
+        Monster &m = g.monster;
+        Player &p = g.player;
+        t.assert(g.combat.profile.restAfter, 2, "chicken restAfter 2");
+        t.assert(g.combat.profile.restT, 110, "chicken restT 110");
+        m.x = 100;
+        m.y = 40;
+        // Hunter inside the keep/engage band: PURSUE would step (circle) each tick.
+        p.x = static_cast<int16_t>(m.x + (m.w >> 1) - (p.w >> 1));
+        p.y = static_cast<int16_t>(m.y + (m.h >> 1) + 26 - (p.h >> 1));
+        const int16_t active = 6, recover = 26;   // peck
+
+        // attack 1: completes into PURSUE with chain 1.
+        monsterAttackSet(g, combat::ATTACK_LUNGE_PECK);
+        g.combat.attack.moveType = MOVE_NONE;   // parked: no lunge drift
+        m.state = MS_ATTACK;
+        m.t = 0;
+        beast(g, active + recover + 1);
+        t.assert(m.state, MS_PURSUE, "attack 1 -> pursue");
+        t.assert(m.chain, 1, "chain 1 after attack 1");
+        t.assert(m.cd != 0, true, "attack 1 keeps the jittered cooldown");
+
+        // attack 2: restAfter reached -> stationary IDLE, chain reset, cd 0.
+        monsterAttackSet(g, combat::ATTACK_LUNGE_PECK);
+        g.combat.attack.moveType = MOVE_NONE;
+        m.state = MS_ATTACK;
+        m.t = 0;
+        beast(g, active + recover + 1);
+        t.assert(m.state, MS_IDLE, "attack 2 -> idle rest");
+        t.assert(m.chain, 0, "chain reset by the rest");
+        t.assert(m.t, g.combat.profile.restT, "rest timer = restT");
+        t.assert(m.cd, 0, "rest cd cleared");
+
+        // The rest is stationary: 20 in-range ticks leave the body anchor put.
+        const int16_t rx = m.x;
+        const int16_t ry = m.y;
+        beast(g, 20);
+        t.assert(m.state, MS_IDLE, "still resting at 20 ticks");
+        t.assert(m.x, rx, "rest: no x drift");
+        t.assert(m.y, ry, "rest: no y drift");
+        t.assert(m.cd, 0, "rest keeps cd 0");
+
+        // Expiry returns to PURSUE without clobbering cd (the next decision tick
+        // is free to attack again).
+        beast(g, g.combat.profile.restT - 20);
+        t.assert(m.state, MS_PURSUE, "rest expiry -> pursue");
+        t.assert(m.cd, 0, "rest expiry keeps cd 0");
+
+        // Other kits are disabled: restAfter 0 never opens the rest window.
+        Game g2;
+        newGame(g2, W_SWORD, MODE_HUNT, MON_SWEEP);
+        t.assert(g2.combat.profile.restAfter, 0, "bull restAfter 0 (disabled)");
+        t.assert(g2.monster.chain, 0, "chain init 0");
+        suite.addTest(t);
+    }
+
+    {
         Test t("stun ends into recover 24, then pursue cd 55");
         Game g;
         newHunt(g);

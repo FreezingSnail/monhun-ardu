@@ -24,12 +24,13 @@ Blob layout (little-endian, explicit u8/u16, no padding, fixed section order):
                      w, h, spd, collide(ox i8, oy i8, w, h),
                      hp u16, spawnX u16, spawnY u16, flags,
                      brokenW, brokenH, enrage(hpPct, spdMul, faceHold, cue)
-    profile    24 B  engageDist, keepDist, attackDist, circleNum, circleDen,
+    profile    26 B  engageDist, keepDist, attackDist, circleNum, circleDen,
                      retreatNum, retreatDen, staggerMax, staggerDecay,
                      zoneFlags (bit0 head, bit1 appendage), faceHold u8 tick
                      countdown, turnRate u8 DIR8 steps per facing refresh,
                      cdBase u16, cdJitter u16, spawnT u16,
-                     spawnCd u16, stunRecoverT u16, staggerRecoverT u16
+                     spawnCd u16, stunRecoverT u16, staggerRecoverT u16,
+                     restAfter u8, restT u8
     skeleton    2 B  firstAnchor, anchorCount
     zone       14 B  box(ox i8, oy i8, w, h), hp, dmgMul, bodyShare, breakTypes,
                      staggerOnHit, brokenDmgMul, brokenFlags (bit0 hurtOff,
@@ -129,7 +130,7 @@ COMBAT_NO_ZONE = 0xFF
 
 SIZES = {
     "CREATURE": 28 + CARVE_SIZE * CARVE_SLOTS,
-    "PROFILE": 24,
+    "PROFILE": 26,
     "SKELETON": 2,
     "ZONE": 14,
     "ANCHOR": 2,
@@ -791,7 +792,7 @@ def normalize_carve(errors, ctx, raw, item_ids):
 
 
 PROFILE_REQUIRED = {"engageDist", "keepDist", "attackDist", "circleNum", "circleDen", "retreatNum", "retreatDen", "cdBase", "cdJitter", "spawnT", "spawnCd", "stunRecoverT"}
-PROFILE_OPTIONAL = {"staggerMax", "staggerDecay", "staggerRecoverT", "faceHold", "turnRate"}
+PROFILE_OPTIONAL = {"staggerMax", "staggerDecay", "staggerRecoverT", "faceHold", "turnRate", "restAfter", "restT"}
 
 
 def zero_profile():
@@ -803,6 +804,7 @@ def zero_profile():
         "circleNum": 0, "circleDen": 1, "retreatNum": 0, "retreatDen": 1,
         "cdBase": 0, "cdJitter": 0, "spawnT": 0, "spawnCd": 0, "stunRecoverT": 0,
         "staggerMax": 0, "staggerDecay": 0, "staggerRecoverT": 0, "faceHold": 0, "turnRate": 0,
+        "restAfter": 0, "restT": 0,
     }
 
 
@@ -831,6 +833,11 @@ def normalize_profile(errors, ctx, obj):
         # onto the player delta (shipped default); 1..8 = step the cached DIR8
         # facing toward it by at most this many 45-degree steps per refresh.
         "turnRate": read_int(errors, ctx, obj, "turnRate", 0, 8, default=0),
+        # dzr: optional chain-gated stationary rest. restAfter = completed attacks
+        # before a rest (0 = disabled, shipped default); restT = rest length in
+        # ticks. Only the chicken authors it (2 / 110).
+        "restAfter": read_int(errors, ctx, obj, "restAfter", 0, 255, default=0),
+        "restT": read_int(errors, ctx, obj, "restT", 0, 255, default=0),
     }
 
 
@@ -1196,6 +1203,7 @@ def pack_model(errors, model):
             u8(zone_flags), u8(profile["faceHold"]), u8(profile["turnRate"]),
             u16(profile["cdBase"]), u16(profile["cdJitter"]), u16(profile["spawnT"]),
             u16(profile["spawnCd"]), u16(profile["stunRecoverT"]), u16(profile["staggerRecoverT"]),
+            u8(profile["restAfter"]), u8(profile["restT"]),
         ]))
 
     # skeletons
@@ -1413,6 +1421,7 @@ def emit_data_header(model, compiled):
     app("    uint8_t faceHold;   // 0 = recompute facing every tick")
     app("    uint8_t turnRate;   // DIR8 steps per facing refresh (0 = snap, feel.14)")
     app("    uint16_t cdBase, cdJitter, spawnT, spawnCd, stunRecoverT, staggerRecoverT;")
+    app("    uint8_t restAfter, restT;   // chain-gated stationary rest (0 = disabled, dzr)")
     app("};")
     app("")
     app("struct Skeleton {")
@@ -1521,12 +1530,13 @@ def emit_data_header(model, compiled):
                 for name in ZONE_NAMES:
                     if name in creature["zones"]:
                         zone_flags |= zone_flag(name)
-                app("    {%d, %d, %d, %d, %d, %d, %d, %d, %d, %d, %d, %d, %d, %d, %d, %d, %d, %d}," % (
+                app("    {%d, %d, %d, %d, %d, %d, %d, %d, %d, %d, %d, %d, %d, %d, %d, %d, %d, %d, %d, %d}," % (
                     profile["engageDist"], profile["keepDist"], profile["attackDist"],
                     profile["circleNum"], profile["circleDen"], profile["retreatNum"], profile["retreatDen"],
                     profile["staggerMax"], profile["staggerDecay"], zone_flags, profile["faceHold"], profile["turnRate"],
                     profile["cdBase"], profile["cdJitter"], profile["spawnT"], profile["spawnCd"],
-                    profile["stunRecoverT"], profile["staggerRecoverT"]))
+                    profile["stunRecoverT"], profile["staggerRecoverT"],
+                    profile["restAfter"], profile["restT"]))
         elif section == "SKELETONS":
             for entry in layout["skeletons"]:
                 skeleton = entry["skeleton"]
@@ -1811,6 +1821,8 @@ def emit_expect_header(model, compiled):
             app("constexpr uint8_t CREATURE_%s_ENRAGE_CUE = %d;" % (cid, enrage["cue"] or 0))
         app("constexpr uint8_t PROFILE_%s_FACE_HOLD = %d;" % (cid, creature["profile"]["faceHold"]))
         app("constexpr uint8_t PROFILE_%s_TURN_RATE = %d;" % (cid, creature["profile"]["turnRate"]))
+        app("constexpr uint8_t PROFILE_%s_REST_AFTER = %d;" % (cid, creature["profile"]["restAfter"]))
+        app("constexpr uint8_t PROFILE_%s_REST_T = %d;" % (cid, creature["profile"]["restT"]))
         if creature["attacks"]:
             first_attack = creature["attacks"][0]
             app("constexpr uint16_t ATTACK_%s_%s_WINDUP = %d;" % (cid, first_attack["id"].upper(), first_attack["windup"]))
@@ -1874,12 +1886,13 @@ def dump_model(model, compiled):
             print("  art: sheet%d anchorY%d stride%d idle%d+%d windup%d attack%d recover%d flash%d dead%d" % (
                 art["sheet"], art["anchorY"], art["stride"], art["idle0"], art["idleCount"],
                 art["windup"], art["attack"], art["recover"], art["flash"], art["dead"]))
-        print("  profile: engage%d keep%d attack%d circle%d/%d retreat%d/%d stagger%d/%d/%d faceHold%d turnRate%d cd%d+%d spawn%d/%d stun%d" % (
+        print("  profile: engage%d keep%d attack%d circle%d/%d retreat%d/%d stagger%d/%d/%d faceHold%d turnRate%d cd%d+%d spawn%d/%d stun%d rest%d/%d" % (
             profile["engageDist"], profile["keepDist"], profile["attackDist"],
             profile["circleNum"], profile["circleDen"], profile["retreatNum"], profile["retreatDen"],
             profile["staggerMax"], profile["staggerDecay"], profile["staggerRecoverT"],
             profile["faceHold"], profile["turnRate"],
-            profile["cdBase"], profile["cdJitter"], profile["spawnT"], profile["spawnCd"], profile["stunRecoverT"]))
+            profile["cdBase"], profile["cdJitter"], profile["spawnT"], profile["spawnCd"], profile["stunRecoverT"],
+            profile["restAfter"], profile["restT"]))
         for name in ZONE_NAMES:
             if name not in creature["zones"]:
                 continue

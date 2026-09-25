@@ -12,7 +12,7 @@
 namespace combat_data {
 
 constexpr uint8_t VERSION = 1;
-constexpr uint16_t BLOB_SIZE = 1257;
+constexpr uint16_t BLOB_SIZE = 1267;
 
 struct Box {
     int8_t ox;
@@ -37,6 +37,7 @@ struct Profile {
     uint8_t faceHold;   // 0 = recompute facing every tick
     uint8_t turnRate;   // DIR8 steps per facing refresh (0 = snap, feel.14)
     uint16_t cdBase, cdJitter, spawnT, spawnCd, stunRecoverT, staggerRecoverT;
+    uint8_t restAfter, restT;   // chain-gated stationary rest (0 = disabled, dzr)
 };
 
 struct Skeleton {
@@ -217,11 +218,11 @@ inline constexpr std::array<Creature, 5> CREATURES = {{
 }};
 
 inline constexpr std::array<Profile, 5> PROFILES = {{
-    {36, 12, 42, 8, 10, 6, 10, 0, 0, 2, 10, 1, 55, 40, 90, 140, 24, 0},
-    {36, 16, 42, 8, 10, 6, 10, 60, 2, 3, 6, 1, 48, 60, 90, 140, 24, 30},
-    {0, 0, 0, 0, 1, 0, 1, 0, 0, 1, 0, 0, 0, 0, 0, 0, 0, 0},
-    {36, 24, 42, 8, 10, 6, 10, 60, 1, 3, 8, 2, 50, 30, 90, 120, 24, 24},
-    {36, 18, 42, 8, 10, 6, 10, 80, 1, 3, 10, 1, 55, 40, 90, 140, 24, 24},
+    {36, 12, 42, 8, 10, 6, 10, 0, 0, 2, 10, 1, 55, 40, 90, 140, 24, 0, 0, 0},
+    {36, 16, 42, 8, 10, 6, 10, 60, 2, 3, 6, 1, 48, 60, 90, 140, 24, 30, 2, 110},
+    {0, 0, 0, 0, 1, 0, 1, 0, 0, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0},
+    {36, 24, 42, 8, 10, 6, 10, 60, 1, 3, 8, 2, 50, 30, 90, 120, 24, 24, 0, 0},
+    {36, 18, 42, 8, 10, 6, 10, 80, 1, 3, 10, 1, 55, 40, 90, 140, 24, 24, 0, 0},
 }};
 
 inline constexpr std::array<Skeleton, 5> SKELETONS = {{

@@ -194,7 +194,8 @@ tightened art bboxes).
 
 **Profile:** engage 36 / keep 16 / attack 42; faceHold 6; turnRate 1; circle 8/10;
 retreat 6/10; cdBase 48 + jitter 60; spawnT 90 / spawnCd 140; stunRecover 24;
-staggerMax 60, decay 2, recover 30.
+staggerMax 60, decay 2, recover 30; restAfter 2 / restT 110 (chain-gated
+stationary rest: after two attacks it stands still ~2.1 s, cd 0, idle flap).
 
 **Attacks**
 

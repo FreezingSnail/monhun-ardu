@@ -578,6 +578,8 @@ inline void test_combat(FxTest &test) {
     test.expectEq(g.combat.profile.spawnT, 90, F("cache spawnT"));
     test.expectEq(g.combat.profile.spawnCd, 140, F("cache spawnCd"));
     test.expectEq(g.combat.profile.stunRecoverT, 24, F("cache stunRecoverT"));
+    test.expectEq(g.combat.profile.restAfter, combat_expect::PROFILE_LUNGE_REST_AFTER, F("cache restAfter"));
+    test.expectEq(g.combat.profile.restT, combat_expect::PROFILE_LUNGE_REST_T, F("cache restT"));
     test.expectEq(g.combat.zoneBroken, 0, F("zones reset"));
     test.expectEq(g.combat.stepT, 0, F("step timer reset"));
 

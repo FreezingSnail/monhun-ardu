@@ -105,6 +105,8 @@ void CombatSuite(TestRunner &runner) {
             t.assert(p.spawnCd, h.spawnCd, "profile spawnCd");
             t.assert(p.stunRecoverT, h.stunRecoverT, "profile stunRecoverT");
             t.assert(p.staggerRecoverT, h.staggerRecoverT, "profile staggerRecoverT");
+            t.assert(p.restAfter, h.restAfter, "profile restAfter");
+            t.assert(p.restT, h.restT, "profile restT");
         }
         // nch.4: heavy commits its turn and holds ground at 12; feel.10 dropped
         // faceHold to 8, feel.15 raises it to 10 and authors turnRate 1 so the
@@ -123,6 +125,9 @@ void CombatSuite(TestRunner &runner) {
         t.assert(lunge.staggerMax, 60, "chicken staggerMax 60 (feel.19)");
         t.assert(lunge.staggerDecay, 2, "chicken staggerDecay 2 (feel.8)");
         t.assert(lunge.staggerRecoverT, 30, "chicken staggerRecoverT 30 (feel.8)");
+        // dzr: the chicken is the only kit with the chain-gated rest enabled.
+        t.assert(lunge.restAfter, 2, "chicken restAfter 2 (dzr)");
+        t.assert(lunge.restT, 110, "chicken restT 110 (dzr)");
         const CombatProfile sweep = combatProfileRead(combatCreatureProfileIdx(combat_data::CREATURE_SWEEP));
         t.assert(sweep.faceHold, combat_expect::PROFILE_SWEEP_FACE_HOLD, "bull faceHold 10");
         t.assert(sweep.turnRate, 1, "bull turnRate 1 (feel.15)");

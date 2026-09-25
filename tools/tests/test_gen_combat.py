@@ -159,7 +159,7 @@ class GenCombatTests(unittest.TestCase):
         # flips HAS_TURN_RATE once a creature authors it.
         self.assert_succeeds(self.compile())
         meta = self.meta_constants()
-        self.assertEqual(meta["PROFILE_SIZE"], 24, "profile record grew for turnRate")
+        self.assertEqual(meta["PROFILE_SIZE"], 26, "profile record grew for restAfter/restT")
         o = meta["PROFILE_BEAST_OFF"]
         self.assertEqual(self.blob()[o + 11], 0, "turnRate defaults to 0")
         self.assertIn("constexpr uint8_t PROFILE_BEAST_TURN_RATE = 0;", self.read(EXPECT_REL))
@@ -174,6 +174,36 @@ class GenCombatTests(unittest.TestCase):
         self.assertIn("turnRate2", self.compile("--dump").stdout)
         # The u16 timers stay contiguous right after the new byte.
         self.assertEqual(self.read_int16(self.blob(), o + 12), 40, "cdBase follows turnRate")
+
+    def test_rest_after_default_emit_range_and_dump(self):
+        # dzr: profile.restAfter/restT are optional (default 0 = disabled), pack
+        # as the trailing byte pair after the six u16 timers (26 B record).
+        self.assert_succeeds(self.compile())
+        meta = self.meta_constants()
+        o = meta["PROFILE_BEAST_OFF"]
+        self.assertEqual(self.blob()[o + 24], 0, "restAfter defaults to 0")
+        self.assertEqual(self.blob()[o + 25], 0, "restT defaults to 0")
+        self.assertIn("constexpr uint8_t PROFILE_BEAST_REST_AFTER = 0;", self.read(EXPECT_REL))
+        self.assertIn("constexpr uint8_t PROFILE_BEAST_REST_T = 0;", self.read(EXPECT_REL))
+        self.assertIn("rest0/0", self.compile("--dump").stdout)
+        self.mutate("data/creatures/beast.json",
+                    lambda doc: doc["profile"].__setitem__("restAfter", 2))
+        self.mutate("data/creatures/beast.json",
+                    lambda doc: doc["profile"].__setitem__("restT", 110))
+        self.assert_succeeds(self.compile())
+        self.assertEqual(self.blob()[o + 24], 2, "restAfter emitted at byte 24")
+        self.assertEqual(self.blob()[o + 25], 110, "restT emitted at byte 25")
+        self.assertIn("constexpr uint8_t PROFILE_BEAST_REST_AFTER = 2;", self.read(EXPECT_REL))
+        self.assertIn("constexpr uint8_t PROFILE_BEAST_REST_T = 110;", self.read(EXPECT_REL))
+        self.assertIn("rest2/110", self.compile("--dump").stdout)
+
+    def test_rest_after_out_of_range_rejected(self):
+        self.mutate("data/creatures/beast.json",
+                    lambda doc: doc["profile"].__setitem__("restAfter", 256))
+        self.assert_fails(self.compile(), "profile: restAfter: out of range 0..255: 256")
+        self.mutate("data/creatures/beast.json",
+                    lambda doc: doc["profile"].__setitem__("restT", -1))
+        self.assert_fails(self.compile(), "profile: restT: out of range 0..255: -1")
 
     def test_turn_rate_out_of_range_rejected(self):
         self.mutate("data/creatures/beast.json",
@@ -598,10 +628,10 @@ class GenCombatTests(unittest.TestCase):
         self.assertEqual(creature, bytes([0, 0, 0, 1, 0, 1, 0, 1, 16, 12, 4, 0, 0, 16, 12, 80, 0, 100, 0, 32, 0, 0, 0, 0, 0, 0, 0, 0] + [0] * 12))
 
         profile = blob[meta["PROFILE_BEAST_OFF"]:meta["PROFILE_BEAST_OFF"] + meta["PROFILE_SIZE"]]
-        # 24 B profile: 12 u8 scalars (zoneFlags, the nch.4 faceHold byte, then
-        # the feel.14 turnRate byte) then six u16 timers.
+        # 26 B profile: 12 u8 scalars (zoneFlags, the nch.4 faceHold byte, then
+        # the feel.14 turnRate byte), six u16 timers, then the dzr rest pair.
         self.assertEqual(profile, bytes([30, 18, 36, 8, 10, 6, 10, 40, 1, 3, 0, 0, 40, 0, 20, 0,
-                                         60, 0, 90, 0, 20, 0, 15, 0]))
+                                         60, 0, 90, 0, 20, 0, 15, 0, 0, 0]))
 
         skeleton = blob[meta["SKELETON_BEAST_16X12_OFF"]:meta["SKELETON_BEAST_16X12_OFF"] + meta["SKELETON_SIZE"]]
         self.assertEqual(skeleton, bytes([0, 1]))
@@ -677,7 +707,7 @@ class GenCombatTests(unittest.TestCase):
         p = meta["PROFILE_POLE_OFF"]
         prof = blob[p:p + meta["PROFILE_SIZE"]]
         self.assertEqual(prof, bytes([0, 0, 0, 0, 1, 0, 1, 0, 0, 3, 0, 0,
-                                      0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0]))
+                                      0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0]))
 
         head = blob[meta["ZONE_POLE_HEAD_OFF"]:meta["ZONE_POLE_HEAD_OFF"] + meta["ZONE_SIZE"]]
         # box -128,0,255,16; hp 0 (omitted), dmgMul 140, bodyShare 100 (default),
@@ -872,6 +902,8 @@ class GenCombatTests(unittest.TestCase):
         self.assertEqual(expect["CREATURE_BEAST_ATTACKS"], 1)
         self.assertEqual(expect["CREATURE_BEAST_PATTERNS"], 1)
         self.assertEqual(expect["PROFILE_BEAST_TURN_RATE"], 0)
+        self.assertEqual(expect["PROFILE_BEAST_REST_AFTER"], 0)
+        self.assertEqual(expect["PROFILE_BEAST_REST_T"], 0)
         self.assertEqual(expect["ATTACK_BEAST_JAB_WINDUP"], 20)
         self.assertEqual(expect["ATTACK_BEAST_JAB_DMG"], 7)
         self.assertEqual(expect["ATTACK_BEAST_JAB_WALLSTUN"], 0)

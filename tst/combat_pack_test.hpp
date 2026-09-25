@@ -405,6 +405,8 @@ void CombatPackSuite(TestRunner &runner) {
             t.assert(b16(blob, o + 18), h.spawnCd, "blob profile spawnCd");
             t.assert(b16(blob, o + 20), h.stunRecoverT, "blob profile stunRecoverT");
             t.assert(b16(blob, o + 22), h.staggerRecoverT, "blob profile staggerRecoverT");
+            t.assert(b8(blob, o + 24), h.restAfter, "blob profile restAfter");
+            t.assert(b8(blob, o + 25), h.restT, "blob profile restT");
         }
         for (uint8_t i = 0; i < combat::SKELETONS_COUNT; i++) {
             const size_t o = static_cast<size_t>(combat::SKELETONS_OFF) + i * combat::SKELETON_SIZE;
@@ -552,14 +554,25 @@ void CombatPackSuite(TestRunner &runner) {
         t.assert(b8(blob, static_cast<size_t>(combat::CREATURE_SWEEP_OFF) + combat::CREATURE_CARVE_OFF + 0), combat_expect::CREATURE_SWEEP_CARVE0_ITEM, "expect sweep carve0 item");
         t.assert(b8(blob, static_cast<size_t>(combat::CREATURE_HEAVY_OFF) + combat::CREATURE_CARVE_OFF + 8), combat_expect::CREATURE_HEAVY_CARVE2_CHANCE, "expect heavy carve2 chance");
         t.assert(b8(blob, static_cast<size_t>(combat::CREATURE_RAVAGER_OFF) + combat::CREATURE_CARVE_OFF + 7), combat_expect::CREATURE_RAVAGER_CARVE2_COUNT, "expect ravager carve2 count");
-        // feel.14/feel.15: the profile record is 24 B so the turnRate byte sits
-        // between faceHold and the six u16 timers; feel.15 authors real rates
-        // (lunge/bull/heavy 1, ravager 2) after feel.14 left them all 0.
-        t.assert(combat::PROFILE_SIZE, 24, "profile record grew for turnRate");
+        // feel.14/feel.15: the profile record is 26 B: the turnRate byte sits
+        // between faceHold and the six u16 timers, and the dzr restAfter/restT
+        // pair tails the record (0 = disabled). feel.15 authors real rates
+        // (lunge/bull/heavy 1, ravager 2) after feel.14 left them all 0; dzr
+        // enables the chain-gated rest on the chicken alone.
+        t.assert(combat::PROFILE_SIZE, 26, "profile record grew for restAfter/restT");
         t.assert(b8(blob, static_cast<size_t>(combat::PROFILE_HEAVY_OFF) + 11), combat_expect::PROFILE_HEAVY_TURN_RATE, "expect heavy turnRate");
         t.assert(b8(blob, static_cast<size_t>(combat::PROFILE_LUNGE_OFF) + 11), combat_expect::PROFILE_LUNGE_TURN_RATE, "expect lunge turnRate");
         t.assert(b8(blob, static_cast<size_t>(combat::PROFILE_LUNGE_OFF) + 11), 1, "shipped lunge turnRate 1");
         t.assert(b8(blob, static_cast<size_t>(combat::PROFILE_RAVAGER_OFF) + 11), combat_expect::PROFILE_RAVAGER_TURN_RATE, "expect ravager turnRate");
+        // dzr: chicken (lunge) is the only creature with the rest enabled.
+        t.assert(combat_expect::PROFILE_LUNGE_REST_AFTER, 2, "chicken restAfter 2");
+        t.assert(combat_expect::PROFILE_LUNGE_REST_T, 110, "chicken restT 110");
+        t.assert(b8(blob, static_cast<size_t>(combat::PROFILE_LUNGE_OFF) + 24), combat_expect::PROFILE_LUNGE_REST_AFTER, "expect lunge restAfter");
+        t.assert(b8(blob, static_cast<size_t>(combat::PROFILE_LUNGE_OFF) + 25), combat_expect::PROFILE_LUNGE_REST_T, "expect lunge restT");
+        t.assert(combat_expect::PROFILE_HEAVY_REST_AFTER, 0, "heavy restAfter 0 (disabled)");
+        t.assert(combat_expect::PROFILE_SWEEP_REST_AFTER, 0, "bull restAfter 0 (disabled)");
+        t.assert(combat_expect::PROFILE_RAVAGER_REST_AFTER, 0, "ravager restAfter 0 (disabled)");
+        t.assert(b8(blob, static_cast<size_t>(combat::PROFILE_HEAVY_OFF) + 24), 0, "shipped heavy restAfter 0");
         t.assert(b8(blob, static_cast<size_t>(combat::ZONE_RAVAGER_HEAD_OFF) + 4), combat_expect::ZONE_RAVAGER_HEAD_HP, "expect head hp");
         t.assert(b8(blob, static_cast<size_t>(combat::ZONE_RAVAGER_HEAD_OFF) + 5), combat_expect::ZONE_RAVAGER_HEAD_DMG_MUL, "expect head dmgMul");
         t.assert(b8(blob, static_cast<size_t>(combat::ZONE_RAVAGER_APPENDAGE_OFF) + 4), combat_expect::ZONE_RAVAGER_APPENDAGE_HP, "expect tail hp");

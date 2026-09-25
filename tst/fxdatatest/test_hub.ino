@@ -10,6 +10,12 @@
 // the smithy route is covered by the host app_state/screens suites.
 #define MH_CHARGE 0
 #define MH_CARVE 0
+// dzr headroom carve: this image is at the board flash limit after the profile
+// grew to 26 B. The E2E drives the flow through appNavApply + a direct
+// damageMonster, never the sheathe verb or a body-overlap push, so both fold
+// out here (shipping + host suites keep them).
+#define MH_SHEATHE 0
+#define MH_PUSH_MOVE 0
 #include "harness/fx_globals.hpp"
 #include "hub_test.hpp"
 
