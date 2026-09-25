@@ -778,14 +778,38 @@ def blade(img, facing, u0, v0, u1, v1, core=WHITE):
     dot(img, *wpt(facing, u1, v1), core, 1)
 
 
+def fill_weapon(img, facing, u0, v0, color_at):
+    """Inverse-mapped weapon-space fill: sample every cell pixel and map it back
+    to weapon space. The forward per-sample mapping the fills used to do is
+    many-to-one at the 45 deg DIR8 vectors ((11,11)/16), so diagonal plates and
+    balls rasterized as a checkerboard with holes. Cardinal facings sample 1:1
+    both ways, so their pixels are unchanged. `color_at(du, dv)` returns the
+    palette entry or None to skip the pixel.
+    """
+    dx, dy = DIR8[facing]
+    den = (dx * dx + dy * dy) / 16.0
+    for y in range(img.size[1]):
+        py = y - 16
+        for x in range(img.size[0]):
+            px = x - 16
+            u = (px * dx + py * dy) / den
+            v = (py * dx - px * dy) / den
+            color = color_at(u - u0, v - v0)
+            if color is not None:
+                put(img, x, y, color)
+
+
 def ball(img, facing, u, v, r, core=WHITE):
-    """Flail head: dark rim, bright core (per-pixel, no brush shift)."""
+    """Flail head: dark rim, bright core (inverse-mapped, diagonal-safe)."""
     inner = (r - 1) * (r - 1)
-    for dv in range(-r, r + 1):
-        for du in range(-r, r + 1):
-            d2 = du * du + dv * dv
-            if d2 <= r * r:
-                put(img, *wpt(facing, u + du, v + dv), core if d2 <= inner else DARK)
+
+    def color(du, dv):
+        d2 = du * du + dv * dv
+        if d2 > r * r:
+            return None
+        return core if d2 <= inner else DARK
+
+    fill_weapon(img, facing, u, v, color)
 
 
 def chain(img, facing, u0, v0, u1, v1):
@@ -799,13 +823,18 @@ def chain(img, facing, u0, v0, u1, v1):
 
 
 def shield(img, facing, u, v, lit):
-    """Gunshield plate: dark rim, light/white face, black slot at the centre."""
+    """Gunshield plate: dark rim, light/white face, black slot at the centre.
+    Inverse-mapped so diagonal facings stay a solid plate (holes were the owner
+    bug: stance/fire/diagonal cells rasterized as a checkerboard)."""
     w, h = 4, 12
     face = WHITE if lit else LIGHT
-    for dv in range(-h // 2 - 1, h // 2 + 2):
-        for du in range(-w // 2, w // 2 + 2):
-            edge = du >= w // 2 or dv <= -h // 2 - 1 or dv >= h // 2 + 1
-            put(img, *wpt(facing, u + du, v + dv), DARK if edge else face)
+
+    def color(du, dv):
+        if not (-w // 2 <= du < w // 2 + 2 and -h // 2 - 1 <= dv < h // 2 + 2):
+            return None
+        return DARK if (du >= w // 2 or dv <= -h // 2 - 1 or dv >= h // 2 + 1) else face
+
+    fill_weapon(img, facing, u, v, color)
     put(img, *wpt(facing, u + w // 2, v), BLACK)
 
 
@@ -1026,8 +1055,11 @@ def gun_cell(row, facing):
                 # references this row at the hand for the arrowshot special, so
                 # the flash sits on the muzzle, not on the 44 px hitscan box.
                 wline(img, facing, -3, 1, 4, 1, DARK, 3)                 # barrel
-                for du, dv in ((8, 1), (6, -1), (6, 3), (2, 1)):
-                    wline(img, facing, 5, 1, du, dv, WHITE, 1)
+                # chunky muzzle star: the outer rays at w=2 read on every
+                # facing; 1 px rays degenerated to specks at 45 deg
+                for du, dv in ((8, 1), (6, -1), (6, 3)):
+                    wline(img, facing, 5, 1, du, dv, WHITE, 2)
+                wline(img, facing, 5, 1, 2, 1, WHITE, 1)
                 dot(img, *wpt(facing, 5, 1), WHITE, 1)
             else:
                 shield(img, facing, 0, 0, lit=False)

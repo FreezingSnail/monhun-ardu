@@ -704,15 +704,15 @@
     {
       "declaration": "fxdata/equip/Sprites.txt",
       "path": "images/equip/mh_weapon_flail_32x32.png",
-      "sha256": "891de734c943131005cdae6c09394af6459a7c9e06be69398b40cdab466f8244",
-      "size": 11225,
+      "sha256": "7406096eba20e6039d52621391c1cc1d85cb3468a8cabbe1c4ae32341caa32e3",
+      "size": 10458,
       "symbol": "mh_weapon_flail"
     },
     {
       "declaration": "fxdata/equip/Sprites.txt",
       "path": "images/equip/mh_weapon_gun_32x32.png",
-      "sha256": "cc31b0ce0fc04b80bc19b553cda3f4af33e551f1ee690c368e988c3334502e7d",
-      "size": 9043,
+      "sha256": "7151f76168d3d9cc88cbbe67dadf5a2cafb4418f8d670c94065a851a4d92804e",
+      "size": 8345,
       "symbol": "mh_weapon_gun"
     },
     {
@@ -1167,7 +1167,7 @@
     },
     {
       "path": "fxdata/equip/Sprites.txt",
-      "sha256": "68a3aa3501fd3e7a5b301b525cf623efdb26542d974c504a8588334c27b698b0",
+      "sha256": "b060bf81374fa01684770a2f8dcf1cbd113addc6507a6391f38f452feeb5f234",
       "size": 2662547,
       "symbols": [
         "mh_head_bandana",
@@ -1369,12 +1369,12 @@
   "outputs": [
     {
       "path": "fxdata/fxdata-data.bin",
-      "sha256": "93704d28956a80e0c0a8d16e4079e81ef94b4cdae366f1764eaaece112799074",
+      "sha256": "e2315ac3033566c618d6cc85239b8a254afef1e83fa0b300341464b7b55f409a",
       "size": 852590
     },
     {
       "path": "fxdata/fxdata.bin",
-      "sha256": "7229f05fb744db33db65eebe6474f75be9bd06add9d980ca7d4430b2df42150e",
+      "sha256": "63797cd79c308ba9db5e72d794049a740fd9f140a44b817296f157a5299c3d65",
       "size": 852736
     },
     {

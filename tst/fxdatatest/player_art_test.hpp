@@ -59,6 +59,19 @@
 // index 32). Every other case is byte-identical; the new hashes are
 // {0x4f202fb3, 0x670510b3, 0x670510b3} (p.t == 0 in the oracle, the fully
 // retracted 4 px pose with the guard/idle plate gone).
+//
+// Bead monhun-ardu-ngf (owner: "gunshield sprites are messed up -- diagonal,
+// stance, fire animation"): the weapon fills were rasterized by forward-sampling
+// weapon space and plotting one pixel per sample, so the 45 deg DIR8 vector
+// (11,11)/16 mapped many samples onto one pixel and punched the shield plate and
+// flail ball into a checkerboard; the 1 px muzzle-flash rays read as specks.
+// gen-equipment now inverse-maps every cell pixel to weapon space (cardinal
+// facings are 1:1 and unchanged) and the shot flash outer rays draw w=2.
+// Changed cases: 17, 18, 20-25 (flail attacks/special/whirl/deflect/dodge/stun:
+// fractional ball centres) and 29, 31-35, 39 (gun guard/attack/arrowshot/shove/
+// stun plate rows + the diagonal flail armor row). Idle/recover rows whose ball
+// or plate sits on integer weapon-space coordinates (15, 16, 19, 26, 30, 36) and
+// every sword case are byte-identical.
 
 #include "harness/fxtest.hpp"
 #include "src/core/world.hpp"
@@ -163,30 +176,30 @@ static const uint32_t MH_PROGMEM GOLDEN[CASE_COUNT][3] = {
     {0xd23c81f4u, 0x07a6637eu, 0x07a6637eu},
     {0x5588d356u, 0x2a256461u, 0x2a256461u},
     {0x34ef9fb0u, 0x1db433a1u, 0x1db433a1u},
-    {0xcf0e8780u, 0x39249010u, 0x39249010u},
-    {0xa6b095ebu, 0x7cb90883u, 0xc6071819u},
+    {0x8d3271aau, 0xc04502c6u, 0xc04502c6u},
+    {0x72ffb6e8u, 0x48500171u, 0xc6071819u},
     {0x37998cb4u, 0x67fd6f44u, 0x67fd6f44u},
-    {0xb682eed3u, 0x70b7d665u, 0x07cf5c05u},
-    {0xaf476db7u, 0x1b4138b7u, 0xa77ecd60u},
-    {0x4c2489f5u, 0x4d9e31f5u, 0xd15b1536u},
-    {0xebf87b30u, 0xd1dd8630u, 0xb6a6e5b6u},
-    {0x58faacf0u, 0xcce15df0u, 0xd6ace58au},
-    {0x793692e1u, 0xe54a817du, 0x5b4daf89u},
+    {0x38a2ce3bu, 0xd53db8fdu, 0x8f3c1e8du},
+    {0xa1fce3b7u, 0x0df6aeb7u, 0xa77ecd60u},
+    {0x1e512eafu, 0x1fcad6afu, 0xd15b1536u},
+    {0xafbeac98u, 0x5067e898u, 0x6e988ddeu},
+    {0x8d9143a8u, 0xaf90a6a8u, 0xd6ace58au},
+    {0x863cd611u, 0x91b922a3u, 0x8a63f356u},
     {0x5588d356u, 0x2a256461u, 0x2a256461u},
     {0xcb7e92ceu, 0x9a6b2301u, 0xc4e88a35u},
     {0x781778acu, 0x628c88a1u, 0x964204b5u},
-    {0x48678287u, 0xe80328ccu, 0xcb2869d8u},
+    {0xc6095092u, 0xcfb6a4c2u, 0xcb2869d8u},
     {0xa69dc7e3u, 0x3e21ab2du, 0x6b9e00c9u},
-    {0x75c6c94cu, 0xbc3f68feu, 0x83b8abbcu},
-    {0x6bc1949du, 0x6820022du, 0xdfdbc454u},
-    {0x0e299fd2u, 0x00533cc8u, 0x5b3e8adeu},
-    {0x0d6a199bu, 0xf3302fa1u, 0x033b61f8u},
-    {0xb293eb6cu, 0x011b8684u, 0x4e51a8dau},
+    {0x5e23e219u, 0x52d053bbu, 0x0c0befa9u},
+    {0xacc6b519u, 0xdba38be0u, 0xdfdbc454u},
+    {0x781feaedu, 0x9587e8b3u, 0xcecbbcf5u},
+    {0x04356bbbu, 0xae318b0du, 0x033b61f8u},
+    {0xc270fdeeu, 0x3fca8317u, 0x4e51a8dau},
     {0xcb7e92ceu, 0x9a6b2301u, 0xc4e88a35u},
-    // arm.2 armor head layer (cases 37..39); weapon-art regen.
+    // arm.2 armor head layer (cases 37..39); ngf rasterization regen.
     {0x23e552ecu, 0x71a79146u, 0xe8971baeu},
     {0x51522cf2u, 0x5e50a808u, 0x6391cf40u},
-    {0xc1ed76f2u, 0xdf00e713u, 0xdf00e713u},
+    {0x965e4d66u, 0x3c4ef065u, 0x3c4ef065u},
 };
 static_assert(sizeof(GOLDEN) / sizeof(GOLDEN[0]) == CASE_COUNT, "goldens must cover every case");
 
