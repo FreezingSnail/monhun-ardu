@@ -834,13 +834,13 @@
     },
     {
       "path": "data/creatures/heavy.json",
-      "sha256": "ea285f1d4d2855b751b44f6fe663ecae00c1266d451fea11ebd3b3c45f8525d9",
-      "size": 3865
+      "sha256": "4682d7539c763a1f69106f0b8bac7c3a0acab8c74764a9606a0188dda3c84d25",
+      "size": 3574
     },
     {
       "path": "data/creatures/lunge.json",
-      "sha256": "3d60de57782534728d658b92223ab966c4bdabf0e25f65ac762abbd6ca5cee9f",
-      "size": 3744
+      "sha256": "5923bad76a77cab76a550edcd2a683aa5a2538f4d2971e433569a4ddef21fd77",
+      "size": 3598
     },
     {
       "path": "data/creatures/pole.json",
@@ -849,13 +849,13 @@
     },
     {
       "path": "data/creatures/ravager.json",
-      "sha256": "89ba8906cf76c9330a083058affcda9cea1d5d7ae49f31017a39ddca26521eaa",
-      "size": 2826
+      "sha256": "24c48e5214acfcc98208c48cdff6f2d48029e8ade9595f9c15a20b74e7e7b82b",
+      "size": 2681
     },
     {
       "path": "data/creatures/sweep.json",
-      "sha256": "4149c0ab8c10b1a59419149b26deffd378441cbb3eaaa93716ba33755d1884ff",
-      "size": 3895
+      "sha256": "92febe803d21e5c91688ae9ef2eb271d3dd53a8fdbf4d8544f4240e48e6d9123",
+      "size": 3702
     },
     {
       "path": "data/equipment/body_base.json",
@@ -1352,43 +1352,48 @@
     },
     {
       "path": "images/masks/fxbullatk_28x22.png",
-      "sha256": "f4e2ab6a99be6c0efd1c5a8b084982753bb232d44b1638d28ed372c5d64a64d8",
-      "size": 246
+      "sha256": "5d71db66fe59f915db90aa9f415a719f4818c89956db66c6a338c71d10620db4",
+      "size": 254
     },
     {
       "path": "images/masks/fxchickenatk_32x24.png",
-      "sha256": "f46082d1e734101e05eb8e05a0374797c6b01fb44cebdbae491fb81d41306382",
-      "size": 207
+      "sha256": "d3ca0b827dd36938025782c881e9effeb9d7321edf40bc5c9db2f3fda4e296db",
+      "size": 200
     },
     {
       "path": "images/masks/fxheavyatk_40x28.png",
-      "sha256": "8df77d638a4277ea7be5831219b06f7f1cb09d88d11af47c80aebf9575d7036a",
-      "size": 269
+      "sha256": "cc2bf5df6b5dd44a0b8d2cf9c6c6cda57953a5aa0c3c0fda1938741217565adc",
+      "size": 212
     },
     {
       "path": "images/masks/fxmonster_32x24.png",
-      "sha256": "2edc600606412dbcf644ef1f32646c66449a230d12b54f6657223384cb89eb89",
-      "size": 506
+      "sha256": "21b7ff838fab137c7d56f303477d213f5bf4ceb0c6ed31f63a8a612587c4aea0",
+      "size": 400
     },
     {
       "path": "images/masks/fxmonster_heavy_40x28.png",
-      "sha256": "aba6d0213322866af74fb2ed3024840e1179d79cbcb68405129d0b476f704ed8",
-      "size": 495
+      "sha256": "5be8d0a1d29015f752a70fd7a26585cfcc6fea9d1d4c1fdc77d4d52286b4fa05",
+      "size": 244
     },
     {
       "path": "images/masks/fxmonster_lunge_32x24.png",
-      "sha256": "d706bae7a49d0025d6708c7b561b05d0d56cfb1c5b1d7f706100b65bb831a884",
-      "size": 353
+      "sha256": "4228c8b837a9e19407254aa6702f1ed64f13e3e652656f020f6145ad3a58e2bb",
+      "size": 168
     },
     {
       "path": "images/masks/fxmonster_sweep_32x24.png",
-      "sha256": "893c6717c3035bb3c0c14fe29532956d11dd38d7ebe88d5fa48e77f5767fa138",
-      "size": 300
+      "sha256": "5d744a7d7a385c4d1b15895dd140033de56f858d5aff6e40e27013b80f9435da",
+      "size": 180
     },
     {
       "path": "images/masks/fxpole_20x40.png",
-      "sha256": "25b9cdbc2d805d1195fd5c3a94c53ebcfaffefb32e4ba02d62aa3afb42c07980",
-      "size": 235
+      "sha256": "90e1887997c8d08de53732f4e63faef73fc1a5f183a12ee450b9cbf6db9624f8",
+      "size": 182
+    },
+    {
+      "path": "images/masks/fxtailspin_40x28.png",
+      "sha256": "9c1425c31acac0d1599fde1e989c065309a8afea5d4e929016982da121e6ebc4",
+      "size": 514
     },
     {
       "path": "images/masks/mh_player_base_16x16.png",

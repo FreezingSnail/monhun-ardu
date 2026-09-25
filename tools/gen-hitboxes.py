@@ -12,25 +12,30 @@ twin (bead ryh.2). A mask image is the sprite sheet's cell grid stacked as three
 horizontal bands, top-to-bottom:
 
     band 0  collision   yellow  (255,255,0)                     = solid
-    band 1  hitbox      orange  (255,128,0) violet (128,0,255)
-                        cyan    (0,255,255) magenta (255,0,255) = window 1..N
+    band 1  hitbox      orange  (255,128,0) = this column's window
+                        (violet/cyan/magenta are reserved for a future
+                        multi-rect column; a column paints exactly one rect)
     band 2  hurtbox     red     (255,0,0)  = head
                         blue    (0,0,255)  = appendage
                         green   (0,255,0)  = body (painted underneath)
 
-Dimensions: W == (cellW + 2*marginX) * source_columns, H == (cellH + 2*marginY)
-* 3. The cell is the mask's coordinate frame (named in the file); the sprite
-cell origin is the cell origin (0,0). The per-side margins are derived from the
-image dims vs the cell, and exist because regions reach outside the cell: the
-chicken wing_beat window reaches 5 px left of the cell, the longtail tail sits
-24 px left of the body, and the bull stomp window reaches 2 px above/below the
-22-tall body. Every visible pixel must be exactly one palette colour; a region
-that is not a single solid rectangle is a hard failure.
+Dimensions: W == (cellW + 2*marginX) * columns, H == (cellH + 2*marginY) * 3.
+The cell is the mask's coordinate frame (named in the file); the body cell
+origin is the cell origin (0,0). The per-side margins are derived from the image
+dims vs the cell, and exist because regions reach outside the cell: the chicken
+wing_beat window reaches 5 px left of the cell, the longtail tail sits 24 px
+left of the body, and the bull stomp window reaches 2 px above/below the 22-tall
+body. Every visible pixel must be exactly one palette colour; a region that is
+not a single solid rectangle is a hard failure.
 
-`source_columns` is the number of columns in the one-facing source PNG
-`images/blocks/<art-sheet>_<W>x<H>.png` (the file's width / frame width), NOT a
-count derived from the attacks: an attack sheet authors a column per east pose
-(e.g. the bull's stomp-windup tell pose has no attack `art.frame`).
+`columns` is the number of hitbox windows the mask owns (bead ryh.6): the hitbox
+band has ONE COLUMN PER WINDOW, in the creature's packed window order, and the
+whole mask is that many columns wide. A mask that owns no window (a beast sheet
+whose attacks all draw their own art) still carries one column so its
+collision/hurtbox bands have a frame; its hitbox band stays blank. The column
+count comes from the creature JSON's attacks, not from the art sheet's pose
+count -- the hurtbox/collision bands are column-invariant, so the old
+art-pose tie is gone.
 
 DERIVED DATA (`build/hitboxes.json`, consumed by gen-combat.py + gen-art.py)
 --------------------------------------------------------------------------
@@ -39,16 +44,17 @@ DERIVED DATA (`build/hitboxes.json`, consumed by gen-combat.py + gen-art.py)
     body box   bbox of the green body region; must equal the creature's
                stats.w/h (the packed body record + the window centre).
     collide    bbox of the yellow region (falls back to the body box).
-    windows    hitbox regions of a column (cell-relative, the monster top-left
-               is the cell origin), mapped onto the attack whose `art.frame`
-               selects that column (east ordinal = art.frame // 2), then
-               converted back to the body-centre-relative `windows[].box` form
-               the packed record uses.
+    windows    hitbox region of each column (cell-relative, the body top-left
+               is the cell origin), mapped onto the attack window it owns:
+               column i = the creature's i-th packed window assigned to this
+               mask (its attack's art sheet, or the beast sheet when the attack
+               authors no art), then converted back to the body-centre-relative
+               `windows[].box` form the packed record uses.
 
 Behaviour keys (dmgMul, hp, bodyShare, breakTypes, ...) stay hand-authored in
-the creature JSON; only geometry moves here. An attack with more than one window
-(a multi-window kit: sweep gore, ravager tail_sweep, heavy tail_spin) is left
-hand-authored until phase 2 decides its encoding, so its mask column stays blank.
+the creature JSON; only geometry moves here. Multi-window kits (sweep gore,
+ravager tail_sweep, heavy tail_spin) author one mask column per window too, so
+no attack window is hand-authored any more.
 
 PLAYER MASK (bead ryh.5)
 ------------------------
@@ -63,13 +69,17 @@ body literals read. A blank column is an all-zero attack (no box).
 
 VALIDATION (all hard failures)
 ------------------------------
-1. mask dims == cell x source columns (x3 bands); every mask symbol resolves;
+1. mask width == (cell + 2*margin) x the windows the mask owns (at least one
+   column); height == (cell + 2*margin) x 3 bands; every mask symbol resolves;
    the margin on each side is a non-negative whole number of pixels;
 2. every region is one solid rect (head/appendage/collide/window; the green body
    is the fallback painted underneath and may be overpainted by the zones);
 3. zones do not overlap each other (they may sit on the body rect);
 4. collision/hurtbox regions are identical on every column of a sheet;
-5. hitbox columns match the creature's single-window attacks by `art.frame`;
+5. hitbox columns: column i paints the i-th window assigned to the mask, every
+   assigned column paints exactly one rect, no column past the assigned count
+   paints anything, and a creature's columns across its masks total its window
+   count;
 6. the body region reproduces the creature's stats.w/h at the origin (so the
    packed body box and the window centre do not drift).
 
@@ -142,30 +152,14 @@ def palette_reverse(band, kind):
 # ------------------------------------------------------------------ art sheets
 
 
-def discover_blocks(root):
-    """stem -> (path, frame_w, frame_h) for images/blocks/<symbol>_<W>x<H>.png."""
-    found = {}
-    for path in sorted(glob.glob(os.path.join(root, BLOCKS_REL, "*.png"))):
+def _find_block(root, sheet):
+    for path in sorted(glob.glob(os.path.join(root, BLOCKS_REL, "%s_*.png" % sheet))):
         name = os.path.basename(path)[:-4]
-        stem, _, dims = name.rpartition("_")
-        if not stem or "x" not in dims:
-            continue
+        _, _, dims = name.rpartition("_")
         fw, _, fh = dims.partition("x")
-        if not fw.isdigit() or not fh.isdigit():
-            continue
-        found[stem] = (path, int(fw), int(fh))
-    return found
-
-
-def source_columns(blocks, symbol):
-    """Columns in the one-facing source PNG: width / frame width."""
-    if symbol not in blocks:
-        raise MaskError("%s: no images/blocks/%s_<W>x<H>.png source sheet" % (symbol, symbol))
-    path, fw, _ = blocks[symbol]
-    width = Image.open(path).width
-    if fw <= 0 or width % fw:
-        raise MaskError("%s: source width %d is not a whole number of %d-px frames" % (path, width, fw))
-    return width // fw
+        if fw.isdigit() and fh.isdigit():
+            return path, int(fw), int(fh)
+    return None, 0, 0
 
 
 # ------------------------------------------------------------------- creatures
@@ -409,37 +403,59 @@ def derive(parsed, creature, label):
     return out
 
 
-def windows_for_attacks(parsed, creature, symbol, label):
-    """Map hitbox columns back onto the attacks whose art.frame selects them.
+def window_sheet(creature, attack):
+    """The mask symbol a window belongs to: the attack's art sheet, or the
+    creature's beast sheet when the attack authors no art (ravager bite /
+    tail_sweep ride the fxmonster beast mask)."""
+    art = attack.get("art") or {}
+    sheet = art.get("sheet")
+    if sheet:
+        return sheet
+    return creature.get("art", {}).get("sheet")
 
-    Multi-window kits are skipped (their windows stay hand-authored): their mask
-    column must stay blank. Every painted column must map to a single-window
-    attack on this sheet."""
-    cell_w, cell_h = parsed["cell"]
+
+def window_assignment(creature):
+    """{symbol: [(attack, window_index), ...]} in the creature's packed window
+    order (attack source order, then window order).
+
+    Every attack window is owned by exactly one mask; a mask's hitbox band
+    paints one column per owned window, in this order (bead ryh.6)."""
     out = {}
-    mapped_cols = set()
     for atk in creature.get("attacks", []):
-        art = atk.get("art")
-        if not art or art.get("sheet") != symbol:
+        windows = atk.get("windows") or []
+        if not windows:
             continue
-        col = art["frame"] // 2
-        if col >= parsed["ncols"]:
-            raise MaskError("%s: attack %s frame %d maps column %d past the mask"
-                            % (label, atk["id"], art["frame"], col))
-        if len(atk.get("windows", [])) > 1:
-            continue
-        regions = window_regions(parsed, col, label)
-        want = len(atk.get("windows", []))
-        if len(regions) != want:
-            raise MaskError("%s: attack %s wants %d window(s), mask column %d paints %d"
-                            % (label, atk["id"], want, col, len(regions)))
-        out[atk["id"]] = [cell_window_to_record(b, cell_w, cell_h) for b in regions]
-        mapped_cols.add(col)
+        symbol = window_sheet(creature, atk)
+        if not symbol:
+            raise MaskError("%s: attack %s has windows but no art sheet and no beast sheet"
+                            % (creature.get("id"), atk.get("id")))
+        owned = out.setdefault(symbol, [])
+        for wi in range(len(windows)):
+            owned.append((atk, wi))
+    return out
+
+
+def windows_for_symbol(parsed, assigned, label):
+    """Validate the mask's hitbox columns and derive the owned window boxes.
+
+    `assigned` is the packed (attack, window_index) list this mask owns: column
+    i paints the i-th assigned window, each assigned column paints exactly one
+    rect, and no column past the assigned count paints anything."""
+    cell_w, cell_h = parsed["cell"]
+    k = len(assigned)
     for col in range(parsed["ncols"]):
-        if window_regions(parsed, col, label) and col not in mapped_cols:
-            raise MaskError("%s: hitbox column %d maps to no single-window attack" % (label, col))
-    if not out:
-        raise MaskError("%s: mask carries no hitbox columns for a single-window attack" % label)
+        regions = window_regions(parsed, col, label)
+        if col < k:
+            if len(regions) != 1:
+                raise MaskError("%s: hitbox col %d must paint exactly one window rect (got %d)"
+                                % (label, col, len(regions)))
+        elif regions:
+            raise MaskError("%s: hitbox col %d paints a window but only %d are assigned"
+                            % (label, col, k))
+    out = []
+    for col, (atk, wi) in enumerate(assigned):
+        region = window_regions(parsed, col, label)[0]
+        out.append((atk["id"], wi, cell_window_to_record(region, cell_w, cell_h)))
     return out
 
 
@@ -569,11 +585,21 @@ def _player_header_text(body, collide, columns):
 
 def process(root):
     creatures = load_creatures(root)
-    blocks = discover_blocks(root)
     masks = discover_masks(root)
     hitboxes = {}
     masked = set()
     player = None
+
+    # Map every creature's windows onto their owning mask symbols first, so a
+    # mask's hitbox column count is known before it is parsed (bead ryh.6).
+    assignments = {}
+    for cid, creature in creatures.items():
+        assignments[cid] = window_assignment(creature)
+    for cid, assign in assignments.items():
+        for symbol in assign:
+            if symbol not in masks:
+                raise MaskError("%s: attack windows ride %s but no images/masks/%s_*.png exists"
+                                % (cid, symbol, symbol))
 
     for symbol in sorted(masks):
         path, cell_w, cell_h = masks[symbol]
@@ -591,7 +617,10 @@ def process(root):
             continue
         cid, role = resolve_symbol(creatures, symbol)
         creature = creatures[cid]
-        ncols = source_columns(blocks, symbol)
+        assigned = assignments.get(cid, {}).get(symbol, [])
+        # One hitbox column per owned window; a mask with no windows still needs
+        # one column so its collision/hurtbox bands have a frame.
+        ncols = max(1, len(assigned))
         parsed = parse_mask(path, symbol, cell_w, cell_h, ncols)
         entry = hitboxes.setdefault(cid, {})
         if role == "beast":
@@ -606,11 +635,26 @@ def process(root):
         else:
             _attack_cell_matches_stats(parsed, creature, path)
             _require_blank_attack_bands(path, parsed)
-            entry.setdefault("windows", {}).update(windows_for_attacks(parsed, creature, symbol, path))
+        if assigned:
+            for aid, wi, box in windows_for_symbol(parsed, assigned, path):
+                entry.setdefault("windows", {}).setdefault(aid, {})[wi] = box
 
     for cid, entry in hitboxes.items():
         if "body" not in entry:
             raise MaskError("%s: attack mask without a beast mask" % cid)
+        windows = entry.get("windows")
+        if windows:
+            entry["windows"] = {aid: [boxes[i] for i in sorted(boxes)]
+                                for aid, boxes in windows.items()}
+
+    # Column count == window count (bead ryh.6): every authored window is owned
+    # by exactly one mask column, and no mask paints a column it does not own.
+    for cid, creature in creatures.items():
+        total = sum(len(atk.get("windows", [])) for atk in creature.get("attacks", []))
+        got = sum(len(boxes) for boxes in hitboxes.get(cid, {}).get("windows", {}).values())
+        if got != total:
+            raise MaskError("%s: masks derive %d window(s), the creature authors %d"
+                            % (cid, got, total))
 
     out = {"version": 2, "bands": list(BANDS),
            "creatures": {cid: hitboxes[cid] for cid in sorted(hitboxes)}}
@@ -628,17 +672,7 @@ def process(root):
 # ------------------------------------------------------------------- review
 
 
-def _find_block(root, sheet):
-    for path in sorted(glob.glob(os.path.join(root, BLOCKS_REL, "%s_*.png" % sheet))):
-        name = os.path.basename(path)[:-4]
-        _, _, dims = name.rpartition("_")
-        fw, _, fh = dims.partition("x")
-        if fw.isdigit() and fh.isdigit():
-            return path, int(fw), int(fh)
-    return None, 0, 0
-
-
-def _review_panel(root, cid, sheet, role, entry):
+def _review_panel(root, cid, sheet, role, entry, ncols):
     sprite_path, fw, fh = _find_block(root, sheet)
     if sprite_path is None:
         return None
@@ -648,15 +682,17 @@ def _review_panel(root, cid, sheet, role, entry):
         return None
     mask_path, cell_w, cell_h = masks[sheet]
     mask = Image.open(mask_path).convert("RGBA")
-    mx, my, band_w, band_h = _band_geometry(mask, mask_path, cell_w, cell_h, sprite.width // fw)
-    cols = mask.width // band_w
+    mx, my, band_w, band_h = _band_geometry(mask, mask_path, cell_w, cell_h, ncols)
+    cols = ncols
+    sprite_cols = sprite.width // fw
 
     width = max(sprite.width, band_w * cols)
     height = band_h * 4
     panel = Image.new("RGBA", (width, height), (16, 16, 24, 255))
     for col in range(cols):
         base = col * band_w
-        panel.paste(sprite.crop((col * fw, 0, col * fw + fw, fh)), (base + mx, my))
+        if col < sprite_cols:
+            panel.paste(sprite.crop((col * fw, 0, col * fw + fw, fh)), (base + mx, my))
         band = mask.crop((base, 0, base + band_w, band_h * 3))
         panel.paste(band, (base, band_h))
 
@@ -693,13 +729,16 @@ def _compose_review(root):
         creature = creatures.get(cid)
         if not creature:
             continue
+        assign = window_assignment(creature)
         beast = creature.get("art", {}).get("sheet")
         if not beast:
             continue
-        panels.append(_review_panel(root, cid, beast, "beast", entry))
+        panels.append(_review_panel(root, cid, beast, "beast", entry, max(1, len(assign.get(beast, [])))))
         for asheet in sorted({atk["art"]["sheet"] for atk in creature.get("attacks", [])
                               if atk.get("art")}):
-            panels.append(_review_panel(root, cid, asheet, "attack", {"windows": entry.get("windows", {})}))
+            panels.append(_review_panel(root, cid, asheet, "attack",
+                                        {"windows": entry.get("windows", {})},
+                                        max(1, len(assign.get(asheet, [])))))
     panels = [p for p in panels if p is not None]
     if not panels:
         return

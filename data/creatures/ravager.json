@@ -70,7 +70,7 @@
       "move": { "type": "lunge", "speedF": 30 },
       "facing": "track",
       "windows": [
-        { "t0": 0, "t1": 8, "box": { "ox": 13, "oy": 0, "w": 22, "h": 18 }, "dmgMul": 100 }
+        { "t0": 0, "t1": 8, "dmgMul": 100 }
       ],
       "onHit": { "effect": "none", "push": 0, "stun": 0 },
       "stagger": 0,
@@ -87,8 +87,8 @@
       "move": { "type": "none" },
       "facing": "track",
       "windows": [
-        { "t0": 0, "t1": 5, "box": { "ox": -22, "oy": 0, "w": 30, "h": 22 }, "dmgMul": 100 },
-        { "t0": 6, "t1": 11, "box": { "ox": 20, "oy": 0, "w": 30, "h": 22 }, "dmgMul": 100 }
+        { "t0": 0, "t1": 5, "dmgMul": 100 },
+        { "t0": 6, "t1": 11, "dmgMul": 100 }
       ],
       "onHit": { "effect": "none", "push": 0, "stun": 0 },
       "stagger": 0,

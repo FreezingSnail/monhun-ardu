@@ -506,26 +506,38 @@ top-to-bottom, rectangles only:
 | band | palette | feeds |
 |---|---|---|
 | collision | yellow = solid | `collide` box (blocking, `pushApart`) |
-| hitbox | orange/violet/cyan/magenta = window 1..N | single-window attack rects |
+| hitbox | orange = the column's window | every attack window rect |
 | hurtbox | red = head, blue = appendage, green = body | zone rects + the body box |
+
+**Hitbox columns (bead ryh.6)**: the hitbox band has ONE COLUMN PER WINDOW, in
+the creature's packed window order (attack source order, then window order). A
+window belongs to its attack's `art.sheet`, or to the beast sheet when the
+attack authors no art (ravager `bite`/`tail_sweep` ride `fxmonster`). Column i of
+a mask paints the i-th window the mask owns, every owned column paints exactly
+one rect, no later column paints anything, and a creature's columns across its
+masks total its window count. This covers the multi-window kits (sweep `gore`,
+ravager `tail_sweep`, heavy `tail_spin`'s four rotating rects) and makes the
+single-window mapping the same rule; the mask width is the owned-window count (a
+beast sheet that owns none still carries one column for its zone/collide bands).
 
 **Pipeline**: `tools/gen-hitboxes.py` validates the masks and derives
 `build/hitboxes.json` -> `gen-art.py` crops each breakable-part overlay sheet to
 the mask bbox -> `gen-combat.py` packs the unchanged 14 B zone / 4 B body / 4 B
-collide records. The zone rect's origin *is* the part-art anchor, so the hit box
-and the broken-part overlay share one source by construction (the mirror-drift
-class of bug is gone, not patched). `make hitboxes-render` bootstraps a missing
-mask from the shipped JSON and writes the composite review PNG (sprite row +
-mask rows + boxes on the art) to `build/scratch/hitbox_review.png`.
+collide / 10 B window records. The zone rect's origin *is* the part-art anchor,
+so the hit box and the broken-part overlay share one source by construction (the
+mirror-drift class of bug is gone, not patched). `make hitboxes-render` writes
+the composite review PNG (sprite row + mask rows + boxes on the art) to
+`build/scratch/hitbox_review.png`.
 
-**Derived**: body box, zone rects, collide box, single-window attack rects. The
+**Derived**: body box, zone rects, collide box, every attack window rect. The
 creature JSON keeps behaviour only (`dmgMul`, `hp`, `bodyShare`, `breakTypes`,
-`broken.*`, `staggerOnHit`, `disableAttacks`).
+`broken.*`, `staggerOnHit`, `disableAttacks`, the window `t0`/`t1`/`dmgMul`).
 
-**Validations** (hard fail): mask dims vs the cell; every region one solid rect;
-zones disjoint (they may sit over the body rect, which is the implicit fallback
-painted underneath); hurtbox/collision identical on every column; hitbox columns
-mapped through each attack's `art.frame`; body == the sprite's stats.
+**Validations** (hard fail): mask width/height vs the cell, margins and owned
+window count; every region one solid rect; zones disjoint (they may sit over the
+body rect, which is the implicit fallback painted underneath); hurtbox/collision
+identical on every column; hitbox column i == the i-th owned window, owned count
+== painted count == the creature's window count; body == the sprite's stats.
 
 **Guard**: `tst/hitbox_reach_test.hpp` scans legal hunter stances through the
 real `meleeHitbox` math and asserts every zone is hittable from at least one of
@@ -538,10 +550,10 @@ collide -> (9,13,9,9); bull head (17,-4,12,10) -> (21,4,8,8), hooves
 ravager keeps its shipped boxes (its zones have no part art) and the pole keeps
 its 20x36 body inside the 20x40 cell.
 
-Still hand-authored: multi-window attack windows (sweep `gore`, ravager
-`tail_sweep`, heavy `tail_spin`) until a multi-window mask encoding is decided;
-the player hurtbox/weapon hitboxes and room rects (props/doors/gather/heal) are
-follow-on phases of the same epic.
+No attack window is hand-authored any more: sweep `gore`, ravager `bite` +
+`tail_sweep` and heavy `tail_spin` all come from the masks. The player
+hurtbox/weapon hitboxes and room rects (props/doors/gather/heal) are follow-on
+phases of the same epic.
 
 Adding a creature is now: behaviour JSON + east-only sprite sheet + the three
 mask bands + an `art_sheets` entry (plus a kind/quest if it must be reachable).

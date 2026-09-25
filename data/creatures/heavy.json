@@ -64,7 +64,7 @@
       "tell": "line",
       "art": { "sheet": "fxheavyatk", "frame": 0, "mode": "normal" },
       "windows": [
-        { "t0": 0, "t1": 8, "box": { "ox": 14, "oy": 0, "w": 18, "h": 14 }, "dmgMul": 100 }
+        { "t0": 0, "t1": 8, "dmgMul": 100 }
       ],
       "onHit": { "effect": "none", "push": 0, "stun": 0 },
       "stagger": 0,
@@ -83,10 +83,10 @@
       "tell": "arc",
       "art": { "sheet": "fxtailspin", "frame": 0, "mode": "spin" },
       "windows": [
-        { "t0": 0, "t1": 5, "box": { "ox": -20, "oy": 0, "w": 28, "h": 16 }, "dmgMul": 100 },
-        { "t0": 6, "t1": 10, "box": { "ox": 0, "oy": -22, "w": 16, "h": 28 }, "dmgMul": 100 },
-        { "t0": 11, "t1": 14, "box": { "ox": 22, "oy": 0, "w": 28, "h": 16 }, "dmgMul": 100 },
-        { "t0": 15, "t1": 18, "box": { "ox": 0, "oy": 22, "w": 16, "h": 28 }, "dmgMul": 100 }
+        { "t0": 0, "t1": 5, "dmgMul": 100 },
+        { "t0": 6, "t1": 10, "dmgMul": 100 },
+        { "t0": 11, "t1": 14, "dmgMul": 100 },
+        { "t0": 15, "t1": 18, "dmgMul": 100 }
       ],
       "onHit": { "effect": "none", "push": 0, "stun": 0 },
       "stagger": 0,
@@ -105,7 +105,7 @@
       "tell": "ring",
       "art": { "sheet": "fxheavyatk", "frame": 4, "mode": "normal" },
       "windows": [
-        { "t0": 0, "t1": 8, "box": { "ox": -16, "oy": 0, "w": 36, "h": 28 }, "dmgMul": 100 }
+        { "t0": 0, "t1": 8, "dmgMul": 100 }
       ],
       "onHit": { "effect": "none", "push": 0, "stun": 0 },
       "stagger": 0,
