@@ -5,12 +5,20 @@
   "cell": [32, 32],
   "anchor": [16, 16],
   "order": "facing*pose",
-  "frames": 24,
+  "frames": 216,
   "poseMap": {
     "idle": 0,
-    "attack_startup": 0,
-    "attack_active": 1,
-    "attack_recover": 2
+    "attack_startup": 2,
+    "attack_active": 3,
+    "attack_recover": 1,
+    "parry": 22,
+    "whirl": 22,
+    "guard": 22,
+    "shove": 24,
+    "dodge": 23,
+    "deflect": 24,
+    "stun": 25,
+    "dead": 0
   },
   "flags": []
 }

@@ -197,9 +197,9 @@ def is_int(value):
 
 
 def is_part(item):
-    """True when the item gets a cart part record (gen-art overlay or an
-    authored shadow/body/head layer)."""
-    return item["genArt"] or item["slot"] in LAYERED_SLOTS
+    """True when the item gets a cart part record (gen-art overlay, an authored
+    shadow/body/head layer, or an authored weapon sheet — docs/weapon-art.md)."""
+    return item["genArt"] or item["slot"] in LAYERED_SLOTS or item["id"] in WEAPON_ART
 
 
 def check_keys(errors, ctx, obj, required, optional=()):
@@ -580,9 +580,222 @@ def placeholder_cell(item, index):
     return None  # weapon / offhand placeholders stay blank
 
 
+# ------------------------------------------------------------------ weapon art
+# Player weapon sheets (docs/weapon-art.md). Each row is a pose; the source
+# authors 5 facings (E, SE, S, N, NE) and the packer mirrors the west twins via
+# images/equip/layout.json, exactly like the creature sheets (ryh.2). Shipped
+# frame index = row * FACINGS + facing; the row tables below match
+# src/render.hpp (wpn::ROW_*).
+WEAPON_SRC_FACINGS = (0, 1, 2, 6, 7)   # DIR8 order used in the source columns
+# packed column -> (source column, mirror), per row
+WEAPON_MIRROR_PLAN = ((0, False), (1, False), (2, False), (1, True), (0, True), (4, True), (3, False), (4, False))
+WEAPON_ROW_MOVE0 = 2                   # slot s -> startup 2 + 2*s, active 3 + 2*s
+WEAPON_ROW_STANCE = 22
+WEAPON_ROW_DODGE = 23
+WEAPON_ROW_DEFENSE = 24                # flail deflect / gun shove
+WEAPON_ROW_STUN = 25
+WEAPON_ROW_RIM = 26
+WEAPON_ROWS = 27
+
+# DIR8 unit vectors (E, SE, S, SW, W, NW, N, NE): +x right, +y down.
+DIR8 = ((16, 0), (11, 11), (0, 16), (-11, 11), (-16, 0), (-11, -11), (0, -16), (11, -11))
+
+# (slot, startup angle deg, active angle deg): 0 deg = along the facing vector,
+# negative = toward the hunter's lead side, positive = trail side.
+SWORD_MOVES = (
+    (0, -120, -35),   # combo 0: high lead cut
+    (1, 150, 30),     # combo 1: return cut
+    (2, -150, 80),    # combo 2: heavy down cut
+    (3, -30, 0),      # special: riposte thrust
+    (4, -100, -15),   # step-slash
+    (5, -170, 10),    # spin-cut
+    (6, -140, 65),    # branch 2: finisher slam
+    (7, -60, 0),      # alt: lunge thrust
+    (8, -180, -25),   # roll slash
+)
+
+
+def wpt(facing, u, v):
+    """Weapon-space (u along facing, v lead/trail) -> cell pixel."""
+    dx, dy = DIR8[facing]
+    return (16 + (u * dx - v * dy + 8) // 16, 16 + (u * dy + v * dx + 8) // 16)
+
+
+def put(img, x, y, color):
+    if 0 <= x < img.size[0] and 0 <= y < img.size[1]:
+        img.load()[x, y] = color
+
+
+def dot(img, x, y, color, size=1):
+    for dy in range(size):
+        for dx in range(size):
+            put(img, x + dx, y + dy, color)
+
+
+def wline(img, facing, u0, v0, u1, v1, color, w=1):
+    """Thick line between two weapon-space points (45 deg steps stay chunky)."""
+    x0, y0 = wpt(facing, u0, v0)
+    x1, y1 = wpt(facing, u1, v1)
+    dx = abs(x1 - x0)
+    dy = -abs(y1 - y0)
+    sx = 1 if x0 < x1 else -1
+    sy = 1 if y0 < y1 else -1
+    err = dx + dy
+    while True:
+        dot(img, x0, y0, color, w)
+        if x0 == x1 and y0 == y1:
+            break
+        e2 = 2 * err
+        if e2 >= dy:
+            err += dy
+            x0 += sx
+        if e2 <= dx:
+            err += dx
+            y0 += sy
+
+
+def warc(img, facing, cu, cv, radius, a0_deg, a1_deg, color, w=1, steps=8):
+    """Arc in weapon space around (cu, cv); angles in degrees."""
+    import math
+    prev = None
+    for i in range(steps + 1):
+        a = math.radians(a0_deg + (a1_deg - a0_deg) * i / steps)
+        u = cu + radius * math.cos(a)
+        v = cv + radius * math.sin(a)
+        if prev is not None:
+            wline(img, facing, prev[0], prev[1], u, v, color, w)
+        prev = (u, v)
+
+
+def _cosdir(deg):
+    import math
+    return math.cos(math.radians(deg))
+
+
+def _sindir(deg):
+    import math
+    return math.sin(math.radians(deg))
+
+
+# Player attack boxes (reach, hw, hh) from build/hitboxes.json, filled by
+# run(). The art derives each active pose from the mask-derived box, never from
+# a copied number (docs/weapon-art.md; build/hitboxes.json is written by
+# gen-hitboxes.py earlier in gen.sh).
+PLAYER_BOXES = None
+
+# weapon index -> move slot -> player_boxes ATTACKS index (docs/weapon-art.md)
+WEAPON_BOX_SLOT = {
+    0: {0: 0, 1: 1, 2: 2, 3: 3, 4: 8, 5: 9, 6: 10, 7: 5, 8: 4},
+}
+WEAPON_COUNT = 3
+PER_WEAPON_BOXES = 11
+
+
+def load_player_boxes(root):
+    path = os.path.join(root, "build", "hitboxes.json")
+    with open(path, encoding="utf-8") as handle:
+        doc = json.load(handle)
+    boxes = doc["player"]["attacks"]
+    if len(boxes) != WEAPON_COUNT * PER_WEAPON_BOXES:
+        raise SystemExit("gen-equipment: build/hitboxes.json player boxes: %d, want %d"
+                         % (len(boxes), WEAPON_COUNT * PER_WEAPON_BOXES))
+    return boxes
+
+
+def player_box(weapon, slot):
+    index = WEAPON_BOX_SLOT[weapon][slot]
+    reach, hw, hh = PLAYER_BOXES[weapon * PER_WEAPON_BOXES + index]
+    return reach, hw, hh
+
+
+def blade(img, facing, u0, v0, u1, v1, core=WHITE):
+    """3 px dark blade with a 1 px core; two calls never overlap by accident."""
+    wline(img, facing, u0, v0, u1, v1, DARK, 3)
+    wline(img, facing, u0, v0, u1, v1, core, 1)
+    dot(img, *wpt(facing, u1, v1), core, 1)
+
+
+def sword_cell(row, facing):
+    """One 32x32 sword pose cell (grip at the cell centre on hand rows, hitbox
+    centre on active rows — docs/weapon-art.md reference table)."""
+    img = new(32, 32)
+    last_move_row = WEAPON_ROW_MOVE0 + 2 * len(SWORD_MOVES) - 1
+    if WEAPON_ROW_MOVE0 <= row <= last_move_row:
+        slot, a_start, a_active = SWORD_MOVES[(row - WEAPON_ROW_MOVE0) // 2]
+        reach, hw, hh = player_box(0, slot)
+        active = (row - WEAPON_ROW_MOVE0) % 2 == 1
+        if active:
+            # Box-centred: the hunter sits `reach` behind the cell centre. The
+            # blade reaches through the box; the dark arc is the swing trail.
+            pu, pv = -reach, 0
+            tip = 1 + hw // 2
+            wline(img, facing, pu, pv, pu + 1, pv, DARK, 3)     # grip
+            blade(img, facing, pu + 1, pv,
+                  pu + 1 + (reach + tip) * _cosdir(a_active),
+                  pv + 1 + (reach + tip) * _sindir(a_active))
+            warc(img, facing, pu, pv, reach - 1, a_start, a_active, DARK, 1, 8)
+            warc(img, facing, pu, pv, max(2, reach // 2), a_start, a_active, DARK, 1, 5)
+        else:
+            wline(img, facing, -2, 0, 1, 0, DARK, 3)             # grip
+            blade(img, facing, 1, 0,
+                  1 + 8 * _cosdir(a_start), 8 * _sindir(a_start))
+            warc(img, facing, 0, 0, 9, a_start, a_active, DARK, 1, 6)
+        return img
+    if row == 0:      # idle: blade resting forward-down
+        wline(img, facing, -3, 0, 1, 0, DARK, 3)
+        blade(img, facing, 1, 0, 12, 4)
+    elif row == 1:    # recover: blade low
+        wline(img, facing, -3, 0, 1, 0, DARK, 3)
+        blade(img, facing, 1, 0, 9, 7)
+    elif row == WEAPON_ROW_STANCE:   # parry: blade vertical in front
+        wline(img, facing, -3, 0, 1, 0, DARK, 3)
+        wline(img, facing, 5, -8, 5, 8, DARK, 3)
+        wline(img, facing, 5, -7, 5, 7, WHITE, 1)
+    elif row == WEAPON_ROW_DODGE:    # tucked
+        wline(img, facing, -2, 0, 1, 0, DARK, 3)
+        blade(img, facing, 1, 0, 4, 9)
+    elif row == WEAPON_ROW_STUN:     # dropped
+        wline(img, facing, -2, 0, 1, 0, DARK, 3)
+        wline(img, facing, 1, 0, 5, 11, DARK, 3)
+    elif row == WEAPON_ROW_RIM:      # riposte rim: white ring, box-centred
+        warc(img, facing, 0, 0, 9, 0, 360, WHITE, 1, 12)
+    else:
+        return None
+    return img
+
+
+WEAPON_ART = {
+    "weapon_sword": sword_cell,
+}
+
+
+def weapon_plan(item):
+    """Packed frame plan for a mirrored weapon sheet (row-major, per row)."""
+    rows = item["frames"] // FACINGS
+    cols = len(WEAPON_SRC_FACINGS)
+    plan = []
+    for r in range(rows):
+        for src_col, mirror in WEAPON_MIRROR_PLAN:
+            plan.append([r * cols + src_col, mirror])
+    return plan
+
+
 def author_sheet(item):
     cw, ch = item["cell"]
     frames = item["frames"]
+    art = WEAPON_ART.get(item["id"]) if item["slot"] == "weapon" else None
+    if art is not None:
+        rows = frames // FACINGS
+        sheet = new(cw * len(WEAPON_SRC_FACINGS), ch * rows)
+        for row in range(rows):
+            for col, facing in enumerate(WEAPON_SRC_FACINGS):
+                cell = art(row, facing)
+                if cell is not None:
+                    if cell.size != (cw, ch):
+                        raise SystemExit("gen-equipment: weapon %dx%d != cell %dx%d for %s"
+                                         % (cell.size[0], cell.size[1], cw, ch, item["id"]))
+                    sheet.paste(cell, (col * cw, row * ch))
+        return sheet
     if item["order"] == "facing":
         cols, rows = frames, 1
     else:
@@ -596,6 +809,7 @@ def author_sheet(item):
                                  % (cell.size[0], cell.size[1], cw, ch, item["id"]))
             sheet.paste(cell, ((index % cols) * cw, (index // cols) * ch))
     return sheet
+
 
 
 def image_name(item):
@@ -918,6 +1132,8 @@ def run(root, dump):
         print("gen-equipment: %d items, %d B blob" % (len(items), len(blob)))
         return 0
 
+    global PLAYER_BOXES
+    PLAYER_BOXES = load_player_boxes(root)
     images_dir = os.path.join(root, IMAGES_REL)
     os.makedirs(images_dir, exist_ok=True)
     wrote = set()
@@ -934,6 +1150,17 @@ def run(root, dump):
         if write_if_changed(os.path.join(images_dir, name), png_bytes(sheet)):
             wrote.add(rel)
     clean_stale(images_dir, expected)
+
+    # Mirror-authored sheets: the packer (tools/convert-sprite.py) reads the
+    # plan so the 5-col source ships as the 8-col sheet (docs/weapon-art.md).
+    plans = {item["sheet"]: weapon_plan(item) for item in items if item["id"] in WEAPON_ART}
+    layout_path = os.path.join(images_dir, "layout.json")
+    if plans:
+        if write_if_changed(layout_path, json.dumps({"version": 1, "sheets": plans}, indent=2) + "\n"):
+            wrote.add("%s/layout.json" % IMAGES_REL)
+    elif os.path.isfile(layout_path):
+        os.remove(layout_path)
+        print("gen-equipment: removed stale %s/layout.json" % IMAGES_REL)
 
     if write_if_changed(os.path.join(root, BLOB_REL), blob):
         wrote.add(BLOB_REL)

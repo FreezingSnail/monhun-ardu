@@ -868,6 +868,43 @@ static inline uint8_t armorHeadPart(uint8_t headId) {
     return equip::DEFAULT_HEAD;
 }
 
+// Weapon art rows (docs/weapon-art.md). All three weapon sheets share the row
+// numbering: 0 idle, 1 recover, 2..21 move slots (startup/active pairs),
+// 22 stance, 23 dodge, 24 tap-defense, 25 stun, 26 riposte rim. The move slot
+// comes from Attack::id (AtkId) for named moves and from the combo chain for
+// plain hits, so no pointer comparisons run at draw time.
+namespace wpn {
+constexpr uint8_t ROW_IDLE = 0;
+constexpr uint8_t ROW_RECOVER = 1;
+constexpr uint8_t ROW_MOVE0 = 2;
+constexpr uint8_t ROW_STANCE = 22;
+constexpr uint8_t ROW_DODGE = 23;
+constexpr uint8_t ROW_DEFENSE = 24;
+constexpr uint8_t ROW_STUN = 25;
+constexpr uint8_t ROW_RIM = 26;
+// AtkId -> dense move slot: NONE (combo/special) never gets here, branch-a ids
+// fold to slot 4, branch-b to 5, branch2 to 6, alt 7, roll 8, charge 9.
+MH_PROGMEM const uint8_t ATK_SLOT[10] = {0, 4, 5, 4, 4, 5, 7, 8, 9, 6};
+// Per weapon: move slot -> startup row. Unused slots fall back to recover (1)
+// so a stray state can never blit a blank cell.
+MH_PROGMEM const uint8_t MOVE_ROW[3][10] = {
+    {2, 4, 6, 8, 10, 12, 14, 16, 18, 1},   // sword: no charge
+    {2, 4, 6, 8, 10, 1, 14, 16, 18, 20},   // flail: no branch-b
+    {2, 4, 6, 8, 10, 12, 14, 16, 18, 1},   // gunshield: no charge
+};
+}   // namespace wpn
+
+// Move slot for the attack being drawn: combo chain for plain hits, the id
+// fold for named moves, the special slot while PS_SPECIAL runs.
+static inline uint8_t weaponMoveSlot(const mh::Player &p, const mh::Attack *a) {
+    const int8_t id = mh::attackId(a);
+    if (id != mh::ATK_NONE)
+        return mhPgmReadU8(&wpn::ATK_SLOT[id]);
+    if (p.state == mh::PS_SPECIAL)
+        return 3;
+    return p.chain > 2 ? 2 : static_cast<uint8_t>(p.chain);
+}
+
 static void drawPlayer(const mh::Game &g, int16_t camX, int16_t camY) {
     const mh::Player &p = g.player;
     const int16_t x = static_cast<int16_t>(rndPx(p.x, p.subX) - camX);
@@ -910,32 +947,31 @@ static void drawPlayer(const mh::Game &g, int16_t camX, int16_t camY) {
     if (!p.sheathed) {
         if (g.weapon == mh::W_SWORD) {
             if (a) {
-                int16_t reach = mh::attackReach(a);
-                if (phase != 1)
-                    reach = static_cast<int16_t>(reach * 6 / 10);   // mock 0.6 arc
-                // int16 product on purpose: |p.fx|,|p.fy| <= 16 (DIR8 unit) and
-                // reach is a pixel reach from the attack record (< 256), so the
-                // 16-bit multiply stays inside int16 and no int32 cast is needed.
+                // Row per move slot (docs/weapon-art.md): startup rows are
+                // hand-centred, active rows box-centred on the same point the
+                // melee test resolves against.
+                const int16_t reach = mh::attackReach(a);
                 const int16_t hx = static_cast<int16_t>(cx + ((p.fx * reach) >> 4));
                 const int16_t hy = static_cast<int16_t>(cy + ((p.fy * reach) >> 4));
-                const int16_t hw = mh::attackHw(a);
-                const int16_t hh = mh::attackHh(a);
-                // Attack slot -> slash frame (VARIANT_SWORD_SLASH): combo chain
-                // 0/1/2, plain special, step-slash, spin-cut. The 32x32 frames are
-                // hit-box-centred with the 4x4 white core at the centre.
-                const int8_t atkId = mh::attackId(a);
-                const uint8_t slot = atkId == mh::ATK_NONE ? static_cast<uint8_t>(p.state == mh::PS_SPECIAL ? 3 : p.chain) : static_cast<uint8_t>(3 + atkId);
-                partVariantDraw(equip::PART_SWORD_SLASH, slot, hx, hy);
-                if (p.state == mh::PS_SPECIAL && p.riposteT > 0) {
-                    // Riposte rim: rim at the frame origin, box top-left as ref.
-                    partDraw(equip::PART_SWORD_RIPOSTE, equip::POSE_ATTACK_ACTIVE, face, hx - (hw >> 1), hy - (hh >> 1));
+                const uint8_t slot = weaponMoveSlot(p, a);
+                const uint8_t base = mhPgmReadU8(&wpn::MOVE_ROW[0][slot]);
+                if (phase == 1) {
+                    partDraw(equip::PART_WEAPON_SWORD, static_cast<uint8_t>(base + 1), face, hx, hy);
+                } else if (phase == 0) {
+                    partDraw(equip::PART_WEAPON_SWORD, base, face, cx, cy);
+                } else {
+                    partDraw(equip::PART_WEAPON_SWORD, wpn::ROW_RECOVER, face, cx, cy);
                 }
+                if (p.state == mh::PS_SPECIAL && p.riposteT > 0)
+                    partDraw(equip::PART_WEAPON_SWORD, wpn::ROW_RIM, face, hx, hy);
             } else if (p.stance == mh::ST_PARRY) {
-                // Blade frame anchored on the player centre.
-                partDraw(equip::PART_SWORD_PARRY, equip::POSE_PARRY, face, cx, cy);
+                partDraw(equip::PART_WEAPON_SWORD, wpn::ROW_STANCE, face, cx, cy);
+            } else if (p.state == mh::PS_DODGE) {
+                partDraw(equip::PART_WEAPON_SWORD, wpn::ROW_DODGE, face, cx, cy);
+            } else if (p.state == mh::PS_STUN) {
+                partDraw(equip::PART_WEAPON_SWORD, wpn::ROW_STUN, face, cx, cy);
             } else {
-                // Idle: chip sheet's 3x3 white head on the mock top-left.
-                partDraw(equip::PART_SWORD_CHIP, equip::POSE_IDLE, face, cx + ((p.fx * 7) >> 4), cy + ((p.fy * 7) >> 4));
+                partDraw(equip::PART_WEAPON_SWORD, wpn::ROW_IDLE, face, cx, cy);
             }
         } else if (g.weapon == mh::W_FLAIL) {
             if (p.stance == mh::ST_WHIRL) {

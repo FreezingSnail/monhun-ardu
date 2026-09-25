@@ -175,7 +175,7 @@ inline void test_data(FxTest &test) {
     test.expectEq(attackPush(branchAtk(b2)), 0, F("helmsplit push"));
     test.expectEq(attackEffect(branchAtk(b2)), 0, F("helmsplit effect"));
     test.expectEq(attackShell(branchAtk(b2)), 0, F("helmsplit shell"));
-    test.expectEq(attackId(branchAtk(b2)), ATK_NONE, F("helmsplit id"));
+    test.expectEq(attackId(branchAtk(b2)), ATK_BRANCH2, F("helmsplit id"));
 
     const ShellDef *ss0 = weaponShell(w0, 0);
     const ShellDef *ss1 = weaponShell(w0, 1);
@@ -237,7 +237,7 @@ inline void test_data(FxTest &test) {
     test.expectEq(attackPush(branchAtk(fb2)), 12, F("earthslam push"));
     test.expectEq(attackEffect(branchAtk(fb2)), 1, F("earthslam effect"));
     test.expectEq(attackShell(branchAtk(fb2)), 0, F("earthslam shell"));
-    test.expectEq(attackId(branchAtk(fb2)), ATK_NONE, F("earthslam id"));
+    test.expectEq(attackId(branchAtk(fb2)), ATK_BRANCH2, F("earthslam id"));
 
     // ---------------------------------------- gunshield values (mock/game.js)
     test.expectEq(weaponId(w2), W_GUN, F("gun id"));
@@ -308,7 +308,7 @@ inline void test_data(FxTest &test) {
     test.expectEq(attackPush(branchAtk(gb2)), 16, F("cannonblast push"));
     test.expectEq(attackEffect(branchAtk(gb2)), 0, F("cannonblast effect"));
     test.expectEq(attackShell(branchAtk(gb2)), 0, F("cannonblast shell"));
-    test.expectEq(attackId(branchAtk(gb2)), ATK_NONE, F("cannonblast id"));
+    test.expectEq(attackId(branchAtk(gb2)), ATK_BRANCH2, F("cannonblast id"));
 
     const ShellDef *ball = weaponShell(w2, 0);
     test.expectEq(shellCount(ball), 2, F("ball count"));
@@ -340,7 +340,7 @@ inline void test_data(FxTest &test) {
     test.expectEq(attackHw(sroll), 16, F("sword roll hw"));
     test.expectEq(attackHh(sroll), 14, F("sword roll hh"));
     test.expectEq(attackStam(sroll), 10, F("sword roll stam"));
-    test.expectEq(attackId(sroll), ATK_NONE, F("sword roll id"));
+    test.expectEq(attackId(sroll), ATK_ROLL, F("sword roll id"));
 
     const Attack *salt = weaponAlt(w0);
     test.expectEq(attackStartup(salt), 6, F("sword alt startup"));
@@ -352,7 +352,7 @@ inline void test_data(FxTest &test) {
     test.expectEq(attackHh(salt), 10, F("sword alt hh"));
     test.expectEq(attackStam(salt), 12, F("sword alt stam"));
     test.expectEq(attackLunge(salt), 20, F("sword alt lunge"));
-    test.expectEq(attackId(salt), ATK_NONE, F("sword alt id"));
+    test.expectEq(attackId(salt), ATK_ALT, F("sword alt id"));
 
     const Attack *froll = weaponRoll(w1);
     test.expectEq(attackStartup(froll), 4, F("flail roll startup"));
@@ -363,6 +363,7 @@ inline void test_data(FxTest &test) {
     test.expectEq(attackHw(froll), 24, F("flail roll hw"));
     test.expectEq(attackHh(froll), 16, F("flail roll hh"));
     test.expectEq(attackStam(froll), 10, F("flail roll stam"));
+    test.expectEq(attackId(froll), ATK_ROLL, F("flail roll id"));
 
     const Attack *falt = weaponAlt(w1);
     test.expectEq(attackStartup(falt), 6, F("flail alt startup"));
@@ -373,6 +374,7 @@ inline void test_data(FxTest &test) {
     test.expectEq(attackHw(falt), 30, F("flail alt hw"));
     test.expectEq(attackHh(falt), 14, F("flail alt hh"));
     test.expectEq(attackStam(falt), 14, F("flail alt stam"));
+    test.expectEq(attackId(falt), ATK_ALT, F("flail alt id"));
 
     const Attack *groll = weaponRoll(w2);
     test.expectEq(attackStartup(groll), 3, F("gun roll startup"));
@@ -385,7 +387,7 @@ inline void test_data(FxTest &test) {
     test.expectEq(attackStam(groll), 8, F("gun roll stam"));
     test.expectEq(attackLunge(groll), 30, F("gun roll lunge"));
     test.expectEq(attackPush(groll), 10, F("gun roll push"));
-    test.expectEq(attackId(groll), ATK_NONE, F("gun roll id"));
+    test.expectEq(attackId(groll), ATK_ROLL, F("gun roll id"));
 
     const Attack *galt = weaponAlt(w2);
     test.expectEq(attackStartup(galt), 4, F("gun alt startup"));
@@ -398,7 +400,7 @@ inline void test_data(FxTest &test) {
     test.expectEq(attackStam(galt), 9, F("gun alt stam"));
     test.expectEq(attackLunge(galt), 18, F("gun alt lunge"));
     test.expectEq(attackPush(galt), 14, F("gun alt push"));
-    test.expectEq(attackId(galt), ATK_NONE, F("gun alt id"));
+    test.expectEq(attackId(galt), ATK_ALT, F("gun alt id"));
 
     // ------------------------------- charge attacks (ynb, charge-lite prg.11)
     // Sword has no charge data: slot 0 zero (weaponHasCharge false).
@@ -414,7 +416,7 @@ inline void test_data(FxTest &test) {
     test.expectEq(attackHh(fc0), 18, F("chargeslam1 hh"));
     test.expectEq(attackStam(fc0), 14, F("chargeslam1 stam"));
     test.expectEq(attackEffect(fc0), 0, F("chargeslam1 effect"));
-    test.expectEq(attackId(fc0), ATK_NONE, F("chargeslam1 id"));
+    test.expectEq(attackId(fc0), ATK_CHARGE, F("chargeslam1 id"));
     test.expectEq(weaponHasCharge(w1), 1, F("flail has charge"));
 
     // Gun has no melee charge; the ynb charged ball (chargeShells) is dead data

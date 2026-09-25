@@ -842,7 +842,7 @@ void PlayerSuite(TestRunner &runner) {
         t.assert(g.player.state, PS_DODGE, "sword evade state");
         stepN(g, 1, Input{0, 0, true, false});
         t.assert(g.player.state, PS_ATTACK, "sword roll attack started");
-        t.assert(g.player.atk->id, ATK_NONE, "sword roll id");
+        t.assert(g.player.atk->id, ATK_ROLL, "sword roll id");
         t.assert(g.player.atk->reach, 15, "sword roll reach");
         t.assert(g.player.atk->hw, 16, "sword roll hw");
         t.assert(g.player.atk->hh, 14, "sword roll hh");

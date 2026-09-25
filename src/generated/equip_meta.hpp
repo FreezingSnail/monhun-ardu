@@ -17,7 +17,7 @@ namespace equip {
 constexpr uint16_t MAGIC = 0x4551;
 constexpr uint8_t VERSION = 1;
 constexpr uint8_t FLAGS = 0x00;
-constexpr uint16_t SIZE = 876;
+constexpr uint16_t SIZE = 897;
 constexpr uint8_t HEADER_SIZE = 8;
 constexpr uint8_t ITEM_SIZE = 19;
 constexpr uint8_t FACINGS = 8;
@@ -117,7 +117,7 @@ constexpr uint8_t ITEM_ORDER[ITEM_COUNT] = {
 constexpr uint8_t ITEM_FRAMES[ITEM_COUNT] = {
     16, 2, 1, 1, 4, 4, 24, 4,
     3, 1, 8, 8, 8, 8, 2, 1,
-    1, 1, 1, 5, 24, 24, 24,
+    1, 1, 1, 5, 24, 24, 216,
 };
 constexpr uint8_t ITEM_CELL_W[ITEM_COUNT] = {
     16, 8, 24, 4, 8, 8, 48, 8,
@@ -208,7 +208,7 @@ constexpr uint8_t POSE_ROW_WEAPON_GUN[POSE_COUNT] = {
     0, 0, 1, 2, 0, 0, 0, 0, 0, 0, 0, 0,
 };
 constexpr uint8_t POSE_ROW_WEAPON_SWORD[POSE_COUNT] = {
-    0, 0, 1, 2, 0, 0, 0, 0, 0, 0, 0, 0,
+    0, 2, 3, 1, 22, 22, 22, 24, 23, 24, 25, 0,
 };
 
 // Frame index tables: FRAME_<ID>[pose][facing]. 'facing' sheets index the
@@ -524,16 +524,16 @@ constexpr uint8_t FRAME_WEAPON_GUN[POSE_COUNT][FACINGS] = {
 };
 constexpr uint8_t FRAME_WEAPON_SWORD[POSE_COUNT][FACINGS] = {
     {0, 1, 2, 3, 4, 5, 6, 7},
-    {0, 1, 2, 3, 4, 5, 6, 7},
-    {8, 9, 10, 11, 12, 13, 14, 15},
     {16, 17, 18, 19, 20, 21, 22, 23},
-    {0, 1, 2, 3, 4, 5, 6, 7},
-    {0, 1, 2, 3, 4, 5, 6, 7},
-    {0, 1, 2, 3, 4, 5, 6, 7},
-    {0, 1, 2, 3, 4, 5, 6, 7},
-    {0, 1, 2, 3, 4, 5, 6, 7},
-    {0, 1, 2, 3, 4, 5, 6, 7},
-    {0, 1, 2, 3, 4, 5, 6, 7},
+    {24, 25, 26, 27, 28, 29, 30, 31},
+    {8, 9, 10, 11, 12, 13, 14, 15},
+    {176, 177, 178, 179, 180, 181, 182, 183},
+    {176, 177, 178, 179, 180, 181, 182, 183},
+    {176, 177, 178, 179, 180, 181, 182, 183},
+    {192, 193, 194, 195, 196, 197, 198, 199},
+    {184, 185, 186, 187, 188, 189, 190, 191},
+    {192, 193, 194, 195, 196, 197, 198, 199},
+    {200, 201, 202, 203, 204, 205, 206, 207},
     {0, 1, 2, 3, 4, 5, 6, 7},
 };
 
@@ -543,7 +543,7 @@ constexpr uint8_t FRAME_WEAPON_SWORD[POSE_COUNT][FACINGS] = {
 // then the u16 variant index table and the variant frame bytes.
 // Little-endian; read on device through core/fxmem.hpp during the
 // render pass (src/render.hpp partDraw/partFrame).
-constexpr uint8_t PART_COUNT = 19;
+constexpr uint8_t PART_COUNT = 20;
 constexpr uint8_t PART_BODY_BASE = 0;
 constexpr uint8_t PART_CHIP_BALL = 1;
 constexpr uint8_t PART_DEFLECT = 2;
@@ -563,6 +563,7 @@ constexpr uint8_t PART_SWORD_CHIP = 15;
 constexpr uint8_t PART_SWORD_PARRY = 16;
 constexpr uint8_t PART_SWORD_RIPOSTE = 17;
 constexpr uint8_t PART_SWORD_SLASH = 18;
+constexpr uint8_t PART_WEAPON_SWORD = 19;
 
 constexpr uint16_t PARTS_OFF = 445;
 constexpr uint8_t PART_SIZE = 19;
@@ -572,8 +573,8 @@ constexpr uint8_t PART_ANCHOR_Y_OFF = 4;          // i8
 constexpr uint8_t PART_ORDER_OFF = 5;             // u8 ORDER_*
 constexpr uint8_t PART_FRAMES_OFF = 6;            // u8
 constexpr uint8_t PART_FRAME_OFF = 7;             // u8[POSE_COUNT]
-constexpr uint16_t PART_VARIANT_OFFSETS_OFF = 806;
-constexpr uint16_t PART_VARIANT_DATA_OFF = 846;
+constexpr uint16_t PART_VARIANT_OFFSETS_OFF = 825;
+constexpr uint16_t PART_VARIANT_DATA_OFF = 867;
 constexpr uint8_t PART_VARIANT_COUNT = 30;
 
 // Default draw set (data/equipment/sets/default.json): the render
@@ -585,22 +586,23 @@ constexpr uint8_t DEFAULT_HEAD = PART_HEAD_BASE;
 // Baked absolute sheet offsets (one per referenced part symbol).
 // The blob stores these; a static_assert pins each against fxdata.h so a
 // stale equip.bin (one gen pass behind) cannot ship on AVR.
-constexpr uint32_t SHEET_OFF_MH_BODY_BASE = 140361;
-constexpr uint32_t SHEET_OFF_FXCHIP = 23597;
-constexpr uint32_t SHEET_OFF_FXDEFLECT = 6593;
-constexpr uint32_t SHEET_OFF_FXERASE = 106695;
-constexpr uint32_t SHEET_OFF_FXWHIRL = 86403;
-constexpr uint32_t SHEET_OFF_FXWHIRLRING = 34409;
-constexpr uint32_t SHEET_OFF_FXGUARD = 25475;
-constexpr uint32_t SHEET_OFF_FXRELOAD = 102285;
-constexpr uint32_t SHEET_OFF_MH_HEAD_BANDANA = 117313;
-constexpr uint32_t SHEET_OFF_MH_HEAD_BASE = 162063;
-constexpr uint32_t SHEET_OFF_MH_HEAD_HELM = 137285;
-constexpr uint32_t SHEET_OFF_FXPLAYER = 86863;
-constexpr uint32_t SHEET_OFF_MH_SHADOW_BASE = 143435;
-constexpr uint32_t SHEET_OFF_FXPARRY = 18215;
-constexpr uint32_t SHEET_OFF_FXRIPSPECIAL = 87249;
-constexpr uint32_t SHEET_OFF_FXSLASH = 107323;
+constexpr uint32_t SHEET_OFF_MH_BODY_BASE = 288606;
+constexpr uint32_t SHEET_OFF_FXCHIP = 23618;
+constexpr uint32_t SHEET_OFF_FXDEFLECT = 6614;
+constexpr uint32_t SHEET_OFF_FXERASE = 106716;
+constexpr uint32_t SHEET_OFF_FXWHIRL = 86424;
+constexpr uint32_t SHEET_OFF_FXWHIRLRING = 34430;
+constexpr uint32_t SHEET_OFF_FXGUARD = 25496;
+constexpr uint32_t SHEET_OFF_FXRELOAD = 102306;
+constexpr uint32_t SHEET_OFF_MH_HEAD_BANDANA = 118102;
+constexpr uint32_t SHEET_OFF_MH_HEAD_BASE = 310308;
+constexpr uint32_t SHEET_OFF_MH_HEAD_HELM = 285530;
+constexpr uint32_t SHEET_OFF_FXPLAYER = 86884;
+constexpr uint32_t SHEET_OFF_MH_SHADOW_BASE = 291680;
+constexpr uint32_t SHEET_OFF_FXPARRY = 18236;
+constexpr uint32_t SHEET_OFF_FXRIPSPECIAL = 87270;
+constexpr uint32_t SHEET_OFF_FXSLASH = 107344;
+constexpr uint32_t SHEET_OFF_MH_WEAPON_SWORD = 119640;
 #if defined(__AVR__)
 static_assert(SHEET_OFF_MH_BODY_BASE == static_cast<uint32_t>(mh_body_base), "equip blob stale: re-run make gen");
 static_assert(SHEET_OFF_FXCHIP == static_cast<uint32_t>(fxchip), "equip blob stale: re-run make gen");
@@ -618,6 +620,7 @@ static_assert(SHEET_OFF_MH_SHADOW_BASE == static_cast<uint32_t>(mh_shadow_base),
 static_assert(SHEET_OFF_FXPARRY == static_cast<uint32_t>(fxparry), "equip blob stale: re-run make gen");
 static_assert(SHEET_OFF_FXRIPSPECIAL == static_cast<uint32_t>(fxripspecial), "equip blob stale: re-run make gen");
 static_assert(SHEET_OFF_FXSLASH == static_cast<uint32_t>(fxslash), "equip blob stale: re-run make gen");
+static_assert(SHEET_OFF_MH_WEAPON_SWORD == static_cast<uint32_t>(mh_weapon_sword), "equip blob stale: re-run make gen");
 #endif
 
 }   // namespace equip

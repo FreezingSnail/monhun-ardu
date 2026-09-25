@@ -100,7 +100,7 @@ constexpr int16_t whirl_radius = 24;
 // Sheet frame layout (uniform frame per sheet, left-to-right strip).
 constexpr uint8_t slash_frame_w = 32;
 constexpr uint8_t slash_frame_h = 32;
-constexpr uint8_t slash_frames = 5;
+constexpr uint8_t slash_frames = 6;
 constexpr uint8_t ripspecial_frame_w = 24;
 constexpr uint8_t ripspecial_frame_h = 24;
 constexpr uint8_t ripspecial_frames = 1;
