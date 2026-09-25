@@ -44,38 +44,22 @@
 // the host each is a normal pointer dereference. Addresses are always formed
 // with `&table[i].field`, so struct layout is whatever the target compiler
 // chose and no manual offset math is needed.
+//
+// These are macros, not inline functions: the typed wrappers were pure
+// indirection around a single pgm_read_*, and expanding them at the call site
+// lets the compiler fold the address arithmetic (measured -44 B whole-image vs
+// the function form). The argument is consumed exactly once and call sites pass
+// a plain `&table[i].field` lvalue, so no multiple-evaluation hazard applies.
 #if defined(__AVR__)
-// LPM byte read duplicated at many call sites; one out-of-line copy measured
-// -4 B whole-image.
-MH_NOINLINE inline uint8_t mhPgmReadU8(const uint8_t *p) {
-    return pgm_read_byte(p);
-}
-inline int8_t mhPgmReadI8(const int8_t *p) {
-    return static_cast<int8_t>(pgm_read_byte(reinterpret_cast<const uint8_t *>(p)));
-}
-inline uint16_t mhPgmReadU16(const uint16_t *p) {
-    return pgm_read_word(p);
-}
-inline int16_t mhPgmReadI16(const int16_t *p) {
-    return static_cast<int16_t>(pgm_read_word(reinterpret_cast<const uint16_t *>(p)));
-}
-inline uint32_t mhPgmReadU32(const uint32_t *p) {
-    return pgm_read_dword(p);
-}
+#define mhPgmReadU8(p) (pgm_read_byte(p))
+#define mhPgmReadI8(p) (static_cast<int8_t>(pgm_read_byte(reinterpret_cast<const uint8_t *>(p))))
+#define mhPgmReadU16(p) (pgm_read_word(p))
+#define mhPgmReadI16(p) (static_cast<int16_t>(pgm_read_word(reinterpret_cast<const uint16_t *>(p))))
+#define mhPgmReadU32(p) (pgm_read_dword(p))
 #else
-inline uint8_t mhPgmReadU8(const uint8_t *p) {
-    return *p;
-}
-inline int8_t mhPgmReadI8(const int8_t *p) {
-    return *p;
-}
-inline uint16_t mhPgmReadU16(const uint16_t *p) {
-    return *p;
-}
-inline int16_t mhPgmReadI16(const int16_t *p) {
-    return *p;
-}
-inline uint32_t mhPgmReadU32(const uint32_t *p) {
-    return *p;
-}
+#define mhPgmReadU8(p) (*(p))
+#define mhPgmReadI8(p) (*(p))
+#define mhPgmReadU16(p) (*(p))
+#define mhPgmReadI16(p) (*(p))
+#define mhPgmReadU32(p) (*(p))
 #endif

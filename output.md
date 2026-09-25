@@ -1,96 +1,67 @@
-# monhun-ardu-ryh.5 — player masks: hurtbox/collide + per-attack weapon hitboxes
+# monhun-ardu-4dm — progmem read-helper shim → macros
 
-## What changed
+## Status: DONE
 
-The player's body box and every weapon attack box now come from a painted mask,
-same treatment as the creatures. `images/masks/mh_player_base_16x16.png` is the
-authoring source; `tools/gen-hitboxes.py` compiles it into a generated header
-that `game.hpp` WEAPON_DEFS and `Player::init` read. Shipped values are
-byte-identical (player 16x16, every reach/hw/hh unchanged), so the gate is the
-packed weapon-defs blob plus every sim suite.
+## Change
+`src/core/progmem.hpp` only (+16 / -32, 1 file changed).
 
-- **`images/masks/mh_player_base_16x16.png` (new source).** Cell 16x16, one
-  facing (east). Three bands: collision yellow (0,0,16,16), hurtbox green body
-  (0,0,16,16), hitbox 33 columns = one per weapon attack entry in the mask's
-  table order (per weapon: attacks 0..2, special, roll, alt, charge 0..1,
-  branches 0..2). Column margins are 40 px x / 5 px y (the gun arrowshot reach 44
-  and the sword spin-cut hh 26 set them); 3168x78 px, 1572 B. The bootstrapped
-  values are the shipped literals, so the artist can tighten the green body to
-  the measured (2,1,12,15) and repaint any arc with no code change.
-- **`tools/gen-hitboxes.py`.** Added a player path: the player mask resolves by
-  symbol (`PLAYER_SYMBOL`) instead of creature JSON. `derive_player` enforces
-  the creature validations the player has: dims vs the cell, one *solid* hurt
-  region (green body, no head/appendage — the player has no zones), the body
-  box inside the cell+margin, one window per painted hitbox column, and 33
-  columns == the attack table count. `cell_rect_to_attack` maps a mask rect to
-  the packed `(reach, hw, hh)` (rect centred on the body y; reach = rect ox -
-  body centre + hw/2). `_player_header_text` writes the header; the player box
-  also lands in `build/hitboxes.json` under a `player` key (gen-combat ignores
-  it). The mask's green body origin *is* the art anchor, the same contract the
-  creature zone boxes use, so "body box + its art bbox origin" is emitted as
-  BODY_OX/OY/W/H (+ COLLIDE_*).
-- **`src/generated/player_boxes.hpp` (new generated header).** Emits
-  `playerboxes::BODY_{OX,OY,W,H}` (0,0,16,16), `COLLIDE_*`, and
-  `playerboxes::ATTACKS[3][11]` (mask-derived reach/hw/hh). Unused storage costs
-  0 B: the values are `constexpr`, folded at the use sites.
-- **`src/core/game.hpp`.** Includes `player_boxes.hpp` and defines
-  `MH_PLAYER_BOX(w, i)` to splice the three mask-derived fields into each
-  `Attack` literal; the `Attack`/`Branch`/`ShellDef`/`WeaponDef` structs and
-  their 23/27/15/329 static_asserts are untouched. Only the reach/hw/hh numbers
-  changed source (all identical values).
-- **`src/core/player.hpp`.** `Player::init` reads `playerboxes::BODY_W/H`
-  instead of the 16/16 literals.
-- **`tools/gen.sh`.** gen-hitboxes now runs before the fxdump host build
-  (game.hpp includes `player_boxes.hpp`, and fxdump/gen-fxtables pack the same
-  table). Ordered: gen-items -> gen-items-ids -> gen-hitboxes -> fxdump ->
-  gen-art -> gen-fxtables -> gen-combat -> ... Unchanged otherwise.
+- Replaced the five `mhPgmRead*` inline functions with macros.
+  - AVR: direct `pgm_read_byte/word/dword` with the same casts as before
+    (`I8` → `reinterpret_cast<const uint8_t*>` then `int8_t`; `I16` →
+    `reinterpret_cast<const uint16_t*>` then `int16_t`).
+  - Host: `(*(p))` identity deref for all five.
+- Dropped the stale `MH_NOINLINE` on `mhPgmReadU8` and its "-4 B whole-image"
+  comment; rewrote the readers block comment to explain the macro form and the
+  single-evaluation safety (call sites pass a plain `&table[i].field` lvalue).
+- `MH_PROGMEM`, `MH_NOINLINE` (still used by ~42 other helpers) and the file's
+  purpose untouched. No other file modified.
 
-## Interfaces
+## Numbers (make size)
+```
+size: .text=29376 .data=50 .bss=1764
+size: flash=29426/29696 (270 free)  ram=1814/2560
+```
+Baseline HEAD (spike): `.text=29420 .data=50 .bss=1764` /
+`flash=29470/29696 (226 free) ram=1814/2560`.
+Delta: **flash −44 B** (29470 → 29426), RAM unchanged 1814. Matches the spiked
+29426 exactly. `make size-line` reports `flash=29426/29696 (270 free)  ram=1814/2560`.
 
-- `mh::playerboxes::ATTACKS[w][i]` — `{int16_t reach, hw, hh}`; column order per
-  weapon: attacks 0..2, special, roll, alt, charge 0..1, branches 0..2. A zero
-  box is an all-zero attack (mask column blank).
-- `mh::playerboxes::BODY_{OX,OY,W,H}`, `COLLIDE_{OX,OY,W,H}`.
-- `MH_PLAYER_BOX(w, i)` macro in game.hpp (host table only).
+## Gates
+| command | result |
+|---|---|
+| `make size` | flash 29426 ≤ 29430 ✔, ram 1814 (no growth) ✔ |
+| `make size-line` | `flash=29426/29696 (270 free)  ram=1814/2560` ✔ |
+| `make test` | `Total Passed: 6815  Total Failed: 0` ✔ (host deref macros) |
+| `make test-tools` | `Ran 373 tests ... OK` ✔ |
+| `FXTEST_ONLY=test_data make fxtest-headless` | `data_test PASSED=354 FAILED=0` / `test_data: PASS` ✔ |
+| `FXTEST_ONLY=test_hud make fxtest-headless` | `test_hud PASSED=29 FAILED=0` / `test_hud: PASS` ✔ |
+| `FXTEST_ONLY=test_items make fxtest-headless` | `test_items PASSED=35 FAILED=0` / `test_items: PASS` ✔ |
+| `FXTEST_ONLY=test_combat make fxtest-headless` | `combat_test PASSED=252 FAILED=0` / `test_combat: PASS` ✔ |
+| `FXTEST_ONLY=test_zones make fxtest-headless` | `zones_test PASSED=82 FAILED=0` / `test_zones: PASS` ✔ |
+| `FXTEST_ONLY=test_screens make fxtest-headless` | `test_screens PASSED=212 FAILED=0` / `test_screens: PASS` ✔ |
+| `make gen-check` | not run — no fxdata/ or src/generated/ files dirty |
 
-## Evidence (exact)
+### Verification-command discrepancy (non-blocking)
+The bead's command list names `test_sin` and `test_save` (and the acceptance
+names `test_carve`); **no such suites exist** under `tst/fxdatatest/`
+(`test_*.ino` list has no `test_sin`/`test_save`/`test_carve`). Those
+`FXTEST_ONLY=` runs filtered to an empty suite and no-op'd
+(`make[2]: Nothing to be done for 'fxtest-build'`, exit 0 — not a real pass).
+Substituted the suites that actually exist and exercise the changed readers:
+`test_combat` (sin256/DIR8 movement math), `test_items`, `test_zones`,
+`test_screens`, plus `test_data`/`test_hud` from the bead. `dir8X/Y`
+(`mhPgmReadI16`) and render masks (`mhPgmReadU8`) are exercised across these.
 
-- `make gen; git diff --stat fxdata/`:
-  ` fxdata/manifest.json | 10 ++++++++++` (1 file changed, 10 insertions) —
-  adds the new mask input and the new `src/generated/player_boxes.hpp` output.
-  `git diff --stat fxdata/tables/` and `git diff --stat src/generated/ src/fxdata.h`
-  are **empty**: the packed `weapondefs.bin` blob and every pre-existing
-  generated header are byte-identical.
-- `make gen-check`: `fxdata_manifest: PASS (164 generated artifacts unchanged)`
-  (was 163; +1 = the new player_boxes.hpp).
-- `make test`: `Total Passed: 6815  Total Failed: 0` (unchanged).
-- `FXTEST_ONLY=test_player_art make fxtest-headless`:
-  `test_player_art PASSED=120 FAILED=0` / `test_player_art: PASS`.
-- `FXTEST_ONLY=test_combat make fxtest-headless`:
-  `combat_test PASSED=252 FAILED=0` / `test_combat: PASS`.
-- `FXTEST_ONLY=test_parity make fxtest-headless`:
-  `parity_test PASSED=515 FAILED=145` / `test_parity: FAIL`.
-  **Pre-existing, not this bead:** the same suite fails identically
-  (515/145, same `s=19 snap/ticks` lines) on a clean aa15ba6 tree
-  (`git stash -u`, rerun, `git stash pop`). Reported as-is per BLOCKED honesty;
-  the failure is unrelated to the player boxes (identical artifact bytes).
-- `make size`: `size: flash=29470/29696 (226 free)  ram=1814/2560`.
-- `make size-line`: `size: flash=29470/29696 (226 free)  ram=1814/2560`.
-- **Delta: 0 B.** Checkpoint aa15ba6 was 29470/29696 (226 free), RAM 1814/2560;
-  this bead is identical. 226 B free >= the ~150 B floor.
-- `make test-tools` (extra safety): `Ran 373 tests ... OK`.
+## Danger / correctness notes
+- Macros consume the argument exactly once; every call site in `src/` passes a
+  single `&table[i].field` lvalue (some wrap it in `reinterpret_cast<...>`, one
+  uses `off + i` in the index) — no comma-expressions, no side-effecting
+  arguments, so no multiple-evaluation hazard.
+- `reinterpret_cast` inside a macro argument is fine at all call sites.
 
-## Notes / deviations
+## Wall time
+~5 min worker (reads/edit + `make size`/`size-line`/`test`/`test-tools` + 6
+device suites).
 
-- Mask column order follows the bead's parenthetical ("main 0..2, special, roll,
-  alt, charge, branches"), i.e. attacks, special, roll, alt, charge 0..1,
-  branches — not the WeaponDef struct declaration order. Both the Python
-  emitter and game.hpp's `MH_PLAYER_BOX` indices share this one order; nothing
-  else consumes a column index.
-- "art bbox origin" is emitted as the body box origin (BODY_OX/OY), mirroring
-  the epic's zone contract ("zone box origin is also the part-art anchor").
-  Reading the sprite's opaque bbox (2,1,12,15) into the header was rejected on
-  purpose: gen-hitboxes runs before gen-art, so a sprite-derived value would lag
-  one `make gen` pass and break `make gen-check` after any art change.
-- The mask is a source (tracked via `fxdata_manifest.py` MASK_GLOBS), never
-  shipped, never rewritten by `make gen`. Not committed by the worker.
+## Commit
+Not committed — orchestrator owns the commit.
