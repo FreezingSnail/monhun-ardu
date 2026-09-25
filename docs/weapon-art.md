@@ -154,6 +154,9 @@ angle, and the tooling test asserts ink in the box and across its front half.
   active row inks its mask box and the box front half, the layout plan
   reproduces the shipped frames row-for-row, and the mirror source/row-table
   validations fail loudly.
+- Local eyeball artifact (`build/` is untracked): `build/scratch/weapon_review.py
+  <0|1|2>` renders body + sheet rows + the mask box per move at 3x for the
+  sword/flail/gunshield.
 - `tools/gen-hitboxes.py --render` / `build/scratch/` composite review PNG shows
   art + mask boxes for eyeballing before device flash.
 - Budget: landed at **29160/29696 (536 free)**, 266 B below the design-freeze
