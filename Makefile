@@ -68,9 +68,9 @@ dev:
 # Dev feel build + the 1 px debug hurt/hit-box wireframe overlay
 # (bead monhun-ardu-rie): dev's flags plus -DDEBUG_HURTBOXES=1, so drawDebug()
 # renders always (no runtime toggle). The overlay only fits on the MH_DEV carve:
-# untrimmed it pushed dev 388 B over (30084/29696) and shipping 1254 B over
-# (30950/29696); the trimmed wireBox/dev-block lands at 29608 B (88 B free).
-# Never a shipping path. Same FX-image check + Ardens launch as dev.
+# post-fix (q0o) shipping is 29316/29696 (380 free) and this build is
+# 29408/29696 (288 free); still MH_DEV-carve-only, never a shipping path.
+# Same FX-image check + Ardens launch as dev.
 dev-hitboxes:
 	arduino-cli compile --fqbn "arduboy-homemade:avr:arduboy-fx" --optimize-for-debug --output-dir dist \
 	    --build-property compiler.cpp.extra_flags="-mcall-prologues -mrelax -DMH_NO_USB -DMH_AUDIO=0 -DMH_DEV=1 -DDEBUG_HURTBOXES=1" \

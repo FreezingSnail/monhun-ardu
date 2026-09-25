@@ -30,6 +30,25 @@ void beast(Game &g, int n) {
         updateMonster(g);
 }
 
+// q0o: the melee rect the player FSM tests against Game::target.rect for the
+// current weapon's combo hit 1 -- the exact same box player.hpp builds from
+// WEAPON_DEFS + attackReach/Hw/Hh, recomputed here for placement preconditions.
+Rect Melee0(const Game &g) {
+    const Player &p = g.player;
+    const Attack *a = weaponAttack(&WEAPON_DEFS[g.weapon], 0);
+    const int16_t reach = attackReach(a);
+    const int16_t hw = attackHw(a);
+    const int16_t hh = attackHh(a);
+    const int16_t cx = static_cast<int16_t>(p.x + (p.w >> 1) + ((p.fx * reach) >> 4));
+    const int16_t cy = static_cast<int16_t>(p.y + (p.h >> 1) + ((p.fy * reach) >> 4));
+    Rect r;
+    r.x = static_cast<int16_t>(cx - (hw >> 1));
+    r.y = static_cast<int16_t>(cy - (hh >> 1));
+    r.w = hw;
+    r.h = hh;
+    return r;
+}
+
 }   // namespace
 
 void MonsterSuite(TestRunner &runner) {
@@ -147,12 +166,26 @@ void MonsterSuite(TestRunner &runner) {
         t.assert(m.fy, 0, "facing flat");
         t.assert(m.circleDir, 1, "circle dir right");
         t.assert(m.state, MS_IDLE, "starts idle");
-        // nch.9: the bull authors a legs/hooves collide box (1,14,26,8), so the
-        // synced hurt box is that rect, not the body box.
-        t.assert(g.target.rect.w, combat_expect::CREATURE_SWEEP_COLLIDE_W, "hurt box synced from collide");
-        t.assert(g.target.rect.h, combat_expect::CREATURE_SWEEP_COLLIDE_H, "hurt box height from collide");
-        t.assert(g.target.rect.x, m.x + combat_expect::CREATURE_SWEEP_COLLIDE_OX, "hurt box x at collide origin");
-        t.assert(g.target.rect.y, m.y + combat_expect::CREATURE_SWEEP_COLLIDE_OY, "hurt box y at collide origin");
+        // q0o: the synced hurt-entry rect is the body box grown to the union of
+        // the present zone rects -- NOT the authored collide box (the bull's
+        // hooves). The drawn body must stay hittable; collide is collision-only
+        // (pushApart through monsterCollideRect). At the spawn facing (west) the
+        // bull's head (21,4,8,8) and appendage (4,18,20,5) both mirror inside
+        // the 28-wide body, so only the appendage's row 23 grows the union:
+        // 28x23 at the body origin.
+        t.assert(g.target.rect.x, m.x, "hurt box x at the body origin");
+        t.assert(g.target.rect.y, m.y, "hurt box y at the body origin");
+        t.assert(g.target.rect.w, m.w, "hurt box body+zone union w");
+        t.assert(g.target.rect.h, 23, "hurt box body+zone union h");
+        // Containment, not raw equality: the body and every present zone rect
+        // sit inside the union (the entry gate must accept the whole body).
+        Rect body{m.x, m.y, m.w, m.h};
+        Rect hurt = g.target.rect;
+        t.assert(body.x >= hurt.x && body.y >= hurt.y && body.x + body.w <= hurt.x + hurt.w && body.y + body.h <= hurt.y + hurt.h, true, "body rect inside hurt rect");
+        const Rect head = monsterZoneRect(g, g.combat.zone[COMBAT_ZONE_HEAD].box);
+        const Rect app = monsterZoneRect(g, g.combat.zone[COMBAT_ZONE_APPENDAGE].box);
+        t.assert(head.x >= hurt.x && head.y >= hurt.y && head.x + head.w <= hurt.x + hurt.w && head.y + head.h <= hurt.y + hurt.h, true, "head zone inside hurt rect");
+        t.assert(app.x >= hurt.x && app.y >= hurt.y && app.x + app.w <= hurt.x + hurt.w && app.y + app.h <= hurt.y + hurt.h, true, "appendage zone inside hurt rect");
 
         Game g2;
         newGame(g2, W_SWORD, MODE_HUNT, MON_HEAVY);
@@ -1250,7 +1283,8 @@ void MonsterSuite(TestRunner &runner) {
     {
         // 76y: the chicken's collide rect is the legs only (tightened to
         // 9x9 by the mask migration, ryh.3), so the hunter can overlap the
-        // raised body and only the legs shove/block.
+        // raised body and only the legs shove/block. q0o: the hunt target's
+        // hurt-entry rect is the body union (not the legs collide box).
         Test t("push rule: legs collide box shoves; body overlap passes under");
         // (a) body overlap (+8,+4), legs clear: no shove, beast holds.
         Game g;
@@ -1375,10 +1409,9 @@ void MonsterSuite(TestRunner &runner) {
         Monster &m = g.monster;
         m.state = MS_RECOVER;   // parked, no movement
         m.t = 30000;
-        // 76y: the chicken's target rect is the legs collide box, tightened to
-        // (9,13,9,9) by the mask migration (ryh.3); the hunter stands in sword
-        // reach of the low legs (beast one px north so the swing band overlaps
-        // the 9-tall legs) and the melee centre lands on the body, so the front
+        // q0o: the chicken's target rect is now the whole body (32x24), not the
+        // 9x9 legs collide box; the hunter stands inside sword reach of the body
+        // so the swing lands. The melee centre lands on the body, so the front
         // crit still routes base 9 * 14/10 = 12.
         m.x = g.player.x + 14;
         m.y = g.player.y - 1;
@@ -1386,6 +1419,128 @@ void MonsterSuite(TestRunner &runner) {
         hunt(g, 1, Input{0, 0, false, false});
         hunt(g, 18);
         t.assert(m.hp, 1788, "sword hit crit for 12");
+        suite.addTest(t);
+    }
+
+    {
+        // q0o T1 (the reported owner bug): a swing that overlaps ONLY the drawn
+        // body -- clear of the authored 9x9 legs collide box -- must now damage.
+        // The old collide-gated hurt rect missed it entirely.
+        Test t("q0o T1: chicken body-only melee damages (legs clear)");
+        Game g;
+        newHunt(g);
+        Monster &m = g.monster;
+        Player &p = g.player;
+        m.state = MS_RECOVER;   // parked, never moves or shoves
+        m.t = 30000;
+        m.cd = 30000;
+        m.fx = fp::FP;   // facing east
+        p.fx = fp::FP;
+        p.fy = 0;   // hunter faces east
+        const Rect melee = Melee0(g);
+        // Down-right of the hunter: the 12x10 swing (x 111..123, y 68..78)
+        // overlaps the body box but sits below the legs collide rect.
+        m.x = static_cast<int16_t>(p.x + 8);
+        m.y = static_cast<int16_t>(p.y + 4);
+        const Rect body{m.x, m.y, m.w, m.h};
+        const Rect legs = monsterCollideRect(g);
+        t.assert(melee.overlaps(body) ? 1 : 0, 1, "precondition: melee overlaps the body");
+        t.assert(melee.overlaps(legs) ? 1 : 0, 0, "precondition: melee clear of the legs collide box");
+        const int16_t hp0 = m.hp;
+        hunt(g, 1, Input{0, 0, true, false});
+        hunt(g, 1, Input{0, 0, false, false});
+        hunt(g, 18);
+        t.assertLessThan(static_cast<int>(m.hp), static_cast<int>(hp0), "body-only swing damages the chicken");
+        suite.addTest(t);
+    }
+
+    {
+        // q0o T2: heavy tail-only melee (east facing). A swing that overlaps the
+        // tail zone but not the body must damage through the union's appendage
+        // extension. The body's west edge is placed on the first free column east
+        // of the swing, a placement proven in-bounds by the precondition asserts.
+        Test t("q0o T2: heavy tail-only melee damages (east facing)");
+        Game g;
+        newGame(g, W_SWORD, MODE_HUNT, MON_HEAVY);
+        Monster &m = g.monster;
+        Player &p = g.player;
+        m.state = MS_RECOVER;
+        m.t = 30000;
+        m.cd = 30000;
+        m.fx = fp::FP;   // east: appendage zone cols m.x+8..m.x+32
+        m.y = static_cast<int16_t>(p.y - 5);
+        p.fx = fp::FP;
+        p.fy = 0;   // hunter faces east
+        const Rect melee = Melee0(g);
+        m.x = static_cast<int16_t>(melee.x + melee.w + 1);
+        const Rect body{m.x, m.y, m.w, m.h};
+        const Rect tail = monsterZoneRect(g, g.combat.zone[COMBAT_ZONE_APPENDAGE].box);
+        t.assert(melee.overlaps(tail) ? 1 : 0, 1, "precondition: melee overlaps the tail zone");
+        t.assert(melee.overlaps(body) ? 1 : 0, 0, "precondition: melee clear of the body");
+        const int16_t hp0 = m.hp;
+        hunt(g, 1, Input{0, 0, true, false});
+        hunt(g, 1, Input{0, 0, false, false});
+        hunt(g, 18);
+        t.assertLessThan(static_cast<int>(m.hp), static_cast<int>(hp0), "tail-only swing damages the heavy");
+        suite.addTest(t);
+    }
+
+    {
+        // q0o T3: the same tail-only melee mirrored west (default fx -16). Pins
+        // monsterZoneRect's mirror against combatZoneContains's (ZONE_CELL_W -
+        // ox - w), the chicken-head-bug contract.
+        Test t("q0o T3: heavy tail-only melee damages (west mirror)");
+        Game g;
+        newGame(g, W_SWORD, MODE_HUNT, MON_HEAVY);
+        Monster &m = g.monster;
+        Player &p = g.player;
+        m.state = MS_RECOVER;
+        m.t = 30000;
+        m.cd = 30000;
+        m.fx = -fp::FP;   // west (spawn facing): tail zone cols m.x-24..m.x
+        m.y = static_cast<int16_t>(p.y - 5);
+        p.fx = -fp::FP;
+        p.fy = 0;   // hunter faces west
+        const Rect melee = Melee0(g);
+        m.x = static_cast<int16_t>(melee.x - m.w - 1);
+        const Rect body{m.x, m.y, m.w, m.h};
+        const CombatBox &appBox = g.combat.zone[COMBAT_ZONE_APPENDAGE].box;
+        const Rect tail = monsterZoneRect(g, appBox);
+        t.assert(tail.x, static_cast<int16_t>(m.x + (ZONE_CELL_W - appBox.ox - appBox.w)), "west tail zone at the cell mirror");
+        t.assert(melee.overlaps(tail) ? 1 : 0, 1, "precondition: melee overlaps the mirrored tail zone");
+        t.assert(melee.overlaps(body) ? 1 : 0, 0, "precondition: melee clear of the body");
+        const int16_t hp0 = m.hp;
+        hunt(g, 1, Input{0, 0, true, false});
+        hunt(g, 1, Input{0, 0, false, false});
+        hunt(g, 18);
+        t.assertLessThan(static_cast<int>(m.hp), static_cast<int>(hp0), "mirrored tail-only swing damages the heavy");
+        suite.addTest(t);
+    }
+
+    {
+        // q0o T4 (negative): a parked chicken out of reach must take nothing --
+        // the new hurt-entry rect must not make distant swings connect. The
+        // hunter is also out of the beast's reach, so its hp is untouched.
+        Test t("q0o T4: out-of-reach swing leaves hp untouched");
+        Game g;
+        newHunt(g);
+        Monster &m = g.monster;
+        Player &p = g.player;
+        m.state = MS_RECOVER;
+        m.t = 30000;
+        m.cd = 30000;
+        m.x = static_cast<int16_t>(p.x + 90);   // well past the sword's 13 px reach
+        m.y = static_cast<int16_t>(p.y + 60);
+        p.fx = fp::FP;
+        p.fy = 0;
+        syncMonsterTarget(g);   // the same sync stepHunt runs before the swing
+        const Rect melee = Melee0(g);
+        t.assert(melee.overlaps(g.target.rect) ? 1 : 0, 0, "precondition: melee off the hurt rect");
+        const int16_t hp0 = m.hp;
+        hunt(g, 1, Input{0, 0, true, false});
+        hunt(g, 1, Input{0, 0, false, false});
+        hunt(g, 18);
+        t.assert(m.hp, hp0, "no damage when out of reach");
         suite.addTest(t);
     }
 

@@ -96,12 +96,12 @@ static void monsterWindowNext(Game &g) {
 
 // Keep Game::target (the live hurt box + callbacks) in step with the beast.
 // The body is implicit (build/zones-design.md): m.w/m.h are the creature w/h
-// cached at spawn, m.x/m.y is the body anchor. Zones are tested at the landed
-// hit point, so the target rect is the body-collision box. When the creature
-// authors a `collide` box (epic monhun-ardu-nch: the chicken's legs) that rect
-// drives body collision instead, so the hunter can overlap the raised body and
-// only the legs push/block; every creature without one uses the body box, so
-// the shipped 3 keep their exact rect.
+// cached at spawn, m.x/m.y is the body anchor, so the hurt-entry rect is the
+// body box. The authored `collide` box (epic monhun-ardu-nch: the chicken's
+// legs) is collision-only and resolved by pushApart through monsterCollideRect;
+// it must NOT gate player hits -- using it as the hurt rect made the chicken
+// and bull hittable only on their legs (owner bug: swing on the drawn body
+// dealt no damage).
 static Rect monsterCollideRect(const Game &g) {
     const Monster &m = g.monster;
     const CombatBox &c = g.combat.collide;
@@ -120,10 +120,60 @@ static Rect monsterCollideRect(const Game &g) {
     return r;
 }
 
+// A zone box in the current facing frame, world space: the exact mirror
+// combatZoneContains resolves a landed hit point with, so the entry gate and
+// the damage resolve agree on where the zone is.
+// A zone box in the current facing frame, world space: the exact mirror
+// combatZoneContains resolves a landed hit point with, so the hurt entry rect
+// and the damage resolve agree on where the zone is.
+static Rect monsterZoneRect(const Game &g, const CombatBox &b) {
+    const Monster &m = g.monster;
+    const int16_t ox = (m.fx < 0) ? static_cast<int16_t>(ZONE_CELL_W - b.ox - b.w) : b.ox;
+    Rect r;
+    r.x = static_cast<int16_t>(m.x + ox);
+    r.y = static_cast<int16_t>(m.y + b.oy);
+    r.w = b.w;
+    r.h = b.h;
+    return r;
+}
+
+// Hurt-entry rect for player swings: the body box grown to cover the authored
+// zones (head/appendage) in the current facing. Zones can overhang the body
+// (the long-tail's tail), so the union keeps every drawn part hittable. The
+// authored `collide` box (chicken legs, bull hooves) is collision-only and must
+// not gate hits -- gating on it made the drawn body undamageable.
+static Rect monsterHurtRect(const Game &g) {
+    const Monster &m = g.monster;
+    Rect r;
+    r.x = m.x;
+    r.y = m.y;
+    r.w = m.w;
+    r.h = m.h;
+    if (!ZONES_ENABLED)
+        return r;
+    for (uint8_t slot = 0; slot < COMBAT_ZONE_COUNT; slot++) {
+        const bool present = (slot == COMBAT_ZONE_HEAD) ? (g.combat.headZone != COMBAT_NO_ZONE) : (g.combat.appendZone != COMBAT_NO_ZONE);
+        if (!present)
+            continue;
+        const Rect z = monsterZoneRect(g, g.combat.zone[slot].box);
+        const int16_t x0 = (z.x < r.x) ? z.x : r.x;
+        const int16_t y0 = (z.y < r.y) ? z.y : r.y;
+        const int16_t x1 = static_cast<int16_t>(z.x + z.w);
+        const int16_t y1 = static_cast<int16_t>(z.y + z.h);
+        const int16_t r1x = static_cast<int16_t>(r.x + r.w);
+        const int16_t r1y = static_cast<int16_t>(r.y + r.h);
+        r.w = static_cast<uint8_t>((x1 > r1x ? x1 : r1x) - x0);
+        r.h = static_cast<uint8_t>((y1 > r1y ? y1 : r1y) - y0);
+        r.x = x0;
+        r.y = y0;
+    }
+    return r;
+}
+
 static void syncMonsterTarget(Game &g) {
     Monster &m = g.monster;
     g.target.alive = (m.state != MS_DEAD);
-    g.target.rect = monsterCollideRect(g);
+    g.target.rect = monsterHurtRect(g);
 }
 
 static void clampMonster(Game &g) {

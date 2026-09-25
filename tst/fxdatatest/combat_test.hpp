@@ -764,9 +764,12 @@ inline void test_combat(FxTest &test) {
         test.expectEq(g.monster.spd, combat_expect::CREATURE_HEAVY_SPD, F("spawn spd from record"));
         test.expectEq(g.combat.body.w, g.monster.w, F("cached body box w"));
         test.expectEq(g.combat.body.h, g.monster.h, F("cached body box h"));
-        // nch.11: HEAVY's target rect is the tail-inclusive collide box, not body.
-        test.expectEq(g.target.rect.w, combat_expect::CREATURE_HEAVY_COLLIDE_W, F("target rect w from collide box"));
-        test.expectEq(g.target.rect.x, g.monster.x + combat_expect::CREATURE_HEAVY_COLLIDE_OX, F("target rect x at collide box origin"));
+        // q0o: HEAVY's target rect is the hurt-entry rect = body 40x28 grown to
+        // the appendage zone (ox -24, 24x11) at the spawn facing (fx -16 mirrors
+        // it to x+32..x+56, inside the body span) -> 56 x 28 at the body origin,
+        // NOT the tail-inclusive collide box. (East facing overhangs to 64.)
+        test.expectEq(g.target.rect.w, 56, F("target rect w = body+zone union"));
+        test.expectEq(g.target.rect.x, g.monster.x, F("target rect x at body origin"));
         test.expectEq(g.combat.zoneBroken, 0, F("spawn zones intact"));
         test.expectEq(initReads <= 40, 1, F("initMonster burst <= 40 reads"));
     }

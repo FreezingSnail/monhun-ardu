@@ -1,110 +1,50 @@
-# monhun-ardu-rie — `make dev-hitboxes` (DEBUG_HURTBOXES overlay build)
+# monhun-ardu-q0o — hurt-entry rect = body ∪ zones (not the collide box)
 
-Bead: monhun-ardu-rie. Repo HEAD deed0fb (branch weapon-art).
-No commit, no push, no `gen`/`gen-check` (no data change).
+Owner bug: sword visibly overlapped the chicken's drawn body but no damage
+landed. Root cause: `syncMonsterTarget` set `Game::target.rect` to the authored
+`collide` box (chicken legs 9x9, bull hooves), so the melee/whirl entry gate
+only connected on the legs. Core fix (orchestrator, already in tree): added
+`monsterZoneRect` + `monsterHurtRect` in `src/core/monster.hpp`;
+`syncMonsterTarget` now uses `monsterHurtRect`. Worker scope = tests + docs +
+Makefile comment + verification only. Core files untouched by the worker.
 
-## Files changed
+## Files changed (worker)
 
-- `Makefile` — added `dev-hitboxes` to `.PHONY`; new `dev-hitboxes` target
-  after `dev` (copies dev's arduino-cli call, appends `-DDEBUG_HURTBOXES=1` to
-  `compiler.cpp.extra_flags`, keeps `-DMH_DEV=1`; size line label
-  `dev-hitboxes size: flash=%d/%d (%d free)  ram=%d/2560`; same FX-image check
-  + Ardens launch as `dev`). Comment notes the overlay only fits the `MH_DEV`
-  carve and why.
-- `tst/fxdatatest/test_wire.ino` — new device suite entry (fx_globals + wire_test,
-  FxTest report, `exit(0)`); auto-picked by the `test_*.ino` wildcard.
-- `tst/fxdatatest/wire_test.hpp` — new suite: `#define DEBUG_HURTBOXES 1` before
-  `#include "src/render.hpp"`; pins solid + dotted `wireBox` borders and the
-  `renderScene` routing equality.
-- `README.md` — hardware/cadence bullet: overlay ships behind `make
-  dev-hitboxes`, always on, dev build only.
-- `AGENTS.md` — commands block: `make dev | dev-hitboxes`.
-- Pre-existing SPIKE TRIM in `monhun-ardu.ino` + `src/render.hpp` kept exactly
-  as-is (untouched by this worker).
+- `tst/monster_test.hpp`
+  - Bull init pin (line ~150): target rect is now the hurt-union rect, not the
+    collide rect. Asserts origin `m.x/m.y`, union `w = m.w` (28), `h = 23`, plus
+    containment of the body box and every present (mirrored) zone rect.
+  - New `Melee0(g)` helper: rebuilds the player combo hit-1 melee rect from
+    `WEAPON_DEFS` + `attackReach/Hw/Hh`, exactly as `player.hpp` does.
+  - T1 chicken body-only melee (legs clear): melee overlaps body, clear of
+    `monsterCollideRect`; hp drops (9, no crit).
+  - T2 heavy tail-only melee (east): overlaps the east appendage zone, clear of
+    the body; hp drops.
+  - T3 heavy tail-only melee (west mirror, default fx -16): pins
+    `monsterZoneRect` against `ZONE_CELL_W - ox - w`; hp drops.
+  - T4 negative: out-of-reach swing leaves hp untouched.
+- `tst/world_test.hpp` — activeTarget pin updated from the 9x9 legs rect to the
+  32x24 body hurt rect.
+- `tst/fxdatatest/combat_test.hpp` — HEAVY target-rect device pin: body+zone
+  union 56x28 at the body origin (spawn fx -16 mirror), not the collide box.
+- `docs/creature-framework.md` — "Demo monster collide + hurt boxes" notes:
+  collide box is collision-only (pushApart); the player hit entry is the hurt
+  rect (body + zones) via `target.rect`; owner-bug note; hit resolve stays
+  point-based.
+- `Makefile` — dev-hitboxes comment refreshed to the post-fix numbers.
 
-## Test suite (tst/fxdatatest/wire_test.hpp)
+## Gate numbers
 
-- (a) solid `wireBox(10,12,7,5,false)`: 20 perimeter pixels lit
-  (2*7+2*5-4), strictly-interior clear, whole-fb lit count == 20 (nothing
-  outside the 7x5 bbox); corner/edge spot pins.
-- (b) dotted `wireBox(20,12,7,5,true)`: top/bottom x=20,22,24,26 lit and
-  x=21,23,25 clear; left/right y=12,14,16 lit and y=13,15 clear; interior
-  clear; whole-fb lit count == 10.
-- (c) routing: scene pinned (newGame W_SWORD/HUNT, cam 0/0, fxN 0, hunter +
-  beast on-screen); asserts `renderScene(g,true)` == `renderScene(g,false) |
-  drawDebug(g,0,0)` for all 1024 buffer bytes, and the overlay is live
-  (`B1 != B2`). RAM-tight test image, so the equality runs one 128 B page at a
-  time (3 renders/page, `current_plane` pinned at 0; shade 3 sets bits on every
-  plane, so pass order is irrelevant).
+| command | result |
+|---|---|
+| `make test` | Total Passed 6830, Failed 0 |
+| `make test-tools` | Ran 388 tests, OK |
+| `FXTEST_ONLY="test_combat" make fxtest-headless` | combat_test PASSED=252 FAILED=0 |
+| `make size` | flash 29316/29696 (380 free), ram 1814/2560 |
+| `ARDENS=/usr/bin/true make dev-hitboxes` | exit 0, flash 29408/29696 (288 free), ram 1814/2560 |
 
-Note: the default spawn (player y=60) is off the 64 px screen once the debug
-box adds HUD_H, so the suite pins the hunter/beast on-screen; the equality is
-independent of placement.
+No gen/gen-check (no data change). No commit/push.
 
-## Verification (wall time per step)
+## Wall time
 
-| step | result | wall |
-|---|---|---|
-| `make test` | Passed 6815, Failed 0 | 2 s |
-| `make test-tools` | Ran 388 tests, OK | 71 s |
-| `FXTEST_ONLY=test_wire make fxtest-headless` | `test_wire PASSED=31 FAILED=0`, `P`, PASS | 2 s |
-| `ARDENS=/usr/bin/true make dev-hitboxes` | exit 0 | 2–3 s |
-| `make size` | shipping unchanged | 3 s |
-
-### Tails / numbers
-
-`make test`:
-```
-========== Total Counts ==========
-Total Passed: 6815
-Total Failed: 0
-```
-
-`make test-tools`:
-```
-Ran 388 tests in 22.428s
-OK
-```
-
-`FXTEST_ONLY=test_wire make fxtest-headless`:
-```
-build: test_wire
-Sketch uses 18758 bytes (63%) of program storage space. Maximum is 29696 bytes.
-Global variables use 1909 bytes (74%) of dynamic memory, leaving 651 bytes for local variables. Maximum is 2560 bytes.
-=== test_wire ===
-test_wire PASSED=31 FAILED=0
-P
-test_wire: PASS
-```
-
-`make dev` (ARDENS=/usr/bin/true, for the delta):
-```
-dev size: flash=28428/29696 (1268 free)  ram=1814/2560
-```
-
-`ARDENS=/usr/bin/true make dev-hitboxes` (exit 0; ARDENS=/usr/bin/true is the
-check — compile only, no GUI left open):
-```
-Sketch uses 29608 bytes (99%) of program storage space. Maximum is 29696 bytes.
-Global variables use 1814 bytes (70%) of dynamic memory, leaving 746 bytes for local variables. Maximum is 2560 bytes.
-dev-hitboxes size: flash=29608/29696 (88 free)  ram=1814/2560
-```
-Delta `dev-hitboxes` vs plain `dev`: **+1180 B flash**, **RAM unchanged
-(1814/2560)**.
-
-`make size` (shipping):
-```
-size: .text=29110 .data=50 .bss=1764
-size: flash=29160/29696 (536 free)  ram=1814/2560
-```
-Shipping flash/RAM unchanged vs the spike baseline (29160/29696, 536 free).
-
-## Acceptance
-
-1. `make test` passes — 6815/0. ✅
-2. `FXTEST_ONLY=test_wire make fxtest-headless` PASS — 31/0. ✅
-3. `make size` shipping unchanged — `flash=29160/29696 (536 free)`. ✅
-4. `ARDENS=/usr/bin/true make dev-hitboxes` prints `dev-hitboxes size: ...`
-   and exits 0; no GUI left open. ✅
-5. `dev-hitboxes` vs `dev`: +1180 B flash, RAM unchanged. ✅
-6. This report with wall time. ✅
+~35 min (single worker; host-test iteration dominated, ~6 `make test` runs).

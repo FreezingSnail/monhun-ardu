@@ -1081,7 +1081,7 @@ static void drawEffects(const mh::Game &g, int16_t camX, int16_t camY) {
 
 // Single-pixel open-square border: solid for hurt boxes, dotted (every other
 // pixel) for hit boxes. Border only -- the interior is never touched.
-static void wireBox(int32_t x, int32_t y, int32_t w, int32_t h, bool dotted) {
+static void wireBox(int16_t x, int16_t y, int16_t w, int16_t h, bool dotted) {
     if (w < 1 || h < 1)
         return;
     if (!dotted) {
@@ -1091,11 +1091,11 @@ static void wireBox(int32_t x, int32_t y, int32_t w, int32_t h, bool dotted) {
         blk(x + w - 1, y, 1, h, 3);
         return;
     }
-    for (int32_t i = 0; i < w; i += 2) {
+    for (int16_t i = 0; i < w; i += 2) {
         blk(x + i, y, 1, 1, 3);
         blk(x + i, y + h - 1, 1, 1, 3);
     }
-    for (int32_t j = 0; j < h; j += 2) {
+    for (int16_t j = 0; j < h; j += 2) {
         blk(x, y + j, 1, 1, 3);
         blk(x + w - 1, y + j, 1, 1, 3);
     }

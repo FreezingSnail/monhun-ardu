@@ -506,7 +506,7 @@ struct Game;
 // plug their damage/knockback/trip handlers in here; this bead only resolves
 // the overlap and forwards the exact mock numbers.
 struct Target {
-    Rect rect;   // hurt box (monster body or training pole)
+    Rect rect;   // hurt-entry box (the beast's body rect; zones gate separately)
     bool alive;
     void (*onHit)(Game &, uint8_t dmg, int16_t hx, int16_t hy, uint8_t push, uint8_t effect);
     void (*onShove)(Game &, int8_t dirX, int8_t dirY, uint8_t amount, uint8_t freeze);

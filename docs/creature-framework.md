@@ -331,6 +331,18 @@ boxes**, authored per creature (not inherited as one generic body box):
 Implementation notes:
 - Data: creature `stats.collide` box (optional; default body box) + `zones`
   head/appendage records. Both are already in the schema.
+- **Collide box is collision-only.** The authored `collide` box drives body
+  collision (`pushApart` via `monsterCollideRect`), nothing else. The player hit
+  entry gate (`Game::target.rect`, set by `syncMonsterTarget`) is the **hurt
+  rect**: the body box unioned with the present head/appendage zone rects in the
+  current facing (`monsterHurtRect`), so every drawn part is hittable and the
+  rect matches where `combatZoneContains` resolves a landed hit. The hit itself
+  stays point-based: `monsterOnHit` resolves the zone at the melee centre.
+- **Owner bug (q0o, 2026-09-25):** `target.rect` was the authored collide box,
+  so the chicken (9x9 legs) and bull (hooves) were only damageable on the
+  collide rect — a sword visibly overlapping the drawn body dealt no damage.
+  `monsterHurtRect` fixed the entry gate; the collide box is untouched for
+  collision.
 - The zone machinery is reused, so per-creature boxes are data-only changes;
   collision support (legs-only overlap) is the part that costs flash (~220 B
   for the current chicken implementation, mostly the collide cart read +

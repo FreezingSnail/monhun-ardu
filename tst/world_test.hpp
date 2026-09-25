@@ -138,11 +138,11 @@ void WorldSuite(TestRunner &runner) {
         newGame(g, W_SWORD, MODE_HUNT);
         updateActiveTarget(g);
         t.assert(g.target.alive, 1, "live beast is targetable");
-        // 76y: the lunge target rect is its legs-only collide box (tightened to
-        // 9x9 by the mask migration, ryh.3), so the hunter can stand under the
-        // raised body.
-        t.assert(g.target.rect.w, 9, "beast legs hurt box w");
-        t.assert(g.target.rect.h, 9, "beast legs hurt box h");
+        // q0o: the lunge target rect is the body hurt rect (32x24) -- the
+        // authored 9x9 legs collide box is collision-only. Pinning the body
+        // keeps the drawn bird hittable.
+        t.assert(g.target.rect.w, g.monster.w, "beast body hurt box w");
+        t.assert(g.target.rect.h, g.monster.h, "beast body hurt box h");
         g.monster.state = MS_DEAD;
         updateActiveTarget(g);
         t.assert(g.target.alive, 0, "dead beast reads as null");
