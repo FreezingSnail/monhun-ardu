@@ -1,6 +1,7 @@
 {
   "id": "weapon_sword",
   "slot": "weapon",
+  "source": "mirror",
   "sheet": "mh_weapon_sword",
   "cell": [32, 32],
   "anchor": [16, 16],

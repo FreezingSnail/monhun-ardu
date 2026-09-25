@@ -843,6 +843,15 @@ static inline void partVariantDraw(uint8_t part, uint8_t variant, int16_t rx, in
     sprDraw(partSheet(rec), static_cast<int16_t>(rx - rec.anchorX), static_cast<int16_t>(ry - rec.anchorY), FRAME(frame));
 }
 
+// Row form for the authored weapon sheets (docs/weapon-art.md): their rows ARE
+// the pose table, so the caller passes the row directly. The cell (32x32) and
+// anchor (16,16) are fixed by the equipment schema and the sheet offset is a
+// generated constant, so the weapon path skips the cart part-record read.
+static inline void weaponRowDraw(uint24_t sheet, uint8_t row, uint8_t facing, int16_t rx, int16_t ry) {
+    const uint8_t frame = static_cast<uint8_t>(row * equip::FACINGS + (facing % equip::FACINGS));
+    sprDraw(sheet, static_cast<int16_t>(rx - 16), static_cast<int16_t>(ry - 16), FRAME(frame));
+}
+
 // Mock drawPlayer(): body, head, weapon overlay and effects. Every shape,
 // frame and anchor comes from the generated cart part tables (beads
 // monhun-ardu-abr/ikp; see src/generated/equip_meta.hpp and
@@ -946,33 +955,36 @@ static void drawPlayer(const mh::Game &g, int16_t camX, int16_t camY) {
     // mock drawPlayer()'s `if (p.sheathed) {}` branch.
     if (!p.sheathed) {
         if (g.weapon == mh::W_SWORD) {
+            // Row per move slot (docs/weapon-art.md): startup rows are
+            // hand-centred, active rows box-centred on the same point the
+            // melee test resolves against.
+            uint8_t row = wpn::ROW_IDLE;
+            int16_t rx = cx;
+            int16_t ry = cy;
             if (a) {
-                // Row per move slot (docs/weapon-art.md): startup rows are
-                // hand-centred, active rows box-centred on the same point the
-                // melee test resolves against.
                 const int16_t reach = mh::attackReach(a);
                 const int16_t hx = static_cast<int16_t>(cx + ((p.fx * reach) >> 4));
                 const int16_t hy = static_cast<int16_t>(cy + ((p.fy * reach) >> 4));
-                const uint8_t slot = weaponMoveSlot(p, a);
-                const uint8_t base = mhPgmReadU8(&wpn::MOVE_ROW[0][slot]);
+                const uint8_t base = mhPgmReadU8(&wpn::MOVE_ROW[0][weaponMoveSlot(p, a)]);
                 if (phase == 1) {
-                    partDraw(equip::PART_WEAPON_SWORD, static_cast<uint8_t>(base + 1), face, hx, hy);
+                    row = static_cast<uint8_t>(base + 1);
+                    rx = hx;
+                    ry = hy;
                 } else if (phase == 0) {
-                    partDraw(equip::PART_WEAPON_SWORD, base, face, cx, cy);
+                    row = base;
                 } else {
-                    partDraw(equip::PART_WEAPON_SWORD, wpn::ROW_RECOVER, face, cx, cy);
+                    row = wpn::ROW_RECOVER;
                 }
                 if (p.state == mh::PS_SPECIAL && p.riposteT > 0)
-                    partDraw(equip::PART_WEAPON_SWORD, wpn::ROW_RIM, face, hx, hy);
+                    weaponRowDraw(equip::SHEET_OFF_MH_WEAPON_SWORD, wpn::ROW_RIM, face, hx, hy);
             } else if (p.stance == mh::ST_PARRY) {
-                partDraw(equip::PART_WEAPON_SWORD, wpn::ROW_STANCE, face, cx, cy);
+                row = wpn::ROW_STANCE;
             } else if (p.state == mh::PS_DODGE) {
-                partDraw(equip::PART_WEAPON_SWORD, wpn::ROW_DODGE, face, cx, cy);
+                row = wpn::ROW_DODGE;
             } else if (p.state == mh::PS_STUN) {
-                partDraw(equip::PART_WEAPON_SWORD, wpn::ROW_STUN, face, cx, cy);
-            } else {
-                partDraw(equip::PART_WEAPON_SWORD, wpn::ROW_IDLE, face, cx, cy);
+                row = wpn::ROW_STUN;
             }
+            weaponRowDraw(equip::SHEET_OFF_MH_WEAPON_SWORD, row, face, rx, ry);
         } else if (g.weapon == mh::W_FLAIL) {
             if (p.stance == mh::ST_WHIRL) {
                 // Mock drawPlayer() whirl: six 2x2 light dots on the exact ellipse

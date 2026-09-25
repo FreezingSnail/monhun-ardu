@@ -7,6 +7,7 @@ build/tests/gen_equipment/ and mutates the copy, so the tests stay read-only on
 the repository fixtures and never write into /tmp.
 """
 import json
+import importlib.util
 import os
 import shutil
 import struct
@@ -333,6 +334,85 @@ class GenEquipmentTests(unittest.TestCase):
     def test_missing_equipment_dir_rejected(self):
         shutil.rmtree(self.path("data", "equipment"))
         self.assert_fails(self.compile(), "missing equipment directory")
+
+    # ------------------------------------------------------- mirror weapons
+
+    def install_mirror_sword(self, boxes=None):
+        """Turn the fixture's weapon_sword into a mirror-authored sheet +
+        the build/hitboxes.json the weapon art derives its boxes from."""
+        def patch(doc):
+            doc["source"] = "mirror"
+            doc["frames"] = 216
+            doc["poseMap"] = {"idle": 0, "attack_startup": 2, "attack_active": 3,
+                              "attack_recover": 1, "parry": 22, "whirl": 22, "guard": 22,
+                              "shove": 24, "dodge": 23, "deflect": 24, "stun": 25, "dead": 0}
+        self.mutate("data/equipment/weapon_sword.json", patch)
+        os.makedirs(self.path("build"), exist_ok=True)
+        with open(self.path("build", "hitboxes.json"), "w", encoding="utf-8", newline="\n") as handle:
+            json.dump({"version": 1, "bands": {}, "creatures": {},
+                       "player": {"attacks": boxes or [[8, 8, 8]] * 33}}, handle)
+
+    def test_mirror_source_authors_sheet_and_layout_plan(self):
+        self.install_mirror_sword()
+        self.assert_succeeds(self.compile())
+        with Image.open(self.path(IMAGES_REL, "mh_weapon_sword_32x32.png")) as img:
+            self.assertEqual(img.size, (5 * 32, 27 * 32))
+        layout = json.loads(self.read(IMAGES_REL, "layout.json"))
+        plan = layout["sheets"]["mh_weapon_sword"]
+        self.assertEqual(len(plan), 216)
+        row_plan = ((0, False), (1, False), (2, False), (1, True), (0, True), (4, True), (3, False), (4, False))
+        for row in range(27):
+            for packed, (src, mirror) in enumerate(row_plan):
+                self.assertEqual(plan[row * 8 + packed], [row * 5 + src, mirror],
+                                 "row %d packed %d" % (row, packed))
+        # Authored weapon sheets carry a cart part record (+19 B record and one
+        # more 2-byte variant offset): 8 + 19*4 + 24 = 108 B.
+        blob = self.read_bytes(BLOB_REL)
+        self.assertEqual(len(blob), 108)
+        text = self.read(META_REL)
+        self.assertIn("constexpr uint8_t PART_WEAPON_SWORD", text)
+
+    def test_clean_tree_has_no_layout_json(self):
+        self.assert_succeeds(self.compile())
+        self.assertFalse(os.path.exists(self.path(IMAGES_REL, "layout.json")))
+
+    def test_mirror_source_rejects_wrong_row_table(self):
+        self.install_mirror_sword()
+        self.mutate("data/equipment/weapon_sword.json", lambda doc: doc.__setitem__("frames", 24))
+        self.assert_fails(self.compile(), "frames must be 216")
+
+    def test_mirror_source_rejects_unknown_weapon(self):
+        self.install_mirror_sword()
+        os.rename(self.path("data", "equipment", "weapon_sword.json"),
+                  self.path("data", "equipment", "weapon_axe.json"))
+        self.mutate("data/equipment/weapon_axe.json",
+                    lambda doc: doc.update({"id": "weapon_axe", "sheet": "mh_weapon_axe"}))
+        self.assert_fails(self.compile(), "no weapon art spec")
+
+    def test_mirror_art_inks_the_active_boxes(self):
+        # Synthetic boxes (unit scope): every move's startup/active row must ink
+        # its hit box centre and the box front half (docs/weapon-art.md).
+        spec = importlib.util.spec_from_file_location("gen_equipment", TOOL)
+        ge = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(ge)
+        boxes = []
+        for w in range(3):
+            for i in range(11):
+                boxes.append([6 + w * 4 + i, 8 + (i % 4) * 2, 6 + (i % 3) * 4])
+        ge.PLAYER_BOXES = boxes
+        for slot, index in ge.WEAPON_BOX_SLOT[0].items():
+            reach, hw, hh = boxes[index]
+            for row, what in ((ge.WEAPON_ROW_MOVE0 + 2 * slot, "startup"),
+                              (ge.WEAPON_ROW_MOVE0 + 2 * slot + 1, "active")):
+                img = ge.sword_cell(row, 0)
+                self.assertIsNotNone(img, "slot %d %s: no art" % (slot, what))
+                px = img.load()
+                inside = [(x, y) for y in range(16 - hh // 2, 16 + (hh + 1) // 2)
+                          for x in range(16 - hw // 2, 16 + (hw + 1) // 2) if px[x, y][3] > 0]
+                if what == "active":
+                    self.assertTrue(inside, "slot %d active: no ink in the hit box" % slot)
+                    self.assertTrue(any(x > 16 for x, _ in inside),
+                                    "slot %d active: no ink in the box front half" % slot)
 
 
 LAYERED_FIXTURE = os.path.join(HERE, "fixtures", "gen_equipment", "layered")

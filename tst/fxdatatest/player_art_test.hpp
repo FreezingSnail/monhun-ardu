@@ -46,6 +46,11 @@
 // cases: 109 (gun special active, E) and 111 (gun special active, W -- the
 // retired reload-bar row, repurposed). Every other case is byte-identical.
 //
+// Weapon-art regen (epic bhp): the sword now draws from mh_weapon_sword
+// rows (idle/recover/startup/active/parry/dodge/stun/stun+idle) instead of
+// the fxslash/fxparry/fxchip overlays. Changed cases: every W_SWORD row
+// (0-14) plus the two sword armor-head rows (37, 38); flail (15-26, 39)
+// and gun (27-36) are byte-identical.
 // Bead monhun-ardu-z5i (feel.24) made the gunshield B-tap shove read as a bash:
 // during PS_SHOVE drawPlayer now draws ONLY the shove plate at a forward offset
 // that retracts as p.t counts down, instead of drawing the guard/idle plate
@@ -141,21 +146,21 @@ static_assert(CASE_COUNT == 40, "golden matrix changed; regenerate GOLDEN");
 // Golden framebuffer hashes [case][plane], captured pre-refactor. See the regen
 // note above; PROGMEM so the 3 x CASE_COUNT words stay in flash.
 static const uint32_t MH_PROGMEM GOLDEN[CASE_COUNT][3] = {
-    {0xe490e488u, 0xccac0388u, 0xccac0388u},
-    {0xa38365c0u, 0x46b905c0u, 0x46b905c0u},
-    {0x9e96c62au, 0xc998692au, 0x17645e42u},
-    {0x90d9bf11u, 0x7d2df311u, 0xd7728e01u},
-    {0x9e96c62au, 0xc998692au, 0x17645e42u},
-    {0x4fae7d31u, 0xd2f41731u, 0x34651e11u},
-    {0x3e136117u, 0x55f84217u, 0xf05c2259u},
-    {0x9861d60du, 0xb2e8700du, 0xf75a8eb9u},
-    {0x8d024a25u, 0x19543b25u, 0xb76fbb91u},
-    {0xe739e1abu, 0x8f6871abu, 0xf75a8eb9u},
-    {0xfc85c4cdu, 0x13a869cdu, 0x356d8145u},
-    {0x6d4eb357u, 0xa7c60857u, 0x3a895d57u},
-    {0xa38365c0u, 0x46b905c0u, 0x37e7b108u},
-    {0x3ec19436u, 0x3ab58236u, 0x3ab58236u},
-    {0x82915ce0u, 0x411204e0u, 0x411204e0u},
+    {0x16d3a3ecu, 0xb1423346u, 0xb1423346u},
+    {0x0d444df2u, 0xacd44d08u, 0xacd44d08u},
+    {0xf9b71822u, 0xa1c7dce4u, 0xa1c7dce4u},
+    {0xdd09d468u, 0xfd364086u, 0xfd364086u},
+    {0xbd548579u, 0xeeb9c403u, 0xeeb9c403u},
+    {0xa88d6cc1u, 0xae836d6eu, 0xae836d6eu},
+    {0x002f791bu, 0x5dbf2a72u, 0x5dbf2a72u},
+    {0x4883dff2u, 0xd9c76832u, 0xd9c76832u},
+    {0xaa7d569au, 0x4e2d698au, 0x4e2d698au},
+    {0xdcb3a712u, 0x340f9028u, 0xa3193104u},
+    {0x151c8f15u, 0xd794de74u, 0x8150f0dbu},
+    {0x99e8fb1fu, 0xbdc6761fu, 0x7aa26edeu},
+    {0xf44b4a7fu, 0x3325bc7fu, 0xae869503u},
+    {0x80e8cf85u, 0xa8b26d05u, 0x6ffb1f5eu},
+    {0xd23c81f4u, 0x07a6637eu, 0x07a6637eu},
     {0x93745722u, 0x7b8f7622u, 0x7b8f7622u},
     {0x69a0e3f8u, 0xd2289bf8u, 0xd2289bf8u},
     {0x8d8428d4u, 0x759f47d4u, 0x759f47d4u},
@@ -178,9 +183,9 @@ static const uint32_t MH_PROGMEM GOLDEN[CASE_COUNT][3] = {
     {0xe56a836fu, 0x1d4a306fu, 0xb845c6bbu},
     {0x474a642du, 0xc098f32du, 0x606e0819u},
     {0xe56a836fu, 0x1d4a306fu, 0xb373bcd7u},
-    // arm.2 armor head layer (cases 37..39); captured after the head-part select.
-    {0xf1a29388u, 0x8d116188u, 0xf5eff250u},
-    {0xe79144c0u, 0xc3e95cc0u, 0x4d851fd8u},
+    // arm.2 armor head layer (cases 37..39); weapon-art regen.
+    {0x23e552ecu, 0x71a79146u, 0xe8971baeu},
+    {0x51522cf2u, 0x5e50a808u, 0x6391cf40u},
     {0x18bc869du, 0x00bc5c25u, 0x00bc5c25u},
 };
 static_assert(sizeof(GOLDEN) / sizeof(GOLDEN[0]) == CASE_COUNT, "goldens must cover every case");

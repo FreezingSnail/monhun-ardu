@@ -102,7 +102,11 @@ FACINGS = 8
 # fxdata/fxdata.h) instead of authoring a placeholder sheet: no images/equip PNG,
 # the sheet is drawn with its current pixels. See the player part view emitted in
 # equip_meta.hpp.
-ART_SOURCES = ("gen-art",)
+# `source` declares where a sheet's pixels come from: absent = placeholder/
+# layered art authored by this tool, "gen-art" = an existing fx sprite symbol,
+# "mirror" = a weapon sheet this tool authors in the one-facing + packer-mirror
+# format (docs/weapon-art.md).
+ART_SOURCES = ("gen-art", "mirror")
 
 SLOTS = ("player", "shadow", "body", "head", "weapon", "offhand")
 # Equipment layers drawn through the cart part view: authored shadow/body/head
@@ -199,7 +203,7 @@ def is_int(value):
 def is_part(item):
     """True when the item gets a cart part record (gen-art overlay, an authored
     shadow/body/head layer, or an authored weapon sheet — docs/weapon-art.md)."""
-    return item["genArt"] or item["slot"] in LAYERED_SLOTS or item["id"] in WEAPON_ART
+    return item["genArt"] or item["mirror"] or item["slot"] in LAYERED_SLOTS
 
 
 def check_keys(errors, ctx, obj, required, optional=()):
@@ -287,9 +291,13 @@ def normalize_item(errors, rel, name, obj, seen_ids, fx_symbols):
 
     # `source: "gen-art"` records reuse an existing fx sprite: the sheet is the
     # symbol itself (no mh_ prefix, no placeholder PNG), and it must already be
-    # declared in fxdata/fxdata.h. Everything else keeps the authored-sheet rules.
+    # declared in fxdata/fxdata.h. `source: "mirror"` records are weapon sheets
+    # authored by this tool from the pose-row spec (docs/weapon-art.md), with the
+    # packer plan emitted to images/equip/layout.json. Everything else keeps the
+    # authored-sheet rules.
     source = obj.get("source")
     gen_art = source == "gen-art"
+    mirror_art = source == "mirror"
     if source is not None and source not in ART_SOURCES:
         errors.add(ctx, "source: unknown value %r (want one of %s)" % (source, ", ".join(ART_SOURCES)))
 
@@ -357,6 +365,17 @@ def normalize_item(errors, rel, name, obj, seen_ids, fx_symbols):
             else:
                 rows = frames // FACINGS
 
+    if mirror_art:
+        # The authored weapon sheets all carry the docs/weapon-art.md row table;
+        # the tool draws them from WEAPON_ART, so an unknown id is a hard error
+        # instead of a silently blank sheet.
+        if item_id is not None and item_id not in WEAPON_ART:
+            errors.add(ctx, "source 'mirror': no weapon art spec for %r" % item_id)
+        if order is not None and order != "facing*pose":
+            errors.add(ctx, "source 'mirror': order must be 'facing*pose', got %r" % order)
+        if frames is not None and frames != WEAPON_ROWS * FACINGS:
+            errors.add(ctx, "source 'mirror': frames must be %d, got %d" % (WEAPON_ROWS * FACINGS, frames))
+
     pose_map = obj.get("poseMap")
     pose_rows = None
     if not isinstance(pose_map, dict):
@@ -412,7 +431,7 @@ def normalize_item(errors, rel, name, obj, seen_ids, fx_symbols):
         return None
     return {"id": item_id, "slot": slot, "sheet": sheet, "cell": (cw, ch), "anchor": (ax, ay),
             "order": order, "frames": frames, "rows": rows, "poseRows": pose_rows,
-            "genArt": gen_art, "variants": var_list, "flags": list(flags)}
+            "genArt": gen_art, "mirror": mirror_art, "variants": var_list, "flags": list(flags)}
 
 
 def load_default_set(errors, root, items):
@@ -725,16 +744,16 @@ def sword_cell(row, facing):
         reach, hw, hh = player_box(0, slot)
         active = (row - WEAPON_ROW_MOVE0) % 2 == 1
         if active:
-            # Box-centred: the hunter sits `reach` behind the cell centre. The
-            # blade reaches through the box; the dark arc is the swing trail.
+            # Box-centred: the cell centre is the hitbox centre. The blade lies
+            # in the box, rotated to the strike angle; the dark arc is the swing
+            # trail from the hand (reach px behind the box).
             pu, pv = -reach, 0
-            tip = 1 + hw // 2
-            wline(img, facing, pu, pv, pu + 1, pv, DARK, 3)     # grip
-            blade(img, facing, pu + 1, pv,
-                  pu + 1 + (reach + tip) * _cosdir(a_active),
-                  pv + 1 + (reach + tip) * _sindir(a_active))
+            half = hw / 2.0
+            wline(img, facing, pu, pv, pu + 2, pv, DARK, 3)          # wrist
             warc(img, facing, pu, pv, reach - 1, a_start, a_active, DARK, 1, 8)
-            warc(img, facing, pu, pv, max(2, reach // 2), a_start, a_active, DARK, 1, 5)
+            blade(img, facing,
+                  -half * _cosdir(a_active), -half * _sindir(a_active),
+                  half * _cosdir(a_active), half * _sindir(a_active))
         else:
             wline(img, facing, -2, 0, 1, 0, DARK, 3)             # grip
             blade(img, facing, 1, 0,
@@ -783,7 +802,7 @@ def weapon_plan(item):
 def author_sheet(item):
     cw, ch = item["cell"]
     frames = item["frames"]
-    art = WEAPON_ART.get(item["id"]) if item["slot"] == "weapon" else None
+    art = WEAPON_ART.get(item["id"]) if item["mirror"] else None
     if art is not None:
         rows = frames // FACINGS
         sheet = new(cw * len(WEAPON_SRC_FACINGS), ch * rows)
@@ -1133,7 +1152,10 @@ def run(root, dump):
         return 0
 
     global PLAYER_BOXES
-    PLAYER_BOXES = load_player_boxes(root)
+    if any(item["mirror"] for item in items):
+        # Authored weapon sheets derive their active poses from the mask boxes;
+        # trees without one (unit fixtures) never reach this.
+        PLAYER_BOXES = load_player_boxes(root)
     images_dir = os.path.join(root, IMAGES_REL)
     os.makedirs(images_dir, exist_ok=True)
     wrote = set()
@@ -1153,7 +1175,7 @@ def run(root, dump):
 
     # Mirror-authored sheets: the packer (tools/convert-sprite.py) reads the
     # plan so the 5-col source ships as the 8-col sheet (docs/weapon-art.md).
-    plans = {item["sheet"]: weapon_plan(item) for item in items if item["id"] in WEAPON_ART}
+    plans = {item["sheet"]: weapon_plan(item) for item in items if item["mirror"]}
     layout_path = os.path.join(images_dir, "layout.json")
     if plans:
         if write_if_changed(layout_path, json.dumps({"version": 1, "sheets": plans}, indent=2) + "\n"):
