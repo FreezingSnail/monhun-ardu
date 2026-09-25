@@ -25,6 +25,12 @@ mkdir -p build
 g++ -std=c++17 -O2 -w tools/fxdump.cpp -o build/fxdump
 ./build/fxdump > build/fxdump.json
 
+# Hitbox masks (epic monhun-ardu-ryh, bead ryh.3): derive every creature box from
+# the artist-painted images/masks/*.png into build/hitboxes.json. Runs before
+# gen-art.py (which crops the breakable-part overlay sheets to the mask bbox) and
+# gen-combat.py (which packs the mask-derived zone/body/collide/window records).
+python3 tools/gen-hitboxes.py
+
 # Author source PNGs from mock/game.js shapes + FONT (deterministic). The
 # overlay/effect sheets are derived from build/fxdump.json; the same run emits
 # src/generated/art_dims.hpp for the render bead + the host dims-drift test.

@@ -138,10 +138,11 @@ void WorldSuite(TestRunner &runner) {
         newGame(g, W_SWORD, MODE_HUNT);
         updateActiveTarget(g);
         t.assert(g.target.alive, 1, "live beast is targetable");
-        // 76y: the lunge target rect is its legs-only collide box (w 12), so
-        // the hunter can stand under the raised body.
-        t.assert(g.target.rect.w, 12, "beast legs hurt box w");
-        t.assert(g.target.rect.h, 13, "beast legs hurt box h");
+        // 76y: the lunge target rect is its legs-only collide box (tightened to
+        // 9x9 by the mask migration, ryh.3), so the hunter can stand under the
+        // raised body.
+        t.assert(g.target.rect.w, 9, "beast legs hurt box w");
+        t.assert(g.target.rect.h, 9, "beast legs hurt box h");
         g.monster.state = MS_DEAD;
         updateActiveTarget(g);
         t.assert(g.target.alive, 0, "dead beast reads as null");

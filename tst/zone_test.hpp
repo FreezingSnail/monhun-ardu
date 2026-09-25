@@ -362,8 +362,9 @@ void ZoneSuite(TestRunner &runner) {
         t.assertGreaterThan(g.target.rect.h, 0, "target rect h non-degenerate");
 
         // Drive the normal melee path: park the beast in the draw-swing arc
-        // (player at from_camp spawn 8,80 centre 16,88, facing E).
-        zparkBeast(g, 24, 80);
+        // (player at from_camp spawn 8,80 centre 16,88, facing E; the tighter
+        // legs collider lands at y 89..97 so the band overlaps).
+        zparkBeast(g, 24, 76);
         const int16_t hp0 = g.monster.hp;
         zswing(g);
         t.assertLessThan(g.monster.hp, hp0, "melee hit reduces beast hp after camp");

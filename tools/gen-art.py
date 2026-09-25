@@ -159,6 +159,31 @@ def compose(blocks, w, h):
 MIRROR_SOURCES = {}
 
 
+# Mask-derived part-art anchors (epic monhun-ardu-ryh, bead ryh.3). tools/
+# gen-hitboxes.py derives each zone's cell-relative box from the painted mask;
+# gen-art crops the breakable-part overlay sheet to that bbox so the hit rect and
+# the drawn part stay the same rectangle (the cey invariant). Keyed
+# (creature_id, zone_name); absent (art-dump without a regen) falls back to the
+# shipped per-sheet default.
+PART_BOXES = {}
+
+
+def load_part_boxes(path):
+    """Read build/hitboxes.json into PART_BOXES (best effort)."""
+    if not os.path.isfile(path):
+        return
+    with open(path, encoding="utf-8") as handle:
+        doc = json.load(handle)
+    for cid, entry in doc.get("creatures", {}).items():
+        for name, box in entry.get("zones", {}).items():
+            PART_BOXES[(cid, name)] = (box["ox"], box["oy"], box["w"], box["h"])
+
+
+def _part_box(cid, zone, fallback):
+    return PART_BOXES.get((cid, zone), fallback)
+
+
+
 def register_mirror(symbol, src_frames, w, h, plan):
     MIRROR_SOURCES[symbol] = (strip(src_frames, w, h), plan)
 
@@ -362,16 +387,16 @@ def icon_defs(dims):
         # origin is the body top-left; height 24 is a multiple of 8.
         {"id": "heavyatk", "w": 32, "h": 24, "anchor": "body top-left",
          "frames": heavyatk_frames()},
-        # Breakable-zone part overlays (bead monhun-ardu-kt7.6): one 4-frame
+        # Breakable-zone part overlays (bead monhun-ardu-kt7.6). One 4-frame
         # combatPartArtFrame() sheet per breakable demo-roster zone, drawn at the
         # face-relative zone box origin (the same world rect the hit test uses).
-        # Frame sizes match the data boxes (lunge.json head 11x7 / appendage 9x24;
-        # sweep.json head 12x10 / appendage 20x10) padded up to a multiple-of-8
-        # height for the SpritesU plus-mask page stride. Frames are authored
-        # facing east and mirrored west, exactly like the heavy tail_heavy sheet.
+        # Frame sizes are the mask-derived zone bbox (head 11x7 / appendage 9x9
+        # after ryh.3), height padded up to a multiple of 8 for the SpritesU
+        # plus-mask page stride. Frames are authored facing east and mirrored
+        # west, exactly like the heavy tail_heavy sheet.
         {"id": "head_chicken", "w": 11, "h": 8, "anchor": "part box top-left",
          "frames": head_chicken_defs()},
-        {"id": "legs_chicken", "w": 9, "h": 24, "anchor": "part box top-left",
+        {"id": "legs_chicken", "w": 9, "h": 16, "anchor": "part box top-left",
          "frames": legs_chicken_defs()},
         {"id": "head_bull", "w": 12, "h": 16, "anchor": "part box top-left",
          "frames": head_bull_defs()},
@@ -1214,61 +1239,89 @@ def _zone_part_defs(id_, east_intact, east_broken, w, h):
             _image_blocks(flip(src[0])), _image_blocks(flip(src[1]))]
 
 
+def _crop_blocks(blocks, box):
+    """Crop cell-absolute part blocks to a zone box (origin - box origin).
+
+    Frame size is box.w x pad8(box.h); the extra rows stay transparent so the
+    SpritesU plus-mask page stride is exact. Blocks outside the box are clipped.
+    """
+    w, h = box[2], ((box[3] + 7) // 8) * 8
+    out = []
+    for color, x, y, bw, bh in blocks:
+        lx, ly = x - box[0], y - box[1]
+        x0, y0 = max(0, lx), max(0, ly)
+        x1, y1 = min(w, lx + bw), min(h, ly + bh)
+        if x1 > x0 and y1 > y0:
+            out.append((color, x0, y0, x1 - x0, y1 - y0))
+    return out, w, h
+
+
+def _zone_part_defs_crop(id_, east_intact, east_broken, box):
+    """Like _zone_part_defs but the authored blocks are cell-absolute and the
+    overlay is cropped to the mask-derived zone bbox (bead ryh.3)."""
+    intact, w, h = _crop_blocks(east_intact, box)
+    broken, _, _ = _crop_blocks(east_broken, box)
+    return _zone_part_defs(id_, intact, broken, w, h)
+
+
 def head_chicken_defs():
-    # lunge.json head box (18, 0, 11, 7): frame-local (0,0) = cell (18, 0). The
-    # baked white head (rows 0..5) with its black eye, beak and wattle. Broken =
-    # the head erased and replaced by a torn dark neck stump at the body end.
+    # lunge.json head box (18, 0, 11, 7): authored cell-absolute and cropped to
+    # the mask-derived bbox (bead ryh.3). The baked white head (rows 0..5) with
+    # its black eye, beak and wattle. Broken = the head erased and replaced by a
+    # torn dark neck stump at the body end.
     east_intact = [
-        (WHITE, 0, 0, 11, 6),    # head
-        (BLACK, 5, 2, 2, 2),     # eye
-        (BLACK, 10, 3, 1, 3),    # beak (cell x28 edge)
-        (BLACK, 10, 6, 1, 1),    # wattle
+        (WHITE, 18, 0, 11, 6),   # head
+        (BLACK, 23, 2, 2, 2),    # eye
+        (BLACK, 28, 3, 1, 3),    # beak (cell x28 edge)
+        (BLACK, 28, 6, 1, 1),    # wattle
     ]
     east_broken = [
-        (BLACK, 0, 0, 11, 6),    # erase the baked head
-        (DARK, 0, 1, 4, 4),      # torn neck stump
-        (LIGHT, 0, 1, 3, 1),     # stump highlight
-        (BLACK, 3, 0, 2, 2),     # wound notch
+        (BLACK, 18, 0, 11, 6),   # erase the baked head
+        (DARK, 18, 1, 4, 4),     # torn neck stump
+        (LIGHT, 18, 1, 3, 1),    # stump highlight
+        (BLACK, 21, 0, 2, 2),    # wound notch
     ]
-    return _zone_part_defs("head_chicken", east_intact, east_broken, 11, 8)
+    return _zone_part_defs_crop("head_chicken", east_intact, east_broken,
+                                _part_box("lunge", "head", (18, 0, 11, 7)))
 
 
 def legs_chicken_defs():
-    # lunge.json appendage box (9, 0, 9, 24): frame-local (0,0) = cell (9, 0).
-    # The baked DARK legs with LIGHT shank/foot highlights; the far leg's outer
-    # toe is clipped (frame width 9). Broken = the legs sheared at the thigh,
-    # leaving short dark stumps.
+    # lunge.json appendage box, mask-derived (9, 13, 9, 9) after ryh.3. Authored
+    # cell-absolute and cropped to the bbox: the baked DARK legs with LIGHT
+    # shank/foot highlights; the far leg's outer toe is clipped (frame width 9).
+    # Broken = the legs sheared at the thigh, leaving short dark stumps.
+    box = _part_box("lunge", "appendage", (9, 13, 9, 9))
     east_intact = [
-        (DARK, 2, 13, 2, 4),     # near thigh
-        (DARK, 1, 16, 4, 2),     # near knee
-        (DARK, 2, 18, 2, 3),     # near shank
-        (LIGHT, 2, 18, 1, 3),    # near shank highlight
-        (DARK, 0, 20, 1, 1),     # near rear toe
-        (DARK, 0, 21, 5, 1),     # near foot
-        (LIGHT, 1, 21, 2, 1),    # near foot front highlight
-        (DARK, 7, 13, 2, 4),     # far thigh
-        (DARK, 6, 16, 3, 2),     # far knee (outer column clipped)
-        (DARK, 7, 18, 2, 3),     # far shank
-        (LIGHT, 7, 18, 1, 3),    # far shank highlight
-        (DARK, 6, 21, 3, 1),     # far foot (outer columns clipped)
+        (DARK, 11, 13, 2, 4),    # near thigh
+        (DARK, 10, 16, 4, 2),    # near knee
+        (DARK, 11, 18, 2, 3),    # near shank
+        (LIGHT, 11, 18, 1, 3),   # near shank highlight
+        (DARK, 9, 20, 1, 1),     # near rear toe
+        (DARK, 9, 21, 5, 1),     # near foot
+        (LIGHT, 10, 21, 2, 1),   # near foot front highlight
+        (DARK, 16, 13, 2, 4),    # far thigh
+        (DARK, 15, 16, 3, 2),    # far knee (outer column clipped)
+        (DARK, 16, 18, 2, 3),    # far shank
+        (LIGHT, 16, 18, 1, 3),   # far shank highlight
+        (DARK, 15, 21, 3, 1),    # far foot (outer columns clipped)
     ]
     east_broken = [
-        (BLACK, 2, 13, 2, 4),    # erase the legs (exact baked rects, so the
-        (BLACK, 1, 16, 4, 2),    # body between them is untouched)
-        (BLACK, 2, 18, 2, 3),
-        (BLACK, 0, 20, 1, 1),
-        (BLACK, 0, 21, 5, 1),
-        (BLACK, 7, 13, 2, 4),
-        (BLACK, 6, 16, 3, 2),
-        (BLACK, 7, 18, 2, 3),
-        (BLACK, 6, 21, 3, 1),
-        (DARK, 2, 13, 2, 2),     # near thigh stump
-        (LIGHT, 2, 13, 1, 1),    # stump highlight
-        (DARK, 7, 13, 2, 2),     # far thigh stump
-        (LIGHT, 7, 13, 1, 1),    # stump highlight
-        (BLACK, 1, 15, 7, 1),    # torn lower edge
+        (BLACK, 11, 13, 2, 4),   # erase the legs (exact baked rects, so the
+        (BLACK, 10, 16, 4, 2),   # body between them is untouched)
+        (BLACK, 11, 18, 2, 3),
+        (BLACK, 9, 20, 1, 1),
+        (BLACK, 9, 21, 5, 1),
+        (BLACK, 16, 13, 2, 4),
+        (BLACK, 15, 16, 3, 2),
+        (BLACK, 16, 18, 2, 3),
+        (BLACK, 15, 21, 3, 1),
+        (DARK, 11, 13, 2, 2),    # near thigh stump
+        (LIGHT, 11, 13, 1, 1),   # stump highlight
+        (DARK, 16, 13, 2, 2),    # far thigh stump
+        (LIGHT, 16, 13, 1, 1),   # stump highlight
+        (BLACK, 10, 15, 7, 1),   # torn lower edge
     ]
-    return _zone_part_defs("legs_chicken", east_intact, east_broken, 9, 24)
+    return _zone_part_defs_crop("legs_chicken", east_intact, east_broken, box)
 
 
 def head_bull_defs():
@@ -2052,6 +2105,7 @@ def main():
         os.makedirs(directory, exist_ok=True)
     os.makedirs(gen_dir, exist_ok=True)
 
+    load_part_boxes(os.path.join(ROOT, "build", "hitboxes.json"))
     icons, sheets, sources = render_all(dims)
     defs = icons
     check_sheets(defs, sheets)

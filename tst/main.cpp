@@ -14,6 +14,7 @@
 #include "smith_test.hpp"
 #include "combat_test.hpp"
 #include "combat_pack_test.hpp"
+#include "hitbox_reach_test.hpp"
 #include "render_math_test.hpp"
 #include "zone_test.hpp"
 #include "gather_test.hpp"
@@ -41,6 +42,7 @@ int main() {
     SmithSuite(runner);
     CombatSuite(runner);
     CombatPackSuite(runner);
+    hitboxreach::HitboxReachSuite(runner);
     rendermathtest::RenderMathSuite(runner);
     ZoneSuite(runner);
     GatherSuite(runner);

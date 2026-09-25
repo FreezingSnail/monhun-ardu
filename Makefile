@@ -1,4 +1,4 @@
-.PHONY :  full build mini dev gen gen-check size size-line debug hooks format test test-tools testvm testvm-debug fxtest fxtest-headless fxtest-headless-preflight fxtest-build fxtest-run base-sheet
+.PHONY :  full build mini dev gen gen-check size size-line debug hooks format test test-tools testvm testvm-debug fxtest fxtest-headless fxtest-headless-preflight fxtest-build fxtest-run base-sheet hitboxes-render
 
 # Common compiler flags
 CXX_FLAGS = -std=c++17 -I/src -w -O0 -g3
@@ -67,6 +67,13 @@ dev:
 
 gen:
 	./tools/gen.sh
+
+# Dev-only review surface (bead monhun-ardu-ryh.3): bootstrap any missing
+# images/masks/*.png from the shipped JSON and write the composite review PNG
+# (sprite row + the three mask rows + the boxes) to build/scratch/hitbox_review.png.
+# Existing masks are never overwritten; not part of `make gen`.
+hitboxes-render:
+	python3 tools/gen-hitboxes.py --render
 
 # Staleness + determinism gate: snapshot every generated artifact, re-run the
 # single generation entry (tools/gen.sh), and fail if any artifact changed.

@@ -78,6 +78,11 @@ OUTPUT_GLOBS = ("src/generated/**/*",)
 # make gen-check.
 DATA_GLOBS = ("data/**/*.json",)
 
+# Source-only hitbox masks (epic monhun-ardu-ryh): they never ship (not declared
+# by a Sprites.txt) but tools/gen-hitboxes.py compiles them into the packed
+# combat records, so a mask edit without a regen must fail make gen-check.
+MASK_GLOBS = ("images/masks/*.png",)
+
 IMAGE_RE = re.compile(r"^([A-Za-z_][A-Za-z0-9_]*)_(\d+)x(\d+)\.png$")
 SPRITES_DECL_RE = re.compile(r"^uint8_t\s+([A-Za-z_][A-Za-z0-9_]*)\s*\[\s*\]\s*=\s*\{?$")
 SPRITES_END_RE = re.compile(r"^\};$")
@@ -174,7 +179,8 @@ def scan(root):
     issues = []
 
     images = sorted(_rel(root, p) for p in glob.glob(
-        os.path.join(root, "images", "**", "*.png"), recursive=True) if os.path.isfile(p))
+        os.path.join(root, "images", "**", "*.png"), recursive=True)
+        if os.path.isfile(p) and not _rel(root, p).startswith("images/masks/"))
     sprite_files = sorted(_rel(root, p) for p in glob.glob(
         os.path.join(root, "fxdata", "*", "Sprites.txt")) if os.path.isfile(p))
 
@@ -221,6 +227,11 @@ def scan(root):
             continue
         inputs.append(file_entry(root, target, symbol=symbol))
     for pattern in DATA_GLOBS:
+        for path in glob.glob(os.path.join(root, pattern), recursive=True):
+            if not os.path.isfile(path):
+                continue
+            inputs.append(file_entry(root, _rel(root, path)))
+    for pattern in MASK_GLOBS:
         for path in glob.glob(os.path.join(root, pattern), recursive=True):
             if not os.path.isfile(path):
                 continue

@@ -16,8 +16,7 @@
 // cgk: the blob carries the ravager head + appendage zones and a two-window
 // tail_sweep, so the zone/break/guard paths below read real records. 4t4 added
 // the heavy appendage (long tail) zone; 76y added the chicken's lunge head +
-// legs (appendage) zones and its legs-only collide box, so SWEEP stays
-// HEAVY now resolves its tail.
+// legs (appendage) zones and its legs-only collide box, so SWEEP stays// HEAVY now resolves its tail.
 #include "harness/fxtest.hpp"
 #include "src/core/combat.hpp"
 #include "src/core/monster.hpp"       // migration A: sim consumes the attack cache
@@ -174,7 +173,7 @@ static const CombatZone kZones[] PROGMEM = {
      0,
      0,
      art_sheets::ART_SHEET_FXHEAD_CHICKEN},
-    {{9, 0, 9, 24},
+    {{9, 13, 9, 9},
      combat_expect::ZONE_LUNGE_APPENDAGE_HP,
      combat_expect::ZONE_LUNGE_APPENDAGE_DMG_MUL,
      combat_expect::ZONE_LUNGE_APPENDAGE_BODY_SHARE,

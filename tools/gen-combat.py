@@ -654,6 +654,55 @@ def load_art_sheets(errors, root):
     return None if errors.items else names
 
 
+# Mask-derived geometry (epic monhun-ardu-ryh). tools/gen-hitboxes.py reads the
+# artist-painted images/masks/*.png and writes build/hitboxes.json; here it
+# overrides the creature JSON geometry keys so the packed records come from the
+# masks. A missing file (lightweight schema fixtures) leaves every hand box in
+# place, matching the pre-migration pipeline.
+HITBOXES_REL = "build/hitboxes.json"
+
+
+def load_hitboxes(root):
+    path = os.path.join(root, HITBOXES_REL)
+    if not os.path.isfile(path):
+        return {}
+    try:
+        with open(path, encoding="utf-8") as handle:
+            doc = json.load(handle)
+    except (OSError, ValueError):
+        return {}
+    creatures = doc.get("creatures")
+    return creatures if isinstance(creatures, dict) else {}
+
+
+def apply_hitboxes(errors, ctx, obj, entry):
+    """Overwrite body/zones/collide/windows from a derived hitboxes entry."""
+    body = entry["body"]
+    obj.setdefault("stats", {})["w"] = body["w"]
+    obj["stats"]["h"] = body["h"]
+    obj["collide"] = entry["collide"]
+    raw_zones = obj.get("zones")
+    if raw_zones is None:
+        raw_zones = {}
+    for name, box in entry.get("zones", {}).items():
+        if name not in raw_zones:
+            errors.add("%s.masks" % ctx, "mask derives a %s zone the JSON does not declare" % name)
+            continue
+        raw_zones[name]["box"] = box
+    windows = entry.get("windows", {})
+    for atk in obj.get("attacks", []):
+        aid = atk.get("id")
+        if aid not in windows:
+            continue
+        boxes = windows[aid]
+        if len(boxes) != len(atk.get("windows", [])):
+            errors.add("%s.masks" % ctx, "attack %s: mask has %d window(s), JSON %d"
+                       % (aid, len(boxes), len(atk.get("windows", []))))
+            continue
+        for win, box in zip(atk["windows"], boxes):
+            win["box"] = box
+
+
 ART_FIELDS = ("sheet", "anchorY", "stride", "idle0", "idleCount", "windup", "attack", "recover", "flash", "dead")
 
 
@@ -836,6 +885,7 @@ def compile_model(errors, root):
     skeletons_by_id = {skeleton["id"]: skeleton for skeleton in skeletons}
     item_ids = load_item_ids(errors, root)
     art_sheet_names = load_art_sheets(errors, root)
+    hitboxes = load_hitboxes(root)
     creatures = []
     creature_ids = set()
     for name in creature_files:
@@ -854,6 +904,12 @@ def compile_model(errors, root):
             if cid in creature_ids:
                 errors.add(ctx, "duplicate creature id '%s'" % cid)
             creature_ids.add(cid)
+        # Mask-derived geometry (epic monhun-ardu-ryh): a creature with a
+        # committed images/masks entry takes its body/zones/collide/windows from
+        # build/hitboxes.json; the JSON geometry keys stay as the pre-migration
+        # shipped values until the ryh.4 cleanup. Behaviour keys are untouched.
+        if cid is not None and cid in hitboxes:
+            apply_hitboxes(errors, ctx, obj, hitboxes[cid])
         skeleton_id = obj.get("skeleton")
         skeleton = skeletons_by_id.get(skeleton_id) if isinstance(skeleton_id, str) else None
         if skeleton is None:

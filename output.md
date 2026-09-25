@@ -1,137 +1,155 @@
-# monhun-ardu-ryh.2 — sources: one facing per sheet + packer mirror
+# monhun-ardu-ryh.3 — spike: hitbox-mask converter + chicken
 
 ## What changed
 
-Every in-scope creature art **source** is now authored east-only; the packer
-(`tools/convert-sprite.py`) rebuilds the shipped frames by mirroring each source
-column into its west twin, so the packed cart image is byte-identical. Frame
-order/layout and `art_dims` are unchanged (no runtime change).
+The mask pipeline is end to end for one creature. `images/masks/*.png` are now
+the geometry source of truth; `tools/gen-hitboxes.py` derives every box into
+`build/hitboxes.json`, which `tools/gen-combat.py` packs (record shapes
+unchanged) and `tools/gen-art.py` reads to crop the breakable-part overlays.
 
-- `tools/gen-art.py`
-  - New `flip()` (horizontal mirror) and `compose()` (blk rects -> frame image)
-    helpers, plus a `MIRROR_SOURCES` registry keyed by packed symbol
-    (`fx<id>`) -> `(east-only source image, packed plan)`.
-  - `monster_lunge`/`monster_sweep`/`monster_heavy`: `_beast_sheet()` authors
-    the seven east poses and builds the shipped 14 frames as
-    `east(0..6) + flip(east(0..5)) + east(6)` (dead reused). Plan:
-    `[(i,F) x7, (i,T) x6, (6,F)]`. Removed the `east=False` draw path.
-  - `chickenatk`/`bullatk`/`heavyatk`: `_attack_sheet()` authors the east poses
-    only and interleaves `flip` for the shipped frames. Removed the per-pose
-    `east=False` draws.
-  - `head_chicken`/`legs_chicken`/`head_bull`/`hooves_bull`/`tail_heavy`:
-    `_zone_part_defs()` now takes the east intact+broken block defs and emits
-    the shipped `[E intact, E broken, flip(E intact), flip(E broken)]` order;
-    the `_mirror_rect()` bbox-duplication helper is deleted.
-  - Writes `images/blocks/layout.json` (packer plan) via `emit_pack_layout()`;
-    `check_disk()` now verifies the east-only sources; main returns/uses a
-    `sources` map so the shipped in-memory sheet stays for the pixel checks and
-    `art_dims` while only the one-facing PNG is written.
-- `tools/convert-sprite.py`: optional `plan` (loaded from
-  `<srcdir>/layout.json`): each packed frame is `[source_frame_index, mirror]`
-  in shipped order; a mirrored frame reads its east column flipped. No plan ->
-  unchanged in-order packing (fonts/equip/out-of-scope sheets).
-- `tools/fxdata_manifest.py`: `images/blocks/layout.json` added to
-  `GENERATED_GLOBS` so `make gen-check` also pins its determinism.
+- **`tools/gen-hitboxes.py` (new).** Reads `images/masks/<art-sheet>_<W>x<H>.png`
+  (one facing, three stacked layers top-to-bottom: collision / hitbox / hurtbox)
+  plus the creature JSON, and writes `build/hitboxes.json` with the body box
+  (green bbox), zone boxes (red=head, blue=appendage bbox), collide box (yellow
+  bbox) and window rects (orange/violet/cyan/magenta per hitbox column, mapped
+  to the attack whose `art.frame // 2` selects that column, then converted back
+  to the packed body-centre-relative `windows[].box` form). `--render` bootstraps
+  missing masks (JSON boxes -> PNG) into `build/scratch/masks/` and writes the
+  composite review PNG.
+- **`images/masks/fxmonster_lunge_32x24.png` + `images/masks/fxchickenatk_32x24.png`
+  (new committed sources).** Chicken beast mask + attack mask.
+- **`tools/gen-combat.py`.** `load_hitboxes()` + `apply_hitboxes()`: a creature
+  with a `build/hitboxes.json` entry takes its `stats.w/h`, zones, collide and
+  windows from the masks; the JSON geometry keys stay at the shipped
+  pre-migration values (the ryh.4 cleanup deletes them). A missing
+  `build/hitboxes.json` (schema fixtures) leaves every hand box in place.
+- **`tools/gen-art.py`.** `load_part_boxes()` + `_zone_part_defs_crop()`: the
+  head/legs part sheets are authored cell-absolute and cropped to the
+  mask-derived zone bbox (frame = box.w x pad8(box.h)). Feet/world positions are
+  unchanged; only the legs frame shrank 9x24 -> 9x16.
+- **`tools/gen.sh`.** Runs `gen-hitboxes.py` after `fxdump` and before `gen-art`
+  / `gen-combat`.
+- **`tools/fxdata_manifest.py`.** `images/masks/**` are excluded from the
+  shipped-image provenance scan and added as tracked inputs (a mask edit without
+  a regen fails `make gen-check`).
+- **`Makefile`.** `hitboxes-render` (dev-only review target).
+- **`tst/hitbox_reach_test.hpp` (new).** Reachability guard + `cey` pin.
+- Tests/docs updated to the tightened numbers.
 
-## Exceptions (non-mirror west frames, kept explicit)
+## Chicken numbers landed through the mask
 
-The design's exception rule: a west frame that is not the mirror of its east
-twin stays authored. Measured on the packed sheets:
+`build/hitboxes.json` (from the mask, verified in a fresh `make gen`):
 
-- `fxmonster` (ravager): the four alive-frame feet rects (x = 3,11,19,27) are not
-  x-mirror-symmetric, so **all four west frames are drawn explicitly** and the
-  sheet ships authored in full (no mirror plan registered; the PNG is unchanged).
-  Documented on `monster_frames()`.
-- `monster_lunge`/`monster_sweep`/`monster_heavy` dead heap: facing-independent
-  (drawn once) and asymmetric for lunge/heavy, so the shipped west dead frame
-  reuses east dead unflipped (plan source 6, mirror False). Documented on
-  `_beast_sheet()`.
-- `fxpole` (+ `fxpole_sever/_break/_crack`) and `fxtailspin`/`fxtail`/
-  `fxtail_spin`: no facing pair (identity) — out of the mirror plan, packed
-  in order unchanged.
-- `fxtail` (legacy 18x10) hand-mirrors its west rects and is out of scope;
-  left untouched.
+| field | value |
+|---|---|
+| body | (0, 0, 32, 24) |
+| head | (18, 0, 11, 7) |
+| appendage | (9, 13, 9, 9) |
+| collide | (9, 13, 9, 9) |
+| peck window | 12x10 @ (14, -6) |
+| leap window | 18x16 @ (12, -2) |
+| wing_beat window | 26x18 @ (-8, 0) |
 
-## Scope / interfaces
+## Mask format + validations
 
-- `MIRROR_SOURCES[symbol] = (PIL.Image east-only source, [(src_idx, mirror), ...])`
-- `images/blocks/layout.json` `{"version":1,"sheets":{"<symbol>":[[src,mirror],...]}}`
-  (11 sheets): `fxmonster_lunge/_sweep/_heavy`, `fxchickenatk/fxbullatk/fxheavyatk`,
-  `fxhead_chicken/fxlegs_chicken/fxhead_bull/fxhooves_bull/fxtail_heavy`.
-- One new tracked source: `images/blocks/layout.json`. 11 in-scope source PNGs
-  shrink to their east frame(s); `fxmonster_32x24.png` is unchanged.
+- Dims: `W = (cellW + 2*8) * source_columns`, `H = cellH * 3`, layers
+  collision / hitbox / hurtbox top-to-bottom; exact palette per the epic. The
+  8 px margin exists because attack windows are body-centre relative and reach
+  behind the sprite cell (wing_beat left edge is 5 px left of the cell).
+- Hard failures: (1) dims + symbol resolution + a beast mask required with any
+  attack mask; (2) every head/appendage/collide/window region is one solid rect
+  (the green body is the fallback **painted underneath** the zones and may be
+  overpainted); (3) head/appendage do not overlap (they may sit on the body);
+  (4) collision/hurtbox identical across a sheet's columns; (5) hitbox columns
+  match the attacks by `art.frame` (single-window only; multi-window kits stay
+  hand-authored until phase 2); (6) round trip: bootstrap from the shipped JSON
+  reproduces the zone/body/collide/window records bit-for-bit.
 
-## Gate (exact tails)
+## Guard (`tst/hitbox_reach_test.hpp`)
 
-`make gen` then `git diff --stat fxdata/`:
+- Every shipped zone (8) is hittable from at least one stance: scan of positions
+  x DIR8 facings x every weapon's attack boxes through the real `meleeHitbox()`
+  math, testing the zone's face-relative world rect. No escape-hatch flag.
+- `cey` invariant: for every zone that draws a part overlay, the overlay sheet
+  frame width == zone box width and frame height == pad8(zone box height) (the
+  overlay anchor is the zone box origin, so the painted part sits on the exact
+  rect the hit test uses).
+
+## Verification (exact tails)
+
+`make gen`:
 ```
- fxdata/manifest.json | 44 ++++++++++++++++++++++----------------------
- 1 file changed, 22 insertions(+), 22 deletions(-)
+gen-hitboxes: 1 masked creature(s) [lunge] -> build/hitboxes.json
+gen.sh: FX data + src/fxdata.h regenerated
 ```
-`fxdata/fxdata.bin`, `fxdata/fxdata-data.bin`, `fxdata/fxdata.h`,
-`src/fxdata.h`, all `src/generated/**` and `fxdata/blocks/Sprites.txt`: **empty
-diff**. Verified explicitly:
-```
-git diff --quiet fxdata/fxdata.bin fxdata/fxdata-data.bin -> UNCHANGED
-git diff --stat src/  -> (empty)
-git diff --stat fxdata/blocks/Sprites.txt -> (empty)
-```
-The only `fxdata/` change is `fxdata/manifest.json` (the provenance sidecar that
-sha256+size-hashes every source image; the 11 east-only PNGs changed). Approved
-by the dispatcher: the east-only sources live in `images/blocks`, so the manifest
-must rehash them; the packed cart artifacts are byte-identical.
 
 `make gen-check`:
 ```
-gen.sh: FX data + src/fxdata.h regenerated
 fxdata_manifest: PASS (163 generated artifacts unchanged)
 ```
 
 `make test`:
 ```
-Total Passed: 6795
+Total Passed: 6815
 Total Failed: 0
 ```
 
 `FXTEST_ONLY=test_monster_art make fxtest-headless`:
 ```
 test_monster_art PASSED=180 FAILED=0
-P
 test_monster_art: PASS
 ```
 
-`FXTEST_ONLY=test_assets make fxtest-headless`:
+`FXTEST_ONLY=test_combat make fxtest-headless`:
+```
+combat_test PASSED=252 FAILED=0
+test_combat: PASS
+```
+
+`FXTEST_ONLY=test_assets make fxtest-headless` (extra: the FX layout shifted):
 ```
 asset_test PASSED=264 FAILED=0
-P
 test_assets: PASS
 ```
 
-`make size`:
+`make size` / `make size-line`:
 ```
 size: .text=29420 .data=50 .bss=1764
 size: flash=29470/29696 (226 free)  ram=1814/2560
 ```
 
-`make size-line`:
-```
-size: flash=29470/29696 (226 free)  ram=1814/2560
-```
-
 ## Size delta
 
-| | before | after | delta |
+| | baseline (ryh.2) | after | delta |
 |---|---|---|---|
 | flash | 29470/29696 (226 free) | 29470/29696 (226 free) | **0 B** |
 | RAM | 1814/2560 | 1814/2560 | 0 B |
+| fxdata image | 410880 B | 410624 B | -256 B |
 
-Exact 0 B: art bytes and `art_dims` are unchanged. Matches the checkpoint
-(29470, 226 free) and clears the ~150 B wave floor.
+Flash is exactly unchanged: the change is data/tooling only, the combat record
+sizes are identical, and the shipped `windows[].box` values are unchanged. The
+FX image shrank 256 B because the legs part sheet went 9x24 (3 pages) ->
+9x16 (2 pages); the offset shift is absorbed by the regenerated
+`equip_meta.hpp` / `zone_meta.hpp` / table blobs (all in this staged set).
+Clears the ~150 B wave floor.
 
-## Notes
+## Review image
 
-- No runtime / `art_dims` / frame-order change: `art_dims.hpp` diff is empty.
-- Generated artifacts staged as expected; `fxdata/manifest.json` is the only
-  `fxdata/` diff (approved).
-- `images/blocks/layout.json` is generated by `make gen` (untracked until commit).
+`build/scratch/hitbox_review.png` (448x400): top panel = lunge beast (sprite row
++ collision/hitbox/hurtbox mask rows + head/appendage/collide boxes on the art);
+bottom panel = `fxchickenatk` (sprite row + hitbox mask row + the three window
+rects). Regenerate with `make hitboxes-render`.
+
+## Notes / deviations
+
+- `data/creatures/lunge.json` keeps the pre-migration geometry
+  (appendage `9,0,9,24`, collide `9,11,12,13`): the mask is the source for the
+  shipped tightened records, and the round-trip validation proves the converter
+  against those shipped values. ryh.4 deletes the hand keys.
+- The other beasts + pole stay on their hand boxes (their masks arrive in ryh.4);
+  `--render` still renders their review panels from the committed masks only.
+- Related suites updated to the tightened collide/appendage geometry:
+  `tst/combat_test.hpp`, `tst/monster_test.hpp`, `tst/world_test.hpp`,
+  `tst/zone_test.hpp`, `tst/art_dims_test.hpp`, `tst/fxdatatest/combat_test.hpp`,
+  `tst/fxdatatest/asset_test.hpp`, `docs/feel-design.md`.
 - No commit/push (orchestrator owns the wave commit).

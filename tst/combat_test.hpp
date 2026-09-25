@@ -209,8 +209,8 @@ void CombatSuite(TestRunner &runner) {
             t.assert(cb.h, h.collide.h, "collide box h");
         }
         // Default collide box is the body box; the chicken authors its legs-
-        // only rect (9,11,12,13) and the bull (nch.9) its wide low hooves rect
-        // (1,14,26,8) so the hunter can overlap the raised body.
+        // only rect (9,13,9,9 after ryh.3) and the bull (nch.9) its wide low
+        // hooves rect (1,14,26,8) so the hunter can overlap the raised body.
         CombatBox cbox = combatCreatureCollideBox(combat_data::CREATURE_SWEEP);
         t.assert(cbox.ox, combat_expect::CREATURE_SWEEP_COLLIDE_OX, "sweep hooves collide ox");
         t.assert(cbox.oy, combat_expect::CREATURE_SWEEP_COLLIDE_OY, "sweep hooves collide oy");
@@ -223,9 +223,9 @@ void CombatSuite(TestRunner &runner) {
         t.assert(cbox.h, 24, "ravager collide body h");
         cbox = combatCreatureCollideBox(combat_data::CREATURE_LUNGE);
         t.assert(cbox.ox, 9, "lunge legs collide ox");
-        t.assert(cbox.oy, 11, "lunge legs collide oy");
-        t.assert(cbox.w, 12, "lunge legs collide w");
-        t.assert(cbox.h, 13, "lunge legs collide h");
+        t.assert(cbox.oy, 13, "lunge legs collide oy");
+        t.assert(cbox.w, 9, "lunge legs collide w");
+        t.assert(cbox.h, 9, "lunge legs collide h");
         // Pinned shipped sizes (parity contract: LUNGE 32x24, SWEEP 28x22,
         // HEAVY 40x28).
         CombatBox box;
@@ -608,9 +608,9 @@ void CombatSuite(TestRunner &runner) {
         // 76y: the chicken ships a head and a legs (appendage) zone and a
         // legs-only collide box; both are cached at spawn.
         t.assert(g.combat.collide.ox, 9, "cache legs collide ox");
-        t.assert(g.combat.collide.oy, 11, "cache legs collide oy");
-        t.assert(g.combat.collide.w, 12, "cache legs collide w");
-        t.assert(g.combat.collide.h, 13, "cache legs collide h");
+        t.assert(g.combat.collide.oy, 13, "cache legs collide oy");
+        t.assert(g.combat.collide.w, 9, "cache legs collide w");
+        t.assert(g.combat.collide.h, 9, "cache legs collide h");
         t.assert(g.combat.headZone, combat_data::ZONE_LUNGE_HEAD, "head zone seeded");
         t.assert(g.combat.appendZone, combat_data::ZONE_LUNGE_APPENDAGE, "appendage zone seeded");
         t.assert(g.combat.zone[COMBAT_ZONE_HEAD].hp, combat_expect::ZONE_LUNGE_HEAD_HP, "head pool seeded");

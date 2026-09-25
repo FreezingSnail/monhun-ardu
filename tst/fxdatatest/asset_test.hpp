@@ -249,14 +249,14 @@ inline void test_assets(FxTest &test) {
     blobHeader(fxbullatk, 32, 24, test, F("bull attack w/h"));
 
     // Breakable-zone part overlays (bead monhun-ardu-kt7.6): one 4-frame
-    // combatPartArtFrame() sheet per breakable demo-roster zone, matching the
-    // data box sizes (lunge.json head 11x7 -> 11x8, appendage 9x24; sweep.json
-    // head 12x10 -> 12x16, appendage 20x10 -> 20x16; heights padded to a
-    // multiple of 8 for the SpritesU page stride). Header identity only here;
-    // tst/art_dims_test.hpp pins the frames/mirrors/erases and
+    // combatPartArtFrame() sheet per breakable demo-roster zone, cropped to the
+    // mask-derived zone bbox (lunge.json head 11x7 -> 11x8, appendage 9x9 ->
+    // 9x16; sweep.json head 12x10 -> 12x16, appendage 20x10 -> 20x16; heights
+    // padded to a multiple of 8 for the SpritesU page stride). Header identity
+    // only here; tst/art_dims_test.hpp pins the frames/mirrors/erases and
     // tst/fxdatatest/monster_art_test.hpp the world-rect frame pick.
     blobHeader(fxhead_chicken, 11, 8, test, F("chicken head part w/h"));
-    blobHeader(fxlegs_chicken, 9, 24, test, F("chicken legs part w/h"));
+    blobHeader(fxlegs_chicken, 9, 16, test, F("chicken legs part w/h"));
     blobHeader(fxhead_bull, 12, 16, test, F("bull head part w/h"));
     blobHeader(fxhooves_bull, 20, 16, test, F("bull hooves part w/h"));
 

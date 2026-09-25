@@ -177,14 +177,19 @@ windup/active/recover. Window `t` ranges are inclusive, 1-based.
 
 ### Chicken — `data/creatures/lunge.json` (skeleton `chicken`)
 
-**Stats:** w32 h24, hp1800, spd6, spawn (200,40), collide (9,11,12,13), no enrage.
+**Stats:** w32 h24, hp1800, spd6, spawn (200,40), collide (9,13,9,9), no enrage.
 
 **Zones**
 
 | Zone | Box | dmgMul | HP | Share | Stagger | Break |
 |---|---|---:|---:|---:|---:|---|
 | head | (18, 0, 11, 7) | 130 | 160 | 100 | 12 | SLASH; broken dmgMul 130, hurtOn false |
-| appendage | (9, 0, 9, 24) | 150 | 240 | 40 | 30 | SLASH; broken dmgMul 200, hurtOn false, disables `leap` |
+| appendage | (9, 13, 9, 9) | 150 | 240 | 40 | 30 | SLASH; broken dmgMul 200, hurtOn false, disables `leap` |
+
+The chicken is the first mask-migrated creature (epic monhun-ardu-ryh, bead
+ryh.3): these boxes come from `images/masks/fxmonster_lunge_32x24.png` via
+`tools/gen-hitboxes.py`, not the JSON geometry keys (the JSON keeps the
+pre-migration values until the ryh.4 cleanup).
 
 **Profile:** engage 36 / keep 16 / attack 42; faceHold 6; turnRate 1; circle 8/10;
 retreat 6/10; cdBase 48 + jitter 60; spawnT 90 / spawnCd 140; stunRecover 24;
