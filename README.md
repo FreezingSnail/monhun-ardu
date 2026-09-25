@@ -269,8 +269,9 @@ data/skeletons.json + data/creatures/*.json ──tools/gen-combat.py──►�
 - Measured under load (bench): **156 Hz plane sweep, 52 Hz logic**, render max
   4868 µs/plane, logic tick 540 µs, 572 B free RAM. Mock runs 60 Hz; tick order
   is equivalent.
-- Debug overlay `DEBUG_HURTBOXES=1` (hold A+B to toggle). Off by default; the
-  overlay build is flash-tight and only for development.
+- Debug overlay `DEBUG_HURTBOXES=1`: `make dev-hitboxes` builds the dev feel
+  image with the 1 px hurt/hit-box wireframe always on (no runtime A+B toggle).
+  Off by default; it fits only on the `MH_DEV` carve and is dev-only.
 
 ---
 

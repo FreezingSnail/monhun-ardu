@@ -1,4 +1,4 @@
-.PHONY :  full build mini dev gen gen-check size size-line debug hooks format test test-tools testvm testvm-debug fxtest fxtest-headless fxtest-headless-preflight fxtest-build fxtest-run base-sheet hitboxes-render
+.PHONY :  full build mini dev dev-hitboxes gen gen-check size size-line debug hooks format test test-tools testvm testvm-debug fxtest fxtest-headless fxtest-headless-preflight fxtest-build fxtest-run base-sheet hitboxes-render
 
 # Common compiler flags
 CXX_FLAGS = -std=c++17 -I/src -w -O0 -g3
@@ -63,6 +63,22 @@ dev:
 	@elf=dist/monhun-ardu.ino.elf; \
 	$(AVR_SIZE) -A "$$elf" | awk '$$1==".text"{t=$$2} $$1==".data"{d=$$2} $$1==".bss"{b=$$2} END {flash=t+d; ram=d+b; printf "dev size: flash=%d/%d (%d free)  ram=%d/2560\n", flash, 29696, 29696-flash, ram}'
 	@test -f "$(FXDATA_BIN)" || { echo "dev: FX data image missing at $(FXDATA_BIN); run make gen" >&2; exit 1; }
+	"$(ARDENS)" display=ssd1306 fxport=d1 file=dist/monhun-ardu.ino.elf file=$(FXDATA_BIN)
+
+# Dev feel build + the 1 px debug hurt/hit-box wireframe overlay
+# (bead monhun-ardu-rie): dev's flags plus -DDEBUG_HURTBOXES=1, so drawDebug()
+# renders always (no runtime toggle). The overlay only fits on the MH_DEV carve:
+# untrimmed it pushed dev 388 B over (30084/29696) and shipping 1254 B over
+# (30950/29696); the trimmed wireBox/dev-block lands at 29608 B (88 B free).
+# Never a shipping path. Same FX-image check + Ardens launch as dev.
+dev-hitboxes:
+	arduino-cli compile --fqbn "arduboy-homemade:avr:arduboy-fx" --optimize-for-debug --output-dir dist \
+	    --build-property compiler.cpp.extra_flags="-mcall-prologues -mrelax -DMH_NO_USB -DMH_AUDIO=0 -DMH_DEV=1 -DDEBUG_HURTBOXES=1" \
+	    --build-property compiler.c.extra_flags="-mrelax" \
+	    --build-property compiler.c.elf.extra_flags="-mrelax"
+	@elf=dist/monhun-ardu.ino.elf; \
+	$(AVR_SIZE) -A "$$elf" | awk '$$1==".text"{t=$$2} $$1==".data"{d=$$2} $$1==".bss"{b=$$2} END {flash=t+d; ram=d+b; printf "dev-hitboxes size: flash=%d/%d (%d free)  ram=%d/2560\n", flash, 29696, 29696-flash, ram}'
+	@test -f "$(FXDATA_BIN)" || { echo "dev-hitboxes: FX data image missing at $(FXDATA_BIN); run make gen" >&2; exit 1; }
 	"$(ARDENS)" display=ssd1306 fxport=d1 file=dist/monhun-ardu.ino.elf file=$(FXDATA_BIN)
 
 gen:

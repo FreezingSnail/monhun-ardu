@@ -1079,20 +1079,18 @@ static void drawEffects(const mh::Game &g, int16_t camX, int16_t camY) {
 // rndPx sub-pixel smoothing used for sprites), translated by the same camera
 // and HUD offset the sprite/blk scene uses.
 
-// Solid 1 px border (hurt boxes).
-static void wireSolid(int32_t x, int32_t y, int32_t w, int32_t h) {
+// Single-pixel open-square border: solid for hurt boxes, dotted (every other
+// pixel) for hit boxes. Border only -- the interior is never touched.
+static void wireBox(int32_t x, int32_t y, int32_t w, int32_t h, bool dotted) {
     if (w < 1 || h < 1)
         return;
-    blk(x, y, w, 1, 3);
-    blk(x, y + h - 1, w, 1, 3);
-    blk(x, y, 1, h, 3);
-    blk(x + w - 1, y, 1, h, 3);
-}
-
-// Dotted 1 px border (hit boxes): every other pixel on each edge.
-static void wireDot(int32_t x, int32_t y, int32_t w, int32_t h) {
-    if (w < 1 || h < 1)
+    if (!dotted) {
+        blk(x, y, w, 1, 3);
+        blk(x, y + h - 1, w, 1, 3);
+        blk(x, y, 1, h, 3);
+        blk(x + w - 1, y, 1, h, 3);
         return;
+    }
     for (int32_t i = 0; i < w; i += 2) {
         blk(x + i, y, 1, 1, 3);
         blk(x + i, y + h - 1, 1, 1, 3);
@@ -1110,17 +1108,17 @@ static void drawDebug(const mh::Game &g, int16_t camX, int16_t camY) {
 
     // Hurt boxes (solid): player body, then the creature's cached skeleton body
     // part (migration B: part boxes from g.combat.body, not w/h literals).
-    wireSolid(p.x + ox, p.y + oy, p.w, p.h);
+    wireBox(p.x + ox, p.y + oy, p.w, p.h, false);
     if (g.target.alive) {
         const mh::CombatBox &b = g.combat.body;
-        wireSolid(g.monster.x + b.ox + ox, g.monster.y + b.oy + oy, b.w, b.h);
+        wireBox(g.monster.x + b.ox + ox, g.monster.y + b.oy + oy, b.w, b.h, false);
     }
 
     // Active player melee hit box (dotted): the sim's meleeHitbox() rect, so
     // the wire matches the frame the overlap test actually runs against.
     if ((p.state == mh::PS_ATTACK || p.state == mh::PS_SPECIAL) && p.atk) {
         const mh::Rect hit = mh::meleeHitbox(p, p.atk);
-        wireDot(hit.x + ox, hit.y + oy, hit.w, hit.h);
+        wireBox(hit.x + ox, hit.y + oy, hit.w, hit.h, true);
     }
 
     // Monster windup/attack hit box (dotted), same face-relative window centre
@@ -1134,25 +1132,7 @@ static void drawDebug(const mh::Game &g, int16_t camX, int16_t camY) {
         const int32_t hy = m.y + b.oy + (b.h >> 1) + dy;
         const int32_t hw = g.combat.attack.win.box.w;
         const int32_t hh = g.combat.attack.win.box.h;
-        wireDot(hx - (hw >> 1) + ox, hy - (hh >> 1) + oy, hw, hh);
-    }
-
-    // Flail whirl radius (dotted 48x48 box) while the whirl stance is held.
-    if (p.stance == mh::ST_WHIRL) {
-        const int32_t cx = p.x + (p.w >> 1);
-        const int32_t cy = p.y + (p.h >> 1);
-        wireDot(cx - 24 + ox, cy - 24 + oy, 48, 48);
-    }
-
-    // Hit-spark markers (small white plus) at live effects.
-    for (int16_t i = 0; i < g.fxN; i++) {
-        const mh::Effect &e = g.fx[i];
-        if (e.t >= e.life)
-            continue;
-        const int32_t sx = e.x + ox;
-        const int32_t sy = e.y + oy;
-        blk(sx, sy - 1, 1, 3, 3);
-        blk(sx - 1, sy, 3, 1, 3);
+        wireBox(hx - (hw >> 1) + ox, hy - (hh >> 1) + oy, hw, hh, true);
     }
 }
 #endif   // DEBUG_HURTBOXES

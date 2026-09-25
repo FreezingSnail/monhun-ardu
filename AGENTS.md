@@ -24,6 +24,7 @@ make test-tools            # Python tooling unittests (tools/tests/)
 make size                  # ELF size + headroom + compile-time data facts
 make size-line             # just the flash/RAM line (script/checkpoint friendly)
 make build | mini | debug  # shipping / Arduboy Mini / Ardens debugger
+make dev | dev-hitboxes    # dev feel build / dev + hurtbox wireframe overlay
 make gen | format | hooks
 ```
 

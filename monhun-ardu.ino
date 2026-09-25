@@ -74,22 +74,8 @@ static void refreshGearReadout() {
 }
 
 #if DEBUG_HURTBOXES
-// Runtime toggle inside the debug build: hold A+B for 30 ticks to flip. The
-// buttons still reach the sim unchanged (run() never consumes them); A+B is
-// only *observed* here, so normal input cannot be eaten by the overlay.
-static bool s_wire = true;
-static uint8_t s_wireHold = 0;
-
-static void pollDebugToggle(const mh::Input &in) {
-    if (in.a && in.b) {
-        if (s_wireHold < 30)
-            s_wireHold++;
-        if (s_wireHold == 30)
-            s_wire = !s_wire;
-    } else {
-        s_wireHold = 0;
-    }
-}
+// The overlay is always on in this build (the A+B runtime toggle was dropped:
+// the dev image has no flash headroom for it). A+B stays untouched input.
 #endif   // DEBUG_HURTBOXES
 
 void setup() {
@@ -132,9 +118,6 @@ static mh::Input sampleInput() {
 // win/loss + A -> hub (turn-ins). The hub is the root: B there does nothing.
 void run() {
     const mh::Input in = sampleInput();
-#if DEBUG_HURTBOXES
-    pollDebugToggle(in);   // observes A+B; does not consume input from stepGame
-#endif
 #ifndef MH_CARD_OFF
     if (s_detail.active) {
         // Card tick (5co.3): LEFT/RIGHT cycle pages (skipping pages absent from
@@ -287,7 +270,7 @@ void render() {
         return;
     }
 #if DEBUG_HURTBOXES
-    mh::renderScene(g, s_wire);
+    mh::renderScene(g, true);
 #else
     mh::renderScene(g, false);
 #endif
