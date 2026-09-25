@@ -14,7 +14,6 @@
     "dead": 6
   },
   "stats": { "w": 40, "h": 28, "hp": 2800, "spd": 5, "spawnX": 200, "spawnY": 40 },
-  "collide": { "ox": -8, "oy": 3, "w": 48, "h": 22 },
   "carve": [
     { "item": "tail", "count": 1, "chance": 100 },
     { "item": "scale", "count": 1, "chance": 55 },
@@ -41,7 +40,6 @@
   },
   "zones": {
     "appendage": {
-      "box": { "ox": -24, "oy": 0, "w": 24, "h": 16 },
       "part": "fxtail_heavy",
       "dmgMul": 150,
       "hp": 240,

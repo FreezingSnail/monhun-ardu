@@ -186,10 +186,11 @@ windup/active/recover. Window `t` ranges are inclusive, 1-based.
 | head | (18, 0, 11, 7) | 130 | 160 | 100 | 12 | SLASH; broken dmgMul 130, hurtOn false |
 | appendage | (9, 13, 9, 9) | 150 | 240 | 40 | 30 | SLASH; broken dmgMul 200, hurtOn false, disables `leap` |
 
-The chicken is the first mask-migrated creature (epic monhun-ardu-ryh, bead
-ryh.3): these boxes come from `images/masks/fxmonster_lunge_32x24.png` via
-`tools/gen-hitboxes.py`, not the JSON geometry keys (the JSON keeps the
-pre-migration values until the ryh.4 cleanup).
+Every creature is mask-migrated (epic monhun-ardu-ryh): the boxes below come
+from `images/masks/<sheet>_<cellW>x<cellH>.png` via `tools/gen-hitboxes.py`,
+not the JSON (which now carries behaviour only). The chicken landed in ryh.3;
+sweep, heavy, ravager and the pole followed in ryh.4 (their zone boxes are the
+tightened art bboxes).
 
 **Profile:** engage 36 / keep 16 / attack 42; faceHold 6; turnRate 1; circle 8/10;
 retreat 6/10; cdBase 48 + jitter 60; spawnT 90 / spawnCd 140; stunRecover 24;
@@ -221,8 +222,8 @@ staggerMax 60, decay 2, recover 30.
 
 | Zone | Box | dmgMul | HP | Share | Stagger | Break |
 |---|---|---:|---:|---:|---:|---|
-| head | (17, -4, 12, 10) | 130 | 160 | 100 | 12 | SLASH; broken dmgMul 130, hurtOn false |
-| appendage | (4, 12, 20, 10) | 150 | 240 | 40 | 30 | SLASH; broken dmgMul 200, hurtOn false, disables `stomp` |
+| head | (21, 4, 8, 8) | 130 | 160 | 100 | 12 | SLASH; broken dmgMul 130, hurtOn false |
+| appendage | (4, 18, 20, 5) | 150 | 240 | 40 | 30 | SLASH; broken dmgMul 200, hurtOn false, disables `stomp` |
 
 **Profile:** engage 36 / keep 18 / attack 42; faceHold 10; turnRate 1; circle 8/10;
 retreat 6/10; cdBase 55 + jitter 40; spawnT 90 / spawnCd 140; stunRecover 24;
@@ -253,7 +254,7 @@ staggerMax 80, decay 1, recover 24.
 
 | Zone | Box | dmgMul | HP | Share | Stagger | Break |
 |---|---|---:|---:|---:|---:|---|
-| appendage | (-24, 0, 24, 16) | 150 | 240 | 40 | 30 | SLASH; broken dmgMul 200, hurtOn false, disables `tail_spin` |
+| appendage | (-24, 4, 24, 11) | 150 | 240 | 40 | 30 | SLASH; broken dmgMul 200, hurtOn false, disables `tail_spin` |
 
 **Profile:** engage 36 / keep 12 / attack 42; faceHold 10; turnRate 1; circle 8/10;
 retreat 6/10; cdBase 55 + jitter 40; spawnT 90 / spawnCd 140; stunRecover 24;

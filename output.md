@@ -1,86 +1,86 @@
-# monhun-ardu-ryh.3 — spike: hitbox-mask converter + chicken
+# monhun-ardu-ryh.4 — migrate every beast + pole to masks
 
 ## What changed
 
-The mask pipeline is end to end for one creature. `images/masks/*.png` are now
-the geometry source of truth; `tools/gen-hitboxes.py` derives every box into
-`build/hitboxes.json`, which `tools/gen-combat.py` packs (record shapes
-unchanged) and `tools/gen-art.py` reads to crop the breakable-part overlays.
+Every creature is now mask-migrated. Sweep, heavy, ravager and the pole joined
+the chicken (ryh.3): six new committed masks, their tightened zone boxes landed
+through the pipeline, the bull/heavy part overlays cropped to the mask bbox, and
+the redundant hand geometry keys deleted from the creature JSON.
 
-- **`tools/gen-hitboxes.py` (new).** Reads `images/masks/<art-sheet>_<W>x<H>.png`
-  (one facing, three stacked layers top-to-bottom: collision / hitbox / hurtbox)
-  plus the creature JSON, and writes `build/hitboxes.json` with the body box
-  (green bbox), zone boxes (red=head, blue=appendage bbox), collide box (yellow
-  bbox) and window rects (orange/violet/cyan/magenta per hitbox column, mapped
-  to the attack whose `art.frame // 2` selects that column, then converted back
-  to the packed body-centre-relative `windows[].box` form). `--render` bootstraps
-  missing masks (JSON boxes -> PNG) into `build/scratch/masks/` and writes the
-  composite review PNG.
-- **`images/masks/fxmonster_lunge_32x24.png` + `images/masks/fxchickenatk_32x24.png`
-  (new committed sources).** Chicken beast mask + attack mask.
-- **`tools/gen-combat.py`.** `load_hitboxes()` + `apply_hitboxes()`: a creature
-  with a `build/hitboxes.json` entry takes its `stats.w/h`, zones, collide and
-  windows from the masks; the JSON geometry keys stay at the shipped
-  pre-migration values (the ryh.4 cleanup deletes them). A missing
-  `build/hitboxes.json` (schema fixtures) leaves every hand box in place.
-- **`tools/gen-art.py`.** `load_part_boxes()` + `_zone_part_defs_crop()`: the
-  head/legs part sheets are authored cell-absolute and cropped to the
-  mask-derived zone bbox (frame = box.w x pad8(box.h)). Feet/world positions are
-  unchanged; only the legs frame shrank 9x24 -> 9x16.
-- **`tools/gen.sh`.** Runs `gen-hitboxes.py` after `fxdump` and before `gen-art`
-  / `gen-combat`.
-- **`tools/fxdata_manifest.py`.** `images/masks/**` are excluded from the
-  shipped-image provenance scan and added as tracked inputs (a mask edit without
-  a regen fails `make gen-check`).
-- **`Makefile`.** `hitboxes-render` (dev-only review target).
-- **`tst/hitbox_reach_test.hpp` (new).** Reachability guard + `cey` pin.
-- Tests/docs updated to the tightened numbers.
+- **`images/masks/` (new sources).**
+  - `fxmonster_sweep_32x24.png` — cell 32x24 (sprite); body (0,0,28,22),
+    head (21,4,8,8), appendage (4,18,20,5), collide (1,14,26,8).
+  - `fxmonster_heavy_40x28.png` — cell 40x28 (body; the tail sits 24 px left of
+    the cell, so the mask now carries a 24 px per-side horizontal margin); body
+    (0,0,40,28), appendage (-24,4,24,11), collide (-8,3,48,22).
+  - `fxmonster_32x24.png` — ravager cell 32x24, margin 16; body (0,0,32,24),
+    head (20,4,12,12), appendage (-14,8,18,10), collide = body (unchanged).
+  - `fxpole_20x40.png` — cell 20x40 (sprite); body (0,0,20,36), head (5,0,10,8),
+    collide = body (unchanged).
+  - `fxbullatk_28x22.png` — attack mask, cell = body; col0 stomp
+    (0,0,36,26), col2 rear_kick (-14,4,22,14); col1 (gore, multi-window) and
+    col3 (stomp-windup tell) blank.
+  - `fxheavyatk_40x28.png` — attack mask; col0 bite (14,0,18,14), col2 tail_slam
+    (-16,0,36,28); col1/col3 blank.
+- **`tools/gen-hitboxes.py`.** The mask cell is now named in the filename
+  (`<symbol>_<cellW>x<cellH>.png`) and the per-side margins are derived from the
+  image dims (`W = (cellW + 2*mx) * columns`, `H = (cellH + 2*my) * 3`). The
+  margins are 2D: the bull stomp window reaches 2 px above/below the 22-tall
+  body and the longtail tail sits 24 px left. `source_columns` is read from the
+  one-facing source PNG (`images/blocks/<sheet>_<W>x<H>.png` width / frame
+  width), not from the attacks (an attack sheet authors a column per east pose,
+  e.g. the bull stomp-windup tell has no `art.frame`). `windows_for_attacks`
+  now *skips* multi-window kits instead of failing, so the mask owns the
+  single-window attacks and the multi-window ones stay hand-authored. The body
+  region must reproduce `stats.w/h` at the origin (new hard validation, replaces
+  the old JSON round trip, which no longer applies now the keys are gone).
+- **`tools/gen-art.py`.** `head_bull`, `hooves_bull` and `tail_heavy` join the
+  chicken: blocks authored cell-absolute and cropped to the mask bbox
+  (`_zone_part_defs_crop`). The bull head frame is 12x16 -> 8x8, hooves
+  20x16 -> 20x8; the heavy tail frame stays 24x16 but its crop origin moved down
+  4 px. Every overlay keeps the same *world* pixels (draw origin + frame-local
+  coords are preserved), so the device art oracle is unchanged.
+- **`data/creatures/*.json`.** Deleted the redundant geometry keys — `collide`
+  (lunge, sweep, heavy) and every `zones.*.box` — for all five creatures.
+  Behaviour keys (dmgMul, hp, bodyShare, breakTypes, broken.*, staggerOnHit,
+  part, profile, patterns, windows) stay.
+- **Tests/docs.** `tst/combat_test.hpp`, `tst/fxdatatest/combat_test.hpp`,
+  `tst/art_dims_test.hpp`, `tst/fxdatatest/asset_test.hpp` updated to the
+  tightened boxes/frames; `docs/feel-design.md` zone tables updated.
 
-## Chicken numbers landed through the mask
+## Tight boxes landed (build/hitboxes.json, from a fresh `make gen`)
 
-`build/hitboxes.json` (from the mask, verified in a fresh `make gen`):
+| creature | zone | before | after |
+|---|---|---|---|
+| sweep | head | (17,-4,12,10) | (21,4,8,8) |
+| sweep | appendage | (4,12,20,10) | (4,18,20,5) |
+| heavy | appendage | (-24,0,24,16) | (-24,4,24,11) |
+| ravager | head/appendage | — | unchanged (no part art) |
+| pole | head | — | unchanged (5,0,10,8) |
 
-| field | value |
-|---|---|
-| body | (0, 0, 32, 24) |
-| head | (18, 0, 11, 7) |
-| appendage | (9, 13, 9, 9) |
-| collide | (9, 13, 9, 9) |
-| peck window | 12x10 @ (14, -6) |
-| leap window | 18x16 @ (12, -2) |
-| wing_beat window | 26x18 @ (-8, 0) |
+Bodies, collide boxes and every window record are unchanged in value: sweep
+stomp (0,0,36,26), rear_kick (-14,4,22,14), heavy bite (14,0,18,14), tail_slam
+(-16,0,36,28) all reproduce exactly through their masks. The multi-window kits
+(sweep gore, ravager tail_sweep, heavy tail_spin) stay hand-authored.
 
-## Mask format + validations
+## Mask format note (deviation from the design text)
 
-- Dims: `W = (cellW + 2*8) * source_columns`, `H = cellH * 3`, layers
-  collision / hitbox / hurtbox top-to-bottom; exact palette per the epic. The
-  8 px margin exists because attack windows are body-centre relative and reach
-  behind the sprite cell (wing_beat left edge is 5 px left of the cell).
-- Hard failures: (1) dims + symbol resolution + a beast mask required with any
-  attack mask; (2) every head/appendage/collide/window region is one solid rect
-  (the green body is the fallback **painted underneath** the zones and may be
-  overpainted); (3) head/appendage do not overlap (they may sit on the body);
-  (4) collision/hurtbox identical across a sheet's columns; (5) hitbox columns
-  match the attacks by `art.frame` (single-window only; multi-window kits stay
-  hand-authored until phase 2); (6) round trip: bootstrap from the shipped JSON
-  reproduces the zone/body/collide/window records bit-for-bit.
-
-## Guard (`tst/hitbox_reach_test.hpp`)
-
-- Every shipped zone (8) is hittable from at least one stance: scan of positions
-  x DIR8 facings x every weapon's attack boxes through the real `meleeHitbox()`
-  math, testing the zone's face-relative world rect. No escape-hatch flag.
-- `cey` invariant: for every zone that draws a part overlay, the overlay sheet
-  frame width == zone box width and frame height == pad8(zone box height) (the
-  overlay anchor is the zone box origin, so the painted part sits on the exact
-  rect the hit test uses).
+The epic wrote `H == cellH * 3` and a single horizontal `MARGIN`. Two shipped
+shapes need vertical reach/size beyond the body cell: the longtail body is
+40x28 vs its 32x24 sprite cell, and the bull appendage/stomp window reach past
+the 22-tall body. So the mask carries an independent x/y margin derived from the
+image dims; the solid-rect validation is untouched (every region is still one
+solid rect). The design's suggested filenames were the sprite cells; the masks
+are named by their actual cell (heavy `40x28`, bull/heavy attack `28x22`/`40x28`)
+because the cell is what the body/window conversion needs.
 
 ## Verification (exact tails)
 
 `make gen`:
 ```
-gen-hitboxes: 1 masked creature(s) [lunge] -> build/hitboxes.json
-gen.sh: FX data + src/fxdata.h regenerated
+gen-hitboxes: 5 masked creature(s) [heavy, lunge, pole, ravager, sweep] -> build/hitboxes.json
+gen-art: pixel check OK (38 sheets, disk-exact)
+gen-combat: 5 creatures, 11 attacks, 16 windows, 15 patterns, 19 steps, 5 skeletons, 8 zones, 1257 B, sha256 f6520b708026a17023dd34398c521bdebe9174137c020eebbbbfcf9275b212f4
 ```
 
 `make gen-check`:
@@ -106,11 +106,13 @@ combat_test PASSED=252 FAILED=0
 test_combat: PASS
 ```
 
-`FXTEST_ONLY=test_assets make fxtest-headless` (extra: the FX layout shifted):
+`FXTEST_ONLY=test_assets make fxtest-headless`:
 ```
 asset_test PASSED=264 FAILED=0
 test_assets: PASS
 ```
+
+Full device gate (sanity — `make fxtest-headless`, all suites): 0 failures.
 
 `make size` / `make size-line`:
 ```
@@ -118,38 +120,7 @@ size: .text=29420 .data=50 .bss=1764
 size: flash=29470/29696 (226 free)  ram=1814/2560
 ```
 
-## Size delta
+**Flash delta: 0 B** (29470/226 free, unchanged from the ryh.3 checkpoint).
 
-| | baseline (ryh.2) | after | delta |
-|---|---|---|---|
-| flash | 29470/29696 (226 free) | 29470/29696 (226 free) | **0 B** |
-| RAM | 1814/2560 | 1814/2560 | 0 B |
-| fxdata image | 410880 B | 410624 B | -256 B |
-
-Flash is exactly unchanged: the change is data/tooling only, the combat record
-sizes are identical, and the shipped `windows[].box` values are unchanged. The
-FX image shrank 256 B because the legs part sheet went 9x24 (3 pages) ->
-9x16 (2 pages); the offset shift is absorbed by the regenerated
-`equip_meta.hpp` / `zone_meta.hpp` / table blobs (all in this staged set).
-Clears the ~150 B wave floor.
-
-## Review image
-
-`build/scratch/hitbox_review.png` (448x400): top panel = lunge beast (sprite row
-+ collision/hitbox/hurtbox mask rows + head/appendage/collide boxes on the art);
-bottom panel = `fxchickenatk` (sprite row + hitbox mask row + the three window
-rects). Regenerate with `make hitboxes-render`.
-
-## Notes / deviations
-
-- `data/creatures/lunge.json` keeps the pre-migration geometry
-  (appendage `9,0,9,24`, collide `9,11,12,13`): the mask is the source for the
-  shipped tightened records, and the round-trip validation proves the converter
-  against those shipped values. ryh.4 deletes the hand keys.
-- The other beasts + pole stay on their hand boxes (their masks arrive in ryh.4);
-  `--render` still renders their review panels from the committed masks only.
-- Related suites updated to the tightened collide/appendage geometry:
-  `tst/combat_test.hpp`, `tst/monster_test.hpp`, `tst/world_test.hpp`,
-  `tst/zone_test.hpp`, `tst/art_dims_test.hpp`, `tst/fxdatatest/combat_test.hpp`,
-  `tst/fxdatatest/asset_test.hpp`, `docs/feel-design.md`.
-- No commit/push (orchestrator owns the wave commit).
+Extras: `make test-tools` 373/373 OK. Review image:
+`build/scratch/hitbox_review.png` (`make hitboxes-render`).

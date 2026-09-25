@@ -1025,10 +1025,10 @@ void CombatSuite(TestRunner &runner) {
     {
         Test t("bull zone records: horns head + hooves appendage (nch.9)");
         const CombatZone head = combatZoneRead(combat_data::ZONE_SWEEP_HEAD);
-        t.assert(head.box.ox, 17, "bull head ox");
-        t.assert(head.box.oy, -4, "bull head oy");
-        t.assert(head.box.w, 12, "bull head w");
-        t.assert(head.box.h, 10, "bull head h");
+        t.assert(head.box.ox, 21, "bull head ox");
+        t.assert(head.box.oy, 4, "bull head oy");
+        t.assert(head.box.w, 8, "bull head w");
+        t.assert(head.box.h, 8, "bull head h");
         t.assert(head.dmgMul, combat_expect::ZONE_SWEEP_HEAD_DMG_MUL, "bull head dmgMul");
         t.assert(head.hp, combat_expect::ZONE_SWEEP_HEAD_HP, "bull head pool hp");
         t.assert(head.bodyShare, combat_expect::ZONE_SWEEP_HEAD_BODY_SHARE, "bull head bodyShare");
@@ -1039,9 +1039,9 @@ void CombatSuite(TestRunner &runner) {
 
         const CombatZone hooves = combatZoneRead(combat_data::ZONE_SWEEP_APPENDAGE);
         t.assert(hooves.box.ox, 4, "bull hooves ox");
-        t.assert(hooves.box.oy, 12, "bull hooves oy");
+        t.assert(hooves.box.oy, 18, "bull hooves oy");
         t.assert(hooves.box.w, 20, "bull hooves w");
-        t.assert(hooves.box.h, 10, "bull hooves h");
+        t.assert(hooves.box.h, 5, "bull hooves h");
         t.assert(hooves.dmgMul, combat_expect::ZONE_SWEEP_APPENDAGE_DMG_MUL, "bull hooves dmgMul");
         t.assert(hooves.hp, combat_expect::ZONE_SWEEP_APPENDAGE_HP, "bull hooves pool hp");
         t.assert(hooves.bodyShare, combat_expect::ZONE_SWEEP_APPENDAGE_BODY_SHARE, "bull hooves bodyShare");
@@ -1315,9 +1315,9 @@ void CombatSuite(TestRunner &runner) {
         // authored fxtail_heavy frame; the generator keeps the two in step.
         const CombatZone z = combatZoneRead(combat_data::ZONE_HEAVY_APPENDAGE);
         t.assert(z.box.ox, -24, "heavy tail ox");
-        t.assert(z.box.oy, 0, "heavy tail oy");
+        t.assert(z.box.oy, 4, "heavy tail oy");
         t.assert(z.box.w, 24, "heavy tail w");
-        t.assert(z.box.h, 16, "heavy tail h");
+        t.assert(z.box.h, 11, "heavy tail h");
         t.assert(z.hp, 240, "heavy tail hp");
         t.assert(z.dmgMul, 150, "heavy tail dmgMul");
         t.assert(z.bodyShare, 40, "heavy tail bodyShare");
@@ -1328,7 +1328,7 @@ void CombatSuite(TestRunner &runner) {
         t.assert(static_cast<uint16_t>(z.unlockMaskLo) | (static_cast<uint16_t>(z.unlockMaskHi) << 8), static_cast<uint16_t>(1u << combat_data::ATTACK_HEAVY_TAIL_SPIN),
                  "heavy tail disables tail_spin");
         t.assert(art_dims::tail_heavy_frame_w, z.box.w, "tail_heavy frame w == zone box w");
-        t.assert(art_dims::tail_heavy_frame_h, z.box.h, "tail_heavy frame h == zone box h");
+        t.assert(art_dims::tail_heavy_frame_h, ((z.box.h + 7) / 8) * 8, "tail_heavy frame h == pad8(zone box h)");
         t.assert(art_dims::tail_heavy_frames, 4, "tail_heavy frames");
         // nch.1: the spin overlay sheet is 4 x 24x24, body-centre anchored.
         t.assert(art_dims::tail_spin_frame_w, 24, "tail_spin frame w");

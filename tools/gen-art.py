@@ -398,9 +398,11 @@ def icon_defs(dims):
          "frames": head_chicken_defs()},
         {"id": "legs_chicken", "w": 9, "h": 16, "anchor": "part box top-left",
          "frames": legs_chicken_defs()},
-        {"id": "head_bull", "w": 12, "h": 16, "anchor": "part box top-left",
+        # w/h are the mask-derived zone bboxes (ryh.4): head (21,4,8,8) ->
+        # 8x8, hooves (4,18,20,5) -> 20x pad8(5)=8. Keep in step with _part_box.
+        {"id": "head_bull", "w": 8, "h": 8, "anchor": "part box top-left",
          "frames": head_bull_defs()},
-        {"id": "hooves_bull", "w": 20, "h": 16, "anchor": "part box top-left",
+        {"id": "hooves_bull", "w": 20, "h": 8, "anchor": "part box top-left",
          "frames": hooves_bull_defs()},
     ] + hud_defs()
 
@@ -498,20 +500,25 @@ def tail_spin_defs():
 
 
 def tail_heavy_defs():
+    # heavy.json appendage box, mask-derived (-24, 4, 24, 11) after ryh.4. The
+    # blocks are authored cell-absolute (origin cell (-24, 0) was the old box;
+    # the tightened box is 4 px lower) and cropped to the mask bbox, so the frame
+    # shifts down 4 rows while the drawn tail stays at the same world pixels.
+    box = _part_box("heavy", "appendage", (-24, 4, 24, 11))
     east_intact = [
-        (LIGHT, 0, 7, 7, 5),     # tapered tip
-        (WHITE, 0, 8, 3, 3),     # bright tip cap
-        (LIGHT, 6, 5, 9, 9),     # mid segment
-        (DARK, 7, 12, 8, 2),     # mid underside
-        (LIGHT, 14, 4, 10, 11),  # root at the body
-        (DARK, 15, 13, 9, 2),    # root underside
-        (WHITE, 21, 4, 3, 3),    # root top highlight
+        (LIGHT, -24, 7, 7, 5),     # tapered tip
+        (WHITE, -24, 8, 3, 3),     # bright tip cap
+        (LIGHT, -18, 5, 9, 9),     # mid segment
+        (DARK, -17, 12, 8, 2),     # mid underside
+        (LIGHT, -10, 4, 10, 11),   # root at the body
+        (DARK, -9, 13, 9, 2),      # root underside
+        (WHITE, -3, 4, 3, 3),      # root top highlight
     ]
     east_broken = [
-        (DARK, 17, 5, 7, 9),     # root stub only
-        (LIGHT, 20, 4, 4, 2),    # stump highlight
+        (DARK, -7, 5, 7, 9),       # root stub only
+        (LIGHT, -4, 4, 4, 2),      # stump highlight
     ]
-    return _zone_part_defs("tail_heavy", east_intact, east_broken, 24, 16)
+    return _zone_part_defs_crop("tail_heavy", east_intact, east_broken, box)
 
 
 def monster_frames():
@@ -1325,67 +1332,73 @@ def legs_chicken_defs():
 
 
 def head_bull_defs():
-    # sweep.json head box (17, -4, 12, 10): frame-local (0,0) = cell (17, -4).
-    # The baked white horns/ear and the head top land in frame rows 8..15; the
-    # muzzle/eye sit below the 16-row frame and stay baked. Broken = the horns
-    # erased and snapped back to short dark stumps with the head top repainted.
+    # sweep.json head box, mask-derived (21, 4, 8, 8) after ryh.4 (the old box
+    # (17, -4, 12, 10) was the part *frame*, the tightened box is the drawn horn
+    # bbox). Blocks are authored cell-absolute and cropped to the mask bbox: the
+    # white horns/ear and the head top land in frame rows 0..7; the muzzle/eye
+    # sit below the 8-row frame and stay baked. Broken = the horns erased and
+    # snapped back to short dark stumps with the head top repainted.
+    box = _part_box("sweep", "head", (21, 4, 8, 8))
     east_intact = [
-        (WHITE, 4, 14, 8, 2),    # head top (cell y10..11)
-        (WHITE, 5, 13, 2, 2),    # ear
-        (WHITE, 5, 12, 2, 3),    # near horn base
-        (WHITE, 6, 9, 2, 3),     # near horn mid
-        (WHITE, 7, 8, 3, 2),     # near horn tip
-        (WHITE, 11, 8, 1, 2),    # far horn tip (outer columns clipped)
+        (WHITE, 21, 10, 8, 2),   # head top (cell y10..11)
+        (WHITE, 22, 9, 2, 2),    # ear
+        (WHITE, 22, 8, 2, 3),    # near horn base
+        (WHITE, 23, 5, 2, 3),    # near horn mid
+        (WHITE, 24, 4, 3, 2),    # near horn tip
+        (WHITE, 28, 4, 1, 2),    # far horn tip (outer columns clipped)
     ]
     east_broken = [
-        (BLACK, 4, 8, 8, 6),     # erase the horn band
-        (WHITE, 4, 14, 8, 2),    # head top stays
-        (WHITE, 5, 13, 2, 2),    # ear stays
-        (DARK, 5, 11, 2, 3),     # near horn stump
-        (LIGHT, 5, 11, 1, 1),    # stump highlight
-        (DARK, 8, 11, 2, 3),     # far horn stump
-        (BLACK, 6, 9, 2, 2),     # snapped gap
+        (BLACK, 21, 4, 8, 6),    # erase the horn band
+        (WHITE, 21, 10, 8, 2),   # head top stays
+        (WHITE, 22, 9, 2, 2),    # ear stays
+        (DARK, 22, 7, 2, 3),     # near horn stump
+        (LIGHT, 22, 7, 1, 1),    # stump highlight
+        (DARK, 25, 7, 2, 3),     # far horn stump
+        (BLACK, 23, 5, 2, 2),    # snapped gap
     ]
-    return _zone_part_defs("head_bull", east_intact, east_broken, 12, 16)
+    return _zone_part_defs_crop("head_bull", east_intact, east_broken, box)
 
 
 def hooves_bull_defs():
-    # sweep.json appendage box (4, 12, 20, 10): frame-local (0,0) = cell (4, 12).
-    # The baked DARK legs with LIGHT shank highlights and BLACK hooves land in
-    # frame rows 6..10; the fourth leg's outer columns are clipped. Broken = the
-    # legs erased and cut to short stumps with no hooves.
+    # sweep.json appendage box, mask-derived (4, 18, 20, 5) after ryh.4 (the old
+    # box (4, 12, 20, 10) was the part frame; the tightened box is the drawn leg
+    # bbox). Blocks are authored cell-absolute and cropped to the mask bbox: the
+    # baked DARK legs with LIGHT shank highlights and BLACK hooves fill frame
+    # rows 0..4; the fourth leg's outer column is clipped. Broken = the legs
+    # erased and cut to short stumps with no hooves.
+    box = _part_box("sweep", "appendage", (4, 18, 20, 5))
     east_intact = [
-        (DARK, 1, 6, 3, 4),      # leg 1
-        (LIGHT, 1, 8, 1, 2),     # shank highlight
-        (BLACK, 0, 10, 4, 1),    # hoof
-        (DARK, 6, 6, 3, 4),      # leg 2
-        (LIGHT, 6, 8, 1, 2),
-        (BLACK, 5, 10, 4, 1),
-        (DARK, 14, 6, 3, 4),     # leg 3
-        (LIGHT, 14, 8, 1, 2),
-        (BLACK, 13, 10, 4, 1),
-        (DARK, 19, 6, 1, 4),     # leg 4 (outer columns clipped)
-        (LIGHT, 19, 8, 1, 2),
-        (BLACK, 18, 10, 2, 1),
+        (DARK, 5, 18, 3, 4),     # leg 1
+        (LIGHT, 5, 20, 1, 2),    # shank highlight
+        (BLACK, 4, 22, 4, 1),    # hoof
+        (DARK, 10, 18, 3, 4),    # leg 2
+        (LIGHT, 10, 20, 1, 2),
+        (BLACK, 9, 22, 4, 1),
+        (DARK, 18, 18, 3, 4),    # leg 3
+        (LIGHT, 18, 20, 1, 2),
+        (BLACK, 17, 22, 4, 1),
+        (DARK, 23, 18, 1, 4),    # leg 4 (outer column clipped)
+        (LIGHT, 23, 20, 1, 2),
+        (BLACK, 22, 22, 2, 1),
     ]
     east_broken = [
-        (BLACK, 1, 6, 3, 4),     # erase the legs (exact baked rects)
-        (BLACK, 6, 6, 3, 4),
-        (BLACK, 14, 6, 3, 4),
-        (BLACK, 19, 6, 1, 4),
-        (BLACK, 0, 10, 4, 1),    # erase the hooves
-        (BLACK, 5, 10, 4, 1),
-        (BLACK, 13, 10, 4, 1),
-        (BLACK, 18, 10, 2, 1),
-        (DARK, 1, 6, 3, 2),      # leg stumps (no hooves)
-        (DARK, 6, 6, 3, 2),
-        (DARK, 14, 6, 3, 2),
-        (DARK, 19, 6, 1, 2),
-        (LIGHT, 1, 8, 1, 1),     # stump highlights
-        (LIGHT, 6, 8, 1, 1),
-        (LIGHT, 14, 8, 1, 1),
+        (BLACK, 5, 18, 3, 4),    # erase the legs (exact baked rects)
+        (BLACK, 10, 18, 3, 4),
+        (BLACK, 18, 18, 3, 4),
+        (BLACK, 23, 18, 1, 4),
+        (BLACK, 4, 22, 4, 1),    # erase the hooves
+        (BLACK, 9, 22, 4, 1),
+        (BLACK, 17, 22, 4, 1),
+        (BLACK, 22, 22, 2, 1),
+        (DARK, 5, 18, 3, 2),     # leg stumps (no hooves)
+        (DARK, 10, 18, 3, 2),
+        (DARK, 18, 18, 3, 2),
+        (DARK, 23, 18, 1, 2),
+        (LIGHT, 5, 20, 1, 1),    # stump highlights
+        (LIGHT, 10, 20, 1, 1),
+        (LIGHT, 18, 20, 1, 1),
     ]
-    return _zone_part_defs("hooves_bull", east_intact, east_broken, 20, 16)
+    return _zone_part_defs_crop("hooves_bull", east_intact, east_broken, box)
 
 
 # ---- HEAVY real spin sheet (bead monhun-ardu-nch.3). The whole longtail

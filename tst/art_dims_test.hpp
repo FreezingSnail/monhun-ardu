@@ -814,26 +814,26 @@ void testZonePartSheets(Test &t) {
         t.assert(blobFrameHash(cl, 0) != blobFrameHash(cl, 1) ? 1 : 0, 1, "chicken legs broken != intact");
     }
 
-    // Bull head (sweep.json head box 17,-4,12x10): frame-local (0,0) = cell
-    // (17,-4), so the baked horns and head top land in frame rows 8..15. East
-    // intact is the white horn/ear art; the broken frame erases the horn band
-    // and draws short dark stumps while repainting the head top.
+    // Bull head (mask-derived head box 21,4,8x8 after ryh.4): frame-local (0,0)
+    // = cell (21,4), so the baked horns and head top land in frame rows 0..7.
+    // East intact is the white horn/ear art; the broken frame erases the horn
+    // band and draws short dark stumps while repainting the head top.
     Blob bh;
     if (parseBlob("fxhead_bull", bh, t)) {
         t.assert(bh.w, art_dims::head_bull_frame_w, "bull head blob frame w");
         t.assert(bh.h, art_dims::head_bull_frame_h, "bull head blob frame h");
         t.assert(bh.frames, art_dims::head_bull_frames, "bull head blob frames");
-        t.assert(art_dims::head_bull_frame_w, 12, "bull head frame w");
-        t.assert(art_dims::head_bull_frame_h, 16, "bull head frame h");
+        t.assert(art_dims::head_bull_frame_w, 8, "bull head frame w");
+        t.assert(art_dims::head_bull_frame_h, 8, "bull head frame h");
         t.assert(art_dims::head_bull_frames, 4, "bull head frames");
-        t.assert(planeAtF(bh, 0, 2, 6, 9), 1, "bull head east horn mid white");
-        t.assert(planeAtF(bh, 0, 2, 8, 8), 1, "bull head east horn tip white");
-        t.assert(planeAtF(bh, 0, 2, 6, 14), 1, "bull head east head top white");
-        t.assert(maskAtF(bh, 0, 4, 8), 0, "bull head east above horn clear");
-        t.assert(maskAtF(bh, 1, 6, 9), 1, "bull head broken horn erase covered");
-        t.assert(planeAtF(bh, 1, 2, 6, 9), 0, "bull head broken horn erased");
-        t.assert(planeAtF(bh, 1, 0, 5, 12), 1, "bull head broken horn stump plane0");
-        t.assert(planeAtF(bh, 1, 2, 6, 14), 1, "bull head broken head top stays white");
+        t.assert(planeAtF(bh, 0, 2, 2, 1), 1, "bull head east horn mid white");
+        t.assert(planeAtF(bh, 0, 2, 4, 0), 1, "bull head east horn tip white");
+        t.assert(planeAtF(bh, 0, 2, 2, 6), 1, "bull head east head top white");
+        t.assert(maskAtF(bh, 0, 0, 0), 0, "bull head east above horn clear");
+        t.assert(maskAtF(bh, 1, 2, 1), 1, "bull head broken horn erase covered");
+        t.assert(planeAtF(bh, 1, 2, 2, 1), 0, "bull head broken horn erased");
+        t.assert(planeAtF(bh, 1, 0, 1, 4), 1, "bull head broken horn stump plane0");
+        t.assert(planeAtF(bh, 1, 2, 2, 6), 1, "bull head broken head top stays white");
         t.assert(partErasePixels(bh, 1) > 0 ? 1 : 0, 1, "bull head east broken erase pixels");
         t.assert(partErasePixels(bh, 3) > 0 ? 1 : 0, 1, "bull head west broken erase pixels");
         t.assert(partFrameMirrors(bh, 0, 2) ? 1 : 0, 1, "bull head west intact mirrors east");
@@ -841,25 +841,26 @@ void testZonePartSheets(Test &t) {
         t.assert(blobFrameHash(bh, 0) != blobFrameHash(bh, 1) ? 1 : 0, 1, "bull head broken != intact");
     }
 
-    // Bull hooves (sweep.json appendage box 4,12,20x10): frame-local (0,0) =
-    // cell (4,12). East intact is the baked DARK legs with LIGHT shanks and
-    // BLACK hooves; the broken frame cuts them to short stumps with no hooves.
+    // Bull hooves (mask-derived appendage box 4,18,20x5 after ryh.4): frame-local
+    // (0,0) = cell (4,18), height padded to 8. East intact is the baked DARK legs
+    // with LIGHT shanks and BLACK hooves; the broken frame cuts them to short
+    // stumps with no hooves.
     Blob bv;
     if (parseBlob("fxhooves_bull", bv, t)) {
         t.assert(bv.w, art_dims::hooves_bull_frame_w, "bull hooves blob frame w");
         t.assert(bv.h, art_dims::hooves_bull_frame_h, "bull hooves blob frame h");
         t.assert(bv.frames, art_dims::hooves_bull_frames, "bull hooves blob frames");
         t.assert(art_dims::hooves_bull_frame_w, 20, "bull hooves frame w");
-        t.assert(art_dims::hooves_bull_frame_h, 16, "bull hooves frame h");
+        t.assert(art_dims::hooves_bull_frame_h, 8, "bull hooves frame h");
         t.assert(art_dims::hooves_bull_frames, 4, "bull hooves frames");
-        t.assert(planeAtF(bv, 0, 0, 1, 6), 1, "bull hooves east leg plane0");
-        t.assert(planeAtF(bv, 0, 0, 6, 6), 1, "bull hooves east second leg plane0");
-        t.assert(maskAtF(bv, 0, 4, 6), 0, "bull hooves east leg gap clear");
-        t.assert(maskAtF(bv, 0, 1, 10), 1, "bull hooves east hoof ink");
-        t.assert(planeAtF(bv, 0, 0, 1, 10), 0, "bull hooves east hoof black eraser");
-        t.assert(planeAtF(bv, 1, 0, 1, 9), 0, "bull hooves broken shank erased");
-        t.assert(planeAtF(bv, 1, 0, 1, 6), 1, "bull hooves broken stump plane0");
-        t.assert(planeAtF(bv, 1, 0, 1, 10), 0, "bull hooves broken hoof erased");
+        t.assert(planeAtF(bv, 0, 0, 1, 0), 1, "bull hooves east leg plane0");
+        t.assert(planeAtF(bv, 0, 0, 6, 0), 1, "bull hooves east second leg plane0");
+        t.assert(maskAtF(bv, 0, 4, 0), 0, "bull hooves east leg gap clear");
+        t.assert(maskAtF(bv, 0, 1, 4), 1, "bull hooves east hoof ink");
+        t.assert(planeAtF(bv, 0, 0, 1, 4), 0, "bull hooves east hoof black eraser");
+        t.assert(planeAtF(bv, 1, 0, 1, 3), 0, "bull hooves broken shank erased");
+        t.assert(planeAtF(bv, 1, 0, 1, 0), 1, "bull hooves broken stump plane0");
+        t.assert(planeAtF(bv, 1, 0, 1, 4), 0, "bull hooves broken hoof erased");
         t.assert(partErasePixels(bv, 1) > 0 ? 1 : 0, 1, "bull hooves east broken erase pixels");
         t.assert(partErasePixels(bv, 3) > 0 ? 1 : 0, 1, "bull hooves west broken erase pixels");
         t.assert(partFrameMirrors(bv, 0, 2) ? 1 : 0, 1, "bull hooves west intact mirrors east");
@@ -885,30 +886,32 @@ void testHeavyTail(Test &t) {
     t.assert(tail.frames, 4, "heavy tail sheet frames");
 
     // East intact: light tip at the far left (plane0), white cap on the tip
-    // (plane2), dark underside (plane0 only), light root at the right.
-    t.assert(maskAtF(tail, 0, 0, 7), 1, "heavy tail east tip ink");
-    t.assert(planeAtF(tail, 0, 0, 0, 9), 1, "heavy tail east tip plane0");
-    t.assert(planeAtF(tail, 0, 2, 0, 8), 1, "heavy tail east tip white cap");
-    t.assert(planeAtF(tail, 0, 2, 3, 8), 0, "heavy tail east cap ends at x3");
-    t.assert(planeAtF(tail, 0, 0, 23, 8), 1, "heavy tail east root plane0");
-    t.assert(planeAtF(tail, 0, 2, 22, 5), 1, "heavy tail east root highlight white");
-    t.assert(planeAtF(tail, 0, 0, 10, 12), 1, "heavy tail east underside dark");
-    t.assert(planeAtF(tail, 0, 1, 10, 12), 0, "heavy tail east underside dark only");
-    t.assert(maskAtF(tail, 0, 12, 3), 0, "heavy tail east above root clear");
+    // (plane2), dark underside (plane0 only), light root at the right. The mask
+    // box moved to (-24,4,24,11) in ryh.4, so the crop origin is 4 rows lower:
+    // every frame-local y is the old value minus 4.
+    t.assert(maskAtF(tail, 0, 0, 3), 1, "heavy tail east tip ink");
+    t.assert(planeAtF(tail, 0, 0, 0, 5), 1, "heavy tail east tip plane0");
+    t.assert(planeAtF(tail, 0, 2, 0, 4), 1, "heavy tail east tip white cap");
+    t.assert(planeAtF(tail, 0, 2, 3, 4), 0, "heavy tail east cap ends at x3");
+    t.assert(planeAtF(tail, 0, 0, 23, 4), 1, "heavy tail east root plane0");
+    t.assert(planeAtF(tail, 0, 2, 22, 1), 1, "heavy tail east root highlight white");
+    t.assert(planeAtF(tail, 0, 0, 10, 8), 1, "heavy tail east underside dark");
+    t.assert(planeAtF(tail, 0, 1, 10, 8), 0, "heavy tail east underside dark only");
+    t.assert(maskAtF(tail, 0, 0, 0), 0, "heavy tail east above tip clear");
     t.assert(maskAtF(tail, 0, 23, 15), 0, "heavy tail east below root clear");
 
     // East broken: stub at the root only; the tip is gone.
-    t.assert(maskAtF(tail, 1, 0, 8), 0, "heavy tail east broken clears tip");
-    t.assert(planeAtF(tail, 1, 0, 20, 8), 1, "heavy tail east broken stub plane0");
-    t.assert(planeAtF(tail, 1, 1, 21, 4), 1, "heavy tail east broken stump light");
-    t.assert(planeAtF(tail, 1, 0, 23, 13), 1, "heavy tail east broken stub base");
+    t.assert(maskAtF(tail, 1, 0, 4), 0, "heavy tail east broken clears tip");
+    t.assert(planeAtF(tail, 1, 0, 20, 4), 1, "heavy tail east broken stub plane0");
+    t.assert(planeAtF(tail, 1, 1, 21, 0), 1, "heavy tail east broken stump light");
+    t.assert(planeAtF(tail, 1, 0, 23, 9), 1, "heavy tail east broken stub base");
 
     // West intact/broken are the exact horizontal mirrors.
-    t.assert(planeAtF(tail, 2, 0, 23, 9), 1, "heavy tail west tip plane0");
-    t.assert(planeAtF(tail, 2, 2, 23, 8), 1, "heavy tail west tip white cap");
-    t.assert(planeAtF(tail, 2, 0, 0, 8), 1, "heavy tail west root plane0");
-    t.assert(maskAtF(tail, 3, 23, 8), 0, "heavy tail west broken clears tip");
-    t.assert(planeAtF(tail, 3, 0, 3, 8), 1, "heavy tail west broken stub plane0");
+    t.assert(planeAtF(tail, 2, 0, 23, 5), 1, "heavy tail west tip plane0");
+    t.assert(planeAtF(tail, 2, 2, 23, 4), 1, "heavy tail west tip white cap");
+    t.assert(planeAtF(tail, 2, 0, 0, 4), 1, "heavy tail west root plane0");
+    t.assert(maskAtF(tail, 3, 23, 4), 0, "heavy tail west broken clears tip");
+    t.assert(planeAtF(tail, 3, 0, 3, 4), 1, "heavy tail west broken stub plane0");
 
     auto mirrored = [&](int a, int b) {
         for (int shade = 0; shade < 3; shade++)

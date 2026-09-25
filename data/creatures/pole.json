@@ -24,7 +24,6 @@
   },
   "zones": {
     "head": {
-      "box": { "ox": 5, "oy": 0, "w": 10, "h": 8 },
       "dmgMul": 140,
       "hp": 0,
       "bodyShare": 100,

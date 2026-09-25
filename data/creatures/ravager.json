@@ -40,7 +40,6 @@
   },
   "zones": {
     "head": {
-      "box": { "ox": 20, "oy": 4, "w": 12, "h": 12 },
       "dmgMul": 130,
       "hp": 160,
       "bodyShare": 100,
@@ -50,7 +49,6 @@
       "broken": { "dmgMul": 130, "hurtOn": false }
     },
     "appendage": {
-      "box": { "ox": -14, "oy": 8, "w": 18, "h": 10 },
       "dmgMul": 150,
       "hp": 240,
       "bodyShare": 40,

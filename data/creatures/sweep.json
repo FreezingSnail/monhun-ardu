@@ -22,14 +22,12 @@
     "spawnY": 40,
     "enrage": { "hpPct": 40, "spdMul": 130, "faceHold": 6 }
   },
-  "collide": { "ox": 1, "oy": 14, "w": 26, "h": 8 },
   "carve": [
     { "item": "shell", "count": 1, "chance": 100 },
     { "item": "fang", "count": 1, "chance": 40 }
   ],
   "zones": {
     "head": {
-      "box": { "ox": 17, "oy": -4, "w": 12, "h": 10 },
       "part": "fxhead_bull",
       "dmgMul": 130,
       "hp": 160,
@@ -40,7 +38,6 @@
       "broken": { "dmgMul": 130, "hurtOn": false }
     },
     "appendage": {
-      "box": { "ox": 4, "oy": 12, "w": 20, "h": 10 },
       "part": "fxhooves_bull",
       "dmgMul": 150,
       "hp": 240,

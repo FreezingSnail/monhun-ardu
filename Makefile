@@ -68,10 +68,10 @@ dev:
 gen:
 	./tools/gen.sh
 
-# Dev-only review surface (bead monhun-ardu-ryh.3): bootstrap any missing
-# images/masks/*.png from the shipped JSON and write the composite review PNG
-# (sprite row + the three mask rows + the boxes) to build/scratch/hitbox_review.png.
-# Existing masks are never overwritten; not part of `make gen`.
+# Dev-only review surface (bead monhun-ardu-ryh.3): validate the committed
+# images/masks/*.png and write the composite review PNG (sprite row + the three
+# mask rows + the derived boxes) to build/scratch/hitbox_review.png. Masks are
+# hand-authored sources and are never rewritten; not part of `make gen`.
 hitboxes-render:
 	python3 tools/gen-hitboxes.py --render
 

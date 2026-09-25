@@ -151,7 +151,7 @@ static const uint8_t kZoneIds[] PROGMEM = {combat::ZONE_HEAVY_APPENDAGE, combat:
                                            combat::ZONE_SWEEP_APPENDAGE, combat::ZONE_RAVAGER_HEAD, combat::ZONE_RAVAGER_APPENDAGE};
 static const CombatZone kZones[] PROGMEM = {
     // box, hp, dmgMul, bodyShare, breakTypes, staggerOnHit, brokenDmgMul, brokenFlags, unlockMaskLo, unlockMaskHi, partSheet
-    {{-24, 0, 24, 16},
+    {{-24, 4, 24, 11},
      combat_expect::ZONE_HEAVY_APPENDAGE_HP,
      combat_expect::ZONE_HEAVY_APPENDAGE_DMG_MUL,
      combat_expect::ZONE_HEAVY_APPENDAGE_BODY_SHARE,
@@ -184,7 +184,7 @@ static const CombatZone kZones[] PROGMEM = {
      static_cast<uint8_t>((1u << combat::ATTACK_LUNGE_LEAP) & 0xFFu),
      static_cast<uint8_t>(((1u << combat::ATTACK_LUNGE_LEAP) >> 8) & 0xFFu),
      art_sheets::ART_SHEET_FXLEGS_CHICKEN},
-    {{17, -4, 12, 10},
+    {{21, 4, 8, 8},
      combat_expect::ZONE_SWEEP_HEAD_HP,
      combat_expect::ZONE_SWEEP_HEAD_DMG_MUL,
      combat_expect::ZONE_SWEEP_HEAD_BODY_SHARE,
@@ -195,7 +195,7 @@ static const CombatZone kZones[] PROGMEM = {
      0,
      0,
      art_sheets::ART_SHEET_FXHEAD_BULL},
-    {{4, 12, 20, 10},
+    {{4, 18, 20, 5},
      combat_expect::ZONE_SWEEP_APPENDAGE_HP,
      combat_expect::ZONE_SWEEP_APPENDAGE_DMG_MUL,
      combat_expect::ZONE_SWEEP_APPENDAGE_BODY_SHARE,
