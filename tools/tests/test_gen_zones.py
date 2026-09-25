@@ -514,5 +514,182 @@ class GenZonesTests(unittest.TestCase):
                           "size limit: 256 spawns exceed the 255 spawn index limit")
 
 
+# ------------------------------------------------------------------- room masks
+#
+# Bead ryh.7: a room's geometry is sourced from images/masks/mh_map_<room>_
+# <W>x<H>.png (four stacked bands: props, gather, doors, heal). These tests
+# build a minimal masked room from scratch, prove the mask reproduces the
+# unmasked packed blob byte-for-byte, and pin each hard validation.
+
+# The band palettes from tools/gen-zones.py (exact RGB).
+MASK_PROP_TENT = (204, 102, 0)
+MASK_PROP_POST = (0, 204, 204)
+MASK_GATHER_HERB = (0, 204, 0)
+MASK_DOOR0 = (255, 0, 128)
+MASK_DOOR1 = (128, 255, 0)
+MASK_HEAL = (0, 255, 128)
+
+
+class GenZonesMaskTests(unittest.TestCase):
+    maxDiff = None
+
+    def setUp(self):
+        case = os.path.join(SCRATCH, self._testMethodName)
+        shutil.rmtree(case, ignore_errors=True)
+        os.makedirs(os.path.join(case, "data"))
+        os.makedirs(os.path.join(case, "images", "masks"))
+        self.case = case
+        shutil.copyfile(os.path.join(FIXTURE, ITEMS_REL),
+                        os.path.join(case, ITEMS_REL))
+
+    def path(self, *parts):
+        return os.path.join(self.case, *parts)
+
+    def compile(self, *extra):
+        return run_tool("--root", self.case, *extra)
+
+    def assert_succeeds(self, result):
+        self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+
+    def assert_fails(self, result, *needles):
+        self.assertEqual(result.returncode, 1, result.stdout + result.stderr)
+        for needle in needles:
+            self.assertIn(needle, result.stderr)
+
+    def write_map(self, doc):
+        with open(self.path(MAP_REL), "w", encoding="utf-8", newline="\n") as handle:
+            json.dump(doc, handle, indent=2)
+            handle.write("\n")
+
+    def write_mask(self, bands):
+        """bands: 4-tuple of [(colour, x, y, w, h), ...] top-to-bottom."""
+        img = Image.new("RGBA", (16, 8 * 4), (0, 0, 0, 0))
+        px = img.load()
+        for bi, rects in enumerate(bands):
+            for colour, x, y, w, h in rects:
+                for yy in range(y, y + h):
+                    for xx in range(x, x + w):
+                        px[xx, bi * 8 + yy] = colour
+        img.save(self.path("images", "masks", "mh_map_camp_16x8.png"), format="PNG")
+
+    def legacy_map(self):
+        return {"version": 1, "rooms": [{
+            "id": "camp", "w": 16, "h": 8,
+            "image": "images/maps/mh_map_camp_16x8.png",
+            "props": [
+                {"type": "tent", "x": 2, "y": 0, "sheet": "mh_map_tent", "frame": 0, "w": 4, "h": 4},
+                {"type": "post", "x": 8, "y": 4, "sheet": "mh_map_tent", "frame": 0, "w": 4, "h": 4,
+                 "gather": {"item": "herb", "yield": 2}}],
+            "spawns": {"entry": {"x": 1, "y": 6}},
+            "doors": [{"x": 0, "y": 0, "w": 4, "h": 8, "to": "menu"}],
+            "heal": [{"x": 2, "y": 0, "w": 4, "h": 4}],
+            "monster": None}]}
+
+    def masked_map(self):
+        return {"version": 1, "rooms": [{
+            "id": "camp", "w": 16, "h": 8,
+            "image": "images/maps/mh_map_camp_16x8.png",
+            "props": [
+                {"type": "tent", "sheet": "mh_map_tent", "frame": 0},
+                {"type": "post", "sheet": "mh_map_tent", "frame": 0,
+                 "gather": {"item": "herb", "yield": 2}}],
+            "spawns": {"entry": {"x": 1, "y": 6}},
+            "doors": [{"to": "menu"}],
+            "monster": None}]}
+
+    def good_mask(self):
+        return ([(MASK_PROP_TENT, 2, 0, 4, 4)],
+                [(MASK_GATHER_HERB, 8, 4, 4, 4)],
+                [(MASK_DOOR0, 0, 0, 4, 8)],
+                [(MASK_HEAL, 2, 0, 4, 4)])
+
+    def read_blob(self):
+        with open(self.path(BLOB_REL), "rb") as handle:
+            return handle.read()
+
+    def test_mask_reproduces_unmasked_blob_byte_for_byte(self):
+        # 1) legacy geometry -> the shipped-style blob.
+        self.write_map(self.legacy_map())
+        self.assert_succeeds(self.compile())
+        legacy = self.read_blob()
+        # 2) the same room authored as a mask + behaviour-only JSON.
+        self.write_map(self.masked_map())
+        self.write_mask(self.good_mask())
+        self.assert_succeeds(self.compile())
+        self.assertEqual(self.read_blob(), legacy)
+
+    def test_masked_prop_packs_gather_rect_from_mask(self):
+        self.write_map(self.masked_map())
+        self.write_mask(self.good_mask())
+        self.assert_succeeds(self.compile())
+        blob = self.read_blob()
+        parsed = parse_blob(blob)
+        # tent at the props-band rect, gather post rect from the gather band.
+        self.assertEqual(PROP.unpack_from(blob, parsed["off"]["props"]),
+                         (0, 2, 0, 0, 0, 4, 4, 0, 0))
+        self.assertEqual(PROP.unpack_from(blob, parsed["off"]["props"] + PROP.size),
+                         (3, 8, 4, 0, 0, 4, 4, 1, 2))
+
+    def test_masked_geometry_key_rejected(self):
+        doc = self.masked_map()
+        doc["rooms"][0]["props"][0]["x"] = 2
+        self.write_map(doc)
+        self.write_mask(self.good_mask())
+        self.assert_fails(self.compile(), "geometry comes from the room mask; drop 'x'")
+
+    def test_mask_rect_count_mismatch_rejected(self):
+        self.write_map(self.masked_map())
+        bands = list(self.good_mask())
+        bands[0] = [(MASK_PROP_TENT, 2, 0, 4, 4), (MASK_PROP_TENT, 10, 0, 4, 4)]
+        self.write_mask(tuple(bands))
+        self.assert_fails(self.compile(), "mask paints 2 tent prop rect(s), the room declares 1")
+
+    def test_mask_non_solid_region_rejected(self):
+        self.write_map(self.masked_map())
+        # Two touching door rects of the same colour merge into one L-shaped region.
+        bands = list(self.good_mask())
+        bands[2] = [(MASK_DOOR0, 0, 0, 2, 4), (MASK_DOOR0, 0, 4, 4, 2)]
+        self.write_mask(tuple(bands))
+        self.assert_fails(self.compile(), "is not a solid rect")
+
+    def test_mask_unknown_colour_rejected(self):
+        self.write_map(self.masked_map())
+        bands = list(self.good_mask())
+        bands[0] = [(MASK_PROP_TENT, 2, 0, 4, 4), ((255, 255, 255), 10, 0, 1, 1)]
+        self.write_mask(tuple(bands))
+        self.assert_fails(self.compile(), "not in palette")
+
+    def test_mask_door_not_touching_edge_rejected(self):
+        self.write_map(self.masked_map())
+        bands = list(self.good_mask())
+        bands[2] = [(MASK_DOOR0, 4, 2, 4, 4)]   # interior, touches no room edge
+        self.write_mask(tuple(bands))
+        self.assert_fails(self.compile(), "does not touch a room edge")
+
+    def test_mask_overlapping_doors_rejected(self):
+        # Painted geometry is single-valued (one colour per pixel), so two
+        # doors cannot actually share pixels: an attempted overlap is painted
+        # over. The reachable failure is a door with no rect at all.
+        doc = self.masked_map()
+        doc["rooms"][0]["doors"] = [{"to": "menu"}, {"to": "menu"}]
+        self.write_map(doc)
+        bands = list(self.good_mask())
+        bands[2] = [(MASK_DOOR0, 0, 0, 6, 8)]   # only door 0 painted
+        self.write_mask(tuple(bands))
+        self.assert_fails(self.compile(), "mask paints 0 rect(s) for door 1")
+
+    def test_mask_unexpected_door_rejected(self):
+        self.write_map(self.masked_map())
+        bands = list(self.good_mask())
+        bands[2] = [(MASK_DOOR0, 0, 0, 4, 8), (MASK_DOOR1, 8, 0, 4, 8)]
+        self.write_mask(tuple(bands))
+        self.assert_fails(self.compile(), "mask paints door 1 but the room declares 1")
+
+    def test_missing_mask_rejected(self):
+        self.write_map(self.masked_map())
+        # No mask file: the behaviour-only JSON has no geometry to fall back on.
+        self.assert_fails(self.compile(), "missing key 'x'")
+
+
 if __name__ == "__main__":
     unittest.main()

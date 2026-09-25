@@ -552,8 +552,11 @@ its 20x36 body inside the 20x40 cell.
 
 No attack window is hand-authored any more: sweep `gore`, ravager `bite` +
 `tail_sweep` and heavy `tail_spin` all come from the masks. The player
-hurtbox/weapon hitboxes and room rects (props/doors/gather/heal) are follow-on
-phases of the same epic.
+hurtbox/weapon hitboxes landed in ryh.5, and the room rects (props/doors/gather/
+heal) in ryh.7: `images/masks/mh_map_<room>_<W>x<H>.png` is the room grid stacked
+as four bands (props/gather/doors/heal; see `docs/map-zones.md`), `gen-zones.py`
+consumes the derived rects and `data/map.json` keeps behaviour only. The packed
+zone blob stays byte-identical across the migration.
 
 Adding a creature is now: behaviour JSON + east-only sprite sheet + the three
 mask bands + an `art_sheets` entry (plus a kind/quest if it must be reachable).

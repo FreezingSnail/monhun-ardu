@@ -999,8 +999,8 @@
     },
     {
       "path": "data/map.json",
-      "sha256": "e655064624f5da853cdd1579284333c6d16e193beaf525b0e193444d2731e753",
-      "size": 4631
+      "sha256": "f09ec6ed3b6084d1da01bb4f900fed6d63bf6b1bc5d430fae4bbfbf9a79c8eaf",
+      "size": 3254
     },
     {
       "path": "data/quests/crush_heavy.json",
@@ -1394,6 +1394,16 @@
       "path": "images/masks/fxtailspin_40x28.png",
       "sha256": "9c1425c31acac0d1599fde1e989c065309a8afea5d4e929016982da121e6ebc4",
       "size": 514
+    },
+    {
+      "path": "images/masks/mh_map_area_384x112.png",
+      "sha256": "c1d7f5316561aea2b711d4f39abb1cac75ed7f857fbcebba81273da8d016ea75",
+      "size": 1004
+    },
+    {
+      "path": "images/masks/mh_map_camp_128x56.png",
+      "sha256": "707c5a0398f806f00944bdbcf109823d5e2696765f8a8d9186154023d0780521",
+      "size": 486
     },
     {
       "path": "images/masks/mh_player_base_16x16.png",

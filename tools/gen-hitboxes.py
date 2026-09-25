@@ -603,6 +603,10 @@ def process(root):
 
     for symbol in sorted(masks):
         path, cell_w, cell_h = masks[symbol]
+        if symbol.startswith("mh_map_"):
+            # Room masks (bead ryh.7) share images/masks/ with the creature
+            # masks but are compiled by tools/gen-zones.py, not here.
+            continue
         if symbol == PLAYER_SYMBOL:
             parsed = parse_mask(path, symbol, cell_w, cell_h, PLAYER_NCOLS)
             body, collide, columns = derive_player(parsed, path)

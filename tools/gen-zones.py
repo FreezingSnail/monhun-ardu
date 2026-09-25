@@ -46,11 +46,24 @@ Placeholder art note: for a room whose PNG is missing this tool authors a
 deterministic flat-shade placeholder (fie.5 refines the art). An existing PNG
 is never overwritten, so refined art survives `make gen`.
 
-Usage:
-    python3 tools/gen-zones.py [--root DIR] [--dump]
+Room masks (bead ryh.7): a room's geometry is sourced from
+`images/masks/mh_map_<room>_<W>x<H>.png` instead of the hand x/y/w/h in
+`data/map.json`. The mask is the room grid stacked as four bands (props, gather,
+doors, heal); see the palette constants below. A masked room authors behaviour
+only (prop type/sheet/frame/gather, door to/toSpawn, spawns, monster); the heal
+and smithy sections are derived (heal from the mask band, smithy from the
+type=smithy prop). A room without a mask keeps the legacy hand-geometry path
+(the unit-test fixtures), so `--bootstrap` can author a starting mask from the
+current geometry.
 
-    --root DIR  pipeline root holding data/, images/ and src/generated
-    --dump      validate + list the compiled graph on stdout; writes nothing
+Usage:
+    python3 tools/gen-zones.py [--root DIR] [--dump] [--bootstrap] [--render]
+
+    --root DIR   pipeline root holding data/, images/ and src/generated
+    --dump       validate + list the compiled graph on stdout; writes nothing
+    --bootstrap  author images/masks/mh_map_<room>_*.png for rooms with hand
+                 geometry and no mask yet (write nothing else)
+    --render     write the composite room-mask review PNG to build/scratch/
 """
 import argparse
 import json
@@ -59,7 +72,7 @@ import re
 import struct
 import sys
 
-from PIL import Image
+from PIL import Image, ImageDraw
 
 REPO_ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 DATA_REL = "data/map.json"
@@ -118,6 +131,43 @@ SHADES = 4
 SHADE_STEP = (254 + SHADES) // SHADES   # 64
 LAYER_COUNT = SHADES - 1                # 3
 
+# Room masks (epic monhun-ardu-ryh, bead ryh.7). A room's geometry is sourced
+# from images/masks/mh_map_<room>_<W>x<H>.png -- the room grid (W x H) stacked
+# as four horizontal bands, same solids-only idea as the creature masks
+# (tools/gen-hitboxes.py). Band order top-to-bottom and exact palette:
+#
+#   props   one colour per prop type (the non-gather props)
+#   gather  one colour per gather item (the gather-node props)
+#   doors   one colour per door, in room source order
+#   heal    one colour per heal rect, in source order
+#
+# Every painted connected region must be one solid rectangle. Prop/gather
+# colours are per class and consumed in canonical order (left-to-right, then
+# top-to-bottom) matched to the JSON entries in source order; door/heal colours
+# are per entry, so their association is order-independent. The mask is
+# source-only: it never ships in the FX image (fxdata_manifest tracks it as an
+# input).
+MASK_BANDS = ("props", "gather", "doors", "heal")
+MASK_BAND_COUNT = len(MASK_BANDS)
+MASKS_DIR_REL = "images/masks"
+PROP_BAND_COLORS = {   # one colour per PROP_TYPES name
+    "tent": (204, 102, 0), "door": (102, 51, 0), "pole": (51, 25, 0),
+    "post": (0, 204, 204), "smithy": (153, 0, 204)}
+GATHER_BAND_COLORS = {  # one colour per GATHER_ITEMS name
+    "herb": (0, 204, 0), "blue_mushroom": (0, 102, 255),
+    "ore": (170, 170, 170), "bug": (204, 204, 0)}
+# Doors/heal get one colour per entry (indexed by the room-local record order),
+# so their rects are matched by colour and stay order-independent.
+DOOR_BAND_COLORS = ((255, 0, 128), (128, 255, 0), (0, 128, 255), (255, 255, 128),
+                    (255, 128, 255), (128, 128, 255), (255, 64, 64), (64, 255, 255))
+HEAL_BAND_COLORS = ((0, 255, 128), (128, 255, 128), (128, 0, 255), (255, 192, 0),
+                    (0, 192, 255), (255, 64, 192), (192, 255, 0), (64, 128, 255))
+MASK_BAND_PALETTE = (
+    {colour: name for name, colour in PROP_BAND_COLORS.items()},
+    {colour: name for name, colour in GATHER_BAND_COLORS.items()},
+    {colour: i for i, colour in enumerate(DOOR_BAND_COLORS)},
+    {colour: i for i, colour in enumerate(HEAL_BAND_COLORS)})
+
 # 4-shade placeholder palette (1:1 with L4_Triplane; see tools/gen-equipment.py).
 CLEAR = (0, 0, 0, 0)
 BLACK = (0, 0, 0, 255)
@@ -142,12 +192,14 @@ def is_int(value):
     return isinstance(value, int) and not isinstance(value, bool)
 
 
-def check_keys(errors, ctx, obj, required, optional=()):
+def check_keys(errors, ctx, obj, required, optional=(), forbidden=()):
     if not isinstance(obj, dict):
         errors.add(ctx, "expected an object")
         return False
     for key in sorted(obj):
-        if key not in required and key not in optional:
+        if key in forbidden:
+            errors.add(ctx, "geometry comes from the room mask; drop '%s'" % key)
+        elif key not in required and key not in optional:
             errors.add(ctx, "unknown key '%s'" % key)
     for key in required:
         if key not in obj:
@@ -301,37 +353,48 @@ def prop_gather(prop):
     return prop["gatherCode"], gather["yield"]
 
 
-def normalize_prop(errors, ctx, obj):
-    check_keys(errors, ctx, obj, {"type", "x", "y", "sheet", "frame", "w", "h"}, {"gather"})
+def normalize_prop(errors, ctx, obj, masked=False):
+    if masked:
+        check_keys(errors, ctx, obj, {"type", "sheet", "frame"}, {"gather"},
+                   forbidden=("x", "y", "w", "h"))
+    else:
+        check_keys(errors, ctx, obj, {"type", "x", "y", "sheet", "frame", "w", "h"}, {"gather"})
     if not isinstance(obj, dict):
         return None
     prop_type = read_enum(errors, ctx, obj, "type", PROP_TYPES)
-    x = read_int(errors, ctx, obj, "x", 0, 65535)
-    y = read_int(errors, ctx, obj, "y", 0, 65535)
     sheet = obj.get("sheet")
     if not isinstance(sheet, str) or not SYMBOL_RE.match(sheet):
         errors.add(ctx, "sheet: expected a C symbol, got %r" % (sheet,))
         sheet = None
     frame = read_int(errors, ctx, obj, "frame", 0, 255)
-    w = read_int(errors, ctx, obj, "w", 1, 255)
-    h = read_int(errors, ctx, obj, "h", 1, 255)
+    x = y = w = h = None
+    if not masked:
+        x = read_int(errors, ctx, obj, "x", 0, 65535)
+        y = read_int(errors, ctx, obj, "y", 0, 65535)
+        w = read_int(errors, ctx, obj, "w", 1, 255)
+        h = read_int(errors, ctx, obj, "h", 1, 255)
     gather = None
     if obj.get("gather") is not None:
         gather = normalize_gather(errors, ctx + ".gather", obj.get("gather"))
-    if None in (prop_type, x, y, sheet, frame, w, h):
+    if None in (prop_type, sheet, frame) or (not masked and None in (x, y, w, h)):
         return None
     return {"type": prop_type, "x": x, "y": y, "sheet": sheet, "frame": frame,
             "w": w, "h": h, "gather": gather}
 
 
-def normalize_door(errors, ctx, obj):
-    check_keys(errors, ctx, obj, {"x", "y", "w", "h", "to"}, {"toSpawn"})
+def normalize_door(errors, ctx, obj, masked=False):
+    if masked:
+        check_keys(errors, ctx, obj, {"to"}, {"toSpawn"}, forbidden=("x", "y", "w", "h"))
+    else:
+        check_keys(errors, ctx, obj, {"x", "y", "w", "h", "to"}, {"toSpawn"})
     if not isinstance(obj, dict):
         return None
-    x = read_int(errors, ctx, obj, "x", 0, 65535)
-    y = read_int(errors, ctx, obj, "y", 0, 65535)
-    w = read_int(errors, ctx, obj, "w", 1, 255)
-    h = read_int(errors, ctx, obj, "h", 1, 255)
+    x = y = w = h = None
+    if not masked:
+        x = read_int(errors, ctx, obj, "x", 0, 65535)
+        y = read_int(errors, ctx, obj, "y", 0, 65535)
+        w = read_int(errors, ctx, obj, "w", 1, 255)
+        h = read_int(errors, ctx, obj, "h", 1, 255)
     to = obj.get("to")
     if not isinstance(to, str) or (to != "menu" and not ID_RE.match(to)):
         errors.add(ctx, "to: expected a room id or 'menu', got %r" % (to,))
@@ -346,7 +409,7 @@ def normalize_door(errors, ctx, obj):
         to_spawn = None
     elif to is not None and to_spawn is None:
         errors.add(ctx, "toSpawn: required for a door to room '%s'" % to)
-    if None in (x, y, w, h, to):
+    if to is None or (not masked and None in (x, y, w, h)):
         return None
     return {"x": x, "y": y, "w": w, "h": h, "to": to, "toSpawn": to_spawn}
 
@@ -402,9 +465,15 @@ def normalize_monster(errors, ctx, obj):
     return {"kind": kind, "spawn": spawn}
 
 
-def normalize_room(errors, ctx, obj, seen_ids):
-    check_keys(errors, ctx, obj, {"id", "w", "h", "image", "spawns"},
-               {"props", "doors", "heal", "smithy", "monster"})
+def normalize_room(errors, ctx, obj, seen_ids, masked=False):
+    if masked:
+        # A masked room authors behaviour only: x/y/w/h (and the heal/smithy
+        # rect arrays) come from the mask, so the hand geometry keys are errors.
+        check_keys(errors, ctx, obj, {"id", "w", "h", "image", "spawns"},
+                   {"props", "doors", "monster"}, forbidden=("heal", "smithy"))
+    else:
+        check_keys(errors, ctx, obj, {"id", "w", "h", "image", "spawns"},
+                   {"props", "doors", "heal", "smithy", "monster"})
     if not isinstance(obj, dict):
         return None
     rid = read_id(errors, ctx, obj, "id", seen_ids)
@@ -451,7 +520,7 @@ def normalize_room(errors, ctx, obj, seen_ids):
         errors.add(ctx, "props: expected an array")
     else:
         for i, prop in enumerate(raw_props):
-            normalized = normalize_prop(errors, "%s.props[%d]" % (ctx, i), prop)
+            normalized = normalize_prop(errors, "%s.props[%d]" % (ctx, i), prop, masked)
             if normalized is not None:
                 props.append(normalized)
 
@@ -461,13 +530,17 @@ def normalize_room(errors, ctx, obj, seen_ids):
         errors.add(ctx, "doors: expected an array")
     else:
         for i, door in enumerate(raw_doors):
-            normalized = normalize_door(errors, "%s.doors[%d]" % (ctx, i), door)
+            normalized = normalize_door(errors, "%s.doors[%d]" % (ctx, i), door, masked)
             if normalized is not None:
                 doors.append(normalized)
 
     raw_heal = obj.get("heal", [])
     heals = []
-    if not isinstance(raw_heal, list):
+    if masked:
+        # Heal rects carry no behaviour, so a masked room derives them entirely
+        # from the mask's heal band (apply_room_mask).
+        pass
+    elif not isinstance(raw_heal, list):
         errors.add(ctx, "heal: expected an array")
     else:
         for i, heal in enumerate(raw_heal):
@@ -477,7 +550,10 @@ def normalize_room(errors, ctx, obj, seen_ids):
 
     raw_smithy = obj.get("smithy", [])
     smithies = []
-    if not isinstance(raw_smithy, list):
+    if masked:
+        # The smithy section is derived from the type=smithy prop rect.
+        pass
+    elif not isinstance(raw_smithy, list):
         errors.add(ctx, "smithy: expected an array")
     else:
         for i, smithy in enumerate(raw_smithy):
@@ -503,22 +579,24 @@ def normalize_room(errors, ctx, obj, seen_ids):
         return None
 
     # Keep the room rects/spawns inside the room so the runtime clamps are sane.
-    for i, prop in enumerate(props):
-        if prop["x"] + prop["w"] > w or prop["y"] + prop["h"] > h:
-            errors.add("%s.props[%d]" % (ctx, i), "rect (%d,%d,%d,%d) leaves the %dx%d room"
-                       % (prop["x"], prop["y"], prop["w"], prop["h"], w, h))
-    for i, door in enumerate(doors):
-        if door["x"] + door["w"] > w or door["y"] + door["h"] > h:
-            errors.add("%s.doors[%d]" % (ctx, i), "rect (%d,%d,%d,%d) leaves the %dx%d room"
-                       % (door["x"], door["y"], door["w"], door["h"], w, h))
-    for i, heal in enumerate(heals):
-        if heal["x"] + heal["w"] > w or heal["y"] + heal["h"] > h:
-            errors.add("%s.heal[%d]" % (ctx, i), "rect (%d,%d,%d,%d) leaves the %dx%d room"
-                       % (heal["x"], heal["y"], heal["w"], heal["h"], w, h))
-    for i, smithy in enumerate(smithies):
-        if smithy["x"] + smithy["w"] > w or smithy["y"] + smithy["h"] > h:
-            errors.add("%s.smithy[%d]" % (ctx, i), "rect (%d,%d,%d,%d) leaves the %dx%d room"
-                       % (smithy["x"], smithy["y"], smithy["w"], smithy["h"], w, h))
+    # A masked room's rects are validated when the mask is applied.
+    if not masked:
+        for i, prop in enumerate(props):
+            if prop["x"] + prop["w"] > w or prop["y"] + prop["h"] > h:
+                errors.add("%s.props[%d]" % (ctx, i), "rect (%d,%d,%d,%d) leaves the %dx%d room"
+                           % (prop["x"], prop["y"], prop["w"], prop["h"], w, h))
+        for i, door in enumerate(doors):
+            if door["x"] + door["w"] > w or door["y"] + door["h"] > h:
+                errors.add("%s.doors[%d]" % (ctx, i), "rect (%d,%d,%d,%d) leaves the %dx%d room"
+                           % (door["x"], door["y"], door["w"], door["h"], w, h))
+        for i, heal in enumerate(heals):
+            if heal["x"] + heal["w"] > w or heal["y"] + heal["h"] > h:
+                errors.add("%s.heal[%d]" % (ctx, i), "rect (%d,%d,%d,%d) leaves the %dx%d room"
+                           % (heal["x"], heal["y"], heal["w"], heal["h"], w, h))
+        for i, smithy in enumerate(smithies):
+            if smithy["x"] + smithy["w"] > w or smithy["y"] + smithy["h"] > h:
+                errors.add("%s.smithy[%d]" % (ctx, i), "rect (%d,%d,%d,%d) leaves the %dx%d room"
+                           % (smithy["x"], smithy["y"], smithy["w"], smithy["h"], w, h))
     for spawn in spawns:
         if spawn["x"] > w or spawn["y"] > h:
             errors.add("%s.spawns.%s" % (ctx, spawn["name"]), "(%d,%d) leaves the %dx%d room"
@@ -526,7 +604,218 @@ def normalize_room(errors, ctx, obj, seen_ids):
 
     return {"id": rid, "w": w, "h": h, "image": image, "spawns": spawns,
             "props": props, "doors": doors, "heals": heals, "smithies": smithies,
-            "monster": monster}
+            "monster": monster, "masked": masked}
+
+
+def room_mask_rel(room):
+    """The mask path a room must author: images/masks/mh_map_<id>_<W>x<H>.png."""
+    return "%s/%s%s_%dx%d.png" % (MASKS_DIR_REL, IMAGE_SYMBOL_PREFIX,
+                                  room["id"], room["w"], room["h"])
+
+
+def room_mask_exists(root, obj):
+    """True when a raw room object names a mask file that exists on disk."""
+    rid = obj.get("id") if isinstance(obj, dict) else None
+    w = obj.get("w") if isinstance(obj, dict) else None
+    h = obj.get("h") if isinstance(obj, dict) else None
+    if not isinstance(rid, str) or not is_int(w) or not is_int(h):
+        return False
+    rel = "%s/%s%s_%dx%d.png" % (MASKS_DIR_REL, IMAGE_SYMBOL_PREFIX, rid, w, h)
+    return os.path.isfile(os.path.join(root, rel))
+
+
+def _connected_components(points):
+    """4-connected components of a set of (x, y) points."""
+    remaining = set(points)
+    out = []
+    while remaining:
+        seed = remaining.pop()
+        stack = [seed]
+        comp = [seed]
+        while stack:
+            x, y = stack.pop()
+            for neighbour in ((x + 1, y), (x - 1, y), (x, y + 1), (x, y - 1)):
+                if neighbour in remaining:
+                    remaining.discard(neighbour)
+                    stack.append(neighbour)
+                    comp.append(neighbour)
+        out.append(comp)
+    return out
+
+
+def _rect_of(points):
+    xs = [p[0] for p in points]
+    ys = [p[1] for p in points]
+    x0, y0 = min(xs), min(ys)
+    return {"ox": x0, "oy": y0, "w": max(xs) - x0 + 1, "h": max(ys) - y0 + 1}
+
+
+def _mask_rects(errors, ctx, band, colour, points):
+    """One solid rect per connected region of one band colour."""
+    rects = []
+    for comp in _connected_components(points):
+        rect = _rect_of(comp)
+        if len(comp) != rect["w"] * rect["h"]:
+            errors.add(ctx, "%s band colour %s is not a solid rect" % (band, colour))
+            return None
+        rects.append(rect)
+    rects.sort(key=lambda rect: (rect["ox"], rect["oy"]))
+    return rects
+
+
+def parse_room_mask(errors, ctx, root, room):
+    """Validate + parse images/masks/mh_map_<room>_<W>x<H>.png.
+
+    Returns {band -> {label -> [rect, ...]}} (labels are prop-type / item names,
+    "door" and "heal"), or None when the mask is missing or malformed. Every
+    painted pixel must be exactly one palette colour; every connected region of
+    one colour must be a single solid rectangle."""
+    rel = room_mask_rel(room)
+    path = os.path.join(root, rel)
+    if not os.path.isfile(path):
+        errors.add(rel, "missing room mask")
+        return None
+    try:
+        with Image.open(path) as raw:
+            img = raw.convert("RGBA")
+    except OSError as exc:
+        errors.add(rel, "cannot read image: %s" % exc)
+        return None
+    w, h = room["w"], room["h"]
+    want = (w, h * MASK_BAND_COUNT)
+    if img.size != want:
+        errors.add(rel, "image is %dx%d, want %dx%d (%d bands of %dx%d)"
+                   % (img.size[0], img.size[1], want[0], want[1], MASK_BAND_COUNT, w, h))
+        return None
+    px = img.load()
+    out = {}
+    for bi, band in enumerate(MASK_BANDS):
+        palette = MASK_BAND_PALETTE[bi]
+        found = {}
+        for y in range(h):
+            for x in range(w):
+                r, g, b, a = px[x, bi * h + y]
+                if a == 0:
+                    continue
+                if a != 255 or (r, g, b) not in palette:
+                    errors.add(rel, "%s band pixel (%d,%d) colour %s not in palette"
+                               % (band, x, y, (r, g, b, a)))
+                    return None
+                found.setdefault((r, g, b), []).append((x, y))
+        rects = {}
+        for colour, points in found.items():
+            band_rects = _mask_rects(errors, rel, band, colour, points)
+            if band_rects is None:
+                return None
+            if band_rects:
+                rects[palette[colour]] = band_rects
+        out[band] = rects
+    return out
+
+
+def _inside_room(rect, w, h):
+    return (rect["ox"] >= 0 and rect["oy"] >= 0
+            and rect["ox"] + rect["w"] <= w and rect["oy"] + rect["h"] <= h)
+
+
+def _set_rect(errors, ctx, obj, rect, w, h, what):
+    """Copy a mask rect onto a normalised record, validating room bounds + size."""
+    if rect["w"] < 1 or rect["h"] < 1:
+        errors.add(ctx, "%s rect (%d,%d,%d,%d) is empty"
+                   % (what, rect["ox"], rect["oy"], rect["w"], rect["h"]))
+    if rect["w"] > 255 or rect["h"] > 255:
+        errors.add(ctx, "%s rect (%d,%d,%d,%d) exceeds the u8 size limit"
+                   % (what, rect["ox"], rect["oy"], rect["w"], rect["h"]))
+    if not _inside_room(rect, w, h):
+        errors.add(ctx, "%s rect (%d,%d,%d,%d) leaves the %dx%d room"
+                   % (what, rect["ox"], rect["oy"], rect["w"], rect["h"], w, h))
+    obj["x"], obj["y"], obj["w"], obj["h"] = rect["ox"], rect["oy"], rect["w"], rect["h"]
+
+
+def _touches_edge(rect, w, h):
+    return (rect["ox"] == 0 or rect["oy"] == 0
+            or rect["ox"] + rect["w"] == w or rect["oy"] + rect["h"] == h)
+
+
+def apply_room_mask(errors, ctx, room, mask):
+    """Fill a masked room's prop/door/heal/smithy rects from its mask.
+
+    Sets x/y/w/h on every record; validates bounds, non-empty gather rects,
+    door edges and door overlap."""
+    w, h = room["w"], room["h"]
+    if len(room["doors"]) > len(DOOR_BAND_COLORS):
+        errors.add(ctx, "room has %d doors but the mask palette holds %d"
+                   % (len(room["doors"]), len(DOOR_BAND_COLORS)))
+    if len(room["heals"]) > len(HEAL_BAND_COLORS):
+        errors.add(ctx, "room has %d heal rects but the mask palette holds %d"
+                   % (len(room["heals"]), len(HEAL_BAND_COLORS)))
+    plain = [p for p in room["props"] if p["gather"] is None]
+    gather = [p for p in room["props"] if p["gather"] is not None]
+
+    prop_band = mask["props"]
+    for type_name in prop_band:
+        if not any(PROP_TYPES[p["type"]] == type_name for p in plain):
+            errors.add(ctx, "mask paints a %s prop but the room has none" % type_name)
+    for type_name in sorted({PROP_TYPES[p["type"]] for p in plain}):
+        entries = [p for p in plain if PROP_TYPES[p["type"]] == type_name]
+        rects = prop_band.get(type_name, [])
+        if len(rects) != len(entries):
+            errors.add(ctx, "mask paints %d %s prop rect(s), the room declares %d"
+                       % (len(rects), type_name, len(entries)))
+            continue
+        for prop, rect in zip(entries, rects):
+            _set_rect(errors, ctx, prop, rect, w, h, type_name + " prop")
+
+    gather_band = mask["gather"]
+    for item in gather_band:
+        if not any(p["gather"]["item"] == item for p in gather):
+            errors.add(ctx, "mask paints a %s gather node but the room has none" % item)
+    for item in sorted({p["gather"]["item"] for p in gather}):
+        entries = [p for p in gather if p["gather"]["item"] == item]
+        rects = gather_band.get(item, [])
+        if len(rects) != len(entries):
+            errors.add(ctx, "mask paints %d %s gather rect(s), the room declares %d"
+                       % (len(rects), item, len(entries)))
+            continue
+        for prop, rect in zip(entries, rects):
+            _set_rect(errors, ctx, prop, rect, w, h, "%s gather" % item)
+
+    door_band = mask["doors"]
+    for index in door_band:
+        if index >= len(room["doors"]):
+            errors.add(ctx, "mask paints door %d but the room declares %d"
+                       % (index, len(room["doors"])))
+    for i, door in enumerate(room["doors"]):
+        rects = door_band.get(i, [])
+        if len(rects) != 1:
+            errors.add(ctx, "mask paints %d rect(s) for door %d, the room declares one"
+                       % (len(rects), i))
+            continue
+        rect = rects[0]
+        _set_rect(errors, ctx, door, rect, w, h, "door")
+        if not _touches_edge(rect, w, h):
+            errors.add(ctx, "door %d rect (%d,%d,%d,%d) does not touch a room edge"
+                       % (i, rect["ox"], rect["oy"], rect["w"], rect["h"]))
+
+    room["heals"] = []
+    for index in sorted(mask["heal"]):
+        rects = mask["heal"][index]
+        if len(rects) != 1:
+            errors.add(ctx, "mask paints %d rect(s) for heal %d, the room declares one"
+                       % (len(rects), index))
+            continue
+        rect = rects[0]
+        if rect["w"] < 1 or rect["h"] < 1:
+            errors.add(ctx, "heal rect (%d,%d,%d,%d) is empty"
+                       % (rect["ox"], rect["oy"], rect["w"], rect["h"]))
+            continue
+        if not _inside_room(rect, w, h):
+            errors.add(ctx, "heal rect (%d,%d,%d,%d) leaves the %dx%d room"
+                       % (rect["ox"], rect["oy"], rect["w"], rect["h"], w, h))
+            continue
+        room["heals"].append({"x": rect["ox"], "y": rect["oy"], "w": rect["w"], "h": rect["h"]})
+    room["smithies"] = [{"x": p["x"], "y": p["y"], "w": p["w"], "h": p["h"]}
+                        for p in room["props"] if PROP_TYPES[p["type"]] == "smithy"]
 
 
 def compile_model(errors, root):
@@ -548,7 +837,8 @@ def compile_model(errors, root):
     rooms = []
     seen_ids = set()
     for i, obj in enumerate(raw_rooms):
-        room = normalize_room(errors, "%s: rooms[%d]" % (DATA_REL, i), obj, seen_ids)
+        masked = room_mask_exists(root, obj)
+        room = normalize_room(errors, "%s: rooms[%d]" % (DATA_REL, i), obj, seen_ids, masked)
         if room is not None:
             rooms.append(room)
     if errors.items:
@@ -571,6 +861,15 @@ def compile_model(errors, root):
                 errors.add(dc, "toSpawn: unknown spawn '%s' in room '%s'" % (door["toSpawn"], door["to"]))
         if room["monster"] is not None and room["monster"]["spawn"] not in names:
             errors.add(ctx + ".monster", "spawn: unknown spawn '%s'" % room["monster"]["spawn"])
+    # A room with a mask sources every rect (props, gather nodes, doors, heal,
+    # smithy) from the painted geometry; the JSON keeps behaviour only.
+    for room in rooms:
+        if not room["masked"]:
+            continue
+        ctx = "%s: rooms.%s.mask" % (DATA_REL, room["id"])
+        mask = parse_room_mask(errors, ctx, root, room)
+        if mask is not None:
+            apply_room_mask(errors, "%s: rooms.%s" % (DATA_REL, room["id"]), room, mask)
     if errors.items:
         return None
     item_ids = load_item_ids(errors, root)
@@ -1271,10 +1570,119 @@ def write_if_changed(path, data):
     return True
 
 
-def run(root, dump):
+def _paint_rect(img, x, y, w, h, colour):
+    px = img.load()
+    for yy in range(y, y + h):
+        for xx in range(x, x + w):
+            px[xx, yy] = colour
+
+
+def bootstrap_masks(rooms, root):
+    """Author a mask for every unmasked room from its JSON geometry.
+
+    Authoring aid (like gen-hitboxes.py --render): writes images/masks/
+    mh_map_<room>_<W>x<H>.png for rooms that have hand geometry and no mask yet.
+    Masks are source files -- once written, edit the JSON to drop the geometry
+    and the mask becomes the sole source. Never overwrites an existing mask."""
+    wrote = []
+    for room in rooms:
+        if room["masked"]:
+            continue
+        rel = room_mask_rel(room)
+        path = os.path.join(root, rel)
+        if os.path.isfile(path):
+            continue
+        w, h = room["w"], room["h"]
+        img = Image.new("RGBA", (w, h * MASK_BAND_COUNT), (0, 0, 0, 0))
+        for prop in room["props"]:
+            gather = prop["gather"]
+            if gather is None:
+                colour = PROP_BAND_COLORS[PROP_TYPES[prop["type"]]]
+                band = 0
+            else:
+                colour = GATHER_BAND_COLORS[gather["item"]]
+                band = 1
+            _paint_rect(img, prop["x"], band * h + prop["y"], prop["w"], prop["h"], colour)
+        for i, door in enumerate(room["doors"]):
+            _paint_rect(img, door["x"], 2 * h + door["y"], door["w"], door["h"], DOOR_BAND_COLORS[i])
+        for i, heal in enumerate(room["heals"]):
+            _paint_rect(img, heal["x"], 3 * h + heal["y"], heal["w"], heal["h"], HEAL_BAND_COLORS[i])
+        os.makedirs(os.path.dirname(path), exist_ok=True)
+        img.save(path, format="PNG")
+        wrote.append(rel)
+    return wrote
+
+
+def render_review(rooms, root):
+    """Write the composite room-mask review PNG (room art + the four mask bands
+    + the derived rects outlined on the art) to
+    build/scratch/roommask_review.png."""
+    panels = []
+    for room in rooms:
+        if not room["masked"]:
+            continue
+        art_path = os.path.join(root, room["image"])
+        mask_path = os.path.join(root, room_mask_rel(room))
+        if not os.path.isfile(art_path) or not os.path.isfile(mask_path):
+            continue
+        w, h = room["w"], room["h"]
+        art = Image.open(art_path).convert("RGBA")
+        mask = Image.open(mask_path).convert("RGBA")
+        panel = Image.new("RGBA", (w, h * (MASK_BAND_COUNT + 1)), (16, 16, 24, 255))
+        panel.paste(art, (0, 0))
+        for b in range(MASK_BAND_COUNT):
+            panel.paste(mask.crop((0, b * h, w, (b + 1) * h)), (0, h * (b + 1)))
+        draw = ImageDraw.Draw(panel)
+        for prop in room["props"]:
+            kind = PROP_TYPES[prop["type"]]
+            colour = (255, 255, 0, 255) if kind != "smithy" else (153, 0, 204, 255)
+            if prop["gather"] is not None:
+                colour = (0, 255, 0, 255)
+            draw.rectangle([prop["x"], prop["y"], prop["x"] + prop["w"] - 1, prop["y"] + prop["h"] - 1],
+                           outline=colour)
+        for door in room["doors"]:
+            draw.rectangle([door["x"], door["y"], door["x"] + door["w"] - 1, door["y"] + door["h"] - 1],
+                           outline=(255, 0, 128, 255))
+        for heal in room["heals"]:
+            draw.rectangle([heal["x"], heal["y"], heal["x"] + heal["w"] - 1, heal["y"] + heal["h"] - 1],
+                           outline=(0, 255, 128, 255))
+        panels.append(panel)
+    if not panels:
+        return
+    width = max(p.size[0] for p in panels)
+    height = sum(p.size[1] + 8 for p in panels)
+    review = Image.new("RGBA", (width, height), (16, 16, 24, 255))
+    y = 0
+    for panel in panels:
+        review.paste(panel, (0, y))
+        y += panel.size[1] + 8
+    review = review.resize((width * 2, height * 2), Image.NEAREST)
+    out_dir = os.path.join(root, "build", "scratch")
+    os.makedirs(out_dir, exist_ok=True)
+    path = os.path.join(out_dir, "roommask_review.png")
+    review.save(path)
+    print("gen-zones: review image -> %s" % os.path.relpath(path, root))
+
+
+def run(root, dump, bootstrap=False, render=False):
     errors = Errors()
     model = compile_model(errors, root)
-    layout = build_layout(errors, model) if model is not None and not errors.items else None
+    if errors.items or model is None:
+        for item in errors.items:
+            print("gen-zones: error: %s" % item, file=sys.stderr)
+        print("gen-zones: FAIL (%d error%s)" % (len(errors.items), "" if len(errors.items) == 1 else "s"),
+              file=sys.stderr)
+        return 1
+    if bootstrap:
+        wrote = bootstrap_masks(model["rooms"], root)
+        for rel in wrote:
+            print("gen-zones: bootstrapped mask %s" % rel)
+        if not wrote:
+            print("gen-zones: bootstrap: every room already has a mask")
+        return 0
+    if render:
+        render_review(model["rooms"], root)
+    layout = build_layout(errors, model) if not errors.items else None
     packed = pack_model(errors, layout) if layout is not None and not errors.items else None
     if errors.items:
         for item in errors.items:
@@ -1337,9 +1745,13 @@ def main(argv=None):
     parser = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     parser.add_argument("--root", default=None, help="pipeline root holding data/ (default: repository root)")
     parser.add_argument("--dump", action="store_true", help="validate + list the compiled graph; write nothing")
+    parser.add_argument("--bootstrap", action="store_true",
+                        help="author images/masks/mh_map_<room>_*.png for rooms with hand geometry; write nothing else")
+    parser.add_argument("--render", action="store_true",
+                        help="write the composite room-mask review PNG to build/scratch/")
     args = parser.parse_args(argv)
     root = os.path.abspath(args.root) if args.root else REPO_ROOT
-    return run(root, args.dump)
+    return run(root, args.dump, args.bootstrap, args.render)
 
 
 if __name__ == "__main__":

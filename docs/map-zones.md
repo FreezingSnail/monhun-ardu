@@ -158,6 +158,38 @@ an AVR-only `static_assert` pins it against the live symbol, so a stale blob
 Placeholder art is a deterministic dark field with a light border and a white
 centre marker — enough to prove clipping/shift; fie.5 refines the real art.
 
+## Room masks (bead monhun-ardu-ryh.7)
+
+A room's geometry is sourced from `images/masks/mh_map_<room>_<W>x<H>.png`
+instead of the hand `x`/`y`/`w`/`h` in `data/map.json`. The mask is the room
+grid (`W`x`H`) stacked as four horizontal bands, same solids-only idea as the
+creature masks (`tools/gen-hitboxes.py`):
+
+| band | colour | feeds |
+|---|---|---|
+| props | one colour per prop type (`tent`/`door`/`pole`/`post`/`smithy`) | the non-gather prop rects |
+| gather | one colour per gather item (`herb`/`blue_mushroom`/`ore`/`bug`) | the gather-node prop rects |
+| doors | one colour per door (room-local order) | the door rects |
+| heal | one colour per heal rect | the heal rects |
+
+Every painted connected region must be one solid rectangle; prop/gather rects
+are consumed in canonical order (left-to-right, then top-to-bottom) and matched
+to the JSON entries in source order, while door/heal colours are per entry (so
+their pairing is order-independent). Validations (hard fail): every rect inside
+the room bounds, gather rects non-empty, each door touches the room edge it
+leaves through, prop/gather rect counts match the JSON, and unknown/hand
+geometry keys (`x`/`y`/`w`/`h`, `heal`, `smithy`) are rejected on a masked room.
+The `heal` section comes from the mask's heal band and the `smithy` section from
+the `type=smithy` prop rect.
+
+A masked room keeps behaviour only in `data/map.json`: `props[]` `type`/`sheet`/
+`frame`/`gather`, `doors[]` `to`/`toSpawn`, `spawns`, `monster`. Rects are the
+same after the migration (the packed blob is byte-identical). A room without a
+mask (the unit-test fixtures) keeps the legacy hand-geometry path;
+`python3 tools/gen-zones.py --bootstrap` authors a starting mask from the current
+geometry and `--render` writes `build/scratch/roommask_review.png` (room art +
+the four mask bands + the derived rects outlined).
+
 ## Generation / workflow
 
 ```
@@ -176,7 +208,9 @@ and fails if any generated artifact drifts.
 
 Generated artifacts (never hand-edit): `images/maps/*.png` (placeholders only),
 `fxdata/maps/Sprites.txt`, `fxdata/tables/zones.bin`, `src/generated/zone_data.hpp`,
-`src/generated/zone_meta.hpp`, and `fxdata/manifest.json`.
+`src/generated/zone_meta.hpp`, and `fxdata/manifest.json`. The room masks under
+`images/masks/` are hand-authored sources (`fxdata_manifest` tracks them as
+inputs; a mask edit without a regen fails `make gen-check`).
 
 ## Tests
 

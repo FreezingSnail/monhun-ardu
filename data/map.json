@@ -9,21 +9,13 @@
       "props": [
         {
           "type": "tent",
-          "x": 40,
-          "y": 8,
           "sheet": "mh_map_tent",
-          "frame": 0,
-          "w": 32,
-          "h": 24
+          "frame": 0
         },
         {
           "type": "post",
-          "x": 8,
-          "y": 8,
           "sheet": "mh_map_tent",
           "frame": 0,
-          "w": 8,
-          "h": 8,
           "gather": {
             "item": "herb",
             "yield": 1
@@ -31,12 +23,8 @@
         },
         {
           "type": "post",
-          "x": 72,
-          "y": 40,
           "sheet": "mh_map_tent",
           "frame": 0,
-          "w": 8,
-          "h": 8,
           "gather": {
             "item": "herb",
             "yield": 2
@@ -44,12 +32,8 @@
         },
         {
           "type": "post",
-          "x": 24,
-          "y": 8,
           "sheet": "mh_map_tent",
           "frame": 0,
-          "w": 8,
-          "h": 8,
           "gather": {
             "item": "blue_mushroom",
             "yield": 1
@@ -57,12 +41,8 @@
         },
         {
           "type": "smithy",
-          "x": 88,
-          "y": 40,
           "sheet": "mh_map_tent",
-          "frame": 0,
-          "w": 16,
-          "h": 16
+          "frame": 0
         }
       ],
       "spawns": {
@@ -77,28 +57,8 @@
       },
       "doors": [
         {
-          "x": 120,
-          "y": 24,
-          "w": 8,
-          "h": 24,
           "to": "area",
           "toSpawn": "from_camp"
-        }
-      ],
-      "heal": [
-        {
-          "x": 40,
-          "y": 8,
-          "w": 32,
-          "h": 24
-        }
-      ],
-      "smithy": [
-        {
-          "x": 88,
-          "y": 40,
-          "w": 16,
-          "h": 16
         }
       ],
       "monster": null
@@ -111,12 +71,8 @@
       "props": [
         {
           "type": "post",
-          "x": 40,
-          "y": 16,
           "sheet": "mh_map_tent",
           "frame": 0,
-          "w": 8,
-          "h": 8,
           "gather": {
             "item": "herb",
             "yield": 1
@@ -124,12 +80,8 @@
         },
         {
           "type": "post",
-          "x": 160,
-          "y": 40,
           "sheet": "mh_map_tent",
           "frame": 0,
-          "w": 8,
-          "h": 8,
           "gather": {
             "item": "herb",
             "yield": 2
@@ -137,12 +89,8 @@
         },
         {
           "type": "post",
-          "x": 280,
-          "y": 88,
           "sheet": "mh_map_tent",
           "frame": 0,
-          "w": 8,
-          "h": 8,
           "gather": {
             "item": "herb",
             "yield": 3
@@ -150,12 +98,8 @@
         },
         {
           "type": "post",
-          "x": 96,
-          "y": 80,
           "sheet": "mh_map_tent",
           "frame": 0,
-          "w": 8,
-          "h": 8,
           "gather": {
             "item": "blue_mushroom",
             "yield": 1
@@ -163,12 +107,8 @@
         },
         {
           "type": "post",
-          "x": 216,
-          "y": 16,
           "sheet": "mh_map_tent",
           "frame": 0,
-          "w": 8,
-          "h": 8,
           "gather": {
             "item": "blue_mushroom",
             "yield": 2
@@ -176,12 +116,8 @@
         },
         {
           "type": "post",
-          "x": 120,
-          "y": 88,
           "sheet": "mh_map_tent",
           "frame": 0,
-          "w": 8,
-          "h": 8,
           "gather": {
             "item": "ore",
             "yield": 1
@@ -189,12 +125,8 @@
         },
         {
           "type": "post",
-          "x": 352,
-          "y": 16,
           "sheet": "mh_map_tent",
           "frame": 0,
-          "w": 8,
-          "h": 8,
           "gather": {
             "item": "ore",
             "yield": 2
@@ -202,12 +134,8 @@
         },
         {
           "type": "post",
-          "x": 200,
-          "y": 96,
           "sheet": "mh_map_tent",
           "frame": 0,
-          "w": 8,
-          "h": 8,
           "gather": {
             "item": "bug",
             "yield": 1
@@ -226,15 +154,10 @@
       },
       "doors": [
         {
-          "x": 0,
-          "y": 72,
-          "w": 8,
-          "h": 24,
           "to": "camp",
           "toSpawn": "from_area"
         }
       ],
-      "heal": [],
       "monster": {
         "kind": "lunge",
         "spawn": "start"

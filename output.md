@@ -1,85 +1,114 @@
-# monhun-ardu-ryh.6 — multi-window masks: one hitbox column per packed window
+# monhun-ardu-ryh.7 — room masks: props/doors/gather/heal rects as map layers
 
 ## Status: DONE
 
 ## Change
 
-The last hand-authored window rects are gone: sweep `gore` (2), ravager
-`bite` + `tail_sweep` (3) and heavy `tail_spin` (4 rotating) now come from the
-masks, and `data/creatures/*.json` lost every `windows[].box` key.
+Room geometry stops being hand numbers. `data/map.json` now carries behaviour
+only, and every rect of both rooms comes from a painted mask:
 
-**Encoding (bead design, decided)**: a mask's hitbox band has ONE COLUMN PER
-WINDOW in the creature's packed window order (attack source order, then window
-order). A window is owned by its attack's `art.sheet`, or by the beast sheet when
-the attack authors no art (ravager `bite`/`tail_sweep` ride `fxmonster`). Column
-i of a mask paints the i-th window the mask owns; every owned column paints
-exactly one rect; no later column paints anything; a creature's columns across
-its masks total its window count. The mask width is the owned-window count (a
-beast sheet that owns none still carries one column so its zone/collide bands
-have a frame). Single-window attacks follow the same rule, so the chicken's 3
-columns already matched.
+- **Source** `images/masks/mh_map_<room>_<W>x<H>.png` (camp 128x56 -> 128x224,
+  area 384x112 -> 384x448). Same solids-only idea as the creature masks: the
+  room grid stacked as four bands top-to-bottom.
 
-**`tools/gen-hitboxes.py`**
-- `windows_for_attacks` (mapped columns by `art.frame`, skipped multi-window
-  kits) replaced by `window_sheet` / `window_assignment` / `windows_for_symbol`.
-- `process` pre-computes each creature's window→mask assignment, derives each
-  mask's column count from it, parses the mask at that count, and derives the
-  window rects for BOTH beast and attack masks. Explicit guard: a creature's
-  derived windows == its authored windows.
-- Dropped `discover_blocks` / `source_columns` (the art-pose column tie is
-  obsolete; hurtbox/collision are column-invariant).
-- `_review_panel` takes the mask column count (was the sprite pose count).
-- Docstring/palette/validation text updated: one orange rect per column.
+  | band | colour | feeds |
+  |---|---|---|
+  | props | one colour per prop type | non-gather prop rects |
+  | gather | one colour per gather item | gather-node prop rects |
+  | doors | one colour per door (room-local order) | door rects |
+  | heal | one colour per heal rect | heal rects |
 
-**Masks** (`images/masks/*.png`, hand-authored sources)
-- `fxbullatk` 4 cols = stomp, gore-horns, gore-trample, rear_kick (was
-  art-frame order stomp/blank/rear_kick/blank).
-- `fxchickenatk` unchanged (3 = peck/leap/wing_beat).
-- `fxheavyatk` 2 cols = bite, tail_slam.
-- `fxmonster` 3 cols = bite, tail_sweep w0, w1.
-- NEW `fxtailspin_40x28.png` 4 cols = tail_spin w0..w3 (the four rotating rects).
-- Beast sheets that own no window (`fxmonster_lunge/_sweep/_heavy`, `fxpole`)
-  re-laid to a single column; geometry identical.
-- Re-laid with a one-off helper `build/paint_masks.py` (gitignored, not
-  committed); the committed PNGs are the source from here.
+  Palette (exact RGB): props `tent (204,102,0)`, `door (102,51,0)`,
+  `pole (51,25,0)`, `post (0,204,204)`, `smithy (153,0,204)`; gather
+  `herb (0,204,0)`, `blue_mushroom (0,102,255)`, `ore (170,170,170)`,
+  `bug (204,204,0)`; door0..7 `(255,0,128),(128,255,0),(0,128,255),
+  (255,255,128),(255,128,255),(128,128,255),(255,64,64),(64,255,255)`;
+  heal0..7 `(0,255,128),(128,255,128),(128,0,255),(255,192,0),(0,192,255),
+  (255,64,192),(192,255,0),(64,128,255)`.
 
-**Docs**: `docs/creature-framework.md` hitbox-mask section rewritten for the new
-column rule and validations.
+- **gen-zones.py** parses the masks (`parse_room_mask`), validates, and fills
+  x/y/w/h (`apply_room_mask`). A masked room authors behaviour only; `heal` and
+  `smithy` are derived (heal from the mask band, smithy from the `type=smithy`
+  prop). `data/map.json` keeps `props[].type/sheet/frame/gather`,
+  `doors[].to/toSpawn`, `spawns`, `monster`.
+- Prop/gather rects are matched to the JSON entries in canonical order
+  (left-to-right, top-to-bottom) against the JSON's source order; door/heal use
+  a per-entry colour so pairing is order-independent. A room without a mask
+  keeps the legacy hand-geometry path (the unit-test fixtures), so
+  `--bootstrap` (author a starting mask from current geometry) and `--render`
+  (review PNG) mirror `gen-hitboxes.py`.
+- `gen-hitboxes.py` skips `mh_map_*` masks — they share `images/masks/` but are
+  compiled by gen-zones.
+- Docs: `docs/map-zones.md` (new "Room masks" section), `docs/creature-framework.md`
+  (mask section updated), gen.sh comment.
 
-## Numbers
+**Validations (hard fail):** mask dims == `W x 4H`; every painted pixel exactly
+one palette colour; every connected region one solid rect; every rect inside the
+room; gather rects non-empty and <= the pack limits; each door touches the room
+edge it leaves through; per-class rect counts match the JSON; hand geometry keys
+(`x`/`y`/`w`/`h`, plus `heal`/`smithy`) rejected on a masked room. Overlapping
+doors cannot be authored: painted geometry is single-valued (one colour per
+pixel), so a repaint resolves the overlap — a missing/extra door rect is caught
+by the per-index count check instead.
 
-```
-make size:      size: .text=29376 .data=50 .bss=1764
-                size: flash=29426/29696 (270 free)  ram=1814/2560
-make size-line: size: flash=29426/29696 (270 free)  ram=1814/2560
-```
+## Derived rects (after `--dump`, masked path)
 
-Delta vs HEAD (2333a7e): **flash 0 B, RAM 0 B**. The packed blob and every
-device generated header are byte-identical — `git diff` on `fxdata/` and `src/`
-touches only `fxdata/manifest.json` (the new mask input); `combat.bin`,
-`combat_data.hpp`, `combat_meta.hpp`, `combat_expect.hpp` and `src/fxdata.h` show
-no diff. (The task's 29470/226 checkpoint predates 2333a7e, the −44 B progmem
-macro trim; HEAD already measured 29426/270.)
+| room | record | rect |
+|---|---|---|
+| camp | prop 0 tent | (40,8,32,24) |
+| camp | prop 1 post/herb x1 | (8,8,8,8) |
+| camp | prop 2 post/herb x2 | (72,40,8,8) |
+| camp | prop 3 post/blue_mushroom x1 | (24,8,8,8) |
+| camp | prop 4 smithy | (88,40,16,16) |
+| camp | door 0 -> area.from_camp | (120,24,8,24) |
+| camp | heal 0 | (40,8,32,24) |
+| camp | smithy 0 | (88,40,16,16) |
+| area | prop 0 herb x1 | (40,16,8,8) |
+| area | prop 1 herb x2 | (160,40,8,8) |
+| area | prop 2 herb x3 | (280,88,8,8) |
+| area | prop 3 blue_mushroom x1 | (96,80,8,8) |
+| area | prop 4 blue_mushroom x2 | (216,16,8,8) |
+| area | prop 5 ore x1 | (120,88,8,8) |
+| area | prop 6 ore x2 | (352,16,8,8) |
+| area | prop 7 bug x1 | (200,96,8,8) |
+| area | door 0 -> camp.from_area | (0,72,8,24) |
 
-## Gates
+Review image: `build/scratch/roommask_review.png` (room art + the four mask
+bands + derived rects outlined; 2x). Generated with
+`python3 tools/gen-zones.py --render`.
 
-| command | result |
-|---|---|
-| `make gen` | regen OK (manifest 117 images, 87 inputs, 33 outputs) ✔ |
-| `make gen-check` | `fxdata_manifest: PASS (164 generated artifacts unchanged)` ✔ |
-| `make test` | `Total Passed: 6815  Total Failed: 0` ✔ (reach guard green) |
-| `make test-tools` | `Ran 373 tests ... OK` ✔ |
-| `FXTEST_ONLY=test_monster_art make fxtest-headless` | `test_monster_art PASSED=180 FAILED=0` / `test_monster_art: PASS` ✔ |
-| `FXTEST_ONLY=test_combat make fxtest-headless` | `combat_test PASSED=252 FAILED=0` / `test_combat: PASS` ✔ |
-| `FXTEST_ONLY=test_tell make fxtest-headless` | `test_tell PASSED=18 FAILED=0` / `test_tell: PASS` ✔ |
-| `make size` / `make size-line` | flash 29426 (270 free) / ram 1814 ✔ |
+## Byte-identical gate
 
-Shipped window rects identical (test_combat pins every value; the blob diffs
-empty). Budget: 270 B free ≥ the ~150 B wave floor.
+`make gen` output: `fxdata/tables/zones.bin (unchanged)`,
+`src/generated/zone_data.hpp (unchanged)`, `src/generated/zone_meta.hpp
+(unchanged)`, `fxdata/maps/Sprites.txt (unchanged)`. `git diff --stat fxdata/`
+shows **only** `fxdata/manifest.json` (12 insertions, 2 deletions): the
+`data/map.json` input hash/size changed and the two new mask PNGs are now
+tracked inputs. `git diff --exit-code` on the blob + both headers + Sprites is
+empty (IDENTICAL-OK). The packed blob is 249 B, identical to the checkpoint.
 
-## Notes
+## Verification (exact)
 
-- The rotating `tail_spin` windows are four fixed body-relative rects (one per
-  time slice), not a box that rotates with the art, so they paint as four mask
-  columns — not the BLOCKED case the bead anticipated.
-- No git commit/push (worker protocol).
+- `make gen` — zones section unchanged (see above).
+- `git diff --stat fxdata/` — only `fxdata/manifest.json`.
+- `make gen-check` — `fxdata_manifest: PASS (164 generated artifacts unchanged)`.
+- `make test` — `Total Passed: 6815 / Total Failed: 0`.
+- `make test-tools` — `Ran 383 tests ... OK` (10 new `GenZonesMaskTests`,
+  including a byte-for-byte legacy-vs-masked blob round trip).
+- `FXTEST_ONLY=test_zones make fxtest-headless` — `zones_test PASSED=82 FAILED=0`,
+  `test_zones: PASS`.
+- `FXTEST_ONLY=test_assets make fxtest-headless` — `asset_test PASSED=264 FAILED=0`,
+  `test_assets: PASS`.
+- `make size` — `flash=29426/29696 (270 free)  ram=1814/2560`; `size-line`
+  rebuild identical (cold-check). **Delta: +0 B flash / +0 B RAM** — data +
+  tooling only, no firmware change.
+
+## Files
+
+Modified: `data/map.json`, `fxdata/manifest.json`, `tools/gen-zones.py`,
+`tools/gen-hitboxes.py`, `tools/gen.sh`, `tools/tests/test_gen_zones.py`,
+`docs/map-zones.md`, `docs/creature-framework.md`.
+Added (sources): `images/masks/mh_map_camp_128x56.png`,
+`images/masks/mh_map_area_384x112.png`.
+
+No git commit/push (orchestrator handles it).

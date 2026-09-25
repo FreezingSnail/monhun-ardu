@@ -101,7 +101,9 @@ python3 tools/gen-smith.py
 # tools/gen-zones.py into the packed fxdata/tables/zones.bin graph blob +
 # src/generated/zone_{data,meta}.hpp, plus the 3x 1bpp page-major room layer
 # arrays in fxdata/maps/Sprites.txt (declare the mhZones raw_t and the maps
-# include in fxdata.txt before fxdata-build). Placeholder PNGs under
+# include in fxdata.txt before fxdata-build). Room geometry comes from the
+# hand-authored images/masks/mh_map_<room>_<W>x<H>.png masks (bead ryh.7); a
+# room without a mask keeps the legacy hand x/y/w/h path. Placeholder PNGs under
 # images/maps/ are authored only when missing, so fie.5's refined art survives.
 python3 tools/gen-zones.py
 
