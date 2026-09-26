@@ -39,10 +39,11 @@ namespace mh {
 // gather completion can spawn the shared spark effect.
 static void addEffect(Game &g, int16_t x, int16_t y, uint8_t life, bool crit);
 
-// Node-depletion mask is a u16 (one bit per global prop record). The demo map
-// has 12 props (prg.4 added mushroom/ore/bug nodes); a future map that
-// overflows this fires the assert instead of silently sharing bits.
-static_assert(zone::PROPS_COUNT <= 16, "gatherMask is a u16: one bit per prop record");
+// Node-depletion mask is a u32 (one bit per global prop record). The demo map
+// has 19 props (the cavern room pushed prg.4's 12 + camp's non-gather props past
+// 16, so the mask widened); a map that overflows this fires the assert instead
+// of silently sharing bits.
+static_assert(zone::PROPS_COUNT <= 32, "gatherMask is a u32: one bit per prop record");
 
 constexpr uint8_t GATHER_SPARK_LIFE = 8;   // same spark family as the heal/hit paths
 
@@ -121,7 +122,7 @@ inline bool itemConsume(Game &g, uint8_t id) {
 
 // Was this prop record picked already this hunt?
 static inline bool gatherNodeDepleted(const Game &g, uint8_t idx) {
-    return (g.gatherMask & static_cast<uint16_t>(1u << idx)) != 0;
+    return (g.gatherMask & static_cast<uint32_t>(1ul << idx)) != 0;
 }
 
 // Player body as a world rect (world.hpp's bodyRect is defined after
@@ -183,7 +184,7 @@ static void applyGather(Game &g, Player &p) {
     const ZoneProp prop = zonePropRead(idx);
     if (prop.gatherItem == zone::GATHER_NONE)
         return;
-    g.gatherMask |= static_cast<uint16_t>(1u << idx);
+    g.gatherMask |= static_cast<uint32_t>(1ul << idx);
     // The record stores the item index + 1 (zone::GATHER_*), so the inventory
     // slot is one less. itemAdd ignores an id past the table.
     const uint8_t slot = static_cast<uint8_t>(prop.gatherItem - 1);

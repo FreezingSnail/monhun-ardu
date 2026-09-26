@@ -66,7 +66,7 @@ void ZoneSuite(TestRunner &runner) {
         t.assert(g.roomMonsterKind, zone::MONSTER_LUNGE, "area has a beast");
         t.assert(g.player.x, 320, "area start spawn x");
         t.assert(g.player.y, 72, "area start spawn y");
-        t.assert(g.roomDoorCount, 1, "area door count");
+        t.assert(g.roomDoorCount, 2, "area door count (camp + cavern)");
         t.assert(g.roomHealCount, 0, "area has no heal rect");
 
         loadRoom(g, zone::ROOM_CAMP, zone::SPAWN_CAMP_ENTRY);
@@ -78,6 +78,17 @@ void ZoneSuite(TestRunner &runner) {
         t.assert(g.player.y, 44, "camp entry spawn y");
         t.assert(g.roomHealCount, 1, "camp heal rect count");
         t.assert(roomIsSafe(g), 1, "roomIsSafe camp");
+
+        loadRoom(g, zone::ROOM_CAVERN, zone::SPAWN_CAVERN_FROM_AREA);
+        t.assert(g.roomId, zone::ROOM_CAVERN, "cavern room id");
+        t.assert(g.roomW, 256, "cavern roomW");
+        t.assert(g.roomH, 112, "cavern roomH");
+        t.assert(g.roomMonsterKind, zone::MONSTER_NONE, "cavern is safe (no beast)");
+        t.assert(g.player.x, 116, "cavern from_area spawn x");
+        t.assert(g.player.y, 88, "cavern from_area spawn y");
+        t.assert(g.roomDoorCount, 1, "cavern door count");
+        t.assert(g.roomPropCount, 6, "cavern gather node count");
+        t.assert(roomIsSafe(g), 1, "roomIsSafe cavern");
 
         loadRoom(g, zone::ROOM_AREA, zone::SPAWN_AREA_START);
         t.assert(g.roomId, zone::ROOM_AREA, "area id after camp");
@@ -152,6 +163,38 @@ void ZoneSuite(TestRunner &runner) {
         t.assert(g.roomId, zone::ROOM_CAMP, "transitioned back to camp");
         t.assert(g.player.x, 104, "camp from_area spawn x");
         t.assert(g.player.y, 40, "camp from_area spawn y");
+        suite.addTest(t);
+    }
+
+    {
+        Test t("door round-trip area -> cavern lands on the from_area spawn");
+        Game g;
+        newGame(g, W_SWORD, MODE_HUNT);
+        loadRoom(g, zone::ROOM_AREA, zone::SPAWN_AREA_START);
+        zparkBeast(g, 350, 90);   // keep the beast off the door probe
+        // Clear the arrival latch, then enter the north door (176,0,16,8).
+        g.player.x = 100;
+        g.player.y = 80;
+        zticks(g, 1, Z_IDLE);
+        t.assert(g.doorLatch, 0, "area latch cleared");
+        g.player.x = 180;
+        g.player.y = 0;
+        zticks(g, 1, Z_IDLE);
+        t.assert(g.roomId, zone::ROOM_CAVERN, "transitioned into the cavern");
+        t.assert(g.player.x, 116, "cavern from_area spawn x");
+        t.assert(g.player.y, 88, "cavern from_area spawn y");
+        t.assert(roomIsSafe(g), 1, "cavern arrived safe");
+        // Walk back out through the south mouth (112,104,16,8).
+        g.player.x = 140;
+        g.player.y = 60;
+        zticks(g, 1, Z_IDLE);
+        t.assert(g.doorLatch, 0, "cavern latch cleared");
+        g.player.x = 112;
+        g.player.y = 104;
+        zticks(g, 1, Z_IDLE);
+        t.assert(g.roomId, zone::ROOM_AREA, "returned to the area");
+        t.assert(g.player.x, 184, "area from_cavern spawn x");
+        t.assert(g.player.y, 16, "area from_cavern spawn y");
         suite.addTest(t);
     }
 

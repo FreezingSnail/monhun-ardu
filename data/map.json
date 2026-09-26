@@ -150,11 +150,19 @@
         "start": {
           "x": 320,
           "y": 72
+        },
+        "from_cavern": {
+          "x": 184,
+          "y": 16
         }
       },
       "doors": [
         {
           "to": "camp",
+          "toSpawn": "from_area"
+        },
+        {
+          "to": "cavern",
           "toSpawn": "from_area"
         }
       ],
@@ -162,6 +170,81 @@
         "kind": "lunge",
         "spawn": "start"
       }
+    },
+    {
+      "id": "cavern",
+      "w": 256,
+      "h": 112,
+      "image": "images/maps/mh_map_cavern_256x112.png",
+      "props": [
+        {
+          "type": "post",
+          "sheet": "mh_map_tent",
+          "frame": 0,
+          "gather": {
+            "item": "blue_mushroom",
+            "yield": 2
+          }
+        },
+        {
+          "type": "post",
+          "sheet": "mh_map_tent",
+          "frame": 0,
+          "gather": {
+            "item": "ore",
+            "yield": 1
+          }
+        },
+        {
+          "type": "post",
+          "sheet": "mh_map_tent",
+          "frame": 0,
+          "gather": {
+            "item": "ore",
+            "yield": 2
+          }
+        },
+        {
+          "type": "post",
+          "sheet": "mh_map_tent",
+          "frame": 0,
+          "gather": {
+            "item": "bug",
+            "yield": 1
+          }
+        },
+        {
+          "type": "post",
+          "sheet": "mh_map_tent",
+          "frame": 0,
+          "gather": {
+            "item": "ore",
+            "yield": 2
+          }
+        },
+        {
+          "type": "post",
+          "sheet": "mh_map_tent",
+          "frame": 0,
+          "gather": {
+            "item": "bug",
+            "yield": 1
+          }
+        }
+      ],
+      "spawns": {
+        "from_area": {
+          "x": 116,
+          "y": 88
+        }
+      },
+      "doors": [
+        {
+          "to": "area",
+          "toSpawn": "from_cavern"
+        }
+      ],
+      "monster": null
     }
   ]
 }

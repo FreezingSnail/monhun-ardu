@@ -126,9 +126,11 @@ QuestDef (v2): id, goalKind u8 (0 kill / 1 gather), target u8
   re-checked in `ACTION_TAKE_QUEST`), and a turn-in row fills `recipe[0] =
   (rewardItem, rewardCount)` plus `cost = rewardZenny` (the def is the source of
   truth, like the armor recipe rows). Payout is zenny + the optional material.
-- Unlock chain (monhun-ardu-dlp.3): the four shipped quests are
-  `slay_lunge` (id 0, always) -> `slay_sweep` (id 1, unlock 1) -> `gather_ore`
-  (id 2, unlock 2) -> `crush_heavy` (id 3, unlock 3), where `unlockFlag = N`
+- Unlock chain (monhun-ardu-dlp.3, demo retune): `gather_ore` (id 2) is now
+  `unlock 0` so the demo can show gather -> turn-in immediately (its desc points
+  at the cavern mine); the kill chain stays
+  `slay_lunge` (id 0, always) -> `slay_sweep` (id 1, unlock 1) ->
+  `crush_heavy` (id 3, unlock 3 = gather_ore done), where `unlockFlag = N`
   means "quest index N-1 must be done". Turn one in and the next take row goes
   live; the board still draws a locked row (no graying/filtering yet).
 - Live hub loop (monhun-ardu-isp.1; the hub is the root, the 5r1/opening menu is

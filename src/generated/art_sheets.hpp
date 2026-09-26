@@ -33,20 +33,20 @@ constexpr uint8_t ART_SHEET_FXHEAD_BULL = 13;
 constexpr uint8_t ART_SHEET_FXHOOVES_BULL = 14;
 
 // Host-readable u24 addresses (list order), for the address-table tests.
-constexpr uint32_t ART_SHEET_ADDR_FXMONSTER = 0x004CE2;
-constexpr uint32_t ART_SHEET_ADDR_FXMONSTER_HEAVY = 0x012466;
-constexpr uint32_t ART_SHEET_ADDR_FXMONSTER_LUNGE = 0x00F736;
-constexpr uint32_t ART_SHEET_ADDR_FXMONSTER_SWEEP = 0x006B80;
-constexpr uint32_t ART_SHEET_ADDR_FXPOLE = 0x006128;
-constexpr uint32_t ART_SHEET_ADDR_FXCHICKENATK = 0x0116E4;
-constexpr uint32_t ART_SHEET_ADDR_FXBULLATK = 0x0143E8;
-constexpr uint32_t ART_SHEET_ADDR_FXHEAVYATK = 0x015B1C;
-constexpr uint32_t ART_SHEET_ADDR_FXTAILSPIN = 0x00263E;
-constexpr uint32_t ART_SHEET_ADDR_FXTAIL_HEAVY = 0x016D1E;
-constexpr uint32_t ART_SHEET_ADDR_FXHEAD_CHICKEN = 0x0156DE;
-constexpr uint32_t ART_SHEET_ADDR_FXLEGS_CHICKEN = 0x0069CE;
-constexpr uint32_t ART_SHEET_ADDR_FXHEAD_BULL = 0x018282;
-constexpr uint32_t ART_SHEET_ADDR_FXHOOVES_BULL = 0x005EE4;
+constexpr uint32_t ART_SHEET_ADDR_FXMONSTER = 0x004D55;
+constexpr uint32_t ART_SHEET_ADDR_FXMONSTER_HEAVY = 0x0124D9;
+constexpr uint32_t ART_SHEET_ADDR_FXMONSTER_LUNGE = 0x00F7A9;
+constexpr uint32_t ART_SHEET_ADDR_FXMONSTER_SWEEP = 0x006BF3;
+constexpr uint32_t ART_SHEET_ADDR_FXPOLE = 0x00619B;
+constexpr uint32_t ART_SHEET_ADDR_FXCHICKENATK = 0x011757;
+constexpr uint32_t ART_SHEET_ADDR_FXBULLATK = 0x01445B;
+constexpr uint32_t ART_SHEET_ADDR_FXHEAVYATK = 0x015B8F;
+constexpr uint32_t ART_SHEET_ADDR_FXTAILSPIN = 0x0026B1;
+constexpr uint32_t ART_SHEET_ADDR_FXTAIL_HEAVY = 0x016D91;
+constexpr uint32_t ART_SHEET_ADDR_FXHEAD_CHICKEN = 0x015751;
+constexpr uint32_t ART_SHEET_ADDR_FXLEGS_CHICKEN = 0x006A41;
+constexpr uint32_t ART_SHEET_ADDR_FXHEAD_BULL = 0x0182F5;
+constexpr uint32_t ART_SHEET_ADDR_FXHOOVES_BULL = 0x005F57;
 
 #if defined(__AVR__)
 // Cart sheet addresses in list order: index = ART_SHEET_<NAME> - 1.

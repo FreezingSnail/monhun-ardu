@@ -57,7 +57,7 @@ inline void test_quests(FxTest &test) {
     test.expectEq(d2.rewardZenny, 200, F("q2 reward"));
     test.expectEq(d2.rewardItem, static_cast<uint8_t>(ITEM_ORE + 1), F("q2 ore material"));
     test.expectEq(d2.rewardCount, 2, F("q2 ore count"));
-    test.expectEq(d2.unlockFlag, 2, F("q2 unlock chain"));
+    test.expectEq(d2.unlockFlag, 0, F("q2 unlock chain (demo: always available)"));
     test.expectEq(d3.id, 3, F("q3 id"));
     test.expectEq(d3.goalKind, quests::GOAL_KILL, F("q3 goal kill"));
     test.expectEq(d3.target, MON_HEAVY, F("q3 target"));

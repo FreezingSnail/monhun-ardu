@@ -982,7 +982,7 @@ struct Game {
     // never touches it, so a node stays depleted across a room round-trip).
     // Appended last so a default Game keeps every existing field offset.
     uint8_t items[ITEM_COUNT];
-    uint16_t gatherMask;
+    uint32_t gatherMask;
     // Carve (bead monhun-ardu-prg.3): carvesDone is the successful-carve count
     // this hunt (cap CARVE_MAX; newGame resets it). carveHold mirrors a live
     // PS_CARVE so the over-screen app layer knows the A press belongs to the

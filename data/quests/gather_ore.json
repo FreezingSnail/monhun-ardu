@@ -4,11 +4,11 @@
   "target": "ore",
   "need": 3,
   "desc": [
-    "MINE ORE FROM THE",
-    "AREA NODES."
+    "MINE ORE IN THE",
+    "CAVERN."
   ],
   "rewardZenny": 200,
   "rewardItem": "ore",
   "rewardCount": 2,
-  "unlockFlag": 2
+  "unlockFlag": 0
 }

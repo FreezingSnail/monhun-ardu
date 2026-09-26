@@ -417,8 +417,8 @@
     {
       "declaration": "fxdata/cards/Sprites.txt",
       "path": "images/cards/mh_card_quest_gather_ore_0_128x64.png",
-      "sha256": "0de458b2d071beb00090993692393c9629bab43b51f460417ad0e1863e767578",
-      "size": 510,
+      "sha256": "276ba6f4b44dc94dfdf7a89a49d99836341262890d3d9030d7397027c6e73162",
+      "size": 488,
       "symbol": "mh_card_quest_gather_ore_0"
     },
     {
@@ -1087,6 +1087,13 @@
       "symbol": "mh_map_camp"
     },
     {
+      "declaration": "fxdata/maps/Sprites.txt",
+      "path": "images/maps/mh_map_cavern_256x112.png",
+      "sha256": "2eb5abf964734b53126c01c7954be51523d5f487d46597a56230be55eca03194",
+      "size": 656,
+      "symbol": "mh_map_cavern"
+    },
+    {
       "declaration": "fxdata/screens/Sprites.txt",
       "path": "images/screens/mh_screen_armor_forge_0_128x64.png",
       "sha256": "b4550a825017ead07e2317b5405113aedeca77c7b8638210d83b715d9ece6f0c",
@@ -1364,8 +1371,8 @@
     },
     {
       "path": "data/map.json",
-      "sha256": "f09ec6ed3b6084d1da01bb4f900fed6d63bf6b1bc5d430fae4bbfbf9a79c8eaf",
-      "size": 3254
+      "sha256": "a063ad01682e2aa89e50e8b79e7e7c1715c6bcb94452cdc26f200e4f0a36a870",
+      "size": 4913
     },
     {
       "path": "data/quests/crush_heavy.json",
@@ -1374,8 +1381,8 @@
     },
     {
       "path": "data/quests/gather_ore.json",
-      "sha256": "4ccf86e141ad268337e060ed11555468aa8072e6ce90edb711588cc5636bbd26",
-      "size": 214
+      "sha256": "4715d89bf0fc8b6c5e4180a11f7d87b20ef898511b94fbddcd825426a3d96d5f",
+      "size": 208
     },
     {
       "path": "data/quests/slay_lunge.json",
@@ -1512,8 +1519,8 @@
     },
     {
       "path": "fxdata/cards/Sprites.txt",
-      "sha256": "a3471f5940eb80301107e28d6b033fa4f83d62e3f4bf6ac394909b32fc7ea978",
-      "size": 973869,
+      "sha256": "5c9529f5f509acfcd6be390eb48114b35d49c5ba80435fa9a2a2474f6c344494",
+      "size": 973811,
       "symbols": [
         "mh_card_armor_hunter_helm_0",
         "mh_card_armor_hunter_helm_1",
@@ -1655,11 +1662,12 @@
     },
     {
       "path": "fxdata/maps/Sprites.txt",
-      "sha256": "2dd4f034c043bdd9d605128e7db822b9495c756f41dc3a6de5ffc52ae41deb69",
-      "size": 74975,
+      "sha256": "f654392fa7da3f6c36d614c3aa5864725980766e983abba50bc5ea0279125011",
+      "size": 117294,
       "symbols": [
         "mh_map_area",
-        "mh_map_camp"
+        "mh_map_camp",
+        "mh_map_cavern"
       ]
     },
     {
@@ -1689,7 +1697,7 @@
     },
     {
       "path": "fxdata/tables/cards.bin",
-      "sha256": "1b1edad3dad868e616380bf3efcf91d1189200522ec61c030b98e0f181d180ee",
+      "sha256": "fcb46396e872d8d727509a72d5ffb8408a08897f7ab0ab2f3087e22a4fe69a28",
       "size": 1031,
       "symbol": "mhCards"
     },
@@ -1701,7 +1709,7 @@
     },
     {
       "path": "fxdata/tables/equip.bin",
-      "sha256": "68830cc94b45d8d0855fe9e28447634abbcae95b101fd6e0005bcfce2aed4413",
+      "sha256": "8a47ffa1080ab52bc8ed862e9a4302d7b72853f568eb06fb45d58d5017777aa4",
       "size": 1053,
       "symbol": "mhEquip"
     },
@@ -1731,13 +1739,13 @@
     },
     {
       "path": "fxdata/tables/quests.bin",
-      "sha256": "6a42db3485e6f9546ee136f3d30fddcc48b3689b1b99c17265686633e0ed97af",
+      "sha256": "f896ef85f1ea025331f4fab7f03e192aad20b93a6241ce43983c578e23b0e70a",
       "size": 53,
       "symbol": "mhQuests"
     },
     {
       "path": "fxdata/tables/screens.bin",
-      "sha256": "928d7fc462f61a774ea4757cef166a613b18a9f7e76523e1ddd01e2bf5c452ff",
+      "sha256": "7aa85a1f758cadb7f6f269da10eef5d3c229e289f2d045f0e8204e05bf1e9746",
       "size": 1470,
       "symbol": "mhScreens"
     },
@@ -1761,8 +1769,8 @@
     },
     {
       "path": "fxdata/tables/zones.bin",
-      "sha256": "bd18325503d50fa7da2d5864b09c23fa730e89fb84e0caf1dd46e6e9235595ba",
-      "size": 249,
+      "sha256": "37c64a9cd53b53699ffe54d62fcc414aac575ddae2ca8ce1142d7e748745059d",
+      "size": 364,
       "symbol": "mhZones"
     },
     {
@@ -1812,13 +1820,18 @@
     },
     {
       "path": "images/masks/mh_map_area_384x112.png",
-      "sha256": "c1d7f5316561aea2b711d4f39abb1cac75ed7f857fbcebba81273da8d016ea75",
-      "size": 1004
+      "sha256": "8cdbbc64ab6805941b37d369a2dc8caf8001d9b15dbc6031d727b92ed9b0d33a",
+      "size": 1034
     },
     {
       "path": "images/masks/mh_map_camp_128x56.png",
       "sha256": "707c5a0398f806f00944bdbcf109823d5e2696765f8a8d9186154023d0780521",
       "size": 486
+    },
+    {
+      "path": "images/masks/mh_map_cavern_256x112.png",
+      "sha256": "1942bb921906efa6bb817b4f0a42afd410864f27006283830ebe3e73219bfb35",
+      "size": 702
     },
     {
       "path": "images/masks/mh_player_base_16x16.png",
@@ -1829,18 +1842,18 @@
   "outputs": [
     {
       "path": "fxdata/fxdata-data.bin",
-      "sha256": "18aa3bc560631266e187f5d5db153b56443652331d812ccdad112200f5252254",
-      "size": 2961476
+      "sha256": "80fe33b194db758785953cb002f19d7923b354716de50495c3a4302f734886b8",
+      "size": 2972343
     },
     {
       "path": "fxdata/fxdata.bin",
-      "sha256": "943ccc5b387667107ee69351cfcf543b21a1147e8021cde419dd9e7f17751d98",
-      "size": 2961664
+      "sha256": "dc71553348222326d0dc78bd0ab21128d46058dc2c2f6b057f030fb03a44f5bb",
+      "size": 2972416
     },
     {
       "path": "fxdata/fxdata.h",
-      "sha256": "79ea15659e961f0f3fb25077beff766cfc109b079f0a3fb5f491ffe04162818f",
-      "size": 9654
+      "sha256": "96ed46a414f167ebefe892886c4efad89ac7fef82778f45b9246a0b463de4f68",
+      "size": 9699
     },
     {
       "path": "fxdata/tables/armor.bin",
@@ -1849,7 +1862,7 @@
     },
     {
       "path": "fxdata/tables/cards.bin",
-      "sha256": "1b1edad3dad868e616380bf3efcf91d1189200522ec61c030b98e0f181d180ee",
+      "sha256": "fcb46396e872d8d727509a72d5ffb8408a08897f7ab0ab2f3087e22a4fe69a28",
       "size": 1031
     },
     {
@@ -1859,7 +1872,7 @@
     },
     {
       "path": "fxdata/tables/equip.bin",
-      "sha256": "68830cc94b45d8d0855fe9e28447634abbcae95b101fd6e0005bcfce2aed4413",
+      "sha256": "8a47ffa1080ab52bc8ed862e9a4302d7b72853f568eb06fb45d58d5017777aa4",
       "size": 1053
     },
     {
@@ -1869,12 +1882,12 @@
     },
     {
       "path": "fxdata/tables/quests.bin",
-      "sha256": "6a42db3485e6f9546ee136f3d30fddcc48b3689b1b99c17265686633e0ed97af",
+      "sha256": "f896ef85f1ea025331f4fab7f03e192aad20b93a6241ce43983c578e23b0e70a",
       "size": 53
     },
     {
       "path": "fxdata/tables/screens.bin",
-      "sha256": "928d7fc462f61a774ea4757cef166a613b18a9f7e76523e1ddd01e2bf5c452ff",
+      "sha256": "7aa85a1f758cadb7f6f269da10eef5d3c229e289f2d045f0e8204e05bf1e9746",
       "size": 1470
     },
     {
@@ -1884,8 +1897,8 @@
     },
     {
       "path": "src/fxdata.h",
-      "sha256": "79ea15659e961f0f3fb25077beff766cfc109b079f0a3fb5f491ffe04162818f",
-      "size": 9654
+      "sha256": "96ed46a414f167ebefe892886c4efad89ac7fef82778f45b9246a0b463de4f68",
+      "size": 9699
     },
     {
       "path": "src/generated/armor_data.hpp",
@@ -1909,7 +1922,7 @@
     },
     {
       "path": "src/generated/art_sheets.hpp",
-      "sha256": "dd59e99fafb8d3bea9b335f439e32a0d8c195d29d22bd19c7e06abc8dc6e05f0",
+      "sha256": "d83a2c71f41558be834bbf3db4ccdc9c5e08b1ccced7a3285f5769d785c55f91",
       "size": 4044
     },
     {
@@ -1934,7 +1947,7 @@
     },
     {
       "path": "src/generated/equip_meta.hpp",
-      "sha256": "262cdbb7200b32e9629d6f9ebfb82ef9cd6897bea36d98c24a3322c24cbbf73a",
+      "sha256": "c3266b216a739bf708296d8d271a69661d2b8c1e6ea1a9c1373424db9a0b5a0c",
       "size": 29031
     },
     {
@@ -1984,13 +1997,13 @@
     },
     {
       "path": "src/generated/zone_data.hpp",
-      "sha256": "1964f74aad6fb763139a3eaabece109eb9516019bb11e8d05b86a7686ae76f00",
-      "size": 4216
+      "sha256": "07fd5f28f75b17af0713a332933157e10df8d0f67049aa75153a0fe6f2d5e10a",
+      "size": 5070
     },
     {
       "path": "src/generated/zone_meta.hpp",
-      "sha256": "2235ff08d0640cf4e5c65a8649bd6555fb687729ad1aaeb02c575f604c3b3fa0",
-      "size": 8390
+      "sha256": "7e8486ce11f40fe872ab28a990e175488d5d98af60d4dd5f275c48849c81c088",
+      "size": 10049
     }
   ],
   "schema_version": 1

@@ -59,7 +59,16 @@ the render path (fie.5) blits the room layers with `seekData`.
 - All coordinates/rects must stay inside the room's own `w`/`h`. Every field
   is integer-only (floats/bools are rejected); unknown keys are errors.
 
-### Authored gather nodes (bead prg.4)
+### Demo room graph
+
+Three rooms ship for the demo: `camp` 128x56 (tent heal + smithy) <-west/east
+door-> `area` 384x112 (lunge beast, mixed nodes) <-south/north-mouth-> `cavern`
+256x112 (safe mine). The cavern door leaves the area's north edge
+(176,0,16,8) and the cavern's south mouth (112,104,16,8) returns to the area at
+its `from_cavern` spawn; the area door count is pinned in `tst/zone_test.hpp`
+(including both round-trips).
+
+### Authored gather nodes (bead prg.4; cavern added with the demo map)
 
 | room | prop | item | yield | rect |
 |---|---|---|---|---|
@@ -74,9 +83,17 @@ the render path (fie.5) blits the room layers with `seekData`.
 | area | `PROP_AREA_5` | ore | 1 | 120,88,8,8 |
 | area | `PROP_AREA_6` | ore | 2 | 352,16,8,8 |
 | area | `PROP_AREA_7` | bug | 1 | 200,96,8,8 |
+| cavern | `PROP_CAVERN_0` | blue_mushroom | 2 | 24,72,8,8 |
+| cavern | `PROP_CAVERN_1` | ore | 1 | 40,24,8,8 |
+| cavern | `PROP_CAVERN_2` | ore | 2 | 88,72,8,8 |
+| cavern | `PROP_CAVERN_3` | bug | 1 | 152,88,8,8 |
+| cavern | `PROP_CAVERN_4` | ore | 2 | 200,32,8,8 |
+| cavern | `PROP_CAVERN_5` | bug | 1 | 216,88,8,8 |
 
 Nodes stay clear of spawns, doors, heal rects and the monster start; every
 node is picked once per hunt (`Game::gatherMask`, reset only by `newGame`).
+The mask is one bit per global prop record and widened to `uint32_t` with the
+cavern (19 props total); `src/core/items.hpp` asserts `PROPS_COUNT <= 32`.
 
 `image` must be `images/maps/<room symbol>_<W>x<H>.png` with `<room symbol>` =
 `mh_map_<id>` and exactly the room's `W`x`H`. The generator authors a
