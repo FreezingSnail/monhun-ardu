@@ -32,6 +32,13 @@ static Game g_gear;
 // file-scope Game (no extra stack).
 static Game g_smithy;
 
+// File-scope test state: the suites run at the stack ceiling (any small growth
+// in the draw path hung the pixel section before), so the 44 B SaveBlocks and
+// the text buffer live here instead of on the stack. Every block is
+// saveDefaults()-initialized before use; `out` is a load target.
+static SaveBlock save, act, eep, out, ps, qs2, gear, skillSave, moveSave, fsave;
+static char ctext[SCREEN_TEXT_BUF];
+
 // ---- EEPROM backends: the real one and a write-counting wrapper ------------
 static uint16_t eepWrites = 0;
 
@@ -117,7 +124,6 @@ inline void test_screens(FxTest &test) {
     test.expectEq(r0.cond, screens::COND_ALWAYS, F("row4 cond"));
 
     // ----------------------------------------------------- nav/scroll
-    SaveBlock save;
     saveDefaults(save);
 
     ScreenState st;
@@ -166,7 +172,6 @@ inline void test_screens(FxTest &test) {
     ScreenRow q0, gw0;
     screenReadRow(screenRowOffsetAt(screens::SCREEN_QUESTS, 0), q0);
     screenReadRow(screenRowOffsetAt(screens::SCREEN_GEAR, 0), gw0);
-    SaveBlock act;
     saveDefaults(act);
     test.expectEq(screenCondOk(act, q0), 1, F("take always allowed"));
     test.expectEq(screenApplyAction(act, q0), 1, F("take applies"));
@@ -185,7 +190,6 @@ inline void test_screens(FxTest &test) {
     test.expectEq(appScreenBack(screens::SCREEN_HUB), APP_NAV_NONE, F("hub B is a root no-op"));
 
     // ----------------------------------------------------- EEPROM roundtrip
-    SaveBlock eep;
     saveDefaults(eep);
     eep.zenny = 1234;
     saveSetWeaponOwned(eep, forge::NODE_GUN_T2);   // save v5 owned bitset
@@ -198,7 +202,6 @@ inline void test_screens(FxTest &test) {
     saveQuestSet(eep, 4, 0);
     test.expectEq(saveStore(eep, REAL_BACKEND), 1, F("eeprom store verifies"));
 
-    SaveBlock out;
     test.expectEq(saveLoad(out, REAL_BACKEND), 1, F("eeprom load valid"));
     test.expectEq(out.zenny, 1234, F("eeprom zenny"));
     test.expectEq(saveWeaponOwned(out, forge::NODE_GUN_T2), 1, F("eeprom owned bit"));
@@ -244,7 +247,6 @@ inline void test_screens(FxTest &test) {
         FX::disableOLED();
     }
     clearFb();
-    SaveBlock ps;
     saveDefaults(ps);
     ps.zenny = 1234;
     ScreenState draw;
@@ -288,7 +290,6 @@ inline void test_screens(FxTest &test) {
     // hbk.13 dropped the hub quest progress column: an active quest no longer
     // draws `p/n` on the HUNT row (progress stays on the quest card + board).
     clearFb();
-    SaveBlock qs2;
     saveDefaults(qs2);
     qs2.activeQuest = quests::QUEST_SLAY_LUNGE;   // need 3
     qs2.progress = 2;
@@ -385,7 +386,6 @@ inline void test_screens(FxTest &test) {
     test.expectEq(appScreenAccept(screens::SCREEN_GEAR, g5), APP_NAV_NONE, F("gear skill row is inert"));
     test.expectEq(appScreenAccept(screens::SCREEN_GEAR, g0), APP_NAV_NONE, F("gear slot row is a save action"));
     test.expectEq(cardRowIndex(g0), CARD_NONE, F("gear slot row opens no card"));
-    SaveBlock gear;
     saveDefaults(gear);
     test.expectEq(screenApplyAction(gear, g0), 0, F("gear slot row is not a screen action"));
     test.expectEq(screenCondOk(gear, g0), 1, F("gear slot row always live"));
@@ -400,7 +400,6 @@ inline void test_screens(FxTest &test) {
     test.expectEq(screenGearSlotCount(3), 1, F("charm slot count"));
     uint8_t cid;
     uint16_t coff;
-    char ctext[SCREEN_TEXT_BUF];
     screenGearSlotEntry(0, 0, cid, coff);
     test.expectEq(cid, forge::NODE_SWORD_BASE, F("weapon cand0 id sword root"));
     test.expectEq(screenReadText(coff + 1, mhFxReadU8(screenCart(coff)), ctext), 6, F("weapon cand0 label len"));
@@ -470,10 +469,27 @@ inline void test_screens(FxTest &test) {
     test.expectEq(screenGearSlotCycle(gear, readout, 1), 1, F("head slot A equips"));
     test.expectEq(gear.equip[armor::SLOT_HEAD], armor::ARMOR_HUNTER_HELM + 1, F("helm equipped"));
 
+    // ------------------------ gear slot label overwrite (baked tail erased)
+    // A candidate name shorter than the baked slot label ("GN T1" over
+    // "WEAPON") must not leave the baked tail visible: the draw erases the
+    // baked label over its full baked width before drawing the name. Pixel pin
+    // on plane 0 (every shade lights): name ink at x 10..29, the baked 6th
+    // glyph cell (x 30..33) clear; the head row keeps its baked "HEAD" (nothing
+    // crafted -> no candidate, no erase).
+    waitPlane(0);
+    clearFb();
+    saveDefaults(gear);
+    gear.equippedNode = forge::NODE_GUN_BASE;   // slot 0 defaults to "GN T1"
+    screenEnter(readout, screens::SCREEN_GEAR, gear);
+    test.expectEq(readout.slotSel[0], 14, F("gun root defaults the weapon slot"));
+    drawScreen(readout, gear, g_gear);
+    test.expectEq(countBits(10, 29, 11, 18) > 0 ? 1 : 0, 1, F("weapon candidate name ink"));
+    test.expectEq(countBits(30, 33, 11, 18), 0, F("baked label tail erased"));
+    test.expectEq(countBits(10, 25, 20, 27) > 0 ? 1 : 0, 1, F("head baked label kept (nothing crafted)"));
+
     // -------------------------------------- gear skill readout cache (gs.2)
     // Cart armor records -> ScreenState cache: helm (attack_up 6, defense_up 4)
     // + mail (attack_up 6, health_up 4) -> attack 12/S, health 4/inert.
-    SaveBlock skillSave;
     saveDefaults(skillSave);
     saveSetCrafted(skillSave, armor::ARMOR_HUNTER_HELM);
     saveSetCrafted(skillSave, armor::ARMOR_HUNTER_MAIL);
@@ -490,7 +506,6 @@ inline void test_screens(FxTest &test) {
 
     // Equipping a piece through the gear slot moves the readout: mail added to
     // the helm -> attack 6 -> 12 (crosses S), health 0 -> 4.
-    SaveBlock moveSave;
     saveDefaults(moveSave);
     saveSetCrafted(moveSave, armor::ARMOR_HUNTER_HELM);
     saveSetCrafted(moveSave, armor::ARMOR_HUNTER_MAIL);
@@ -667,7 +682,6 @@ inline void test_screens_smithy(FxTest &test) {
     // Plane ISR drives waitForNextPlane: start the gray mode once (same
     // discipline as test_screens), else waitPlane() spins forever.
     arduboy.startGray();
-    SaveBlock fsave;
     saveDefaults(fsave);
     ScreenState forge;
     screenEnter(forge, screens::SCREEN_FORGE, fsave);

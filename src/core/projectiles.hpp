@@ -73,10 +73,12 @@ static void stepWorldBody(Game &g, const Input &inp, bool aP, bool bP, bool bR) 
     // the beast's home, leaves the beast and target untouched while the player
     // controls / HUD / doors stay live. Room bounds are carved out of the
     // parity image, so this folds to the pre-room single-branch dispatch there.
+    // No beast here: the target reads null (its rect/state refresh below is a
+    // no-op). With a beast the target was already synced at the end of the
+    // previous tick (and by updateActiveTarget on arrival), so updatePlayer
+    // reads a current rect without another sync.
     const bool beast = beastHere(g);
-    if (beast)
-        syncMonsterTarget(g);
-    else
+    if (!beast)
         g.target.alive = false;
     updatePlayer(g, inp, aP, bP, bR);
     if (beast)

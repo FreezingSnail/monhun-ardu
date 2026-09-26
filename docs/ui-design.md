@@ -292,6 +292,11 @@ every list stays static and only small live overlays remain:
   slot and equips it in place (no card); a slot with nothing owned shows the
   baked slot label only, and unowned gear is never listed. The LR cycle is
   deferred (measured +~70 B; the image sits at 184 free).
+  **Label erase (5gp):** a slot row draws its candidate name at the label lane,
+  so it first erases the baked slot label over its full baked width
+  (`hudBlk`, shade 0). Without it the live name's glyph gaps let the baked ink
+  through and a shorter name ("GN T1" over "WEAPON") read as the label written
+  over itself. Pinned by `test_screens` (baked tail clear + name ink).
 - Budget: the wave is funded by hbk.9 (hub strip deleted, quest column leaned,
   fixed-stride page table), hbk.13 (UPGRADE slim) and hbk.15 (sound cut,
   `-DMH_AUDIO=0`) — 28826 B / 870 free before the GEAR slot view, 29512 B /

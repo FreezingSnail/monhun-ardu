@@ -355,10 +355,11 @@ inline uint8_t screenMapPage(const SaveBlock &save) {
     // page 0). gen-quests validates every hint against the room list, and an
     // absent hint is QUEST_ROOM_HINT_NONE (0xFF), which +1 wraps back to page
     // 0 -- so one compare covers both.
-    const uint8_t room = screenMapQuestRoom(save);
+    // The hint read is spelled out (not via screenMapQuestRoom) so the
+    // shipping image carries one copy; the helper stays for the device suites.
     // QUEST_ROOM_HINT_NONE (0xFF) + 1 wraps to page 0, so one compare covers
     // both "no quest" and "no hint".
-    return room < zone::ROOMS_COUNT ? static_cast<uint8_t>(room + 1) : 0;
+    return static_cast<uint8_t>(mhPgmReadU8(&quests::QUEST_ROOM_HINT[save.activeQuest]) + 1);
 }
 
 // One page of the list. Called once per plane (same discipline as
@@ -440,6 +441,11 @@ inline void drawScreen(const ScreenState &s, const SaveBlock &save, const Game &
             screenGearSlotEntry(slot, s.slotSel[slot], id, labelOff);
             const uint8_t state = screenGearSlotState(save, slot, id);
             if (state != 0) {
+                // Erase the baked slot label over its full baked width first:
+                // the candidate name's glyph gaps let the baked ink through, so
+                // a shorter name ("GN T1" over "WEAPON") read as the label
+                // written over itself. Nothing owned keeps the baked label.
+                hudBlk(SCREEN_LABEL_X, y, static_cast<int16_t>(labelLen * 4), 8, 0);
                 const uint8_t ln = screenReadText(static_cast<uint16_t>(labelOff + 1), mhFxReadU8(screenCart(labelOff)), text);
                 screenTextLabel(selected ? fxfontw : fxfontg, static_cast<uint8_t>(SCREEN_LABEL_X), y, text, ln);
                 screenMarker(state == 2, true, static_cast<int16_t>(y));
