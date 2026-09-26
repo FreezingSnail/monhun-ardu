@@ -196,6 +196,17 @@ seekData(mh_map_<id> + plane * ROOM_<ID>_IMAGE_LAYER_BYTES
 an AVR-only `static_assert` pins it against the live symbol, so a stale blob
 (fxdata.h changed without a regen) fails the device build.
 
+Shipping render (monhun-ardu-9kn): `-DMH_ROOM_IMAGE=1` is in the Makefile
+`SIZE_FLAGS`, so `drawRoom` blits the active room's stored layer instead of the
+procedural dot field (`drawArena` stays as the `MH_ROOM_IMAGE=0` carve).
+`roomImageInfo` maps all four room ids to their generated base/extent
+(camp/area/cavern/ridge); the pre-room default falls through to area. The layer
+is streamed per plane with the fused split reader; `ROOM_ROW_COEF[0] == 1`
+makes `camY & 7 == 0` a page copy through that same reader (its r0 carries the
+whole byte) so there is no separate copy path. `drawRoom` needs no rx/ry
+re-clamp: `renderScene` clamps the camera to the room extents, which equal the
+image extents for every room (`test_zones` pins bound w/h == image w/h).
+
 Placeholder art is a deterministic dark field with a light border and a white
 centre marker — enough to prove clipping/shift; fie.5 refines the real art.
 

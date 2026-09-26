@@ -41,7 +41,12 @@ full: gen build
 # drops the beeper (tone engine + TIMER3 ISR + cue edge detector), measured
 # -692 B flash. Sound is feel, not loop; the module stays in the tree behind the
 # flag (default 1), and the device test builds keep it so test_audio still runs.
-SIZE_FLAGS = --build-property compiler.cpp.extra_flags="-mcall-prologues -mrelax -DMH_NO_USB -DMH_AUDIO=0" \
+#
+# -DMH_ROOM_IMAGE=1 (monhun-ardu-9kn): the ground is the active room's stored
+# image (drawRoom, per-plane FX streaming) instead of the procedural dot field.
+# All four rooms ship authored art now; the image pipeline was always in the
+# tree (fie.8 compiled it out for budget). The dev targets keep the same define.
+SIZE_FLAGS = --build-property compiler.cpp.extra_flags="-mcall-prologues -mrelax -DMH_NO_USB -DMH_AUDIO=0 -DMH_ROOM_IMAGE=1" \
     --build-property compiler.c.extra_flags="-mrelax" \
     --build-property compiler.c.elf.extra_flags="-mrelax"
 
@@ -57,7 +62,7 @@ mini:
 # keeps DWARF, so F5/F8 stepping works).
 dev:
 	arduino-cli compile --fqbn "arduboy-homemade:avr:arduboy-fx" --optimize-for-debug --output-dir dist \
-	    --build-property compiler.cpp.extra_flags="-mcall-prologues -mrelax -DMH_NO_USB -DMH_AUDIO=0 -DMH_DEV=1" \
+	    --build-property compiler.cpp.extra_flags="-mcall-prologues -mrelax -DMH_NO_USB -DMH_AUDIO=0 -DMH_ROOM_IMAGE=1 -DMH_DEV=1" \
 	    --build-property compiler.c.extra_flags="-mrelax" \
 	    --build-property compiler.c.elf.extra_flags="-mrelax"
 	@elf=dist/monhun-ardu.ino.elf; \
@@ -73,7 +78,7 @@ dev:
 # Same FX-image check + Ardens launch as dev.
 dev-hitboxes:
 	arduino-cli compile --fqbn "arduboy-homemade:avr:arduboy-fx" --optimize-for-debug --output-dir dist \
-	    --build-property compiler.cpp.extra_flags="-mcall-prologues -mrelax -DMH_NO_USB -DMH_AUDIO=0 -DMH_DEV=1 -DDEBUG_HURTBOXES=1 -DMH_CARD_OFF=1" \
+	    --build-property compiler.cpp.extra_flags="-mcall-prologues -mrelax -DMH_NO_USB -DMH_AUDIO=0 -DMH_ROOM_IMAGE=1 -DMH_DEV=1 -DDEBUG_HURTBOXES=1 -DMH_CARD_OFF=1" \
 	    --build-property compiler.c.extra_flags="-mrelax" \
 	    --build-property compiler.c.elf.extra_flags="-mrelax"
 	@# MH_CARD_OFF carve: the hurtbox overlay (body + head/appendage zone wire)

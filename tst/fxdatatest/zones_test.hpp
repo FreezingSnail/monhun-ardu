@@ -155,7 +155,53 @@ inline void test_zones(FxTest &test) {
     test.expectEq(areaBug.gatherItem, zone::GATHER_BUG, F("area bug item"));
     test.expectEq(areaBug.gatherYield, 1, F("area bug yield"));
 
+    // -------------------------- 1b. room-image selectors + camera window
+    // roomImageInfo maps every shipped room to its generated meta base/extent
+    // (monhun-ardu-9kn: previously only camp resolved, everything else fell
+    // through to area, so cavern/ridge would blit the area art). The pre-room
+    // default falls through to area.
+    {
+        uint24_t img;
+        int16_t w, h;
+        roomImageInfo(zone::ROOM_CAMP, img, w, h);
+        test.expectEq(img, mh_map_camp, F("selector camp img"));
+        test.expectEq(static_cast<uint32_t>(w), zone::ROOM_CAMP_W, F("selector camp w"));
+        test.expectEq(static_cast<uint32_t>(h), zone::ROOM_CAMP_H, F("selector camp h"));
+        roomImageInfo(zone::ROOM_AREA, img, w, h);
+        test.expectEq(img, mh_map_area, F("selector area img"));
+        test.expectEq(static_cast<uint32_t>(w), zone::ROOM_AREA_W, F("selector area w"));
+        test.expectEq(static_cast<uint32_t>(h), zone::ROOM_AREA_H, F("selector area h"));
+        roomImageInfo(zone::ROOM_CAVERN, img, w, h);
+        test.expectEq(img, mh_map_cavern, F("selector cavern img"));
+        test.expectEq(static_cast<uint32_t>(w), zone::ROOM_CAVERN_W, F("selector cavern w"));
+        test.expectEq(static_cast<uint32_t>(h), zone::ROOM_CAVERN_H, F("selector cavern h"));
+        roomImageInfo(zone::ROOM_RIDGE, img, w, h);
+        test.expectEq(img, mh_map_ridge, F("selector ridge img"));
+        test.expectEq(static_cast<uint32_t>(w), zone::ROOM_RIDGE_W, F("selector ridge w"));
+        test.expectEq(static_cast<uint32_t>(h), zone::ROOM_RIDGE_H, F("selector ridge h"));
+    }
+
+    // drawRoom no longer re-clamps rx/ry (trim b): the renderScene camera clamp
+    // must already keep the window inside the image. Prove the active-room
+    // extents that camMaxX/Y clamp to equal the image extents for every room.
+    loadRoom(g, zone::ROOM_CAMP, zone::SPAWN_CAMP_ENTRY);
+    test.expectEq(static_cast<uint32_t>(roomBoundW(g)), zone::ROOM_CAMP_W, F("camp bound w == image w"));
+    test.expectEq(static_cast<uint32_t>(roomBoundH(g)), zone::ROOM_CAMP_H, F("camp bound h == image h"));
+    test.expectEq(static_cast<uint32_t>(camMaxX(g)), 0, F("camp camX pinned"));
+    loadRoom(g, zone::ROOM_AREA, zone::SPAWN_AREA_START);
+    test.expectEq(static_cast<uint32_t>(roomBoundW(g)), zone::ROOM_AREA_W, F("area bound w == image w"));
+    test.expectEq(static_cast<uint32_t>(roomBoundH(g)), zone::ROOM_AREA_H, F("area bound h == image h"));
+    test.expectEq(static_cast<uint32_t>(camMaxX(g)), zone::ROOM_AREA_W - SCREEN_W, F("area camX max"));
+    loadRoom(g, zone::ROOM_CAVERN, zone::SPAWN_CAVERN_FROM_AREA);
+    test.expectEq(static_cast<uint32_t>(roomBoundW(g)), zone::ROOM_CAVERN_W, F("cavern bound w == image w"));
+    test.expectEq(static_cast<uint32_t>(roomBoundH(g)), zone::ROOM_CAVERN_H, F("cavern bound h == image h"));
+    loadRoom(g, zone::ROOM_RIDGE, zone::SPAWN_RIDGE_FROM_AREA);
+    test.expectEq(static_cast<uint32_t>(roomBoundW(g)), zone::ROOM_RIDGE_W, F("ridge bound w == image w"));
+    test.expectEq(static_cast<uint32_t>(roomBoundH(g)), zone::ROOM_RIDGE_H, F("ridge bound h == image h"));
+
     // ------------------------------------------ 2. camp view: v == 0 copy
+    // v == 0 rides the split reader with ROOM_ROW_COEF[0] == 1 (r0 == the whole
+    // byte) instead of the deleted roomAsmCopy fast path.
     loadRoom(g, zone::ROOM_CAMP, zone::SPAWN_CAMP_ENTRY);
     test.expectEq(g.camX, 0, F("camp camX pinned"));
     test.expectEq(g.camY, 0, F("camp camY pinned"));
@@ -206,6 +252,23 @@ inline void test_zones(FxTest &test) {
         for (uint8_t x = 0; x < 128; x++)
             s_page[x] = static_cast<uint8_t>(static_cast<uint8_t>(s_page[x] >> v) | static_cast<uint8_t>(s_hi[x] << (8 - v)));
         test.expectEq(firstDiff(s_page, j), 0xFF, F("area plane1 split page"));
+    }
+
+    // ---------------------------- 3b. cavern view: v == 0 copy, 256 px stride
+    // Exotic-stride v == 0 copy (camp is 128 px): the newly wired cavern
+    // selector must blit mh_map_cavern on the current plane, and the column
+    // offset must stay a pure row stride.
+    loadRoom(g, zone::ROOM_CAVERN, zone::SPAWN_CAVERN_FROM_AREA);
+    const int16_t cx = 64;
+    syncPlane(2);
+    test.expectEq(arduboy.currentPlane(), 2, F("cavern on plane 2"));
+    clearFb();
+    drawRoom(g, cx, 0);
+    test.expectEq(countPageEq(0, 0x00), 128, F("cavern page0 still HUD"));
+    const uint24_t cavernLayer2 = mh_map_cavern + static_cast<uint24_t>(zone::ROOM_CAVERN_IMAGE_LAYER_BYTES) * 2;
+    for (uint8_t q = 0; q < 7; q++) {
+        FX::readDataBytes(cavernLayer2 + static_cast<uint24_t>(q) * zone::ROOM_CAVERN_W + static_cast<uint16_t>(cx), s_page, 128);
+        test.expectEq(firstDiff(s_page, static_cast<uint8_t>(1 + q)), 0xFF, F("cavern plane2 page copy"));
     }
 
     // ------------------------------- 4. transition wipe (demo: 12 of 40 ticks)

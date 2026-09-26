@@ -425,9 +425,9 @@ size: .text=27108 .data=20 .bss=1564
 **Measured whole-image reclaim: 1448 B flash (28576 → 27128), 43 B RAM
 (1627 → 1584).** The prg.1 spike budgeted -1812 for the recB set (which also
 included the ground-dot cut); the shipping image lands at -1448 because (a) the
-procedural ground-dot field was kept — the fie.8 `MH_ROOM_IMAGE` default is 0,
-so `drawArena` is still the shipping ground and removing it would blank the
-playfield — and (b) the per-cut deltas were measured independently and do not
+procedural ground-dot field was kept (the prg.1-era fie.8 `MH_ROOM_IMAGE`
+default was 0, so `drawArena` was the shipping ground; monhun-ardu-9kn later
+switched shipping to the stored room images) and (b) the per-cut deltas were measured independently and do not
 sum linearly under LTO. Device perf improved as a strict render subtraction:
 `test_perf` `rMx` 4768 → 3348 µs, `rAv` 4540 → 3075 (budget 7407), ram 724.
 

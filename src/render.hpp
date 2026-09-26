@@ -296,7 +296,7 @@ static void drawArena(int16_t camX, int16_t camY, int16_t roomW, int16_t roomH) 
 // vertical px -- so an integer camX is a pure column offset (no horizontal bit
 // shift) and only camY&7 needs a vertical split. The fused inline asm reads one
 // SPI byte per iteration (SPDR read + next-byte kick), splits it with
-// `mul byte, 1<<(8-v)` into r0 = byte<<(8-v) (high part -> dest page q-1) and
+// `mul byte, 1<<(8-v)` into r0 = byte<<(8-v) (high part -> dest page q) and
 // r1 = byte>>v (low part -> dest page q+1), ORs both into the framebuffer, and
 // is cycle-padded to 17 cycles/iteration vs the 16-cycle SPI byte time (SPI2X,
 // 8 MHz), so no SPIF wait is needed. Dest pages 1..7; page 0 stays HUD. Every
@@ -304,53 +304,34 @@ static void drawArena(int16_t camX, int16_t camY, int16_t roomW, int16_t roomH) 
 // ArduboyG paint.
 #if MH_ROOM_BOUNDS
 
-// v == 0: byte-for-byte page copy (no mul). Same SPIF-margin padding as the
-// split reader. Shared by the room-image blit and the fixed 128x64 card blit
-// (bead 5co.3): card pages are page-aligned, so the copy reader alone suffices.
-#if defined(__AVR__)
-static void roomAsmCopy(uint8_t *dst, uint8_t n) {
-    uint8_t b, t;
-    asm volatile("1:                        \n\t"
-                 "in  %[b], %[spdr]         \n\t"
-                 "out %[spdr], __zero_reg__ \n\t"
-                 "ld  %[t], X               \n\t"
-                 "or  %[t], %[b]            \n\t"
-                 "st  X+, %[t]              \n\t"
-                 "nop                       \n\t"
-                 "nop                       \n\t"
-                 "nop                       \n\t"
-                 "nop                       \n\t"
-                 "nop                       \n\t"
-                 "nop                       \n\t"
-                 "nop                       \n\t"
-                 "nop                       \n\t"
-                 "dec %[n]                  \n\t"
-                 "brne 1b                   \n\t"
-                 : [b] "=&r"(b), [t] "=&r"(t), [n] "+r"(n), "+x"(dst)
-                 : [spdr] "I"(_SFR_IO_ADDR(SPDR))
-                 : "memory");
-}
-#else
-static void roomAsmCopy(uint8_t *dst, uint8_t n) {
-    for (uint8_t i = 0; i < n; i++)
-        dst[i] = static_cast<uint8_t>(dst[i] | 0);
-}
-#endif
-
 #if MH_ROOM_IMAGE
-// Per-room image base + extent from the generated meta constants. Only the
-// three shipped rooms exist; the default (pre-room) scene maps to area, the
-// legacy room-0 image (its baked stride 384 must come from the record, not the
-// legacy roomW 256 default).
+// Per-room image base + extent from the generated meta constants. All four
+// shipped rooms have authored art; the default (pre-room) id maps to area (id 0
+// is area). Trim c measured the if-chain 6 B smaller than a 4-entry PROGMEM
+// record table, so it stays. The stride fields must come from the meta, not the
+// legacy roomW 256 default.
 static inline void roomImageInfo(uint8_t roomId, uint24_t &img, int16_t &w, int16_t &h) {
-    if (roomId == zone::ROOM_CAMP) {
+    switch (roomId) {
+    case zone::ROOM_CAMP:
         img = mh_map_camp;
         w = static_cast<int16_t>(zone::ROOM_CAMP_W);
         h = static_cast<int16_t>(zone::ROOM_CAMP_H);
-    } else {
+        break;
+    case zone::ROOM_CAVERN:
+        img = mh_map_cavern;
+        w = static_cast<int16_t>(zone::ROOM_CAVERN_W);
+        h = static_cast<int16_t>(zone::ROOM_CAVERN_H);
+        break;
+    case zone::ROOM_RIDGE:
+        img = mh_map_ridge;
+        w = static_cast<int16_t>(zone::ROOM_RIDGE_W);
+        h = static_cast<int16_t>(zone::ROOM_RIDGE_H);
+        break;
+    default:
         img = mh_map_area;
         w = static_cast<int16_t>(zone::ROOM_AREA_W);
         h = static_cast<int16_t>(zone::ROOM_AREA_H);
+        break;
     }
 }
 
@@ -391,42 +372,42 @@ static void roomAsmDual(uint8_t *dstHi, uint8_t *dstLo, uint8_t coef, uint8_t n)
 
 // Stream one plane of the room image into framebuffer pages 1..7. `camX` is an
 // integer column offset; `camY&7` splits across the two source pages. The
-// source page index q0+j+b must stay inside the image (camY clamp guarantees
-// it: v != 0 implies camY <= h - ARENA_H - 1, so q0+7 < h/8).
+// source page index q0+q must stay inside the image (the renderScene camera
+// clamp guarantees it -- see drawRoom).
 // Vertical page-shift coefficient for the split reader: row-coef[v] ==
-// (v == 0) ? 0 : (1u << (8 - v)) for v = camY & 7. AVR has no barrel shifter,
-// so the shift -> 8-entry flash LUT (techniques.md §3). Index is already v&7.
+// 1u << (8 - v) for v = 1..7. ROOM_ROW_COEF[0] == 1 makes v == 0 a page copy
+// through the same reader (mul b,1 -> r0 == b, r1 == 0). AVR has no barrel
+// shifter, so the shift -> 8-entry flash LUT (techniques.md §3). Index is v.
 static const uint8_t MH_PROGMEM ROOM_ROW_COEF[8] = {
-    0, 128, 64, 32, 16, 8, 4, 2,
+    1, 128, 64, 32, 16, 8, 4, 2,
 };
 
+// Rows are always streamed as 8 pages: at v == 0 the extra q == 7 read lands
+// one byte past the layer, but the dest swap below sends that byte through r0
+// into `dummy` while its r1 == 0 OR is a no-op -- so one extra dummy page read
+// per plane at camY&7 == 0 replaces the whole roomAsmCopy reader plus the
+// pages/branch (this bead's internal trim a).
+// The window needs no rx/ry re-clamp here: renderScene clamps camX/camY to the
+// active room extents (camMaxX/Y), and those equal the image extents for every
+// shipped room (test_zones pins roomBoundW/H == the meta W/H), so rx == camX and
+// ry == camY are already in [0, rw - SCREEN_W] x [0, rh - ARENA_H].
 __attribute__((noinline)) static void drawRoom(const Game &g, int16_t camX, int16_t camY) {
     uint24_t img;
     int16_t rw, rh;
     roomImageInfo(g.roomId, img, rw, rh);
-    int16_t rx = camX;
-    int16_t ry = camY;
-    if (rx < 0)
-        rx = 0;
-    else if (rx > rw - SCREEN_W)
-        rx = static_cast<int16_t>(rw - SCREEN_W);
-    if (ry < 0)
-        ry = 0;
-    else if (ry > rh - ARENA_H)
-        ry = static_cast<int16_t>(rh - ARENA_H);
 
-    const uint8_t v = static_cast<uint8_t>(ry & 7);
-    const uint8_t q0 = static_cast<uint8_t>(ry >> 3);
+    const uint8_t v = static_cast<uint8_t>(camY & 7);
+    const uint8_t q0 = static_cast<uint8_t>(camY >> 3);
     const uint16_t rw16 = static_cast<uint16_t>(rw);
     const uint16_t layerBytes = static_cast<uint16_t>(rw16 * static_cast<uint16_t>(rh >> 3));
     const uint24_t layer = img + static_cast<uint24_t>(arduboy.currentPlane()) * static_cast<uint24_t>(layerBytes);
-    const uint8_t pages = (v == 0) ? 7 : 8;
-    const uint8_t coef = mhPgmReadU8(&ROOM_ROW_COEF[v & 7]);
+    const uint8_t coef = mhPgmReadU8(&ROOM_ROW_COEF[v]);
+    const bool copy = (v == 0);   // split degenerates: r0 carries the whole byte
     uint8_t *fb = arduboy.getBuffer();
     uint8_t dummy[128];   // unused half at the window's first/last page
 
-    for (uint8_t q = 0; q < pages; q++) {
-        const uint24_t src = layer + static_cast<uint24_t>(static_cast<uint16_t>(q0 + q) * rw16) + static_cast<uint24_t>(static_cast<uint16_t>(rx));
+    for (uint8_t q = 0; q < 8; q++) {
+        const uint24_t src = layer + static_cast<uint24_t>(static_cast<uint16_t>(q0 + q) * rw16) + static_cast<uint24_t>(static_cast<uint16_t>(camX));
 #if defined(__AVR__)
         FX::seekData(src);
         // Wait for the prefetched first column; the asm's paced loop then
@@ -434,30 +415,21 @@ __attribute__((noinline)) static void drawRoom(const Game &g, int16_t camX, int1
         // the FX bus for the next seek.
         while (!(SPSR & _BV(SPIF))) {
         }
-        if (v == 0) {
-            uint8_t *d = (q < 7) ? fb + static_cast<uint16_t>(1 + q) * SCREEN_W : dummy;
-            roomAsmCopy(d, 128);
-        } else {
-            uint8_t *lo = (q < 7) ? fb + static_cast<uint16_t>(1 + q) * SCREEN_W : dummy;
-            uint8_t *hi = (q >= 1) ? fb + static_cast<uint16_t>(q) * SCREEN_W : dummy;
-            roomAsmDual(hi, lo, coef, 128);
-        }
+        uint8_t *lo = (q < 7) ? fb + static_cast<uint16_t>(1 + q) * SCREEN_W : dummy;
+        uint8_t *hi = (q >= 1) ? fb + static_cast<uint16_t>(q) * SCREEN_W : dummy;
+        // copy: r0 == b must reach the low page (q+1), so point X at lo and let
+        // its r1 == 0 OR back into lo (no-op); otherwise r0 -> hi, r1 -> lo.
+        roomAsmDual(copy ? lo : hi, lo, coef, 128);
         FX::readEnd();
 #else
         // Host fallback (render.hpp is device-only; kept compilable).
         uint8_t row[128];
         FX::readDataBytes(src, row, 128);
-        if (v == 0) {
-            uint8_t *d = (q < 7) ? fb + static_cast<uint16_t>(1 + q) * SCREEN_W : dummy;
-            for (uint8_t x = 0; x < 128; x++)
-                d[x] = static_cast<uint8_t>(d[x] | row[x]);
-        } else {
-            uint8_t *lo = (q < 7) ? fb + static_cast<uint16_t>(1 + q) * SCREEN_W : dummy;
-            uint8_t *hi = (q >= 1) ? fb + static_cast<uint16_t>(q) * SCREEN_W : dummy;
-            for (uint8_t x = 0; x < 128; x++) {
-                hi[x] = static_cast<uint8_t>(hi[x] | static_cast<uint8_t>(row[x] << (8 - v)));
-                lo[x] = static_cast<uint8_t>(lo[x] | static_cast<uint8_t>(row[x] >> v));
-            }
+        uint8_t *lo = (q < 7) ? fb + static_cast<uint16_t>(1 + q) * SCREEN_W : dummy;
+        uint8_t *hi = (q >= 1) ? fb + static_cast<uint16_t>(q) * SCREEN_W : dummy;
+        for (uint8_t x = 0; x < 128; x++) {
+            hi[x] = static_cast<uint8_t>(hi[x] | (copy ? 0 : static_cast<uint8_t>(row[x] << (8 - v))));
+            lo[x] = static_cast<uint8_t>(lo[x] | (copy ? row[x] : static_cast<uint8_t>(row[x] >> v)));
         }
 #endif
     }

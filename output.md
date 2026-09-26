@@ -1,112 +1,88 @@
-# monhun-ardu-dap — trim wave: weaponSheet switch + beast-presence cache
+# monhun-ardu-9kn — Room art: wire cavern/ridge + enable the stored-image ground
 
-STATUS: DONE (landed; measured reclaim is FAR BELOW the frozen lead — see Size).
+STATUS: DONE (fits; no BLOCKED). Shipping ground is now the stored room image
+for all four rooms; perf gate stays green.
 
 ## What changed
 
-### A) weaponSheet switch -> resolved FX sheet offset (frozen trim)
-- `tools/gen-forge.py`: resolves each node's `sheet` symbol against the committed
-  `fxdata/fxdata.h` (`FX_SYMBOL_RE`) and emits `NODE_SHEET_OFF[NODE_COUNT]` —
-  the absolute FX sheet address per node; a node with no sheet (and any
-  unequipped fallback) uses its class default (`mh_weapon_sword/flail/gun`).
-  AVR: `MH_PROGMEM constexpr uint32_t` (flash-only); host: plain `constexpr
-  uint32_t`. A synthetic tree with no part header / undeclared symbol resolves
-  to 0 without failing (gen-cards/gen-screens fixtures reuse the loader).
-- `src/generated/forge_meta.hpp`: regenerated (new table + AVR includes
-  `../core/progmem.hpp`).
-- `src/forge_state.hpp`: new `forgeSheetOff(node)`
-  (`mhPgmReadU32(&NODE_SHEET_OFF[node])`, `MH_NOINLINE`),
-  `forgeEquippedSheetOff(save, cls)` (equipped node else
-  `NODE_SHEET_OFF[NODE_CLASS_FIRST[cls]]`), `forgeClassSheetOff(cls)`.
-  Kept `NODE_SHEET` + `forgeEquippedSheet` for the kind-pinning host/device
-  tests (LTO drops the now-unused function + table from shipping).
-- `src/core/game.hpp`: `using SheetOff = __uint24` (host: `uint32_t`);
-  `Game::wpnSheet` is now `SheetOff` (was `uint8_t` kind).
-- `src/core/player.hpp`: `initGame` arms the class default address
-  (`forgeClassSheetOff(weapon)`).
-- `src/app_setup.hpp`: `upgradeApplyToGame` arms
-  `forgeEquippedSheetOff(save, g.weapon)`; static_assert pins
-  `WeaponId == forge::WEAPON_*` order.
-- `src/render.hpp`: `weaponSheet(g)` is `return static_cast<uint24_t>(g.wpnSheet);`
-  (3-level kind switch + class guard gone).
-- `tst/fxdatatest/player_art_test.hpp`: `Case.wpnSheet` is a `uint32_t` sheet
-  ADDRESS; the 12 variant rows carry the `equip::SHEET_OFF_MH_WEAPON_*`
-  constant, kind-0 rows map to the class default via `defaultWpnSheet`. All 52
-  goldens unchanged.
-- `tst/forge_state_test.hpp` / `tst/fxdatatest/forge_test.hpp` /
-  `tools/tests/test_gen_forge.py`: pin `NODE_SHEET_OFF` against the equip
-  catalog and the resolver fallbacks; tooling pins the emitted table + the
-  no-header / undeclared-symbol -> 0 fallback.
+### render.hpp
+- `roomImageInfo(roomId, img, w, h)`: 4-way switch — camp/area/cavern/ridge map
+  to `mh_map_*` + `zone::ROOM_*_W/H` (previously only camp, all else area, so
+  cavern/ridge would have blitted the area art). `default` (pre-room) -> area.
+  Trim (c): the if-chain measured **6 B smaller** than a 4-entry PROGMEM
+  record table (29666 vs 29672), so the switch stays.
+- Trim (a): dropped the `v == 0` fast path + `roomAsmCopy`. `ROOM_ROW_COEF[0]`
+  is now `1`; the split reader always streams 8 pages. At `v == 0` `mul b,1`
+  gives `r0 == b`, `r1 == 0`; `drawRoom` passes the low page as the r0 (`X`)
+  dest and the same low page as the r1 (`Z`) dest, so `r0` carries the whole
+  byte into page `q+1` and its `r1 == 0` OR is a no-op. Costs one dummy page
+  read per plane at `camY & 7 == 0` (q == 7 -> `dummy`). `roomAsmCopy` was
+  referenced only by `drawRoom` (not the card blit, despite the stale comment),
+  so it is deleted.
+- Trim (b): dropped `drawRoom`'s rx/ry re-clamp. `renderScene` already clamps
+  `camX/camY` to `camMaxX/Y` = `roomBoundW/H - {SCREEN_W, ARENA_H}`, and
+  `roomBoundW/H == the image W/H` for every shipped room; `test_zones` now pins
+  that equality.
 
-### B) Beast-presence cache (frozen trim)
-- `src/core/game.hpp`: `Game::beastHere` byte (appended at the end).
-- `src/core/zones.hpp`: `refreshBeastHere(g)` computes the old predicate once;
-  `beastHere(g)` is `return g.beastHere != 0;`.
-- `src/core/world.hpp`: `refreshBeastHere` runs inside `updateActiveTarget`,
-  the single path called by `newGame` (and thus `withWeapon`/`resetHunt`) and
-  `loadRoom` — the only sites that move `monsterKind`/`roomId`/`roomMonsterKind`.
+### Makefile
+- `-DMH_ROOM_IMAGE=1` added to `SIZE_FLAGS` (build/mini/size/debug) and to the
+  inline dev + dev-hitboxes flag strings.
+
+### Tests (tst/fxdatatest/zones_test.hpp)
+- Selector pins for all four rooms: `roomImageInfo` img == `mh_map_*`, w/h ==
+  `ROOM_*_W/H`.
+- Camera-window proof (trim b): after `loadRoom`, `roomBoundW/H == image W/H`
+  and `camMaxX` pins for camp/area/cavern/ridge.
+- Cavern blit pin (3b): v == 0 copy at the 256 px stride on plane 2 — fb pages
+  1..7 byte-equal the cavern layer-2 source pages at column 64, page 0 (HUD)
+  untouched. Existing camp (v==0) + area (v==4 split) pixel pins kept.
+
+### Docs
+- README: shipping row 29634/62 -> 29666/30 free, RAM 1867; perf row 3412 ->
+  4280 µs (image ground); ground description (stored image, `drawArena` stays as
+  the `MH_ROOM_IMAGE=0` carve); host 7000 / device 2158, zones 108; history
+  (`dap` landed, `9kn` +50 B) and free-flash challenge line.
+- docs/map-zones.md: "Shipping render (monhun-ardu-9kn)" note in the room-layer
+  section.
+- docs/feel-design.md: the prg.1 ground-dot rationale corrected (it was the
+  shipping ground then; `9kn` switched shipping to the stored images).
 
 ## Verification
 
-- `make gen-check`: PASS (217 generated artifacts unchanged; `fxdata/fxdata.h
-  == src/fxdata.h`).
-- `make test`: Total Passed: 7000, Failed: 0.
-- `make test-tools`: Ran 411 tests — OK.
-- `FXTEST_ONLY="test_player_art test_monster_art test_zones test_hub test_forge"`:
-  - test_forge PASSED=79 FAILED=0
-  - test_hub PASSED=86 FAILED=0
-  - test_monster_art PASSED=182 FAILED=0
-  - test_player_art PASSED=156 FAILED=0
-  - test_zones (zones_test) PASSED=77 FAILED=0
-  (also ran test_wire PASSED=31, test_hud PASSED=29 earlier in the loop)
-- `make size-line` tail:
-  `size: flash=29616/29696 (80 free)  ram=1867/2560`
-  Baseline (HEAD 4fb8e10): `flash=29634/29696 (62 free)  ram=1920/2560`.
-  Delta: **flash -18 B (62 -> 80 free), RAM -53 B (1920 -> 1867)**.
+### make size-line (shipping, `-DMH_ROOM_IMAGE=1`)
+```
+Sketch uses 29666 bytes (99%) of program storage space. Maximum is 29696 bytes.
+Global variables use 1867 bytes (72%) of dynamic memory, leaving 693 bytes for local variables. Maximum is 2560 bytes.
+size: flash=29666/29696 (30 free)  ram=1867/2560
+```
+- Delta vs HEAD 838e32f baseline (29616/80 free): **+50 B**. Flag alone was
+  measured at +136 B; trims (a)+(b) recovered 86 B. Fits with 30 B free.
 
-## Size verdict (far off the lead — reported, not forced)
+### Perf gate with the image flag (`FXTEST_ONLY=test_perf`, `-DMH_ROOM_IMAGE=1`)
+```
+B pUs=6351 pHz=157 lHz=52 lTk=164 rMx=4280 rAv=3709 ram=505
+perf_test PASSED=5 FAILED=0
+```
+- rMx 4280 <= 7407, pHz 157 >= 135, lHz 52 >= 45. All inside.
 
-Frozen lead: A ~114 B, B ~16 B, target >= ~180 B free.
-Measured: **+18 B free** (flash), +53 B RAM free.
+### Touched device suites (default test flags)
+```
+test_boot   PASSED=4   FAILED=0   (globals 1187 B)
+test_hub    PASSED=86  FAILED=0   (globals 1316 B)
+test_perf   PASSED=5   FAILED=0   (globals 1798 B)  rMx=3408 pHz=157 lHz=52
+test_screens PASSED=214 FAILED=0  (globals 2062 B)
+test_zones  PASSED=108 FAILED=0   (globals 2024 B)
+```
+- test_zones note: 108 (was 77) with the new selector/camera/cavern pins.
 
-Diagnosis (isolated by stub builds):
-- Removing the render switch alone: **-144 B flash** (spike: 29634 -> 29490),
-  -36 B RAM.
-- The generated `NODE_SHEET_OFF[21]` table costs **84 B flash** (PROGMEM), and
-  the resolver glue (noinline `forgeSheetOff` + `forgeEquippedSheetOff` +
-  `forgeClassSheetOff` + the `__uint24` store) ~48 B flash — together ~132 B.
-  Net A ~= -12 B.
-- B: the cached `beastHere` load saves ~74 B across the 3 hot gates, but
-  `refreshBeastHere` (+2 calls via `updateActiveTarget`) costs ~44-60 B; net
-  B ~= +6..+30 B depending on inlining (chosen: inline, single call site).
-- Conclusion: the frozen A lead (~114 B) appears to assume the offset table is
-  free; the absolute-address data is real sketch flash here. Neither trim was
-  forced to hit the target.
+### Other gates
+- `make gen-check`: PASS (217 generated artifacts unchanged; header sync OK).
+- `make test` (host): 7000 passed / 0 failed.
+- `clang-format --dry-run --Werror`: clean on render.hpp + zones_test.hpp.
 
-Option to realize the lead in a follow-up (NOT implemented — out of the frozen
-scope): pack the 3-byte sheet offset into the FX-cart forge record
-(`fxdata/tables/forge.bin`) and read it via `src/forge.hpp` at hunt start; the
-blob lives on the SPI flash, so the address data costs 0 sketch bytes and the
-render change alone reclaims ~144 B.
+## Wall time
+- Worker (implement + measure + suites + docs): ~55 min.
 
-## Files
-
-- src/core/game.hpp, src/core/player.hpp, src/core/world.hpp, src/core/zones.hpp
-- src/forge_state.hpp, src/app_setup.hpp, src/render.hpp
-- src/generated/forge_meta.hpp (+ fxdata/manifest.json)
-- tools/gen-forge.py, tools/tests/test_gen_forge.py
-- tst/forge_state_test.hpp, tst/fxdatatest/forge_test.hpp,
-  tst/fxdatatest/player_art_test.hpp
-
-No commit/push (orchestrator commits). mock/ + parity untouched.
-
-## Wall time (approx, worker)
-
-- recon/read (bead + AGENTS + dev-flow + key headers): ~8 min
-- spike (switch removal, table/refresh isolation builds): ~18 min
-- code + generated + test edits: ~30 min
-- `make gen` (x4 converge) + gen-check: ~14 min
-- `make test` + `make test-tools`: ~5 min
-- device suites (7, one iteration): ~6 min
-- final re-verify (host + gen-check + tools + size) + report: ~10 min
-- total: ~1 h 30 min
+## Notes
+- No `make gen` data change; generated sets untouched.
+- mock/ + parity untouched; no commit/push (orchestrator commits).
