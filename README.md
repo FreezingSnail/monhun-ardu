@@ -34,8 +34,10 @@ stays in `dist/` for flashing). Pick a loadout and hunt:
 | B | inert on the picker |
 
 GO runs `newGame()` for the picked weapon + beast and drops the hunter at the
-beast's home room start spawn (the area for lunge / sweep / ravager, the ridge
-for heavy); the hunt itself is unchanged. Camp hold-B or win/loss + A returns to
+beast's home room entrance spawn (the area 512x112 for lunge / sweep / ravager,
+the ridge for heavy); the beast stays at its own monster spawn across the room,
+so the hunt opens with the hunter closing in from off-screen. The hunt itself is
+unchanged. Camp hold-B or win/loss + A returns to
 the picker. Output lands in `dist/` (`monhun-ardu.ino.hex` + `fxdata/fxdata.bin`);
 package it with
 `python3 tools/package-arduboy.py --version vX --hex dist/monhun-ardu.ino.hex --fxdata fxdata/fxdata.bin --out dist/monhun-ardu-demo.arduboy`.
@@ -50,13 +52,13 @@ Shipping (`make build`) and dev builds are unchanged by the flag (it defaults to
 |---|---|
 | Vertical-slice sim | Ported + parity-verified (20 scenes / 1269 ticks / 660 device asserts) |
 | Device render + HUD | Working (block/FX-sprite art; HUD text/FX glyphs + bars — `7y3` clamp fixed). Audio (cue tones) is compiled out of shipping since `hbk.15` (`-DMH_AUDIO=0`, owner call: sound is feel, not loop); the module stays behind the flag and the device suites still exercise it |
-| Host unit tests | `make test` — **7000 passed / 0 failed** |
-| Device tests (Ardens) | 19 suites / 2158 asserts — boot 4, assets 264, audio 9, hud 29, data 356, combat 254, hub 86, monster_art 182, player_art 156, quests 112, screens 214, screens_smithy 102, smith 51, cards 85, zones 108, items 35, forge 75, wire 31, perf 5 — all PASS (the frozen `test_parity` diagnostics image is not a gate; the opening-menu `test_menu`/`test_menu_art` suites and its `mh_menu_*` sheets were deleted with the menu, `isp.1`/`hml.2`; the `test_tell` marker suite was deleted with the markers, `nup`) |
+| Host unit tests | `make test` — **7106 passed / 0 failed** |
+| Device tests (Ardens) | 19 suites / 2150 asserts — boot 4, assets 264, audio 9, hud 29, data 356, combat 254, hub 86, monster_art 182, player_art 156, quests 112, screens 214, screens_smithy 102, smith 51, cards 85, zones 100, items 35, forge 75, wire 31, perf 5 — all PASS (the frozen `test_parity` diagnostics image is not a gate; the opening-menu `test_menu`/`test_menu_art` suites and its `mh_menu_*` sheets were deleted with the menu, `isp.1`/`hml.2`; the `test_tell` marker suite was deleted with the markers, `nup`) |
 | Demo content | 4-room map (`camp` ↔ `area` ↔ `cavern` / `ridge`), start-available `gather_ore` quest + kill quests, four beast-variant branches per weapon class (sword / flail / gunshield), per-room beast homes, stored room-art ground (all four rooms, `9kn`), beast presence + door-transition fixes (`ve2`) |
 | Perf gate (`monhun-ardu-8v7`, re-verified through `9kn`) | **PASS.** plane 157 Hz (≥135), logic 52 Hz (≥45), render max 4280 µs (≤7407, stored-image ground), tick 164 µs, RAM free 505 B (bench) |
 | Perf tooling | Headless Ardens profiler dump (`profiledump=<path>`, local patch) + on-device cycle bench (`test_perf`) |
-| Shipping build | flash **29666 / 29696 B** (30 free), RAM **1867 / 2560 B** (693 free); USB-free + sound off + stored room-image ground (`-DMH_NO_USB -DMH_AUDIO=0 -DMH_ROOM_IMAGE=1`), see below. Reserve is below the ~150 B guideline |
-| FX data image | **2,989,312 B** of 16 MB (2.85 MB) used — equip sheets 2.44 MB, 94 card pages 282 KB, block sheets 104 KB, 12 screen pages 36 KB, 4 room images 45 KB, fonts 6 KB, tables 7 KB |
+| Shipping build | flash **29658 / 29696 B** (38 free), RAM **1867 / 2560 B** (693 free); USB-free + sound off + stored room-image ground (`-DMH_NO_USB -DMH_AUDIO=0 -DMH_ROOM_IMAGE=1`), see below. Reserve is below the ~150 B guideline |
+| FX data image | **2,994,688 B** of 16 MB (2.85 MB) used — equip sheets 2.44 MB, 94 card pages 282 KB, block sheets 104 KB, 12 screen pages 36 KB, 4 room images 50 KB, fonts 6 KB, tables 7 KB |
 
 Speculative gameplay status: combat (sword / flail / gunshield), monster FSM,
 camera/world clamps, HUD, audio cues all in place. The prg.8 trim removed

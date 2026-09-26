@@ -309,32 +309,27 @@ static void drawArena(int16_t camX, int16_t camY, int16_t roomW, int16_t roomH) 
 #if MH_ROOM_BOUNDS
 
 #if MH_ROOM_IMAGE
-// Per-room image base + extent from the generated meta constants. All four
-// shipped rooms have authored art; the default (pre-room) id maps to area (id 0
-// is area). Trim c measured the if-chain 6 B smaller than a 4-entry PROGMEM
-// record table, so it stays. The stride fields must come from the meta, not the
-// legacy roomW 256 default.
-static inline void roomImageInfo(uint8_t roomId, uint24_t &img, int16_t &w, int16_t &h) {
+// Per-room image base from the generated meta constants. All four shipped rooms
+// have authored art; the default (pre-room) id maps to area (id 0 is area). Trim
+// c measured the if-chain 6 B smaller than a 4-entry PROGMEM record table, so it
+// stays. The blit stride/extent come from the active room record (Game::roomW/H,
+// set by loadRoom from the same zone data as the meta ROOM_*_W/H): a per-room
+// width arm here would re-materialise the area's now-unique 512 constant into
+// drawRoom's inlined copy and cost 4 B, and the room record is authoritative
+// once a room is loaded (the hub/screens replace the scene before that).
+static inline void roomImageInfo(uint8_t roomId, uint24_t &img) {
     switch (roomId) {
     case zone::ROOM_CAMP:
         img = mh_map_camp;
-        w = static_cast<int16_t>(zone::ROOM_CAMP_W);
-        h = static_cast<int16_t>(zone::ROOM_CAMP_H);
         break;
     case zone::ROOM_CAVERN:
         img = mh_map_cavern;
-        w = static_cast<int16_t>(zone::ROOM_CAVERN_W);
-        h = static_cast<int16_t>(zone::ROOM_CAVERN_H);
         break;
     case zone::ROOM_RIDGE:
         img = mh_map_ridge;
-        w = static_cast<int16_t>(zone::ROOM_RIDGE_W);
-        h = static_cast<int16_t>(zone::ROOM_RIDGE_H);
         break;
     default:
         img = mh_map_area;
-        w = static_cast<int16_t>(zone::ROOM_AREA_W);
-        h = static_cast<int16_t>(zone::ROOM_AREA_H);
         break;
     }
 }
@@ -397,8 +392,9 @@ static const uint8_t MH_PROGMEM ROOM_ROW_COEF[8] = {
 // ry == camY are already in [0, rw - SCREEN_W] x [0, rh - ARENA_H].
 __attribute__((noinline)) static void drawRoom(const Game &g, int16_t camX, int16_t camY) {
     uint24_t img;
-    int16_t rw, rh;
-    roomImageInfo(g.roomId, img, rw, rh);
+    roomImageInfo(g.roomId, img);
+    const int16_t rw = g.roomW;
+    const int16_t rh = g.roomH;
 
     const uint8_t v = static_cast<uint8_t>(camY & 7);
     const uint8_t q0 = static_cast<uint8_t>(camY >> 3);

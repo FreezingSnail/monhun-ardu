@@ -17,7 +17,7 @@
 //      page into framebuffer pages 1..7 and leave page 0 (HUD) untouched. The
 //      expected bytes are read back from the same layer with a *different*
 //      reader (FX::readDataBytes), so a bad asm data path cannot self-confirm;
-//   3. area view (384x112, camX=64, camY=52 -> v == 4, q0 == 6): the shifted
+//   3. area view (512x112, camX=64, camY=52 -> v == 4, q0 == 6): the shifted
 //      window must equal the page-major decomposition
 //        dst[j] = (src[q0+j-1] >> v) | (src[q0+j] << (8-v))
 //      computed here in C, page by page, on plane 1 (proves per-plane seek);
@@ -156,29 +156,22 @@ inline void test_zones(FxTest &test) {
     test.expectEq(areaBug.gatherYield, 1, F("area bug yield"));
 
     // -------------------------- 1b. room-image selectors + camera window
-    // roomImageInfo maps every shipped room to its generated meta base/extent
+    // roomImageInfo maps every shipped room to its generated meta image base
     // (monhun-ardu-9kn: previously only camp resolved, everything else fell
     // through to area, so cavern/ridge would blit the area art). The pre-room
-    // default falls through to area.
+    // default falls through to area. The blit stride/extent now come from the
+    // loaded room record; the camera-window block below pins roomBoundW/H == the
+    // meta W/H, and the layer reads use ROOM_*_W as the stride.
     {
         uint24_t img;
-        int16_t w, h;
-        roomImageInfo(zone::ROOM_CAMP, img, w, h);
+        roomImageInfo(zone::ROOM_CAMP, img);
         test.expectEq(img, mh_map_camp, F("selector camp img"));
-        test.expectEq(static_cast<uint32_t>(w), zone::ROOM_CAMP_W, F("selector camp w"));
-        test.expectEq(static_cast<uint32_t>(h), zone::ROOM_CAMP_H, F("selector camp h"));
-        roomImageInfo(zone::ROOM_AREA, img, w, h);
+        roomImageInfo(zone::ROOM_AREA, img);
         test.expectEq(img, mh_map_area, F("selector area img"));
-        test.expectEq(static_cast<uint32_t>(w), zone::ROOM_AREA_W, F("selector area w"));
-        test.expectEq(static_cast<uint32_t>(h), zone::ROOM_AREA_H, F("selector area h"));
-        roomImageInfo(zone::ROOM_CAVERN, img, w, h);
+        roomImageInfo(zone::ROOM_CAVERN, img);
         test.expectEq(img, mh_map_cavern, F("selector cavern img"));
-        test.expectEq(static_cast<uint32_t>(w), zone::ROOM_CAVERN_W, F("selector cavern w"));
-        test.expectEq(static_cast<uint32_t>(h), zone::ROOM_CAVERN_H, F("selector cavern h"));
-        roomImageInfo(zone::ROOM_RIDGE, img, w, h);
+        roomImageInfo(zone::ROOM_RIDGE, img);
         test.expectEq(img, mh_map_ridge, F("selector ridge img"));
-        test.expectEq(static_cast<uint32_t>(w), zone::ROOM_RIDGE_W, F("selector ridge w"));
-        test.expectEq(static_cast<uint32_t>(h), zone::ROOM_RIDGE_H, F("selector ridge h"));
     }
 
     // drawRoom no longer re-clamps rx/ry (trim b): the renderScene camera clamp

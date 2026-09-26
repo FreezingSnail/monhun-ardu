@@ -110,9 +110,9 @@ void WorldSuite(TestRunner &runner) {
         t.assert(camMaxY(g), 0, "camp camMaxY pinned to 0");
         t.assert(g.camX, 0, "camp camera x pinned");
         t.assert(g.camY, 0, "camp camera y pinned");
-        // A 384x112 room allows horizontal scroll past the legacy CAM_MAX_X.
+        // A 512x112 room allows horizontal scroll past the legacy CAM_MAX_X.
         loadRoom(g, zone::ROOM_AREA, zone::SPAWN_AREA_START);
-        t.assert(camMaxX(g), 256, "area camMaxX = 384-128");
+        t.assert(camMaxX(g), 384, "area camMaxX = 512-128");
         t.assert(camMaxY(g), 56, "area camMaxY = 112-56");
         suite.addTest(t);
     }

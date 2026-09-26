@@ -65,9 +65,9 @@
     },
     {
       "id": "area",
-      "w": 384,
+      "w": 512,
       "h": 112,
-      "image": "images/maps/mh_map_area_384x112.png",
+      "image": "images/maps/mh_map_area_512x112.png",
       "props": [
         {
           "type": "post",
@@ -156,7 +156,7 @@
           "y": 16
         },
         "from_ridge": {
-          "x": 360,
+          "x": 488,
           "y": 80
         }
       },

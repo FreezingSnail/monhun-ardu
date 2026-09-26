@@ -62,12 +62,13 @@ the render path (fie.5) blits the room layers with `seekData`.
 ### Demo room graph
 
 Four rooms ship for the demo: `camp` 128x56 (tent heal + smithy) <-west/east
-door-> `area` 384x112 (lunge beast, mixed nodes), which forks <-south/north-mouth->
+door-> `area` 512x112 (lunge beast, mixed nodes), which forks <-south/north-mouth->
 to `cavern` 256x112 (safe mine) and <-east/west door-> to `ridge` 384x112 (heavy
 beast, light nodes). The cavern door leaves the area's north edge (176,0,16,8)
 and the cavern's south mouth (112,104,16,8) returns to the area at its
-`from_cavern` spawn; the ridge door leaves the area's east edge (376,72,8,24) and
-the ridge's west door (0,72,8,24) returns to the area at its `from_ridge` spawn.
+`from_cavern` spawn; the ridge door leaves the area's east edge (504,72,8,24) and
+the ridge's west door (0,72,8,24) returns to the area at its `from_ridge` spawn
+(488,80 -- the area's west/east doors are its entrance spawns).
 The area door count is pinned in `tst/zone_test.hpp` (including every
 round-trip). Each hunt room's beast home is its record's `monsterSpawn`
 (`ridge` for the heavy beast, `area` for lunge and the sweep/ravager/pole

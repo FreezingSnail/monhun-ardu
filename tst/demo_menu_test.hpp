@@ -2,7 +2,7 @@
 // Host unit tests for the demo playtest picker (bead monhun-ardu-1du),
 // src/demo_menu.hpp: row nav wrap, weapon/beast cycle wrap, A/B edges once per
 // press, the GO launch event, the held-button guard on re-entry, the hunt-end
-// return edge, and the launch's beast home room + generated start spawn.
+// return edge, and the launch's beast home room + generated entrance spawn.
 #include "test.hpp"
 #include "../src/demo_menu.hpp"
 #include "../src/core/zones.hpp"   // beastHomeRoom
@@ -180,21 +180,21 @@ void DemoSuite(TestRunner &runner) {
     }
 
     {
-        Test t("demoHomeSpawn maps each home room to its generated start spawn");
-        t.assert(demoHomeSpawn(zone::ROOM_AREA), zone::SPAWN_AREA_START, "area start");
-        t.assert(demoHomeSpawn(zone::ROOM_RIDGE), zone::SPAWN_RIDGE_START, "ridge start");
+        Test t("demoHomeSpawn maps each home room to its generated entrance spawn");
+        t.assert(demoHomeSpawn(zone::ROOM_AREA), zone::SPAWN_AREA_FROM_CAMP, "area entrance");
+        t.assert(demoHomeSpawn(zone::ROOM_RIDGE), zone::SPAWN_RIDGE_FROM_AREA, "ridge entrance");
         t.assert(demoHomeSpawn(zone::ROOM_CAMP), zone::SPAWN_CAMP_ENTRY, "camp entry");
         t.assert(demoHomeSpawn(zone::ROOM_CAVERN), zone::SPAWN_CAVERN_FROM_AREA, "cavern from area");
         // The beast -> home mapping feeds it: lunge/sweep/ravager home at the
         // area, heavy at the ridge.
         t.assert(beastHomeRoom(MON_LUNGE), zone::ROOM_AREA, "lunge homes at the area");
         t.assert(beastHomeRoom(MON_HEAVY), zone::ROOM_RIDGE, "heavy homes at the ridge");
-        t.assert(demoHomeSpawn(beastHomeRoom(MON_HEAVY)), zone::SPAWN_RIDGE_START, "heavy start spawn");
+        t.assert(demoHomeSpawn(beastHomeRoom(MON_HEAVY)), zone::SPAWN_RIDGE_FROM_AREA, "heavy entrance spawn");
         suite.addTest(t);
     }
 
     {
-        Test t("demoLaunch builds a fresh hunt in the beast's home at its start spawn");
+        Test t("demoLaunch builds a fresh hunt in the beast's home at its entrance spawn");
         Game g;
         DemoMenu m;
         demoInit(m);
@@ -206,13 +206,14 @@ void DemoSuite(TestRunner &runner) {
         t.assert(g.mode, MODE_HUNT, "hunt mode");
         t.assert(g.roomId, zone::ROOM_RIDGE, "heavy homes at the ridge");
         t.assert(g.beastHere, 1, "the beast is present in its home");
-        // The beast sits at the home room's monster spawn; the hunter drops 28 px
-        // west of it, same lane (owner report fix).
-        const ZoneSpawn sp = zoneSpawnRead(zone::SPAWN_RIDGE_START);
-        t.assert(g.monster.x, static_cast<int16_t>(sp.x), "beast at the ridge monster spawn x");
-        t.assert(g.monster.y, static_cast<int16_t>(sp.y), "beast at the ridge monster spawn y");
-        t.assert(g.player.x, static_cast<int16_t>(g.monster.x - 28), "player drops west of the beast");
-        t.assert(g.player.y, g.monster.y, "player in the beast's lane");
+        // The beast sits at the home room's monster spawn; the hunter lands on
+        // the entrance spawn record, across the room.
+        const ZoneSpawn beastSp = zoneSpawnRead(zone::SPAWN_RIDGE_START);
+        t.assert(g.monster.x, static_cast<int16_t>(beastSp.x), "beast at the ridge monster spawn x");
+        t.assert(g.monster.y, static_cast<int16_t>(beastSp.y), "beast at the ridge monster spawn y");
+        const ZoneSpawn entry = zoneSpawnRead(zone::SPAWN_RIDGE_FROM_AREA);
+        t.assert(g.player.x, static_cast<int16_t>(entry.x), "hunter at the ridge entrance spawn x");
+        t.assert(g.player.y, static_cast<int16_t>(entry.y), "hunter at the ridge entrance spawn y");
         t.assert(g.dmgMul, UPGRADE_MUL_BASE, "identity damage multiplier");
         t.assert(g.spdMul, UPGRADE_MUL_BASE, "identity speed multiplier");
         t.assert(g.items[ITEM_HERB], 0, "empty inventory");
@@ -238,13 +239,15 @@ void DemoSuite(TestRunner &runner) {
     }
 
     {
-        // Owner report (demo playtest): picks other than HEAVY looked empty. The
-        // launch must leave the beast present AND in the camera window at the
-        // hunter's spawn, for every pick -- a beast parked at the creature
-        // record's spawn coords (200,40) sat off-screen east of the room start
-        // spawn, so the hunt read as "no monster spawned".
-        Test t("demoLaunch: every beast is present and on-screen at spawn");
+        // Owner call (demo playtest, 512x112 area): the hunt must open with the
+        // hunter at the home room's entrance spawn and the beast at its monster
+        // spawn across the room -- present after a tick but off-screen, so the
+        // hunter closes in. Replaces the old "on-screen at spawn" pin.
+        Test t("demoLaunch: every beast present at its home spawn and off-screen from the entrance");
         const int8_t kinds[4] = {MON_LUNGE, MON_SWEEP, MON_HEAVY, MON_RAVAGER};
+        const uint8_t homes[4] = {zone::ROOM_AREA, zone::ROOM_AREA, zone::ROOM_RIDGE, zone::ROOM_AREA};
+        const uint8_t entrances[4] = {zone::SPAWN_AREA_FROM_CAMP, zone::SPAWN_AREA_FROM_CAMP, zone::SPAWN_RIDGE_FROM_AREA, zone::SPAWN_AREA_FROM_CAMP};
+        const uint8_t beastSpawns[4] = {zone::SPAWN_AREA_START, zone::SPAWN_AREA_START, zone::SPAWN_RIDGE_START, zone::SPAWN_AREA_START};
         Game g;
         DemoMenu m;
         demoInit(m);
@@ -254,10 +257,17 @@ void DemoSuite(TestRunner &runner) {
             demoLaunch(g, m);
             stepGame(g, idle);   // refresh the presence cache like the demo loop
             t.assert(g.beastHere, 1, "beast present after a tick");
-            const bool inX = g.monster.x<g.camX + SCREEN_W &&static_cast<int16_t>(g.monster.x + g.monster.w)> g.camX;
-            const bool inY = g.monster.y<g.camY + ARENA_H &&static_cast<int16_t>(g.monster.y + g.monster.h)> g.camY;
-            t.assert(inX ? 1 : 0, 1, "beast in the camera x window");
-            t.assert(inY ? 1 : 0, 1, "beast in the camera y window");
+            t.assert(g.roomId, homes[i], "hunt opens in the beast's home room");
+            const ZoneSpawn bSp = zoneSpawnRead(beastSpawns[i]);
+            t.assert(g.monster.x, static_cast<int16_t>(bSp.x), "beast at its home monster spawn x");
+            t.assert(g.monster.y, static_cast<int16_t>(bSp.y), "beast at its home monster spawn y");
+            const ZoneSpawn eSp = zoneSpawnRead(entrances[i]);
+            t.assert(g.player.x, static_cast<int16_t>(eSp.x), "hunter at the home entrance spawn x");
+            t.assert(g.player.y, static_cast<int16_t>(eSp.y), "hunter at the home entrance spawn y");
+            int16_t dx = static_cast<int16_t>(g.monster.x - g.player.x);
+            if (dx < 0)
+                dx = static_cast<int16_t>(-dx);
+            t.assert(dx > SCREEN_W ? 1 : 0, 1, "hunter-beast distance exceeds the screen width");
         }
         suite.addTest(t);
     }

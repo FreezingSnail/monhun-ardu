@@ -138,7 +138,7 @@ inline constexpr std::array<SpawnName, 9> SPAWN_NAMES = {{
 
 // Section arrays, in packed order.
 inline constexpr std::array<Room, 4> ROOMS = {{
-    {384, 112, 0, 3, 0, 4, 0, 8, 0, 0, 0, 0, 0, 3},
+    {512, 112, 0, 3, 0, 4, 0, 8, 0, 0, 0, 0, 0, 3},
     {128, 56, 3, 1, 4, 2, 8, 5, 0, 1, 0, 1, 255, 255},
     {256, 112, 4, 1, 6, 1, 13, 6, 1, 0, 1, 0, 255, 255},
     {384, 112, 5, 1, 7, 2, 19, 4, 1, 0, 1, 0, 2, 8},
@@ -147,7 +147,7 @@ inline constexpr std::array<Room, 4> ROOMS = {{
 inline constexpr std::array<Door, 6> DOORS = {{
     {0, 72, 8, 24, 1, 5},
     {176, 0, 16, 8, 2, 6},
-    {376, 72, 8, 24, 3, 7},
+    {504, 72, 8, 24, 3, 7},
     {120, 24, 8, 24, 0, 0},
     {112, 104, 16, 8, 0, 1},
     {0, 72, 8, 24, 0, 2},
@@ -156,7 +156,7 @@ inline constexpr std::array<Door, 6> DOORS = {{
 inline constexpr std::array<Spawn, 9> SPAWNS = {{
     {8, 80},
     {184, 16},
-    {360, 80},
+    {488, 80},
     {320, 72},
     {20, 44},
     {104, 40},

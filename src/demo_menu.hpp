@@ -116,22 +116,24 @@ inline bool demoOverReturnStep(bool over, const Input &in, bool &prevA) {
     return over && aP;
 }
 
-// Home-room start spawn (design C): the demo lands the hunter on the home
-// room's start spawn, not the room's beast spawn. beastHomeRoom() owns the
-// beast -> home mapping; this is the home room -> its start <-> entrance spawn.
-// Values are the generated zone symbolic constants.
+// Home-room entrance spawn (design C): the demo lands the hunter on the home
+// room's ENTRANCE spawn (where a door from the neighbouring room drops the
+// hunter), not the room's beast spawn. beastHomeRoom() owns the beast -> home
+// mapping; this is the home room -> its entrance spawn. The area/ridge hunts
+// open across the room from the beast so the hunter closes in. Values are the
+// generated zone symbolic constants.
 inline uint8_t demoHomeSpawn(uint8_t homeRoom) {
     switch (homeRoom) {
     case zone::ROOM_AREA:
-        return zone::SPAWN_AREA_START;
+        return zone::SPAWN_AREA_FROM_CAMP;   // area west entrance (8,80)
     case zone::ROOM_RIDGE:
-        return zone::SPAWN_RIDGE_START;
+        return zone::SPAWN_RIDGE_FROM_AREA;   // ridge west entrance (8,80)
     case zone::ROOM_CAMP:
         return zone::SPAWN_CAMP_ENTRY;
     case zone::ROOM_CAVERN:
         return zone::SPAWN_CAVERN_FROM_AREA;
     default:
-        return zone::SPAWN_AREA_START;
+        return zone::SPAWN_AREA_FROM_CAMP;
     }
 }
 
@@ -139,27 +141,15 @@ inline uint8_t demoHomeSpawn(uint8_t homeRoom) {
 // beast (fresh Game defaults -- class default sheet, identity multipliers,
 // empty inventory; no quest/save/armor/items arming), the beast moved to its
 // home room's monster spawn (mirrors huntStart/beastHomeSpawn) and the hunter
-// dropped 28 px west of it so the fight starts in view.
-//
-// Owner report (demo playtest): picks other than HEAVY looked empty because the
-// beast stayed at the creature record's spawn coords (200,40), off-screen east
-// of the room's start spawn (320,72). beastHomeSpawn + the adjacent drop make
-// every pick open on the beast; the placement is clamped to the room bounds.
+// placed on the home room's entrance spawn record -- the hunt opens with the
+// hunter approaching from across the room, the beast off-screen at its spawn.
+// loadRoom's own camera update is enough (nothing else moves the player).
 inline void demoLaunch(Game &g, const DemoMenu &m) {
     const int8_t beast = static_cast<int8_t>(m.beast);
     newGame(g, static_cast<int8_t>(m.weapon), MODE_HUNT, beast);
     beastHomeSpawn(g, beast);   // home room's monster spawn (huntStart parity)
     const uint8_t home = beastHomeRoom(beast);
     loadRoom(g, home, demoHomeSpawn(home));
-    int16_t px = static_cast<int16_t>(g.monster.x - 28);
-    if (px < 0)
-        px = 0;
-    const int16_t maxX = static_cast<int16_t>(roomBoundW(g) - g.player.w);
-    if (px > maxX)
-        px = maxX;
-    g.player.x = px;
-    g.player.y = g.monster.y;
-    updateCamera(g);   // first frame already follows the drop point
     // Owner call (playtest): demo hunts start with the weapon stowed -- the
     // first A is the draw (per-weapon rooted windup), so testers see the
     // sheathe/draw verb before the fight. newGame leaves it drawn.

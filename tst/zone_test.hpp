@@ -61,7 +61,7 @@ void ZoneSuite(TestRunner &runner) {
         newGame(g, W_SWORD, MODE_HUNT);
         loadRoom(g, zone::ROOM_AREA, zone::SPAWN_AREA_START);
         t.assert(g.roomId, zone::ROOM_AREA, "active room id");
-        t.assert(g.roomW, 384, "area roomW");
+        t.assert(g.roomW, 512, "area roomW");
         t.assert(g.roomH, 112, "area roomH");
         t.assert(g.roomMonsterKind, zone::MONSTER_LUNGE, "area has a beast");
         t.assert(g.player.x, 320, "area start spawn x");
@@ -122,9 +122,9 @@ void ZoneSuite(TestRunner &runner) {
         t.assert(g.camY, 0, "camp camera y pinned");
 
         loadRoom(g, zone::ROOM_AREA, zone::SPAWN_AREA_START);
-        // area 384x112: camMaxX 256, camMaxY 56. Spawn (320,72) -> tx 264 -> 256,
-        // ty 52 -> 52.
-        t.assert(g.camX, 256, "area camera x clamped to 384-128");
+        // area 512x112: camMaxX 384, camMaxY 56. Spawn (320,72) -> tx 264, inside
+        // the clamp; ty 52.
+        t.assert(g.camX, 264, "area camera x follows the spawn");
         t.assert(g.camY, 52, "area camera y follows the spawn");
         suite.addTest(t);
     }
@@ -215,12 +215,12 @@ void ZoneSuite(TestRunner &runner) {
         newGame(g, W_SWORD, MODE_HUNT);
         loadRoom(g, zone::ROOM_AREA, zone::SPAWN_AREA_START);
         zparkBeast(g, 20, 20);   // keep the beast off the door probe
-        // Clear the arrival latch, then enter the east door (376,72,8,24).
+        // Clear the arrival latch, then enter the east door (504,72,8,24).
         g.player.x = 100;
         g.player.y = 80;
         zticks(g, 1, Z_IDLE);
         t.assert(g.doorLatch, 0, "area latch cleared");
-        g.player.x = 376;
+        g.player.x = 504;
         g.player.y = 72;
         zticks(g, 1, Z_IDLE);
         t.assert(g.roomId, zone::ROOM_RIDGE, "transitioned to the ridge");
@@ -236,7 +236,7 @@ void ZoneSuite(TestRunner &runner) {
         g.player.y = 72;
         zticks(g, 1, Z_IDLE);
         t.assert(g.roomId, zone::ROOM_AREA, "returned to the area");
-        t.assert(g.player.x, 360, "area from_ridge spawn x");
+        t.assert(g.player.x, 488, "area from_ridge spawn x");
         t.assert(g.player.y, 80, "area from_ridge spawn y");
         suite.addTest(t);
     }
@@ -257,7 +257,7 @@ void ZoneSuite(TestRunner &runner) {
     }
 
     {
-        Test t("per-room player clamps at 128x56 and 384x112");
+        Test t("per-room player clamps at 128x56 and 512x112");
         Game g;
         newGame(g, W_SWORD, MODE_HUNT);
         loadRoom(g, zone::ROOM_CAMP, zone::SPAWN_CAMP_ENTRY);
@@ -272,30 +272,30 @@ void ZoneSuite(TestRunner &runner) {
         g.player.x = 500;
         g.player.y = 500;
         zticks(g, 1, Z_IDLE);
-        t.assert(g.player.x, 368, "area player x clamp = 384-16");
+        t.assert(g.player.x, 496, "area player x clamp = 512-16");
         t.assert(g.player.y, 96, "area player y clamp = 112-16");
         suite.addTest(t);
     }
 
     {
-        Test t("per-room monster clamps at 128x56 and 384x112");
+        Test t("per-room monster clamps at 128x56 and 512x112");
         Game g;
         newGame(g, W_SWORD, MODE_HUNT);
         // Direct clamp probe (a safe room never runs the monster update).
-        g.roomW = 128;
-        g.roomH = 56;
+        g.roomW = zone::ROOM_CAMP_W;
+        g.roomH = zone::ROOM_CAMP_H;
         g.monster.x = 500;
         g.monster.y = 500;
         clampMonster(g);
-        t.assert(g.monster.x, 128 - g.monster.w, "camp monster x clamp");
-        t.assert(g.monster.y, 56 - g.monster.h, "camp monster y clamp");
-        g.roomW = 384;
-        g.roomH = 112;
+        t.assert(g.monster.x, zone::ROOM_CAMP_W - g.monster.w, "camp monster x clamp");
+        t.assert(g.monster.y, zone::ROOM_CAMP_H - g.monster.h, "camp monster y clamp");
+        g.roomW = zone::ROOM_AREA_W;
+        g.roomH = zone::ROOM_AREA_H;
         g.monster.x = 500;
         g.monster.y = 500;
         clampMonster(g);
-        t.assert(g.monster.x, 384 - g.monster.w, "area monster x clamp");
-        t.assert(g.monster.y, 112 - g.monster.h, "area monster y clamp");
+        t.assert(g.monster.x, zone::ROOM_AREA_W - g.monster.w, "area monster x clamp");
+        t.assert(g.monster.y, zone::ROOM_AREA_H - g.monster.h, "area monster y clamp");
         suite.addTest(t);
     }
 

@@ -1081,9 +1081,9 @@
     },
     {
       "declaration": "fxdata/maps/Sprites.txt",
-      "path": "images/maps/mh_map_area_384x112.png",
-      "sha256": "250a989871dde00913bcb7a5e36f501d85c8c917b5a42ac4afa96e557e252e2c",
-      "size": 830,
+      "path": "images/maps/mh_map_area_512x112.png",
+      "sha256": "8926b50eb7ca09b1e6da8e1966185aa13cffdad9d448adf06b06d130acdc2322",
+      "size": 813,
       "symbol": "mh_map_area"
     },
     {
@@ -1385,7 +1385,7 @@
     },
     {
       "path": "data/map.json",
-      "sha256": "225e64a047aed51e7db0fd76e28ec158b149257e11df55363e3d492a38d6a9b4",
+      "sha256": "b2e31dd281d831ac2417df8cef134c68ae0616acdf8479edfd1f815ae9c9f44d",
       "size": 6306
     },
     {
@@ -1677,8 +1677,8 @@
     },
     {
       "path": "fxdata/maps/Sprites.txt",
-      "sha256": "c6c4004b7fd6d57c2f8758c2f0ec6f1b9b1e5f0b3681d65f4d469f3b8abd8844",
-      "size": 159191,
+      "sha256": "ab610e2c7436e57abe56ffcfd750b6889bab636ba2447ccbadc75e12391579f2",
+      "size": 178327,
       "symbols": [
         "mh_map_area",
         "mh_map_camp",
@@ -1713,7 +1713,7 @@
     },
     {
       "path": "fxdata/tables/cards.bin",
-      "sha256": "236b4fcee4fa89e1e06cc7156e4d9c44ec93ee960413e9ce66948c1a653e9440",
+      "sha256": "454a6c851b6207e72fae2e80deaa6a6af4226d5c42a423a179570e0bdee86b80",
       "size": 1031,
       "symbol": "mhCards"
     },
@@ -1761,7 +1761,7 @@
     },
     {
       "path": "fxdata/tables/screens.bin",
-      "sha256": "f160c123d0d59c30dc9910ebe9e347265484ba9825d0fe8d61dcbcb9b49d749d",
+      "sha256": "9ec41180667d04d1624fb3f4ee1244520412f3774ca2071053198a4104b90262",
       "size": 1480,
       "symbol": "mhScreens"
     },
@@ -1785,7 +1785,7 @@
     },
     {
       "path": "fxdata/tables/zones.bin",
-      "sha256": "ac092855a7a4824f011b8dc79328bd78171886f7049552d74fd128764220212a",
+      "sha256": "7872cdd8a5667bec26a0e263f08f149a9a4b1f0c529268822eaf635c05b8bb5f",
       "size": 461,
       "symbol": "mhZones"
     },
@@ -1835,9 +1835,9 @@
       "size": 514
     },
     {
-      "path": "images/masks/mh_map_area_384x112.png",
-      "sha256": "22b31d25d44998a35b46c21b4d4d6e823ccc89fe1618bc53868163966f04a177",
-      "size": 1040
+      "path": "images/masks/mh_map_area_512x112.png",
+      "sha256": "93274c3f6cfd8f1822b7bd51ee8b3001804ba0ca16ccec52f30cd441fa458b42",
+      "size": 1173
     },
     {
       "path": "images/masks/mh_map_camp_128x56.png",
@@ -1863,17 +1863,17 @@
   "outputs": [
     {
       "path": "fxdata/fxdata-data.bin",
-      "sha256": "5d81d07e1210dac43015463ae14982d3a4ded6ac12f30ce06bbd0d3e3d98c465",
-      "size": 2989156
+      "sha256": "c5c7d931070a8cef0220dc6b07337f9b005459dd89cda4f6f5dc9b80aca5f249",
+      "size": 2994532
     },
     {
       "path": "fxdata/fxdata.bin",
-      "sha256": "56e3b6e10047d7947e546419d0c7201540115143754bc7bdd1f07f68224da576",
-      "size": 2989312
+      "sha256": "b186a6998ad6db0c475d99a7b9ee998d41bda22456f80aa9a1f1cf3772a63b3a",
+      "size": 2994688
     },
     {
       "path": "fxdata/fxdata.h",
-      "sha256": "5049b9ac01bc8faa31801ec22cb9817ca1c0fe2f324043de74e0842792b336a8",
+      "sha256": "33cb3d1ce3380bdc865c04ce164d507c49704c8e0cd4d8ea5ee3ec8b7eded93f",
       "size": 9781
     },
     {
@@ -1883,7 +1883,7 @@
     },
     {
       "path": "fxdata/tables/cards.bin",
-      "sha256": "236b4fcee4fa89e1e06cc7156e4d9c44ec93ee960413e9ce66948c1a653e9440",
+      "sha256": "454a6c851b6207e72fae2e80deaa6a6af4226d5c42a423a179570e0bdee86b80",
       "size": 1031
     },
     {
@@ -1908,7 +1908,7 @@
     },
     {
       "path": "fxdata/tables/screens.bin",
-      "sha256": "f160c123d0d59c30dc9910ebe9e347265484ba9825d0fe8d61dcbcb9b49d749d",
+      "sha256": "9ec41180667d04d1624fb3f4ee1244520412f3774ca2071053198a4104b90262",
       "size": 1480
     },
     {
@@ -1918,7 +1918,7 @@
     },
     {
       "path": "src/fxdata.h",
-      "sha256": "5049b9ac01bc8faa31801ec22cb9817ca1c0fe2f324043de74e0842792b336a8",
+      "sha256": "33cb3d1ce3380bdc865c04ce164d507c49704c8e0cd4d8ea5ee3ec8b7eded93f",
       "size": 9781
     },
     {
@@ -2018,12 +2018,12 @@
     },
     {
       "path": "src/generated/zone_data.hpp",
-      "sha256": "4eb225a25c27ab77c32cc2f9672efd4653966bd738d3e686c56e31dd3509e605",
+      "sha256": "ec0a729bd7c5971ffff893773d342795b84cd81f41da90df786dbcf1a60365ee",
       "size": 5837
     },
     {
       "path": "src/generated/zone_meta.hpp",
-      "sha256": "6a42ab351cbf85ff60ea114a146a77dc84da8a0c7729ea111aaa76d820b0aa7a",
+      "sha256": "c1a6e5d94ebd20f24f6aa19e4b7ad191ed37214b2759d30f60c265b7b37b0581",
       "size": 11859
     }
   ],
