@@ -40,9 +40,9 @@ namespace mh {
 static void addEffect(Game &g, int16_t x, int16_t y, uint8_t life, bool crit);
 
 // Node-depletion mask is a u32 (one bit per global prop record). The demo map
-// has 19 props (the cavern room pushed prg.4's 12 + camp's non-gather props past
-// 16, so the mask widened); a map that overflows this fires the assert instead
-// of silently sharing bits.
+// has 23 props (the cavern room pushed prg.4's 12 + camp's non-gather props past
+// 16, so the mask widened; the ridge arena pushed it to 23); a map that
+// overflows this fires the assert instead of silently sharing bits.
 static_assert(zone::PROPS_COUNT <= 32, "gatherMask is a u32: one bit per prop record");
 
 constexpr uint8_t GATHER_SPARK_LIFE = 8;   // same spark family as the heal/hit paths
@@ -120,9 +120,18 @@ inline bool itemConsume(Game &g, uint8_t id) {
     return true;
 }
 
-// Was this prop record picked already this hunt?
+// Was this prop record picked already this hunt? The mask is one bit per
+// global prop record, byte-addressed: a 32-bit `1 << idx` would pull in AVR's
+// 32-bit shift helper for every site, while the byte form only shifts a
+// constant 1 within a byte (measured trim; the mask is little-endian on AVR).
 static inline bool gatherNodeDepleted(const Game &g, uint8_t idx) {
-    return (g.gatherMask & static_cast<uint32_t>(1ul << idx)) != 0;
+    const uint8_t *m = reinterpret_cast<const uint8_t *>(&g.gatherMask);
+    return (m[static_cast<uint8_t>(idx >> 3)] & static_cast<uint8_t>(1u << (idx & 7))) != 0;
+}
+
+static inline void gatherMarkPicked(Game &g, uint8_t idx) {
+    uint8_t *m = reinterpret_cast<uint8_t *>(&g.gatherMask);
+    m[static_cast<uint8_t>(idx >> 3)] |= static_cast<uint8_t>(1u << (idx & 7));
 }
 
 // Player body as a world rect (world.hpp's bodyRect is defined after
@@ -184,7 +193,7 @@ static void applyGather(Game &g, Player &p) {
     const ZoneProp prop = zonePropRead(idx);
     if (prop.gatherItem == zone::GATHER_NONE)
         return;
-    g.gatherMask |= static_cast<uint32_t>(1ul << idx);
+    gatherMarkPicked(g, idx);
     // The record stores the item index + 1 (zone::GATHER_*), so the inventory
     // slot is one less. itemAdd ignores an id past the table.
     const uint8_t slot = static_cast<uint8_t>(prop.gatherItem - 1);

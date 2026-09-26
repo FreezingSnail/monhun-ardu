@@ -12,7 +12,7 @@
 namespace zone_data {
 
 constexpr uint8_t VERSION = 1;
-constexpr uint16_t BLOB_SIZE = 364;
+constexpr uint16_t BLOB_SIZE = 461;
 constexpr uint8_t MONSTER_NONE = 0xFF;
 
 struct Room {
@@ -66,20 +66,26 @@ struct Smithy {
 constexpr uint8_t ROOM_AREA = 0;
 constexpr uint8_t ROOM_CAMP = 1;
 constexpr uint8_t ROOM_CAVERN = 2;
+constexpr uint8_t ROOM_RIDGE = 3;
 
 // Spawn indices (global section order).
 constexpr uint8_t SPAWN_AREA_FROM_CAMP = 0;
 constexpr uint8_t SPAWN_AREA_FROM_CAVERN = 1;
-constexpr uint8_t SPAWN_AREA_START = 2;
-constexpr uint8_t SPAWN_CAMP_ENTRY = 3;
-constexpr uint8_t SPAWN_CAMP_FROM_AREA = 4;
-constexpr uint8_t SPAWN_CAVERN_FROM_AREA = 5;
+constexpr uint8_t SPAWN_AREA_FROM_RIDGE = 2;
+constexpr uint8_t SPAWN_AREA_START = 3;
+constexpr uint8_t SPAWN_CAMP_ENTRY = 4;
+constexpr uint8_t SPAWN_CAMP_FROM_AREA = 5;
+constexpr uint8_t SPAWN_CAVERN_FROM_AREA = 6;
+constexpr uint8_t SPAWN_RIDGE_FROM_AREA = 7;
+constexpr uint8_t SPAWN_RIDGE_START = 8;
 
 // Door indices (global section order).
 constexpr uint8_t DOOR_AREA_0 = 0;
 constexpr uint8_t DOOR_AREA_1 = 1;
-constexpr uint8_t DOOR_CAMP_0 = 2;
-constexpr uint8_t DOOR_CAVERN_0 = 3;
+constexpr uint8_t DOOR_AREA_2 = 2;
+constexpr uint8_t DOOR_CAMP_0 = 3;
+constexpr uint8_t DOOR_CAVERN_0 = 4;
+constexpr uint8_t DOOR_RIDGE_0 = 5;
 
 // Prop/heal indices.
 constexpr uint8_t PROP_AREA_0 = 0;
@@ -101,51 +107,65 @@ constexpr uint8_t PROP_CAVERN_2 = 15;
 constexpr uint8_t PROP_CAVERN_3 = 16;
 constexpr uint8_t PROP_CAVERN_4 = 17;
 constexpr uint8_t PROP_CAVERN_5 = 18;
+constexpr uint8_t PROP_RIDGE_0 = 19;
+constexpr uint8_t PROP_RIDGE_1 = 20;
+constexpr uint8_t PROP_RIDGE_2 = 21;
+constexpr uint8_t PROP_RIDGE_3 = 22;
 constexpr uint8_t HEAL_CAMP_0 = 0;
 constexpr uint8_t SMITHY_CAMP_0 = 0;
 
 // Name tables: host-side lookup for loadRoom(roomId, spawnName).
 struct RoomName { const char *id; uint8_t index; };
-inline constexpr std::array<RoomName, 3> ROOM_NAMES = {{
+inline constexpr std::array<RoomName, 4> ROOM_NAMES = {{
     {"area", 0},
     {"camp", 1},
     {"cavern", 2},
+    {"ridge", 3},
 }};
 
 struct SpawnName { const char *name; uint8_t room; uint8_t index; };
-inline constexpr std::array<SpawnName, 6> SPAWN_NAMES = {{
+inline constexpr std::array<SpawnName, 9> SPAWN_NAMES = {{
     {"from_camp", 0, 0},
     {"from_cavern", 0, 1},
-    {"start", 0, 2},
-    {"entry", 1, 3},
-    {"from_area", 1, 4},
-    {"from_area", 2, 5},
+    {"from_ridge", 0, 2},
+    {"start", 0, 3},
+    {"entry", 1, 4},
+    {"from_area", 1, 5},
+    {"from_area", 2, 6},
+    {"from_area", 3, 7},
+    {"start", 3, 8},
 }};
 
 // Section arrays, in packed order.
-inline constexpr std::array<Room, 3> ROOMS = {{
-    {384, 112, 0, 2, 0, 3, 0, 8, 0, 0, 0, 0, 0, 2},
-    {128, 56, 2, 1, 3, 2, 8, 5, 0, 1, 0, 1, 255, 255},
-    {256, 112, 3, 1, 5, 1, 13, 6, 1, 0, 1, 0, 255, 255},
+inline constexpr std::array<Room, 4> ROOMS = {{
+    {384, 112, 0, 3, 0, 4, 0, 8, 0, 0, 0, 0, 0, 3},
+    {128, 56, 3, 1, 4, 2, 8, 5, 0, 1, 0, 1, 255, 255},
+    {256, 112, 4, 1, 6, 1, 13, 6, 1, 0, 1, 0, 255, 255},
+    {384, 112, 5, 1, 7, 2, 19, 4, 1, 0, 1, 0, 2, 8},
 }};
 
-inline constexpr std::array<Door, 4> DOORS = {{
-    {0, 72, 8, 24, 1, 4},
-    {176, 0, 16, 8, 2, 5},
+inline constexpr std::array<Door, 6> DOORS = {{
+    {0, 72, 8, 24, 1, 5},
+    {176, 0, 16, 8, 2, 6},
+    {376, 72, 8, 24, 3, 7},
     {120, 24, 8, 24, 0, 0},
     {112, 104, 16, 8, 0, 1},
+    {0, 72, 8, 24, 0, 2},
 }};
 
-inline constexpr std::array<Spawn, 6> SPAWNS = {{
+inline constexpr std::array<Spawn, 9> SPAWNS = {{
     {8, 80},
     {184, 16},
+    {360, 80},
     {320, 72},
     {20, 44},
     {104, 40},
     {116, 88},
+    {8, 80},
+    {320, 72},
 }};
 
-inline constexpr std::array<Prop, 19> PROPS = {{
+inline constexpr std::array<Prop, 23> PROPS = {{
     {3, 40, 16, 0, 0, 8, 8, 1, 1},
     {3, 160, 40, 0, 0, 8, 8, 1, 2},
     {3, 280, 88, 0, 0, 8, 8, 1, 3},
@@ -165,6 +185,10 @@ inline constexpr std::array<Prop, 19> PROPS = {{
     {3, 152, 88, 0, 0, 8, 8, 4, 1},
     {3, 200, 32, 0, 0, 8, 8, 3, 2},
     {3, 216, 88, 0, 0, 8, 8, 4, 1},
+    {3, 40, 16, 0, 0, 8, 8, 1, 1},
+    {3, 160, 40, 0, 0, 8, 8, 1, 2},
+    {3, 352, 16, 0, 0, 8, 8, 3, 1},
+    {3, 200, 96, 0, 0, 8, 8, 4, 1},
 }};
 
 inline constexpr std::array<Heal, 1> HEALS = {{

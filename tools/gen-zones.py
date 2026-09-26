@@ -1318,6 +1318,27 @@ def emit_meta_header(layout, packed, fx_symbols, gather_codes):
     app("constexpr uint8_t MONSTER_NONE = 0x%02X;   // room has no monster" % MONSTER_NONE)
     for i, name in enumerate(MONSTER_KINDS):
         app("constexpr uint8_t MONSTER_%s = %d;" % (name.upper(), i))
+    app("constexpr uint8_t MONSTER_KIND_COUNT = %d;" % len(MONSTER_KINDS))
+    # Beast home room per kind (bead monhun-ardu-udb): the first room whose
+    # monsterKind matches (rooms sort by id), else the first monster room; 0xFF
+    # when the map hosts no monster. Precomputed so the runtime needs one table
+    # read instead of a per-room cart scan (measured trim on the udb wave).
+    home = [MONSTER_NONE] * len(MONSTER_KINDS)
+    fallback = MONSTER_NONE
+    for i, room in enumerate(rooms):
+        monster = room["monster"]
+        if monster is None:
+            continue
+        if fallback == MONSTER_NONE:
+            fallback = i
+        kind_idx = MONSTER_KINDS.index(monster["kind"])
+        if home[kind_idx] == MONSTER_NONE:
+            home[kind_idx] = i
+    home = [fallback if v == MONSTER_NONE else v for v in home]
+    app("// Beast home room per MonsterKind (udb): src/core/zones.hpp")
+    app("// beastHomeRoom/beastHomeSpawn read this; 0xFF = the map has no beast.")
+    app("constexpr uint8_t MONSTER_HOME_ROOM[MONSTER_KIND_COUNT] = {%s};"
+        % ", ".join("0x%02X" % v for v in home))
     app("constexpr uint8_t DOOR_MENU = 0x%02X;   // door.toRoom: exit to the opening menu" % DOOR_MENU)
     app("")
     app("// Room indices + blob offsets, sorted by id.")

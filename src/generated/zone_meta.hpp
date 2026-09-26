@@ -17,7 +17,7 @@ namespace zone {
 constexpr uint16_t MAGIC = 0x5A52;
 constexpr uint8_t VERSION = 1;
 constexpr uint8_t FLAGS = 0x00;
-constexpr uint16_t SIZE = 364;
+constexpr uint16_t SIZE = 461;
 constexpr uint8_t HEADER_SIZE = 16;
 
 constexpr uint8_t ROOM_SIZE = 21;
@@ -28,15 +28,15 @@ constexpr uint8_t HEAL_SIZE = 6;
 constexpr uint8_t SMITHY_SIZE = 6;
 
 constexpr uint16_t ROOMS_OFF = 16;
-constexpr uint16_t DOORS_OFF = 79;
-constexpr uint16_t SPAWNS_OFF = 119;
-constexpr uint16_t PROPS_OFF = 143;
-constexpr uint16_t HEALS_OFF = 352;
-constexpr uint16_t SMITHIES_OFF = 358;
-constexpr uint16_t ROOMS_COUNT = 3;
-constexpr uint16_t DOORS_COUNT = 4;
-constexpr uint16_t SPAWNS_COUNT = 6;
-constexpr uint16_t PROPS_COUNT = 19;
+constexpr uint16_t DOORS_OFF = 100;
+constexpr uint16_t SPAWNS_OFF = 160;
+constexpr uint16_t PROPS_OFF = 196;
+constexpr uint16_t HEALS_OFF = 449;
+constexpr uint16_t SMITHIES_OFF = 455;
+constexpr uint16_t ROOMS_COUNT = 4;
+constexpr uint16_t DOORS_COUNT = 6;
+constexpr uint16_t SPAWNS_COUNT = 9;
+constexpr uint16_t PROPS_COUNT = 23;
 constexpr uint16_t HEALS_COUNT = 1;
 constexpr uint16_t SMITHIES_COUNT = 1;
 
@@ -103,13 +103,17 @@ constexpr uint8_t MONSTER_LUNGE = 0;
 constexpr uint8_t MONSTER_SWEEP = 1;
 constexpr uint8_t MONSTER_HEAVY = 2;
 constexpr uint8_t MONSTER_RAVAGER = 3;
+constexpr uint8_t MONSTER_KIND_COUNT = 4;
+// Beast home room per MonsterKind (udb): src/core/zones.hpp
+// beastHomeRoom/beastHomeSpawn read this; 0xFF = the map has no beast.
+constexpr uint8_t MONSTER_HOME_ROOM[MONSTER_KIND_COUNT] = {0x00, 0x00, 0x03, 0x00};
 constexpr uint8_t DOOR_MENU = 0xFF;   // door.toRoom: exit to the opening menu
 
 // Room indices + blob offsets, sorted by id.
 constexpr uint8_t ROOM_AREA = 0;
 constexpr uint16_t ROOM_AREA_OFF = 16;
-constexpr uint8_t ROOM_AREA_DOORS = 2;
-constexpr uint8_t ROOM_AREA_SPAWNS = 3;
+constexpr uint8_t ROOM_AREA_DOORS = 3;
+constexpr uint8_t ROOM_AREA_SPAWNS = 4;
 constexpr uint16_t ROOM_AREA_FIRST_SPAWN = 0;
 constexpr uint16_t ROOM_AREA_FIRST_DOOR = 0;
 constexpr uint16_t ROOM_AREA_W = 384;
@@ -120,8 +124,8 @@ constexpr uint8_t ROOM_CAMP = 1;
 constexpr uint16_t ROOM_CAMP_OFF = 37;
 constexpr uint8_t ROOM_CAMP_DOORS = 1;
 constexpr uint8_t ROOM_CAMP_SPAWNS = 2;
-constexpr uint16_t ROOM_CAMP_FIRST_SPAWN = 3;
-constexpr uint16_t ROOM_CAMP_FIRST_DOOR = 2;
+constexpr uint16_t ROOM_CAMP_FIRST_SPAWN = 4;
+constexpr uint16_t ROOM_CAMP_FIRST_DOOR = 3;
 constexpr uint16_t ROOM_CAMP_W = 128;
 constexpr uint16_t ROOM_CAMP_H = 56;
 constexpr uint16_t ROOM_CAMP_IMAGE_LAYER_BYTES = 896;
@@ -130,108 +134,142 @@ constexpr uint8_t ROOM_CAVERN = 2;
 constexpr uint16_t ROOM_CAVERN_OFF = 58;
 constexpr uint8_t ROOM_CAVERN_DOORS = 1;
 constexpr uint8_t ROOM_CAVERN_SPAWNS = 1;
-constexpr uint16_t ROOM_CAVERN_FIRST_SPAWN = 5;
-constexpr uint16_t ROOM_CAVERN_FIRST_DOOR = 3;
+constexpr uint16_t ROOM_CAVERN_FIRST_SPAWN = 6;
+constexpr uint16_t ROOM_CAVERN_FIRST_DOOR = 4;
 constexpr uint16_t ROOM_CAVERN_W = 256;
 constexpr uint16_t ROOM_CAVERN_H = 112;
 constexpr uint16_t ROOM_CAVERN_IMAGE_LAYER_BYTES = 3584;
 constexpr uint32_t ROOM_CAVERN_IMAGE_SIZE = 10752;
+constexpr uint8_t ROOM_RIDGE = 3;
+constexpr uint16_t ROOM_RIDGE_OFF = 79;
+constexpr uint8_t ROOM_RIDGE_DOORS = 1;
+constexpr uint8_t ROOM_RIDGE_SPAWNS = 2;
+constexpr uint16_t ROOM_RIDGE_FIRST_SPAWN = 7;
+constexpr uint16_t ROOM_RIDGE_FIRST_DOOR = 5;
+constexpr uint16_t ROOM_RIDGE_W = 384;
+constexpr uint16_t ROOM_RIDGE_H = 112;
+constexpr uint16_t ROOM_RIDGE_IMAGE_LAYER_BYTES = 5376;
+constexpr uint32_t ROOM_RIDGE_IMAGE_SIZE = 16128;
 
 // Spawn indices + blob offsets (global section order).
 constexpr uint8_t SPAWN_AREA_FROM_CAMP = 0;
-constexpr uint16_t SPAWN_AREA_FROM_CAMP_OFF = 119;
+constexpr uint16_t SPAWN_AREA_FROM_CAMP_OFF = 160;
 constexpr uint8_t SPAWN_AREA_FROM_CAVERN = 1;
-constexpr uint16_t SPAWN_AREA_FROM_CAVERN_OFF = 123;
-constexpr uint8_t SPAWN_AREA_START = 2;
-constexpr uint16_t SPAWN_AREA_START_OFF = 127;
-constexpr uint8_t SPAWN_CAMP_ENTRY = 3;
-constexpr uint16_t SPAWN_CAMP_ENTRY_OFF = 131;
-constexpr uint8_t SPAWN_CAMP_FROM_AREA = 4;
-constexpr uint16_t SPAWN_CAMP_FROM_AREA_OFF = 135;
-constexpr uint8_t SPAWN_CAVERN_FROM_AREA = 5;
-constexpr uint16_t SPAWN_CAVERN_FROM_AREA_OFF = 139;
+constexpr uint16_t SPAWN_AREA_FROM_CAVERN_OFF = 164;
+constexpr uint8_t SPAWN_AREA_FROM_RIDGE = 2;
+constexpr uint16_t SPAWN_AREA_FROM_RIDGE_OFF = 168;
+constexpr uint8_t SPAWN_AREA_START = 3;
+constexpr uint16_t SPAWN_AREA_START_OFF = 172;
+constexpr uint8_t SPAWN_CAMP_ENTRY = 4;
+constexpr uint16_t SPAWN_CAMP_ENTRY_OFF = 176;
+constexpr uint8_t SPAWN_CAMP_FROM_AREA = 5;
+constexpr uint16_t SPAWN_CAMP_FROM_AREA_OFF = 180;
+constexpr uint8_t SPAWN_CAVERN_FROM_AREA = 6;
+constexpr uint16_t SPAWN_CAVERN_FROM_AREA_OFF = 184;
+constexpr uint8_t SPAWN_RIDGE_FROM_AREA = 7;
+constexpr uint16_t SPAWN_RIDGE_FROM_AREA_OFF = 188;
+constexpr uint8_t SPAWN_RIDGE_START = 8;
+constexpr uint16_t SPAWN_RIDGE_START_OFF = 192;
 
 // Door indices + blob offsets (global section order; names use the
 // room-local index so host/meta symbol names stay in lockstep).
 constexpr uint8_t DOOR_AREA_0 = 0;
-constexpr uint16_t DOOR_AREA_0_OFF = 79;
+constexpr uint16_t DOOR_AREA_0_OFF = 100;
 constexpr uint8_t DOOR_AREA_0_TO_ROOM = 1;
 constexpr uint8_t DOOR_AREA_1 = 1;
-constexpr uint16_t DOOR_AREA_1_OFF = 89;
+constexpr uint16_t DOOR_AREA_1_OFF = 110;
 constexpr uint8_t DOOR_AREA_1_TO_ROOM = 2;
-constexpr uint8_t DOOR_CAMP_0 = 2;
-constexpr uint16_t DOOR_CAMP_0_OFF = 99;
+constexpr uint8_t DOOR_AREA_2 = 2;
+constexpr uint16_t DOOR_AREA_2_OFF = 120;
+constexpr uint8_t DOOR_AREA_2_TO_ROOM = 3;
+constexpr uint8_t DOOR_CAMP_0 = 3;
+constexpr uint16_t DOOR_CAMP_0_OFF = 130;
 constexpr uint8_t DOOR_CAMP_0_TO_ROOM = 0;
-constexpr uint8_t DOOR_CAVERN_0 = 3;
-constexpr uint16_t DOOR_CAVERN_0_OFF = 109;
+constexpr uint8_t DOOR_CAVERN_0 = 4;
+constexpr uint16_t DOOR_CAVERN_0_OFF = 140;
 constexpr uint8_t DOOR_CAVERN_0_TO_ROOM = 0;
+constexpr uint8_t DOOR_RIDGE_0 = 5;
+constexpr uint16_t DOOR_RIDGE_0_OFF = 150;
+constexpr uint8_t DOOR_RIDGE_0_TO_ROOM = 0;
 
 // Prop/heal indices + blob offsets (names use the room-local index).
 constexpr uint8_t PROP_AREA_0 = 0;
-constexpr uint16_t PROP_AREA_0_OFF = 143;
+constexpr uint16_t PROP_AREA_0_OFF = 196;
 constexpr uint8_t PROP_AREA_1 = 1;
-constexpr uint16_t PROP_AREA_1_OFF = 154;
+constexpr uint16_t PROP_AREA_1_OFF = 207;
 constexpr uint8_t PROP_AREA_2 = 2;
-constexpr uint16_t PROP_AREA_2_OFF = 165;
+constexpr uint16_t PROP_AREA_2_OFF = 218;
 constexpr uint8_t PROP_AREA_3 = 3;
-constexpr uint16_t PROP_AREA_3_OFF = 176;
+constexpr uint16_t PROP_AREA_3_OFF = 229;
 constexpr uint8_t PROP_AREA_4 = 4;
-constexpr uint16_t PROP_AREA_4_OFF = 187;
+constexpr uint16_t PROP_AREA_4_OFF = 240;
 constexpr uint8_t PROP_AREA_5 = 5;
-constexpr uint16_t PROP_AREA_5_OFF = 198;
+constexpr uint16_t PROP_AREA_5_OFF = 251;
 constexpr uint8_t PROP_AREA_6 = 6;
-constexpr uint16_t PROP_AREA_6_OFF = 209;
+constexpr uint16_t PROP_AREA_6_OFF = 262;
 constexpr uint8_t PROP_AREA_7 = 7;
-constexpr uint16_t PROP_AREA_7_OFF = 220;
+constexpr uint16_t PROP_AREA_7_OFF = 273;
 constexpr uint8_t PROP_CAMP_0 = 8;
-constexpr uint16_t PROP_CAMP_0_OFF = 231;
+constexpr uint16_t PROP_CAMP_0_OFF = 284;
 constexpr uint8_t PROP_CAMP_1 = 9;
-constexpr uint16_t PROP_CAMP_1_OFF = 242;
+constexpr uint16_t PROP_CAMP_1_OFF = 295;
 constexpr uint8_t PROP_CAMP_2 = 10;
-constexpr uint16_t PROP_CAMP_2_OFF = 253;
+constexpr uint16_t PROP_CAMP_2_OFF = 306;
 constexpr uint8_t PROP_CAMP_3 = 11;
-constexpr uint16_t PROP_CAMP_3_OFF = 264;
+constexpr uint16_t PROP_CAMP_3_OFF = 317;
 constexpr uint8_t PROP_CAMP_4 = 12;
-constexpr uint16_t PROP_CAMP_4_OFF = 275;
+constexpr uint16_t PROP_CAMP_4_OFF = 328;
 constexpr uint8_t PROP_CAVERN_0 = 13;
-constexpr uint16_t PROP_CAVERN_0_OFF = 286;
+constexpr uint16_t PROP_CAVERN_0_OFF = 339;
 constexpr uint8_t PROP_CAVERN_1 = 14;
-constexpr uint16_t PROP_CAVERN_1_OFF = 297;
+constexpr uint16_t PROP_CAVERN_1_OFF = 350;
 constexpr uint8_t PROP_CAVERN_2 = 15;
-constexpr uint16_t PROP_CAVERN_2_OFF = 308;
+constexpr uint16_t PROP_CAVERN_2_OFF = 361;
 constexpr uint8_t PROP_CAVERN_3 = 16;
-constexpr uint16_t PROP_CAVERN_3_OFF = 319;
+constexpr uint16_t PROP_CAVERN_3_OFF = 372;
 constexpr uint8_t PROP_CAVERN_4 = 17;
-constexpr uint16_t PROP_CAVERN_4_OFF = 330;
+constexpr uint16_t PROP_CAVERN_4_OFF = 383;
 constexpr uint8_t PROP_CAVERN_5 = 18;
-constexpr uint16_t PROP_CAVERN_5_OFF = 341;
+constexpr uint16_t PROP_CAVERN_5_OFF = 394;
+constexpr uint8_t PROP_RIDGE_0 = 19;
+constexpr uint16_t PROP_RIDGE_0_OFF = 405;
+constexpr uint8_t PROP_RIDGE_1 = 20;
+constexpr uint16_t PROP_RIDGE_1_OFF = 416;
+constexpr uint8_t PROP_RIDGE_2 = 21;
+constexpr uint16_t PROP_RIDGE_2_OFF = 427;
+constexpr uint8_t PROP_RIDGE_3 = 22;
+constexpr uint16_t PROP_RIDGE_3_OFF = 438;
 constexpr uint8_t HEAL_CAMP_0 = 0;
-constexpr uint16_t HEAL_CAMP_0_OFF = 352;
+constexpr uint16_t HEAL_CAMP_0_OFF = 449;
 
 // Smithy interaction rects (prg.7; names use the room-local index).
 constexpr uint8_t SMITHY_CAMP_0 = 0;
-constexpr uint16_t SMITHY_CAMP_0_OFF = 358;
+constexpr uint16_t SMITHY_CAMP_0_OFF = 455;
 
 // Prop sheet names + FX-image offsets (0 = not yet authored; fie.5 art).
 constexpr uint8_t SHEET_MH_MAP_TENT = 0;
 constexpr bool SHEET_MH_MAP_TENT_RESOLVED = true;
-constexpr uint32_t SHEET_MH_MAP_TENT_OFF = 26189;
+constexpr uint32_t SHEET_MH_MAP_TENT_OFF = 26286;
 
 // Room image symbols + baked FX offsets (the fie.5 blit base). A missing
 // symbol means a first gen pass before fxdata-build emitted it.
 constexpr const char *ROOM_AREA_IMAGE = "mh_map_area";
 constexpr bool ROOM_AREA_IMAGE_RESOLVED = true;
-constexpr uint32_t ROOM_AREA_IMAGE_OFF = 2617143;
+constexpr uint32_t ROOM_AREA_IMAGE_OFF = 2617240;
 constexpr const char *ROOM_CAMP_IMAGE = "mh_map_camp";
 constexpr bool ROOM_CAMP_IMAGE_RESOLVED = true;
-constexpr uint32_t ROOM_CAMP_IMAGE_OFF = 2633271;
+constexpr uint32_t ROOM_CAMP_IMAGE_OFF = 2633368;
 constexpr const char *ROOM_CAVERN_IMAGE = "mh_map_cavern";
 constexpr bool ROOM_CAVERN_IMAGE_RESOLVED = true;
-constexpr uint32_t ROOM_CAVERN_IMAGE_OFF = 2635959;
+constexpr uint32_t ROOM_CAVERN_IMAGE_OFF = 2636056;
+constexpr const char *ROOM_RIDGE_IMAGE = "mh_map_ridge";
+constexpr bool ROOM_RIDGE_IMAGE_RESOLVED = true;
+constexpr uint32_t ROOM_RIDGE_IMAGE_OFF = 2646808;
 #if defined(__AVR__)
 static_assert(ROOM_AREA_IMAGE_OFF == static_cast<uint32_t>(mh_map_area), "zone blob stale: re-run make gen");
 static_assert(ROOM_CAMP_IMAGE_OFF == static_cast<uint32_t>(mh_map_camp), "zone blob stale: re-run make gen");
 static_assert(ROOM_CAVERN_IMAGE_OFF == static_cast<uint32_t>(mh_map_cavern), "zone blob stale: re-run make gen");
+static_assert(ROOM_RIDGE_IMAGE_OFF == static_cast<uint32_t>(mh_map_ridge), "zone blob stale: re-run make gen");
 static_assert(SHEET_MH_MAP_TENT_OFF == static_cast<uint32_t>(mh_map_tent), "zone blob stale: re-run make gen");
 #endif
 

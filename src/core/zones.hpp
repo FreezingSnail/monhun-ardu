@@ -265,6 +265,46 @@ inline ZoneProp zonePropRead(uint8_t i) {
 
 #endif   // __AVR__
 
+// ---------------------------------------------------------- beast home (udb)
+// Per-room beast home (bead monhun-ardu-udb): the beast kind -- a MonsterKind
+// value; lunge/sweep/heavy/ravager map 1:1 onto zone::MONSTER_* -- indexes the
+// generated home table (heavy -> ridge, lunge -> area; roster kinds with no
+// matching room fall back to the first monster room, today's single-arena
+// behaviour; non-roster kinds like pole return 0xFF and keep their creature
+// spawn).
+// Rooms with MONSTER_NONE (camp, cavern) are never homes. 0xFF = no home, so
+// the caller can skip the override. The table is baked by gen-zones, so no
+// per-room cart scan runs at hunt start.
+//
+// Invariant: the beast's coordinates live in its home room's space and never
+// migrate or simulate per room. While the hunter is in another room the normal
+// distance gate keeps it idle (dormant/off-room), exactly as the single-arena
+// runtime did -- this bead adds no per-room monster simulation.
+inline uint8_t beastHomeRoom(int8_t kind) {
+    const uint8_t k = static_cast<uint8_t>(kind);
+    return k < zone::MONSTER_KIND_COUNT ? zone::MONSTER_HOME_ROOM[k] : 0xFF;
+}
+
+// Move a just-spawned beast (initMonster ran) to its home room's zone spawn
+// coords. hp/spd/FSM/body stay the creature record's; only x/y move. Called by
+// huntStart before loadRoom so the arrival room's target rect reads the home
+// position. A home room with no monsterSpawn (0xFF) leaves the creature spawn.
+inline void beastHomeSpawn(Game &g, int8_t kind) {
+    const uint8_t home = beastHomeRoom(kind);
+    if (home >= zone::ROOMS_COUNT)
+        return;
+    // The room record's monsterSpawn is validated by gen-zones (it must name a
+    // spawn in the same room), so no runtime bounds check is needed here.
+#if defined(__AVR__)
+    const uint8_t spawn = zdetail::zoneReadU8(static_cast<uint16_t>(zone::ROOMS_OFF + home * zone::ROOM_SIZE + zone::ROOM_MONSTER_SPAWN_OFF));
+#else
+    const uint8_t spawn = zone_data::ROOMS[home].monsterSpawn;
+#endif
+    const ZoneSpawn sp = zoneSpawnRead(spawn);
+    g.monster.x = static_cast<int16_t>(sp.x);
+    g.monster.y = static_cast<int16_t>(sp.y);
+}
+
 // Safe room: the room record carries no monster, so stepWorldBody skips the
 // monster/target updates while its door/heal/player logic stays live. Carved
 // out of the parity image with the rest of the room runtime (every pre-room

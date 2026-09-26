@@ -154,6 +154,10 @@
         "from_cavern": {
           "x": 184,
           "y": 16
+        },
+        "from_ridge": {
+          "x": 360,
+          "y": 80
         }
       },
       "doors": [
@@ -163,6 +167,10 @@
         },
         {
           "to": "cavern",
+          "toSpawn": "from_area"
+        },
+        {
+          "to": "ridge",
           "toSpawn": "from_area"
         }
       ],
@@ -245,6 +253,70 @@
         }
       ],
       "monster": null
+    },
+    {
+      "id": "ridge",
+      "w": 384,
+      "h": 112,
+      "image": "images/maps/mh_map_ridge_384x112.png",
+      "props": [
+        {
+          "type": "post",
+          "sheet": "mh_map_tent",
+          "frame": 0,
+          "gather": {
+            "item": "herb",
+            "yield": 1
+          }
+        },
+        {
+          "type": "post",
+          "sheet": "mh_map_tent",
+          "frame": 0,
+          "gather": {
+            "item": "herb",
+            "yield": 2
+          }
+        },
+        {
+          "type": "post",
+          "sheet": "mh_map_tent",
+          "frame": 0,
+          "gather": {
+            "item": "ore",
+            "yield": 1
+          }
+        },
+        {
+          "type": "post",
+          "sheet": "mh_map_tent",
+          "frame": 0,
+          "gather": {
+            "item": "bug",
+            "yield": 1
+          }
+        }
+      ],
+      "spawns": {
+        "from_area": {
+          "x": 8,
+          "y": 80
+        },
+        "start": {
+          "x": 320,
+          "y": 72
+        }
+      },
+      "doors": [
+        {
+          "to": "area",
+          "toSpawn": "from_ridge"
+        }
+      ],
+      "monster": {
+        "kind": "heavy",
+        "spawn": "start"
+      }
     }
   ]
 }

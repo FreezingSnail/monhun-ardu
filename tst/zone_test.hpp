@@ -66,7 +66,7 @@ void ZoneSuite(TestRunner &runner) {
         t.assert(g.roomMonsterKind, zone::MONSTER_LUNGE, "area has a beast");
         t.assert(g.player.x, 320, "area start spawn x");
         t.assert(g.player.y, 72, "area start spawn y");
-        t.assert(g.roomDoorCount, 2, "area door count (camp + cavern)");
+        t.assert(g.roomDoorCount, 3, "area door count (camp + cavern + ridge)");
         t.assert(g.roomHealCount, 0, "area has no heal rect");
 
         loadRoom(g, zone::ROOM_CAMP, zone::SPAWN_CAMP_ENTRY);
@@ -89,6 +89,17 @@ void ZoneSuite(TestRunner &runner) {
         t.assert(g.roomDoorCount, 1, "cavern door count");
         t.assert(g.roomPropCount, 6, "cavern gather node count");
         t.assert(roomIsSafe(g), 1, "roomIsSafe cavern");
+
+        loadRoom(g, zone::ROOM_RIDGE, zone::SPAWN_RIDGE_FROM_AREA);
+        t.assert(g.roomId, zone::ROOM_RIDGE, "ridge room id");
+        t.assert(g.roomW, 384, "ridge roomW");
+        t.assert(g.roomH, 112, "ridge roomH");
+        t.assert(g.roomMonsterKind, zone::MONSTER_HEAVY, "ridge hosts the heavy beast");
+        t.assert(g.player.x, 8, "ridge from_area spawn x");
+        t.assert(g.player.y, 80, "ridge from_area spawn y");
+        t.assert(g.roomDoorCount, 1, "ridge door count");
+        t.assert(g.roomPropCount, 4, "ridge gather node count");
+        t.assert(roomIsSafe(g), 0, "ridge is a hunt room, not safe");
 
         loadRoom(g, zone::ROOM_AREA, zone::SPAWN_AREA_START);
         t.assert(g.roomId, zone::ROOM_AREA, "area id after camp");
@@ -195,6 +206,38 @@ void ZoneSuite(TestRunner &runner) {
         t.assert(g.roomId, zone::ROOM_AREA, "returned to the area");
         t.assert(g.player.x, 184, "area from_cavern spawn x");
         t.assert(g.player.y, 16, "area from_cavern spawn y");
+        suite.addTest(t);
+    }
+
+    {
+        Test t("door round-trip area -> ridge lands on the from_area spawn");
+        Game g;
+        newGame(g, W_SWORD, MODE_HUNT);
+        loadRoom(g, zone::ROOM_AREA, zone::SPAWN_AREA_START);
+        zparkBeast(g, 20, 20);   // keep the beast off the door probe
+        // Clear the arrival latch, then enter the east door (376,72,8,24).
+        g.player.x = 100;
+        g.player.y = 80;
+        zticks(g, 1, Z_IDLE);
+        t.assert(g.doorLatch, 0, "area latch cleared");
+        g.player.x = 376;
+        g.player.y = 72;
+        zticks(g, 1, Z_IDLE);
+        t.assert(g.roomId, zone::ROOM_RIDGE, "transitioned to the ridge");
+        t.assert(g.player.x, 8, "ridge from_area spawn x");
+        t.assert(g.player.y, 80, "ridge from_area spawn y");
+        t.assert(g.roomMonsterKind, zone::MONSTER_HEAVY, "ridge arrived with its beast");
+        // Walk back out through the ridge west door (0,72,8,24).
+        g.player.x = 100;
+        g.player.y = 80;
+        zticks(g, 1, Z_IDLE);
+        t.assert(g.doorLatch, 0, "ridge latch cleared");
+        g.player.x = 0;
+        g.player.y = 72;
+        zticks(g, 1, Z_IDLE);
+        t.assert(g.roomId, zone::ROOM_AREA, "returned to the area");
+        t.assert(g.player.x, 360, "area from_ridge spawn x");
+        t.assert(g.player.y, 80, "area from_ridge spawn y");
         suite.addTest(t);
     }
 
@@ -418,6 +461,53 @@ void ZoneSuite(TestRunner &runner) {
         loadRoom(g, zone::ROOM_AREA, zone::SPAWN_AREA_FROM_CAMP);
         t.assert(g.target.alive, 1, "second area load re-arms alive");
         t.assert(g.target.onHit == monsterOnHit, 1, "second area load re-arms onHit");
+        suite.addTest(t);
+    }
+
+    {
+        Test t("beast home: kind picks the room, home spawn overrides x/y (udb)");
+        // Ridge record: the second arena, heavy beast home (bead udb).
+        const ZoneRoom ridge = zoneRoomRead(zone::ROOM_RIDGE);
+        t.assert(ridge.w, 384, "ridge roomW");
+        t.assert(ridge.h, 112, "ridge roomH");
+        t.assert(ridge.monsterKind, zone::MONSTER_HEAVY, "ridge hosts the heavy beast");
+        t.assert(ridge.spawnCount, 2, "ridge spawn count");
+
+        // crush_heavy (kill target heavy) -> ridge; slay_lunge -> area.
+        t.assert(beastHomeRoom(MON_HEAVY), zone::ROOM_RIDGE, "heavy homes at the ridge");
+        const ZoneSpawn ridgeHome = zoneSpawnRead(zoneRoomRead(zone::ROOM_RIDGE).monsterSpawn);
+        t.assert(ridgeHome.x, 320, "ridge start spawn x");
+        t.assert(ridgeHome.y, 72, "ridge start spawn y");
+        t.assert(beastHomeRoom(MON_LUNGE), zone::ROOM_AREA, "lunge homes at the area");
+        const ZoneSpawn areaHome = zoneSpawnRead(zoneRoomRead(zone::ROOM_AREA).monsterSpawn);
+        t.assert(areaHome.x, 320, "area start spawn x");
+        t.assert(areaHome.y, 72, "area start spawn y");
+        // No matching room (sweep/ravager/pole): first monster room = area.
+        t.assert(beastHomeRoom(MON_SWEEP), zone::ROOM_AREA, "sweep falls back to the area");
+        t.assert(beastHomeRoom(MON_RAVAGER), zone::ROOM_AREA, "ravager falls back to the area");
+        // The pole is not a room-roster kind (zone data models lunge/sweep/
+        // heavy/ravager), so it gets no home and keeps its creature spawn --
+        // pre-udb behaviour for the training post.
+        t.assert(beastHomeRoom(MON_POLE), 0xFF, "pole has no home room");
+
+        // The override moves only x/y; hp/spd/FSM stay the creature record's.
+        Game g;
+        newGame(g, W_SWORD, MODE_HUNT, MON_HEAVY);
+        const int16_t hp0 = g.monster.hp;
+        const uint8_t spd0 = g.monster.spd;
+        g.monster.state = MS_PURSUE;
+        beastHomeSpawn(g, MON_HEAVY);
+        t.assert(g.monster.x, 320, "heavy beast moved to the ridge spawn x");
+        t.assert(g.monster.y, 72, "heavy beast moved to the ridge spawn y");
+        t.assert(g.monster.hp, hp0, "hp untouched by the home override");
+        t.assert(g.monster.spd, spd0, "spd untouched by the home override");
+        t.assert(g.monster.state, MS_PURSUE, "FSM untouched by the home override");
+
+        Game l;
+        newGame(l, W_SWORD, MODE_HUNT, MON_LUNGE);
+        beastHomeSpawn(l, MON_LUNGE);
+        t.assert(l.monster.x, 320, "lunge beast moved to the area start x");
+        t.assert(l.monster.y, 72, "lunge beast moved to the area start y");
         suite.addTest(t);
     }
 

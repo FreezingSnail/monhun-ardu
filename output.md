@@ -1,70 +1,53 @@
-# monhun-ardu-jd1 — wire equipped forge node sheet to the render
+# monhun-ardu-udb — second arena (ridge) + per-room beast home
 
-Status: DONE. Gate green; no commit (orchestrator commits).
+Status: DONE. Landed with orchestrator trims (see below); no worker commit.
 
-## What changed
+## What landed
 
-- `tools/gen-forge.py`: added `SHEET_KINDS` (sword/flail/gun -> 0,
-  gun buckler/kite/tower/brace -> 1..4); an unknown `sheet` symbol is a hard
-  error (`sheet: unknown sheet symbol 'X'`). Each node carries `sheetKind`; the
-  generator emits `constexpr uint8_t NODE_SHEET[NODE_COUNT]` into
-  `src/generated/forge_meta.hpp` (real data: `{0,0,0,0,0,0,0,0,0,1,2,3,4}`).
-- `src/core/game.hpp`: `Game::wpnSheet` (u8) beside `dmgMul/spdMul`.
-- `src/core/player.hpp`: `initGame` zeroes `wpnSheet` (class default sheet).
-- `src/forge.hpp`: `forgeEquippedSheet(const SaveBlock&)` -> `NODE_SHEET[node]`,
-  `0` for `SAVE_NODE_NONE` / out-of-range (constexpr table, no cart read).
-- `src/app_setup.hpp`: `upgradeApplyToGame` also sets `g.wpnSheet`.
-- `src/render.hpp`: `weaponSheet(const mh::Game&)`; for W_GUN switches on
-  `g.wpnSheet` to the buckler/kite/tower/brace `SHEET_OFF_MH_WEAPON_GUN_*`
-  constant (default `mh_weapon_gun`). Sword/flail unchanged. Call site updated.
-- Docs: `docs/weapon-art.md` (variant sheet selection), `docs/ui-design.md`
-  (kind byte).
-- Generated set regenerated with `make gen` (forge_meta.hpp + fxdata manifest
-  hash).
+- `tools/gen-zones.py` bakes `MONSTER_HOME_ROOM[MONSTER_KIND_COUNT]` (+ the
+  count) into `zone_meta.hpp`: per kind, the first room whose `monsterKind`
+  matches, else the first monster room, `0xFF` when the map hosts no monster.
+  One table read at hunt start instead of a per-room cart scan.
+- `src/core/zones.hpp`: `beastHomeRoom(kind)` (table lookup; non-roster kinds
+  like pole -> `0xFF`) and `beastHomeSpawn(g, kind)` (override the just-spawned
+  beast's x/y with the home room's `monsterSpawn` -> `zoneSpawnRead`). hp/spd/
+  FSM/body stay the creature record's. Header comment states the invariant: the
+  beast's coords live in its home room's space, no per-room simulation, the
+  distance gate keeps it idle off-room.
+- `src/app_setup.hpp`: `huntStart` calls `beastHomeSpawn(g, kind)` right after
+  `newGame`/`initMonster`, before `loadRoom`.
+- `src/core/items.hpp`: gather mask byte-indexed (`gatherMarkPicked`), so the
+  32-bit `1 << idx` AVR shift helper is gone; one-bit-per-prop semantics kept.
+- `data/map.json`: `ridge` 384x112 (heavy beast, `start` spawn, 4 nodes: herb
+  x2 / ore / bug); area gains the east door (376,72,8,24) + `from_ridge` spawn;
+  ridge west door (0,72,8,24) -> area.
+- Masks/art: ridge mask authored (+ gen-zones placeholder art; bead kcj owns
+  the art pass), area mask door idx2 (0,128,255).
+- `data/quests/crush_heavy.json`: desc "FELL THE HEAVY / IN THE RIDGE."
+- Tests: `tst/zone_test.hpp` pins the ridge record (extents, MONSTER_HEAVY,
+  spawns), the area<->ridge round-trip, and the home mapping (heavy->ridge,
+  lunge->area, sweep/ravager->area fallback, pole->no home, spawn coords moved,
+  hp/spd/FSM untouched).
+- Docs: `docs/map-zones.md` room graph + gather table (23 props).
 
-## Tests added (permanent, native frameworks)
+## Budget (measured whole-image)
 
-- `tools/tests/test_gen_forge.py`: `test_node_sheet_kinds` (gun fixture with all
-  four variants; pins `NODE_SHEET = {0,0,0,0,0,0,0,1,2,3,4}` over the synthetic
-  tree and the per-node kinds) + `test_unknown_sheet_symbol_rejected`.
-- `tst/forge_state_test.hpp`: "node sheet kinds" pins the four variant kinds +
-  class defaults + `sizeof(NODE_SHEET) == NODE_COUNT`.
-- `tst/fxdatatest/forge_test.hpp`: `forgeEquippedSheet` flow — kinds 1..4 via the
-  equipped node, default 0 for base/none/out-of-range.
-- `tst/fxdatatest/player_art_test.hpp`: `Case::wpnSheet` + 4 appended cases 40..43
-  (W_GUN, PS_IDLE, ST_GUARD, fx=16, kinds 1..4), `CASE_COUNT` 40 -> 44, goldens
-  regenerated via the documented PRINT_GOLDENS flow; regen-history note added.
+Order: worker first cut 29606/29696 (90 free, test_hub over board) -> trims:
+1. inline single-use readers + drop the gen-validated spawn bounds check: -4 B.
+2. byte-indexed gather mask (drops the AVR 32-bit shift helper): -68 B.
+3. generated `MONSTER_HOME_ROOM` table (replaces the runtime room scan): -32 B.
+Final 29502/29696 (**194 free**), RAM 1920/2560; test_hub 29670/29696 (26 free)
+with no extra carve — an `MH_AUDIO 0` carve attempt was a no-op (the suite never
+pulls audio) and was reverted.
 
-## Verification (exact commands)
+## Verification (orchestrator full gate)
 
-- `make gen-check` -> `fxdata_manifest: PASS (181 generated artifacts unchanged)`.
-- `make test` -> `Total Passed: 6885  Total Failed: 0`.
-- `make test-tools` -> `Ran 392 tests ... OK` (incl. both new forge tests).
-- `FXTEST_ONLY="test_player_art test_forge" make fxtest-headless` ->
-  `test_forge PASSED=70 FAILED=0`, `test_player_art PASSED=132 FAILED=0` (44
-  cases x 3 planes).
-- `make size` -> `flash=29278/29696 (418 free)  ram=1856/2560`.
-  Baseline 29196 (500 free): **+82 B**, 418 free (>= the 150 B reserve).
-- `ARDENS=/usr/bin/true make dev-hitboxes` -> `flash=29376/29696 (320 free)`.
+- `make gen-check` OK; host 6954/0; tools 394 OK.
+- 19/19 device suites PASS (incl. the previously-overflowing test_hub).
+- `make size`: flash 29502/29696 (194 free), ram 1920/2560.
+- `ARDENS=/usr/bin/true make dev-hitboxes` builds.
 
-## Golden regen
+## Time
 
-`PRINT_GOLDENS=true` run emitted all 44 lines; cases 0..39 were byte-identical
-to the existing goldens (all prior rows carry `wpnSheet 0` -> class default).
-New case hashes:
-
-```
-G 40 b8679899 b6322ac0 3a2e3ee9
-G 41 6cf6bb00 6c89d9ac 5be309de
-G 42 aed61621 62e32a39 5d595e89
-G 43 9d80d12f 17ccce82 a0fa3755
-```
-
-All four differ from each other and from the kind-0 guard case 29
-(`60f18d7f 09458678 b6d14f15`), i.e. each variant sheet actually draws.
-
-## Notes
-
-- `wpnSheet` is not in the parity state hash (same as `dmgMul/spdMul`); sim
-  behaviour is unchanged.
-- Wall time (worker, approx; not instrumented): ~20 min.
+Worker ~45 min (read/design ~30, edits + focused gates ~15; gen x2 + device
+compiles dominate). Orchestrator review + trims + gates ~40 min.

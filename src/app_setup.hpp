@@ -30,6 +30,14 @@ static void huntStart(Game &g, const SaveBlock &save) {
             kind = static_cast<int8_t>(def.target);
     }
     newGame(g, static_cast<int8_t>(forgeEquippedClass(save)), MODE_HUNT, kind);
+    // Beast home (bead monhun-ardu-udb): the quest kind picks the home room, and
+    // the beast's position is overridden with that room's zone spawn coords.
+    // hp/spd/FSM/body still come from the creature record via initMonster; the
+    // beast's coords live in its home room's space and never simulate off-room
+    // (the distance gate keeps it idle while the hunter is elsewhere --
+    // zones.hpp beastHomeRoom). Runs before loadRoom so the arrival target rect
+    // reads the home position. No match -> first monster room (today's fallback).
+    beastHomeSpawn(g, kind);
     loadRoom(g, zone::ROOM_CAMP, zone::SPAWN_CAMP_ENTRY);
 }
 
