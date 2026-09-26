@@ -73,6 +73,20 @@ round-trip). Each hunt room's beast home is its record's `monsterSpawn`
 (`ridge` for the heavy beast, `area` for lunge and the sweep/ravager/pole
 fallback) -- `huntStart` places the beast there.
 
+**Beast presence (demo fix).** The beast (carcass included) exists only in its
+home room: `beastHere` (`src/core/zones.hpp`) gates the per-tick sim, the
+target/hurt callbacks, the beast draw and the HUD monster bar. A monster room
+that is not the hunt beast's home (the ridge while a lunge hunt runs) therefore
+reads empty instead of showing the chicken standing frozen at its area
+coordinates; safe rooms (`camp`, `cavern`) never host it. Non-roster kinds
+(home `0xFF`, e.g. the pole) keep the legacy any-monster-room behaviour. Pinned
+by `tst/zone_test.hpp` ("beast presence" block).
+
+**Door-cross transition.** `loadRoom` arms `Game::fade` with `ROOM_TOAST_TICKS`
+(40); the render black-wipes the whole arena band for the first `FADE_TICKS`
+(12) of it (the old 4-tick wipe was easy to miss), and the room art then names
+the place. Pinned by `tst/fxdatatest/zones_test.hpp` (wipe + decay).
+
 ### Authored gather nodes (bead prg.4; cavern + ridge added with the demo map)
 
 | room | prop | item | yield | rect |

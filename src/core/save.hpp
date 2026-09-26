@@ -248,10 +248,14 @@ struct SaveBackend {
 // when a well-formed record was loaded; false for blank/junk, where `s` holds
 // the defaults.
 inline bool saveLoad(SaveBlock &s, const SaveBackend &backend) {
-    if (DEV_UNLIMITED) {
-        saveDefaults(s);
-        return false;
-    }
+#if MH_DEV
+    // Dev feel mode (hbk.1): the sandbox never reads the EEPROM, so the whole
+    // load path is compiled out (dev builds only; shipping is identical).
+    // NB: the macro, not the constexpr -- #if cannot fold DEV_UNLIMITED.
+    (void)backend;
+    saveDefaults(s);
+    return false;
+#else
     uint8_t bytes[SAVE_BYTES];
     for (uint8_t i = 0; i < SAVE_BYTES; i++)
         bytes[i] = backend.read(static_cast<uint16_t>(SAVE_EEPROM_ADDR + i));
@@ -259,12 +263,16 @@ inline bool saveLoad(SaveBlock &s, const SaveBackend &backend) {
         return true;
     saveDefaults(s);
     return false;
+#endif
 }
 
 // Write-on-change + verify read. Returns false when the verify mismatches.
 inline bool saveStore(const SaveBlock &s, const SaveBackend &backend) {
-    if (DEV_UNLIMITED)
-        return true;
+#if MH_DEV
+    (void)s;
+    (void)backend;
+    return true;   // dev feel mode: never write the EEPROM
+#else
     uint8_t bytes[SAVE_BYTES];
     saveEncode(s, bytes);
     for (uint8_t i = 0; i < SAVE_BYTES; i++) {
@@ -277,6 +285,7 @@ inline bool saveStore(const SaveBlock &s, const SaveBackend &backend) {
             return false;
     }
     return true;
+#endif
 }
 
 #if defined(__AVR__)

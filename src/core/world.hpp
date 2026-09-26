@@ -61,12 +61,13 @@ static void updateCamera(Game &g) {
     gp->camY = ty;
 }
 
-// Mock activeTarget(): the live beast in hunt, null once the beast is dead.
+// Mock activeTarget(): the live beast in hunt, null once the beast is dead or
+// the hunter is not in the beast's home room (beastHere).
 // The port keeps one Game::target (hurt rect + callbacks), so this points it at
 // the beast and re-arms the callbacks (prg.8 removed the training pole arm).
 static void updateActiveTarget(Game &g) {
-    if (roomIsSafe(g)) {
-        g.target = Target{};   // no beast in a safe room: reads as null
+    if (!beastHere(g)) {
+        g.target = Target{};   // no beast here: reads as null
     } else {
         g.target.onHit = monsterOnHit;
         g.target.onShove = monsterOnShove;
@@ -83,9 +84,12 @@ static const Rect *activeTargetRect(const Game &g) {
 // ------------------------------------------------------------- room runtime
 // Heal spark effect lifetime (ticks); same spark family the hit paths spawn.
 constexpr uint8_t HEAL_SPARK_LIFE = 8;
-// Door-cross transition wipe length (ticks): loadRoom arms Game::fade and
-// stepGame decays it; the render black-wipes the arena for these ticks.
-constexpr uint8_t FADE_TICKS = 4;
+// Door-cross transition (demo fix): loadRoom arms Game::fade with
+// ROOM_TOAST_TICKS. The render black-wipes the arena for the first FADE_TICKS
+// of the toast, then shows the arrival room-name banner until it expires; the
+// old 4-tick wipe alone did not read as a room change.
+constexpr uint8_t ROOM_TOAST_TICKS = 40;
+constexpr uint8_t FADE_TICKS = 12;
 
 static inline Rect bodyRect(const Player &p) {
     Rect r;
@@ -139,9 +143,9 @@ static void loadRoom(Game &g, uint8_t roomId, uint8_t spawn) {
     gp->fxN = 0;
     gp->lastShot = 0;
 
-    updateCamera(g);         // clamp the follow to the new room's extents
-    gp->doorLatch = true;    // suppress doors until the spawn rect is left
-    gp->fade = FADE_TICKS;   // render black-wipe on arrival (no cart traffic)
+    updateCamera(g);               // clamp the follow to the new room's extents
+    gp->doorLatch = true;          // suppress doors until the spawn rect is left
+    gp->fade = ROOM_TOAST_TICKS;   // arrival wipe + room-name banner (no cart traffic)
     // Re-arm the target for the arrival room: a safe room clears it, a beast
     // room re-wires the monster callbacks (a prior safe load nulled them, and
     // the per-tick syncMonsterTarget only refreshes alive/rect, so without this
@@ -246,7 +250,7 @@ static void resetHunt(Game &g) {
 static void stepGame(Game &g, const Input &inp) {
     g.tick++;
     if (ROOM_BOUNDS_ENABLED && g.fade)
-        g.fade--;   // door-cross wipe decays one tick per logic tick
+        g.fade--;   // door-cross toast decays one tick per logic tick
     bool aP, bP, bR;
     inputEdges(inp, g.prevA, g.prevB, aP, bP, bR);   // edges run even while frozen
     updateCamera(g);

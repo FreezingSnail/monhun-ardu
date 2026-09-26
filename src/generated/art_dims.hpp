@@ -167,6 +167,9 @@ constexpr uint8_t hooves_bull_frames = 4;
 constexpr uint8_t hud_frame_w = 16;
 constexpr uint8_t hud_frame_h = 8;
 constexpr uint8_t hud_frames = 6;
+constexpr uint8_t room_frame_w = 24;
+constexpr uint8_t room_frame_h = 8;
+constexpr uint8_t room_frames = 4;
 
 // Sword slash: 32x32 frame, hit box (hw x hh) centred with the 4x4
 // white core at slash_core_x/y (the hit-box centre). Frame order: 12x10

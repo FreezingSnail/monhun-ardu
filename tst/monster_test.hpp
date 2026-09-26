@@ -189,6 +189,7 @@ void MonsterSuite(TestRunner &runner) {
 
         Game g2;
         newGame(g2, W_SWORD, MODE_HUNT, MON_HEAVY);
+        loadRoom(g2, beastHomeRoom(MON_HEAVY), zone::SPAWN_AREA_START);   // presence: the heavy lives in the ridge
         t.assert(g2.monsterKind, MON_HEAVY, "heavy kind recorded");
         t.assert(g2.monster.w, 40, "heavy width");
         t.assert(g2.monster.h, 28, "heavy height");
@@ -299,6 +300,7 @@ void MonsterSuite(TestRunner &runner) {
         t.assert(m.atkIdx, combat::ATTACK_SWEEP_GORE, "bull gores at 41");
         Game g2;
         newGame(g2, W_SWORD, MODE_HUNT, MON_HEAVY);
+        loadRoom(g2, beastHomeRoom(MON_HEAVY), zone::SPAWN_AREA_START);   // presence: the heavy lives in the ridge
         Monster &h = g2.monster;
         Player &p2 = g2.player;
         h.x = 100;
@@ -409,6 +411,7 @@ void MonsterSuite(TestRunner &runner) {
         Test t("heavy faceHold: facing stale for faceHold ticks, flank hit lands the tail");
         Game g;
         newGame(g, W_SWORD, MODE_HUNT, MON_HEAVY);
+        loadRoom(g, beastHomeRoom(MON_HEAVY), zone::SPAWN_AREA_START);   // presence: the heavy lives in the ridge
         Monster &m = g.monster;
         Player &p = g.player;
         t.assert(g.combat.profile.faceHold, 10, "heavy faceHold 10 (feel.15)");
@@ -454,6 +457,7 @@ void MonsterSuite(TestRunner &runner) {
         Test t("turnRate: 0 snaps, 1 rotates 45 deg per refresh and wraps");
         Game g;
         newGame(g, W_SWORD, MODE_HUNT, MON_HEAVY);
+        loadRoom(g, beastHomeRoom(MON_HEAVY), zone::SPAWN_AREA_START);   // presence: the heavy lives in the ridge
         Monster &m = g.monster;
         Player &p = g.player;
         t.assert(g.combat.profile.turnRate, 1, "shipped heavy turnRate 1 (feel.15)");
@@ -570,6 +574,7 @@ void MonsterSuite(TestRunner &runner) {
         Test t("turnRate: faceHold 0 still bounds the per-tick rotation");
         Game g;
         newGame(g, W_SWORD, MODE_HUNT, MON_HEAVY);
+        loadRoom(g, beastHomeRoom(MON_HEAVY), zone::SPAWN_AREA_START);   // presence: the heavy lives in the ridge
         Monster &m = g.monster;
         Player &p = g.player;
         m.state = MS_PURSUE;
@@ -623,6 +628,7 @@ void MonsterSuite(TestRunner &runner) {
         Test t("heavy tail_spin: lock-away turns the back at windup, frozen after");
         Game g;
         newGame(g, W_SWORD, MODE_HUNT, MON_HEAVY);
+        loadRoom(g, beastHomeRoom(MON_HEAVY), zone::SPAWN_AREA_START);   // presence: the heavy lives in the ridge
         Monster &m = g.monster;
         Player &p = g.player;
         // Hunter due east of the beast centre: the tracked vector is +E, then
@@ -662,6 +668,7 @@ void MonsterSuite(TestRunner &runner) {
         Test t("heavy tail_spin: lock-away window hit knocks the hunter radially away");
         Game g;
         newGame(g, W_SWORD, MODE_HUNT, MON_HEAVY);
+        loadRoom(g, beastHomeRoom(MON_HEAVY), zone::SPAWN_AREA_START);   // presence: the heavy lives in the ridge
         Monster &m = g.monster;
         Player &p = g.player;
         m.x = 100;
@@ -685,6 +692,7 @@ void MonsterSuite(TestRunner &runner) {
         Test t("withWeapon/resetHunt preserve the chosen beast kind");
         Game g;
         newGame(g, W_SWORD, MODE_HUNT, MON_HEAVY);
+        loadRoom(g, beastHomeRoom(MON_HEAVY), zone::SPAWN_AREA_START);   // presence: the heavy lives in the ridge
         withWeapon(g, W_FLAIL);
         t.assert(g.monsterKind, MON_HEAVY, "swap keeps kind");
         t.assert(g.monster.w, 40, "swap keeps heavy body");
@@ -1090,6 +1098,7 @@ void MonsterSuite(TestRunner &runner) {
         Test t("tail_slam hop: backward vector pounces 28 px toward the flank");
         Game g;
         newGame(g, W_SWORD, MODE_HUNT, MON_HEAVY);
+        loadRoom(g, beastHomeRoom(MON_HEAVY), zone::SPAWN_AREA_START);   // presence: the heavy lives in the ridge
         Monster &m = g.monster;
         monsterAttackSet(g, combat::ATTACK_HEAVY_TAIL_SLAM);
         m.fx = 16;
@@ -1526,6 +1535,7 @@ void MonsterSuite(TestRunner &runner) {
         Test t("q0o T2: heavy tail-only melee damages (east facing)");
         Game g;
         newGame(g, W_SWORD, MODE_HUNT, MON_HEAVY);
+        loadRoom(g, beastHomeRoom(MON_HEAVY), zone::SPAWN_AREA_START);   // presence: the heavy lives in the ridge
         Monster &m = g.monster;
         Player &p = g.player;
         m.state = MS_RECOVER;
@@ -1556,6 +1566,7 @@ void MonsterSuite(TestRunner &runner) {
         Test t("q0o T3: heavy tail-only melee damages (west mirror)");
         Game g;
         newGame(g, W_SWORD, MODE_HUNT, MON_HEAVY);
+        loadRoom(g, beastHomeRoom(MON_HEAVY), zone::SPAWN_AREA_START);   // presence: the heavy lives in the ridge
         Monster &m = g.monster;
         Player &p = g.player;
         m.state = MS_RECOVER;

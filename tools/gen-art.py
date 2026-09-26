@@ -404,7 +404,7 @@ def icon_defs(dims):
          "frames": head_bull_defs()},
         {"id": "hooves_bull", "w": 20, "h": 8, "anchor": "part box top-left",
          "frames": hooves_bull_defs()},
-    ] + hud_defs()
+    ] + hud_defs() + room_banner_defs()
 
 
 # Existing block sheets (kept byte-stable).
@@ -1758,6 +1758,22 @@ def hud_defs():
         for mode in HUD_MODES:
             frames.append(text_blocks(0, 0, wpn + mode, WHITE))
     return [{"id": "hud", "w": 16, "h": 8, "anchor": "marker top-left", "frames": frames}]
+
+
+# --------------------------------------------------- room-name banner (demo)
+# drawRoomBanner (src/render.hpp) blits one 24x8 frame per zone room while the
+# door-cross toast runs. Frames are in room-index order (the generated
+# zone::ROOM_* order: area, camp, cavern, ridge), each name centred on the 24 px
+# lane; glyphs come from the same table as the font sheets.
+ROOM_NAMES = ("AREA", "CAMP", "CAVERN", "RIDGE")
+
+
+def room_banner_defs():
+    """Four 24x8 room-name frames, room-index order."""
+    frames = []
+    for name in ROOM_NAMES:
+        frames.append(text_blocks((24 - 4 * len(name)) // 2, 0, name, WHITE))
+    return [{"id": "room", "w": 24, "h": 8, "anchor": "banner top-left", "frames": frames}]
 
 
 def check_hud_identity(sheets):

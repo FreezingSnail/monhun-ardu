@@ -545,16 +545,18 @@ static void drawProps(const Game &g, int16_t camX, int16_t camY) {
     }
 }
 
-// Door-cross black wipe: loadRoom arms Game::fade (FADE_TICKS) and stepGame
-// decays it. Collapsed to the cheapest wipe that still covers a door cross:
-// a full-arena shade-0 blk() on every plane, no per-tick height math and no
-// cart traffic. The 4-tick arm/decay times the blackout; covers the scene but
-// not the HUD strip (minY clip).
+// Door-cross black wipe (demo fix: the old 4-tick wipe was easy to miss).
+// loadRoom arms Game::fade (ROOM_TOAST_TICKS) and stepGame decays it; the wipe
+// covers the first FADE_TICKS of the toast: a full-arena shade-0 blk() on every
+// plane, no per-tick height math and no cart traffic. The room art then names
+// the place (the 24x8 room-name sheet fxroom is authored but the HUD banner is
+// budget-gated; see output.md).
 static inline void drawFade(const Game &g) {
-    if (g.fade == 0)
+    if (g.fade <= ROOM_TOAST_TICKS - FADE_TICKS)
         return;
     blk(0, HUD_H, SCREEN_W, ARENA_H, 0);
 }
+
 #endif   // MH_ROOM_BOUNDS
 
 // Zone part-art overlay (bead monhun-ardu-kt7.6): draw one breakable zone's
@@ -627,7 +629,11 @@ MH_NOINLINE static void drawMonsterBodyGeneric(const mh::Game &g, int16_t x, int
 }
 
 // Mock drawMonster(): dead heap, feet, body, head + eyes, and stun sparkle.
+// Presence gate (beastHere): the beast -- carcass included -- belongs to its
+// home room only, so an off-home room draws nothing at the stale coordinates.
 static void drawMonster(const mh::Game &g, int16_t camX, int16_t camY) {
+    if (!mh::beastHere(g))
+        return;   // the beast (carcass included) belongs to its home room only
     const mh::Monster &m = g.monster;
     const int16_t x = static_cast<int16_t>(rndPx(m.x, m.subX) - camX);
     const int16_t y = static_cast<int16_t>(rndPx(m.y, m.subY) - camY + mh::HUD_H);
@@ -1112,11 +1118,24 @@ static void drawDebug(const mh::Game &g, int16_t camX, int16_t camY) {
     const mh::Player &p = g.player;
 
     // Hurt boxes (solid): player body, then the creature's cached skeleton body
-    // part (migration B: part boxes from g.combat.body, not w/h literals).
+    // part (migration B: part boxes from g.combat.body, not w/h literals) and
+    // the two breakable zone boxes (head, appendage) of the 3-hitzone model.
     wireBox(p.x + ox, p.y + oy, p.w, p.h, false);
     if (g.target.alive) {
         const mh::CombatBox &b = g.combat.body;
         wireBox(g.monster.x + b.ox + ox, g.monster.y + b.oy + oy, b.w, b.h, false);
+        // 3-hitzone model: the two breakable zone boxes (head, appendage) from
+        // the cached zone slots. Always solid: the wireframe shows the authored
+        // boxes; the offsets mirror combatZoneContains (combatZoneOffsetX), so
+        // the wire sits on the tested rect for both facings.
+        if (g.combat.headZone != mh::COMBAT_NO_ZONE) {
+            const mh::CombatBox &zb = g.combat.zone[mh::COMBAT_ZONE_HEAD].box;
+            wireBox(g.monster.x + mh::combatZoneOffsetX(g.monster.fx, zb) + ox, g.monster.y + zb.oy + oy, zb.w, zb.h, false);
+        }
+        if (g.combat.appendZone != mh::COMBAT_NO_ZONE) {
+            const mh::CombatBox &zb = g.combat.zone[mh::COMBAT_ZONE_APPENDAGE].box;
+            wireBox(g.monster.x + mh::combatZoneOffsetX(g.monster.fx, zb) + ox, g.monster.y + zb.oy + oy, zb.w, zb.h, false);
+        }
     }
 
     // Active player melee hit box (dotted): the sim's meleeHitbox() rect, so
@@ -1272,7 +1291,10 @@ static void drawHud(const mh::Game &g) {
     if (g.weapon == mh::W_GUN)
         drawGunNock(p);   // arrowshot load state (RDY / LOD + fill)
 
-    hudBar(82, 2, 44, 3, g.monster.hp, g.monster.hpMax, 3);   // monster HP (hunt only)
+    // Monster HP bar: only when the beast is present (target.alive == alive &&
+    // beastHere), so an off-home room never shows a ghost bar (demo fix).
+    if (g.target.alive)
+        hudBar(82, 2, 44, 3, g.monster.hp, g.monster.hpMax, 3);
 
     // Herb count (feel.22): a tiny 1 px plant glyph + one digit in the free
     // 5 px lane x=62..66 (after the 16-wide weapon marker at 46..61, before the

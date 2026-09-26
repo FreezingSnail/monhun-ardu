@@ -249,22 +249,22 @@ constexpr uint16_t SMITHY_CAMP_0_OFF = 455;
 // Prop sheet names + FX-image offsets (0 = not yet authored; fie.5 art).
 constexpr uint8_t SHEET_MH_MAP_TENT = 0;
 constexpr bool SHEET_MH_MAP_TENT_RESOLVED = true;
-constexpr uint32_t SHEET_MH_MAP_TENT_OFF = 26343;
+constexpr uint32_t SHEET_MH_MAP_TENT_OFF = 26921;
 
 // Room image symbols + baked FX offsets (the fie.5 blit base). A missing
 // symbol means a first gen pass before fxdata-build emitted it.
 constexpr const char *ROOM_AREA_IMAGE = "mh_map_area";
 constexpr bool ROOM_AREA_IMAGE_RESOLVED = true;
-constexpr uint32_t ROOM_AREA_IMAGE_OFF = 2617297;
+constexpr uint32_t ROOM_AREA_IMAGE_OFF = 2617875;
 constexpr const char *ROOM_CAMP_IMAGE = "mh_map_camp";
 constexpr bool ROOM_CAMP_IMAGE_RESOLVED = true;
-constexpr uint32_t ROOM_CAMP_IMAGE_OFF = 2633425;
+constexpr uint32_t ROOM_CAMP_IMAGE_OFF = 2634003;
 constexpr const char *ROOM_CAVERN_IMAGE = "mh_map_cavern";
 constexpr bool ROOM_CAVERN_IMAGE_RESOLVED = true;
-constexpr uint32_t ROOM_CAVERN_IMAGE_OFF = 2636113;
+constexpr uint32_t ROOM_CAVERN_IMAGE_OFF = 2636691;
 constexpr const char *ROOM_RIDGE_IMAGE = "mh_map_ridge";
 constexpr bool ROOM_RIDGE_IMAGE_RESOLVED = true;
-constexpr uint32_t ROOM_RIDGE_IMAGE_OFF = 2646865;
+constexpr uint32_t ROOM_RIDGE_IMAGE_OFF = 2647443;
 #if defined(__AVR__)
 static_assert(ROOM_AREA_IMAGE_OFF == static_cast<uint32_t>(mh_map_area), "zone blob stale: re-run make gen");
 static_assert(ROOM_CAMP_IMAGE_OFF == static_cast<uint32_t>(mh_map_camp), "zone blob stale: re-run make gen");

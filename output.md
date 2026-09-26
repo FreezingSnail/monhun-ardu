@@ -1,50 +1,48 @@
-# monhun-ardu-imx — MAP screen (room graph + quest marker)
+# monhun-ardu-ve2 — demo fixes: beast room presence + clearer transition + dev hurtbox zones
 
-Status: DONE. Worker implementation + orchestrator trim pass; no worker commit.
+Status: DONE (orchestrator inline; full gate green).
 
 ## What landed
 
-- `data/screens/map.json` + `images/screens/mh_screen_map_{0..4}_128x64.png`:
-  SCREEN_MAP is a **panel** screen. Page 0 is the room graph (camp west, area
-  centre, cavern north, ridge east) with the v1 cursor (camp) baked in; pages
-  1..4 stamp a marker box on each room's panel corner. All five are committed
-  art compiled by gen-screens (multi-page panel support + a page-count
-  validation against `PAGE_MAX`).
-- `src/screens.hpp`: `screenMapQuestRoom(save)` (room hint or `NONE`) and
-  `screenMapPage(save)` (page = hint + 1; `NONE` wraps to page 0) pick the page;
-  every other screen still pages by scroll. The MAP screen skips the list
-  chrome. No live drawing: the marker/cursor are pixels in the cart.
-- `tools/gen-quests.py` + `data/quests/*.json`: new optional `roomHint`
-  validated against `data/map.json` room ids, emitted as `QUEST_ROOM_HINT`
-  (PROGMEM, u8 room index, 0xFF = none) + `QUEST_ROOM_HINT_NONE`. Set:
-  gather_ore -> cavern, slay_lunge/sweep -> area, crush_heavy -> ridge,
-  train_pole -> area.
-- `src/app_state.hpp`: `APP_NAV_MAP` + the hub MAP row route (pre-switch
-  checks in `appScreenAccept`/`appNavApply` so the jump tables keep their size).
-- `data/screens/hub.json`: MAP row after HUNT; `ACTION_OPEN_MAP`.
-- Docs: `docs/ui-design.md` MAP section + page-table stride.
+- **Beast presence** (`beastHere`, `src/core/zones.hpp`): a hunt beast (carcass
+  included) exists only in its home room. Gates: per-tick sim + target
+  (`stepWorldBody`, `updateActiveTarget`), the beast draw (`drawMonster`) and
+  the HUD monster bar (`target.alive`). A monster room that is not the hunt
+  beast's home (the ridge while a lunge hunt runs) now reads empty instead of
+  showing the chicken frozen at its area coordinates; `camp`/`cavern` never
+  host it. Non-roster kinds (home `0xFF`, e.g. the pole) keep the legacy
+  any-monster-room behaviour.
+- **Door transition** (`world.hpp` / `render.hpp`): `Game::fade` is now the
+  arrival toast (`ROOM_TOAST_TICKS` 40); the black wipe covers the first
+  `FADE_TICKS` 12 (was 4 — easy to miss) of the whole arena band, HUD spared.
+  The room art names the place.
+- **Dev hurtbox zones** (`make dev-hitboxes`): the wire overlay draws the
+  beast's **three hurt boxes** — body, head and appendage (from the cached zone
+  slots) — with the zone offsets mirrored through the new
+  `combatZoneOffsetX` (`src/core/combat.hpp`), the same helper
+  `combatZoneContains` uses, so the wire can never drift from the tested rect.
+  The target carves `MH_CARD_OFF` (detail cards ~1.4 KB, irrelevant to combat
+  feel); `make dev` keeps them.
+- Tests: host `zone_test` "beast presence" block; `monster_test` heavy blocks +
+  device `monster_art` `setupBeast` load the beast's home room; device
+  `zones_test` pins the 12-of-40 wipe + toast decay.
+- Docs: `docs/map-zones.md` (presence + transition), `docs/creature-framework.md`
+  (dev wire overlay + the carve).
 
-## Budget
+## Budget (honest)
 
-The worker's first cut drew a live cursor+marker overlay: +106 B, 72 free
-(under the ~150 reserve), and it also ran `test_screens` at the stack ceiling.
-The baked-pages rework costs ~30 B net: **29572/29696 (124 free)**, ram 1920;
-`test_hub` 1307 B globals, `test_screens` 1815 B (745 B stack margin).
-The page-table slot widened from 13 B (4 addresses) to 16 B (5 addresses) with
-a generator-side page-count error so a screen can never overflow its slot
-again.
-
-## Gotcha log (worth remembering)
-
-- `test_screens` runs within ~780 B of frame at the stack ceiling: a rebuilt
-  `app_state` route (switch-case instead of the pre-switch check) hung the
-  suite with *no serial output*; restoring the checked form fixed it. Any
-  imx-adjacent edit to that path needs a `test_screens` run.
-- A single `make gen` pass after moving panel PNGs leaves a stale cart
-  (gen-check catches it); always two passes when new FX symbols appear.
+- Shipping **29660/29696 (36 free)**, ram 1920; `dev-hitboxes` 28218 (1478 free,
+  carved); `make dev` builds.
+- The room-name banner (HUD lane, `fxroom` 24x8 sheet) is **budget-gated**: it
+  costs 46 B and shipping is already below the ~150 B reserve, so the sheet is
+  authored + committed but not drawn. Bead `monhun-ardu-dap` (trim wave) lands
+  it after reclaiming bytes.
+- Measured trim leads are in `monhun-ardu-dap`: weaponSheet nested switch 114 B
+  (table variants measured *worse*: u32 29704, packed u24 29716), banner 46 B,
+  MAP page-pick ~30 B, presence caching ~16 B.
 
 ## Verification (orchestrator full gate)
 
-- `make gen-check` OK; host 6960/0; tools 411 OK (6 pins updated for the new
-  stride/page cap); 19/19 device suites PASS; `make size` 29572/29696
-  (124 free); `ARDENS=/usr/bin/true make dev-hitboxes` builds.
+- `make gen-check` OK; host 6973/0; tools 411 OK; 19/19 device suites PASS;
+  `make size` 29660/29696 (36 free); `make dev-hitboxes` builds (28218/1478
+  free); `make dev` builds.

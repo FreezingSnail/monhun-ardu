@@ -208,21 +208,22 @@ inline void test_zones(FxTest &test) {
         test.expectEq(firstDiff(s_page, j), 0xFF, F("area plane1 split page"));
     }
 
-    // ------------------------------------------------------ 4. fade wipe
+    // ------------------------------- 4. transition wipe (demo: 12 of 40 ticks)
+    // Game::fade is the arrival toast (ROOM_TOAST_TICKS, world.hpp); the first
+    // FADE_TICKS of it black-wipe the whole arena band (HUD spared), the rest
+    // is the tail the room art carries.
     fillFb(0xFF);
-    g.fade = FADE_TICKS;
+    g.fade = ROOM_TOAST_TICKS;
     drawFade(g);
     test.expectEq(countPageEq(0, 0xFF), 128, F("fade spares HUD page"));
     for (uint8_t p = 1; p <= 7; p++)
         test.expectEq(countPageEq(p, 0x00), 128, F("fade clears arena page"));
-    // fie.9 collapsed the wipe to a constant full-arena shade-0 blk: any armed
-    // tick clears the whole arena band (was a growing wipe), HUD still spared.
-    fillFb(0xFF);
-    g.fade = 1;
+    // Mid-toast: the wipe is over, the arena and HUD are left alone.
+    fillFb(0x00);
+    g.fade = static_cast<uint8_t>(ROOM_TOAST_TICKS - FADE_TICKS);
     drawFade(g);
-    test.expectEq(countPageEq(0, 0xFF), 128, F("armed fade spares HUD page"));
-    for (uint8_t p = 1; p <= 7; p++)
-        test.expectEq(countPageEq(p, 0x00), 128, F("armed fade covers the arena"));
+    test.expectEq(countPageEq(1, 0x00), 128, F("mid-toast fade is a no-op"));
+    test.expectEq(countPageEq(0, 0x00), 128, F("mid-toast spares the HUD"));
     g.fade = 0;
     fillFb(0xFF);
     drawFade(g);
@@ -241,9 +242,9 @@ inline void test_zones(FxTest &test) {
     t.player.y = 24;
     stepGame(t, Z_IDLE);
     test.expectEq(t.roomId, zone::ROOM_AREA, F("door cross lands in area"));
-    test.expectEq(t.fade, FADE_TICKS, F("arrival arms the wipe"));
+    test.expectEq(t.fade, ROOM_TOAST_TICKS, F("arrival arms the toast"));
     stepGame(t, Z_IDLE);
-    test.expectEq(t.fade, FADE_TICKS - 1, F("wipe decays per tick"));
+    test.expectEq(t.fade, ROOM_TOAST_TICKS - 1, F("toast decays per tick"));
 
     // -------------------------------------------- 6. live app flow (fie.6/isp.1)
     // boot -> hub -> HUNT -> camp; camp hold-B -> Game::menuRequest -> hub;

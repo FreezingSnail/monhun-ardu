@@ -1267,9 +1267,16 @@ inline CombatBodyHit combatResolveBodyHit(const Game &g, int32_t base) {
 // registered as body).
 constexpr int16_t ZONE_CELL_W = 32;   // == art_dims::monster_w (render.hpp pins it)
 
+// Zone box x offset in the beast cell frame: east at the authored (ox), west at
+// the cell mirror. The hit test below and the dev hurtbox wireframe both read
+// this one function, so the drawn box can never drift from the tested box.
+inline int16_t combatZoneOffsetX(int16_t fx, const CombatBox &b) {
+    return fx < 0 ? static_cast<int16_t>(ZONE_CELL_W - b.ox - b.w) : b.ox;
+}
+
 inline bool combatZoneContains(int16_t bx, int16_t by, int16_t fx, int16_t fy, const CombatBox &b, int16_t hx, int16_t hy) {
     (void)fy;
-    const int16_t ox = fx < 0 ? static_cast<int16_t>(ZONE_CELL_W - b.ox - b.w) : b.ox;
+    const int16_t ox = combatZoneOffsetX(fx, b);
     const int16_t x = static_cast<int16_t>(bx + ox);
     const int16_t y = static_cast<int16_t>(by + b.oy);
     return hx >= x && hx < x + b.w && hy >= y && hy < y + b.h;

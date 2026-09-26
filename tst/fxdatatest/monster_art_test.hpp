@@ -78,6 +78,9 @@ static void renderMonster(const Game &g, uint8_t plane) {
 
 static void setupBeast(Game &g, int8_t kind, int8_t fx, int8_t fy) {
     newGame(g, W_SWORD, MODE_HUNT, kind);
+    // Presence: the beast only exists in its home room (ridge for the heavy),
+    // so the art suite loads it before parking the beast.
+    loadRoom(g, beastHomeRoom(kind), zone::SPAWN_AREA_START);
     Monster &m = g.monster;
     m.x = BX;
     m.y = 20;

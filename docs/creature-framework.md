@@ -551,6 +551,14 @@ the composite review PNG (sprite row + mask rows + boxes on the art) to
 creature JSON keeps behaviour only (`dmgMul`, `hp`, `bodyShare`, `breakTypes`,
 `broken.*`, `staggerOnHit`, `disableAttacks`, the window `t0`/`t1`/`dmgMul`).
 
+**Dev wire overlay** (`make dev-hitboxes`, `DEBUG_HURTBOXES`): draws the
+player body, the beast's **three hurt boxes** -- body, head and appendage, from
+the cached zone slots, the zone offsets mirrored exactly like
+`combatZoneContains` via `combatZoneOffsetX` -- plus the live player melee hit
+box and the beast windup/attack window (hurt = solid, hit = dotted). The target
+carves `MH_CARD_OFF` (the ~1.4 KB detail cards are irrelevant to combat feel)
+so the overlay fits alongside the dev sandbox; `make dev` keeps the cards.
+
 **Validations** (hard fail): mask width/height vs the cell, margins and owned
 window count; every region one solid rect; zones disjoint (they may sit over the
 body rect, which is the implicit fallback painted underneath); hurtbox/collision

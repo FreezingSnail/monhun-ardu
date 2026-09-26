@@ -512,6 +512,49 @@ void ZoneSuite(TestRunner &runner) {
     }
 
     {
+        Test t("beast presence: the beast lives in its home room only (demo fix)");
+        Game g;
+        newGame(g, W_SWORD, MODE_HUNT);   // lunge: home = area
+        loadRoom(g, zone::ROOM_AREA, zone::SPAWN_AREA_START);
+        t.assert(beastHere(g), 1, "area hosts the lunge");
+        t.assert(g.target.alive, 1, "area target alive");
+
+        // The ridge is a monster room, but not this beast's home: it reads
+        // empty (no target, no sim) instead of the chicken standing frozen at
+        // its area coordinates inside the ridge.
+        loadRoom(g, zone::ROOM_RIDGE, zone::SPAWN_AREA_START);
+        t.assert(beastHere(g), 0, "ridge is not the lunge's home");
+        t.assert(g.target.alive, 0, "off-home room clears the target");
+        g.monster.x = 100;
+        g.monster.y = 40;
+        g.monster.state = MS_PURSUE;
+        g.monster.t = 5;
+        zticks(g, 30, Z_IDLE);
+        t.assert(g.monster.x, 100, "off-home monster x frozen");
+        t.assert(g.monster.y, 40, "off-home monster y frozen");
+        t.assert(g.monster.state, MS_PURSUE, "off-home monster FSM frozen");
+
+        // The heavy hunt's home is the ridge; the area then reads empty.
+        newGame(g, W_SWORD, MODE_HUNT, MON_HEAVY);
+        loadRoom(g, zone::ROOM_RIDGE, zone::SPAWN_AREA_START);
+        t.assert(beastHere(g), 1, "ridge hosts the heavy");
+        t.assert(g.target.alive, 1, "heavy target alive in the ridge");
+        loadRoom(g, zone::ROOM_AREA, zone::SPAWN_AREA_START);
+        t.assert(beastHere(g), 0, "area is not the heavy's home");
+
+        // Safe rooms never host it; non-roster kinds keep the legacy behaviour.
+        newGame(g, W_SWORD, MODE_HUNT);
+        loadRoom(g, zone::ROOM_CAMP, zone::SPAWN_CAMP_ENTRY);
+        t.assert(beastHere(g), 0, "camp never hosts the beast");
+        loadRoom(g, zone::ROOM_CAVERN, zone::SPAWN_AREA_START);
+        t.assert(beastHere(g), 0, "cavern never hosts the beast");
+        newGame(g, W_SWORD, MODE_HUNT, MON_POLE);
+        loadRoom(g, zone::ROOM_AREA, zone::SPAWN_AREA_START);
+        t.assert(beastHere(g), 1, "pole (no home) stays in monster rooms");
+        suite.addTest(t);
+    }
+
+    {
         Test t("gather props: reader surfaces item/yield, plain props read none");
         // Camp props: 0 = tent (plain), 1 = herb x1, 2 = herb x2, 3 = mushroom.
         const ZoneProp tent = zonePropRead(zone::PROP_CAMP_0);

@@ -69,19 +69,19 @@ static void updateEffects(Game &g) {
 // Edges are supplied by the caller so stepGame() can run them before the
 // over/freeze gate (mock computes edges every tick, frozen or not).
 static void stepWorldBody(Game &g, const Input &inp, bool aP, bool bP, bool bR) {
-    // Safe room: the room record carries no monster, so the beast and target
-    // are left untouched while the player controls / HUD / doors stay live.
-    // Room bounds are carved out of the parity image, so this folds to the
-    // pre-room single-branch dispatch there.
-    const bool safe = roomIsSafe(g);
-    if (!safe)
+    // Beast presence (beastHere): a safe room, or a monster room that is not
+    // the beast's home, leaves the beast and target untouched while the player
+    // controls / HUD / doors stay live. Room bounds are carved out of the
+    // parity image, so this folds to the pre-room single-branch dispatch there.
+    const bool beast = beastHere(g);
+    if (beast)
         syncMonsterTarget(g);
     else
         g.target.alive = false;
     updatePlayer(g, inp, aP, bP, bR);
-    if (!safe)
+    if (beast)
         updateMonster(g);
-    if (!safe)
+    if (beast)
         syncMonsterTarget(g);
     updateEffects(g);
 }

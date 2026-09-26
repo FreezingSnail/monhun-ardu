@@ -73,9 +73,13 @@ dev:
 # Same FX-image check + Ardens launch as dev.
 dev-hitboxes:
 	arduino-cli compile --fqbn "arduboy-homemade:avr:arduboy-fx" --optimize-for-debug --output-dir dist \
-	    --build-property compiler.cpp.extra_flags="-mcall-prologues -mrelax -DMH_NO_USB -DMH_AUDIO=0 -DMH_DEV=1 -DDEBUG_HURTBOXES=1" \
+	    --build-property compiler.cpp.extra_flags="-mcall-prologues -mrelax -DMH_NO_USB -DMH_AUDIO=0 -DMH_DEV=1 -DDEBUG_HURTBOXES=1 -DMH_CARD_OFF=1" \
 	    --build-property compiler.c.extra_flags="-mrelax" \
 	    --build-property compiler.c.elf.extra_flags="-mrelax"
+	@# MH_CARD_OFF carve: the hurtbox overlay (body + head/appendage zone wire)
+	@# costs ~150 B and the detail cards ~1.4 KB; the combat-feel tool does not
+	@# need the card screens, so this target carves them and fits. `make dev`
+	@# keeps the full sandbox including cards.
 	@elf=dist/monhun-ardu.ino.elf; \
 	$(AVR_SIZE) -A "$$elf" | awk '$$1==".text"{t=$$2} $$1==".data"{d=$$2} $$1==".bss"{b=$$2} END {flash=t+d; ram=d+b; printf "dev-hitboxes size: flash=%d/%d (%d free)  ram=%d/2560\n", flash, 29696, 29696-flash, ram}'
 	@test -f "$(FXDATA_BIN)" || { echo "dev-hitboxes: FX data image missing at $(FXDATA_BIN); run make gen" >&2; exit 1; }

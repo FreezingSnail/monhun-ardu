@@ -289,6 +289,8 @@ inline uint8_t beastHomeRoom(int8_t kind) {
 // coords. hp/spd/FSM/body stay the creature record's; only x/y move. Called by
 // huntStart before loadRoom so the arrival room's target rect reads the home
 // position. A home room with no monsterSpawn (0xFF) leaves the creature spawn.
+// MH_NOINLINE: called once per hunt, so a shared copy beats an inline blob at
+// the single call site (measured).
 inline void beastHomeSpawn(Game &g, int8_t kind) {
     const uint8_t k = static_cast<uint8_t>(kind);
     if (k >= zone::MONSTER_KIND_COUNT)
@@ -314,6 +316,23 @@ inline void beastHomeSpawn(Game &g, int8_t kind) {
 // hunt is a live hunt).
 inline bool roomIsSafe(const Game &g) {
     return ROOM_BOUNDS_ENABLED && g.roomMonsterKind == zone::MONSTER_NONE;
+}
+
+// Beast presence (demo fix): a hunt beast lives in its home room only. A safe
+// room never hosts it, and a monster room that is not the beast's home (the
+// ridge while a lunge hunt runs) reads empty -- no sim, no target, no draw, no
+// carve reach -- instead of the old behaviour where the beast's coordinates
+// happened to land inside the new room and it stood there frozen. Non-roster
+// kinds (home 0xFF, e.g. the pole) keep the legacy any-monster-room behaviour;
+// carved builds (no rooms) always host the beast. The home table is baked
+// (gen-zones MONSTER_HOME_ROOM), so no per-room cart scan runs.
+inline bool beastHere(const Game &g) {
+    if (!ROOM_BOUNDS_ENABLED)
+        return true;
+    if (roomIsSafe(g))
+        return false;
+    const uint8_t home = beastHomeRoom(g.monsterKind);
+    return home == 0xFF || home == g.roomId;
 }
 
 }   // namespace mh
