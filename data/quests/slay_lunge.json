@@ -2,7 +2,7 @@
   "id": 0,
   "goalKind": "kill",
   "target": "lunge",
-  "need": 3,
+  "need": 1,
   "desc": [
     "HUNT THE LUNGE BEAST",
     "IN THE AREA."

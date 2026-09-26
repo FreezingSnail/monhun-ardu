@@ -445,15 +445,15 @@
     {
       "declaration": "fxdata/cards/Sprites.txt",
       "path": "images/cards/mh_card_quest_slay_lunge_0_128x64.png",
-      "sha256": "d62a8a7d099c8a9deb2def6cf1ad1160b77734789212f21210015a2a31b725b8",
+      "sha256": "2c6c5ea23d17a68cd9c1c22d26f9b9ce0a9d3d696b79324d63d00d5d997a14c7",
       "size": 550,
       "symbol": "mh_card_quest_slay_lunge_0"
     },
     {
       "declaration": "fxdata/cards/Sprites.txt",
       "path": "images/cards/mh_card_quest_slay_lunge_1_128x64.png",
-      "sha256": "0fcf874abb8d63b5d4457556d157c328f61e7a67e047274c7f5c67aa410c1272",
-      "size": 415,
+      "sha256": "55ba279a163f042c26b4a597b28acf114dcc0d5117e7e718b5d4f1c49badb89a",
+      "size": 417,
       "symbol": "mh_card_quest_slay_lunge_1"
     },
     {
@@ -466,15 +466,15 @@
     {
       "declaration": "fxdata/cards/Sprites.txt",
       "path": "images/cards/mh_card_quest_slay_sweep_0_128x64.png",
-      "sha256": "c38869f310007ef199a7e55bdb31b8cb8db678254d43e9699528b1a2e52aa7aa",
-      "size": 508,
+      "sha256": "140a990002510736d5e9689a586c13d7f5b094a382eafc447e1ee10e2ee4690b",
+      "size": 513,
       "symbol": "mh_card_quest_slay_sweep_0"
     },
     {
       "declaration": "fxdata/cards/Sprites.txt",
       "path": "images/cards/mh_card_quest_slay_sweep_1_128x64.png",
-      "sha256": "31885da4ca3e21adbb6009583ca2739dd66ba5aed0c4c8629b7070046f30b35f",
-      "size": 418,
+      "sha256": "92f2d1f3c572347fd10c2f31b7380cf6752e56beb047b796a0e2b3a3f6083341",
+      "size": 417,
       "symbol": "mh_card_quest_slay_sweep_1"
     },
     {
@@ -1173,8 +1173,8 @@
     {
       "declaration": "fxdata/screens/Sprites.txt",
       "path": "images/screens/mh_screen_quests_0_128x64.png",
-      "sha256": "5686ce458dbeba6dd32ecc7b92c676dd5f7152b3e9cf08ebd0fce14f7399d5f9",
-      "size": 750,
+      "sha256": "cf730f0c3d787144fb042ba0b0e5ac70a6ca751e3869680c0a21aaf9bea57958",
+      "size": 742,
       "symbol": "mh_screen_quests_0"
     },
     {
@@ -1400,12 +1400,12 @@
     },
     {
       "path": "data/quests/slay_lunge.json",
-      "sha256": "1600592abb3d7972e8f1dfd2a894fa4032e0500d02321eb7a317f4d48c26c675",
+      "sha256": "16602a9e05ed1d545c082bd5812974187f405670d882a18d7cba8df7ffaedc9f",
       "size": 175
     },
     {
       "path": "data/quests/slay_sweep.json",
-      "sha256": "cfa722ad7b69f54313a28a5f97f172527e834b46c7efe2ee99391a02018422b1",
+      "sha256": "f0fac9bd4c0a3cbc37156c5ba37eebed753748ae08ab3960a499f7c3da89674d",
       "size": 214
     },
     {
@@ -1440,7 +1440,7 @@
     },
     {
       "path": "data/screens/quests.json",
-      "sha256": "dfc462702d54a8ab7e25eb9bf2061c73c6783d3edcecc0c3190d7e949b334cd7",
+      "sha256": "7a8e7450fb9f88a8255f068dc14297c11dc904734ce4c2920612b8833b48c1a0",
       "size": 1113
     },
     {
@@ -1534,8 +1534,8 @@
     },
     {
       "path": "fxdata/cards/Sprites.txt",
-      "sha256": "b15a68a706c6e03ec0c35a608a162e7fde4aa14df1d19c2d3c7a73232110f43f",
-      "size": 973841,
+      "sha256": "1a71b0b7f121307ce15d7a147d7a19c19b03fa09e3a418b88f47bec826ca57ca",
+      "size": 973821,
       "symbols": [
         "mh_card_armor_hunter_helm_0",
         "mh_card_armor_hunter_helm_1",
@@ -1688,8 +1688,8 @@
     },
     {
       "path": "fxdata/screens/Sprites.txt",
-      "sha256": "5d11f5ca1c681027a37b3c4934194218450a39677639590d3cae4a0a4fdaae7c",
-      "size": 129404,
+      "sha256": "731b535176511d6f4065c11f1411a87001c14c956117f06867167301ebec4ebb",
+      "size": 129398,
       "symbols": [
         "mh_screen_hub_0",
         "mh_screen_quests_0",
@@ -1713,7 +1713,7 @@
     },
     {
       "path": "fxdata/tables/cards.bin",
-      "sha256": "87a57ce8fa8ad32625155704b53e86505169fb22dee846b98dba174c42a66ed9",
+      "sha256": "236b4fcee4fa89e1e06cc7156e4d9c44ec93ee960413e9ce66948c1a653e9440",
       "size": 1031,
       "symbol": "mhCards"
     },
@@ -1755,13 +1755,13 @@
     },
     {
       "path": "fxdata/tables/quests.bin",
-      "sha256": "f896ef85f1ea025331f4fab7f03e192aad20b93a6241ce43983c578e23b0e70a",
+      "sha256": "d65a79a4a7a335fce8016232a0f243873ab4db2c064db8d3c32d04d711c4bdcb",
       "size": 53,
       "symbol": "mhQuests"
     },
     {
       "path": "fxdata/tables/screens.bin",
-      "sha256": "2820752d0a7fe65d6e6576adaddb3c7807e5efbf8694a23865048264b404c287",
+      "sha256": "f160c123d0d59c30dc9910ebe9e347265484ba9825d0fe8d61dcbcb9b49d749d",
       "size": 1480,
       "symbol": "mhScreens"
     },
@@ -1863,12 +1863,12 @@
   "outputs": [
     {
       "path": "fxdata/fxdata-data.bin",
-      "sha256": "7e5fbc68b05a5f56fef0a0fcd85250662b5b3e0ebe575ae190f1406912a07570",
+      "sha256": "cdb62b29877028f44fd155c5b15e70c3258d3f42ce637528717965395ce12807",
       "size": 2989156
     },
     {
       "path": "fxdata/fxdata.bin",
-      "sha256": "a2191ff322f6a301e227ba905db76cad771b53a87626f2d45505ad0dc58eda5d",
+      "sha256": "82e45cff485046f1ec0b1c598c70f1fb383cf8d479c4b4d8dbf2d44d569ef503",
       "size": 2989312
     },
     {
@@ -1883,7 +1883,7 @@
     },
     {
       "path": "fxdata/tables/cards.bin",
-      "sha256": "87a57ce8fa8ad32625155704b53e86505169fb22dee846b98dba174c42a66ed9",
+      "sha256": "236b4fcee4fa89e1e06cc7156e4d9c44ec93ee960413e9ce66948c1a653e9440",
       "size": 1031
     },
     {
@@ -1903,12 +1903,12 @@
     },
     {
       "path": "fxdata/tables/quests.bin",
-      "sha256": "f896ef85f1ea025331f4fab7f03e192aad20b93a6241ce43983c578e23b0e70a",
+      "sha256": "d65a79a4a7a335fce8016232a0f243873ab4db2c064db8d3c32d04d711c4bdcb",
       "size": 53
     },
     {
       "path": "fxdata/tables/screens.bin",
-      "sha256": "2820752d0a7fe65d6e6576adaddb3c7807e5efbf8694a23865048264b404c287",
+      "sha256": "f160c123d0d59c30dc9910ebe9e347265484ba9825d0fe8d61dcbcb9b49d749d",
       "size": 1480
     },
     {

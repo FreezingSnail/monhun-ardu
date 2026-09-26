@@ -171,7 +171,7 @@ inline void test_hub(FxTest &test) {
     test.expectEq(static_cast<uint32_t>(g.roomId), zone::ROOM_CAMP, F("hunt starts in camp"));
     test.expectEq(static_cast<uint32_t>(g.questGoalKind), quests::GOAL_KILL, F("quest kill goal armed"));
     test.expectEq(static_cast<uint32_t>(g.questTarget), MON_LUNGE, F("quest target armed"));
-    test.expectEq(static_cast<uint32_t>(g.questNeed), 3, F("quest need armed"));
+    test.expectEq(static_cast<uint32_t>(g.questNeed), 1, F("quest need armed (all kill quests need 1)"));
     test.expectEq(static_cast<uint32_t>(g.over), OVER_NONE, F("hunt starts live"));
     test.expectEq(static_cast<uint32_t>(g.projN), 0, F("fresh projectile ring"));
     test.expectEq(static_cast<uint32_t>(g.fxN), 0, F("fresh effect ring"));

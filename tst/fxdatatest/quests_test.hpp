@@ -37,7 +37,7 @@ inline void test_quests(FxTest &test) {
     test.expectEq(d0.id, 0, F("q0 id"));
     test.expectEq(d0.goalKind, quests::GOAL_KILL, F("q0 goal kill"));
     test.expectEq(d0.target, MON_LUNGE, F("q0 target"));
-    test.expectEq(d0.need, 3, F("q0 need"));
+    test.expectEq(d0.need, 1, F("q0 need (kill quests need 1)"));
     test.expectEq(d0.rewardZenny, 150, F("q0 reward"));
     test.expectEq(d0.rewardItem, 0, F("q0 no material"));
     test.expectEq(d0.rewardCount, 0, F("q0 no material count"));
@@ -45,7 +45,7 @@ inline void test_quests(FxTest &test) {
     test.expectEq(d1.id, 1, F("q1 id"));
     test.expectEq(d1.goalKind, quests::GOAL_KILL, F("q1 goal kill"));
     test.expectEq(d1.target, MON_SWEEP, F("q1 target"));
-    test.expectEq(d1.need, 2, F("q1 need"));
+    test.expectEq(d1.need, 1, F("q1 need (kill quests need 1)"));
     test.expectEq(d1.rewardZenny, 250, F("q1 reward"));
     test.expectEq(d1.rewardItem, static_cast<uint8_t>(ITEM_SHELL + 1), F("q1 shell material"));
     test.expectEq(d1.rewardCount, 1, F("q1 shell count"));
@@ -105,10 +105,11 @@ inline void test_quests(FxTest &test) {
     test.expectEq(saveLoad(loaded, REAL_BACKEND), 1, F("take persisted"));
     test.expectEq(loaded.activeQuest, 0, F("active quest persisted"));
 
-    // Kill three lunge beasts through the real death hook (one hunt each), and
-    // commit progress at each hunt end exactly like the sketch does.
+    // Kill the quest's need (all kill quests need one kill) of lunge beasts
+    // through the real death hook (one hunt each), and commit progress at each
+    // hunt end exactly like the sketch does.
     Game g;
-    for (uint8_t i = 0; i < 3; i++) {
+    for (uint8_t i = 0; i < d0.need; i++) {
         initGame(g, W_SWORD);
         initMonster(g, MON_LUNGE);
         g.questTarget = static_cast<int8_t>(loaded.activeQuest == 0 ? d0.target : -1);
@@ -122,9 +123,9 @@ inline void test_quests(FxTest &test) {
         loaded.progress = g.questProgress;
         saveStore(loaded, REAL_BACKEND);
     }
-    test.expectEq(loaded.progress, 3, F("three kills persisted"));
+    test.expectEq(loaded.progress, d0.need, F("kills persisted"));
     test.expectEq(saveLoad(loaded, REAL_BACKEND), 1, F("progress reloads"));
-    test.expectEq(loaded.progress, 3, F("progress == need"));
+    test.expectEq(loaded.progress, d0.need, F("progress == need"));
 
     // Off-kind kill must not count (sweep while the lunge quest is active).
     initGame(g, W_SWORD);
@@ -133,7 +134,7 @@ inline void test_quests(FxTest &test) {
     g.questGoalKind = d0.goalKind;
     g.questProgress = loaded.progress;
     damageMonster(g, 2000, g.monster.x, g.monster.y);
-    test.expectEq(g.questProgress, 3, F("off-kind kill not counted"));
+    test.expectEq(g.questProgress, loaded.progress, F("off-kind kill not counted"));
 
     // Turn in: payout + done bit, persisted.
     test.expectEq(screenCondOk(loaded, turn0), 1, F("turn row live at need"));

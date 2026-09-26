@@ -286,8 +286,8 @@ inline void test_screens_pixels(FxTest &test) {
     // draws `p/n` on the HUNT row (progress stays on the quest card + board).
     clearFb();
     saveDefaults(qs2);
-    qs2.activeQuest = quests::QUEST_SLAY_LUNGE;   // need 3
-    qs2.progress = 2;
+    qs2.activeQuest = quests::QUEST_SLAY_LUNGE;   // need 1 (kill quests need one kill)
+    qs2.progress = 1;
     ScreenState hud;
     screenEnter(hud, screens::SCREEN_HUB, qs2);
     drawScreen(hud, qs2, g_gear);
@@ -328,7 +328,7 @@ inline void test_screens_pixels(FxTest &test) {
     test.expectEq(qr0.param, 0, F("quest row0 param (quest 0)"));
     test.expectEq(qr1.action, screens::ACTION_TURN_IN_QUEST, F("quest row1 action"));
     test.expectEq(qr1.cost, 150, F("quest row1 reward cost"));
-    test.expectEq(qr1.param, 48, F("quest row1 param (need 3, quest 0)"));
+    test.expectEq(qr1.param, 16, F("quest row1 param (need 1, quest 0)"));
 
     // Pixel: the quests page draws through the same generic renderer. Page 0
     // bakes the turn-in costs (shade 3, right-aligned ending at x=112); the take

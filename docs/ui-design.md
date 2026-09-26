@@ -68,7 +68,7 @@ list screen --A--> detail card --LEFT/RIGHT--> pages --A--> action --B--> list
 ```
 HUB                      1240
 ____________________________
-> HUNT                 2/3
+> HUNT                 0/1
   QUESTS
   FORGE
   GEAR
@@ -85,8 +85,8 @@ skill point totals (abbr + points, tiered skills only).
 ```
 QUESTS 1/2               1240
 ____________________________
-> SLAY LUNGE     2/3 [##..]
-  SLAY SWEEP         NEW
+> SLAY 1 LUNGE   0/1 [..]
+  SLAY 1 SWEEP       NEW
   GATHER ORE          --
   CRUSH HEAVY         --
 ____________________________

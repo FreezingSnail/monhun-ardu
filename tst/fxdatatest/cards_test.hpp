@@ -95,7 +95,7 @@ inline void test_cards(FxTest &test) {
     test.expectEq(it.overlayCount, 1, F("lunge overlay count"));
     test.expectEq(it.overlays[0].kind, cards::OVERLAY_PROG, F("lunge prog kind"));
     test.expectEq(it.overlays[0].page, cards::PAGE_PROG, F("lunge prog page"));
-    test.expectEq(it.overlays[0].arg0, 3, F("lunge need"));
+    test.expectEq(it.overlays[0].arg0, 1, F("lunge need (kill quests need 1)"));
     test.expectEq(it.overlays[0].arg1, 112, F("lunge bar width"));
 
     // Out-of-range index decodes empty (no pages/overlays).
