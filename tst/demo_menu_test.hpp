@@ -216,6 +216,8 @@ void DemoSuite(TestRunner &runner) {
         t.assert(g.dmgMul, UPGRADE_MUL_BASE, "identity damage multiplier");
         t.assert(g.spdMul, UPGRADE_MUL_BASE, "identity speed multiplier");
         t.assert(g.items[ITEM_HERB], 0, "empty inventory");
+        t.assert(g.player.sheathed, 1, "demo hunts start with the weapon stowed");
+        t.assert(g.player.sheatheLatch, 0, "no stale sheathe latch");
         suite.addTest(t);
     }
 

@@ -160,6 +160,11 @@ inline void demoLaunch(Game &g, const DemoMenu &m) {
     g.player.x = px;
     g.player.y = g.monster.y;
     updateCamera(g);   // first frame already follows the drop point
+    // Owner call (playtest): demo hunts start with the weapon stowed -- the
+    // first A is the draw (per-weapon rooted windup), so testers see the
+    // sheathe/draw verb before the fight. newGame leaves it drawn.
+    g.player.sheathed = true;
+    g.player.sheatheLatch = false;
 }
 
 }   // namespace mh
