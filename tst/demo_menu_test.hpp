@@ -206,9 +206,13 @@ void DemoSuite(TestRunner &runner) {
         t.assert(g.mode, MODE_HUNT, "hunt mode");
         t.assert(g.roomId, zone::ROOM_RIDGE, "heavy homes at the ridge");
         t.assert(g.beastHere, 1, "the beast is present in its home");
+        // The beast sits at the home room's monster spawn; the hunter drops 28 px
+        // west of it, same lane (owner report fix).
         const ZoneSpawn sp = zoneSpawnRead(zone::SPAWN_RIDGE_START);
-        t.assert(g.player.x, static_cast<int16_t>(sp.x), "player at the ridge start spawn x");
-        t.assert(g.player.y, static_cast<int16_t>(sp.y), "player at the ridge start spawn y");
+        t.assert(g.monster.x, static_cast<int16_t>(sp.x), "beast at the ridge monster spawn x");
+        t.assert(g.monster.y, static_cast<int16_t>(sp.y), "beast at the ridge monster spawn y");
+        t.assert(g.player.x, static_cast<int16_t>(g.monster.x - 28), "player drops west of the beast");
+        t.assert(g.player.y, g.monster.y, "player in the beast's lane");
         t.assert(g.dmgMul, UPGRADE_MUL_BASE, "identity damage multiplier");
         t.assert(g.spdMul, UPGRADE_MUL_BASE, "identity speed multiplier");
         t.assert(g.items[ITEM_HERB], 0, "empty inventory");
@@ -227,6 +231,31 @@ void DemoSuite(TestRunner &runner) {
             demoLaunch(g, m);
             t.assert(g.monsterKind, kinds[i], "launched beast kind");
             t.assert(g.roomId, homes[i], "beast lands in its home room");
+        }
+        suite.addTest(t);
+    }
+
+    {
+        // Owner report (demo playtest): picks other than HEAVY looked empty. The
+        // launch must leave the beast present AND in the camera window at the
+        // hunter's spawn, for every pick -- a beast parked at the creature
+        // record's spawn coords (200,40) sat off-screen east of the room start
+        // spawn, so the hunt read as "no monster spawned".
+        Test t("demoLaunch: every beast is present and on-screen at spawn");
+        const int8_t kinds[4] = {MON_LUNGE, MON_SWEEP, MON_HEAVY, MON_RAVAGER};
+        Game g;
+        DemoMenu m;
+        demoInit(m);
+        const Input idle = Input{0, 0, false, false};
+        for (uint8_t i = 0; i < 4; i++) {
+            m.beast = static_cast<uint8_t>(kinds[i]);
+            demoLaunch(g, m);
+            stepGame(g, idle);   // refresh the presence cache like the demo loop
+            t.assert(g.beastHere, 1, "beast present after a tick");
+            const bool inX = g.monster.x<g.camX + SCREEN_W &&static_cast<int16_t>(g.monster.x + g.monster.w)> g.camX;
+            const bool inY = g.monster.y<g.camY + ARENA_H &&static_cast<int16_t>(g.monster.y + g.monster.h)> g.camY;
+            t.assert(inX ? 1 : 0, 1, "beast in the camera x window");
+            t.assert(inY ? 1 : 0, 1, "beast in the camera y window");
         }
         suite.addTest(t);
     }

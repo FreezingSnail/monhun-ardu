@@ -137,13 +137,29 @@ inline uint8_t demoHomeSpawn(uint8_t homeRoom) {
 
 // Launch the picked hunt (design C): a fresh world for the picked weapon and
 // beast (fresh Game defaults -- class default sheet, identity multipliers,
-// empty inventory; no quest/save/armor/items arming), the hunter placed at the
-// beast's home room start spawn.
+// empty inventory; no quest/save/armor/items arming), the beast moved to its
+// home room's monster spawn (mirrors huntStart/beastHomeSpawn) and the hunter
+// dropped 28 px west of it so the fight starts in view.
+//
+// Owner report (demo playtest): picks other than HEAVY looked empty because the
+// beast stayed at the creature record's spawn coords (200,40), off-screen east
+// of the room's start spawn (320,72). beastHomeSpawn + the adjacent drop make
+// every pick open on the beast; the placement is clamped to the room bounds.
 inline void demoLaunch(Game &g, const DemoMenu &m) {
     const int8_t beast = static_cast<int8_t>(m.beast);
     newGame(g, static_cast<int8_t>(m.weapon), MODE_HUNT, beast);
+    beastHomeSpawn(g, beast);   // home room's monster spawn (huntStart parity)
     const uint8_t home = beastHomeRoom(beast);
     loadRoom(g, home, demoHomeSpawn(home));
+    int16_t px = static_cast<int16_t>(g.monster.x - 28);
+    if (px < 0)
+        px = 0;
+    const int16_t maxX = static_cast<int16_t>(roomBoundW(g) - g.player.w);
+    if (px > maxX)
+        px = maxX;
+    g.player.x = px;
+    g.player.y = g.monster.y;
+    updateCamera(g);   // first frame already follows the drop point
 }
 
 }   // namespace mh
