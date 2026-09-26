@@ -2,6 +2,7 @@
   "id": 4,
   "goalKind": "kill",
   "target": "pole",
+  "roomHint": "area",
   "need": 1,
   "desc": [
     "TRAIN ON THE POST.",

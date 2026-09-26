@@ -20,9 +20,10 @@
 
 #include "render.hpp"
 #include "screen_state.hpp"
-#include "quest.hpp"          // questReadDef: quest unlock + reward for COND_QUEST rows (dlp.2)
-#include "forge.hpp"          // forge::NODE_UPGRADE_COST + NODE_*_FIRST (hbk.13 UPGRADE rows)
-#include "core/progmem.hpp"   // MH_PROGMEM + mhPgmReadU8 for the chrome strings
+#include "quest.hpp"                 // questReadDef: quest unlock + reward for COND_QUEST rows (dlp.2)
+#include "forge.hpp"                 // forge::NODE_UPGRADE_COST + NODE_*_FIRST (hbk.13 UPGRADE rows)
+#include "core/progmem.hpp"          // MH_PROGMEM + mhPgmReadU8 for the chrome strings
+#include "generated/zone_meta.hpp"   // zone::ROOM_* / ROOMS_COUNT (imx MAP panels)
 
 namespace mh {
 
@@ -326,10 +327,45 @@ inline void screenMarker(bool equipped, bool owned, int16_t y) {
         hudBlk(118, static_cast<int16_t>(y + 3), 4, 4, equipped ? 3 : 2);
 }
 
+// ---- MAP screen (monhun-ardu-imx, docs/ui-design.md) -----------------------
+// The room graph is baked art (images/screens/mh_screen_map_0_128x64.png ->
+// mh_screen_map_0, the single SCREEN_MAP page); only the current-room cursor
+// and the active quest's target marker are live pixels. The panel rects below
+// mirror that art, indexed by the generated zone::ROOM_* order (data/map.json
+// rooms sorted by id: area 0, camp 1, cavern 2, ridge 3).
+//
+// The MAP screen's pages are all baked art (images/screens/mh_screen_map_<i>):
+// page 0 is the graph + the v1 cursor (camp, baked), pages 1..ROOMS_COUNT carry
+// a marker box stamped on the active quest's target room. The only live work is
+// the page pick below -- no overlay draw code, which keeps the screen at the
+// repo's prebaked-screens discipline and the flash cost to the quest-hint
+// table (measured: the overlay version cost 106 B, this costs ~16 B).
+// Active quest's MAP target room: a zone room index, or QUEST_ROOM_HINT_NONE
+// when there is no active quest / no hint (no marker page). Inert-safe: no
+// active quest must never index QUEST_ROOM_HINT. The device suites assert the
+// mapping through this helper.
+inline uint8_t screenMapQuestRoom(const SaveBlock &save) {
+    if (save.activeQuest == SAVE_QUEST_NONE || save.activeQuest >= quests::QUEST_COUNT)
+        return quests::QUEST_ROOM_HINT_NONE;
+    return mhPgmReadU8(&quests::QUEST_ROOM_HINT[save.activeQuest]);
+}
+
+inline uint8_t screenMapPage(const SaveBlock &save) {
+    // The MAP screen's page is the active quest's room hint (+1; no quest ->
+    // page 0). gen-quests validates every hint against the room list, and an
+    // absent hint is QUEST_ROOM_HINT_NONE (0xFF), which +1 wraps back to page
+    // 0 -- so one compare covers both.
+    const uint8_t room = screenMapQuestRoom(save);
+    // QUEST_ROOM_HINT_NONE (0xFF) + 1 wraps to page 0, so one compare covers
+    // both "no quest" and "no hint".
+    return room < zone::ROOMS_COUNT ? static_cast<uint8_t>(room + 1) : 0;
+}
+
 // One page of the list. Called once per plane (same discipline as
 // renderScene/menu), between ArduboyG's plane blits. hbk.3: every shipped
 // screen is prebaked -- blit the page for the visible window, then draw only
-// the live chrome.
+// the live chrome. The MAP screen picks its page from the quest hint (above)
+// and skips the list chrome (imx).
 inline void drawScreen(const ScreenState &s, const SaveBlock &save, const Game &g) {
     // Prebaked page for the visible window: page = scroll / SCREEN_ROWS (scroll
     // is always a multiple of 6). Every shipped screen prebakes pages
@@ -337,7 +373,8 @@ inline void drawScreen(const ScreenState &s, const SaveBlock &save, const Game &
     // screen without pages from blitting a null address (it then renders as an
     // empty page plus the live chrome).
     if (screenPageCount(s.screen) != 0) {
-        const uint24_t page = static_cast<uint24_t>(screenPageAddr(s.screen, static_cast<uint8_t>(s.scroll / SCREEN_ROWS)));
+        const uint8_t pageIdx = s.screen == screens::SCREEN_MAP ? screenMapPage(save) : static_cast<uint8_t>(s.scroll / SCREEN_ROWS);
+        const uint24_t page = static_cast<uint24_t>(screenPageAddr(s.screen, pageIdx));
 #if MH_ROOM_BOUNDS
         cardBlit(page);
 #else
@@ -347,6 +384,8 @@ inline void drawScreen(const ScreenState &s, const SaveBlock &save, const Game &
         FX::readDataBytes(page + static_cast<uint24_t>(arduboy.currentPlane()) * 1024u, arduboy.getBuffer(), 1024);
 #endif
     }
+    if (s.screen == screens::SCREEN_MAP)
+        return;   // baked panel + baked marker page: no list chrome
 
     // Header zenny (ui.5): right-aligned `$` + live balance on the title line;
     // the fake ZENNY row and its ROW_F_ZENNY token are retired.

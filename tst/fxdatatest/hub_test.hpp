@@ -120,6 +120,32 @@ inline void test_hub(FxTest &test) {
     test.expectEq(static_cast<uint32_t>(screen.rowCount), screens::SCREEN_HUB_ROWS, F("hub row count"));
     test.expectEq(static_cast<uint32_t>(g.over), OVER_NONE, F("no hunt started yet"));
 
+    // ---------------------------- hub MAP row + quest marker (imx)
+    // The hub MAP row (row 1) routes to SCREEN_MAP; the quest roomHint table
+    // resolves the marker room. Room indices are the sorted map.json order
+    // (area 0, camp 1, cavern 2, ridge 3); no active quest -> no marker.
+    ScreenRow mapRow;
+    screenReadRow(screenRowOffsetAt(screens::SCREEN_HUB, 1), mapRow);
+    test.expectEq(static_cast<uint32_t>(mapRow.action), screens::ACTION_OPEN_MAP, F("hub MAP row action"));
+    test.expectEq(static_cast<uint32_t>(appScreenAccept(screens::SCREEN_HUB, mapRow)), APP_NAV_MAP, F("MAP row routes to the map"));
+    appNavApply(APP_NAV_MAP, screen, save, g, H_A);
+    test.expectEq(static_cast<uint32_t>(screen.screen), screens::SCREEN_MAP, F("MAP screen open"));
+    test.expectEq(static_cast<uint32_t>(screen.rowCount), screens::SCREEN_MAP_ROWS, F("MAP row count"));
+    test.expectEq(static_cast<uint32_t>(appScreenBack(screens::SCREEN_MAP)), APP_NAV_HUB, F("MAP B backs to the hub"));
+    appNavApply(APP_NAV_HUB, screen, save, g, H_A);
+    save.activeQuest = SAVE_QUEST_NONE;
+    test.expectEq(static_cast<uint32_t>(screenMapQuestRoom(save)), quests::QUEST_ROOM_HINT_NONE, F("no quest -> no marker"));
+    save.activeQuest = quests::QUEST_GATHER_ORE;
+    test.expectEq(static_cast<uint32_t>(screenMapQuestRoom(save)), zone::ROOM_CAVERN, F("gather ore marks the cavern"));
+    save.activeQuest = quests::QUEST_SLAY_LUNGE;
+    test.expectEq(static_cast<uint32_t>(screenMapQuestRoom(save)), zone::ROOM_AREA, F("slay lunge marks the area"));
+    save.activeQuest = quests::QUEST_CRUSH_HEAVY;
+    test.expectEq(static_cast<uint32_t>(screenMapQuestRoom(save)), zone::ROOM_RIDGE, F("crush heavy marks the ridge"));
+    save.activeQuest = quests::QUEST_COUNT;   // out-of-range stays inert
+    test.expectEq(static_cast<uint32_t>(screenMapQuestRoom(save)), quests::QUEST_ROOM_HINT_NONE, F("bad quest index inert"));
+    save.activeQuest = SAVE_QUEST_NONE;
+    test.expectEq(static_cast<uint32_t>(screen.screen), screens::SCREEN_HUB, F("back on the hub after MAP"));
+
     // ----------------------------- hub HUNT (row 0) launches the picked hunt
     // No active quest -> the LUNGE fallback beast; the save weapon is used.
     test.expectEq(static_cast<uint32_t>(applyNav(pressA(screen, save), screen, save, g, H_A)), 1, F("hub HUNT starts the hunt"));
@@ -134,9 +160,11 @@ inline void test_hub(FxTest &test) {
     test.expectEq(static_cast<uint32_t>(screen.active), 1, F("hub active again"));
     test.expectEq(static_cast<uint32_t>(screen.rowCount), screens::SCREEN_HUB_ROWS, F("hub row count"));
 
-    // QUESTS is hub row 1: cursor down once, A opens the board, A takes quest 0.
+    // imx added MAP at hub row 1; QUESTS is now hub row 2. Cursor down twice, A
+    // opens the board, A takes quest 0.
     tap(screen, H_DOWN);
-    test.expectEq(static_cast<uint32_t>(screen.cursor), 1, F("cursor on QUESTS"));
+    tap(screen, H_DOWN);
+    test.expectEq(static_cast<uint32_t>(screen.cursor), 2, F("cursor on QUESTS"));
     appNavApply(pressA(screen, save), screen, save, g, H_A);
     test.expectEq(static_cast<uint32_t>(screen.screen), screens::SCREEN_QUESTS, F("quests screen"));
     test.expectEq(static_cast<uint32_t>(screen.rowCount), screens::SCREEN_QUESTS_ROWS, F("quests row count"));
@@ -144,16 +172,17 @@ inline void test_hub(FxTest &test) {
     test.expectEq(static_cast<uint32_t>(save.activeQuest), 0, F("quest 0 active"));
     test.expectEq(static_cast<uint32_t>(saveQuestGet(save, 0, 0)), 1, F("quest 0 taken bit"));
 
-    // GEAR is hub row 3 (ui.4: FORGE is row 2, the SMITH row is long gone).
-    // hbk.12: GEAR is a slot view; the armor craft/equip lives on the ARMOR
-    // FORGE card (cards_test).
+    // GEAR is hub row 4 (imx: MAP row 1; ui.4: FORGE is row 3; the SMITH row is
+    // long gone). hbk.12: GEAR is a slot view; the armor craft/equip lives on
+    // the ARMOR FORGE card (cards_test).
     appNavApply(pressB(screen, save), screen, save, g, H_B);
     test.expectEq(static_cast<uint32_t>(screen.screen), screens::SCREEN_HUB, F("back on hub"));
     test.expectEq(static_cast<uint32_t>(screen.cursor), 0, F("hub cursor reset to HUNT"));
     tap(screen, H_DOWN);
     tap(screen, H_DOWN);
     tap(screen, H_DOWN);
-    test.expectEq(static_cast<uint32_t>(screen.cursor), 3, F("cursor on GEAR"));
+    tap(screen, H_DOWN);
+    test.expectEq(static_cast<uint32_t>(screen.cursor), 4, F("cursor on GEAR"));
     appNavApply(pressA(screen, save), screen, save, g, H_A);
     test.expectEq(static_cast<uint32_t>(screen.screen), screens::SCREEN_GEAR, F("gear screen"));
     test.expectEq(static_cast<uint32_t>(screen.rowCount), screens::SCREEN_GEAR_ROWS, F("gear row count"));
@@ -161,25 +190,10 @@ inline void test_hub(FxTest &test) {
     test.expectEq(static_cast<uint32_t>(screen.screen), screens::SCREEN_HUB, F("back on hub 2"));
     test.expectEq(static_cast<uint32_t>(screen.cursor), 0, F("hub cursor reset to HUNT"));
 
-    arduboy.startGray();
-    while (arduboy.currentPlane() != 0) {
-        FX::enableOLED();
-        arduboy.waitForNextPlane();
-        FX::disableOLED();
-    }
-    clearFb();
-    drawScreen(screen, save, g);
-
-    // HUNT is row 0 with the white chip cursor; QUESTS row 1; FORGE row 2; GEAR
-    // row 3. The ZENNY row is retired (ui.5): the live 500 balance is now the
-    // header zenny (`$` + digits at x 108..123 on the title line).
-    test.expectEq(countBits(2, 5, 13, 16), 16, F("hub cursor chip 4x4"));
-    test.expectEq(countBits(2, 13, 0, 7) > 0 ? 1 : 0, 1, F("hub title ink"));
-    test.expectEq(countBits(108, 123, 0, 7) > 0 ? 1 : 0, 1, F("hub header zenny 500"));
-    test.expectEq(countBits(10, 30, 11, 18) > 0 ? 1 : 0, 1, F("HUNT label ink"));
-    test.expectEq(countBits(10, 50, 20, 27) > 0 ? 1 : 0, 1, F("QUESTS label ink"));
-    test.expectEq(countBits(10, 40, 29, 36) > 0 ? 1 : 0, 1, F("FORGE label ink"));
-    test.expectEq(countBits(10, 40, 38, 45) > 0 ? 1 : 0, 1, F("GEAR label ink"));
+    // The hub's rendered pixels (cursor chip, title/zenny, the imx MAP label)
+    // are pinned by test_screens; this E2E suite keeps to routing/save so its
+    // flash frame stays inside the sketch budget (it sat 26 B free at the imx
+    // baseline, and drawScreen now carries the MAP overlay).
 
     // hub B is a root no-op: the hub stays up (isp.1 deleted the menu).
     appNavApply(pressB(screen, save), screen, save, g, H_B);
@@ -234,7 +248,9 @@ inline void test_hub(FxTest &test) {
     test.expectEq(save.zenny, 500, F("hub zenny updated"));
     test.expectEq(static_cast<uint32_t>(save.progress), 1, F("hub progress updated"));
 
-    // The hub QUESTS row (row 1) reaches the 8-row board from the live hub.
+    // The hub QUESTS row (row 2, past the imx MAP row) reaches the 8-row board
+    // from the live hub.
+    tap(screen, H_DOWN);
     tap(screen, H_DOWN);
     appNavApply(pressA(screen, save), screen, save, g, H_A);
     test.expectEq(static_cast<uint32_t>(screen.screen), screens::SCREEN_QUESTS, F("hub QUESTS row reaches the board"));
@@ -261,7 +277,8 @@ inline void test_hub(FxTest &test) {
     tap(screen, H_DOWN);
     tap(screen, H_DOWN);
     tap(screen, H_DOWN);
-    test.expectEq(static_cast<uint32_t>(screen.cursor), 3, F("cursor on GEAR"));
+    tap(screen, H_DOWN);
+    test.expectEq(static_cast<uint32_t>(screen.cursor), 4, F("cursor on GEAR"));
     appNavApply(pressA(screen, save), screen, save, g, H_A);
     test.expectEq(static_cast<uint32_t>(screen.screen), screens::SCREEN_GEAR, F("gear screen"));
     test.expectEq(static_cast<uint32_t>(screen.rowCount), screens::SCREEN_GEAR_ROWS, F("gear row count"));

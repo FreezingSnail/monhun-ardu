@@ -2,6 +2,7 @@
   "id": 2,
   "goalKind": "gather",
   "target": "ore",
+  "roomHint": "cavern",
   "need": 3,
   "desc": [
     "MINE ORE IN THE",

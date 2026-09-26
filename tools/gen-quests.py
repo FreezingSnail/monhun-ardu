@@ -23,6 +23,13 @@ the id list in data/items.json (source order == item index, so the packed
 target is the item idx the runtime uses); a material reward is validated the
 same way and packed as item idx + 1 (0 = none).
 
+Optional `roomHint` (bead monhun-ardu-imx, docs/ui-design.md MAP screen): one of
+the room ids in data/map.json. It is NOT packed into the blob; the generator
+emits `QUEST_ROOM_HINT[QUEST_COUNT]` (u8 room index, sorted by id like
+zone::ROOM_* in gen-zones, so it can index the MAP panel table on device) plus
+`QUEST_ROOM_HINT_NONE` (0xFF). An absent key emits 0xFF; an invalid value is an
+error.
+
 Usage:
     python3 tools/gen-quests.py [--root DIR] [--dump]
 
@@ -39,6 +46,7 @@ import sys
 REPO_ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 DATA_DIR = "data/quests"
 ITEMS_REL = "data/items.json"
+MAP_REL = "data/map.json"
 BLOB_REL = "fxdata/tables/quests.bin"
 META_REL = "src/generated/quest_meta.hpp"
 
@@ -48,6 +56,9 @@ FLAGS = 0
 HEADER_SIZE = 8
 RECORD_SIZE = 9
 QUEST_MAX = 16
+
+# `roomHint` sentinel (monhun-ardu-imx): no MAP marker for this quest.
+ROOM_HINT_NONE = 0xFF
 
 # Card copy bounds (ui.3): the pre-wrapped desc lines the card baker draws.
 DESC_MAX_LINES = 4
@@ -150,6 +161,43 @@ def load_item_ids(errors, root):
     return ids
 
 
+def load_room_ids(errors, root):
+    """The room id list from data/map.json, sorted by id == the packed room
+    index (gen-zones assigns zone::ROOM_* by sorted id order).
+
+    Validates a quest's optional `roomHint` against the same table the room
+    graph uses; no second list is hardcoded here.
+    """
+    path = os.path.join(root, MAP_REL)
+    doc = load_json(errors, path, MAP_REL)
+    if doc is None:
+        return None
+    raw = doc.get("rooms") if isinstance(doc, dict) else None
+    if not isinstance(raw, list) or not raw:
+        errors.add(MAP_REL, "rooms: expected a non-empty array")
+        return None
+    ids = []
+    for i, obj in enumerate(raw):
+        room_id = obj.get("id") if isinstance(obj, dict) else None
+        if not isinstance(room_id, str):
+            errors.add("%s: rooms[%d]" % (MAP_REL, i), "id: expected a string")
+            return None
+        ids.append(room_id)
+    return sorted(ids)
+
+
+def read_room_hint(errors, ctx, obj, room_ids):
+    """Optional `roomHint`: absent -> ROOM_HINT_NONE; present must be a known
+    room id (data/map.json). Present-but-invalid is an error."""
+    if not isinstance(obj, dict) or "roomHint" not in obj:
+        return ROOM_HINT_NONE
+    value = obj["roomHint"]
+    if not isinstance(value, str) or value not in room_ids:
+        errors.add(ctx, "roomHint: unknown room %r (want an id from %s)" % (value, MAP_REL))
+        return None
+    return room_ids.index(value)
+
+
 def load_json(errors, path, rel):
     try:
         with open(path, encoding="utf-8") as handle:
@@ -161,11 +209,11 @@ def load_json(errors, path, rel):
     return None
 
 
-def normalize_quest(errors, rel, name, obj, seen_ids, item_ids):
+def normalize_quest(errors, rel, name, obj, seen_ids, item_ids, room_ids):
     ctx = rel
     check_keys(errors, ctx, obj,
                {"id", "goalKind", "target", "need", "rewardZenny", "unlockFlag"},
-               optional={"rewardItem", "rewardCount", "desc"})
+               optional={"rewardItem", "rewardCount", "desc", "roomHint"})
     if not isinstance(obj, dict):
         return None
     stem = os.path.splitext(name)[0]
@@ -204,7 +252,8 @@ def normalize_quest(errors, rel, name, obj, seen_ids, item_ids):
             reward_count = read_int(errors, ctx, obj, "rewardCount", 1, 255)
     elif has_count:
         errors.add(ctx, "rewardCount: requires rewardItem")
-    if None in (quest_id, goal, target, need, reward_zenny, unlock):
+    room_hint = read_room_hint(errors, ctx, obj, room_ids)
+    if None in (quest_id, goal, target, need, reward_zenny, unlock, room_hint):
         return None
     if has_item and (reward_item == 0 or reward_count is None):
         return None
@@ -213,7 +262,8 @@ def normalize_quest(errors, rel, name, obj, seen_ids, item_ids):
     desc = normalize_desc(errors, ctx, obj)
     return {"name": stem, "id": quest_id, "goalKind": goal, "target": target,
             "need": need, "rewardZenny": reward_zenny, "rewardItem": reward_item,
-            "rewardCount": reward_count, "unlockFlag": unlock, "desc": desc}
+            "rewardCount": reward_count, "unlockFlag": unlock, "roomHint": room_hint,
+            "desc": desc}
 
 
 def normalize_desc(errors, ctx, obj):
@@ -242,6 +292,9 @@ def compile_model(errors, root):
     item_ids = load_item_ids(errors, root)
     if item_ids is None:
         return None
+    room_ids = load_room_ids(errors, root)
+    if room_ids is None:
+        return None
     names = sorted(name for name in os.listdir(data_dir) if name.endswith(".json"))
     if not names:
         errors.add(DATA_DIR, "no quest JSON files found")
@@ -253,13 +306,13 @@ def compile_model(errors, root):
         obj = load_json(errors, os.path.join(data_dir, name), rel)
         if obj is None:
             continue
-        quest = normalize_quest(errors, rel, name, obj, seen_ids, item_ids)
+        quest = normalize_quest(errors, rel, name, obj, seen_ids, item_ids, room_ids)
         if quest is not None:
             quests.append(quest)
     if errors.items:
         return None
     quests.sort(key=lambda quest: (quest["id"], quest["name"]))
-    return {"quests": quests}
+    return {"quests": quests, "roomIds": room_ids}
 
 
 def pack_blob(errors, quests):
@@ -279,7 +332,7 @@ def pack_blob(errors, quests):
     return bytes(blob)
 
 
-def emit_meta_header(quests, blob):
+def emit_meta_header(quests, blob, room_count):
     lines = []
     app = lines.append
     app("#pragma once")
@@ -291,6 +344,7 @@ def emit_meta_header(quests, blob):
     app("// src/quest_state.hpp holds the host-testable logic + struct.")
     app("")
     app("#include <stdint.h>")
+    app("#include \"../core/progmem.hpp\"   // MH_PROGMEM: QUEST_ROOM_HINT lives in flash on AVR")
     app("")
     app("namespace quests {")
     app("")
@@ -321,6 +375,17 @@ def emit_meta_header(quests, blob):
     app("// A gather quest's target is instead an item index (data/items.json).")
     for i, name in enumerate(TARGET_NAMES):
         app("constexpr uint8_t TARGET_%s = %d;" % (name.upper(), i))
+    app("")
+    app("// MAP screen quest marker (monhun-ardu-imx): the room each quest points")
+    app("// at, in quest index order (sorted by id). Values index the room order")
+    app("// data/map.json is packed in (sorted by id == zone::ROOM_*, see")
+    app("// generated/zone_meta.hpp); QUEST_ROOM_HINT_NONE = no marker. The hint")
+    app("// is authored per quest (data/quests/*.json `roomHint`) and never packed")
+    app("// into the mhQuests blob. Read it with mhPgmReadU8 (flash on AVR).")
+    app("constexpr uint8_t QUEST_ROOM_HINT_NONE = 0x%02X;" % ROOM_HINT_NONE)
+    app("constexpr uint8_t MAP_ROOM_COUNT = %d;" % room_count)
+    hints = ", ".join("0x%02X" % quest["roomHint"] for quest in quests)
+    app("MH_PROGMEM constexpr uint8_t QUEST_ROOM_HINT[QUEST_COUNT] = {%s};" % hints)
     app("")
     app("// Quest indices, sorted by id, with the cart record offsets the runtime uses.")
     for i, quest in enumerate(quests):
@@ -356,6 +421,7 @@ def run(root, dump):
               % (len(errors.items), "" if len(errors.items) == 1 else "s"), file=sys.stderr)
         return 1
     quests = model["quests"]
+    room_ids = model["roomIds"]
     blob = pack_blob(errors, quests)
     if blob is None or errors.items:
         for item in errors.items:
@@ -365,17 +431,18 @@ def run(root, dump):
 
     if dump:
         for quest in quests:
-            print("quest %s: id %d goal %s target %d need %d zenny %d item %d count %d unlock %d"
+            print("quest %s: id %d goal %s target %d need %d zenny %d item %d count %d unlock %d room %s"
                   % (quest["name"], quest["id"], GOAL_NAMES[quest["goalKind"]],
                      quest["target"], quest["need"], quest["rewardZenny"],
-                     quest["rewardItem"], quest["rewardCount"], quest["unlockFlag"]))
-        print("gen-quests: %d quests, %d B blob" % (len(quests), len(blob)))
+                     quest["rewardItem"], quest["rewardCount"], quest["unlockFlag"],
+                     "none" if quest["roomHint"] == ROOM_HINT_NONE else room_ids[quest["roomHint"]]))
+        print("gen-quests: %d quests, %d B blob, %d rooms" % (len(quests), len(blob), len(room_ids)))
         return 0
 
     wrote = set()
     if write_if_changed(os.path.join(root, BLOB_REL), blob):
         wrote.add(BLOB_REL)
-    if write_if_changed(os.path.join(root, META_REL), emit_meta_header(quests, blob)):
+    if write_if_changed(os.path.join(root, META_REL), emit_meta_header(quests, blob, len(room_ids))):
         wrote.add(META_REL)
     print("gen-quests: %d quests, %d B blob (magic 0x%04X version %d)"
           % (len(quests), len(blob), MAGIC, VERSION))

@@ -40,6 +40,7 @@ enum AppNav : int8_t {
     APP_NAV_CRAFT,         // hbk.10: FORGE submenu WEAPON CRAFT row
     APP_NAV_UPGRADE,       // hbk.10: FORGE submenu WEAPON UPGRADE row (screen in hbk.11)
     APP_NAV_ARMOR_FORGE,   // hbk.10: FORGE submenu ARMOR FORGE row
+    APP_NAV_MAP,           // imx: hub MAP row (room graph screen)
     APP_NAV_HUNT           // the hub HUNT row: the caller starts the hunt (huntStart)
 };
 
@@ -54,6 +55,10 @@ inline AppNav appScreenBack(uint8_t screen) {
 // caller runs the row's save action (screenApplyAction).
 inline AppNav appScreenAccept(uint8_t screen, const ScreenRow &row) {
     if (screen == screens::SCREEN_HUB) {
+        // imx: the MAP row is resolved before the switch so the hub action
+        // switch (and its jump table) keeps its pre-MAP size.
+        if (row.action == screens::ACTION_OPEN_MAP)
+            return APP_NAV_MAP;
         switch (row.action) {
         case screens::ACTION_HUNT:
             return APP_NAV_HUNT;
@@ -138,6 +143,14 @@ inline AppNav appHubRequest(Game &g) {
 MH_NOINLINE inline bool appNavApply(AppNav nav, ScreenState &screen, const SaveBlock &save, Game &game, const Input &in) {
     (void)save;
     (void)game;
+    // imx: APP_NAV_MAP is handled before the switch so the nav switch (and its
+    // jump table) keeps its pre-MAP size.
+    if (nav == APP_NAV_MAP) {
+        screenReset(screen, screens::SCREEN_MAP, screens::SCREEN_MAP_ROWS);
+        screen.prevA = in.a;
+        screen.prevB = in.b;
+        return false;
+    }
     switch (nav) {
     case APP_NAV_HUB:
         screenReset(screen, screens::SCREEN_HUB, screens::SCREEN_HUB_ROWS);

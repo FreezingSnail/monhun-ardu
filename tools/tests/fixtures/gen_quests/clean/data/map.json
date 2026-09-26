@@ -1,0 +1,8 @@
+{
+  "version": 1,
+  "rooms": [
+    { "id": "camp" },
+    { "id": "area" },
+    { "id": "cavern" }
+  ]
+}

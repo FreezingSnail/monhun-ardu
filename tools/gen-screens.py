@@ -20,7 +20,7 @@ Blob layout (little-endian, explicit u8/u16, no padding, fixed order):
     rows       variable  ScreenRow: labelLen u8, label[labelLen], cost u16,
                     actionId u8, flags u8, condId u8, param u8
     pageTable  fixed     per screen (index order) one SCREEN_PAGE_STRIDE-byte slot:
-                    pageCount u8, then 4 x u24 absolute FX addresses of the baked
+                    pageCount u8, then SCREEN_PAGE_MAX x u24 addresses of the baked
                     mh_screen_<name>_<page> layer arrays (0 = not prebaked /
                     unresolved)
     slotTables variable  per screen with "slots": true, appended after the page
@@ -37,6 +37,14 @@ also bakes one 128x64 4-shade image per 6-row page (the runtime scroll window),
 written to images/screens/<symbol>_128x64.png and declared in
 fxdata/screens/Sprites.txt as 3x 1bpp page-major layer arrays; the page table
 above carries their absolute FX addresses so the device can blit them.
+
+Panel screens (monhun-ardu-imx, docs/ui-design.md MAP): a screen with
+"panel": true has no rows; its pages are committed source PNGs
+(images/screens/mh_screen_<name>_<i>_128x64.png, authored once by a scratch
+script, never rewritten) loaded from page 0 while present, compiled into the
+same layer arrays + page table. The runtime picks the page -- the MAP screen
+indexes its marker pages (1 + the quest's room hint, 0 = no marker) -- so all
+dynamic chrome stays baked (no overlay draw code).
 
 Usage:
     python3 tools/gen-screens.py [--root DIR] [--dump] [--sheet FILE]
@@ -86,7 +94,8 @@ ACTION_NAMES = ("leave", "buy_upgrade", "take_quest", "turn_in_quest",
                 "forge_node", "open_forge",
                 "open_craft", "open_upgrade", "open_armor_forge",
                 "upgrade_row",   # hbk.11: UPGRADE class row (live tier/cost, param = class)
-                "slot_pick")     # hbk.12: GEAR equipment-slot row (param = slot 0..3)
+                "slot_pick",     # hbk.12: GEAR equipment-slot row (param = slot 0..3)
+                "open_map")      # imx: hub MAP row -> SCREEN_MAP (no param; inert)
 COND_NAMES = ("always", "zenny", "flag", "tier", "quest", "upgrade")
 # hide_locked: reserved. skill: draw the cached live skill points
 # (ScreenState::skillPoints) in the cost column plus an S/M tier letter next to
@@ -123,10 +132,11 @@ PREBAKE_LAYOUT = {
     "header_prefix": "--",    # section header rows (class/armor bands)
     "cost_max": 999,      # 3 digits fit left of the marker column
 }
-# Baked pages per screen: the fixed 13-byte page-table slot carries 4 u24
-# addresses (4 x 6 = 24 rows), so a prebaked screen may not exceed PAGE_MAX pages.
-PAGE_MAX = 4
-PAGE_STRIDE = 13          # u8 pageCount + PAGE_MAX x u24 addresses per screen slot
+# Baked pages per screen: the fixed page-table slot carries PAGE_MAX x u24
+# addresses (PAGE_MAX x 6 = 30 rows), so neither a prebaked nor a panel screen
+# may exceed PAGE_MAX pages (the MAP screen uses five: base + four markers).
+PAGE_MAX = 5
+PAGE_STRIDE = 16          # u8 pageCount + PAGE_MAX x u24 addresses per screen slot
 
 # GEAR equipment-box slot view (hbk.12, docs/ui-design.md): a screen with
 # "slots": true gets a candidate table appended to the blob -- u8 slotStart[5]
@@ -569,9 +579,43 @@ def clean_stale_images(screens, root):
         print("gen-screens: removed stale %s/%s" % (IMAGE_DIR_REL, name))
 
 
+def load_panel_pages(errors, root, screen):
+    """A screen with "panel": true draws committed art instead of row-baked
+    text: its pages are images/screens/mh_screen_<name>_<i>_128x64.png,
+    authored once by a scratch script and never rewritten by the generator,
+    loaded from page 0 up while the file exists (at least page 0 must). The
+    runtime picks the page (the MAP screen indexes its marker pages by the
+    active quest's room hint); the generator only compiles them into the same
+    3x 1bpp page-major layers as a baked page (declared in
+    fxdata/screens/Sprites.txt + the page table)."""
+    pages = []
+    index = 0
+    while True:
+        rel = page_image_rel(screen, index)
+        path = os.path.join(root, rel)
+        if not os.path.isfile(path):
+            if index == 0:
+                errors.add(rel, "panel: missing source image (author and commit %s)" % rel)
+            break
+        try:
+            img = Image.open(path)
+        except OSError as exc:
+            errors.add(rel, "panel: cannot read image: %s" % exc)
+            break
+        if img.size != (PAGE_W, PAGE_H):
+            errors.add(rel, "panel: image is %dx%d, want %dx%d"
+                       % (img.size[0], img.size[1], PAGE_W, PAGE_H))
+            break
+        if img.mode != "RGBA":
+            img = img.convert("RGBA")
+        pages.append((index, img))
+        index += 1
+    return pages
+
+
 def normalize_screen(errors, rel, name, obj, seen_ids, forge_model, armor_model):
     ctx = rel
-    check_keys(errors, ctx, obj, {"id", "title", "rows"}, ("weapons", "prebake", "armor", "slots"))
+    check_keys(errors, ctx, obj, {"id", "title", "rows"}, ("weapons", "prebake", "armor", "slots", "panel"))
     if not isinstance(obj, dict):
         return None
     stem = os.path.splitext(name)[0]
@@ -587,6 +631,13 @@ def normalize_screen(errors, rel, name, obj, seen_ids, forge_model, armor_model)
     if not isinstance(prebake, bool):
         errors.add(ctx, "prebake: expected a boolean, got %r" % (prebake,))
         prebake = False
+    panel = obj.get("panel", False)
+    if not isinstance(panel, bool):
+        errors.add(ctx, "panel: expected a boolean, got %r" % (panel,))
+        panel = False
+    if panel and prebake:
+        errors.add(ctx, "panel/prebake: pick one page source (committed art vs row-baked text)")
+        panel = False
     mode = obj.get("weapons")
     if mode is not None and mode not in WEAPONS_MODES:
         errors.add(ctx, "weapons: unknown mode %r (want one of %s)" % (mode, ", ".join(WEAPONS_MODES)))
@@ -602,7 +653,7 @@ def normalize_screen(errors, rel, name, obj, seen_ids, forge_model, armor_model)
     if mode is not None and armor:
         errors.add(ctx, "weapons/armor: pick one generated row source")
     raw_rows = obj.get("rows")
-    if not isinstance(raw_rows, list) or not raw_rows:
+    if not isinstance(raw_rows, list) or (not raw_rows and not panel):
         errors.add(ctx, "rows: expected a non-empty array")
         raw_rows = []
     rows = []
@@ -634,7 +685,7 @@ def normalize_screen(errors, rel, name, obj, seen_ids, forge_model, armor_model)
         return None
     candidates = slot_candidates(errors, ctx, forge_model, armor_model) if slots else None
     return {"name": stem, "id": screen_id, "title": title, "rows": rows, "prebake": prebake,
-            "slots": slots, "slotCandidates": candidates}
+            "panel": panel, "slots": slots, "slotCandidates": candidates}
 
 
 def compile_model(errors, root):
@@ -677,9 +728,17 @@ def compile_model(errors, root):
     screens.sort(key=lambda screen: (screen["id"], screen["name"]))
     # Screen prebake v2 (hbk.2): bake the pages of every opted-in screen. The
     # page images are authored here (deterministic RGBA -> PNG -> layer arrays),
-    # so a data-only screen edit re-bakes its pages.
+    # so a data-only screen edit re-bakes its pages. A "panel" screen instead
+    # compiles its committed source PNG (never rewritten).
     for screen in screens:
-        screen["pages"] = screen_pages(screen) if screen["prebake"] else []
+        if screen["panel"]:
+            screen["pages"] = load_panel_pages(errors, root, screen)
+        else:
+            screen["pages"] = screen_pages(screen) if screen["prebake"] else []
+        if len(screen["pages"]) > PAGE_MAX:
+            errors.add("data/screens/%s.json" % screen["name"],
+                       "pages: %d exceed the %d-address page-table slot "
+                       "(SCREEN_PAGE_STRIDE)" % (len(screen["pages"]), PAGE_MAX))
     return {"screens": screens}
 
 
@@ -913,8 +972,11 @@ def run(root, dump, sheet=None):
 
     wrote = set()
     # Author the page PNGs first (gen-cards pattern: the screen art is fully
-    # generated, so it is always rewritten; stale pages are removed).
+    # generated, so it is always rewritten; stale pages are removed). A "panel"
+    # screen's page is a committed source PNG, so it is never rewritten.
     for screen in screens:
+        if screen["panel"]:
+            continue
         for page, img in screen["pages"]:
             rel = page_image_rel(screen, page)
             path = os.path.join(root, rel)

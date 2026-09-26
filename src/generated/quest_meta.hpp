@@ -7,6 +7,7 @@
 // src/quest_state.hpp holds the host-testable logic + struct.
 
 #include <stdint.h>
+#include "../core/progmem.hpp"   // MH_PROGMEM: QUEST_ROOM_HINT lives in flash on AVR
 
 namespace quests {
 
@@ -40,6 +41,16 @@ constexpr uint8_t TARGET_SWEEP = 1;
 constexpr uint8_t TARGET_HEAVY = 2;
 constexpr uint8_t TARGET_RAVAGER = 3;
 constexpr uint8_t TARGET_POLE = 4;
+
+// MAP screen quest marker (monhun-ardu-imx): the room each quest points
+// at, in quest index order (sorted by id). Values index the room order
+// data/map.json is packed in (sorted by id == zone::ROOM_*, see
+// generated/zone_meta.hpp); QUEST_ROOM_HINT_NONE = no marker. The hint
+// is authored per quest (data/quests/*.json `roomHint`) and never packed
+// into the mhQuests blob. Read it with mhPgmReadU8 (flash on AVR).
+constexpr uint8_t QUEST_ROOM_HINT_NONE = 0xFF;
+constexpr uint8_t MAP_ROOM_COUNT = 4;
+MH_PROGMEM constexpr uint8_t QUEST_ROOM_HINT[QUEST_COUNT] = {0x00, 0x00, 0x02, 0x03, 0x00};
 
 // Quest indices, sorted by id, with the cart record offsets the runtime uses.
 constexpr uint8_t QUEST_SLAY_LUNGE = 0;

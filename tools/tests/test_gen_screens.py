@@ -14,6 +14,8 @@ import subprocess
 import sys
 import unittest
 
+from PIL import Image
+
 HERE = os.path.dirname(os.path.abspath(__file__))
 TOOLS = os.path.dirname(HERE)
 ROOT = os.path.dirname(TOOLS)
@@ -140,6 +142,7 @@ class GenScreensTests(unittest.TestCase):
             "constexpr uint8_t ACTION_EQUIP_WEAPON = 7;",
             "constexpr uint8_t ACTION_OPEN_GEAR = 8;",
             "constexpr uint8_t ACTION_EQUIP_ARMOR = 9;",
+            "constexpr uint8_t ACTION_OPEN_MAP = 17;",
             "constexpr uint8_t COND_ALWAYS = 0;",
             "constexpr uint8_t COND_ZENNY = 1;",
             "constexpr uint8_t COND_FLAG = 2;",
@@ -157,12 +160,12 @@ class GenScreensTests(unittest.TestCase):
             "constexpr uint8_t SCREEN_SMITH_ROWS = 1;",
             "constexpr uint16_t SCREEN_SMITH_FIRST_ROW = 58;",
             "constexpr uint16_t PAGE_TABLE_OFF = 71;",
-            "constexpr uint8_t SCREEN_PAGE_STRIDE = 13;",
-            "constexpr uint8_t SCREEN_PAGE_MAX = 4;",
+            "constexpr uint8_t SCREEN_PAGE_STRIDE = 16;",
+            "constexpr uint8_t SCREEN_PAGE_MAX = 5;",
             "constexpr uint8_t SCREEN_HUB_PAGES = 0;",
             "constexpr uint16_t SCREEN_HUB_PAGE_TABLE = 71;",
             "constexpr uint8_t SCREEN_SMITH_PAGES = 0;",
-            "constexpr uint16_t SCREEN_SMITH_PAGE_TABLE = 84;",
+            "constexpr uint16_t SCREEN_SMITH_PAGE_TABLE = 87;",
         ):
             self.assertIn(needle, text)
 
@@ -173,12 +176,13 @@ class GenScreensTests(unittest.TestCase):
         self.assertEqual((magic, version, flags, count, reserved, row_count),
                          (0x5343, 1, 0, 2, 0, 3))
         self.assertEqual(struct.unpack_from("<2H", blob, DEF_OFF), (12, 20))
-        # rows end at the page table (hbk.9): one fixed 13-byte slot per screen.
-        self.assertEqual(len(blob), 71 + 2 * 13)
+        # rows end at the page table (hbk.9/imx): one fixed 16-byte slot per
+        # screen (a u8 page count + 5 u24 addresses).
+        self.assertEqual(len(blob), 71 + 2 * 16)
         self.assertEqual(blob[71], 0, "hub page count (not prebaked)")
-        self.assertEqual(blob[72:84], bytes(12), "hub slot addresses zero")
-        self.assertEqual(blob[84], 0, "smith page count (not prebaked)")
-        self.assertEqual(blob[85:97], bytes(12), "smith slot addresses zero")
+        self.assertEqual(blob[72:87], bytes(15), "hub slot addresses zero")
+        self.assertEqual(blob[87], 0, "smith page count (not prebaked)")
+        self.assertEqual(blob[88:103], bytes(15), "smith slot addresses zero")
 
         hub = parse_def(blob, 12)
         self.assertEqual(hub, {"id": 0, "titleLen": 3, "title": "HUB", "rowCount": 2, "firstRow": 30})
@@ -202,7 +206,7 @@ class GenScreensTests(unittest.TestCase):
         self.assert_succeeds(result)
         self.assertIn("screen hub: id 0 title 'HUB' rows 2 off 12 pages 0", result.stdout)
         self.assertIn("row 'BUY SWORD' cost 100 action buy_upgrade flags 0x00 cond zenny param 0", result.stdout)
-        self.assertIn("gen-screens: 2 screens, 3 rows, 0 pages, 97 B blob", result.stdout)
+        self.assertIn("gen-screens: 2 screens, 3 rows, 0 pages, 103 B blob", result.stdout)
         self.assertFalse(os.path.exists(self.path(BLOB_REL)))
         self.assertFalse(os.path.exists(self.path(META_REL)))
         self.assertFalse(os.path.exists(self.path("fxdata", "screens", "Sprites.txt")))
@@ -362,8 +366,8 @@ class GenScreensTests(unittest.TestCase):
         self.assertEqual((rows[2]["param"], rows[2]["cost"]), (1, 100))
         self.assertEqual(rows[3]["label"], "LEAVE")
         # hbk.9: rows end at the fixed page table (13-byte slot per screen).
-        self.assertEqual(off, len(blob) - 3 * 13, "rows end at the page table")
-        self.assertEqual(blob[off:], bytes(3 * 13), "no screen prebakes pages")
+        self.assertEqual(off, len(blob) - 3 * 16, "rows end at the page table")
+        self.assertEqual(blob[off:], bytes(3 * 16), "no screen prebakes pages")
 
     def write_items_and_forge(self):
         os.makedirs(self.path("data", "forge"), exist_ok=True)
@@ -488,7 +492,7 @@ class GenScreensTests(unittest.TestCase):
         self.assertIn("constexpr uint8_t ACTION_SLOT_PICK = 16;", meta)
         self.assertIn("constexpr uint16_t SCREEN_GEAR_SLOT_TABLE = ", meta)
         off = int(meta.split("SCREEN_GEAR_SLOT_TABLE = ")[1].split(";")[0])
-        # The slot table trails the page table (3 screens x 13 B) and holds the
+        # The slot table trails the page table (3 screens x 16 B) and holds the
         # 5 entries plus their label records (u8 len + bytes).
         labels = (1 + 6) + (1 + 6) + (1 + 11) + (1 + 8) + (1 + 11)   # SWD T1/T2, HUNTER HELM, BONE CAP, HUNTER MAIL
         self.assertEqual(off, len(blob) - (5 + 5 * 4 + labels), "slot table trails the page table")
@@ -601,20 +605,20 @@ class GenScreensTests(unittest.TestCase):
         self.prebake_hub()
         self.assert_succeeds(self.compile())
         blob = self.read_bytes(BLOB_REL)
-        # Page table: fixed 13-byte slots; hub (1 page, address unresolved
-        # without fxdata.h) then smith (0 pages).
-        self.assertEqual(len(blob), 71 + 2 * 13)
+        # Page table: fixed 16-byte slots (u8 count + 5 u24 addresses); hub
+        # (1 page, address unresolved without fxdata.h) then smith (0 pages).
+        self.assertEqual(len(blob), 71 + 2 * 16)
         self.assertEqual(blob[71], 1, "hub page count")
         self.assertEqual(blob[72:75], b"\x00\x00\x00", "unresolved page address")
-        self.assertEqual(blob[75:84], bytes(9), "hub unused slots zero")
-        self.assertEqual(blob[84], 0, "smith page count")
-        self.assertEqual(blob[85:97], bytes(12), "smith slot addresses zero")
+        self.assertEqual(blob[75:87], bytes(12), "hub unused slots zero")
+        self.assertEqual(blob[87], 0, "smith page count")
+        self.assertEqual(blob[88:103], bytes(15), "smith slot addresses zero")
         text = self.read(META_REL)
         self.assertIn("constexpr uint16_t PAGE_TABLE_OFF = 71;", text)
         self.assertIn("constexpr uint8_t SCREEN_HUB_PAGES = 1;", text)
         self.assertIn("constexpr uint16_t SCREEN_HUB_PAGE_TABLE = 71;", text)
         self.assertIn("constexpr uint8_t SCREEN_SMITH_PAGES = 0;", text)
-        self.assertIn("constexpr uint16_t SCREEN_SMITH_PAGE_TABLE = 84;", text)
+        self.assertIn("constexpr uint16_t SCREEN_SMITH_PAGE_TABLE = 87;", text)
         self.assertTrue(os.path.isfile(self.path("images", "screens", "mh_screen_hub_0_128x64.png")))
         self.assertTrue(os.path.isfile(self.path("fxdata", "screens", "Sprites.txt")))
 
@@ -690,12 +694,12 @@ class GenScreensTests(unittest.TestCase):
         self.assert_fails(self.compile(), "exceeds the 3-digit bake cap")
 
     def test_prebake_page_cap_rejected(self):
-        # hbk.9: the fixed 13-byte slot carries 4 page addresses (24 rows).
+        # hbk.9/imx: the fixed 16-byte slot carries 5 page addresses (30 rows).
         def doc_fn(doc):
             doc["prebake"] = True
-            doc["rows"] = [{"label": "ROW %d" % i, "cost": 0, "action": "leave"} for i in range(25)]
+            doc["rows"] = [{"label": "ROW %d" % i, "cost": 0, "action": "leave"} for i in range(31)]
         self.mutate("data/screens/hub.json", doc_fn)
-        self.assert_fails(self.compile(), "exceed the 4 baked pages")
+        self.assert_fails(self.compile(), "exceed the 5 baked pages")
 
     def test_prebake_non_bool_rejected(self):
         self.mutate("data/screens/hub.json", lambda doc: doc.__setitem__("prebake", "yes"))
@@ -713,6 +717,51 @@ class GenScreensTests(unittest.TestCase):
             layers = parse_layers(self.read("fxdata", "screens", "Sprites.txt"), "mh_screen_hub_%d" % page)
             # `n/m` (light) sits after the 3-char title: x = 2 + 12 + 4 = 18.
             self.assertEqual(layers[18] & 0x01, 0x01, "page indicator ink on page %d" % page)
+
+    # ------------------------------------------------------- panel (imx)
+
+    def write_panel(self, name="panel", image=True):
+        with open(self.path("data", "screens", name + ".json"), "w", encoding="utf-8", newline="\n") as handle:
+            json.dump({"id": 2, "title": "MAP", "panel": True, "rows": []}, handle, indent=2)
+        if image:
+            directory = self.path("images", "screens")
+            os.makedirs(directory, exist_ok=True)
+            img = Image.new("RGBA", (128, 64), (0, 0, 0, 0))
+            img.load()[0, 0] = (255, 255, 255, 255)   # one white (shade 3) pixel
+            img.save(os.path.join(directory, "mh_screen_%s_0_128x64.png" % name), format="PNG")
+
+    def test_panel_compiles_committed_image(self):
+        # imx: a "panel": true screen has no rows; its single page 0 is a
+        # committed source PNG compiled into the same layer arrays + page table.
+        # The generator must never rewrite the source image.
+        self.write_panel()
+        self.assert_succeeds(self.compile())
+        meta = self.read(META_REL)
+        self.assertIn("constexpr uint8_t SCREEN_PANEL = 2;", meta)
+        self.assertIn("constexpr uint8_t SCREEN_PANEL_ROWS = 0;", meta)
+        self.assertIn("constexpr uint8_t SCREEN_PANEL_PAGES = 1;", meta)
+        layers = parse_layers(self.read("fxdata", "screens", "Sprites.txt"), "mh_screen_panel_0")
+        self.assertEqual(len(layers), 3 * 1024)
+        # The single white pixel lights all three planes (shade 3).
+        self.assertEqual((layers[0], layers[1024], layers[2048]), (0x01, 0x01, 0x01))
+        before = self.read_bytes("images", "screens", "mh_screen_panel_0_128x64.png")
+        self.assert_succeeds(self.compile())
+        self.assertEqual(before, self.read_bytes("images", "screens", "mh_screen_panel_0_128x64.png"))
+
+    def test_panel_missing_image_rejected(self):
+        self.write_panel(image=False)
+        self.assert_fails(self.compile(), "panel: missing source image")
+
+    def test_panel_with_prebake_rejected(self):
+        self.write_panel()
+        with open(self.path("data", "screens", "panel.json"), "w", encoding="utf-8", newline="\n") as handle:
+            json.dump({"id": 2, "title": "MAP", "panel": True, "prebake": True, "rows": []}, handle, indent=2)
+        self.assert_fails(self.compile(), "panel/prebake: pick one page source")
+
+    def test_panel_rows_required(self):
+        with open(self.path("data", "screens", "panel.json"), "w", encoding="utf-8", newline="\n") as handle:
+            json.dump({"id": 2, "title": "MAP", "panel": True}, handle, indent=2)
+        self.assert_fails(self.compile(), "rows: expected a non-empty array")
 
 
 if __name__ == "__main__":

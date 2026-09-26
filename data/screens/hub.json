@@ -4,6 +4,7 @@
   "prebake": true,
   "rows": [
     { "label": "HUNT", "cost": 0, "action": "hunt", "condition": "always", "param": 0 },
+    { "label": "MAP", "cost": 0, "action": "open_map", "condition": "always", "param": 0 },
     { "label": "QUESTS", "cost": 0, "action": "open_quests", "condition": "always", "param": 0 },
     { "label": "FORGE", "cost": 0, "action": "open_forge", "condition": "always", "param": 0 },
     { "label": "GEAR", "cost": 0, "action": "open_gear", "condition": "always", "param": 0 }

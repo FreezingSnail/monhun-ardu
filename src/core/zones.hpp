@@ -290,7 +290,10 @@ inline uint8_t beastHomeRoom(int8_t kind) {
 // huntStart before loadRoom so the arrival room's target rect reads the home
 // position. A home room with no monsterSpawn (0xFF) leaves the creature spawn.
 inline void beastHomeSpawn(Game &g, int8_t kind) {
-    const uint8_t home = beastHomeRoom(kind);
+    const uint8_t k = static_cast<uint8_t>(kind);
+    if (k >= zone::MONSTER_KIND_COUNT)
+        return;
+    const uint8_t home = zone::MONSTER_HOME_ROOM[k];
     if (home >= zone::ROOMS_COUNT)
         return;
     // The room record's monsterSpawn is validated by gen-zones (it must name a

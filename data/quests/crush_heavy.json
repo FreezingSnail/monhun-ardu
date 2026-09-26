@@ -2,6 +2,7 @@
   "id": 3,
   "goalKind": "kill",
   "target": "heavy",
+  "roomHint": "ridge",
   "need": 1,
   "desc": [
     "FELL THE HEAVY",

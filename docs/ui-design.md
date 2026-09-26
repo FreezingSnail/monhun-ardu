@@ -237,7 +237,7 @@ addresses of the `mh_screen_<name>_<page>` layer arrays.
 |---|---|
 | Title band | rect (0,0,128,8) shade 1 (dark); title text shade 3 (white) at (2,0) |
 | Page indicator | `n/m` shade 2 after the title (2 + title width + 4) when a screen spans >1 page; static per page, so baked |
-| Page table | fixed 13-byte slot per screen (`u8 pageCount` + 4 x `u24` addresses, `SCREEN_PAGE_STRIDE`; hbk.9) -- the device indexes it, no walk |
+| Page table | fixed 16-byte slot per screen (`u8 pageCount` + 5 x `u24` addresses, `SCREEN_PAGE_STRIDE`; hbk.9/imx) -- the device indexes it, no walk |
 | Rule | y=8, full width, shade 2 (light) |
 | Rows | y = 11 + 9*i, 6 per page (same grid as the legacy path) |
 | Section header rows (`action == none`, label starts `--`) | band (0,y-1,128,8) shade 1, frame-stripped text shade 3, centered |
@@ -296,6 +296,40 @@ every list stays static and only small live overlays remain:
   fixed-stride page table), hbk.13 (UPGRADE slim) and hbk.15 (sound cut,
   `-DMH_AUDIO=0`) — 28826 B / 870 free before the GEAR slot view, 29512 B /
   184 free after it.
+
+## MAP screen (monhun-ardu-imx)
+
+Status: shipped with the demo map wave. The hub gets a **MAP** row (after HUNT,
+before QUESTS) that opens `SCREEN_MAP`; B backs to the hub.
+
+- **Baked panel.** The whole graph is one committed 128x64 4-shade source PNG,
+  `images/screens/mh_screen_map_0_128x64.png` (authored once by a scratch script
+  under `build/scratch/`, never rewritten by the generator). `data/screens/map.json`
+  opts in with `"panel": true` and no rows; gen-screens compiles the PNG into the
+  same 3x 1bpp page-major layers + page table as a prebaked page
+  (`mh_screen_map_0`). The diagram is camp west, area centre, cavern north of the
+  area, ridge east, joined by corridor lines.
+- **Live pixels: two boxes only.** A 4x4 white box centred in the current room's
+  panel (the cursor) and a second 4x4 white box at the active quest's target
+  panel's top-left corner (the marker). `MAP_ROOM_PANEL[]` in `src/screens.hpp`
+  mirrors the baked art, indexed by the generated `zone::ROOM_*` order
+  (`data/map.json` rooms sorted by id: area 0, camp 1, cavern 2, ridge 3).
+- **v1 cursor.** There is no last-room save byte, so the cursor is the hub
+  default (camp): `MAP_ROOM_DEFAULT = zone::ROOM_CAMP`. LEFT/RIGHT are no-ops;
+  `drawMapOverlay` reads `MAP_ROOM_DEFAULT`, which is the single place a later
+  revision threads a live room id (the opener passing one) through. `ScreenState`
+  deliberately gains no field (test_screens runs at the stack ceiling).
+- **Quest marker data.** An optional `roomHint` on `data/quests/*.json` names a
+  `data/map.json` room id; gen-quests validates it and emits
+  `QUEST_ROOM_HINT[QUEST_COUNT]` (u8 room index, `QUEST_ROOM_HINT_NONE` = 0xFF)
+  in `quest_meta.hpp` as a flash table. No active quest -> no marker; the draw is
+  inert-safe. Hints: gather_ore -> cavern, slay_lunge/slay_sweep/train_pole ->
+  area, crush_heavy -> ridge.
+- **Tests.** `tools/tests/test_gen_quests.py` pins the roomHint parse/validation
+  and the emitted table; `test_screens` pins the MAP page count/table/address and
+  the hub row shift; `test_hub` pins the MAP row route, B-back and the marker
+  table resolving gather_ore / kill quests. Whole-image cost: +122 B flash
+  (29502 -> 29624, 72 free), RAM unchanged.
 
 ## Dev feel mode (`make dev`)
 

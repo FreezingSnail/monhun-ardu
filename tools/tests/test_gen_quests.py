@@ -115,6 +115,9 @@ class GenQuestsTests(unittest.TestCase):
             "constexpr uint8_t TARGET_SWEEP = 1;",
             "constexpr uint8_t TARGET_HEAVY = 2;",
             "constexpr uint8_t TARGET_RAVAGER = 3;",
+            "constexpr uint8_t QUEST_ROOM_HINT_NONE = 0xFF;",
+            "constexpr uint8_t MAP_ROOM_COUNT = 3;",
+            "constexpr uint8_t QUEST_ROOM_HINT[QUEST_COUNT] = {0xFF, 0xFF};",
             "constexpr uint8_t QUEST_SLAY_LUNGE = 0;",
             "constexpr uint16_t QUEST_SLAY_LUNGE_OFF = 8;",
             "constexpr uint8_t QUEST_SLAY_SWEEP = 1;",
@@ -224,6 +227,34 @@ class GenQuestsTests(unittest.TestCase):
         rec = parse_record(self.read_bytes(BLOB_REL), 8)
         self.assertEqual(rec["ritem"], 3, "scale is item index 2 -> packed 3")
         self.assertEqual(rec["rcount"], 2)
+
+    def test_room_hint_valid_resolves_sorted_room_index(self):
+        # imx: roomHint must name a data/map.json room id; the emitted table
+        # indexes rooms by sorted id (the zone::ROOM_* order), not file order.
+        # The fixture map is file-ordered camp/area/cavern, so "camp" is index 1.
+        self.mutate("data/quests/slay_lunge.json", lambda doc: doc.__setitem__("roomHint", "camp"))
+        self.assert_succeeds(self.compile())
+        meta = self.read(META_REL)
+        self.assertIn("constexpr uint8_t QUEST_ROOM_HINT[QUEST_COUNT] = {0x01, 0xFF};", meta)
+        # The hint is not packed into the blob: the record layout is unchanged.
+        self.assertEqual(len(self.read_bytes(BLOB_REL)), 26)
+
+    def test_room_hint_reads_the_map_room_ids(self):
+        self.mutate("data/quests/slay_lunge.json", lambda doc: doc.__setitem__("roomHint", "cavern"))
+        self.assert_succeeds(self.compile())
+        self.assertIn("constexpr uint8_t QUEST_ROOM_HINT[QUEST_COUNT] = {0x02, 0xFF};", self.read(META_REL))
+
+    def test_room_hint_unknown_room_rejected(self):
+        self.mutate("data/quests/slay_lunge.json", lambda doc: doc.__setitem__("roomHint", "volcano"))
+        self.assert_fails(self.compile(), "roomHint: unknown room 'volcano'")
+
+    def test_room_hint_non_string_rejected(self):
+        self.mutate("data/quests/slay_lunge.json", lambda doc: doc.__setitem__("roomHint", 2))
+        self.assert_fails(self.compile(), "roomHint: unknown room 2")
+
+    def test_missing_map_file_rejected(self):
+        os.remove(self.path("data", "map.json"))
+        self.assert_fails(self.compile(), "data/map.json")
 
     def test_need_zero_rejected(self):
         self.mutate("data/quests/slay_lunge.json", lambda doc: doc.__setitem__("need", 0))
