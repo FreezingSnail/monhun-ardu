@@ -1082,29 +1082,29 @@
     {
       "declaration": "fxdata/maps/Sprites.txt",
       "path": "images/maps/mh_map_area_384x112.png",
-      "sha256": "802e9b35565acf540c40fa07203cf5b90b954772ea2e3b0949891251bdd01f04",
-      "size": 857,
+      "sha256": "250a989871dde00913bcb7a5e36f501d85c8c917b5a42ac4afa96e557e252e2c",
+      "size": 830,
       "symbol": "mh_map_area"
     },
     {
       "declaration": "fxdata/maps/Sprites.txt",
       "path": "images/maps/mh_map_camp_128x56.png",
-      "sha256": "bf0d0bf1431640d6f27683992546d98d922ffea8f86a5bf919edeab73dd03808",
-      "size": 565,
+      "sha256": "ee6bb56270e5c6038ba41a2bf21e635d2d56b97e1c8e4b91af2f5b08ed0af169",
+      "size": 566,
       "symbol": "mh_map_camp"
     },
     {
       "declaration": "fxdata/maps/Sprites.txt",
       "path": "images/maps/mh_map_cavern_256x112.png",
-      "sha256": "87bcebaf7452d7ae2748e0455acd06ad81cfa34d2efd173b990af9e5806f4df4",
-      "size": 675,
+      "sha256": "2dda51b4f6ace430213b137c9d89a6c6be837f9d800a07e7e8eec2b9c0e9d084",
+      "size": 648,
       "symbol": "mh_map_cavern"
     },
     {
       "declaration": "fxdata/maps/Sprites.txt",
       "path": "images/maps/mh_map_ridge_384x112.png",
-      "sha256": "77efaa76e895b38894d782485c6f657bbe99e7588e81c4b30404bec0e729bb77",
-      "size": 810,
+      "sha256": "4a7e78e345fa31799d9fbbb522bd904b4e169c9f08355397a4ead9c6a1b1dd40",
+      "size": 798,
       "symbol": "mh_map_ridge"
     },
     {
@@ -1677,8 +1677,8 @@
     },
     {
       "path": "fxdata/maps/Sprites.txt",
-      "sha256": "ce32fb615702d0ee7d29b74756e5d6f4920f809f30e1e6d8b013d6bb7f8cafb2",
-      "size": 182152,
+      "sha256": "c6c4004b7fd6d57c2f8758c2f0ec6f1b9b1e5f0b3681d65f4d469f3b8abd8844",
+      "size": 159191,
       "symbols": [
         "mh_map_area",
         "mh_map_camp",
@@ -1863,12 +1863,12 @@
   "outputs": [
     {
       "path": "fxdata/fxdata-data.bin",
-      "sha256": "826b1f44de56859f3c987c8ed65ffd0f3c33c574bffe22e95bb9596c6dc859ce",
+      "sha256": "7e5fbc68b05a5f56fef0a0fcd85250662b5b3e0ebe575ae190f1406912a07570",
       "size": 2989156
     },
     {
       "path": "fxdata/fxdata.bin",
-      "sha256": "c101afa74359d4a6c6d5a8bfc76eb397d882a9796037a6303798b8fdcfcb04be",
+      "sha256": "a2191ff322f6a301e227ba905db76cad771b53a87626f2d45505ad0dc58eda5d",
       "size": 2989312
     },
     {

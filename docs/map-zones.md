@@ -183,6 +183,12 @@ step of the `254/4` ramp (thresholds 64/128/192) — the same conversion as
 `tools/convert-sprite.py get_shade`, so DARK/LIGHT/WHITE nest on planes
 1/2/3. A fully transparent pixel (alpha < 128) lights no plane (shade 0).
 
+Shipped room art is black-dominant by owner call (2026-09-26): the ground is
+shade 0 (fully transparent pixels), detail lines are shade 1, structures shade
+2, highlights shade 3. The four `images/maps/*.png` were palette-swapped from
+the earlier light-ground pass (shade 0 <-> shade 1), so props and actors read
+against black.
+
 The three layers concatenate in plane order into the room's `uint8_t
 mh_map_<id>[]` array in `fxdata/maps/Sprites.txt` (an `include` section of the
 one FX image). fie.5 samples:
