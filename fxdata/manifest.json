@@ -1635,8 +1635,8 @@
     },
     {
       "path": "src/generated/forge_meta.hpp",
-      "sha256": "28d8e675d5897dca825cf6fb1458ee3bedf0e8ce0374e33cab56e5a72281de11",
-      "size": 3577
+      "sha256": "606ae01a6c4169e5bbb7be5a81b3bb132c5cf9c3b9418d29b0b33d7a41771ba2",
+      "size": 3921
     },
     {
       "path": "src/generated/items_data.hpp",

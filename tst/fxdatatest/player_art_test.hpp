@@ -80,6 +80,12 @@
 // weapon space, and the shot rows fire through the port. Changed cases: the
 // whole gun block 27-36 (every case draws the plate or the shot art); flail and
 // sword rows are byte-identical.
+//
+// Bead monhun-ardu-jd1 (forge node sheet -> render): the equipped forge node's
+// sheet kind (Game::wpnSheet) now selects which gun sheet renders, so the four
+// gunshield variants are pinned as appended cases 40..43 (W_GUN, PS_IDLE,
+// ST_GUARD, E, kinds 1..4). Only the appended rows are new; all 40 prior cases
+// kept their bytes (the pre-jd1 rows carry wpnSheet 0 = the class default).
 
 #include "harness/fxtest.hpp"
 #include "src/core/world.hpp"
@@ -108,6 +114,9 @@ struct Case {
     // Equipped head piece + 1 (arm.2 armorHeadPart); 0 = base head. Left off the
     // pre-arm.2 rows, so they value-initialize to 0 and keep their goldens.
     uint8_t armorHead;
+    // Equipped forge-node sheet kind (jd1); 0 = class default sheet, 1..4 = the
+    // gunshield variants. Left off every pre-jd1 row so they keep their goldens.
+    uint8_t wpnSheet;
 };
 
 // State matrix. Facings are 8-way fp vectors (E = 16,0; W = -16,0; SE = 11,11).
@@ -158,11 +167,18 @@ static const Case CASES[] = {
     {W_SWORD, PS_IDLE, ST_NONE, 0, 0, 16, 0, 0, 0, 0, 0, armor::ARMOR_HUNTER_HELM + 1},
     {W_SWORD, PS_IDLE, ST_NONE, 0, 0, -16, 0, 0, 0, 0, 0, armor::ARMOR_HUNTER_HELM + 1},
     {W_FLAIL, PS_IDLE, ST_NONE, 0, 0, 11, 11, 0, 0, 0, 0, armor::ARMOR_BONE_CAP + 1},
+    // jd1 gunshield variants: same base pose (W_GUN idle guard, E) with each
+    // equipped forge-node sheet kind 1..4 -- the sheet selector must swap the
+    // drawn gun sheet.
+    {W_GUN, PS_IDLE, ST_GUARD, 0, 0, 16, 0, 0, 0, 0, 0, 0, 1},
+    {W_GUN, PS_IDLE, ST_GUARD, 0, 0, 16, 0, 0, 0, 0, 0, 0, 2},
+    {W_GUN, PS_IDLE, ST_GUARD, 0, 0, 16, 0, 0, 0, 0, 0, 0, 3},
+    {W_GUN, PS_IDLE, ST_GUARD, 0, 0, 16, 0, 0, 0, 0, 0, 0, 4},
 };
 constexpr uint8_t CASE_COUNT = static_cast<uint8_t>(sizeof(CASES) / sizeof(CASES[0]));
 // Changing the matrix invalidates GOLDEN: extend both in the same change and
 // capture the new hashes with the regen command above.
-static_assert(CASE_COUNT == 40, "golden matrix changed; regenerate GOLDEN");
+static_assert(CASE_COUNT == 44, "golden matrix changed; regenerate GOLDEN");
 
 // Golden framebuffer hashes [case][plane], captured pre-refactor. See the regen
 // note above; PROGMEM so the 3 x CASE_COUNT words stay in flash.
@@ -208,6 +224,13 @@ static const uint32_t MH_PROGMEM GOLDEN[CASE_COUNT][3] = {
     {0x23e552ecu, 0x71a79146u, 0xe8971baeu},
     {0x51522cf2u, 0x5e50a808u, 0x6391cf40u},
     {0x965e4d66u, 0x3c4ef065u, 0x3c4ef065u},
+    // jd1 gunshield variants (cases 40..43): each equipped forge-node sheet
+    // kind 1..4 draws a different gun sheet (all four hashes differ from each
+    // other and from the default kind-0 guard case 29).
+    {0xb8679899u, 0xb6322ac0u, 0x3a2e3ee9u},
+    {0x6cf6bb00u, 0x6c89d9acu, 0x5be309deu},
+    {0xaed61621u, 0x62e32a39u, 0x5d595e89u},
+    {0x9d80d12fu, 0x17ccce82u, 0xa0fa3755u},
 };
 static_assert(sizeof(GOLDEN) / sizeof(GOLDEN[0]) == CASE_COUNT, "goldens must cover every case");
 
@@ -248,6 +271,7 @@ static void setupCase(Game &g, const Case &c) {
     p.whirlTick = 3;   // deterministic ring/ball angle
     g.tick = c.tick;
     g.armorHead = c.armorHead;
+    g.wpnSheet = c.wpnSheet;
 
     const WeaponDef *def = &WEAPON_DEFS[c.weapon];
     const Attack *a = nullptr;

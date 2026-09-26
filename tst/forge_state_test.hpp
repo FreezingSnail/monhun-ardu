@@ -208,5 +208,21 @@ void ForgeSuite(TestRunner &runner) {
         suite.addTest(t);
     }
 
+    // jd1: the equipped node's sheet kind. The generated NODE_SHEET table is
+    // cart-free (plain constants), so the host suite pins the mapping directly;
+    // the device suite pins forgeEquippedSheet's save flow.
+    {
+        Test t("node sheet kinds: gun variants 1..4, class defaults 0 (jd1)");
+        t.assert(forge::NODE_SHEET[forge::NODE_SWORD_BASE], 0, "sword default sheet");
+        t.assert(forge::NODE_SHEET[forge::NODE_FLAIL_BASE], 0, "flail default sheet");
+        t.assert(forge::NODE_SHEET[forge::NODE_GUN_BASE], 0, "gun base default sheet");
+        t.assert(forge::NODE_SHEET[forge::NODE_GUN_BUCKLER], 1, "buckler kind");
+        t.assert(forge::NODE_SHEET[forge::NODE_GUN_KITE], 2, "kite kind");
+        t.assert(forge::NODE_SHEET[forge::NODE_GUN_TOWER], 3, "tower kind");
+        t.assert(forge::NODE_SHEET[forge::NODE_GUN_BRACE], 4, "brace kind");
+        t.assert(sizeof(forge::NODE_SHEET), sizeof(uint8_t) * forge::NODE_COUNT, "one kind byte per node");
+        suite.addTest(t);
+    }
+
     runner.addTestSuite(suite);
 }

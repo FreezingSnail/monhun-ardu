@@ -132,6 +132,11 @@ angle, and the tooling test asserts ink in the box and across its front half.
   rows come from `wpn::MOVE_ROW[w][weaponMoveSlot(p, a)] + phase`; state rows
   from the table above. Startup/state rows are referenced at the player centre,
   active rows at the hitbox centre.
+- Gunshield variants (jd1): the equipped forge node's sheet kind
+  (`forge::NODE_SHEET` -> `Game::wpnSheet`) selects the gun
+  sheet — 1..4 pick the buckler/kite/tower/brace `SHEET_OFF_MH_WEAPON_GUN_*`
+  constant, 0 keeps the class default `mh_weapon_gun`. Every variant sheet shares
+  the row/frame layout, so `weaponRowDraw` is unchanged.
 - Extras stay per weapon: sword riposte rim (row 26 over the special active),
   flail whirl ring/ball + stun sparkle, gun arrowshot tracer + the guard plate
   staying up while the shot fires from the stance. The gun's arrowshot active

@@ -9,7 +9,7 @@
 
 #include "core/world.hpp"
 #include "quest.hpp"
-#include "forge.hpp"   // forgeEquippedClass/Mul: equipped node -> class + multipliers (ui.4)
+#include "forge.hpp"   // forgeEquippedClass/Mul/Sheet: equipped node -> class + multipliers + sheet (ui.4, jd1)
 #include "armor.hpp"   // armorApplyToGame: cache equipped stats at hunt start (arm.2)
 
 namespace mh {
@@ -51,8 +51,10 @@ static void questApplyToGame(Game &g, const SaveBlock &save) {
 
 // ui.4 (5co.4): the equipped forge node's dmgMul/spdMul replace the retired
 // smith tier table. SAVE_NODE_NONE (or an out-of-range id) leaves 100/100.
+// jd1: the same node's sheet kind rides along so the render draws its shield.
 static void upgradeApplyToGame(Game &g, const SaveBlock &save) {
     forgeEquippedMul(save, g.dmgMul, g.spdMul);
+    g.wpnSheet = forgeEquippedSheet(save);
 }
 
 // Restore the persisted inventory into the live hunt (prg.5 save v2). newGame

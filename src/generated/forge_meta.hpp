@@ -73,6 +73,12 @@ constexpr uint16_t NODE_GUN_BRACE_OFF = 212;
 constexpr uint8_t NODE_DEPTH[NODE_COUNT] = {0, 1, 2, 0, 1, 2, 0, 1, 2, 1, 1, 1, 1};
 constexpr uint8_t NODE_BRANCH[NODE_COUNT] = {0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 2, 3, 4};
 
+// Equipped-sheet kind per node index (jd1): 0 = the class default sheet,
+// 1..4 = the gunshield variant sheets. src/forge.hpp forgeEquippedSheet reads
+// this off the equipped node; src/render.hpp weaponSheet maps it to a
+// SHEET_OFF_MH_WEAPON_* constant.
+constexpr uint8_t NODE_SHEET[NODE_COUNT] = {0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 2, 3, 4};
+
 // Per-node upgrade cost (the forge bill's zenny, N_COST_OFF). The UPGRADE
 // screen resolves a class's next node and reads its cost here instead of a
 // runtime cart seek per row (hbk.13).

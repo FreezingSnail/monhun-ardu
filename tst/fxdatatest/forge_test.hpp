@@ -53,6 +53,25 @@ inline void test_forge(FxTest &test) {
     test.expectEq(n.parent, forge::NODE_NONE, F("bad node parent none"));
     test.expectEq(n.flags, 0, F("bad node flags clear"));
 
+    // jd1: the equipped node's sheet kind flows through forgeEquippedSheet to
+    // the render sheet selector (0 = class default, 1..4 = gun variants).
+    SaveBlock sheetSave;
+    saveDefaults(sheetSave);
+    sheetSave.equippedNode = forge::NODE_GUN_BUCKLER;
+    test.expectEq(forgeEquippedSheet(sheetSave), 1, F("buckler node -> sheet 1"));
+    sheetSave.equippedNode = forge::NODE_GUN_KITE;
+    test.expectEq(forgeEquippedSheet(sheetSave), 2, F("kite node -> sheet 2"));
+    sheetSave.equippedNode = forge::NODE_GUN_TOWER;
+    test.expectEq(forgeEquippedSheet(sheetSave), 3, F("tower node -> sheet 3"));
+    sheetSave.equippedNode = forge::NODE_GUN_BRACE;
+    test.expectEq(forgeEquippedSheet(sheetSave), 4, F("brace node -> sheet 4"));
+    sheetSave.equippedNode = forge::NODE_GUN_BASE;
+    test.expectEq(forgeEquippedSheet(sheetSave), 0, F("gun base -> default sheet"));
+    sheetSave.equippedNode = SAVE_NODE_NONE;
+    test.expectEq(forgeEquippedSheet(sheetSave), 0, F("unequipped -> default sheet"));
+    sheetSave.equippedNode = forge::NODE_COUNT;
+    test.expectEq(forgeEquippedSheet(sheetSave), 0, F("out-of-range -> default sheet"));
+
     // --------------------------------------------------- CRAFT row layout
     // hbk.10: the FORGE submenu opens the flat CRAFT list (no headers or tree
     // prefixes); each row carries forge_node + the baked direct cost.

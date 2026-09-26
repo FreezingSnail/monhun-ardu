@@ -880,13 +880,25 @@ static inline uint8_t weaponMoveSlot(const mh::Player &p, const mh::Attack *a) {
 }
 
 // Sheet offset for one weapon: generated constants, folded at compile time (no
-// RAM table on AVR).
-static inline uint24_t weaponSheet(uint8_t weapon) {
-    if (weapon == mh::W_SWORD)
+// RAM table on AVR). Sword/flail have one sheet; the gun picks its equipped
+// forge node's variant sheet (Game::wpnSheet, jd1), 0 = the class default.
+static inline uint24_t weaponSheet(const mh::Game &g) {
+    if (g.weapon == mh::W_SWORD)
         return static_cast<uint24_t>(equip::SHEET_OFF_MH_WEAPON_SWORD);
-    if (weapon == mh::W_FLAIL)
+    if (g.weapon == mh::W_FLAIL)
         return static_cast<uint24_t>(equip::SHEET_OFF_MH_WEAPON_FLAIL);
-    return static_cast<uint24_t>(equip::SHEET_OFF_MH_WEAPON_GUN);
+    switch (g.wpnSheet) {
+    case 1:
+        return static_cast<uint24_t>(equip::SHEET_OFF_MH_WEAPON_GUN_BUCKLER);
+    case 2:
+        return static_cast<uint24_t>(equip::SHEET_OFF_MH_WEAPON_GUN_KITE);
+    case 3:
+        return static_cast<uint24_t>(equip::SHEET_OFF_MH_WEAPON_GUN_TOWER);
+    case 4:
+        return static_cast<uint24_t>(equip::SHEET_OFF_MH_WEAPON_GUN_BRACE);
+    default:
+        return static_cast<uint24_t>(equip::SHEET_OFF_MH_WEAPON_GUN);
+    }
 }
 
 static void drawPlayer(const mh::Game &g, int16_t camX, int16_t camY) {
@@ -930,7 +942,7 @@ static void drawPlayer(const mh::Game &g, int16_t camX, int16_t camY) {
     // table; per-weapon branches add only their extra parts (riposte rim, whirl
     // ring/ball, arrowshot tracer) and pick the stance rows.
     if (!p.sheathed) {
-        const uint24_t sheet = weaponSheet(g.weapon);
+        const uint24_t sheet = weaponSheet(g);
         // Row per move slot: startup rows are hand-centred, active rows
         // box-centred on the point the melee test resolves against. The gun's
         // arrowshot is muzzle-referenced instead: its box is the hitscan reach,

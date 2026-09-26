@@ -115,6 +115,7 @@ MH_NOINLINE void initGame(Game &g, int8_t weapon) {
     // mhSmith cart at hunt start (bead monhun-ardu-4ug).
     g.dmgMul = UPGRADE_MUL_BASE;
     g.spdMul = UPGRADE_MUL_BASE;
+    g.wpnSheet = 0;   // class default sheet; upgradeApplyToGame arms the forge node kind
     // Inventory + gather nodes are per-hunt (feel.22); loadRoom deliberately
     // leaves the node mask alone so a picked node stays picked across rooms.
     for (uint8_t i = 0; i < ITEM_COUNT; i++)

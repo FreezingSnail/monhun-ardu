@@ -78,6 +78,34 @@ SWORD = {
     ],
 }
 
+# Gun tree with the four shield variants: one direct branch per variant, so the
+# emitted NODE_SHEET pins kinds 1..4 (and the root 0) in data order.
+GUN = {
+    "class": "gun",
+    "header": "-- GUN --",
+    "nodes": [
+        {"id": "gun_base", "label": "GN T1", "parent": None, "direct": True,
+         "cost": 0, "mats": [], "directCost": 0, "directMats": [],
+         "dmgMul": 100, "spdMul": 100, "desc": ["PLAIN SHIELD."], "sheet": "mh_weapon_gun"},
+        {"id": "gun_buckler", "label": "GN BUCKLER", "parent": "gun_base", "direct": True,
+         "cost": 120, "mats": [{"item": "ore", "count": 1}],
+         "directCost": 200, "directMats": [{"item": "ore", "count": 2}],
+         "dmgMul": 108, "spdMul": 104, "desc": ["LIGHT BUCKLER."], "sheet": "mh_weapon_gun_buckler"},
+        {"id": "gun_kite", "label": "GN KITE", "parent": "gun_base", "direct": True,
+         "cost": 150, "mats": [{"item": "ore", "count": 2}],
+         "directCost": 230, "directMats": [{"item": "ore", "count": 3}],
+         "dmgMul": 112, "spdMul": 102, "desc": ["KITE SHIELD."], "sheet": "mh_weapon_gun_kite"},
+        {"id": "gun_tower", "label": "GN TOWER", "parent": "gun_base", "direct": True,
+         "cost": 220, "mats": [{"item": "scale", "count": 2}],
+         "directCost": 300, "directMats": [{"item": "scale", "count": 3}],
+         "dmgMul": 118, "spdMul": 98, "desc": ["TOWER SHIELD."], "sheet": "mh_weapon_gun_tower"},
+        {"id": "gun_brace", "label": "GN BRACE", "parent": "gun_base", "direct": True,
+         "cost": 280, "mats": [{"item": "scale", "count": 3}],
+         "directCost": 360, "directMats": [{"item": "scale", "count": 4}],
+         "dmgMul": 122, "spdMul": 100, "desc": ["BRACE SHIELD."], "sheet": "mh_weapon_gun_brace"},
+    ],
+}
+
 
 def write_tree(case):
     data = os.path.join(case, "data")
@@ -91,6 +119,15 @@ def write_tree(case):
         with open(path, "w", encoding="utf-8", newline="\n") as handle:
             json.dump(doc, handle, indent=2)
             handle.write("\n")
+    return case
+
+
+def write_gun(case):
+    """Add the gun tree (all four sheet variants) to an existing case tree."""
+    path = os.path.join(case, "data", "forge", "gun.json")
+    with open(path, "w", encoding="utf-8", newline="\n") as handle:
+        json.dump(GUN, handle, indent=2)
+        handle.write("\n")
     return case
 
 
@@ -219,6 +256,27 @@ class GenForgeTests(unittest.TestCase):
             self.assertIn(needle, meta)
         # The retired smith spine map is gone (save v5 has no migration).
         self.assertNotIn("TIER_NODE", meta)
+
+    def test_node_sheet_kinds(self):
+        # jd1: the sheet symbol folds to a kind byte; the four gun variants are
+        # 1..4 and every class-default sheet is 0.
+        write_gun(self.case)
+        self.run_ok()
+        meta = self.read(META_REL)
+        # sword 0..3, flail 0..5, then gun root 0 + buckler/kite/tower/brace 1..4.
+        self.assertIn("constexpr uint8_t NODE_SHEET[NODE_COUNT] = {0, 0, 0, 0, 0, 0, 0, 1, 2, 3, 4};", meta)
+        model = gen_forge.load_model(self.case)
+        kinds = {n["id"]: n["sheetKind"] for n in model["nodes"]}
+        self.assertEqual(kinds["gun_base"], 0, "class default sheet is kind 0")
+        self.assertEqual(kinds["gun_buckler"], 1)
+        self.assertEqual(kinds["gun_kite"], 2)
+        self.assertEqual(kinds["gun_tower"], 3)
+        self.assertEqual(kinds["gun_brace"], 4)
+
+    def test_unknown_sheet_symbol_rejected(self):
+        self.mutate("data/forge/sword.json",
+                    lambda d: d["nodes"][1].update({"sheet": "mh_weapon_axe"}))
+        self.assert_fails("sheet: unknown sheet symbol 'mh_weapon_axe'")
 
     def test_load_model_api_and_row_labels(self):
         model = gen_forge.load_model(self.case)

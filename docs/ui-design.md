@@ -144,6 +144,9 @@ child). Skipped nodes stay unowned.
 
 - Node: `id, class, parent, direct(bool), cost, mats, directCost, directMats,
   dmgMul, spdMul, desc, sheet`.
+- `sheet` selects the drawn sheet: the generator folds it to a kind byte
+  (`NODE_SHEET`), 0 = the class default, 1..4 = the gunshield variants; the
+  render maps the equipped node's kind to a generated sheet constant.
 - Data-driven: any tree shape/branching; the generator emits depth/branch
   metadata; FORGE rows are generated from the tree source.
 

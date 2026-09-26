@@ -14,7 +14,8 @@ damage/speed multipliers (replacing the old smith tier table).
 
 Node fields: id, label, parent (null = root), direct (bool), cost, mats,
 directCost, directMats, dmgMul, spdMul, desc (card copy), sheet (equip sheet
-symbol, metadata only). A root node has no parent; every class must have one.
+symbol; selects the drawn sheet kind, emitted as NODE_SHEET). A root node has no
+parent; every class must have one.
 Branches are allowed: a node's parent is any earlier node of the same class.
 
 The generator also exposes load_nodes()/load_model() for tools/gen-screens.py
@@ -66,6 +67,21 @@ WEAPON_NAMES = ("sword", "flail", "gun")
 
 NAME_RE = re.compile(r"^[a-z][a-z0-9_]*$")
 SHEET_RE = re.compile(r"^[a-z][a-z0-9_]*$")
+
+# Equipped-sheet kind per sheet symbol (bead monhun-ardu-jd1): 0 = the weapon
+# class's default sheet, 1..4 = the four gunshield variant sheets. The runtime
+# maps the equipped node's kind to the generated SHEET_OFF_MH_WEAPON_* constant
+# (src/render.hpp weaponSheet), so this table is the single place that decides
+# which sheet a node draws. An unknown symbol is a hard error.
+SHEET_KINDS = {
+    "mh_weapon_sword": 0,
+    "mh_weapon_flail": 0,
+    "mh_weapon_gun": 0,
+    "mh_weapon_gun_buckler": 1,
+    "mh_weapon_gun_kite": 2,
+    "mh_weapon_gun_tower": 3,
+    "mh_weapon_gun_brace": 4,
+}
 
 _MISSING = object()
 
@@ -232,14 +248,19 @@ def normalize_node(errors, ctx, obj, cls, item_ids, by_id):
             errors.add(ctx, "desc[%d]: chars must be printable ASCII" % i)
             return None
     sheet = obj.get("sheet")
-    if sheet is not None and (not isinstance(sheet, str) or not SHEET_RE.match(sheet)):
-        errors.add(ctx, "sheet: expected a [a-z][a-z0-9_]* symbol")
-        return None
+    if sheet is not None:
+        if not isinstance(sheet, str) or not SHEET_RE.match(sheet):
+            errors.add(ctx, "sheet: expected a [a-z][a-z0-9_]* symbol")
+            return None
+        if sheet not in SHEET_KINDS:
+            errors.add(ctx, "sheet: unknown sheet symbol '%s'" % sheet)
+            return None
     if None in (label, cost, direct_cost, dmg, spd, mats, direct_mats):
         return None
     return {"id": node_id, "label": label, "parent": parent, "direct": direct,
             "cost": cost, "mats": mats, "directCost": direct_cost, "directMats": direct_mats,
             "dmgMul": dmg, "spdMul": spd, "desc": list(desc), "sheet": sheet,
+            "sheetKind": 0 if sheet is None else SHEET_KINDS[sheet],
             "class": cls, "index": len(by_id)}
 
 
@@ -437,6 +458,13 @@ def emit_meta_header(model, blob):
         % ", ".join(str(n["depth"]) for n in nodes))
     app("constexpr uint8_t NODE_BRANCH[NODE_COUNT] = {%s};"
         % ", ".join(str(n["branch"]) for n in nodes))
+    app("")
+    app("// Equipped-sheet kind per node index (jd1): 0 = the class default sheet,")
+    app("// 1..4 = the gunshield variant sheets. src/forge.hpp forgeEquippedSheet reads")
+    app("// this off the equipped node; src/render.hpp weaponSheet maps it to a")
+    app("// SHEET_OFF_MH_WEAPON_* constant.")
+    app("constexpr uint8_t NODE_SHEET[NODE_COUNT] = {%s};"
+        % ", ".join(str(n["sheetKind"]) for n in nodes))
     app("")
     app("// Per-node upgrade cost (the forge bill's zenny, N_COST_OFF). The UPGRADE")
     app("// screen resolves a class's next node and reads its cost here instead of a")
