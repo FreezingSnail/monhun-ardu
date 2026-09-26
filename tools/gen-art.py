@@ -828,12 +828,15 @@ def _chicken_attack_east(put, body, head, mode):
         # neck angles down off the raised body, the head drops to rows 3..8 and
         # the beak sits at the lowered head's front edge -- no beak/wattle wedge
         # is added below the head.
-        put(0, 1, 6, 3, body)         # tail plume, upper
-        put(0, 4, 8, 4, body)         # tail plume, middle
-        put(1, 8, 6, 3, body)         # tail plume, lower
-        put(0, 1, 3, 1, hi)
-        put(0, 4, 3, 1, hi)
-        put(1, 8, 3, 1, hi)
+        # Owner call (playtest): the leap pose must read as the creature, not a
+        # long arrow shaft. The plumes used to start at x=0 with 3 px bright
+        # (hi) leading lines; they now start at x=2 and carry 2 px highlights,
+        # so the raised tail reads as a tail instead of a streak pointing left.
+        put(2, 1, 4, 3, body)         # tail plume, upper
+        put(2, 4, 5, 4, body)         # tail plume, middle
+        put(3, 8, 4, 3, body)         # tail plume, lower
+        put(2, 1, 2, 1, hi)
+        put(2, 4, 2, 1, hi)
 
         put(6, 2, 15, 10, body)       # raised body
         put(15, 3, 5, 7, hi)          # chest highlight
@@ -872,12 +875,13 @@ def _chicken_attack_east(put, body, head, mode):
     # onto the target (rows 4..9) instead of holding the idle head high while
     # the beak/wattle are driven below it -- the beak sits at the lowered head's
     # front edge, so no separate beak wedge is added.
-    put(0, 3, 6, 3, body)             # tail plume, upper
-    put(0, 6, 8, 4, body)             # tail plume, middle
-    put(1, 10, 6, 3, body)            # tail plume, lower
-    put(0, 3, 3, 1, hi)
-    put(0, 6, 3, 1, hi)
-    put(1, 10, 3, 1, hi)
+    # Same owner-call trim as the leap pose: plumes start at x=2 with 2 px
+    # highlights, so the peck does not read as a left-pointing streak either.
+    put(2, 3, 4, 3, body)             # tail plume, upper
+    put(2, 6, 5, 4, body)             # tail plume, middle
+    put(3, 10, 4, 3, body)            # tail plume, lower
+    put(2, 3, 2, 1, hi)
+    put(2, 6, 2, 1, hi)
 
     put(7, 4, 15, 10, body)           # body leaned 1 px
     put(16, 5, 5, 7, hi)              # chest highlight

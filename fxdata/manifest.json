@@ -18,8 +18,8 @@
     {
       "declaration": "fxdata/blocks/Sprites.txt",
       "path": "images/blocks/fxchickenatk_32x24.png",
-      "sha256": "667e3a6b905038825d2a5805311a0da08912fff547a0557337fafb6f2fcbe09f",
-      "size": 530,
+      "sha256": "22aeb8a571a0ece59a609b846a296b2028539be50541763a381721f895655d02",
+      "size": 534,
       "symbol": "fxchickenatk"
     },
     {
@@ -1490,7 +1490,7 @@
     },
     {
       "path": "fxdata/blocks/Sprites.txt",
-      "sha256": "0483ffb5babe19d99a46e9ac9656a49ca533ced68d8bdddf3f8c0708573c32be",
+      "sha256": "1946776a870ab50b3891e2386d1745e782ca2a22563427d8fb90bd9e3f8f4b98",
       "size": 561797,
       "symbols": [
         "fxtail",
@@ -1863,12 +1863,12 @@
   "outputs": [
     {
       "path": "fxdata/fxdata-data.bin",
-      "sha256": "c5f7d27131fc28c92476aac218d675eb4025933fe9311103517c6a76dbaca9d5",
+      "sha256": "5d81d07e1210dac43015463ae14982d3a4ded6ac12f30ce06bbd0d3e3d98c465",
       "size": 2989156
     },
     {
       "path": "fxdata/fxdata.bin",
-      "sha256": "50b3f98ee5406e0a2d797563eefdf3e43f130c2cba032fe897dcff93136a1933",
+      "sha256": "56e3b6e10047d7947e546419d0c7201540115143754bc7bdd1f07f68224da576",
       "size": 2989312
     },
     {
