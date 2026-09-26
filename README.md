@@ -24,7 +24,8 @@ flashing. Controls are below; no USB serial device comes up while the game runs
 
 `make demo` compiles a standalone playtest image (`-DMH_DEMO=1`) that boots into
 a picker instead of the hub and compiles the hub / quests / gear / forge / detail
-card / EEPROM flows out. Pick a loadout and hunt:
+card / EEPROM flows out, then launches it in Ardens (same as `make dev`; the hex
+stays in `dist/` for flashing). Pick a loadout and hunt:
 
 | Input | Action |
 |---|---|
