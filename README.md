@@ -20,6 +20,27 @@ single FX data image (`flashdata`); the plain hex files are attached for manual
 flashing. Controls are below; no USB serial device comes up while the game runs
 (see the shipping-build note).
 
+### Demo build (`make demo`)
+
+`make demo` compiles a standalone playtest image (`-DMH_DEMO=1`) that boots into
+a picker instead of the hub and compiles the hub / quests / gear / forge / detail
+card / EEPROM flows out. Pick a loadout and hunt:
+
+| Input | Action |
+|---|---|
+| UP / DOWN | move the cursor over WEAPON / BEAST / GO (wraps) |
+| A | cycle the selected row — weapon 1 of 3 (sword / flail / gun), beast 1 of 4 (lunge / sweep / heavy / ravager) — or launch from GO |
+| B | inert on the picker |
+
+GO runs `newGame()` for the picked weapon + beast and drops the hunter at the
+beast's home room start spawn (the area for lunge / sweep / ravager, the ridge
+for heavy); the hunt itself is unchanged. Camp hold-B or win/loss + A returns to
+the picker. Output lands in `dist/` (`monhun-ardu.ino.hex` + `fxdata/fxdata.bin`);
+package it with
+`python3 tools/package-arduboy.py --version vX --hex dist/monhun-ardu.ino.hex --fxdata fxdata/fxdata.bin --out dist/monhun-ardu-demo.arduboy`.
+Shipping (`make build`) and dev builds are unchanged by the flag (it defaults to
+0).
+
 ---
 
 ## Status snapshot

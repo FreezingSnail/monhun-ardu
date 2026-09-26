@@ -1,85 +1,57 @@
-# monhun-ardu-tfo — Balance: beast HP -33%, stamina actions cost more (owner tune)
+# monhun-ardu-1du — Demo build: `make demo` picker (weapon 1/3 + beast 1/4)
 
-STATUS: DONE (fits; **flash delta 0 B** — 29666/29696, 30 free). No BLOCKED.
+## Status
 
-## What changed
+DONE. `make demo` compiles clean and boots into the picker; shipping stays
+byte-identical (29666/29696). No commit/push (orchestrator commits).
 
-### Data (beast body HP -33%)
-- `data/creatures/lunge.json` stats.hp 1800→1200
-- `data/creatures/sweep.json` stats.hp 1500→1000
-- `data/creatures/heavy.json` stats.hp 2800→1900
-- `data/creatures/ravager.json` stats.hp 2400→1600
-- pole untouched (300).
+## Files
 
-### Data (breakable-zone HP ×2/3, truncating)
-- every zone hp 160→106, 240→160 in lunge/sweep/heavy/ravager
-  (head pools 106, appendage pools 160). pole head hp stays 0.
-
-### src/core/game.hpp (WEAPON_DEFS, host source; make gen repacks the cart blob)
-- every `Attack.stam` ×1.5 round-half-up `(v*3+1)/2`: sword combo 9/9/15→14/14/22,
-  special 20→30, branches 10/16/18→15/24/27, roll/alt 10→15/12→18; flail combo
-  13/12/17→20/18/26, special 22→33, branches 14/24→21/36, roll/alt 10→15/14→21,
-  charge 14/22→21/33; gun combo 8/8/13→12/12/20, special 14→21, branches
-  6/8/16→9/12/24, roll/alt 8→12/9→14.
-- shell stam (ball 6, scatter 5) intentionally unchanged: design froze "Attack.stam
-  field" only; shells were not listed. See DEVIATION below.
-
-### src/core/player.hpp (hardcoded action stamina)
-- dodge/roll 14→20 (all sites, incl. stowed roll): `startDodgeRoll` gate+cost.
-- guard block 22→28 (`playerHurt` ST_GUARD chip).
-- stance tick drain +6 per the owner's resolution of the design ambiguity
-  (design said "stance tick drain 10->14 (whirl/parry/guard drain sites)"; no
-  code site held 10 — `updateStance` drained parry 2 / whirl 8 / guard 1, and the
-  only hardcoded 10s were the flail deflect / gun shove). Owner chose "+6 to all
-  three stance drains": parry 2→8, whirl 8→14, guard 1→7. Deflect/shove 10 unchanged.
-- stamina regen unchanged (8/16 per tick, +1 per 2 ticks).
-
-### Generated (staged together after `make gen`)
-- `fxdata/fxdata.bin`, `fxdata/fxdata-data.bin`, `fxdata/manifest.json`,
-  `fxdata/tables/combat.bin`, `fxdata/tables/weapondefs.bin`,
-  `src/generated/combat_data.hpp`, `src/generated/combat_expect.hpp`.
-  `src/fxdata.h == fxdata/fxdata.h` verified by `cmp` (byte-stable regen).
-
-### Tests (all pins updated to the frozen numbers)
-- host: `tst/player_test.hpp` (WEAPON_DEFS s0 stam 14, guard 28, whirl drain
-  100-start, roll 20 all/stowed, roll-attack stam 15/15/12, chargeslam1 21),
-  `tst/monster_test.hpp` (legacy/lunge 1200, sweep 1000, heavy 1900, crit 1188,
-  enrage band rescaled to hpMax 1000: 400/410/401), `tst/combat_test.hpp`
-  (zone 106/160, drain 93/145, heavy tail 160, 11-hit tail drain),
-  `tst/hitscan_test.hpp` (special stam 21), `tst/armor_effect_test.hpp`
-  (guard 72 with direct stance, no tick).
-- device: `tst/fxdatatest/data_test.hpp` — all 20 `attackStam` pins rescaled
-  (+ roll-attack 15/15/12).
-- `tst/fxdatatest/combat_test.hpp` already referenced `combat_expect::*`
-  symbolic constants (regen carries the new values), so no edit needed.
-
-### Docs
-- `README.md` monster roster HP column (1200/1000/1900/1600).
-- `docs/feel-design.md` chicken/bull/heavy stats + zone HP tables.
-- `docs/creature-framework.md` quotes no HP/stamina numbers (no edit needed).
-
-## DEVIATION (documented, design-literal)
-
-1. Shell stam (ball/scatter) NOT scaled — design C enumerated only WEAPON_DEFS
-   `Attack.stam`. If shells were meant to scale too, ball 6→9 / scatter 5→8 is a
-   2-line follow-up.
-2. "stance tick drain 10->14" had no matching code site; resolved by the owner as
-   +6 to all three stance drains (see above).
+- `Makefile` — new `demo` target (PHONY): shipping flags + `-DMH_DEMO=1`
+  (`-DMH_NO_USB -DMH_AUDIO=0 -DMH_ROOM_IMAGE=1` kept), output to `dist/`, then
+  the `demo size: flash=.../29696 (... free)  ram=.../2560` line.
+- `monhun-ardu.ino` — `MH_DEMO` default 0; under `MH_DEMO` the
+  screens/cards/app_state/app_setup/quest includes and the
+  save/screen/card/GEAR-readout/hunt-arm globals compile out. `setup()` boots the
+  picker (`demoInit`); `run()` runs the picker → GO → `demoLaunch`, camp hold-B →
+  picker, hunt-end + fresh A → picker; `render()` draws `drawDemoPicker` while the
+  picker is up. Shipping/dev paths unchanged (`#else`).
+- `src/demo_menu.hpp` (new) — host-testable picker logic: `demoWrap` (wrap both
+  ways), `demoInit` / `demoEnter` (held-button guard), `demoStep` (row nav +
+  weapon/beast cycle + GO `DEMO_LAUNCH`), `demoOverReturnStep` (the demo's own
+  hunt-end edge latch), `demoHomeSpawn` (generated `zone::SPAWN_*` home-room
+  start table), `demoLaunch` (`newGame` + `loadRoom(beastHomeRoom, home spawn)`).
+- `src/render.hpp` — `drawDemoPicker` under `#if MH_DEMO` (title DEMO, rows at
+  y=11+9*i; `hudBlk` cursor chip + `textPut`/`fxfontw` words from MH_PROGMEM
+  tables; no cart data / no prebaked art).
+- `tst/demo_menu_test.hpp` (new) + `tst/main.cpp` registration — 10 tests: wrap
+  both ways, row nav wrap, weapon wrap 3 / beast wrap 4, GO launch once per
+  press, A edge-once, B inert, held-button guard on re-entry, hunt-end edge
+  once, home-spawn mapping (generated constants), and launch room/kind/spawn/
+  identity-multiplier/empty-inventory.
+- `README.md` — "Demo build (`make demo`)" section (outputs, controls, publish
+  via `tools/package-arduboy.py`).
+- `mock/`, `fxdata/`, generated headers: untouched.
 
 ## Verification
 
-- `make gen` then `make gen-check`: PASS — `fxdata_manifest: PASS (217 generated
-  artifacts unchanged)`; `cmp src/fxdata.h fxdata/fxdata.h` identical.
-- `make test`: `Total Passed: 6995  Total Failed: 0`.
-- `FXTEST_ONLY="test_combat test_data test_hub test_zones test_quests test_items
-  test_monster_art" make fxtest-headless`: all PASS —
-  combat 254/0, data 356/0, hub 86/0, items 35/0, monster_art 182/0,
-  quests 110/0, zones 108/0. RAM audit OK every suite
-  (max test_zones 2024 B, 536 B stack).
-- `make size-line`: `size: flash=29666/29696 (30 free)  ram=1867/2560`.
-  **Delta vs baseline 29666/29696 (30 free): 0 B flash, RAM 1867 (was 1867).**
+- `make demo` (clean compile):
+  `Sketch uses 23258 bytes (78%) of program storage space.`
+  `demo size: flash=23258/29696 (6438 free)  ram=1674/2560`
+- `make size` (shipping byte-identical): `size: flash=29666/29696 (30 free)  ram=1867/2560`;
+  data facts unchanged. `make build` unchanged.
+- `make dev` (compile step verified directly; the target then launches Ardens and
+  blocks on the GUI): `Sketch uses 28946 bytes (97%)... RAM 1867`.
+- `make test`: `Total Passed: 7074  Total Failed: 0` (new demo suite included).
+- `make gen-check`: `fxdata_manifest: PASS (217 generated artifacts unchanged)`.
+- Device/Ardens smoke image is OUT of scope (no device suite touched; no device
+  tests run per the bead).
 
 ## Wall time
 
-- worker (implement + host/device gates + size + docs): ~one session; no separate
-  spike needed (data-only values + a few int literals).
+- worker (implement + host/device-build gates + size + docs): ~20 min
+  (first file 18:04, report 18:18).
+
+## Deviations
+
+None.

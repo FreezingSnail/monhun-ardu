@@ -2,6 +2,15 @@
 #define ABG_IMPLEMENTATION
 #define SPRITESU_IMPLEMENTATION
 #include "src/common.hpp"
+
+// Demo playtest build (bead monhun-ardu-1du): `make demo` sets -DMH_DEMO=1.
+// It boots into the picker (weapon + beast cycle rows and GO) and compiles the
+// hub/quests/gear/forge/cards/EEPROM flows out of this sketch. Shipping and dev
+// builds default to 0 and stay byte-identical.
+#ifndef MH_DEMO
+#define MH_DEMO 0
+#endif
+
 #include "src/globals.hpp"
 #include "src/fxdata.h"
 #include "src/core/world.hpp"
@@ -18,11 +27,15 @@
 // exact same header is compiled into the on-device perf bench, so the numbers
 // there describe this loop's real render path.
 #include "src/render.hpp"
+#if MH_DEMO
+#include "src/demo_menu.hpp"   // picker state machine + hunt launch (1du)
+#else
 #include "src/screens.hpp"     // hub/list screens + EEPROM save (qs.1)
 #include "src/cards.hpp"       // prebaked detail cards + nav (5co.3)
 #include "src/app_state.hpp"   // boot-flow routing: hub <-> screens <-> hunt (isp.1)
 #include "src/app_setup.hpp"   // cart-backed hunt arming + huntStart (qs.4/isp.1)
 #include "src/quest.hpp"       // quest defs on cart + TAKE/TURN_IN state (qs.2)
+#endif
 
 decltype(arduboy) arduboy;
 
@@ -34,6 +47,7 @@ mh::Game g;
 // (no core changes). Muted at compile time with -DMH_AUDIO=0.
 mh::AudioState s_audio;
 
+#if !MH_DEMO
 // Persistent save + the data-driven screen state (bead monhun-ardu-cgz). The
 // save loads once in setup(); it is committed only from a screen action or the
 // hunt-end progress commit (never mid-hunt) so EEPROM write cycles stay low.
@@ -85,6 +99,16 @@ static void startHuntFromSave() {
     mh::armorApplyToGame(g, s_save);
     s_huntOver = false;
 }
+#endif   // !MH_DEMO
+
+#if MH_DEMO
+// Demo picker state (1du): the picker is the root, so `s_demoPicker` toggles
+// between it and a hunt. s_demoPrevA is the demo's own hunt-end A edge latch
+// (app_state.hpp's appOverReturnStep is compiled out).
+mh::DemoMenu s_demo;
+static bool s_demoPicker = true;
+static bool s_demoPrevA = false;
+#endif   // MH_DEMO
 
 #if DEBUG_HURTBOXES
 // The overlay is always on in this build (the A+B runtime toggle was dropped:
@@ -102,6 +126,10 @@ void setup() {
     FX::begin(FX_DATA_PAGE);
     FX::setCursorRange(0, 32767);
 
+#if MH_DEMO
+    // Demo build: no EEPROM/save, no hub. Boot into the picker.
+    mh::demoInit(s_demo);
+#else
     mh::saveLoad(s_save, SAVE_BACKEND);   // first boot / bad block -> defaults
     // The hub is the root screen (monhun-ardu-isp.1): boot enters it. The world
     // is only built when the quest card launches a hunt (huntStart), so no
@@ -109,6 +137,7 @@ void setup() {
     // bottom strip (ui.5.2); a hunt re-arms it in huntStart.
     mh::armorApplyToGame(g, s_save);
     mh::screenEnter(s_screen, screens::SCREEN_HUB, s_save);
+#endif
 }
 
 // One input sample per logic tick, shared by the screens and the sim. The
@@ -130,8 +159,37 @@ static mh::Input sampleInput() {
 // boot -> hub --QUESTS--> board --card A--> camp --door--> area --door--> camp;
 // hub --MAP/QUESTS/FORGE/GEAR--> screen --B--> hub; camp hold-B -> hub;
 // win/loss + A -> hub (turn-ins). The hub is the root: B there does nothing.
+// Demo build (MH_DEMO): boot -> picker --GO--> hunt; camp hold-B or win/loss + A
+// -> picker (the picker is that build's root).
 void run() {
     const mh::Input in = sampleInput();
+#if MH_DEMO
+    if (s_demoPicker) {
+        // Picker tick: GO launches a fresh hunt; the picker is the demo root.
+        if (mh::demoStep(s_demo, in) == mh::DEMO_LAUNCH) {
+            mh::demoLaunch(g, s_demo);
+            s_demoPrevA = in.a;
+            s_demoPicker = false;
+        }
+        return;
+    }
+    mh::stepGame(g, in);
+    mh::audioUpdate(s_audio, g);
+    // Camp hold-B (sheathed): the core raises Game::menuRequest. Consume it once
+    // and return to the picker.
+    if (g.menuRequest) {
+        g.menuRequest = false;
+        mh::demoEnter(s_demo, in);
+        s_demoPicker = true;
+        return;
+    }
+    // Hunt end + fresh A returns to the picker (the demo's own edge latch; the
+    // carve gate is not needed in the demo).
+    if (mh::demoOverReturnStep(g.over != mh::OVER_NONE, in, s_demoPrevA)) {
+        mh::demoEnter(s_demo, in);
+        s_demoPicker = true;
+    }
+#else
 #ifndef MH_CARD_OFF
     if (s_detail.active) {
         // Card tick (5co.3): LEFT/RIGHT cycle pages (skipping pages absent from
@@ -271,12 +329,22 @@ void run() {
     const bool huntReturn = mh::appOverReturnStep(g.over != mh::OVER_NONE, in, s_huntPrevA);
     if (huntReturn && mh::appHuntReturnAllowed(g))
         mh::appNavApply(mh::appHuntReturn(), s_screen, s_save, g, in);
+#endif   // MH_DEMO
 }
 
 // Full block-art scene (arena, target, player, shells, effects, HUD). Read-only:
 // render never mutates Game; the three plane passes composite one L4 image.
 // While a screen is up it replaces the scene (same per-plane call discipline).
 void render() {
+#if MH_DEMO
+    // Picker replaces the scene; an active hunt renders exactly like shipping.
+    if (s_demoPicker) {
+        mh::drawDemoPicker(s_demo);
+        return;
+    }
+    mh::renderScene(g, false);
+    return;
+#else
 #ifndef MH_CARD_OFF
     if (s_detail.active) {
         mh::drawCard(s_detail, s_card, s_save);
@@ -292,6 +360,7 @@ void render() {
 #else
     mh::renderScene(g, false);
 #endif
+#endif   // MH_DEMO
 }
 
 void loop() {

@@ -1,4 +1,4 @@
-.PHONY :  full build mini dev dev-hitboxes gen gen-check size size-line debug hooks format test test-tools testvm testvm-debug fxtest fxtest-headless fxtest-headless-preflight fxtest-build fxtest-run base-sheet hitboxes-render
+.PHONY :  full build mini dev dev-hitboxes demo gen gen-check size size-line debug hooks format test test-tools testvm testvm-debug fxtest fxtest-headless fxtest-headless-preflight fxtest-build fxtest-run base-sheet hitboxes-render
 
 # Common compiler flags
 CXX_FLAGS = -std=c++17 -I/src -w -O0 -g3
@@ -89,6 +89,18 @@ dev-hitboxes:
 	$(AVR_SIZE) -A "$$elf" | awk '$$1==".text"{t=$$2} $$1==".data"{d=$$2} $$1==".bss"{b=$$2} END {flash=t+d; ram=d+b; printf "dev-hitboxes size: flash=%d/%d (%d free)  ram=%d/2560\n", flash, 29696, 29696-flash, ram}'
 	@test -f "$(FXDATA_BIN)" || { echo "dev-hitboxes: FX data image missing at $(FXDATA_BIN); run make gen" >&2; exit 1; }
 	"$(ARDENS)" display=ssd1306 fxport=d1 file=dist/monhun-ardu.ino.elf file=$(FXDATA_BIN)
+
+# Demo playtest build (bead monhun-ardu-1du): shipping flags + -DMH_DEMO=1. Boots
+# into the picker (weapon 1/3 + beast 1/4 cycle rows and GO) and compiles the
+# hub/quests/gear/forge/cards/EEPROM flows out. Output stays in dist/ (the hex +
+# fxdata/fxdata.bin are the publishable pair); shipping/dev are untouched.
+demo:
+	arduino-cli compile --fqbn "arduboy-homemade:avr:arduboy-fx" --optimize-for-debug --output-dir dist \
+	    --build-property compiler.cpp.extra_flags="-mcall-prologues -mrelax -DMH_NO_USB -DMH_AUDIO=0 -DMH_ROOM_IMAGE=1 -DMH_DEMO=1" \
+	    --build-property compiler.c.extra_flags="-mrelax" \
+	    --build-property compiler.c.elf.extra_flags="-mrelax"
+	@elf=dist/monhun-ardu.ino.elf; \
+	$(AVR_SIZE) -A "$$elf" | awk '$$1==".text"{t=$$2} $$1==".data"{d=$$2} $$1==".bss"{b=$$2} END {flash=t+d; ram=d+b; printf "demo size: flash=%d/%d (%d free)  ram=%d/2560\n", flash, 29696, 29696-flash, ram}'
 
 gen:
 	./tools/gen.sh

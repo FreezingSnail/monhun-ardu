@@ -17,6 +17,10 @@
 #include "generated/equip_meta.hpp"   // gen-art part tables (sheet/frame/anchor) for drawPlayer
 #include "generated/armor_meta.hpp"   // ARMOR_* piece ids for the armor head layer (arm.2)
 
+#if MH_DEMO
+#include "demo_menu.hpp"   // picker state for drawDemoPicker (bead monhun-ardu-1du)
+#endif
+
 #if defined(__AVR__)
 #include <avr/io.h>   // SPDR / SPSR for the fused room-image reader
 #endif
@@ -1313,5 +1317,66 @@ static void renderScene(const mh::Game &g, bool wire) {
 #endif
     drawHud(g);
 }
+
+#if MH_DEMO
+/* ------------------------------------------------ demo picker (1du, MH_DEMO) */
+// Demo playtest picker (bead monhun-ardu-1du): title DEMO plus three rows on
+// the y = 11 + 9*i grid. Row 0 cycles the weapon, row 1 the beast, row 2
+// launches (GO). Drawn from MCU-flash word tables with the FX glyph sheet
+// (textPut / fxfontw) and hudBlk only -- no cart screen data, no prebaked art.
+// Called instead of renderScene while the picker is up; the black field is the
+// per-plane framebuffer wipe, same as the HUD strip.
+static const char DEMO_STR_TITLE[] MH_PROGMEM = "DEMO";
+static const char DEMO_STR_WEAPON[] MH_PROGMEM = "WEAPON";
+static const char DEMO_STR_BEAST[] MH_PROGMEM = "BEAST";
+static const char DEMO_STR_GO[] MH_PROGMEM = "GO";
+static const char DEMO_STR_SWORD[] MH_PROGMEM = "SWORD";
+static const char DEMO_STR_FLAIL[] MH_PROGMEM = "FLAIL";
+static const char DEMO_STR_GUN[] MH_PROGMEM = "GUN";
+static const char DEMO_STR_LUNGE[] MH_PROGMEM = "LUNGE";
+static const char DEMO_STR_SWEEP[] MH_PROGMEM = "SWEEP";
+static const char DEMO_STR_HEAVY[] MH_PROGMEM = "HEAVY";
+static const char DEMO_STR_RAVAGER[] MH_PROGMEM = "RAVAGER";
+
+// One word from a flash table, glyph by glyph through the FX font sheet.
+static int16_t demoPut(int16_t x, int16_t y, const char *word, uint8_t len) {
+    for (uint8_t i = 0; i < len; i++)
+        x = textPut(fxfontw, x, y, static_cast<char>(mhPgmReadU8(reinterpret_cast<const uint8_t *>(word + i))));
+    return x;
+}
+
+static void drawDemoPicker(const DemoMenu &m) {
+    demoPut(10, 0, DEMO_STR_TITLE, 4);
+
+    const int16_t rowY = static_cast<int16_t>(m.row == DEMO_ROW_WEAPON ? 11 : (m.row == DEMO_ROW_BEAST ? 20 : 29));
+    hudBlk(2, static_cast<int16_t>(rowY + 2), 4, 4, 3);   // cursor chip (white)
+
+    demoPut(10, 11, DEMO_STR_WEAPON, 6);
+    if (m.weapon == static_cast<uint8_t>(W_FLAIL))
+        demoPut(42, 11, DEMO_STR_FLAIL, 5);
+    else if (m.weapon == static_cast<uint8_t>(W_GUN))
+        demoPut(42, 11, DEMO_STR_GUN, 3);
+    else
+        demoPut(42, 11, DEMO_STR_SWORD, 5);
+
+    demoPut(10, 20, DEMO_STR_BEAST, 5);
+    switch (m.beast) {
+    case MON_SWEEP:
+        demoPut(38, 20, DEMO_STR_SWEEP, 5);
+        break;
+    case MON_HEAVY:
+        demoPut(38, 20, DEMO_STR_HEAVY, 5);
+        break;
+    case MON_RAVAGER:
+        demoPut(38, 20, DEMO_STR_RAVAGER, 7);
+        break;
+    default:
+        demoPut(38, 20, DEMO_STR_LUNGE, 5);
+        break;
+    }
+
+    demoPut(10, 29, DEMO_STR_GO, 2);
+}
+#endif   // MH_DEMO
 
 }   // namespace mh
