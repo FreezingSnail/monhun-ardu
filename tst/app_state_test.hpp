@@ -9,7 +9,6 @@
 // functions against the real cart + EEPROM and covers huntStart().
 #include "test.hpp"
 #include "../src/app_state.hpp"
-#include "../src/generated/zone_meta.hpp"    // zone::ROOM_CAMP (imx MAP cursor default)
 #include "../src/generated/quest_meta.hpp"   // quests::QUEST_* (quest-card launch, 087)
 
 using namespace mh;
@@ -55,13 +54,13 @@ void AppSuite(TestRunner &runner) {
     }
 
     {
-        Test t("hub A routing: QUESTS / MAP / GEAR / FORGE; HUNT row gone, LEAVE/status no-ops");
-        t.assert(screens::SCREEN_HUB_ROWS, 4, "hub has 4 rows (087)");
+        Test t("hub A routing: QUESTS / FORGE / GEAR; HUNT/MAP rows gone, LEAVE/status no-ops");
+        t.assert(screens::SCREEN_HUB_ROWS, 3, "hub has 3 rows (6k2)");
         t.assert(appScreenAccept(screens::SCREEN_HUB, arow(screens::ACTION_HUNT)), APP_NAV_NONE, "stray HUNT row is a no-op");
+        t.assert(appScreenAccept(screens::SCREEN_HUB, arow(screens::ACTION_OPEN_MAP)), APP_NAV_NONE, "stray MAP row is a no-op");
         t.assert(appScreenAccept(screens::SCREEN_HUB, arow(screens::ACTION_OPEN_QUESTS)), APP_NAV_QUESTS, "QUESTS row");
         t.assert(appScreenAccept(screens::SCREEN_HUB, arow(screens::ACTION_OPEN_GEAR)), APP_NAV_GEAR, "GEAR row");
         t.assert(appScreenAccept(screens::SCREEN_HUB, arow(screens::ACTION_OPEN_FORGE)), APP_NAV_FORGE, "FORGE row");
-        t.assert(appScreenAccept(screens::SCREEN_HUB, arow(screens::ACTION_OPEN_MAP)), APP_NAV_MAP, "MAP row");
         t.assert(appScreenAccept(screens::SCREEN_HUB, arow(screens::ACTION_LEAVE)), APP_NAV_NONE, "LEAVE row is root no-op");
         t.assert(appScreenAccept(screens::SCREEN_HUB, arow(screens::ACTION_NONE, screens::COND_ALWAYS)), APP_NAV_NONE, "status row");
         t.assert(appScreenAccept(screens::SCREEN_HUB, arow(screens::ACTION_TAKE_QUEST, screens::COND_QUEST)), APP_NAV_NONE, "quest row not a hub dest");
@@ -151,25 +150,11 @@ void AppSuite(TestRunner &runner) {
     }
 
     {
-        Test t("hub MAP row opens the map screen with the cursor on camp (imx)");
-        ScreenState screen;
-        Game g;
-        SaveBlock save;
-        saveDefaults(save);
-        t.assert(appNavApply(APP_NAV_MAP, screen, save, g, AT_A), false, "map nav is not a hunt start");
-        t.assert(screen.active, true, "map screen active");
-        t.assert(screen.screen, screens::SCREEN_MAP, "on the map screen");
-        t.assert(screen.rowCount, screens::SCREEN_MAP_ROWS, "map row count from the meta");
-        suite.addTest(t);
-    }
-
-    {
         Test t("B backs out one level: hub is the root (none), quests/gear -> hub");
         t.assert(appScreenBack(screens::SCREEN_HUB), APP_NAV_NONE, "hub B is a root no-op");
         t.assert(appScreenBack(screens::SCREEN_QUESTS), APP_NAV_HUB, "quests backs to hub");
         t.assert(appScreenBack(screens::SCREEN_GEAR), APP_NAV_HUB, "gear backs to hub");
         t.assert(appScreenBack(screens::SCREEN_FORGE), APP_NAV_HUB, "forge backs to hub");
-        t.assert(appScreenBack(screens::SCREEN_MAP), APP_NAV_HUB, "map backs to hub");
         suite.addTest(t);
     }
 

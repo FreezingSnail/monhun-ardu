@@ -1166,44 +1166,9 @@
     {
       "declaration": "fxdata/screens/Sprites.txt",
       "path": "images/screens/mh_screen_hub_0_128x64.png",
-      "sha256": "9403c1384862ecbf7cbdf714c25479148b1688b695919615a39251497f5fc883",
-      "size": 371,
+      "sha256": "9647119d5aa53f4d07881ac56e377ca0fbf78e4d89adffaa96ac670562d1c0a4",
+      "size": 342,
       "symbol": "mh_screen_hub_0"
-    },
-    {
-      "declaration": "fxdata/screens/Sprites.txt",
-      "path": "images/screens/mh_screen_map_0_128x64.png",
-      "sha256": "0182484d17691b4b9a37cfe5dba47bd1eab3417e975e1651ebec11ca74c60dd4",
-      "size": 604,
-      "symbol": "mh_screen_map_0"
-    },
-    {
-      "declaration": "fxdata/screens/Sprites.txt",
-      "path": "images/screens/mh_screen_map_1_128x64.png",
-      "sha256": "0d07b438bc0d09f787201944d1681be8e612f0e533681c7d60c10dd4ce735ef0",
-      "size": 626,
-      "symbol": "mh_screen_map_1"
-    },
-    {
-      "declaration": "fxdata/screens/Sprites.txt",
-      "path": "images/screens/mh_screen_map_2_128x64.png",
-      "sha256": "5f7faa3c9b5f5ed2c809dbc9e79ec13c987b9382ec7c57cb5235e742cf1742c4",
-      "size": 625,
-      "symbol": "mh_screen_map_2"
-    },
-    {
-      "declaration": "fxdata/screens/Sprites.txt",
-      "path": "images/screens/mh_screen_map_3_128x64.png",
-      "sha256": "87a0616c2493325d3f02b9969f98d144d0d6d9aedfa97dffa482b8e5ed0020e3",
-      "size": 618,
-      "symbol": "mh_screen_map_3"
-    },
-    {
-      "declaration": "fxdata/screens/Sprites.txt",
-      "path": "images/screens/mh_screen_map_4_128x64.png",
-      "sha256": "debb1fdf8850c0fa7e6817d825fc606ba0df102d12278eb0e59b42b50f8ea9be",
-      "size": 621,
-      "symbol": "mh_screen_map_4"
     },
     {
       "declaration": "fxdata/screens/Sprites.txt",
@@ -1425,28 +1390,28 @@
     },
     {
       "path": "data/quests/crush_heavy.json",
-      "sha256": "a7fbd07c1800263bf3c8652c15c54e2a0fdcb3fc74b3d56d080ba7d791f87fa8",
-      "size": 238
+      "sha256": "460a536d24ce9cb4497e9377e45da1e0dc2cebf736c217fc610d2d21f304cdaf",
+      "size": 215
     },
     {
       "path": "data/quests/gather_ore.json",
-      "sha256": "7711a4249c7bee9d3aae711a37cd2146a5883e22b8c8f81eb5f1819e4e26db06",
-      "size": 232
+      "sha256": "4715d89bf0fc8b6c5e4180a11f7d87b20ef898511b94fbddcd825426a3d96d5f",
+      "size": 208
     },
     {
       "path": "data/quests/slay_lunge.json",
-      "sha256": "69624badb9e372a322b62c5b0f6b109de81282a17636cf18ac65869754fa56bd",
-      "size": 197
+      "sha256": "1600592abb3d7972e8f1dfd2a894fa4032e0500d02321eb7a317f4d48c26c675",
+      "size": 175
     },
     {
       "path": "data/quests/slay_sweep.json",
-      "sha256": "1400fd71f6297704e3ecfcd3c2e2544f4d23254db5eff77ecba62c1f6639ff09",
-      "size": 236
+      "sha256": "cfa722ad7b69f54313a28a5f97f172527e834b46c7efe2ee99391a02018422b1",
+      "size": 214
     },
     {
       "path": "data/quests/train_pole.json",
-      "sha256": "209793fd8539cbc8dcb0944e37e6308a6f4d1928bf631cf2f94c67f1be9605c7",
-      "size": 202
+      "sha256": "3c5f32e3c325cefcef59e342dbf61c8f5892cb7dfaef73b31e3251ba6609c52c",
+      "size": 180
     },
     {
       "path": "data/screens/armor_forge.json",
@@ -1470,13 +1435,8 @@
     },
     {
       "path": "data/screens/hub.json",
-      "sha256": "180ad331308b8b14677d1d23576f409aea7e4458e8c5b8f531d44d27a65b9b60",
-      "size": 447
-    },
-    {
-      "path": "data/screens/map.json",
-      "sha256": "770561517fb43ad354bc6d9e2270113818b0fa8a184689a242b7f30ca91c0598",
-      "size": 63
+      "sha256": "ef034eacc9596a26af350469be88cfcff2643956784f28ad5aa0de1b54063d58",
+      "size": 355
     },
     {
       "path": "data/screens/quests.json",
@@ -1728,8 +1688,8 @@
     },
     {
       "path": "fxdata/screens/Sprites.txt",
-      "sha256": "0e311a049436f6cf6980c506a0325a121ceebc1b4bc5c99de20568bd09f30b9e",
-      "size": 185610,
+      "sha256": "5d11f5ca1c681027a37b3c4934194218450a39677639590d3cae4a0a4fdaae7c",
+      "size": 129404,
       "symbols": [
         "mh_screen_hub_0",
         "mh_screen_quests_0",
@@ -1742,12 +1702,7 @@
         "mh_screen_craft_2",
         "mh_screen_craft_3",
         "mh_screen_armor_forge_0",
-        "mh_screen_upgrade_0",
-        "mh_screen_map_0",
-        "mh_screen_map_1",
-        "mh_screen_map_2",
-        "mh_screen_map_3",
-        "mh_screen_map_4"
+        "mh_screen_upgrade_0"
       ]
     },
     {
@@ -1758,7 +1713,7 @@
     },
     {
       "path": "fxdata/tables/cards.bin",
-      "sha256": "619fd394638364bd908a5c220b3f1dcfad6825cfdc08a26043e0aacdb31a1bd4",
+      "sha256": "87a57ce8fa8ad32625155704b53e86505169fb22dee846b98dba174c42a66ed9",
       "size": 1031,
       "symbol": "mhCards"
     },
@@ -1770,7 +1725,7 @@
     },
     {
       "path": "fxdata/tables/equip.bin",
-      "sha256": "0c67354f15bbb46d39ce863c7ec4443527b36677a33c1055d709b6e14b06afbd",
+      "sha256": "2ef667ceaf498cb5bcd8c7841c272b8eeb53d62c4d9199c37d6d7192e0e75891",
       "size": 1053,
       "symbol": "mhEquip"
     },
@@ -1806,8 +1761,8 @@
     },
     {
       "path": "fxdata/tables/screens.bin",
-      "sha256": "9d76338fc69e7f422f41850b563201d157a28b7309f08fb5007115764fd10308",
-      "size": 1516,
+      "sha256": "2820752d0a7fe65d6e6576adaddb3c7807e5efbf8694a23865048264b404c287",
+      "size": 1480,
       "symbol": "mhScreens"
     },
     {
@@ -1908,18 +1863,18 @@
   "outputs": [
     {
       "path": "fxdata/fxdata-data.bin",
-      "sha256": "4216bd5c4b95fc99dbe0527df2e53c76f5a2225e6c7a27496b25c0e49039d40c",
-      "size": 3004552
+      "sha256": "826b1f44de56859f3c987c8ed65ffd0f3c33c574bffe22e95bb9596c6dc859ce",
+      "size": 2989156
     },
     {
       "path": "fxdata/fxdata.bin",
-      "sha256": "704d7472577e6b56572df19cdf39418350358efcf85be18d9bcd5fe11fdb99e4",
-      "size": 3004672
+      "sha256": "c101afa74359d4a6c6d5a8bfc76eb397d882a9796037a6303798b8fdcfcb04be",
+      "size": 2989312
     },
     {
       "path": "fxdata/fxdata.h",
-      "sha256": "c7ee5be5bfeb7482eb652e21f1c352cb46a6c20608ede8f01a20bdbdff481bb9",
-      "size": 10016
+      "sha256": "5049b9ac01bc8faa31801ec22cb9817ca1c0fe2f324043de74e0842792b336a8",
+      "size": 9781
     },
     {
       "path": "fxdata/tables/armor.bin",
@@ -1928,7 +1883,7 @@
     },
     {
       "path": "fxdata/tables/cards.bin",
-      "sha256": "619fd394638364bd908a5c220b3f1dcfad6825cfdc08a26043e0aacdb31a1bd4",
+      "sha256": "87a57ce8fa8ad32625155704b53e86505169fb22dee846b98dba174c42a66ed9",
       "size": 1031
     },
     {
@@ -1938,7 +1893,7 @@
     },
     {
       "path": "fxdata/tables/equip.bin",
-      "sha256": "0c67354f15bbb46d39ce863c7ec4443527b36677a33c1055d709b6e14b06afbd",
+      "sha256": "2ef667ceaf498cb5bcd8c7841c272b8eeb53d62c4d9199c37d6d7192e0e75891",
       "size": 1053
     },
     {
@@ -1953,8 +1908,8 @@
     },
     {
       "path": "fxdata/tables/screens.bin",
-      "sha256": "9d76338fc69e7f422f41850b563201d157a28b7309f08fb5007115764fd10308",
-      "size": 1516
+      "sha256": "2820752d0a7fe65d6e6576adaddb3c7807e5efbf8694a23865048264b404c287",
+      "size": 1480
     },
     {
       "path": "fxdata/tables/smith.bin",
@@ -1963,8 +1918,8 @@
     },
     {
       "path": "src/fxdata.h",
-      "sha256": "c7ee5be5bfeb7482eb652e21f1c352cb46a6c20608ede8f01a20bdbdff481bb9",
-      "size": 10016
+      "sha256": "5049b9ac01bc8faa31801ec22cb9817ca1c0fe2f324043de74e0842792b336a8",
+      "size": 9781
     },
     {
       "path": "src/generated/armor_data.hpp",
@@ -1988,7 +1943,7 @@
     },
     {
       "path": "src/generated/art_sheets.hpp",
-      "sha256": "cedf6bab2b45bf6aca6cf2a9b05f462e6ca7024bc393954aa4f4f11886a433b3",
+      "sha256": "4e3f9bd81983060a65bf11c73e0dd05d3431ea49111dde15661a870b97b4449e",
       "size": 4044
     },
     {
@@ -2013,7 +1968,7 @@
     },
     {
       "path": "src/generated/equip_meta.hpp",
-      "sha256": "d76bf6a943ae11f937ddbdbd6d0cf9e70ffedc3a6acaf01db5eb5e9c1bd01922",
+      "sha256": "b1eeef26b6d9c5b564a905f1d13a46e2f5ec9529b67bbab943e17b507f3119e5",
       "size": 29031
     },
     {
@@ -2048,13 +2003,13 @@
     },
     {
       "path": "src/generated/quest_meta.hpp",
-      "sha256": "0a3f2af6eae185d9744130e2c96ad83eb6432012c424e90ad27ddab16b342bcd",
-      "size": 2752
+      "sha256": "6008e6855bc8bebefc556ab654cf231a0bcc2bc9fcbb47a1266cdb66e8ab97bf",
+      "size": 2064
     },
     {
       "path": "src/generated/screen_meta.hpp",
-      "sha256": "5b0cb90d66c1eab10b6876b2592684b99fe941490d19ea288995d579043f95dd",
-      "size": 5130
+      "sha256": "e8d9cf4ee69923affde05f26616c55fa618434ecb343ffe064e48815b91df920",
+      "size": 4834
     },
     {
       "path": "src/generated/smith_meta.hpp",
@@ -2068,7 +2023,7 @@
     },
     {
       "path": "src/generated/zone_meta.hpp",
-      "sha256": "331632914e0b5665c2ef477ea430c4e4fdc14574a233108030e074818ee99efb",
+      "sha256": "6a42ab351cbf85ff60ea114a146a77dc84da8a0c7729ea111aaa76d820b0aa7a",
       "size": 11859
     }
   ],

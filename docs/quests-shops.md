@@ -9,7 +9,7 @@ cost ~0 flash (cart data) once the framework lands.
 ## Layers
 
 ```
-hub menu (title -> QUESTS / MAP / FORGE / GEAR, header zenny; no HUNT row)
+hub menu (title -> QUESTS / FORGE / GEAR, header zenny; no HUNT/MAP rows)
   screen framework: one generic list renderer + input + row actions
     cart data: screen tables (title, rows: label, cost, flags, condition, action)
     state:    save block v5 in EEPROM (zenny, quest flags, owned/crafted bitsets)
@@ -143,8 +143,11 @@ QuestDef (v2): id, goalKind u8 (0 kill / 1 gather), target u8
   leaves the hunt back to the hub. The loadout is the save's equipped forge node
   (v5) and the beast comes from the active quest's `goalKind`/`target`
   (`huntStart`, src/app_setup.hpp).
-- Hub rows (monhun-ardu-087): QUESTS / MAP / FORGE / GEAR (cursor boots on
-  QUESTS). There is no HUNT row; the quest card is the only hunt entry.
+- Hub rows (monhun-ardu-087 dropped HUNT, monhun-ardu-6k2 cut MAP): QUESTS /
+  FORGE / GEAR (cursor boots on QUESTS). There is no HUNT row; the quest card is
+  the only hunt entry. The MAP room-graph screen and its quest room-hint meta
+  (`QUEST_ROOM_HINT`) are gone; the room graph itself (data/map.json -> zone
+  runtime) stays.
 - Gear screen (hml.3, armor rows gs.1; ui.3.1 craft; ui.4 weapons): the hub's
   GEAR row (`ACTION_OPEN_GEAR`) opens the `data/screens/gear.json` list (the
   generated weapon-tree rows + the five armor pieces + the skill rows + LEAVE).

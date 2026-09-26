@@ -2,7 +2,6 @@
   "id": 0,
   "goalKind": "kill",
   "target": "lunge",
-  "roomHint": "area",
   "need": 3,
   "desc": [
     "HUNT THE LUNGE BEAST",

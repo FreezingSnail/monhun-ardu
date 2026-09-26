@@ -15,7 +15,7 @@
 // the hub HUNT row -- the QUESTS board's quest card now launches the hunt):
 //   boot --> hub --QUESTS--> board --A on a take row--> quest card
 //   card A (take) --> camp --door--> area --door--> camp
-//   hub --MAP/QUESTS/FORGE/GEAR--> screen --B/LEAVE--> hub
+//   hub --QUESTS/FORGE/GEAR--> screen --B/LEAVE--> hub
 //   hub --B--> nothing (root; appScreenBack(HUB) == APP_NAV_NONE)
 //   camp hold-B --> hub                              (appHubRequest)
 //   hunt end + A --> hub                             (appHuntReturn; turn-ins)
@@ -43,7 +43,6 @@ enum AppNav : int8_t {
     APP_NAV_CRAFT,         // hbk.10: FORGE submenu WEAPON CRAFT row
     APP_NAV_UPGRADE,       // hbk.10: FORGE submenu WEAPON UPGRADE row (screen in hbk.11)
     APP_NAV_ARMOR_FORGE,   // hbk.10: FORGE submenu ARMOR FORGE row
-    APP_NAV_MAP,           // imx: hub MAP row (room graph screen)
     APP_NAV_HUNT           // monhun-ardu-087: the quest card take; the caller starts the hunt (huntStart)
 };
 
@@ -58,12 +57,9 @@ inline AppNav appScreenBack(uint8_t screen) {
 // the row's save action (screenApplyAction / the detail card).
 inline AppNav appScreenAccept(uint8_t screen, const ScreenRow &row) {
     if (screen == screens::SCREEN_HUB) {
-        // imx: the MAP row is resolved before the switch so the hub action
-        // switch (and its jump table) keeps its pre-MAP size. monhun-ardu-087
-        // dropped the HUNT row, so ACTION_HUNT no longer routes (a stray row
-        // falls through to APP_NAV_NONE).
-        if (row.action == screens::ACTION_OPEN_MAP)
-            return APP_NAV_MAP;
+        // monhun-ardu-087 dropped the HUNT row, and monhun-ardu-6k2 cut the MAP
+        // row: ACTION_HUNT/ACTION_OPEN_MAP no longer route (a stray row falls
+        // through to APP_NAV_NONE).
         switch (row.action) {
         case screens::ACTION_OPEN_QUESTS:
             return APP_NAV_QUESTS;
@@ -156,18 +152,18 @@ inline AppNav appHubRequest(Game &g) {
 // cart-free and host-testable; the device build's screenEnter() reads the same
 // counts off the cart.
 //
-// The screen destinations are one table (monhun-ardu-087 trim): the eight
-// APP_NAV_HUB..APP_NAV_MAP values are contiguous, so nav - 1 indexes the
-// generated (screen, rows) pair instead of a per-case switch body. MAP used to
-// be resolved before the switch to keep the old jump table small; the table is
-// smaller than either.
+// The screen destinations are one table (monhun-ardu-087 trim): the seven
+// APP_NAV_HUB..APP_NAV_ARMOR_FORGE values are contiguous, so nav - 1 indexes the
+// generated (screen, rows) pair instead of a per-case switch body. The table is
+// smaller than a switch; monhun-ardu-6k2 dropped the MAP destination with the
+// screen.
 struct NavDest {
     uint8_t screen;
     uint8_t rows;
 };
 // PROGMEM: a plain const array lands in SRAM on AVR (avr-gcc .rodata), and the
 // device suites run at the stack ceiling (this is the 087 table-trim RAM note).
-static const NavDest NAV_DESTS[8] MH_PROGMEM = {
+static const NavDest NAV_DESTS[7] MH_PROGMEM = {
     {screens::SCREEN_HUB, screens::SCREEN_HUB_ROWS},
     {screens::SCREEN_QUESTS, screens::SCREEN_QUESTS_ROWS},
     {screens::SCREEN_GEAR, screens::SCREEN_GEAR_ROWS},
@@ -175,9 +171,8 @@ static const NavDest NAV_DESTS[8] MH_PROGMEM = {
     {screens::SCREEN_CRAFT, screens::SCREEN_CRAFT_ROWS},
     {screens::SCREEN_UPGRADE, screens::SCREEN_UPGRADE_ROWS},
     {screens::SCREEN_ARMOR_FORGE, screens::SCREEN_ARMOR_FORGE_ROWS},
-    {screens::SCREEN_MAP, screens::SCREEN_MAP_ROWS},
 };
-static_assert(APP_NAV_HUB == 1 && APP_NAV_MAP == 8, "NAV_DESTS covers APP_NAV_HUB..APP_NAV_MAP in order");
+static_assert(APP_NAV_HUB == 1 && APP_NAV_ARMOR_FORGE == 7, "NAV_DESTS covers APP_NAV_HUB..APP_NAV_ARMOR_FORGE in order");
 
 MH_NOINLINE inline bool appNavApply(AppNav nav, ScreenState &screen, const SaveBlock &save, Game &game, const Input &in) {
     (void)save;

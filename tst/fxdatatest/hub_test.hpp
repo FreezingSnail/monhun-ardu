@@ -140,32 +140,6 @@ inline void test_hub(FxTest &test) {
     test.expectEq(static_cast<uint32_t>(screen.cursor), 0, F("hub cursor boots on QUESTS"));
     test.expectEq(static_cast<uint32_t>(g.over), OVER_NONE, F("no hunt started yet"));
 
-    // ---------------------------- hub MAP row + quest marker (imx)
-    // The hub MAP row (row 1) routes to SCREEN_MAP; the quest roomHint table
-    // resolves the marker room. Room indices are the sorted map.json order
-    // (area 0, camp 1, cavern 2, ridge 3); no active quest -> no marker.
-    ScreenRow mapRow;
-    screenReadRow(screenRowOffsetAt(screens::SCREEN_HUB, 1), mapRow);
-    test.expectEq(static_cast<uint32_t>(mapRow.action), screens::ACTION_OPEN_MAP, F("hub MAP row action"));
-    test.expectEq(static_cast<uint32_t>(appScreenAccept(screens::SCREEN_HUB, mapRow)), APP_NAV_MAP, F("MAP row routes to the map"));
-    appNavApply(APP_NAV_MAP, screen, save, g, H_A);
-    test.expectEq(static_cast<uint32_t>(screen.screen), screens::SCREEN_MAP, F("MAP screen open"));
-    test.expectEq(static_cast<uint32_t>(screen.rowCount), screens::SCREEN_MAP_ROWS, F("MAP row count"));
-    test.expectEq(static_cast<uint32_t>(appScreenBack(screens::SCREEN_MAP)), APP_NAV_HUB, F("MAP B backs to the hub"));
-    appNavApply(APP_NAV_HUB, screen, save, g, H_A);
-    save.activeQuest = SAVE_QUEST_NONE;
-    test.expectEq(static_cast<uint32_t>(screenMapQuestRoom(save)), quests::QUEST_ROOM_HINT_NONE, F("no quest -> no marker"));
-    save.activeQuest = quests::QUEST_GATHER_ORE;
-    test.expectEq(static_cast<uint32_t>(screenMapQuestRoom(save)), zone::ROOM_CAVERN, F("gather ore marks the cavern"));
-    save.activeQuest = quests::QUEST_SLAY_LUNGE;
-    test.expectEq(static_cast<uint32_t>(screenMapQuestRoom(save)), zone::ROOM_AREA, F("slay lunge marks the area"));
-    save.activeQuest = quests::QUEST_CRUSH_HEAVY;
-    test.expectEq(static_cast<uint32_t>(screenMapQuestRoom(save)), zone::ROOM_RIDGE, F("crush heavy marks the ridge"));
-    save.activeQuest = quests::QUEST_COUNT;   // out-of-range stays inert
-    test.expectEq(static_cast<uint32_t>(screenMapQuestRoom(save)), quests::QUEST_ROOM_HINT_NONE, F("bad quest index inert"));
-    save.activeQuest = SAVE_QUEST_NONE;
-    test.expectEq(static_cast<uint32_t>(screen.screen), screens::SCREEN_HUB, F("back on the hub after MAP"));
-
     // ------------------- hub QUESTS -> board -> quest card launches (087)
     // The hub boots on QUESTS (row 0); A opens the board, A on the take row
     // opens the quest card from the cart, and the card A takes the contract and
@@ -295,15 +269,14 @@ inline void test_hub(FxTest &test) {
     test.expectEq(static_cast<uint32_t>(g.monsterKind), MON_LUNGE, F("fresh quest beast"));
 
     // ---------------------- hub GEAR: equip FLAIL, next hunt uses it (hbk.12)
-    // Return to the hub, open GEAR (row 3), and press A on the WEAPON slot row:
+    // Return to the hub, open GEAR (row 2), and press A on the WEAPON slot row:
     // it rotates to the next owned candidate (the flail root) and equips it in
     // place; the next card launch starts the hunt with the equipped flail.
     appNavApply(APP_NAV_HUB, screen, save, g, H_A);
     test.expectEq(static_cast<uint32_t>(screen.screen), screens::SCREEN_HUB, F("hub again"));
     tap(screen, H_DOWN);
     tap(screen, H_DOWN);
-    tap(screen, H_DOWN);
-    test.expectEq(static_cast<uint32_t>(screen.cursor), 3, F("cursor on GEAR"));
+    test.expectEq(static_cast<uint32_t>(screen.cursor), 2, F("cursor on GEAR"));
     appNavApply(pressA(screen, save), screen, save, g, H_A);
     test.expectEq(static_cast<uint32_t>(screen.screen), screens::SCREEN_GEAR, F("gear screen"));
     test.expectEq(static_cast<uint32_t>(screen.rowCount), screens::SCREEN_GEAR_ROWS, F("gear row count"));

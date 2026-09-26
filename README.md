@@ -28,13 +28,13 @@ flashing. Controls are below; no USB serial device comes up while the game runs
 |---|---|
 | Vertical-slice sim | Ported + parity-verified (20 scenes / 1269 ticks / 660 device asserts) |
 | Device render + HUD | Working (block/FX-sprite art; HUD text/FX glyphs + bars — `7y3` clamp fixed). Audio (cue tones) is compiled out of shipping since `hbk.15` (`-DMH_AUDIO=0`, owner call: sound is feel, not loop); the module stays behind the flag and the device suites still exercise it |
-| Host unit tests | `make test` — **6989 passed / 0 failed** |
-| Device tests (Ardens) | 19 suites / 2152 asserts — boot 4, assets 264, audio 9, hud 29, data 356, combat 254, hub 97, monster_art 182, player_art 156, quests 112, screens 228, screens_smithy 102, smith 51, cards 85, zones 77, items 35, forge 75, wire 31, perf 5 — all PASS (the frozen `test_parity` diagnostics image is not a gate; the opening-menu `test_menu`/`test_menu_art` suites and its `mh_menu_*` sheets were deleted with the menu, `isp.1`/`hml.2`; the `test_tell` marker suite was deleted with the markers, `nup`) |
-| Demo content | 4-room map (`camp` ↔ `area` ↔ `cavern` / `ridge`), start-available `gather_ore` quest + kill quests, MAP screen (baked room graph + quest-marker page), four beast-variant branches per weapon class (sword / flail / gunshield), per-room beast homes, room-art pass (`kcj`), beast presence + door-transition fixes (`ve2`) |
+| Host unit tests | `make test` — **6984 passed / 0 failed** |
+| Device tests (Ardens) | 19 suites / 2127 asserts — boot 4, assets 264, audio 9, hud 29, data 356, combat 254, hub 86, monster_art 182, player_art 156, quests 112, screens 214, screens_smithy 102, smith 51, cards 85, zones 77, items 35, forge 75, wire 31, perf 5 — all PASS (the frozen `test_parity` diagnostics image is not a gate; the opening-menu `test_menu`/`test_menu_art` suites and its `mh_menu_*` sheets were deleted with the menu, `isp.1`/`hml.2`; the `test_tell` marker suite was deleted with the markers, `nup`) |
+| Demo content | 4-room map (`camp` ↔ `area` ↔ `cavern` / `ridge`), start-available `gather_ore` quest + kill quests, four beast-variant branches per weapon class (sword / flail / gunshield), per-room beast homes, room-art pass (`kcj`), beast presence + door-transition fixes (`ve2`) |
 | Perf gate (`monhun-ardu-8v7`, re-verified through `hbk.3`) | **PASS.** plane 157 Hz (≥135), logic 52 Hz (≥45), render max 3412 µs (≤7407), tick 172 µs, RAM free 548 B (bench) |
 | Perf tooling | Headless Ardens profiler dump (`profiledump=<path>`, local patch) + on-device cycle bench (`test_perf`) |
-| Shipping build | flash **29672 / 29696 B** (24 free), RAM **1920 / 2560 B** (640 free); USB-free + sound off (`-DMH_NO_USB -DMH_AUDIO=0`), see below. Reserve is below the ~150 B guideline: the trim wave `dap` is queued with measured leads |
-| FX data image | **3,004,672 B** of 16 MB (2.87 MB) used — equip sheets 2.44 MB, 94 card pages 282 KB, block sheets 104 KB, 17 screen pages 51 KB, 4 room images 45 KB, fonts 6 KB, tables 7 KB |
+| Shipping build | flash **29634 / 29696 B** (62 free), RAM **1920 / 2560 B** (640 free); USB-free + sound off (`-DMH_NO_USB -DMH_AUDIO=0`), see below. Reserve is below the ~150 B guideline: the trim wave `dap` is queued with measured leads |
+| FX data image | **2,989,312 B** of 16 MB (2.85 MB) used — equip sheets 2.44 MB, 94 card pages 282 KB, block sheets 104 KB, 12 screen pages 36 KB, 4 room images 45 KB, fonts 6 KB, tables 7 KB |
 
 Speculative gameplay status: combat (sword / flail / gunshield), monster FSM,
 camera/world clamps, HUD, audio cues all in place. The prg.8 trim removed
@@ -54,9 +54,10 @@ defaults it to 1 (monhun-ardu-ryh.1, +118 B) so a moved hunter can never shove
 the beast. The **demo wave** then landed the content: four beast-variant
 branches per weapon class (`cdd0250`…`2bb7742`, the equipped forge node selects
 the drawn sheet), the 4-room demo map + start-available ore gather quest
-(`71539ab`), the ridge arena + per-room beast homes (`360c0ce`), the MAP screen
-(baked room graph + a quest-marker page per room, `da95519`), the room-art pass
-(`526f11d`) and the beast-presence / door-transition fixes (`ve2`). Remaining:
+(`71539ab`), the ridge arena + per-room beast homes (`360c0ce`), the room-art
+pass (`526f11d`) and the beast-presence / door-transition fixes (`ve2`);
+monhun-ardu-6k2 then cut the cosmetic MAP screen (hub MAP row + `SCREEN_MAP` +
+its baked pages + the dead quest room-hint meta). Remaining:
 trim wave `dap` (flash reserve), stale-cache guards `p71`/`cqw`, real art pass
 (`vx2`, human), feel tuning (`1to`, human), EEPROM save (`qyb`, deferred).
 
@@ -333,11 +334,8 @@ After a win or loss, A returns to the hub so the finished quest can be turned in
 the next launch runs `newGame` again, so projectiles/effects/quest counters start
 clean. While a screen is up the sim and audio are not stepped.
 
-The hub shows QUESTS / MAP / FORGE / GEAR (cursor boots on QUESTS; the HUNT row
-is gone, monhun-ardu-087). The MAP row opens the room
-graph (`imx`): a baked 128x64 panel (camp west, area centre, cavern north,
-ridge east) with the v1 cursor baked at camp and a marker page picked from the
-active quest's room hint (`QUEST_ROOM_HINT`); LEFT/RIGHT are no-ops for now.
+The hub shows QUESTS / FORGE / GEAR (cursor boots on QUESTS; the HUNT row is
+gone, monhun-ardu-087, and monhun-ardu-6k2 cut the cosmetic MAP row + screen).
 Every list screen carries the live
 `save.zenny` balance right-aligned on the title line (`$` + digits, ui.5); the
 old HUB ZENNY row and its `ROW_F_ZENNY` dynamic-value token are retired. The
@@ -463,7 +461,7 @@ bar) instead of showing a frozen beast at stale coordinates.
 ## Commands
 
 ```sh
-make test               # host unit tests (6973 asserts)
+make test               # host unit tests (6984 asserts)
 make fxtest-headless    # Ardens device tests (19 suites; FXTEST_ONLY=test_combat for one)
 make size               # whole-image flash/RAM report + compile-time data facts
 make size-line          # just the flash/RAM line (script/checkpoint friendly)
@@ -529,7 +527,7 @@ Notes:
    (`80bbfb0`), and `blk()`'s `fillRect`/`drawFastVLine` path was replaced with
    direct masked framebuffer writes (`816767d`) — render max 13312 → 3984 µs,
    plane 82 → 156 Hz, logic 27 → 52 Hz, profiler `mh::blk` share 29% → 3.6%.
-   Any new feature must fit flash (24 B free today; the `dap` trim wave is
+   Any new feature must fit flash (62 B free today; the `dap` trim wave is
    queued to reclaim the ~150 B reserve) and keep the perf gates green.
 2. **Flash headroom** (history): the USB-stack removal (`42n.8`: custom
    USB-free `main()`, -2666 B flash / -140 B RAM, see the device-layer note)
@@ -552,7 +550,10 @@ Notes:
    (`526f11d`); the presence/transition fixes added ~88 B (`ve2`).
    Shipping then measured **29672/29696 B (24 free)**; the quest-card launch
    (`monhun-ardu-087`, hub HUNT row removed, `A GO` resume) landed at
-   **29674/29696 B (22 free)**, VM RAM 1920 B. The 119 B of hot LUTs (`mh::SIN65`
+   **29674/29696 B (22 free)**; the MAP cut (`monhun-ardu-6k2`, hub MAP row +
+   `SCREEN_MAP` + its 5 baked panel pages + the dead quest room-hint meta
+   removed) reclaimed 40 B, landing at **29634/29696 B (62 free)**, VM RAM
+   1920 B. The 119 B of hot LUTs (`mh::SIN65`
    65 B, `fp::DIR8` 32 B, `mh::MH_MASK_TOP/BOT` 16 B, `mh::RING6` 6 B) stay in
    MCU flash by decision (`monhun-ardu-42n.5`): FX per-access reads measured
    ~150 cycles (~9 µs, 20-35x an LPM) and a SIN65 RAM cache would breach the
@@ -562,8 +563,8 @@ Notes:
    flash, prefer FX data; debug-only code (`DEBUG_HURTBOXES`) must stay behind
    compile-time flags. Measured trim leads live in `monhun-ardu-dap`
    (weaponSheet nested switch 114 B — table variants measured *worse*; the
-   room-name banner 46 B, whose `fxroom` sheet is authored and waiting; the MAP
-   page pick ~30 B; presence caching ~16 B).
+   room-name banner 46 B, whose `fxroom` sheet is authored and waiting;
+   presence caching ~16 B).
 3. **RAM history**: constant tables originally sat in AVR `.rodata` (RAM) at
    2494 B used; moved to PROGMEM (MCU flash) via `progmem.hpp` → 1888 B. Audio
    added timers/state → 1941 B; the opening menu's 5 B `MenuState` → 1946 B; its
@@ -665,7 +666,7 @@ and the gates `b3t`/`kpi`/`8v7`, plus the demo waves (weapon variants,
 transition fixes). Remaining:
 
 - `dap` — trim wave: reclaim ~150 B (weaponSheet switch 114 B, room-name
-  banner 46 B, MAP pick ~30 B, presence cache ~16 B)
+  banner 46 B, presence cache ~16 B)
 - `p71` — `make size` can report a stale ELF (arduino-cli cache)
 - `cqw` — gen pipeline: one-pass convergence assert (stale addresses)
 - `vx2` — real 4-shade art pass (human)
