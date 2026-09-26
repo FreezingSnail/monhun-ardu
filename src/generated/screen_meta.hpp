@@ -13,19 +13,19 @@ namespace screens {
 constexpr uint16_t MAGIC = 0x5343;
 constexpr uint8_t VERSION = 1;
 constexpr uint8_t FLAGS = 0x00;
-constexpr uint16_t SIZE = 1214;
+constexpr uint16_t SIZE = 1470;
 constexpr uint8_t HEADER_SIZE = 8;
 constexpr uint8_t DEF_OFF_OFF = 8;
 constexpr uint16_t ROWS_OFF = 92;
 constexpr uint8_t SCREEN_COUNT = 7;
-constexpr uint16_t ROW_COUNT = 53;
+constexpr uint16_t ROW_COUNT = 61;
 
 // Prebaked screen pages (hbk.2/hbk.9): one fixed SCREEN_PAGE_STRIDE-byte
 // slot per screen, in index order: a u8 page count then SCREEN_PAGE_MAX
 // u24 absolute FX addresses of the mh_screen_<name>_<page> layer arrays.
 // pageCount == 0 slots render empty; src/screens.hpp indexes a screen
 // with PAGE_TABLE_OFF + screen * SCREEN_PAGE_STRIDE.
-constexpr uint16_t PAGE_TABLE_OFF = 887;
+constexpr uint16_t PAGE_TABLE_OFF = 1023;
 constexpr uint8_t SCREEN_PAGE_STRIDE = 13;
 constexpr uint8_t SCREEN_PAGE_MAX = 4;
 
@@ -68,51 +68,51 @@ constexpr uint8_t SCREEN_HUB_ROWS = 4;
 constexpr uint8_t SCREEN_HUB_TITLE_LEN = 3;
 constexpr uint16_t SCREEN_HUB_FIRST_ROW = 92;
 constexpr uint8_t SCREEN_HUB_PAGES = 1;
-constexpr uint16_t SCREEN_HUB_PAGE_TABLE = 887;
+constexpr uint16_t SCREEN_HUB_PAGE_TABLE = 1023;
 constexpr uint8_t SCREEN_QUESTS = 1;
 constexpr uint16_t SCREEN_QUESTS_OFF = 30;
 constexpr uint8_t SCREEN_QUESTS_ROWS = 10;
 constexpr uint8_t SCREEN_QUESTS_TITLE_LEN = 6;
 constexpr uint16_t SCREEN_QUESTS_FIRST_ROW = 139;
 constexpr uint8_t SCREEN_QUESTS_PAGES = 2;
-constexpr uint16_t SCREEN_QUESTS_PAGE_TABLE = 900;
+constexpr uint16_t SCREEN_QUESTS_PAGE_TABLE = 1036;
 constexpr uint8_t SCREEN_GEAR = 2;
 constexpr uint16_t SCREEN_GEAR_OFF = 41;
 constexpr uint8_t SCREEN_GEAR_ROWS = 11;
 constexpr uint8_t SCREEN_GEAR_TITLE_LEN = 4;
 constexpr uint16_t SCREEN_GEAR_FIRST_ROW = 324;
 constexpr uint8_t SCREEN_GEAR_PAGES = 2;
-constexpr uint16_t SCREEN_GEAR_PAGE_TABLE = 913;
+constexpr uint16_t SCREEN_GEAR_PAGE_TABLE = 1049;
 // hbk.12 equipment-box candidate table: u8 slotStart[4] then
 // 4-byte {u8 id, u24 labelOff} entries then the label records.
-constexpr uint16_t SCREEN_GEAR_SLOT_TABLE = 978;
+constexpr uint16_t SCREEN_GEAR_SLOT_TABLE = 1114;
 constexpr uint8_t SCREEN_FORGE = 3;
 constexpr uint16_t SCREEN_FORGE_OFF = 50;
 constexpr uint8_t SCREEN_FORGE_ROWS = 4;
 constexpr uint8_t SCREEN_FORGE_TITLE_LEN = 5;
 constexpr uint16_t SCREEN_FORGE_FIRST_ROW = 480;
 constexpr uint8_t SCREEN_FORGE_PAGES = 1;
-constexpr uint16_t SCREEN_FORGE_PAGE_TABLE = 926;
+constexpr uint16_t SCREEN_FORGE_PAGE_TABLE = 1062;
 constexpr uint8_t SCREEN_CRAFT = 4;
 constexpr uint16_t SCREEN_CRAFT_OFF = 60;
-constexpr uint8_t SCREEN_CRAFT_ROWS = 14;
+constexpr uint8_t SCREEN_CRAFT_ROWS = 22;
 constexpr uint8_t SCREEN_CRAFT_TITLE_LEN = 5;
 constexpr uint16_t SCREEN_CRAFT_FIRST_ROW = 550;
-constexpr uint8_t SCREEN_CRAFT_PAGES = 3;
-constexpr uint16_t SCREEN_CRAFT_PAGE_TABLE = 939;
+constexpr uint8_t SCREEN_CRAFT_PAGES = 4;
+constexpr uint16_t SCREEN_CRAFT_PAGE_TABLE = 1075;
 constexpr uint8_t SCREEN_ARMOR_FORGE = 5;
 constexpr uint16_t SCREEN_ARMOR_FORGE_OFF = 70;
 constexpr uint8_t SCREEN_ARMOR_FORGE_ROWS = 6;
 constexpr uint8_t SCREEN_ARMOR_FORGE_TITLE_LEN = 5;
-constexpr uint16_t SCREEN_ARMOR_FORGE_FIRST_ROW = 744;
+constexpr uint16_t SCREEN_ARMOR_FORGE_FIRST_ROW = 880;
 constexpr uint8_t SCREEN_ARMOR_FORGE_PAGES = 1;
-constexpr uint16_t SCREEN_ARMOR_FORGE_PAGE_TABLE = 952;
+constexpr uint16_t SCREEN_ARMOR_FORGE_PAGE_TABLE = 1088;
 constexpr uint8_t SCREEN_UPGRADE = 6;
 constexpr uint16_t SCREEN_UPGRADE_OFF = 80;
 constexpr uint8_t SCREEN_UPGRADE_ROWS = 4;
 constexpr uint8_t SCREEN_UPGRADE_TITLE_LEN = 7;
-constexpr uint16_t SCREEN_UPGRADE_FIRST_ROW = 841;
+constexpr uint16_t SCREEN_UPGRADE_FIRST_ROW = 977;
 constexpr uint8_t SCREEN_UPGRADE_PAGES = 1;
-constexpr uint16_t SCREEN_UPGRADE_PAGE_TABLE = 965;
+constexpr uint16_t SCREEN_UPGRADE_PAGE_TABLE = 1101;
 
 }   // namespace screens

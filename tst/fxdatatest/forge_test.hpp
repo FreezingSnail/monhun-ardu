@@ -67,6 +67,18 @@ inline void test_forge(FxTest &test) {
     test.expectEq(forgeEquippedSheet(sheetSave), 4, F("brace node -> sheet 4"));
     sheetSave.equippedNode = forge::NODE_GUN_BASE;
     test.expectEq(forgeEquippedSheet(sheetSave), 0, F("gun base -> default sheet"));
+    // 2tb: the melee beast variants ride the same table -- sword 5..8, flail
+    // 9..12 -- resolved off the equipped node exactly like the gun kinds.
+    sheetSave.equippedNode = forge::NODE_SWORD_SABER;
+    test.expectEq(forgeEquippedSheet(sheetSave), 5, F("sword saber node -> sheet 5"));
+    sheetSave.equippedNode = forge::NODE_SWORD_FANG;
+    test.expectEq(forgeEquippedSheet(sheetSave), 8, F("sword fang node -> sheet 8"));
+    sheetSave.equippedNode = forge::NODE_FLAIL_SLING;
+    test.expectEq(forgeEquippedSheet(sheetSave), 9, F("flail sling node -> sheet 9"));
+    sheetSave.equippedNode = forge::NODE_FLAIL_SPIKE;
+    test.expectEq(forgeEquippedSheet(sheetSave), 12, F("flail spike node -> sheet 12"));
+    sheetSave.equippedNode = forge::NODE_FLAIL_BASE;
+    test.expectEq(forgeEquippedSheet(sheetSave), 0, F("flail spine -> default sheet"));
     sheetSave.equippedNode = SAVE_NODE_NONE;
     test.expectEq(forgeEquippedSheet(sheetSave), 0, F("unequipped -> default sheet"));
     sheetSave.equippedNode = forge::NODE_COUNT;
@@ -77,11 +89,11 @@ inline void test_forge(FxTest &test) {
     // prefixes); each row carries forge_node + the baked direct cost.
     test.expectEq(screens::SCREEN_FORGE, 3, F("forge submenu index"));
     test.expectEq(screens::SCREEN_CRAFT, 4, F("craft screen index"));
-    test.expectEq(screenRowCount(screens::SCREEN_CRAFT), 14, F("craft row count"));
+    test.expectEq(screenRowCount(screens::SCREEN_CRAFT), 22, F("craft row count"));
     ScreenRow t1, t3, leave;
     screenReadRow(screenRowOffsetAt(screens::SCREEN_CRAFT, 0), t1);
     screenReadRow(screenRowOffsetAt(screens::SCREEN_CRAFT, 2), t3);
-    screenReadRow(screenRowOffsetAt(screens::SCREEN_CRAFT, 13), leave);
+    screenReadRow(screenRowOffsetAt(screens::SCREEN_CRAFT, 21), leave);
     test.expectEq(t1.action, screens::ACTION_FORGE_NODE, F("craft node action"));
     test.expectEq(t1.param, forge::NODE_SWORD_BASE, F("craft root param"));
     test.expectEq(t1.cost, 0, F("craft root cost"));

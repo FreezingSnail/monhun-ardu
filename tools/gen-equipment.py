@@ -1037,6 +1037,216 @@ def flail_cell(row, facing):
     return img
 
 
+# ---------------------------------------------------- beast melee variants
+# Same treatment as the gunshield branches: one melee variant per demo beast.
+# Style keys name the striking part; the pose geometry (hand anchor,
+# hitbox-centred actives, trail arcs, the flail ball radius from the box)
+# stays sword_cell / flail_cell's -- only the blade/head pixels and trim
+# change. sword: saber (chicken) / cleaver (bull) / tailblade (longtail) /
+# fang (ravager). flail: sling (chicken) / shell (bull) / tail (longtail) /
+# spike (ravager).
+SWORD_STYLE_IDS = ("saber", "cleaver", "tailblade", "fang")
+FLAIL_STYLE_IDS = ("sling", "shell", "tail", "spike")
+
+
+def capsule(img, facing, u0, v0, u1, v1, half, face, rim, core=None, teeth=0):
+    """Inverse-mapped tapered capsule between two weapon-space points: fills
+    |perp| <= half (narrowing to 60% at the tip) with face/rim, an optional
+    bright core line, and `teeth` alternating rim notches for a serrated edge.
+    The beast blades use this so a broad cleaver still rasterises solid on the
+    45 deg facings (the same reason fill_weapon exists)."""
+    du, dv = u1 - u0, v1 - v0
+    len2 = du * du + dv * dv
+    if len2 <= 0:
+        return
+
+    def color(u, v):
+        t = ((u - u0) * du + (v - v0) * dv) / len2
+        if t < 0 or t > 1:
+            return None
+        hw = half * (1 - 0.4 * t)
+        if teeth and int(t * teeth * 2) % 2 == 0:
+            hw += 1.0
+        px, py = u0 + du * t, v0 + dv * t
+        d = ((u - px) ** 2 + (v - py) ** 2) ** 0.5
+        if d > hw:
+            return None
+        if core is not None and d < 0.7:
+            return core
+        return face if d <= hw - 1 else rim
+
+    fill_weapon(img, facing, 0, 0, color)
+
+
+def sword_blade(style, img, facing, u0, v0, u1, v1):
+    """Beast blade between the guard and the tip (the style's `blade()`)."""
+    if style == "saber":        # chicken: light curved edge, guard-notch detail
+        mx = u0 + (u1 - u0) * 0.5
+        my = v0 + (v1 - v0) * 0.5 - 1.0
+        capsule(img, facing, u0, v0, mx, my, 1.4, WHITE, DARK)
+        capsule(img, facing, mx, my, u1, v1, 1.1, WHITE, DARK)
+        dot(img, *wpt(facing, u0 + (u1 - u0) * 0.35, v0 + (v1 - v0) * 0.35 - 2.0), DARK, 1)
+    elif style == "cleaver":    # bull: broad shell-backed head
+        capsule(img, facing, u0, v0, u1, v1, 3.4, LIGHT, DARK, core=WHITE)
+    elif style == "tailblade":  # longtail: thin two-segment curve + base rings
+        mx = u0 + (u1 - u0) * 0.5 + 0.5
+        my = v0 + (v1 - v0) * 0.5 - 0.8
+        capsule(img, facing, u0, v0, mx, my, 1.6, WHITE, DARK)
+        capsule(img, facing, mx, my, u1, v1, 1.2, WHITE, DARK)
+        for f in (0.2, 0.4):
+            dot(img, *wpt(facing, u0 + (u1 - u0) * f, v0 + (v1 - v0) * f), LIGHT, 1)
+    else:                       # fang: serrated ravager edge
+        capsule(img, facing, u0, v0, u1, v1, 2.3, LIGHT, DARK, core=WHITE, teeth=4)
+
+
+def sword_variant_cell(style, row, facing):
+    """sword_cell with one beast blade style (rows/geometry identical)."""
+    img = new(32, 32)
+    last_move_row = WEAPON_ROW_MOVE0 + 2 * WEAPON_SLOTS - 1
+    if WEAPON_ROW_MOVE0 <= row <= last_move_row:
+        slot = (row - WEAPON_ROW_MOVE0) // 2
+        record = move_record(0, slot)
+        if record is None or not record["hw"]:
+            return None
+        a_start, a_active = sword_move_art(record, slot)
+        reach, hw = record["reach"], record["hw"]
+        active = (row - WEAPON_ROW_MOVE0) % 2 == 1
+        steps = 4 + min(8, record["active"])
+        if active:
+            pu, pv = -reach, 0
+            half = hw / 2.0
+            wline(img, facing, pu, pv, pu + 2, pv, DARK, 3)          # wrist
+            if abs(a_active - a_start) > 20:
+                warc(img, facing, pu, pv, reach - 1, a_start, a_active, DARK, 1, steps)
+            else:
+                wline(img, facing, pu + 2, pv, -half, 0, DARK, 1)
+            sword_blade(style, img, facing,
+                        -half * _cosdir(a_active), -half * _sindir(a_active),
+                        half * _cosdir(a_active), half * _sindir(a_active))
+            if record["lunge"]:
+                for v in (-3, 3):
+                    wline(img, facing, max(-15.5, -half - 6), v, max(-13.5, -half - 2), v, DARK, 1)
+        else:
+            wline(img, facing, -2, 0, 1, 0, DARK, 3)             # grip
+            sword_blade(style, img, facing, 1, 0,
+                        1 + 8 * _cosdir(a_start), 8 * _sindir(a_start))
+            warc(img, facing, 0, 0, 9, a_start, a_start + (a_active - a_start) * 0.5, DARK, 1, steps)
+        return img
+    if row == 0:      # idle: blade resting forward-down
+        wline(img, facing, -3, 0, 1, 0, DARK, 3)
+        sword_blade(style, img, facing, 1, 0, 12, 4)
+    elif row == 1:    # recover: blade low
+        wline(img, facing, -3, 0, 1, 0, DARK, 3)
+        sword_blade(style, img, facing, 1, 0, 9, 7)
+    elif row == WEAPON_ROW_STANCE:   # parry: blade vertical in front
+        wline(img, facing, -3, 0, 1, 0, DARK, 3)
+        sword_blade(style, img, facing, 5, -8, 5, 8)
+    elif row == WEAPON_ROW_DODGE:    # tucked
+        wline(img, facing, -2, 0, 1, 0, DARK, 3)
+        sword_blade(style, img, facing, 1, 0, 4, 9)
+    elif row == WEAPON_ROW_STUN:     # dropped
+        wline(img, facing, -2, 0, 1, 0, DARK, 3)
+        sword_blade(style, img, facing, 1, 0, 5, 11)
+    elif row == WEAPON_ROW_RIM:      # riposte rim: white ring, box-centred
+        warc(img, facing, 0, 0, 9, 0, 360, WHITE, 1, 12)
+    else:
+        return None
+    return img
+
+
+def flail_head(style, img, facing, u, v, r):
+    """Beast flail head at the box centre / rest point (sword_cell's ball())."""
+    if style == "sling":        # chicken: small quick ball
+        ball(img, facing, u, v, max(2, r - 1))
+    elif style == "shell":      # bull: wide shell plate with a rim ring
+        ball(img, facing, u, v, r + 1, core=LIGHT)
+        warc(img, facing, u, v, r + 1, 0, 360, DARK, 1, 8)
+        warc(img, facing, u, v, r - 1, 0, 360, WHITE, 1, 8)
+    elif style == "tail":       # longtail: round head + tail tip
+        ball(img, facing, u, v, r)
+        wline(img, facing, u + r - 1, v, u + r + 2, v, DARK, 2)
+        dot(img, *wpt(facing, u + r + 2, v), LIGHT, 1)
+    else:                       # spike: spiked ravager head
+        ball(img, facing, u, v, r)
+        for du, dv in ((r, 0), (-r, 0), (0, r), (0, -r), (r - 1, r - 1), (r - 1, 1 - r), (1 - r, r - 1), (1 - r, 1 - r)):
+            dot(img, *wpt(facing, u + du, v + dv), DARK, 1)
+
+
+def flail_links(style, img, facing, u0, v0, u1, v1):
+    """Chain dots between the hand and the head, per style: sling is thin,
+    tail runs one link longer, shell is chunky."""
+    count = 4 if style == "tail" else 3
+    size = 1 if style == "sling" else 2
+    for i in range(1, count + 1):
+        f = i / (count + 1.0)
+        u = u0 + (u1 - u0) * f
+        v = v0 + (v1 - v0) * f
+        if -15 <= u <= 15:
+            dot(img, *wpt(facing, u, v), DARK, size)
+
+
+def flail_variant_cell(style, row, facing):
+    """flail_cell with one beast head/chain style (rows/geometry identical)."""
+    img = new(32, 32)
+    last_move_row = WEAPON_ROW_MOVE0 + 2 * WEAPON_SLOTS - 1
+    if WEAPON_ROW_MOVE0 <= row <= last_move_row:
+        slot = (row - WEAPON_ROW_MOVE0) // 2
+        record = move_record(1, slot)
+        if record is None or not record["hw"]:
+            return None
+        a_start, a_active = flail_move_art(record, slot)
+        reach, hw, hh = record["reach"], record["hw"], record["hh"]
+        radius = 2 + min(3, hh // 8)
+        active = (row - WEAPON_ROW_MOVE0) % 2 == 1
+        steps = 4 + min(8, record["active"])
+        if active:
+            pu, pv = -reach, 0
+            wline(img, facing, pu, pv, pu + 2, pv, DARK, 3)              # wrist
+            span = a_active - a_start
+            if abs(span) > 20:
+                warc(img, facing, pu, pv, reach - 1, a_start, a_active, DARK, 1, steps)
+                warc(img, facing, 0, 0, min(12, hw // 2 + 1), a_start, a_active, DARK, 1, steps)
+                if abs(span) > 40:
+                    for f in (0.33, 0.66):
+                        ga = a_start + span * f
+                        ball(img, facing, 9 * _cosdir(ga), 9 * _sindir(ga),
+                             max(2, radius - 2), core=LIGHT)
+            flail_head(style, img, facing, 0, 0, radius)
+            flail_links(style, img, facing, pu + 2, pv, -radius, 0)
+            if record["lunge"]:
+                for v in (-3, 3):
+                    wline(img, facing, max(-15.5, -hw / 2 - 6), v, max(-13.5, -hw / 2 - 2), v, DARK, 1)
+        else:
+            hu = 1 + 8 * _cosdir(a_start)
+            hv = 8 * _sindir(a_start)
+            flail_head(style, img, facing, hu, hv, radius)
+            flail_links(style, img, facing, 0, 0, hu, hv)
+            warc(img, facing, 0, 0, 8, a_start, a_start + (a_active - a_start) * 0.5, DARK, 1, steps)
+        return img
+    if row == 0:      # idle: chain and ball resting forward-down
+        flail_head(style, img, facing, 9, 5, 3)
+        flail_links(style, img, facing, 0, 0, 9, 5)
+    elif row == 1:    # recover: ball low
+        flail_head(style, img, facing, 7, 8, 3)
+        flail_links(style, img, facing, 0, 0, 7, 8)
+    elif row == WEAPON_ROW_STANCE:   # whirl base: hand + slack chain
+        wline(img, facing, -3, 0, 1, 0, DARK, 3)
+        flail_links(style, img, facing, 1, 0, 8, -2)
+    elif row == WEAPON_ROW_DEFENSE:  # deflect: two light bars in front
+        wline(img, facing, -3, 0, 1, 0, DARK, 3)
+        wline(img, facing, 4, -6, 4, 6, LIGHT, 1)
+        wline(img, facing, 7, -7, 7, 7, LIGHT, 1)
+    elif row == WEAPON_ROW_DODGE:    # tucked
+        flail_head(style, img, facing, 4, 7, 3)
+        flail_links(style, img, facing, 0, 0, 4, 7)
+    elif row == WEAPON_ROW_STUN:     # slack chain, ball dropped
+        flail_head(style, img, facing, 5, 10, 3)
+        wline(img, facing, 1, 0, 5, 10, DARK, 1)
+    else:
+        return None
+    return img
+
+
 def gun_move_art(record, slot):
     """(startup angle, active angle, mode) for one gunshield move. Mode:
     'shot' (shell/muzzle), 'bash' (shield strike), 'thrust' (flat shield hit)."""
@@ -1241,6 +1451,16 @@ WEAPON_ART = {
     "weapon_sword": sword_cell,
     "weapon_flail": flail_cell,
     "weapon_gun": gun_cell,
+    # Beast melee variants (same treatment as the gunshields): one branch per
+    # demo beast, style keys in SWORD_STYLE_IDS / FLAIL_STYLE_IDS.
+    "weapon_sword_saber": lambda row, facing: sword_variant_cell("saber", row, facing),
+    "weapon_sword_cleaver": lambda row, facing: sword_variant_cell("cleaver", row, facing),
+    "weapon_sword_tailblade": lambda row, facing: sword_variant_cell("tailblade", row, facing),
+    "weapon_sword_fang": lambda row, facing: sword_variant_cell("fang", row, facing),
+    "weapon_flail_sling": lambda row, facing: flail_variant_cell("sling", row, facing),
+    "weapon_flail_shell": lambda row, facing: flail_variant_cell("shell", row, facing),
+    "weapon_flail_tail": lambda row, facing: flail_variant_cell("tail", row, facing),
+    "weapon_flail_spike": lambda row, facing: flail_variant_cell("spike", row, facing),
     # Craftable gunshield variants (bead ht8): one plate style per item, same
     # row table (docs/weapon-art.md).
     "weapon_gun_buckler": lambda row, facing: gun_variant_cell("buckler", row, facing),

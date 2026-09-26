@@ -224,5 +224,33 @@ void ForgeSuite(TestRunner &runner) {
         suite.addTest(t);
     }
 
+    // 2tb: the melee beast variants. NODE_SHEET folds the sword styles to
+    // 5..8 and the flail styles to 9..12; forgeEquippedSheet (now host-testable
+    // in forge_state.hpp) resolves the equipped node's kind for a melee branch.
+    {
+        Test t("melee sheet kinds: sword beast 5..8, flail beast 9..12 (2tb)");
+        t.assert(forge::NODE_SHEET[forge::NODE_SWORD_SABER], 5, "saber kind");
+        t.assert(forge::NODE_SHEET[forge::NODE_SWORD_CLEAVER], 6, "cleaver kind");
+        t.assert(forge::NODE_SHEET[forge::NODE_SWORD_TAILBLADE], 7, "tailblade kind");
+        t.assert(forge::NODE_SHEET[forge::NODE_SWORD_FANG], 8, "fang kind");
+        t.assert(forge::NODE_SHEET[forge::NODE_FLAIL_SLING], 9, "sling kind");
+        t.assert(forge::NODE_SHEET[forge::NODE_FLAIL_SHELL], 10, "shell kind");
+        t.assert(forge::NODE_SHEET[forge::NODE_FLAIL_TAIL], 11, "tail kind");
+        t.assert(forge::NODE_SHEET[forge::NODE_FLAIL_SPIKE], 12, "spike kind");
+        SaveBlock s;
+        saveDefaults(s);
+        s.equippedNode = forge::NODE_SWORD_SABER;
+        t.assert(forgeEquippedSheet(s), 5, "equipped sword saber -> sheet 5");
+        s.equippedNode = forge::NODE_SWORD_FANG;
+        t.assert(forgeEquippedSheet(s), 8, "equipped sword fang -> sheet 8");
+        s.equippedNode = forge::NODE_FLAIL_SLING;
+        t.assert(forgeEquippedSheet(s), 9, "equipped flail sling -> sheet 9");
+        s.equippedNode = forge::NODE_FLAIL_SPIKE;
+        t.assert(forgeEquippedSheet(s), 12, "equipped flail spike -> sheet 12");
+        s.equippedNode = forge::NODE_SWORD_T1;
+        t.assert(forgeEquippedSheet(s), 0, "spine node -> class default sheet");
+        suite.addTest(t);
+    }
+
     runner.addTestSuite(suite);
 }

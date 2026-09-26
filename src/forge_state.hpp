@@ -65,6 +65,19 @@ inline bool forgeParentOwned(const SaveBlock &save, const ForgeNode &n) {
     return forgeHasParent(n) && saveWeaponOwned(save, n.parent);
 }
 
+// The equipped node's sheet kind (beads monhun-ardu-jd1/2tb): 0 = the class
+// default sheet, 1..4 the gunshield variants, 5..8 the sword beast variants,
+// 9..12 the flail beast variants. NODE_SHEET is a generated constexpr table, so
+// this is a plain index -- no cart access (host-testable). Out-of-range /
+// unequipped falls back to 0. src/render.hpp weaponSheet resolves the kind
+// against the equipped weapon's class, so a kind can never select another
+// class's sheet.
+inline uint8_t forgeEquippedSheet(const SaveBlock &save) {
+    if (save.equippedNode == SAVE_NODE_NONE || save.equippedNode >= forge::NODE_COUNT)
+        return 0;
+    return forge::NODE_SHEET[save.equippedNode];
+}
+
 // Shared material-bill gate/debit (ui.4.1). `mats` is `slots` packed
 // {itemCode (item idx + 1, 0 = empty), count} byte pairs -- the exact layout of
 // a ForgeNode's mats/directMats arrays and of the armor card's baked craft

@@ -78,6 +78,54 @@ SWORD = {
     ],
 }
 
+# Sword/flail beast variants: one extra direct branch per style off the class
+# root, so the emitted NODE_SHEET pins kinds 5..8 (sword) and 9..12 (flail).
+SWORD_MELEE = {
+    "class": "sword",
+    "header": "-- SWD --",
+    "nodes": SWORD["nodes"] + [
+        {"id": "sword_saber", "label": "CHKN SABER", "parent": "sword_base", "direct": True,
+         "cost": 120, "mats": [{"item": "scale", "count": 2}],
+         "directCost": 200, "directMats": [{"item": "scale", "count": 3}],
+         "dmgMul": 96, "spdMul": 120, "desc": ["CHICKEN EDGE."], "sheet": "mh_weapon_sword_saber"},
+        {"id": "sword_cleaver", "label": "BULL CLEAVE", "parent": "sword_base", "direct": True,
+         "cost": 150, "mats": [{"item": "scale", "count": 2}],
+         "directCost": 240, "directMats": [{"item": "scale", "count": 3}],
+         "dmgMul": 114, "spdMul": 92, "desc": ["BULL SHELL."], "sheet": "mh_weapon_sword_cleaver"},
+        {"id": "sword_tailblade", "label": "TAIL BLADE", "parent": "sword_base", "direct": True,
+         "cost": 220, "mats": [{"item": "scale", "count": 2}],
+         "directCost": 340, "directMats": [{"item": "scale", "count": 3}],
+         "dmgMul": 106, "spdMul": 104, "desc": ["LONGTAIL EDGE."], "sheet": "mh_weapon_sword_tailblade"},
+        {"id": "sword_fang", "label": "RVGR FANG", "parent": "sword_base", "direct": True,
+         "cost": 280, "mats": [{"item": "scale", "count": 2}],
+         "directCost": 420, "directMats": [{"item": "scale", "count": 3}],
+         "dmgMul": 126, "spdMul": 86, "desc": ["RAVAGER FANG."], "sheet": "mh_weapon_sword_fang"},
+    ],
+}
+
+FLAIL_MELEE = {
+    "class": "flail",
+    "header": "-- FLAIL --",
+    "nodes": FLAIL["nodes"] + [
+        {"id": "flail_sling", "label": "CHKN SLING", "parent": "flail_base", "direct": True,
+         "cost": 120, "mats": [{"item": "scale", "count": 2}],
+         "directCost": 200, "directMats": [{"item": "scale", "count": 3}],
+         "dmgMul": 98, "spdMul": 118, "desc": ["CHICKEN SLING."], "sheet": "mh_weapon_flail_sling"},
+        {"id": "flail_shell", "label": "BULL SHELL", "parent": "flail_base", "direct": True,
+         "cost": 150, "mats": [{"item": "scale", "count": 2}],
+         "directCost": 240, "directMats": [{"item": "scale", "count": 3}],
+         "dmgMul": 114, "spdMul": 94, "desc": ["BULL SHELL."], "sheet": "mh_weapon_flail_shell"},
+        {"id": "flail_tail", "label": "TAIL FLAIL", "parent": "flail_base", "direct": True,
+         "cost": 220, "mats": [{"item": "scale", "count": 2}],
+         "directCost": 340, "directMats": [{"item": "scale", "count": 3}],
+         "dmgMul": 108, "spdMul": 102, "desc": ["LONGTAIL CHAIN."], "sheet": "mh_weapon_flail_tail"},
+        {"id": "flail_spike", "label": "RVGR SPIKE", "parent": "flail_base", "direct": True,
+         "cost": 280, "mats": [{"item": "scale", "count": 2}],
+         "directCost": 420, "directMats": [{"item": "scale", "count": 3}],
+         "dmgMul": 126, "spdMul": 88, "desc": ["RAVAGER SPIKES."], "sheet": "mh_weapon_flail_spike"},
+    ],
+}
+
 # Gun tree with the four shield variants: one direct branch per variant, so the
 # emitted NODE_SHEET pins kinds 1..4 (and the root 0) in data order.
 GUN = {
@@ -128,6 +176,16 @@ def write_gun(case):
     with open(path, "w", encoding="utf-8", newline="\n") as handle:
         json.dump(GUN, handle, indent=2)
         handle.write("\n")
+    return case
+
+
+def write_melee(case):
+    """Replace sword/flail with the beast-variant trees (kinds 5..12)."""
+    for name, doc in (("sword", SWORD_MELEE), ("flail", FLAIL_MELEE)):
+        path = os.path.join(case, "data", "forge", "%s.json" % name)
+        with open(path, "w", encoding="utf-8", newline="\n") as handle:
+            json.dump(doc, handle, indent=2)
+            handle.write("\n")
     return case
 
 
@@ -272,6 +330,37 @@ class GenForgeTests(unittest.TestCase):
         self.assertEqual(kinds["gun_kite"], 2)
         self.assertEqual(kinds["gun_tower"], 3)
         self.assertEqual(kinds["gun_brace"], 4)
+
+    def test_melee_sheet_kinds(self):
+        # 2tb: the sword beast variants fold to kinds 5..8 and the flail ones to
+        # 9..12; the NODE_SHEET table emits them in data order.
+        write_melee(self.case)
+        self.run_ok()
+        meta = self.read(META_REL)
+        self.assertIn("constexpr uint8_t NODE_SHEET[NODE_COUNT] = {0, 0, 0, 0, 5, 6, 7, 8, 0, 0, 9, 10, 11, 12};", meta)
+        model = gen_forge.load_model(self.case)
+        kinds = {n["id"]: n["sheetKind"] for n in model["nodes"]}
+        self.assertEqual(kinds["sword_saber"], 5)
+        self.assertEqual(kinds["sword_cleaver"], 6)
+        self.assertEqual(kinds["sword_tailblade"], 7)
+        self.assertEqual(kinds["sword_fang"], 8)
+        self.assertEqual(kinds["flail_sling"], 9)
+        self.assertEqual(kinds["flail_shell"], 10)
+        self.assertEqual(kinds["flail_tail"], 11)
+        self.assertEqual(kinds["flail_spike"], 12)
+        self.assertEqual(kinds["sword_base"], 0, "spine keeps the class default sheet")
+        self.assertEqual(kinds["flail_t1"], 0, "flail spine keeps the class default sheet")
+
+    def test_class_first_table(self):
+        # 2tb: NODE_CLASS_FIRST[WEAPON_COUNT] mirrors the generated firsts so
+        # src/screens.hpp screenClassFirst can drop the retired cls*3 formula.
+        write_gun(self.case)
+        self.run_ok()
+        meta = self.read(META_REL)
+        self.assertIn("constexpr uint8_t NODE_CLASS_FIRST[WEAPON_COUNT] = {NODE_SWORD_FIRST, NODE_FLAIL_FIRST, NODE_GUN_FIRST};", meta)
+        model = gen_forge.load_model(self.case)
+        firsts = {entry["name"]: entry["firstNode"] for entry in model["classes"]}
+        self.assertEqual(firsts, {"sword": 0, "flail": 4, "gun": 6})
 
     def test_unknown_sheet_symbol_rejected(self):
         self.mutate("data/forge/sword.json",

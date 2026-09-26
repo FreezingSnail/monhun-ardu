@@ -145,8 +145,14 @@ child). Skipped nodes stay unowned.
 - Node: `id, class, parent, direct(bool), cost, mats, directCost, directMats,
   dmgMul, spdMul, desc, sheet`.
 - `sheet` selects the drawn sheet: the generator folds it to a kind byte
-  (`NODE_SHEET`), 0 = the class default, 1..4 = the gunshield variants; the
-  render maps the equipped node's kind to a generated sheet constant.
+  (`NODE_SHEET`), 0 = the class default, 1..4 = the gunshield variants, 5..8 =
+  the sword beast variants (saber/cleaver/tailblade/fang), 9..12 = the flail
+  beast variants (sling/shell/tail/spike); the render resolves the kind against
+  the equipped weapon's class and maps it to a generated sheet constant.
+- Node ids are dense in class order (sword, flail, gun); each class's spine
+  (root/t1/t2) is three contiguous nodes at its `NODE_<CLASS>_FIRST`, with the
+  class branches appended after the spine. `NODE_CLASS_FIRST[WEAPON_COUNT]`
+  maps a class id to its first node (the old `class * 3` formula is retired).
 - Data-driven: any tree shape/branching; the generator emits depth/branch
   metadata; FORGE rows are generated from the tree source.
 

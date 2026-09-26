@@ -64,6 +64,98 @@
         "Devastating sweeps."
       ],
       "sheet": "mh_weapon_flail"
+    },
+    {
+      "id": "flail_sling",
+      "label": "CHKN SLING",
+      "parent": "flail_base",
+      "direct": true,
+      "cost": 120,
+      "mats": [
+        { "item": "scale", "count": 2 },
+        { "item": "shell", "count": 1 }
+      ],
+      "directCost": 200,
+      "directMats": [
+        { "item": "scale", "count": 3 },
+        { "item": "shell", "count": 2 }
+      ],
+      "dmgMul": 98,
+      "spdMul": 118,
+      "desc": [
+        "CHICKEN SLING.",
+        "Quick swing."
+      ],
+      "sheet": "mh_weapon_flail_sling"
+    },
+    {
+      "id": "flail_shell",
+      "label": "BULL SHELL",
+      "parent": "flail_base",
+      "direct": true,
+      "cost": 150,
+      "mats": [
+        { "item": "shell", "count": 2 },
+        { "item": "fang", "count": 1 }
+      ],
+      "directCost": 240,
+      "directMats": [
+        { "item": "shell", "count": 3 },
+        { "item": "fang", "count": 2 }
+      ],
+      "dmgMul": 114,
+      "spdMul": 94,
+      "desc": [
+        "BULL SHELL HEAD.",
+        "Wide swing."
+      ],
+      "sheet": "mh_weapon_flail_shell"
+    },
+    {
+      "id": "flail_tail",
+      "label": "TAIL FLAIL",
+      "parent": "flail_base",
+      "direct": true,
+      "cost": 220,
+      "mats": [
+        { "item": "tail", "count": 1 },
+        { "item": "scale", "count": 2 }
+      ],
+      "directCost": 340,
+      "directMats": [
+        { "item": "tail", "count": 2 },
+        { "item": "scale", "count": 3 }
+      ],
+      "dmgMul": 108,
+      "spdMul": 102,
+      "desc": [
+        "LONGTAIL CHAIN.",
+        "Long reach."
+      ],
+      "sheet": "mh_weapon_flail_tail"
+    },
+    {
+      "id": "flail_spike",
+      "label": "RVGR SPIKE",
+      "parent": "flail_base",
+      "direct": true,
+      "cost": 280,
+      "mats": [
+        { "item": "fang", "count": 1 },
+        { "item": "tail", "count": 1 }
+      ],
+      "directCost": 420,
+      "directMats": [
+        { "item": "fang", "count": 2 },
+        { "item": "tail", "count": 2 }
+      ],
+      "dmgMul": 126,
+      "spdMul": 88,
+      "desc": [
+        "RAVAGER SPIKES.",
+        "Hardest hit."
+      ],
+      "sheet": "mh_weapon_flail_spike"
     }
   ]
 }

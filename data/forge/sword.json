@@ -64,6 +64,98 @@
         "Heavy, swift strikes."
       ],
       "sheet": "mh_weapon_sword"
+    },
+    {
+      "id": "sword_saber",
+      "label": "CHKN SABER",
+      "parent": "sword_base",
+      "direct": true,
+      "cost": 120,
+      "mats": [
+        { "item": "scale", "count": 2 },
+        { "item": "shell", "count": 1 }
+      ],
+      "directCost": 200,
+      "directMats": [
+        { "item": "scale", "count": 3 },
+        { "item": "shell", "count": 2 }
+      ],
+      "dmgMul": 96,
+      "spdMul": 120,
+      "desc": [
+        "CHICKEN EDGE.",
+        "Light and quick."
+      ],
+      "sheet": "mh_weapon_sword_saber"
+    },
+    {
+      "id": "sword_cleaver",
+      "label": "BULL CLEAVE",
+      "parent": "sword_base",
+      "direct": true,
+      "cost": 150,
+      "mats": [
+        { "item": "shell", "count": 2 },
+        { "item": "fang", "count": 1 }
+      ],
+      "directCost": 240,
+      "directMats": [
+        { "item": "shell", "count": 3 },
+        { "item": "fang", "count": 2 }
+      ],
+      "dmgMul": 114,
+      "spdMul": 92,
+      "desc": [
+        "BULL SHELL HEAD.",
+        "Heavy cut."
+      ],
+      "sheet": "mh_weapon_sword_cleaver"
+    },
+    {
+      "id": "sword_tailblade",
+      "label": "TAIL BLADE",
+      "parent": "sword_base",
+      "direct": true,
+      "cost": 220,
+      "mats": [
+        { "item": "tail", "count": 1 },
+        { "item": "scale", "count": 2 }
+      ],
+      "directCost": 340,
+      "directMats": [
+        { "item": "tail", "count": 2 },
+        { "item": "scale", "count": 3 }
+      ],
+      "dmgMul": 106,
+      "spdMul": 104,
+      "desc": [
+        "LONGTAIL EDGE.",
+        "Long reach."
+      ],
+      "sheet": "mh_weapon_sword_tailblade"
+    },
+    {
+      "id": "sword_fang",
+      "label": "RVGR FANG",
+      "parent": "sword_base",
+      "direct": true,
+      "cost": 280,
+      "mats": [
+        { "item": "fang", "count": 1 },
+        { "item": "tail", "count": 1 }
+      ],
+      "directCost": 420,
+      "directMats": [
+        { "item": "fang", "count": 2 },
+        { "item": "tail", "count": 2 }
+      ],
+      "dmgMul": 126,
+      "spdMul": 86,
+      "desc": [
+        "RAVAGER FANG.",
+        "Sawtooth cut."
+      ],
+      "sheet": "mh_weapon_sword_fang"
     }
   ]
 }

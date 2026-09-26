@@ -159,13 +159,20 @@ inline bool screenCursorRow(const ScreenState &s, ScreenRow &row) {
     return true;
 }
 
-// First forge-node id of a class (forge::WEAPON_*), from the generated tree
-// constants (the class spines are three contiguous nodes, so the id is class*3
-// -- the static_asserts pin the generated layout).
+// First forge-node id of a class (forge::WEAPON_*), from the generated
+// NODE_CLASS_FIRST table (the class spines are three contiguous nodes at each
+// class's first id -- branches append after the spine, so the old cls*3
+// formula no longer holds).
 inline uint8_t screenClassFirst(uint8_t cls) {
-    return static_cast<uint8_t>(cls * 3);
+    return forge::NODE_CLASS_FIRST[cls];
 }
-static_assert(forge::NODE_SWORD_FIRST == 0 && forge::NODE_FLAIL_FIRST == 3 && forge::NODE_GUN_FIRST == 6, "class spines are three contiguous nodes (screenClassFirst)");
+// Each class's spine (root/t1/t2) is three contiguous nodes starting at its
+// class first; the branches are appended after the spine, so every next class
+// first is at least three past the previous one and the UPGRADE walk stays
+// first..first+2. The NODE_CLASS_FIRST entries mirror the generated firsts.
+static_assert(forge::NODE_CLASS_FIRST[0] == forge::NODE_SWORD_FIRST && forge::NODE_CLASS_FIRST[1] == forge::NODE_FLAIL_FIRST && forge::NODE_CLASS_FIRST[2] == forge::NODE_GUN_FIRST &&
+                  forge::NODE_CLASS_FIRST[1] >= forge::NODE_CLASS_FIRST[0] + 3 && forge::NODE_CLASS_FIRST[2] >= forge::NODE_CLASS_FIRST[1] + 3,
+              "class spines are three contiguous nodes at their class firsts (screenClassFirst)");
 
 // Resolve a class's upgrade target from the save + generated tables (hbk.13):
 // walk the three-node spine and take the highest owned node; when it exists and

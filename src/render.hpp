@@ -880,24 +880,52 @@ static inline uint8_t weaponMoveSlot(const mh::Player &p, const mh::Attack *a) {
 }
 
 // Sheet offset for one weapon: generated constants, folded at compile time (no
-// RAM table on AVR). Sword/flail have one sheet; the gun picks its equipped
-// forge node's variant sheet (Game::wpnSheet, jd1), 0 = the class default.
+// RAM table on AVR). The equipped forge node's kind (Game::wpnSheet, jd1/2tb)
+// selects the variant sheet -- 0 = the class default, 1..4 the gunshield
+// variants, 5..8 the sword beast variants, 9..12 the flail beast variants. The
+// kind is resolved strictly against the weapon's own class, so a sword can
+// never draw a flail sheet (or vice versa) even from a stale kind byte.
 static inline uint24_t weaponSheet(const mh::Game &g) {
-    if (g.weapon == mh::W_SWORD)
-        return static_cast<uint24_t>(equip::SHEET_OFF_MH_WEAPON_SWORD);
-    if (g.weapon == mh::W_FLAIL)
-        return static_cast<uint24_t>(equip::SHEET_OFF_MH_WEAPON_FLAIL);
-    switch (g.wpnSheet) {
-    case 1:
-        return static_cast<uint24_t>(equip::SHEET_OFF_MH_WEAPON_GUN_BUCKLER);
-    case 2:
-        return static_cast<uint24_t>(equip::SHEET_OFF_MH_WEAPON_GUN_KITE);
-    case 3:
-        return static_cast<uint24_t>(equip::SHEET_OFF_MH_WEAPON_GUN_TOWER);
-    case 4:
-        return static_cast<uint24_t>(equip::SHEET_OFF_MH_WEAPON_GUN_BRACE);
+    switch (g.weapon) {
+    case mh::W_SWORD:
+        switch (g.wpnSheet) {
+        case 5:
+            return static_cast<uint24_t>(equip::SHEET_OFF_MH_WEAPON_SWORD_SABER);
+        case 6:
+            return static_cast<uint24_t>(equip::SHEET_OFF_MH_WEAPON_SWORD_CLEAVER);
+        case 7:
+            return static_cast<uint24_t>(equip::SHEET_OFF_MH_WEAPON_SWORD_TAILBLADE);
+        case 8:
+            return static_cast<uint24_t>(equip::SHEET_OFF_MH_WEAPON_SWORD_FANG);
+        default:
+            return static_cast<uint24_t>(equip::SHEET_OFF_MH_WEAPON_SWORD);
+        }
+    case mh::W_FLAIL:
+        switch (g.wpnSheet) {
+        case 9:
+            return static_cast<uint24_t>(equip::SHEET_OFF_MH_WEAPON_FLAIL_SLING);
+        case 10:
+            return static_cast<uint24_t>(equip::SHEET_OFF_MH_WEAPON_FLAIL_SHELL);
+        case 11:
+            return static_cast<uint24_t>(equip::SHEET_OFF_MH_WEAPON_FLAIL_TAIL);
+        case 12:
+            return static_cast<uint24_t>(equip::SHEET_OFF_MH_WEAPON_FLAIL_SPIKE);
+        default:
+            return static_cast<uint24_t>(equip::SHEET_OFF_MH_WEAPON_FLAIL);
+        }
     default:
-        return static_cast<uint24_t>(equip::SHEET_OFF_MH_WEAPON_GUN);
+        switch (g.wpnSheet) {
+        case 1:
+            return static_cast<uint24_t>(equip::SHEET_OFF_MH_WEAPON_GUN_BUCKLER);
+        case 2:
+            return static_cast<uint24_t>(equip::SHEET_OFF_MH_WEAPON_GUN_KITE);
+        case 3:
+            return static_cast<uint24_t>(equip::SHEET_OFF_MH_WEAPON_GUN_TOWER);
+        case 4:
+            return static_cast<uint24_t>(equip::SHEET_OFF_MH_WEAPON_GUN_BRACE);
+        default:
+            return static_cast<uint24_t>(equip::SHEET_OFF_MH_WEAPON_GUN);
+        }
     }
 }
 

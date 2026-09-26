@@ -17,13 +17,13 @@ namespace equip {
 constexpr uint16_t MAGIC = 0x4551;
 constexpr uint8_t VERSION = 1;
 constexpr uint8_t FLAGS = 0x00;
-constexpr uint16_t SIZE = 733;
+constexpr uint16_t SIZE = 1053;
 constexpr uint8_t HEADER_SIZE = 8;
 constexpr uint8_t ITEM_SIZE = 19;
 constexpr uint8_t FACINGS = 8;
 constexpr uint8_t SLOT_COUNT = 6;
 constexpr uint8_t POSE_COUNT = 12;
-constexpr uint8_t ITEM_COUNT = 18;
+constexpr uint8_t ITEM_COUNT = 26;
 
 // Slots, in draw order (docs/equipment-framework.md).
 constexpr uint8_t SLOT_PLAYER = 0;
@@ -66,12 +66,20 @@ constexpr uint8_t ITEM_PLAYER_BASE = 8;
 constexpr uint8_t ITEM_PLAYER_BODY = 9;
 constexpr uint8_t ITEM_SHADOW_BASE = 10;
 constexpr uint8_t ITEM_WEAPON_FLAIL = 11;
-constexpr uint8_t ITEM_WEAPON_GUN = 12;
-constexpr uint8_t ITEM_WEAPON_GUN_BRACE = 13;
-constexpr uint8_t ITEM_WEAPON_GUN_BUCKLER = 14;
-constexpr uint8_t ITEM_WEAPON_GUN_KITE = 15;
-constexpr uint8_t ITEM_WEAPON_GUN_TOWER = 16;
-constexpr uint8_t ITEM_WEAPON_SWORD = 17;
+constexpr uint8_t ITEM_WEAPON_FLAIL_SHELL = 12;
+constexpr uint8_t ITEM_WEAPON_FLAIL_SLING = 13;
+constexpr uint8_t ITEM_WEAPON_FLAIL_SPIKE = 14;
+constexpr uint8_t ITEM_WEAPON_FLAIL_TAIL = 15;
+constexpr uint8_t ITEM_WEAPON_GUN = 16;
+constexpr uint8_t ITEM_WEAPON_GUN_BRACE = 17;
+constexpr uint8_t ITEM_WEAPON_GUN_BUCKLER = 18;
+constexpr uint8_t ITEM_WEAPON_GUN_KITE = 19;
+constexpr uint8_t ITEM_WEAPON_GUN_TOWER = 20;
+constexpr uint8_t ITEM_WEAPON_SWORD = 21;
+constexpr uint8_t ITEM_WEAPON_SWORD_CLEAVER = 22;
+constexpr uint8_t ITEM_WEAPON_SWORD_FANG = 23;
+constexpr uint8_t ITEM_WEAPON_SWORD_SABER = 24;
+constexpr uint8_t ITEM_WEAPON_SWORD_TAILBLADE = 25;
 
 // Sheet symbol names (fxdata/equip/Sprites.txt -> fxdata.h uint24_t offsets).
 constexpr const char *SHEET_BODY_BASE = "mh_body_base";
@@ -86,47 +94,62 @@ constexpr const char *SHEET_PLAYER_BASE = "mh_player_base";
 constexpr const char *SHEET_PLAYER_BODY = "fxplayer";
 constexpr const char *SHEET_SHADOW_BASE = "mh_shadow_base";
 constexpr const char *SHEET_WEAPON_FLAIL = "mh_weapon_flail";
+constexpr const char *SHEET_WEAPON_FLAIL_SHELL = "mh_weapon_flail_shell";
+constexpr const char *SHEET_WEAPON_FLAIL_SLING = "mh_weapon_flail_sling";
+constexpr const char *SHEET_WEAPON_FLAIL_SPIKE = "mh_weapon_flail_spike";
+constexpr const char *SHEET_WEAPON_FLAIL_TAIL = "mh_weapon_flail_tail";
 constexpr const char *SHEET_WEAPON_GUN = "mh_weapon_gun";
 constexpr const char *SHEET_WEAPON_GUN_BRACE = "mh_weapon_gun_brace";
 constexpr const char *SHEET_WEAPON_GUN_BUCKLER = "mh_weapon_gun_buckler";
 constexpr const char *SHEET_WEAPON_GUN_KITE = "mh_weapon_gun_kite";
 constexpr const char *SHEET_WEAPON_GUN_TOWER = "mh_weapon_gun_tower";
 constexpr const char *SHEET_WEAPON_SWORD = "mh_weapon_sword";
+constexpr const char *SHEET_WEAPON_SWORD_CLEAVER = "mh_weapon_sword_cleaver";
+constexpr const char *SHEET_WEAPON_SWORD_FANG = "mh_weapon_sword_fang";
+constexpr const char *SHEET_WEAPON_SWORD_SABER = "mh_weapon_sword_saber";
+constexpr const char *SHEET_WEAPON_SWORD_TAILBLADE = "mh_weapon_sword_tailblade";
 
 // Per-item catalog, indexed by the ITEM_* constants above.
 constexpr uint8_t ITEM_SLOT[ITEM_COUNT] = {
     2, 5, 4, 4, 5, 3, 3, 3,
     0, 2, 1, 4, 4, 4, 4, 4,
+    4, 4, 4, 4, 4, 4, 4, 4,
     4, 4,
 };
 constexpr uint8_t ITEM_ORDER[ITEM_COUNT] = {
     1, 2, 2, 2, 2, 0, 0, 0,
     0, 2, 0, 1, 1, 1, 1, 1,
+    1, 1, 1, 1, 1, 1, 1, 1,
     1, 1,
 };
 constexpr uint8_t ITEM_FRAMES[ITEM_COUNT] = {
     16, 1, 4, 24, 4, 8, 8, 8,
     8, 2, 1, 216, 216, 216, 216, 216,
+    216, 216, 216, 216, 216, 216, 216, 216,
     216, 216,
 };
 constexpr uint8_t ITEM_CELL_W[ITEM_COUNT] = {
     16, 4, 8, 48, 8, 16, 16, 16,
     16, 16, 16, 32, 32, 32, 32, 32,
+    32, 32, 32, 32, 32, 32, 32, 32,
     32, 32,
 };
 constexpr uint8_t ITEM_CELL_H[ITEM_COUNT] = {
     16, 16, 4, 32, 4, 16, 16, 16,
     16, 16, 16, 32, 32, 32, 32, 32,
+    32, 32, 32, 32, 32, 32, 32, 32,
     32, 32,
 };
 constexpr int8_t ITEM_ANCHOR_X[ITEM_COUNT] = {
     8, 2, 2, 24, 0, 8, 8, 8,
     8, 8, 8, 16, 16, 16, 16, 16,
+    16, 16, 16, 16, 16, 16, 16, 16,
     16, 16,
 };
 constexpr int8_t ITEM_ANCHOR_Y[ITEM_COUNT] = {
     8, 5, 2, 16, 0, 8, 8, 8,
     8, 8, 8, 16, 16, 16, 16, 16,
+    16, 16, 16, 16, 16, 16, 16, 16,
     16, 16,
 };
 
@@ -167,6 +190,18 @@ constexpr uint8_t POSE_ROW_SHADOW_BASE[POSE_COUNT] = {
 constexpr uint8_t POSE_ROW_WEAPON_FLAIL[POSE_COUNT] = {
     0, 2, 3, 1, 22, 22, 22, 24, 23, 24, 25, 0,
 };
+constexpr uint8_t POSE_ROW_WEAPON_FLAIL_SHELL[POSE_COUNT] = {
+    0, 2, 3, 1, 22, 22, 22, 24, 23, 24, 25, 0,
+};
+constexpr uint8_t POSE_ROW_WEAPON_FLAIL_SLING[POSE_COUNT] = {
+    0, 2, 3, 1, 22, 22, 22, 24, 23, 24, 25, 0,
+};
+constexpr uint8_t POSE_ROW_WEAPON_FLAIL_SPIKE[POSE_COUNT] = {
+    0, 2, 3, 1, 22, 22, 22, 24, 23, 24, 25, 0,
+};
+constexpr uint8_t POSE_ROW_WEAPON_FLAIL_TAIL[POSE_COUNT] = {
+    0, 2, 3, 1, 22, 22, 22, 24, 23, 24, 25, 0,
+};
 constexpr uint8_t POSE_ROW_WEAPON_GUN[POSE_COUNT] = {
     0, 2, 3, 1, 22, 22, 22, 24, 23, 24, 25, 0,
 };
@@ -183,6 +218,18 @@ constexpr uint8_t POSE_ROW_WEAPON_GUN_TOWER[POSE_COUNT] = {
     0, 2, 3, 1, 22, 22, 22, 24, 23, 24, 25, 0,
 };
 constexpr uint8_t POSE_ROW_WEAPON_SWORD[POSE_COUNT] = {
+    0, 2, 3, 1, 22, 22, 22, 24, 23, 24, 25, 0,
+};
+constexpr uint8_t POSE_ROW_WEAPON_SWORD_CLEAVER[POSE_COUNT] = {
+    0, 2, 3, 1, 22, 22, 22, 24, 23, 24, 25, 0,
+};
+constexpr uint8_t POSE_ROW_WEAPON_SWORD_FANG[POSE_COUNT] = {
+    0, 2, 3, 1, 22, 22, 22, 24, 23, 24, 25, 0,
+};
+constexpr uint8_t POSE_ROW_WEAPON_SWORD_SABER[POSE_COUNT] = {
+    0, 2, 3, 1, 22, 22, 22, 24, 23, 24, 25, 0,
+};
+constexpr uint8_t POSE_ROW_WEAPON_SWORD_TAILBLADE[POSE_COUNT] = {
     0, 2, 3, 1, 22, 22, 22, 24, 23, 24, 25, 0,
 };
 
@@ -357,6 +404,62 @@ constexpr uint8_t FRAME_WEAPON_FLAIL[POSE_COUNT][FACINGS] = {
     {200, 201, 202, 203, 204, 205, 206, 207},
     {0, 1, 2, 3, 4, 5, 6, 7},
 };
+constexpr uint8_t FRAME_WEAPON_FLAIL_SHELL[POSE_COUNT][FACINGS] = {
+    {0, 1, 2, 3, 4, 5, 6, 7},
+    {16, 17, 18, 19, 20, 21, 22, 23},
+    {24, 25, 26, 27, 28, 29, 30, 31},
+    {8, 9, 10, 11, 12, 13, 14, 15},
+    {176, 177, 178, 179, 180, 181, 182, 183},
+    {176, 177, 178, 179, 180, 181, 182, 183},
+    {176, 177, 178, 179, 180, 181, 182, 183},
+    {192, 193, 194, 195, 196, 197, 198, 199},
+    {184, 185, 186, 187, 188, 189, 190, 191},
+    {192, 193, 194, 195, 196, 197, 198, 199},
+    {200, 201, 202, 203, 204, 205, 206, 207},
+    {0, 1, 2, 3, 4, 5, 6, 7},
+};
+constexpr uint8_t FRAME_WEAPON_FLAIL_SLING[POSE_COUNT][FACINGS] = {
+    {0, 1, 2, 3, 4, 5, 6, 7},
+    {16, 17, 18, 19, 20, 21, 22, 23},
+    {24, 25, 26, 27, 28, 29, 30, 31},
+    {8, 9, 10, 11, 12, 13, 14, 15},
+    {176, 177, 178, 179, 180, 181, 182, 183},
+    {176, 177, 178, 179, 180, 181, 182, 183},
+    {176, 177, 178, 179, 180, 181, 182, 183},
+    {192, 193, 194, 195, 196, 197, 198, 199},
+    {184, 185, 186, 187, 188, 189, 190, 191},
+    {192, 193, 194, 195, 196, 197, 198, 199},
+    {200, 201, 202, 203, 204, 205, 206, 207},
+    {0, 1, 2, 3, 4, 5, 6, 7},
+};
+constexpr uint8_t FRAME_WEAPON_FLAIL_SPIKE[POSE_COUNT][FACINGS] = {
+    {0, 1, 2, 3, 4, 5, 6, 7},
+    {16, 17, 18, 19, 20, 21, 22, 23},
+    {24, 25, 26, 27, 28, 29, 30, 31},
+    {8, 9, 10, 11, 12, 13, 14, 15},
+    {176, 177, 178, 179, 180, 181, 182, 183},
+    {176, 177, 178, 179, 180, 181, 182, 183},
+    {176, 177, 178, 179, 180, 181, 182, 183},
+    {192, 193, 194, 195, 196, 197, 198, 199},
+    {184, 185, 186, 187, 188, 189, 190, 191},
+    {192, 193, 194, 195, 196, 197, 198, 199},
+    {200, 201, 202, 203, 204, 205, 206, 207},
+    {0, 1, 2, 3, 4, 5, 6, 7},
+};
+constexpr uint8_t FRAME_WEAPON_FLAIL_TAIL[POSE_COUNT][FACINGS] = {
+    {0, 1, 2, 3, 4, 5, 6, 7},
+    {16, 17, 18, 19, 20, 21, 22, 23},
+    {24, 25, 26, 27, 28, 29, 30, 31},
+    {8, 9, 10, 11, 12, 13, 14, 15},
+    {176, 177, 178, 179, 180, 181, 182, 183},
+    {176, 177, 178, 179, 180, 181, 182, 183},
+    {176, 177, 178, 179, 180, 181, 182, 183},
+    {192, 193, 194, 195, 196, 197, 198, 199},
+    {184, 185, 186, 187, 188, 189, 190, 191},
+    {192, 193, 194, 195, 196, 197, 198, 199},
+    {200, 201, 202, 203, 204, 205, 206, 207},
+    {0, 1, 2, 3, 4, 5, 6, 7},
+};
 constexpr uint8_t FRAME_WEAPON_GUN[POSE_COUNT][FACINGS] = {
     {0, 1, 2, 3, 4, 5, 6, 7},
     {16, 17, 18, 19, 20, 21, 22, 23},
@@ -441,6 +544,62 @@ constexpr uint8_t FRAME_WEAPON_SWORD[POSE_COUNT][FACINGS] = {
     {200, 201, 202, 203, 204, 205, 206, 207},
     {0, 1, 2, 3, 4, 5, 6, 7},
 };
+constexpr uint8_t FRAME_WEAPON_SWORD_CLEAVER[POSE_COUNT][FACINGS] = {
+    {0, 1, 2, 3, 4, 5, 6, 7},
+    {16, 17, 18, 19, 20, 21, 22, 23},
+    {24, 25, 26, 27, 28, 29, 30, 31},
+    {8, 9, 10, 11, 12, 13, 14, 15},
+    {176, 177, 178, 179, 180, 181, 182, 183},
+    {176, 177, 178, 179, 180, 181, 182, 183},
+    {176, 177, 178, 179, 180, 181, 182, 183},
+    {192, 193, 194, 195, 196, 197, 198, 199},
+    {184, 185, 186, 187, 188, 189, 190, 191},
+    {192, 193, 194, 195, 196, 197, 198, 199},
+    {200, 201, 202, 203, 204, 205, 206, 207},
+    {0, 1, 2, 3, 4, 5, 6, 7},
+};
+constexpr uint8_t FRAME_WEAPON_SWORD_FANG[POSE_COUNT][FACINGS] = {
+    {0, 1, 2, 3, 4, 5, 6, 7},
+    {16, 17, 18, 19, 20, 21, 22, 23},
+    {24, 25, 26, 27, 28, 29, 30, 31},
+    {8, 9, 10, 11, 12, 13, 14, 15},
+    {176, 177, 178, 179, 180, 181, 182, 183},
+    {176, 177, 178, 179, 180, 181, 182, 183},
+    {176, 177, 178, 179, 180, 181, 182, 183},
+    {192, 193, 194, 195, 196, 197, 198, 199},
+    {184, 185, 186, 187, 188, 189, 190, 191},
+    {192, 193, 194, 195, 196, 197, 198, 199},
+    {200, 201, 202, 203, 204, 205, 206, 207},
+    {0, 1, 2, 3, 4, 5, 6, 7},
+};
+constexpr uint8_t FRAME_WEAPON_SWORD_SABER[POSE_COUNT][FACINGS] = {
+    {0, 1, 2, 3, 4, 5, 6, 7},
+    {16, 17, 18, 19, 20, 21, 22, 23},
+    {24, 25, 26, 27, 28, 29, 30, 31},
+    {8, 9, 10, 11, 12, 13, 14, 15},
+    {176, 177, 178, 179, 180, 181, 182, 183},
+    {176, 177, 178, 179, 180, 181, 182, 183},
+    {176, 177, 178, 179, 180, 181, 182, 183},
+    {192, 193, 194, 195, 196, 197, 198, 199},
+    {184, 185, 186, 187, 188, 189, 190, 191},
+    {192, 193, 194, 195, 196, 197, 198, 199},
+    {200, 201, 202, 203, 204, 205, 206, 207},
+    {0, 1, 2, 3, 4, 5, 6, 7},
+};
+constexpr uint8_t FRAME_WEAPON_SWORD_TAILBLADE[POSE_COUNT][FACINGS] = {
+    {0, 1, 2, 3, 4, 5, 6, 7},
+    {16, 17, 18, 19, 20, 21, 22, 23},
+    {24, 25, 26, 27, 28, 29, 30, 31},
+    {8, 9, 10, 11, 12, 13, 14, 15},
+    {176, 177, 178, 179, 180, 181, 182, 183},
+    {176, 177, 178, 179, 180, 181, 182, 183},
+    {176, 177, 178, 179, 180, 181, 182, 183},
+    {192, 193, 194, 195, 196, 197, 198, 199},
+    {184, 185, 186, 187, 188, 189, 190, 191},
+    {192, 193, 194, 195, 196, 197, 198, 199},
+    {200, 201, 202, 203, 204, 205, 206, 207},
+    {0, 1, 2, 3, 4, 5, 6, 7},
+};
 
 // ---- player part view (records live in the mhEquip blob) ----------
 // One PART_SIZE record per part at PARTS_OFF: sheet u24 (fx offset),
@@ -448,7 +607,7 @@ constexpr uint8_t FRAME_WEAPON_SWORD[POSE_COUNT][FACINGS] = {
 // then the u16 variant index table and the variant frame bytes.
 // Little-endian; read on device through core/fxmem.hpp during the
 // render pass (src/render.hpp partDraw/partFrame).
-constexpr uint8_t PART_COUNT = 17;
+constexpr uint8_t PART_COUNT = 25;
 constexpr uint8_t PART_BODY_BASE = 0;
 constexpr uint8_t PART_ERASE = 1;
 constexpr uint8_t PART_FLAIL_BALL = 2;
@@ -460,14 +619,22 @@ constexpr uint8_t PART_HEAD_HELM = 7;
 constexpr uint8_t PART_PLAYER_BODY = 8;
 constexpr uint8_t PART_SHADOW_BASE = 9;
 constexpr uint8_t PART_WEAPON_FLAIL = 10;
-constexpr uint8_t PART_WEAPON_GUN = 11;
-constexpr uint8_t PART_WEAPON_GUN_BRACE = 12;
-constexpr uint8_t PART_WEAPON_GUN_BUCKLER = 13;
-constexpr uint8_t PART_WEAPON_GUN_KITE = 14;
-constexpr uint8_t PART_WEAPON_GUN_TOWER = 15;
-constexpr uint8_t PART_WEAPON_SWORD = 16;
+constexpr uint8_t PART_WEAPON_FLAIL_SHELL = 11;
+constexpr uint8_t PART_WEAPON_FLAIL_SLING = 12;
+constexpr uint8_t PART_WEAPON_FLAIL_SPIKE = 13;
+constexpr uint8_t PART_WEAPON_FLAIL_TAIL = 14;
+constexpr uint8_t PART_WEAPON_GUN = 15;
+constexpr uint8_t PART_WEAPON_GUN_BRACE = 16;
+constexpr uint8_t PART_WEAPON_GUN_BUCKLER = 17;
+constexpr uint8_t PART_WEAPON_GUN_KITE = 18;
+constexpr uint8_t PART_WEAPON_GUN_TOWER = 19;
+constexpr uint8_t PART_WEAPON_SWORD = 20;
+constexpr uint8_t PART_WEAPON_SWORD_CLEAVER = 21;
+constexpr uint8_t PART_WEAPON_SWORD_FANG = 22;
+constexpr uint8_t PART_WEAPON_SWORD_SABER = 23;
+constexpr uint8_t PART_WEAPON_SWORD_TAILBLADE = 24;
 
-constexpr uint16_t PARTS_OFF = 350;
+constexpr uint16_t PARTS_OFF = 502;
 constexpr uint8_t PART_SIZE = 19;
 constexpr uint8_t PART_SHEET_OFF = 0;             // u24
 constexpr uint8_t PART_ANCHOR_X_OFF = 3;          // i8
@@ -475,8 +642,8 @@ constexpr uint8_t PART_ANCHOR_Y_OFF = 4;          // i8
 constexpr uint8_t PART_ORDER_OFF = 5;             // u8 ORDER_*
 constexpr uint8_t PART_FRAMES_OFF = 6;            // u8
 constexpr uint8_t PART_FRAME_OFF = 7;             // u8[POSE_COUNT]
-constexpr uint16_t PART_VARIANT_OFFSETS_OFF = 673;
-constexpr uint16_t PART_VARIANT_DATA_OFF = 709;
+constexpr uint16_t PART_VARIANT_OFFSETS_OFF = 977;
+constexpr uint16_t PART_VARIANT_DATA_OFF = 1029;
 constexpr uint8_t PART_VARIANT_COUNT = 24;
 
 // Default draw set (data/equipment/sets/default.json): the render
@@ -488,22 +655,30 @@ constexpr uint8_t DEFAULT_HEAD = PART_HEAD_BASE;
 // Baked absolute sheet offsets (one per referenced part symbol).
 // The blob stores these; a static_assert pins each against fxdata.h so a
 // stale equip.bin (one gen pass behind) cannot ship on AVR.
-constexpr uint32_t SHEET_OFF_MH_BODY_BASE = 454676;
-constexpr uint32_t SHEET_OFF_FXERASE = 106896;
-constexpr uint32_t SHEET_OFF_FXWHIRL = 86604;
-constexpr uint32_t SHEET_OFF_FXWHIRLRING = 34610;
-constexpr uint32_t SHEET_OFF_MH_HEAD_BANDANA = 284172;
-constexpr uint32_t SHEET_OFF_MH_HEAD_BASE = 623834;
-constexpr uint32_t SHEET_OFF_MH_HEAD_HELM = 451600;
-constexpr uint32_t SHEET_OFF_FXPLAYER = 87064;
-constexpr uint32_t SHEET_OFF_MH_SHADOW_BASE = 457750;
-constexpr uint32_t SHEET_OFF_MH_WEAPON_FLAIL = 957152;
-constexpr uint32_t SHEET_OFF_MH_WEAPON_GUN = 457944;
-constexpr uint32_t SHEET_OFF_MH_WEAPON_GUN_BRACE = 625372;
-constexpr uint32_t SHEET_OFF_MH_WEAPON_GUN_BUCKLER = 791262;
-constexpr uint32_t SHEET_OFF_MH_WEAPON_GUN_KITE = 1123042;
-constexpr uint32_t SHEET_OFF_MH_WEAPON_GUN_TOWER = 118282;
-constexpr uint32_t SHEET_OFF_MH_WEAPON_SWORD = 285710;
+constexpr uint32_t SHEET_OFF_MH_BODY_BASE = 1119212;
+constexpr uint32_t SHEET_OFF_FXERASE = 107872;
+constexpr uint32_t SHEET_OFF_FXWHIRL = 87580;
+constexpr uint32_t SHEET_OFF_FXWHIRLRING = 35586;
+constexpr uint32_t SHEET_OFF_MH_HEAD_BANDANA = 285148;
+constexpr uint32_t SHEET_OFF_MH_HEAD_BASE = 1288370;
+constexpr uint32_t SHEET_OFF_MH_HEAD_HELM = 784356;
+constexpr uint32_t SHEET_OFF_FXPLAYER = 88040;
+constexpr uint32_t SHEET_OFF_MH_SHADOW_BASE = 1122286;
+constexpr uint32_t SHEET_OFF_MH_WEAPON_FLAIL = 2119358;
+constexpr uint32_t SHEET_OFF_MH_WEAPON_FLAIL_SHELL = 1787578;
+constexpr uint32_t SHEET_OFF_MH_WEAPON_FLAIL_SLING = 618466;
+constexpr uint32_t SHEET_OFF_MH_WEAPON_FLAIL_SPIKE = 787432;
+constexpr uint32_t SHEET_OFF_MH_WEAPON_FLAIL_TAIL = 953322;
+constexpr uint32_t SHEET_OFF_MH_WEAPON_GUN = 1122480;
+constexpr uint32_t SHEET_OFF_MH_WEAPON_GUN_BRACE = 1289908;
+constexpr uint32_t SHEET_OFF_MH_WEAPON_GUN_BUCKLER = 1455798;
+constexpr uint32_t SHEET_OFF_MH_WEAPON_GUN_KITE = 2451138;
+constexpr uint32_t SHEET_OFF_MH_WEAPON_GUN_TOWER = 119258;
+constexpr uint32_t SHEET_OFF_MH_WEAPON_SWORD = 452576;
+constexpr uint32_t SHEET_OFF_MH_WEAPON_SWORD_CLEAVER = 1953468;
+constexpr uint32_t SHEET_OFF_MH_WEAPON_SWORD_FANG = 1621688;
+constexpr uint32_t SHEET_OFF_MH_WEAPON_SWORD_SABER = 286686;
+constexpr uint32_t SHEET_OFF_MH_WEAPON_SWORD_TAILBLADE = 2285248;
 #if defined(__AVR__)
 static_assert(SHEET_OFF_MH_BODY_BASE == static_cast<uint32_t>(mh_body_base), "equip blob stale: re-run make gen");
 static_assert(SHEET_OFF_FXERASE == static_cast<uint32_t>(fxerase), "equip blob stale: re-run make gen");
@@ -515,12 +690,20 @@ static_assert(SHEET_OFF_MH_HEAD_HELM == static_cast<uint32_t>(mh_head_helm), "eq
 static_assert(SHEET_OFF_FXPLAYER == static_cast<uint32_t>(fxplayer), "equip blob stale: re-run make gen");
 static_assert(SHEET_OFF_MH_SHADOW_BASE == static_cast<uint32_t>(mh_shadow_base), "equip blob stale: re-run make gen");
 static_assert(SHEET_OFF_MH_WEAPON_FLAIL == static_cast<uint32_t>(mh_weapon_flail), "equip blob stale: re-run make gen");
+static_assert(SHEET_OFF_MH_WEAPON_FLAIL_SHELL == static_cast<uint32_t>(mh_weapon_flail_shell), "equip blob stale: re-run make gen");
+static_assert(SHEET_OFF_MH_WEAPON_FLAIL_SLING == static_cast<uint32_t>(mh_weapon_flail_sling), "equip blob stale: re-run make gen");
+static_assert(SHEET_OFF_MH_WEAPON_FLAIL_SPIKE == static_cast<uint32_t>(mh_weapon_flail_spike), "equip blob stale: re-run make gen");
+static_assert(SHEET_OFF_MH_WEAPON_FLAIL_TAIL == static_cast<uint32_t>(mh_weapon_flail_tail), "equip blob stale: re-run make gen");
 static_assert(SHEET_OFF_MH_WEAPON_GUN == static_cast<uint32_t>(mh_weapon_gun), "equip blob stale: re-run make gen");
 static_assert(SHEET_OFF_MH_WEAPON_GUN_BRACE == static_cast<uint32_t>(mh_weapon_gun_brace), "equip blob stale: re-run make gen");
 static_assert(SHEET_OFF_MH_WEAPON_GUN_BUCKLER == static_cast<uint32_t>(mh_weapon_gun_buckler), "equip blob stale: re-run make gen");
 static_assert(SHEET_OFF_MH_WEAPON_GUN_KITE == static_cast<uint32_t>(mh_weapon_gun_kite), "equip blob stale: re-run make gen");
 static_assert(SHEET_OFF_MH_WEAPON_GUN_TOWER == static_cast<uint32_t>(mh_weapon_gun_tower), "equip blob stale: re-run make gen");
 static_assert(SHEET_OFF_MH_WEAPON_SWORD == static_cast<uint32_t>(mh_weapon_sword), "equip blob stale: re-run make gen");
+static_assert(SHEET_OFF_MH_WEAPON_SWORD_CLEAVER == static_cast<uint32_t>(mh_weapon_sword_cleaver), "equip blob stale: re-run make gen");
+static_assert(SHEET_OFF_MH_WEAPON_SWORD_FANG == static_cast<uint32_t>(mh_weapon_sword_fang), "equip blob stale: re-run make gen");
+static_assert(SHEET_OFF_MH_WEAPON_SWORD_SABER == static_cast<uint32_t>(mh_weapon_sword_saber), "equip blob stale: re-run make gen");
+static_assert(SHEET_OFF_MH_WEAPON_SWORD_TAILBLADE == static_cast<uint32_t>(mh_weapon_sword_tailblade), "equip blob stale: re-run make gen");
 #endif
 
 }   // namespace equip

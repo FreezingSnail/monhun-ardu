@@ -68,9 +68,11 @@ WEAPON_NAMES = ("sword", "flail", "gun")
 NAME_RE = re.compile(r"^[a-z][a-z0-9_]*$")
 SHEET_RE = re.compile(r"^[a-z][a-z0-9_]*$")
 
-# Equipped-sheet kind per sheet symbol (bead monhun-ardu-jd1): 0 = the weapon
-# class's default sheet, 1..4 = the four gunshield variant sheets. The runtime
-# maps the equipped node's kind to the generated SHEET_OFF_MH_WEAPON_* constant
+# Equipped-sheet kind per sheet symbol (beads monhun-ardu-jd1/2tb): 0 = the
+# weapon class's default sheet, 1..4 = the four gunshield variant sheets,
+# 5..8 = the four sword beast variants, 9..12 = the four flail beast variants.
+# The kind is only ever resolved against the equipped weapon's own class: the
+# runtime maps it to the generated SHEET_OFF_MH_WEAPON_* constant
 # (src/render.hpp weaponSheet), so this table is the single place that decides
 # which sheet a node draws. An unknown symbol is a hard error.
 SHEET_KINDS = {
@@ -81,6 +83,14 @@ SHEET_KINDS = {
     "mh_weapon_gun_kite": 2,
     "mh_weapon_gun_tower": 3,
     "mh_weapon_gun_brace": 4,
+    "mh_weapon_sword_saber": 5,
+    "mh_weapon_sword_cleaver": 6,
+    "mh_weapon_sword_tailblade": 7,
+    "mh_weapon_sword_fang": 8,
+    "mh_weapon_flail_sling": 9,
+    "mh_weapon_flail_shell": 10,
+    "mh_weapon_flail_tail": 11,
+    "mh_weapon_flail_spike": 12,
 }
 
 _MISSING = object()
@@ -459,10 +469,11 @@ def emit_meta_header(model, blob):
     app("constexpr uint8_t NODE_BRANCH[NODE_COUNT] = {%s};"
         % ", ".join(str(n["branch"]) for n in nodes))
     app("")
-    app("// Equipped-sheet kind per node index (jd1): 0 = the class default sheet,")
-    app("// 1..4 = the gunshield variant sheets. src/forge.hpp forgeEquippedSheet reads")
-    app("// this off the equipped node; src/render.hpp weaponSheet maps it to a")
-    app("// SHEET_OFF_MH_WEAPON_* constant.")
+    app("// Equipped-sheet kind per node index (jd1/2tb): 0 = the class default")
+    app("// sheet, 1..4 = the gunshield variants, 5..8 = the sword beast variants,")
+    app("// 9..12 = the flail beast variants. src/forge_state.hpp forgeEquippedSheet")
+    app("// reads this off the equipped node; src/render.hpp weaponSheet maps it to a")
+    app("// SHEET_OFF_MH_WEAPON_* constant (only against the matching weapon class).")
     app("constexpr uint8_t NODE_SHEET[NODE_COUNT] = {%s};"
         % ", ".join(str(n["sheetKind"]) for n in nodes))
     app("")
@@ -477,6 +488,12 @@ def emit_meta_header(model, blob):
     for entry in model["classes"]:
         app("constexpr uint8_t NODE_%s_FIRST = %d;"
             % (entry["name"].upper(), entry["firstNode"]))
+    app("")
+    app("// Class id (forge::WEAPON_*) -> the class's first node id. The class")
+    app("// spines (root/t1/t2) are three contiguous nodes at NODE_CLASS_FIRST[cls];")
+    app("// src/screens.hpp screenClassFirst reads this for the UPGRADE walk.")
+    app("constexpr uint8_t NODE_CLASS_FIRST[WEAPON_COUNT] = {%s};"
+        % ", ".join("NODE_%s_FIRST" % entry["name"].upper() for entry in model["classes"]))
     app("")
     app("}   // namespace forge")
     app("")

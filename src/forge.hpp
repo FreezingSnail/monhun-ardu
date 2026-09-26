@@ -57,15 +57,9 @@ inline uint8_t forgeEquippedClass(const SaveBlock &save) {
     return save.equippedNode == SAVE_NODE_NONE ? forge::WEAPON_SWORD : forgeNodeClass(save.equippedNode);
 }
 
-// The equipped node's sheet kind (bead monhun-ardu-jd1): 0 = the class default
-// sheet, 1..4 = the four gunshield variants. NODE_SHEET is a generated
-// constexpr table, so this is a plain index -- no cart access. Out-of-range /
-// unequipped falls back to 0.
-inline uint8_t forgeEquippedSheet(const SaveBlock &save) {
-    if (save.equippedNode == SAVE_NODE_NONE || save.equippedNode >= forge::NODE_COUNT)
-        return 0;
-    return forge::NODE_SHEET[save.equippedNode];
-}
+// forgeEquippedSheet (the equipped node's sheet kind) lives in
+// src/forge_state.hpp: it is a plain NODE_SHEET index with no cart access, so
+// the host suite drives the same code.
 
 inline void forgeEquippedMul(const SaveBlock &save, uint8_t &dmgMul, uint8_t &spdMul) {
     dmgMul = 100;

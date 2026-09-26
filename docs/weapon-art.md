@@ -75,6 +75,30 @@ used.
 `PS_SHOVE` keeps the existing retract offset in the render; `PS_DRAW` and
 `PS_CHARGE` use idle art for now.
 
+### Beast variant sheets (2tb)
+
+Each melee class also has four craftable beast-style variants (kind 5..12).
+They reuse the class sheet's row table, anchors and box-derived geometry — only
+the striking-part pixels and trim differ (`gen-equipment.py`
+`sword_variant_cell` / `flail_variant_cell`). The equipped forge node's kind
+selects the sheet, and only ever within the weapon's own class
+(`src/render.hpp weaponSheet`):
+
+| kind | class | style | sheet | beast |
+|---:|---|---|---|---|
+| 5 | sword | saber | `mh_weapon_sword_saber` | chicken |
+| 6 | sword | cleaver | `mh_weapon_sword_cleaver` | bull |
+| 7 | sword | tailblade | `mh_weapon_sword_tailblade` | longtail |
+| 8 | sword | fang | `mh_weapon_sword_fang` | ravager |
+| 9 | flail | sling | `mh_weapon_flail_sling` | chicken |
+| 10 | flail | shell | `mh_weapon_flail_shell` | bull |
+| 11 | flail | tail | `mh_weapon_flail_tail` | longtail |
+| 12 | flail | spike | `mh_weapon_flail_spike` | ravager |
+
+Kinds 1..4 stay gunshield-only. The blades/heads inverse-map through
+`fill_weapon` like the class sheets (45 deg facings stay solid), and the
+player_art oracle pins one idle-guard case per variant (cases 44..51).
+
 ## Reference point per row
 
 The part record has one anchor (16,16), so the render passes the per-row
@@ -132,11 +156,14 @@ angle, and the tooling test asserts ink in the box and across its front half.
   rows come from `wpn::MOVE_ROW[w][weaponMoveSlot(p, a)] + phase`; state rows
   from the table above. Startup/state rows are referenced at the player centre,
   active rows at the hitbox centre.
-- Gunshield variants (jd1): the equipped forge node's sheet kind
-  (`forge::NODE_SHEET` -> `Game::wpnSheet`) selects the gun
-  sheet — 1..4 pick the buckler/kite/tower/brace `SHEET_OFF_MH_WEAPON_GUN_*`
-  constant, 0 keeps the class default `mh_weapon_gun`. Every variant sheet shares
-  the row/frame layout, so `weaponRowDraw` is unchanged.
+- Weapon variants (jd1/2tb): the equipped forge node's sheet kind
+  (`forge::NODE_SHEET` -> `Game::wpnSheet`) selects the drawn sheet, resolved
+  strictly against the equipped weapon's own class — 1..4 pick the
+  buckler/kite/tower/brace `SHEET_OFF_MH_WEAPON_GUN_*` constants, 5..8 the
+  sword saber/cleaver/tailblade/fang and 9..12 the flail
+  sling/shell/tail/spike; 0 (and any kind outside the class's range) keeps the
+  class default `mh_weapon_sword` / `mh_weapon_flail` / `mh_weapon_gun`. Every
+  variant sheet shares the row/frame layout, so `weaponRowDraw` is unchanged.
 - Extras stay per weapon: sword riposte rim (row 26 over the special active),
   flail whirl ring/ball + stun sparkle, gun arrowshot tracer + the guard plate
   staying up while the shot fires from the stance. The gun's arrowshot active

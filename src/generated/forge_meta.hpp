@@ -14,10 +14,10 @@ namespace forge {
 constexpr uint16_t MAGIC = 0x4647;
 constexpr uint8_t VERSION = 1;
 constexpr uint8_t FLAGS = 0x00;
-constexpr uint16_t SIZE = 229;
+constexpr uint16_t SIZE = 365;
 constexpr uint8_t HEADER_SIZE = 8;
 constexpr uint8_t RECORD_SIZE = 17;
-constexpr uint8_t NODE_COUNT = 13;
+constexpr uint8_t NODE_COUNT = 21;
 constexpr uint8_t WEAPON_COUNT = 3;
 constexpr uint8_t MAT_SLOTS = 2;
 constexpr uint8_t NODE_NONE = 0xFF;
@@ -47,47 +47,69 @@ constexpr uint8_t NODE_SWORD_T1 = 1;
 constexpr uint16_t NODE_SWORD_T1_OFF = 25;
 constexpr uint8_t NODE_SWORD_T2 = 2;
 constexpr uint16_t NODE_SWORD_T2_OFF = 42;
-constexpr uint8_t NODE_FLAIL_BASE = 3;
-constexpr uint16_t NODE_FLAIL_BASE_OFF = 59;
-constexpr uint8_t NODE_FLAIL_T1 = 4;
-constexpr uint16_t NODE_FLAIL_T1_OFF = 76;
-constexpr uint8_t NODE_FLAIL_T2 = 5;
-constexpr uint16_t NODE_FLAIL_T2_OFF = 93;
-constexpr uint8_t NODE_GUN_BASE = 6;
-constexpr uint16_t NODE_GUN_BASE_OFF = 110;
-constexpr uint8_t NODE_GUN_T1 = 7;
-constexpr uint16_t NODE_GUN_T1_OFF = 127;
-constexpr uint8_t NODE_GUN_T2 = 8;
-constexpr uint16_t NODE_GUN_T2_OFF = 144;
-constexpr uint8_t NODE_GUN_BUCKLER = 9;
-constexpr uint16_t NODE_GUN_BUCKLER_OFF = 161;
-constexpr uint8_t NODE_GUN_KITE = 10;
-constexpr uint16_t NODE_GUN_KITE_OFF = 178;
-constexpr uint8_t NODE_GUN_TOWER = 11;
-constexpr uint16_t NODE_GUN_TOWER_OFF = 195;
-constexpr uint8_t NODE_GUN_BRACE = 12;
-constexpr uint16_t NODE_GUN_BRACE_OFF = 212;
+constexpr uint8_t NODE_SWORD_SABER = 3;
+constexpr uint16_t NODE_SWORD_SABER_OFF = 59;
+constexpr uint8_t NODE_SWORD_CLEAVER = 4;
+constexpr uint16_t NODE_SWORD_CLEAVER_OFF = 76;
+constexpr uint8_t NODE_SWORD_TAILBLADE = 5;
+constexpr uint16_t NODE_SWORD_TAILBLADE_OFF = 93;
+constexpr uint8_t NODE_SWORD_FANG = 6;
+constexpr uint16_t NODE_SWORD_FANG_OFF = 110;
+constexpr uint8_t NODE_FLAIL_BASE = 7;
+constexpr uint16_t NODE_FLAIL_BASE_OFF = 127;
+constexpr uint8_t NODE_FLAIL_T1 = 8;
+constexpr uint16_t NODE_FLAIL_T1_OFF = 144;
+constexpr uint8_t NODE_FLAIL_T2 = 9;
+constexpr uint16_t NODE_FLAIL_T2_OFF = 161;
+constexpr uint8_t NODE_FLAIL_SLING = 10;
+constexpr uint16_t NODE_FLAIL_SLING_OFF = 178;
+constexpr uint8_t NODE_FLAIL_SHELL = 11;
+constexpr uint16_t NODE_FLAIL_SHELL_OFF = 195;
+constexpr uint8_t NODE_FLAIL_TAIL = 12;
+constexpr uint16_t NODE_FLAIL_TAIL_OFF = 212;
+constexpr uint8_t NODE_FLAIL_SPIKE = 13;
+constexpr uint16_t NODE_FLAIL_SPIKE_OFF = 229;
+constexpr uint8_t NODE_GUN_BASE = 14;
+constexpr uint16_t NODE_GUN_BASE_OFF = 246;
+constexpr uint8_t NODE_GUN_T1 = 15;
+constexpr uint16_t NODE_GUN_T1_OFF = 263;
+constexpr uint8_t NODE_GUN_T2 = 16;
+constexpr uint16_t NODE_GUN_T2_OFF = 280;
+constexpr uint8_t NODE_GUN_BUCKLER = 17;
+constexpr uint16_t NODE_GUN_BUCKLER_OFF = 297;
+constexpr uint8_t NODE_GUN_KITE = 18;
+constexpr uint16_t NODE_GUN_KITE_OFF = 314;
+constexpr uint8_t NODE_GUN_TOWER = 19;
+constexpr uint16_t NODE_GUN_TOWER_OFF = 331;
+constexpr uint8_t NODE_GUN_BRACE = 20;
+constexpr uint16_t NODE_GUN_BRACE_OFF = 348;
 
 // Tree shape per node index: depth (root 0) and sibling ordinal. The FORGE
 // row labels bake the prefixes from these at gen time; host tests read them.
-constexpr uint8_t NODE_DEPTH[NODE_COUNT] = {0, 1, 2, 0, 1, 2, 0, 1, 2, 1, 1, 1, 1};
-constexpr uint8_t NODE_BRANCH[NODE_COUNT] = {0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 2, 3, 4};
+constexpr uint8_t NODE_DEPTH[NODE_COUNT] = {0, 1, 2, 1, 1, 1, 1, 0, 1, 2, 1, 1, 1, 1, 0, 1, 2, 1, 1, 1, 1};
+constexpr uint8_t NODE_BRANCH[NODE_COUNT] = {0, 0, 0, 1, 2, 3, 4, 0, 0, 0, 1, 2, 3, 4, 0, 0, 0, 1, 2, 3, 4};
 
-// Equipped-sheet kind per node index (jd1): 0 = the class default sheet,
-// 1..4 = the gunshield variant sheets. src/forge.hpp forgeEquippedSheet reads
-// this off the equipped node; src/render.hpp weaponSheet maps it to a
-// SHEET_OFF_MH_WEAPON_* constant.
-constexpr uint8_t NODE_SHEET[NODE_COUNT] = {0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 2, 3, 4};
+// Equipped-sheet kind per node index (jd1/2tb): 0 = the class default
+// sheet, 1..4 = the gunshield variants, 5..8 = the sword beast variants,
+// 9..12 = the flail beast variants. src/forge_state.hpp forgeEquippedSheet
+// reads this off the equipped node; src/render.hpp weaponSheet maps it to a
+// SHEET_OFF_MH_WEAPON_* constant (only against the matching weapon class).
+constexpr uint8_t NODE_SHEET[NODE_COUNT] = {0, 0, 0, 5, 6, 7, 8, 0, 0, 0, 9, 10, 11, 12, 0, 0, 0, 1, 2, 3, 4};
 
 // Per-node upgrade cost (the forge bill's zenny, N_COST_OFF). The UPGRADE
 // screen resolves a class's next node and reads its cost here instead of a
 // runtime cart seek per row (hbk.13).
-constexpr uint16_t NODE_UPGRADE_COST[NODE_COUNT] = {0, 100, 250, 0, 120, 280, 0, 90, 220, 120, 150, 220, 280};
+constexpr uint16_t NODE_UPGRADE_COST[NODE_COUNT] = {0, 100, 250, 120, 150, 220, 280, 0, 120, 280, 120, 150, 220, 280, 0, 90, 220, 120, 150, 220, 280};
 
 // Class first-node index: NODE_<CLASS>_FIRST + n walks the class nodes in
 // data order (the FORGE/GEAR generated row blocks).
 constexpr uint8_t NODE_SWORD_FIRST = 0;
-constexpr uint8_t NODE_FLAIL_FIRST = 3;
-constexpr uint8_t NODE_GUN_FIRST = 6;
+constexpr uint8_t NODE_FLAIL_FIRST = 7;
+constexpr uint8_t NODE_GUN_FIRST = 14;
+
+// Class id (forge::WEAPON_*) -> the class's first node id. The class
+// spines (root/t1/t2) are three contiguous nodes at NODE_CLASS_FIRST[cls];
+// src/screens.hpp screenClassFirst reads this for the UPGRADE walk.
+constexpr uint8_t NODE_CLASS_FIRST[WEAPON_COUNT] = {NODE_SWORD_FIRST, NODE_FLAIL_FIRST, NODE_GUN_FIRST};
 
 }   // namespace forge

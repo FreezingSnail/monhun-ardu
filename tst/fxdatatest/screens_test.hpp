@@ -381,9 +381,10 @@ inline void test_screens(FxTest &test) {
     test.expectEq(screenCondOk(gear, g0), 1, F("gear slot row always live"));
 
     // ------------------------------------ gear slot candidate table (hbk.12)
-    // Slot 0 = the 13 forge nodes in order; 1/2/3 the armor pieces by slot
-    // (head 0,1 / body 2,3 / charm 4). Labels live in the blob records.
-    test.expectEq(screenGearSlotCount(0), 13, F("weapon slot count"));
+    // Slot 0 = the 21 forge nodes in order (sword 0..6, flail 7..13, gun
+    // 14..20); 1/2/3 the armor pieces by slot (head 0,1 / body 2,3 / charm 4).
+    // Labels live in the blob records.
+    test.expectEq(screenGearSlotCount(0), 21, F("weapon slot count"));
     test.expectEq(screenGearSlotCount(1), 2, F("head slot count"));
     test.expectEq(screenGearSlotCount(2), 2, F("body slot count"));
     test.expectEq(screenGearSlotCount(3), 1, F("charm slot count"));
@@ -396,7 +397,9 @@ inline void test_screens(FxTest &test) {
     test.expectEq(ctext[0], 'S', F("weapon cand0 label S"));
     test.expectEq(ctext[4], 'T', F("weapon cand0 label T"));
     screenGearSlotEntry(0, 8, cid, coff);
-    test.expectEq(cid, forge::NODE_GUN_T2, F("weapon cand8 id gun t3"));
+    test.expectEq(cid, forge::NODE_FLAIL_T1, F("weapon cand8 id flail t2"));
+    screenGearSlotEntry(0, 17, cid, coff);
+    test.expectEq(cid, forge::NODE_GUN_BUCKLER, F("weapon cand17 id gun buckler"));
     screenGearSlotEntry(1, 0, cid, coff);
     test.expectEq(cid, armor::ARMOR_HUNTER_HELM, F("head cand0 helm"));
     screenGearSlotEntry(1, 1, cid, coff);
@@ -429,16 +432,16 @@ inline void test_screens(FxTest &test) {
 
     // ------------------------------------ gear slot A rotation + equip (hbk.12)
     // A on the weapon slot rotates to the next owned candidate (the flail root,
-    // candidate 3) and equips it; the save owns all three roots, so the next
-    // presses walk the gun root (6) and wrap back to the sword root (0).
+    // candidate 7) and equips it; the save owns all three roots, so the next
+    // presses walk the gun root (14) and wrap back to the sword root (0).
     saveDefaults(gear);
     screenEnter(readout, screens::SCREEN_GEAR, gear);
     test.expectEq(readout.slotSel[0], 0, F("rotation starts on the sword"));
     test.expectEq(screenGearSlotCycle(gear, readout, 0), 1, F("weapon slot A rotates"));
-    test.expectEq(readout.slotSel[0], 3, F("rotates to the next owned flail"));
+    test.expectEq(readout.slotSel[0], 7, F("rotates to the next owned flail"));
     test.expectEq(gear.equippedNode, forge::NODE_FLAIL_BASE, F("flail root equipped"));
     test.expectEq(screenGearSlotCycle(gear, readout, 0), 1, F("weapon slot A rotates again"));
-    test.expectEq(readout.slotSel[0], 6, F("rotates to the gun root"));
+    test.expectEq(readout.slotSel[0], 14, F("rotates to the gun root"));
     test.expectEq(gear.equippedNode, forge::NODE_GUN_BASE, F("gun root equipped"));
     test.expectEq(screenGearSlotCycle(gear, readout, 0), 1, F("weapon slot A wraps"));
     test.expectEq(readout.slotSel[0], 0, F("wraps back to the sword"));
@@ -594,7 +597,7 @@ inline void test_screens(FxTest &test) {
     test.expectEq(screenPageCount(screens::SCREEN_QUESTS), 2, F("quests page count"));
     test.expectEq(screenPageCount(screens::SCREEN_GEAR), 2, F("gear page count"));
     test.expectEq(screenPageCount(screens::SCREEN_FORGE), 1, F("forge submenu page count"));
-    test.expectEq(screenPageCount(screens::SCREEN_CRAFT), 3, F("craft page count"));
+    test.expectEq(screenPageCount(screens::SCREEN_CRAFT), 4, F("craft page count"));
     test.expectEq(screenPageCount(screens::SCREEN_ARMOR_FORGE), 1, F("armor forge page count"));
     test.expectEq(screenPageCount(screens::SCREEN_UPGRADE), 1, F("upgrade page count"));
     // The generated per-screen offsets are PAGE_TABLE_OFF + screen * stride.
@@ -673,9 +676,10 @@ inline void test_screens_smithy(FxTest &test) {
     test.expectEq(countBits(10, 60, 29, 36), 0, F("forge unselected baked label skips plane2"));
 
     // --------------------------------------------------- hbk.10 CRAFT list
-    // Flat rows in forge-node order (13 nodes + LEAVE = 14, 3 pages): no class
+    // Flat rows in forge-node order (21 nodes + LEAVE = 22, 4 pages): no class
     // headers/prefixes, cost = the node's directCost (the baked craft price).
-    test.expectEq(screenRowCount(screens::SCREEN_CRAFT), 14, F("craft row count"));
+    // Sword 0..6, flail 7..13, gun 14..20 (2tb melee branches appended).
+    test.expectEq(screenRowCount(screens::SCREEN_CRAFT), 22, F("craft row count"));
     screenReadRow(screenRowOffsetAt(screens::SCREEN_CRAFT, 0), srow);
     test.expectEq(srow.action, screens::ACTION_FORGE_NODE, F("craft row0 action forge"));
     test.expectEq(srow.flags, screens::ROW_F_FORGE, F("craft row0 forge flag"));
@@ -687,18 +691,26 @@ inline void test_screens_smithy(FxTest &test) {
     screenReadRow(screenRowOffsetAt(screens::SCREEN_CRAFT, 2), srow);
     test.expectEq(srow.cost, 400, F("craft row2 baked direct cost"));
     screenReadRow(screenRowOffsetAt(screens::SCREEN_CRAFT, 3), srow);
-    test.expectEq(srow.param, forge::NODE_FLAIL_BASE, F("craft row3 param flail root"));
+    test.expectEq(srow.param, forge::NODE_SWORD_SABER, F("craft row3 param sword saber"));
+    test.expectEq(srow.cost, 200, F("craft row3 baked direct cost"));
+    screenReadRow(screenRowOffsetAt(screens::SCREEN_CRAFT, 7), srow);
+    test.expectEq(srow.param, forge::NODE_FLAIL_BASE, F("craft row7 param flail root"));
     test.expectEq(srow.cost, 0, F("craft flail root cost 0"));
-    screenReadRow(screenRowOffsetAt(screens::SCREEN_CRAFT, 8), srow);
-    test.expectEq(srow.param, forge::NODE_GUN_T2, F("craft row8 param gun t3"));
-    test.expectEq(srow.cost, 360, F("craft row8 baked direct cost"));
     screenReadRow(screenRowOffsetAt(screens::SCREEN_CRAFT, 13), srow);
+    test.expectEq(srow.param, forge::NODE_FLAIL_SPIKE, F("craft row13 param flail spike"));
+    test.expectEq(srow.cost, 420, F("craft row13 baked direct cost"));
+    screenReadRow(screenRowOffsetAt(screens::SCREEN_CRAFT, 16), srow);
+    test.expectEq(srow.param, forge::NODE_GUN_T2, F("craft row16 param gun t3"));
+    test.expectEq(srow.cost, 360, F("craft row16 baked direct cost"));
+    screenReadRow(screenRowOffsetAt(screens::SCREEN_CRAFT, 21), srow);
     test.expectEq(srow.action, screens::ACTION_LEAVE, F("craft leave row"));
 
     // Pixel: page 0 bakes the flat labels (no tree prefix) and the direct
     // costs; row 1 (SWD T2, y=20) bakes cost 180 ending at x=112, row 0 (root,
     // cost 0) bakes none. The cursor chip stays live on row 0. Back to plane 0
     // so the shade-2 baked labels/markers are ink again.
+    // Own the sword saber branch (row 3) so its live marker is exercised too.
+    saveSetWeaponOwned(fsave, forge::NODE_SWORD_SABER);
     waitPlane(0);
     clearFb();
     screenEnter(forge, screens::SCREEN_CRAFT, fsave);
@@ -709,13 +721,13 @@ inline void test_screens_smithy(FxTest &test) {
     test.expectEq(countBits(100, 111, 20, 27) > 0 ? 1 : 0, 1, F("craft row1 baked cost 180"));
     test.expectEq(countBits(100, 111, 11, 18), 0, F("craft row0 root has no cost"));
     // Live node markers on the craft rows (ROW_F_FORGE): the default save owns
-    // and equips the sword root (row 0 -> white) and owns the flail/gun roots;
-    // an unforged child (row 1) leaves the marker column empty.
+    // and equips the sword root (row 0 -> white) and now owns the saber branch
+    // (row 3 -> gray); an unforged child (row 1) leaves the marker column empty.
     test.expectEq(countBits(118, 121, 14, 17) > 0 ? 1 : 0, 1, F("craft equipped root marker ink"));
     test.expectEq(countBits(118, 121, 23, 26), 0, F("craft unforged child marker empty"));
-    test.expectEq(countBits(118, 121, 41, 44) > 0 ? 1 : 0, 1, F("craft owned flail root marker ink"));
+    test.expectEq(countBits(118, 121, 41, 44) > 0 ? 1 : 0, 1, F("craft owned saber marker ink"));
     // Plane 2 lights shade 3 only: the equipped (white) root marker is ink, the
-    // owned (shade 2) flail root marker is not.
+    // owned (shade 2) saber marker is not.
     waitPlane(2);
     clearFb();
     screenEnter(forge, screens::SCREEN_CRAFT, fsave);

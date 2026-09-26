@@ -87,6 +87,18 @@
 // ST_GUARD, E, kinds 1..4). Only the appended rows are new; all 40 prior cases
 // kept their bytes (the pre-jd1 rows carry wpnSheet 0 = the class default).
 
+//
+// Bead monhun-ardu-2tb (melee beast branches): the same equipped-node kind now
+// also selects the sword (kinds 5..8: saber/cleaver/tailblade/fang) and flail
+// (kinds 9..12: sling/shell/tail/spike) variant sheets, so the eight variants
+// are pinned as appended cases 44..51 (W_SWORD/W_FLAIL, PS_IDLE, ST_NONE, E,
+// kinds 5..12), each drawing a different idle-row weapon part. Only the
+// appended rows are new; all 44 prior cases kept their bytes.
+//
+// RAM note: the case matrix outgrew RAM at 52 rows (the array sat in .data and
+// the globals line hit 2497/2560 with 63 B for the stack, which corrupted
+// earlier cases non-deterministically). CASES is now flash-resident behind
+// MH_PROGMEM and read with memcpy_P per case, so the matrix can keep growing.
 #include "harness/fxtest.hpp"
 #include "src/core/world.hpp"
 #include "src/render.hpp"
@@ -120,7 +132,7 @@ struct Case {
 };
 
 // State matrix. Facings are 8-way fp vectors (E = 16,0; W = -16,0; SE = 11,11).
-static const Case CASES[] = {
+static const Case MH_PROGMEM CASES[] = {
     // sword: body normal/dodge, slash frames by attack, parry, riposte
     {W_SWORD, PS_IDLE, ST_NONE, 0, 0, 16, 0, 0, 0, 0, 0},
     {W_SWORD, PS_IDLE, ST_NONE, 0, 0, -16, 0, 0, 0, 0, 0},
@@ -174,11 +186,23 @@ static const Case CASES[] = {
     {W_GUN, PS_IDLE, ST_GUARD, 0, 0, 16, 0, 0, 0, 0, 0, 0, 2},
     {W_GUN, PS_IDLE, ST_GUARD, 0, 0, 16, 0, 0, 0, 0, 0, 0, 3},
     {W_GUN, PS_IDLE, ST_GUARD, 0, 0, 16, 0, 0, 0, 0, 0, 0, 4},
+    // 2tb melee beast variants: same base pose (idle, facing E) with each
+    // equipped forge-node sheet kind 5..8 (sword) / 9..12 (flail) -- the sheet
+    // selector must swap the drawn sword/flail sheet. The idle row draws the
+    // blade / ball, so every style pins distinct pixels.
+    {W_SWORD, PS_IDLE, ST_NONE, 0, 0, 16, 0, 0, 0, 0, 0, 0, 5},
+    {W_SWORD, PS_IDLE, ST_NONE, 0, 0, 16, 0, 0, 0, 0, 0, 0, 6},
+    {W_SWORD, PS_IDLE, ST_NONE, 0, 0, 16, 0, 0, 0, 0, 0, 0, 7},
+    {W_SWORD, PS_IDLE, ST_NONE, 0, 0, 16, 0, 0, 0, 0, 0, 0, 8},
+    {W_FLAIL, PS_IDLE, ST_NONE, 0, 0, 16, 0, 0, 0, 0, 0, 0, 9},
+    {W_FLAIL, PS_IDLE, ST_NONE, 0, 0, 16, 0, 0, 0, 0, 0, 0, 10},
+    {W_FLAIL, PS_IDLE, ST_NONE, 0, 0, 16, 0, 0, 0, 0, 0, 0, 11},
+    {W_FLAIL, PS_IDLE, ST_NONE, 0, 0, 16, 0, 0, 0, 0, 0, 0, 12},
 };
 constexpr uint8_t CASE_COUNT = static_cast<uint8_t>(sizeof(CASES) / sizeof(CASES[0]));
 // Changing the matrix invalidates GOLDEN: extend both in the same change and
 // capture the new hashes with the regen command above.
-static_assert(CASE_COUNT == 44, "golden matrix changed; regenerate GOLDEN");
+static_assert(CASE_COUNT == 52, "golden matrix changed; regenerate GOLDEN");
 
 // Golden framebuffer hashes [case][plane], captured pre-refactor. See the regen
 // note above; PROGMEM so the 3 x CASE_COUNT words stay in flash.
@@ -231,6 +255,16 @@ static const uint32_t MH_PROGMEM GOLDEN[CASE_COUNT][3] = {
     {0x6cf6bb00u, 0x6c89d9acu, 0x5be309deu},
     {0xaed61621u, 0x62e32a39u, 0x5d595e89u},
     {0x9d80d12fu, 0x17ccce82u, 0xa0fa3755u},
+    // 2tb melee beast variants (cases 44..51): sword kinds 5..8 / flail kinds
+    // 9..12, each drawing a different class sheet at the same idle pose.
+    {0x15fb6d94u, 0x09802e7cu, 0x09802e7cu},
+    {0x04d7ea52u, 0x363c6d64u, 0x6bcb5483u},
+    {0x4f7da0ccu, 0xd62cb1ebu, 0x9e231fedu},
+    {0x7fa3131du, 0xa26f6e75u, 0x239bd593u},
+    {0x3382bdd5u, 0x2f9de2b3u, 0x2f9de2b3u},
+    {0x8171362au, 0x6e297a02u, 0xebfab8b1u},
+    {0xaf913f46u, 0x5eb2cee1u, 0x570cb801u},
+    {0x5588d356u, 0x2a256461u, 0x2a256461u},
 };
 static_assert(sizeof(GOLDEN) / sizeof(GOLDEN[0]) == CASE_COUNT, "goldens must cover every case");
 
@@ -309,7 +343,9 @@ inline void test_player_art(FxTest &test) {
 
     static Game g;
     for (uint8_t ci = 0; ci < CASE_COUNT; ci++) {
-        setupCase(g, CASES[ci]);
+        Case c;
+        memcpy_P(&c, &CASES[ci], sizeof(Case));   // flash-resident matrix (RAM note above)
+        setupCase(g, c);
         if (PRINT_GOLDENS) {
             Serial.print(F("G "));
             Serial.print(ci);
