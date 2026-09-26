@@ -1003,7 +1003,7 @@ void CombatSuite(TestRunner &runner) {
         t.assert(head.box.w, 12, "head w");
         t.assert(head.box.h, 12, "head h");
         t.assert(head.dmgMul, 130, "head dmgMul");
-        t.assert(head.hp, 160, "head pool hp");
+        t.assert(head.hp, 106, "head pool hp");
         t.assert(head.bodyShare, 100, "head bodyShare");
         t.assert(head.breakTypes, PHYS_SLASH, "head breakTypes slash only");
         t.assert(head.staggerOnHit, 12, "head staggerOnHit");
@@ -1016,7 +1016,7 @@ void CombatSuite(TestRunner &runner) {
         t.assert(tail.box.w, 18, "tail w");
         t.assert(tail.box.h, 10, "tail h");
         t.assert(tail.dmgMul, 150, "tail dmgMul");
-        t.assert(tail.hp, 240, "tail pool hp");
+        t.assert(tail.hp, 160, "tail pool hp");
         t.assert(tail.bodyShare, 40, "tail bodyShare");
         t.assert(tail.breakTypes, PHYS_SLASH, "tail breakTypes slash only");
         t.assert(tail.staggerOnHit, 30, "tail staggerOnHit");
@@ -1080,7 +1080,7 @@ void CombatSuite(TestRunner &runner) {
         t.assert(r.zone, COMBAT_ZONE_HEAD, "head wins forward");
         t.assert(r.mul, 130, "head multiplier");
         t.assert(r.dmg, 13, "head body share 100");
-        t.assert(g.combat.zone[COMBAT_ZONE_HEAD].hp, 147, "head pool 160-13");
+        t.assert(g.combat.zone[COMBAT_ZONE_HEAD].hp, 93, "head pool 106-13");
 
         // Blunt is not a head/hit break type? head breakTypes are SLASH: pool
         // drains but no break bit.
@@ -1091,7 +1091,7 @@ void CombatSuite(TestRunner &runner) {
         t.assert(r.zone, COMBAT_ZONE_APPENDAGE, "tail wins behind");
         t.assert(r.mul, 150, "tail multiplier");
         t.assert(r.dmg, 6, "tail body share 40");
-        t.assert(g.combat.zone[COMBAT_ZONE_APPENDAGE].hp, 225, "tail pool 240-15");
+        t.assert(g.combat.zone[COMBAT_ZONE_APPENDAGE].hp, 145, "tail pool 160-15");
 
         // Tie rule: an explicit 100 zone does not beat the implicit body.
         g.combat.zone[COMBAT_ZONE_HEAD].dmgMul = 100;
@@ -1124,8 +1124,8 @@ void CombatSuite(TestRunner &runner) {
         m.fx = 16;
         m.fy = 0;
 
-        // 10*150/100 = 15 per slash hit; 240 drains in 16 hits (240/15).
-        for (int i = 0; i < 16; i++) {
+        // 10*150/100 = 15 per slash hit; 160 drains in 11 hits (160/15 = 10.67).
+        for (int i = 0; i < 11; i++) {
             const CombatBodyHit r = combatZoneHitResolve(g, 10, PHYS_SLASH, 95, 52);
             t.assert(r.zone, COMBAT_ZONE_APPENDAGE, "slash hits tail while intact");
         }
@@ -1323,7 +1323,7 @@ void CombatSuite(TestRunner &runner) {
         t.assert(z.box.oy, 4, "heavy tail oy");
         t.assert(z.box.w, 24, "heavy tail w");
         t.assert(z.box.h, 11, "heavy tail h");
-        t.assert(z.hp, 240, "heavy tail hp");
+        t.assert(z.hp, 160, "heavy tail hp");
         t.assert(z.dmgMul, 150, "heavy tail dmgMul");
         t.assert(z.bodyShare, 40, "heavy tail bodyShare");
         t.assert(z.breakTypes, PHYS_SLASH, "heavy tail breakTypes");

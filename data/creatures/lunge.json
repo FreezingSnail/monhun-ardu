@@ -13,7 +13,7 @@
     "flash": 5,
     "dead": 6
   },
-  "stats": { "w": 32, "h": 24, "hp": 1800, "spd": 6, "spawnX": 200, "spawnY": 40 },
+  "stats": { "w": 32, "h": 24, "hp": 1200, "spd": 6, "spawnX": 200, "spawnY": 40 },
   "carve": [
     { "item": "scale", "count": 1, "chance": 100 },
     { "item": "shell", "count": 1, "chance": 45 }
@@ -22,7 +22,7 @@
     "head": {
       "part": "fxhead_chicken",
       "dmgMul": 130,
-      "hp": 160,
+      "hp": 106,
       "bodyShare": 100,
       "breakTypes": ["SLASH"],
       "hurtOn": true,
@@ -32,7 +32,7 @@
     "appendage": {
       "part": "fxlegs_chicken",
       "dmgMul": 150,
-      "hp": 240,
+      "hp": 160,
       "bodyShare": 40,
       "breakTypes": ["SLASH"],
       "hurtOn": true,

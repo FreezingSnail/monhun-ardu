@@ -68,11 +68,11 @@ void HitscanSuite(TestRunner &runner) {
     TestSuite suite("Gun hitscan arrowshot: reach hit, stam, muzzle spark (src/core/player.hpp)");
 
     {
-        Test t("arrowshot data: reach 44, dmg 12, stam 14");
+        Test t("arrowshot data: reach 44, dmg 12, stam 21");
         const Attack *a = weaponSpecial(&WEAPON_DEFS[W_GUN]);
         t.assert(attackReach(a), 44, "authored reach");
         t.assert(attackDmg(a), 12, "authored dmg");
-        t.assert(attackStam(a), 14, "authored stam");
+        t.assert(attackStam(a), 21, "authored stam");
         suite.addTest(t);
     }
 
@@ -85,7 +85,7 @@ void HitscanSuite(TestRunner &runner) {
         hfire(g);
         t.assert(g.player.state, PS_SPECIAL, "arrowshot enters PS_SPECIAL");
         t.assert(g.player.atk == weaponSpecial(&WEAPON_DEFS[W_GUN]) ? 1 : 0, 1, "special attack data");
-        t.assert(g.player.stam, stam0 - 14, "stam spent");
+        t.assert(g.player.stam, stam0 - 21, "stam spent");
         t.assert(g.player.reload, ARROW_NOCK_TICKS, "nock timer armed");
         t.assert(g.player.stance, ST_GUARD, "guard held through the shot (B held)");
         t.assert(g.player.bLocked, false, "no re-entry lock: the hold is still live");

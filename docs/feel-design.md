@@ -177,14 +177,14 @@ windup/active/recover. Window `t` ranges are inclusive, 1-based.
 
 ### Chicken — `data/creatures/lunge.json` (skeleton `chicken`)
 
-**Stats:** w32 h24, hp1800, spd6, spawn (200,40), collide (9,13,9,9), no enrage.
+**Stats:** w32 h24, hp1200, spd6, spawn (200,40), collide (9,13,9,9), no enrage.
 
 **Zones**
 
 | Zone | Box | dmgMul | HP | Share | Stagger | Break |
 |---|---|---:|---:|---:|---:|---|
-| head | (18, 0, 11, 7) | 130 | 160 | 100 | 12 | SLASH; broken dmgMul 130, hurtOn false |
-| appendage | (9, 13, 9, 9) | 150 | 240 | 40 | 30 | SLASH; broken dmgMul 200, hurtOn false, disables `leap` |
+| head | (18, 0, 11, 7) | 130 | 106 | 100 | 12 | SLASH; broken dmgMul 130, hurtOn false |
+| appendage | (9, 13, 9, 9) | 150 | 160 | 40 | 30 | SLASH; broken dmgMul 200, hurtOn false, disables `leap` |
 
 Every creature is mask-migrated (epic monhun-ardu-ryh): the boxes below come
 from `images/masks/<sheet>_<cellW>x<cellH>.png` via `tools/gen-hitboxes.py`,
@@ -216,15 +216,15 @@ stationary rest: after two attacks it stands still ~2.1 s, cd 0, idle flap).
 
 ### Bull — `data/creatures/sweep.json` (skeleton `bull`)
 
-**Stats:** w28 h22, hp1500, spd7, spawn (200,40), collide (1,14,26,8).
+**Stats:** w28 h22, hp1000, spd7, spawn (200,40), collide (1,14,26,8).
 **Enrage:** hpPct 40, spdMul 130, faceHold 6, cue 0 (spd 7 → 9, faceHold 10 → 6).
 
 **Zones**
 
 | Zone | Box | dmgMul | HP | Share | Stagger | Break |
 |---|---|---:|---:|---:|---:|---|
-| head | (21, 4, 8, 8) | 130 | 160 | 100 | 12 | SLASH; broken dmgMul 130, hurtOn false |
-| appendage | (4, 18, 20, 5) | 150 | 240 | 40 | 30 | SLASH; broken dmgMul 200, hurtOn false, disables `stomp` |
+| head | (21, 4, 8, 8) | 130 | 106 | 100 | 12 | SLASH; broken dmgMul 130, hurtOn false |
+| appendage | (4, 18, 20, 5) | 150 | 160 | 40 | 30 | SLASH; broken dmgMul 200, hurtOn false, disables `stomp` |
 
 **Profile:** engage 36 / keep 18 / attack 42; faceHold 10; turnRate 1; circle 8/10;
 retreat 6/10; cdBase 55 + jitter 40; spawnT 90 / spawnCd 140; stunRecover 24;
@@ -249,13 +249,13 @@ staggerMax 80, decay 1, recover 24.
 
 ### Heavy — `data/creatures/heavy.json` (skeleton `longtail`)
 
-**Stats:** w40 h28, hp2800, spd5, spawn (200,40), collide (-8,3,48,22), no enrage.
+**Stats:** w40 h28, hp1900, spd5, spawn (200,40), collide (-8,3,48,22), no enrage.
 
 **Zone**
 
 | Zone | Box | dmgMul | HP | Share | Stagger | Break |
 |---|---|---:|---:|---:|---:|---|
-| appendage | (-24, 4, 24, 11) | 150 | 240 | 40 | 30 | SLASH; broken dmgMul 200, hurtOn false, disables `tail_spin` |
+| appendage | (-24, 4, 24, 11) | 150 | 160 | 40 | 30 | SLASH; broken dmgMul 200, hurtOn false, disables `tail_spin` |
 
 **Profile:** engage 36 / keep 12 / attack 42; faceHold 10; turnRate 1; circle 8/10;
 retreat 6/10; cdBase 55 + jitter 40; spawnT 90 / spawnCd 140; stunRecover 24;

@@ -432,10 +432,10 @@ by the card hint line, not a list token column (ui.4.1 trim).
 
 | Target | Mode | Size | HP | Spd | Attack |
 |---|---|---|---|---|---|
-| LUNGE | hunt | 32x24 | 1800 | 5 | pecks inside 28 px, leaps 29..41 px (leap locks facing at windup) |
-| SWEEP | hunt | 28x22 | 1500 | 7 | stomps inside 24 px, gores 25..41 px (gore locks facing at windup) |
-| HEAVY | hunt | 40x28 | 2800 | 3 | lunges inside 24 px |
-| RAVAGER | hunt | 32x24 | 2600 | 6 | breakable head/appendage zones (ljj.6), pattern-driven |
+| LUNGE | hunt | 32x24 | 1200 | 5 | pecks inside 28 px, leaps 29..41 px (leap locks facing at windup) |
+| SWEEP | hunt | 28x22 | 1000 | 7 | stomps inside 24 px, gores 25..41 px (gore locks facing at windup) |
+| HEAVY | hunt | 40x28 | 1900 | 3 | lunges inside 24 px |
+| RAVAGER | hunt | 32x24 | 1600 | 6 | breakable head/appendage zones (ljj.6), pattern-driven |
 
 ### In game (hunt)
 

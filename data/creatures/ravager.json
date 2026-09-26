@@ -13,7 +13,7 @@
     "flash": 2,
     "dead": 3
   },
-  "stats": { "w": 32, "h": 24, "hp": 2400, "spd": 6, "spawnX": 200, "spawnY": 40 },
+  "stats": { "w": 32, "h": 24, "hp": 1600, "spd": 6, "spawnX": 200, "spawnY": 40 },
   "carve": [
     { "item": "fang", "count": 1, "chance": 100 },
     { "item": "tail", "count": 1, "chance": 45 },
@@ -41,7 +41,7 @@
   "zones": {
     "head": {
       "dmgMul": 130,
-      "hp": 160,
+      "hp": 106,
       "bodyShare": 100,
       "breakTypes": ["SLASH"],
       "hurtOn": true,
@@ -50,7 +50,7 @@
     },
     "appendage": {
       "dmgMul": 150,
-      "hp": 240,
+      "hp": 160,
       "bodyShare": 40,
       "breakTypes": ["SLASH"],
       "hurtOn": true,

@@ -325,17 +325,17 @@ MH_PROGMEM const WeaponDef WEAPON_DEFS[3] = {
     {
         W_SWORD,
         14,
-        {{3, 5, 8, 9, MH_PLAYER_BOX(0, 0), 9, 0, 0, 0, false, ATK_NONE},
-         {3, 5, 8, 10, MH_PLAYER_BOX(0, 1), 9, 0, 0, 0, false, ATK_NONE},
-         {5, 6, 14, 17, MH_PLAYER_BOX(0, 2), 15, 0, 0, 0, false, ATK_NONE}},
-        {4, 6, 16, 24, MH_PLAYER_BOX(0, 3), 20, 0, 0, 0, false, ATK_NONE},
-        {{1, ST_NONE, 0, {3, 5, 12, 12, MH_PLAYER_BOX(0, 8), 10, 42, 0, 0, false, ATK_STEPSLASH}},
-         {2, ST_NONE, 0, {5, 7, 15, 20, MH_PLAYER_BOX(0, 9), 16, 0, 0, 0, false, ATK_SPINCUT}},
-         {3, ST_NONE, 0, {8, 4, 20, 26, MH_PLAYER_BOX(0, 10), 18, 0, 0, 0, false, ATK_BRANCH2}}},
+        {{3, 5, 8, 9, MH_PLAYER_BOX(0, 0), 14, 0, 0, 0, false, ATK_NONE},
+         {3, 5, 8, 10, MH_PLAYER_BOX(0, 1), 14, 0, 0, 0, false, ATK_NONE},
+         {5, 6, 14, 17, MH_PLAYER_BOX(0, 2), 22, 0, 0, 0, false, ATK_NONE}},
+        {4, 6, 16, 24, MH_PLAYER_BOX(0, 3), 30, 0, 0, 0, false, ATK_NONE},
+        {{1, ST_NONE, 0, {3, 5, 12, 12, MH_PLAYER_BOX(0, 8), 15, 42, 0, 0, false, ATK_STEPSLASH}},
+         {2, ST_NONE, 0, {5, 7, 15, 20, MH_PLAYER_BOX(0, 9), 24, 0, 0, 0, false, ATK_SPINCUT}},
+         {3, ST_NONE, 0, {8, 4, 20, 26, MH_PLAYER_BOX(0, 10), 27, 0, 0, 0, false, ATK_BRANCH2}}},
         true,
         {{0, 0, 0, 0, 0, 0, 0, 0}, {0, 0, 0, 0, 0, 0, 0, 0}},
-        {4, 5, 10, 12, MH_PLAYER_BOX(0, 4), 10, 0, 0, 0, false, ATK_ROLL},                                                                  // rollslash
-        {6, 4, 12, 14, MH_PLAYER_BOX(0, 5), 12, 20, 0, 0, false, ATK_ALT},                                                                  // thrust (lunge 20)
+        {4, 5, 10, 12, MH_PLAYER_BOX(0, 4), 15, 0, 0, 0, false, ATK_ROLL},                                                                  // rollslash
+        {6, 4, 12, 14, MH_PLAYER_BOX(0, 5), 18, 20, 0, 0, false, ATK_ALT},                                                                  // thrust (lunge 20)
         {{0, 0, 0, 0, MH_PLAYER_BOX(0, 6), 0, 0, 0, 0, false, ATK_NONE}, {0, 0, 0, 0, MH_PLAYER_BOX(0, 7), 0, 0, 0, 0, false, ATK_NONE}},   // no charge
         {{0, 0, 0, 0, 0, 0, 0, 0}, {0, 0, 0, 0, 0, 0, 0, 0}},                                                                               // no charge shells
     },
@@ -343,36 +343,36 @@ MH_PROGMEM const WeaponDef WEAPON_DEFS[3] = {
     {
         W_FLAIL,
         12,
-        {{8, 6, 9, 14, MH_PLAYER_BOX(1, 0), 13, 0, 0, 0, false, ATK_NONE},
-         {6, 6, 9, 17, MH_PLAYER_BOX(1, 1), 12, 0, 0, 0, false, ATK_NONE},
-         {5, 7, 15, 25, MH_PLAYER_BOX(1, 2), 17, 0, 0, 0, false, ATK_NONE}},
-        {4, 8, 14, 27, MH_PLAYER_BOX(1, 3), 22, 0, 0, 0, false, ATK_NONE},
+        {{8, 6, 9, 14, MH_PLAYER_BOX(1, 0), 20, 0, 0, 0, false, ATK_NONE},
+         {6, 6, 9, 17, MH_PLAYER_BOX(1, 1), 18, 0, 0, 0, false, ATK_NONE},
+         {5, 7, 15, 25, MH_PLAYER_BOX(1, 2), 26, 0, 0, 0, false, ATK_NONE}},
+        {4, 8, 14, 27, MH_PLAYER_BOX(1, 3), 33, 0, 0, 0, false, ATK_NONE},
         {{1, ST_WHIRL, 50, {0, 0, 0, 0, MH_PLAYER_BOX(1, 8), 0, 0, 0, 0, false, ATK_NONE}},
-         {2, ST_NONE, 0, {5, 6, 16, 12, MH_PLAYER_BOX(1, 9), 14, 0, 0, 1, false, ATK_TRIP}},
-         {3, ST_NONE, 0, {10, 6, 24, 32, MH_PLAYER_BOX(1, 10), 24, 0, 12, 1, false, ATK_BRANCH2}}},
+         {2, ST_NONE, 0, {5, 6, 16, 12, MH_PLAYER_BOX(1, 9), 21, 0, 0, 1, false, ATK_TRIP}},
+         {3, ST_NONE, 0, {10, 6, 24, 32, MH_PLAYER_BOX(1, 10), 36, 0, 12, 1, false, ATK_BRANCH2}}},
         false,
         {{0, 0, 0, 0, 0, 0, 0, 0}, {0, 0, 0, 0, 0, 0, 0, 0}},
-        {4, 6, 13, 15, MH_PLAYER_BOX(1, 4), 10, 0, 0, 0, false, ATK_ROLL},      // rollsweep
-        {6, 6, 14, 18, MH_PLAYER_BOX(1, 5), 14, 0, 0, 0, false, ATK_ALT},       // widesweep
-        {{4, 6, 14, 24, MH_PLAYER_BOX(1, 6), 14, 0, 0, 0, false, ATK_CHARGE},   // chargeslam1
-         {5, 8, 20, 36, MH_PLAYER_BOX(1, 7), 22, 0, 0, 1, false, ATK_NONE}},    // chargeslam2 (trip)
+        {4, 6, 13, 15, MH_PLAYER_BOX(1, 4), 15, 0, 0, 0, false, ATK_ROLL},      // rollsweep
+        {6, 6, 14, 18, MH_PLAYER_BOX(1, 5), 21, 0, 0, 0, false, ATK_ALT},       // widesweep
+        {{4, 6, 14, 24, MH_PLAYER_BOX(1, 6), 21, 0, 0, 0, false, ATK_CHARGE},   // chargeslam1
+         {5, 8, 20, 36, MH_PLAYER_BOX(1, 7), 33, 0, 0, 1, false, ATK_NONE}},    // chargeslam2 (trip)
         {{0, 0, 0, 0, 0, 0, 0, 0}, {0, 0, 0, 0, 0, 0, 0, 0}},                   // no charge shells
     },
     // gunshield: slow walk, shove, guard stance + gun (ball / scatter)
     {
         W_GUN,
         7,
-        {{5, 4, 11, 6, MH_PLAYER_BOX(2, 0), 8, 0, 0, 0, false, ATK_NONE},
-         {5, 4, 11, 7, MH_PLAYER_BOX(2, 1), 8, 0, 0, 0, false, ATK_NONE},
-         {7, 5, 15, 11, MH_PLAYER_BOX(2, 2), 13, 0, 0, 0, false, ATK_NONE}},
-        {6, 4, 16, 12, MH_PLAYER_BOX(2, 3), 14, 0, 0, 0, false, ATK_NONE},   // arrowshot: hitscan special (reach 44)
-        {{1, ST_NONE, 0, {4, 5, 16, 22, MH_PLAYER_BOX(2, 8), 6, 0, 0, 0, true, ATK_POINTBLANK}},
-         {2, ST_NONE, 0, {4, 4, 12, 9, MH_PLAYER_BOX(2, 9), 8, 0, 12, 0, false, ATK_GUARDBASH}},
-         {3, ST_NONE, 0, {6, 3, 20, 30, MH_PLAYER_BOX(2, 10), 16, 0, 16, 0, false, ATK_BRANCH2}}},
+        {{5, 4, 11, 6, MH_PLAYER_BOX(2, 0), 12, 0, 0, 0, false, ATK_NONE},
+         {5, 4, 11, 7, MH_PLAYER_BOX(2, 1), 12, 0, 0, 0, false, ATK_NONE},
+         {7, 5, 15, 11, MH_PLAYER_BOX(2, 2), 20, 0, 0, 0, false, ATK_NONE}},
+        {6, 4, 16, 12, MH_PLAYER_BOX(2, 3), 21, 0, 0, 0, false, ATK_NONE},   // arrowshot: hitscan special (reach 44)
+        {{1, ST_NONE, 0, {4, 5, 16, 22, MH_PLAYER_BOX(2, 8), 9, 0, 0, 0, true, ATK_POINTBLANK}},
+         {2, ST_NONE, 0, {4, 4, 12, 9, MH_PLAYER_BOX(2, 9), 12, 0, 12, 0, false, ATK_GUARDBASH}},
+         {3, ST_NONE, 0, {6, 3, 20, 30, MH_PLAYER_BOX(2, 10), 24, 0, 16, 0, false, ATK_BRANCH2}}},
         true,
         {{2, 28, 35, 7, 6, 70, 6, 1}, {5, 7, 42, 4, 4, 30, 5, 3}},
-        {3, 4, 12, 8, MH_PLAYER_BOX(2, 4), 8, 30, 10, 0, false, ATK_ROLL},                                                                  // shieldbash (lunge 30, push 10)
-        {4, 5, 14, 10, MH_PLAYER_BOX(2, 5), 9, 18, 14, 0, false, ATK_ALT},                                                                  // shieldcharge (lunge 18, push 14)
+        {3, 4, 12, 8, MH_PLAYER_BOX(2, 4), 12, 30, 10, 0, false, ATK_ROLL},                                                                 // shieldbash (lunge 30, push 10)
+        {4, 5, 14, 10, MH_PLAYER_BOX(2, 5), 14, 18, 14, 0, false, ATK_ALT},                                                                 // shieldcharge (lunge 18, push 14)
         {{0, 0, 0, 0, MH_PLAYER_BOX(2, 6), 0, 0, 0, 0, false, ATK_NONE}, {0, 0, 0, 0, MH_PLAYER_BOX(2, 7), 0, 0, 0, 0, false, ATK_NONE}},   // no melee charge
         {{0, 34, 45, 7, 6, 70, 12, 1}, {0, 46, 55, 8, 8, 70, 18, 1}},                                                                       // charge ball L1/L2
     },

@@ -115,7 +115,7 @@ inline void test_data(FxTest &test) {
     test.expectEq(attackReach(a0), 13, F("s0 reach"));
     test.expectEq(attackHw(a0), 12, F("s0 hw"));
     test.expectEq(attackHh(a0), 10, F("s0 hh"));
-    test.expectEq(attackStam(a0), 9, F("s0 stam"));
+    test.expectEq(attackStam(a0), 14, F("s0 stam"));
     test.expectEq(attackLunge(a0), 0, F("s0 lunge"));
     test.expectEq(attackPush(a0), 0, F("s0 push"));
     test.expectEq(attackEffect(a0), 0, F("s0 effect"));
@@ -130,7 +130,7 @@ inline void test_data(FxTest &test) {
     test.expectEq(attackReach(a2), 16, F("s2 reach"));
     test.expectEq(attackHw(a2), 18, F("s2 hw"));
     test.expectEq(attackHh(a2), 14, F("s2 hh"));
-    test.expectEq(attackStam(a2), 15, F("s2 stam"));
+    test.expectEq(attackStam(a2), 22, F("s2 stam"));
 
     const Attack *as = weaponSpecial(w0);
     test.expectEq(attackStartup(as), 4, F("special startup"));
@@ -140,7 +140,7 @@ inline void test_data(FxTest &test) {
     test.expectEq(attackReach(as), 18, F("special reach"));
     test.expectEq(attackHw(as), 20, F("special hw"));
     test.expectEq(attackHh(as), 16, F("special hh"));
-    test.expectEq(attackStam(as), 20, F("special stam"));
+    test.expectEq(attackStam(as), 30, F("special stam"));
 
     const Branch *b0 = weaponBranch(w0, 0);
     test.expectEq(branchStage(b0), 1, F("stepslash stage"));
@@ -170,7 +170,7 @@ inline void test_data(FxTest &test) {
     test.expectEq(attackReach(branchAtk(b2)), 16, F("helmsplit reach"));
     test.expectEq(attackHw(branchAtk(b2)), 20, F("helmsplit hw"));
     test.expectEq(attackHh(branchAtk(b2)), 22, F("helmsplit hh"));
-    test.expectEq(attackStam(branchAtk(b2)), 18, F("helmsplit stam"));
+    test.expectEq(attackStam(branchAtk(b2)), 27, F("helmsplit stam"));
     test.expectEq(attackLunge(branchAtk(b2)), 0, F("helmsplit lunge"));
     test.expectEq(attackPush(branchAtk(b2)), 0, F("helmsplit push"));
     test.expectEq(attackEffect(branchAtk(b2)), 0, F("helmsplit effect"));
@@ -195,14 +195,14 @@ inline void test_data(FxTest &test) {
     test.expectEq(attackReach(f0), 19, F("f0 reach"));
     test.expectEq(attackHw(f0), 20, F("f0 hw"));
     test.expectEq(attackHh(f0), 16, F("f0 hh"));
-    test.expectEq(attackStam(f0), 13, F("f0 stam"));
+    test.expectEq(attackStam(f0), 20, F("f0 stam"));
 
     const Attack *fs = weaponSpecial(w1);
     test.expectEq(attackDmg(fs), 27, F("flail special dmg"));
     test.expectEq(attackReach(fs), 32, F("flail special reach"));
     test.expectEq(attackHw(fs), 14, F("flail special hw"));
     test.expectEq(attackHh(fs), 18, F("flail special hh"));
-    test.expectEq(attackStam(fs), 22, F("flail special stam"));
+    test.expectEq(attackStam(fs), 33, F("flail special stam"));
 
     const Branch *fb0 = weaponBranch(w1, 0);
     test.expectEq(branchStage(fb0), 1, F("whirl stage"));
@@ -218,7 +218,7 @@ inline void test_data(FxTest &test) {
     test.expectEq(attackReach(branchAtk(fb1)), 22, F("trip reach"));
     test.expectEq(attackHw(branchAtk(fb1)), 22, F("trip hw"));
     test.expectEq(attackHh(branchAtk(fb1)), 14, F("trip hh"));
-    test.expectEq(attackStam(branchAtk(fb1)), 14, F("trip stam"));
+    test.expectEq(attackStam(branchAtk(fb1)), 21, F("trip stam"));
     test.expectEq(attackEffect(branchAtk(fb1)), 1, F("trip effect"));
     test.expectEq(attackShell(branchAtk(fb1)), 0, F("trip shell"));
     test.expectEq(attackId(branchAtk(fb1)), ATK_TRIP, F("trip id"));
@@ -233,7 +233,7 @@ inline void test_data(FxTest &test) {
     test.expectEq(attackReach(branchAtk(fb2)), 24, F("earthslam reach"));
     test.expectEq(attackHw(branchAtk(fb2)), 32, F("earthslam hw"));
     test.expectEq(attackHh(branchAtk(fb2)), 24, F("earthslam hh"));
-    test.expectEq(attackStam(branchAtk(fb2)), 24, F("earthslam stam"));
+    test.expectEq(attackStam(branchAtk(fb2)), 36, F("earthslam stam"));
     test.expectEq(attackPush(branchAtk(fb2)), 12, F("earthslam push"));
     test.expectEq(attackEffect(branchAtk(fb2)), 1, F("earthslam effect"));
     test.expectEq(attackShell(branchAtk(fb2)), 0, F("earthslam shell"));
@@ -252,7 +252,7 @@ inline void test_data(FxTest &test) {
     test.expectEq(attackReach(g0), 11, F("g0 reach"));
     test.expectEq(attackHw(g0), 14, F("g0 hw"));
     test.expectEq(attackHh(g0), 12, F("g0 hh"));
-    test.expectEq(attackStam(g0), 8, F("g0 stam"));
+    test.expectEq(attackStam(g0), 12, F("g0 stam"));
 
     const Attack *gs = weaponSpecial(w2);
     test.expectEq(attackStartup(gs), 6, F("gun special startup"));
@@ -261,7 +261,7 @@ inline void test_data(FxTest &test) {
     test.expectEq(attackHw(gs), 8, F("gun special hw"));
     test.expectEq(attackHh(gs), 6, F("gun special hh"));
     test.expectEq(attackDmg(gs), 12, F("gun special dmg"));
-    test.expectEq(attackStam(gs), 14, F("gun special stam"));
+    test.expectEq(attackStam(gs), 21, F("gun special stam"));
     test.expectEq(attackId(gs), ATK_NONE, F("gun special id"));
 
     const Branch *gb0 = weaponBranch(w2, 0);
@@ -273,7 +273,7 @@ inline void test_data(FxTest &test) {
     test.expectEq(attackReach(branchAtk(gb0)), 15, F("pointblank reach"));
     test.expectEq(attackHw(branchAtk(gb0)), 18, F("pointblank hw"));
     test.expectEq(attackHh(branchAtk(gb0)), 16, F("pointblank hh"));
-    test.expectEq(attackStam(branchAtk(gb0)), 6, F("pointblank stam"));
+    test.expectEq(attackStam(branchAtk(gb0)), 9, F("pointblank stam"));
     test.expectEq(attackShell(branchAtk(gb0)), 1, F("pointblank shell"));
     test.expectEq(attackId(branchAtk(gb0)), ATK_POINTBLANK, F("pointblank id"));
 
@@ -286,7 +286,7 @@ inline void test_data(FxTest &test) {
     test.expectEq(attackReach(branchAtk(gb1)), 14, F("guardbash reach"));
     test.expectEq(attackHw(branchAtk(gb1)), 16, F("guardbash hw"));
     test.expectEq(attackHh(branchAtk(gb1)), 14, F("guardbash hh"));
-    test.expectEq(attackStam(branchAtk(gb1)), 8, F("guardbash stam"));
+    test.expectEq(attackStam(branchAtk(gb1)), 12, F("guardbash stam"));
     test.expectEq(attackLunge(branchAtk(gb1)), 0, F("guardbash lunge"));
     test.expectEq(attackPush(branchAtk(gb1)), 12, F("guardbash push"));
     test.expectEq(attackEffect(branchAtk(gb1)), 0, F("guardbash effect"));
@@ -303,7 +303,7 @@ inline void test_data(FxTest &test) {
     test.expectEq(attackReach(branchAtk(gb2)), 16, F("cannonblast reach"));
     test.expectEq(attackHw(branchAtk(gb2)), 24, F("cannonblast hw"));
     test.expectEq(attackHh(branchAtk(gb2)), 18, F("cannonblast hh"));
-    test.expectEq(attackStam(branchAtk(gb2)), 16, F("cannonblast stam"));
+    test.expectEq(attackStam(branchAtk(gb2)), 24, F("cannonblast stam"));
     test.expectEq(attackLunge(branchAtk(gb2)), 0, F("cannonblast lunge"));
     test.expectEq(attackPush(branchAtk(gb2)), 16, F("cannonblast push"));
     test.expectEq(attackEffect(branchAtk(gb2)), 0, F("cannonblast effect"));
@@ -339,7 +339,7 @@ inline void test_data(FxTest &test) {
     test.expectEq(attackReach(sroll), 15, F("sword roll reach"));
     test.expectEq(attackHw(sroll), 16, F("sword roll hw"));
     test.expectEq(attackHh(sroll), 14, F("sword roll hh"));
-    test.expectEq(attackStam(sroll), 10, F("sword roll stam"));
+    test.expectEq(attackStam(sroll), 15, F("sword roll stam"));
     test.expectEq(attackId(sroll), ATK_ROLL, F("sword roll id"));
 
     const Attack *salt = weaponAlt(w0);
@@ -350,7 +350,7 @@ inline void test_data(FxTest &test) {
     test.expectEq(attackReach(salt), 22, F("sword alt reach"));
     test.expectEq(attackHw(salt), 10, F("sword alt hw"));
     test.expectEq(attackHh(salt), 10, F("sword alt hh"));
-    test.expectEq(attackStam(salt), 12, F("sword alt stam"));
+    test.expectEq(attackStam(salt), 18, F("sword alt stam"));
     test.expectEq(attackLunge(salt), 20, F("sword alt lunge"));
     test.expectEq(attackId(salt), ATK_ALT, F("sword alt id"));
 
@@ -362,7 +362,7 @@ inline void test_data(FxTest &test) {
     test.expectEq(attackReach(froll), 20, F("flail roll reach"));
     test.expectEq(attackHw(froll), 24, F("flail roll hw"));
     test.expectEq(attackHh(froll), 16, F("flail roll hh"));
-    test.expectEq(attackStam(froll), 10, F("flail roll stam"));
+    test.expectEq(attackStam(froll), 15, F("flail roll stam"));
     test.expectEq(attackId(froll), ATK_ROLL, F("flail roll id"));
 
     const Attack *falt = weaponAlt(w1);
@@ -373,7 +373,7 @@ inline void test_data(FxTest &test) {
     test.expectEq(attackReach(falt), 22, F("flail alt reach"));
     test.expectEq(attackHw(falt), 30, F("flail alt hw"));
     test.expectEq(attackHh(falt), 14, F("flail alt hh"));
-    test.expectEq(attackStam(falt), 14, F("flail alt stam"));
+    test.expectEq(attackStam(falt), 21, F("flail alt stam"));
     test.expectEq(attackId(falt), ATK_ALT, F("flail alt id"));
 
     const Attack *groll = weaponRoll(w2);
@@ -384,7 +384,7 @@ inline void test_data(FxTest &test) {
     test.expectEq(attackReach(groll), 14, F("gun roll reach"));
     test.expectEq(attackHw(groll), 16, F("gun roll hw"));
     test.expectEq(attackHh(groll), 14, F("gun roll hh"));
-    test.expectEq(attackStam(groll), 8, F("gun roll stam"));
+    test.expectEq(attackStam(groll), 12, F("gun roll stam"));
     test.expectEq(attackLunge(groll), 30, F("gun roll lunge"));
     test.expectEq(attackPush(groll), 10, F("gun roll push"));
     test.expectEq(attackId(groll), ATK_ROLL, F("gun roll id"));
@@ -397,7 +397,7 @@ inline void test_data(FxTest &test) {
     test.expectEq(attackReach(galt), 15, F("gun alt reach"));
     test.expectEq(attackHw(galt), 18, F("gun alt hw"));
     test.expectEq(attackHh(galt), 16, F("gun alt hh"));
-    test.expectEq(attackStam(galt), 9, F("gun alt stam"));
+    test.expectEq(attackStam(galt), 14, F("gun alt stam"));
     test.expectEq(attackLunge(galt), 18, F("gun alt lunge"));
     test.expectEq(attackPush(galt), 14, F("gun alt push"));
     test.expectEq(attackId(galt), ATK_ALT, F("gun alt id"));
@@ -414,7 +414,7 @@ inline void test_data(FxTest &test) {
     test.expectEq(attackReach(fc0), 26, F("chargeslam1 reach"));
     test.expectEq(attackHw(fc0), 28, F("chargeslam1 hw"));
     test.expectEq(attackHh(fc0), 18, F("chargeslam1 hh"));
-    test.expectEq(attackStam(fc0), 14, F("chargeslam1 stam"));
+    test.expectEq(attackStam(fc0), 21, F("chargeslam1 stam"));
     test.expectEq(attackEffect(fc0), 0, F("chargeslam1 effect"));
     test.expectEq(attackId(fc0), ATK_CHARGE, F("chargeslam1 id"));
     test.expectEq(weaponHasCharge(w1), 1, F("flail has charge"));

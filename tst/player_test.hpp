@@ -137,7 +137,7 @@ void PlayerSuite(TestRunner &runner) {
         t.assert(WEAPON_DEFS[W_SWORD].attacks[0].reach, 13, "s0 reach");
         t.assert(WEAPON_DEFS[W_SWORD].attacks[0].hw, 12, "s0 hw");
         t.assert(WEAPON_DEFS[W_SWORD].attacks[0].hh, 10, "s0 hh");
-        t.assert(WEAPON_DEFS[W_SWORD].attacks[0].stam, 9, "s0 stam");
+        t.assert(WEAPON_DEFS[W_SWORD].attacks[0].stam, 14, "s0 stam");
         t.assert(WEAPON_DEFS[W_SWORD].attacks[2].dmg, 17, "s2 dmg");
         t.assert(WEAPON_DEFS[W_SWORD].attacks[2].startup, 5, "s2 startup");
         t.assert(WEAPON_DEFS[W_SWORD].special.dmg, 24, "sword special dmg");
@@ -343,11 +343,11 @@ void PlayerSuite(TestRunner &runner) {
         Test t("whirl drains stamina to empty and exits locked");
         Game g;
         initGame(g, W_FLAIL);
-        g.player.stam = 12;
+        g.player.stam = 100;
         g.player.stamSub = 0;
-        stepN(g, 40, Input{0, 0, false, true});   // enters at t10; regen refilled to ~17 first
+        stepN(g, 40, Input{0, 0, false, true});   // enters at t10; whirl drains 14/16 per tick
         t.assert(g.player.stance, ST_WHIRL, "still whirling at 40");
-        t.assertLessThan(g.player.stam, 8, "draining hard");
+        t.assertLessThan(g.player.stam, 80, "draining hard");
         for (int i = 0; i < 100 && g.player.stance != ST_NONE; i++) {
             stepN(g, 1, Input{0, 0, false, true});
         }
@@ -420,12 +420,12 @@ void PlayerSuite(TestRunner &runner) {
     }
 
     {
-        Test t("guard blocks cost 22 stamina + chip, break -> stun 45");
+        Test t("guard blocks cost 28 stamina + chip, break -> stun 45");
         Game g;
         initGame(g, W_GUN);
         holdToStance(g);
         playerHurt(g, 10, -16, 0);
-        t.assert(g.player.stam, 78, "block cost 22");
+        t.assert(g.player.stam, 71, "block cost 28 (+ stance drain)");
         t.assert(g.player.hp, 98, "chip 25% of 10 = 2");
         t.assert(g.player.state, PS_IDLE, "guard holds");
 
@@ -847,7 +847,7 @@ void PlayerSuite(TestRunner &runner) {
         t.assert(g.player.atk->hw, 16, "sword roll hw");
         t.assert(g.player.atk->hh, 14, "sword roll hh");
         t.assert(g.player.atk->dmg, 12, "sword roll dmg");
-        t.assert(g.player.atk->stam, 10, "sword roll stam");
+        t.assert(g.player.atk->stam, 15, "sword roll stam");
         t.assert(meleeHitbox(g.player, g.player.atk).w, 16, "sword roll box w");
         t.assert(meleeHitbox(g.player, g.player.atk).h, 14, "sword roll box h");
         t.assertGreaterThan(g.player.iT, 0, "dodge i-frames keep ticking");
@@ -862,7 +862,7 @@ void PlayerSuite(TestRunner &runner) {
         t.assert(g.player.atk->hw, 24, "flail roll hw");
         t.assert(g.player.atk->hh, 16, "flail roll hh");
         t.assert(g.player.atk->dmg, 15, "flail roll dmg");
-        t.assert(g.player.atk->stam, 10, "flail roll stam");
+        t.assert(g.player.atk->stam, 15, "flail roll stam");
 
         // gun shove -> shieldbash
         initGame(g, W_GUN);
@@ -875,7 +875,7 @@ void PlayerSuite(TestRunner &runner) {
         t.assert(g.player.atk->hh, 14, "gun roll hh");
         t.assert(g.player.atk->dmg, 8, "gun roll dmg");
         t.assert(g.player.atk->push, 10, "gun roll push");
-        t.assert(g.player.atk->stam, 8, "gun roll stam");
+        t.assert(g.player.atk->stam, 12, "gun roll stam");
         suite.addTest(t);
     }
 
@@ -967,7 +967,7 @@ void PlayerSuite(TestRunner &runner) {
         t.assert(g.player.atk->reach, 26, "chargeslam1 reach");
         t.assert(g.player.atk->hw, 28, "chargeslam1 hw");
         t.assert(g.player.atk->hh, 18, "chargeslam1 hh");
-        t.assert(g.player.atk->stam, 14, "chargeslam1 stam");
+        t.assert(g.player.atk->stam, 21, "chargeslam1 stam");
 
         // Holding into the charge window then releasing still fires the single
         // level: no chargeslam2 tier.
@@ -981,7 +981,7 @@ void PlayerSuite(TestRunner &runner) {
         stepPlayer(g2, Input{0, 0, false, false});
         t.assert(g2.player.state, PS_ATTACK, "charged swing runs");
         t.assert(g2.player.atk->dmg, 24, "hold still chargeslam1");
-        t.assert(g2.player.atk->stam, 14, "hold still chargeslam1 stam");
+        t.assert(g2.player.atk->stam, 21, "hold still chargeslam1 stam");
 
         // S2: holding past CHARGE_MIN + STOW_HOLD stows instead.
         Game g3;
@@ -1048,7 +1048,7 @@ void PlayerSuite(TestRunner &runner) {
     // feel.18: the double-tap roll is universal — sword, flail and gun all use
     // the sword dodge numbers. Only the B tap stays weapon-specific.
     {
-        Test t("double-tap E rolls PS_DODGE (iT 14, stam 14) for every weapon");
+        Test t("double-tap E rolls PS_DODGE (iT 14, stam 20) for every weapon");
         const int8_t ws[3] = {W_SWORD, W_FLAIL, W_GUN};
         for (int k = 0; k < 3; k++) {
             Game g;
@@ -1059,7 +1059,7 @@ void PlayerSuite(TestRunner &runner) {
             t.assert(g.player.state, PS_DODGE, "double-tap dodge state");
             t.assert(g.player.iT, 14, "i-frames 14");
             t.assert(g.player.t, 15, "dodge length (16 set, same-tick ticks once)");
-            t.assert(g.player.stam, 86, "roll cost 14");
+            t.assert(g.player.stam, 80, "roll cost 20");
             t.assertGreaterThan(g.player.vx, 0, "rolls east");
         }
         suite.addTest(t);
@@ -1155,7 +1155,7 @@ void PlayerSuite(TestRunner &runner) {
     }
 
     {
-        Test t("sheathed double-tap rolls with the stowed numbers (stam 14, vx 54)");
+        Test t("sheathed double-tap rolls with the stowed numbers (stam 20, vx 54)");
         Game g;
         initGame(g, W_FLAIL);
         stowWeapon(g);
@@ -1166,7 +1166,7 @@ void PlayerSuite(TestRunner &runner) {
         t.assert(g.player.sheathed, true, "still stowed");
         t.assert(g.player.state, PS_DODGE, "stowed roll state");
         t.assert(g.player.iT, 14, "stowed roll i-frames");
-        t.assert(g.player.stam, 86, "stowed roll cost 14");
+        t.assert(g.player.stam, 80, "stowed roll cost 20");
         t.assertGreaterThan(g.player.vx, 40, "stowed roll velocity from 54");
         suite.addTest(t);
     }

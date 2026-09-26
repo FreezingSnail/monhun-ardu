@@ -16,7 +16,7 @@
   "stats": {
     "w": 28,
     "h": 22,
-    "hp": 1500,
+    "hp": 1000,
     "spd": 7,
     "spawnX": 200,
     "spawnY": 40,
@@ -30,7 +30,7 @@
     "head": {
       "part": "fxhead_bull",
       "dmgMul": 130,
-      "hp": 160,
+      "hp": 106,
       "bodyShare": 100,
       "breakTypes": ["SLASH"],
       "hurtOn": true,
@@ -40,7 +40,7 @@
     "appendage": {
       "part": "fxhooves_bull",
       "dmgMul": 150,
-      "hp": 240,
+      "hp": 160,
       "bodyShare": 40,
       "breakTypes": ["SLASH"],
       "hurtOn": true,

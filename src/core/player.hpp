@@ -341,13 +341,13 @@ static void updateStance(Game &g, const WeaponDef *def) {
     p.stanceT++;
 
     if (p.stance == ST_PARRY) {
-        const bool ok = fp::drainStam(p, 2);   // ~0.12 per tick
+        const bool ok = fp::drainStam(p, 8);   // 0.5 per tick
         if (p.stanceT > 34 || !ok) {
             exitStance(p);
             p.bLocked = true;
         }
     } else if (p.stance == ST_WHIRL) {
-        const bool ok = fp::drainStam(p, 8);   // 0.5 per tick
+        const bool ok = fp::drainStam(p, 14);   // ~0.88 per tick
         p.whirlTick++;
         if (!ok) {
             exitStance(p);
@@ -365,7 +365,7 @@ static void updateStance(Game &g, const WeaponDef *def) {
             }
         }
     } else if (p.stance == ST_GUARD) {
-        const bool ok = fp::drainStam(p, 1);   // ~0.06 per tick
+        const bool ok = fp::drainStam(p, 7);   // ~0.44 per tick
         if (!ok) {
             exitStance(p);
             p.bLocked = true;
@@ -444,15 +444,15 @@ static bool tapDefenseReady(const Player &p, const WeaponDef *def) {
 
 // Sword-style dodge roll, shared by the sword/stowed B tap (feel.16) and the
 // universal double-tap roll (feel.18): facing set to (dx,dy), PS_DODGE for 16
-// ticks with 14 i-frames, 3.4 px/t velocity, 14 stamina. Returns false without
+// ticks with 14 i-frames, 3.4 px/t velocity, 20 stamina. Returns false without
 // touching state when stamina is short.
 static bool startDodgeRoll(Game &g, int16_t dx, int16_t dy) {
     Player &p = g.player;
-    if (p.stam < 14)
+    if (p.stam < 20)
         return false;
     p.fx = static_cast<int8_t>(dx);
     p.fy = static_cast<int8_t>(dy);
-    p.stam -= 14;
+    p.stam -= 20;
     p.state = PS_DODGE;
     p.t = 16;
     p.iT = static_cast<uint8_t>(14 + g.armorFx.iT);   // EVADE_WINDOW extends dodge i-frames (arm.3)
@@ -617,7 +617,7 @@ static void playerHurt(Game &g, int16_t dmg, int16_t faceX, int16_t faceY) {
     }
     if (p.stance == ST_GUARD) {
         const int16_t chip = static_cast<int16_t>((dmg * 25) / 100);
-        p.stam = (p.stam > 22) ? static_cast<uint8_t>(p.stam - 22) : 0;
+        p.stam = (p.stam > 28) ? static_cast<uint8_t>(p.stam - 28) : 0;
         const int16_t chipDmg = chip < 1 ? 1 : chip;
         p.hp = (chipDmg >= p.hp) ? 0 : static_cast<uint8_t>(p.hp - chipDmg);
         p.vx = (faceX * 19) >> 4;

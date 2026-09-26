@@ -290,7 +290,7 @@ void ArmorEffectSuite(TestRunner &runner) {
         g.player.iT = 0;
         playerHurt(g, 30, 0, 0);   // reduced to 20 -> chip 5
         t.assert(g.player.hp, 95, "chip = reduced*25/100");
-        t.assert(g.player.stam, 78, "guard drains 22 stamina");
+        t.assert(g.player.stam, 72, "guard drains 28 stamina");
         t.assert(g.player.stance, ST_GUARD, "guard holds while stamina remains");
 
         // A floor-1 reduced hit still chips exactly 1 and cannot wrap hp.
