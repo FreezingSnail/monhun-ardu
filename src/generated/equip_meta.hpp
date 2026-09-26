@@ -488,22 +488,22 @@ constexpr uint8_t DEFAULT_HEAD = PART_HEAD_BASE;
 // Baked absolute sheet offsets (one per referenced part symbol).
 // The blob stores these; a static_assert pins each against fxdata.h so a
 // stale equip.bin (one gen pass behind) cannot ship on AVR.
-constexpr uint32_t SHEET_OFF_MH_BODY_BASE = 454656;
-constexpr uint32_t SHEET_OFF_FXERASE = 106876;
-constexpr uint32_t SHEET_OFF_FXWHIRL = 86584;
-constexpr uint32_t SHEET_OFF_FXWHIRLRING = 34590;
-constexpr uint32_t SHEET_OFF_MH_HEAD_BANDANA = 284152;
-constexpr uint32_t SHEET_OFF_MH_HEAD_BASE = 623814;
-constexpr uint32_t SHEET_OFF_MH_HEAD_HELM = 451580;
-constexpr uint32_t SHEET_OFF_FXPLAYER = 87044;
-constexpr uint32_t SHEET_OFF_MH_SHADOW_BASE = 457730;
-constexpr uint32_t SHEET_OFF_MH_WEAPON_FLAIL = 957132;
-constexpr uint32_t SHEET_OFF_MH_WEAPON_GUN = 457924;
-constexpr uint32_t SHEET_OFF_MH_WEAPON_GUN_BRACE = 625352;
-constexpr uint32_t SHEET_OFF_MH_WEAPON_GUN_BUCKLER = 791242;
-constexpr uint32_t SHEET_OFF_MH_WEAPON_GUN_KITE = 1123022;
-constexpr uint32_t SHEET_OFF_MH_WEAPON_GUN_TOWER = 118262;
-constexpr uint32_t SHEET_OFF_MH_WEAPON_SWORD = 285690;
+constexpr uint32_t SHEET_OFF_MH_BODY_BASE = 454676;
+constexpr uint32_t SHEET_OFF_FXERASE = 106896;
+constexpr uint32_t SHEET_OFF_FXWHIRL = 86604;
+constexpr uint32_t SHEET_OFF_FXWHIRLRING = 34610;
+constexpr uint32_t SHEET_OFF_MH_HEAD_BANDANA = 284172;
+constexpr uint32_t SHEET_OFF_MH_HEAD_BASE = 623834;
+constexpr uint32_t SHEET_OFF_MH_HEAD_HELM = 451600;
+constexpr uint32_t SHEET_OFF_FXPLAYER = 87064;
+constexpr uint32_t SHEET_OFF_MH_SHADOW_BASE = 457750;
+constexpr uint32_t SHEET_OFF_MH_WEAPON_FLAIL = 957152;
+constexpr uint32_t SHEET_OFF_MH_WEAPON_GUN = 457944;
+constexpr uint32_t SHEET_OFF_MH_WEAPON_GUN_BRACE = 625372;
+constexpr uint32_t SHEET_OFF_MH_WEAPON_GUN_BUCKLER = 791262;
+constexpr uint32_t SHEET_OFF_MH_WEAPON_GUN_KITE = 1123042;
+constexpr uint32_t SHEET_OFF_MH_WEAPON_GUN_TOWER = 118282;
+constexpr uint32_t SHEET_OFF_MH_WEAPON_SWORD = 285710;
 #if defined(__AVR__)
 static_assert(SHEET_OFF_MH_BODY_BASE == static_cast<uint32_t>(mh_body_base), "equip blob stale: re-run make gen");
 static_assert(SHEET_OFF_FXERASE == static_cast<uint32_t>(fxerase), "equip blob stale: re-run make gen");

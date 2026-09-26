@@ -91,140 +91,140 @@
     },
     {
       "id": "gun_buckler",
-      "label": "GN BUCKLER",
+      "label": "CHKN BUCKLER",
       "parent": "gun_base",
       "direct": true,
       "cost": 120,
       "mats": [
         {
-          "item": "bug",
+          "item": "scale",
           "count": 2
         },
         {
-          "item": "scale",
+          "item": "shell",
           "count": 1
         }
       ],
       "directCost": 200,
       "directMats": [
         {
-          "item": "bug",
-          "count": 4
+          "item": "scale",
+          "count": 3
         },
         {
-          "item": "scale",
+          "item": "shell",
           "count": 2
         }
       ],
       "dmgMul": 96,
       "spdMul": 118,
       "desc": [
-        "ROUND SHIELD.",
+        "CHICKEN HIDE ROUND.",
         "Quick hands."
       ],
       "sheet": "mh_weapon_gun_buckler"
     },
     {
       "id": "gun_kite",
-      "label": "GN KITE",
+      "label": "BULL KITE",
       "parent": "gun_base",
       "direct": true,
       "cost": 150,
       "mats": [
         {
-          "item": "bug",
+          "item": "shell",
           "count": 2
         },
         {
-          "item": "tail",
+          "item": "fang",
           "count": 1
         }
       ],
       "directCost": 240,
       "directMats": [
         {
-          "item": "bug",
+          "item": "shell",
           "count": 3
         },
         {
-          "item": "tail",
+          "item": "fang",
           "count": 2
         }
       ],
       "dmgMul": 104,
       "spdMul": 104,
       "desc": [
-        "WIDE COVER.",
+        "BULL SHELL PLATE.",
         "Balanced shot."
       ],
       "sheet": "mh_weapon_gun_kite"
     },
     {
       "id": "gun_tower",
-      "label": "GN TOWER",
+      "label": "HEAVY TOWER",
       "parent": "gun_base",
       "direct": true,
       "cost": 220,
       "mats": [
         {
-          "item": "scale",
-          "count": 2
-        },
-        {
           "item": "tail",
           "count": 1
+        },
+        {
+          "item": "scale",
+          "count": 2
         }
       ],
       "directCost": 340,
       "directMats": [
         {
-          "item": "scale",
-          "count": 4
-        },
-        {
           "item": "tail",
           "count": 2
+        },
+        {
+          "item": "scale",
+          "count": 3
         }
       ],
       "dmgMul": 114,
       "spdMul": 94,
       "desc": [
-        "TALL PLATE.",
+        "LONGTAIL PLATE.",
         "Heavy shot."
       ],
       "sheet": "mh_weapon_gun_tower"
     },
     {
       "id": "gun_brace",
-      "label": "GN BRACE",
+      "label": "RAVGR BRACE",
       "parent": "gun_base",
       "direct": true,
       "cost": 280,
       "mats": [
         {
-          "item": "scale",
-          "count": 3
+          "item": "fang",
+          "count": 1
+        },
+        {
+          "item": "tail",
+          "count": 1
+        }
+      ],
+      "directCost": 420,
+      "directMats": [
+        {
+          "item": "fang",
+          "count": 2
         },
         {
           "item": "tail",
           "count": 2
         }
       ],
-      "directCost": 420,
-      "directMats": [
-        {
-          "item": "scale",
-          "count": 5
-        },
-        {
-          "item": "tail",
-          "count": 3
-        }
-      ],
       "dmgMul": 124,
       "spdMul": 86,
       "desc": [
-        "BRACED FRAME.",
+        "RAVAGER FRAME.",
         "Hardest hit."
       ],
       "sheet": "mh_weapon_gun_brace"
