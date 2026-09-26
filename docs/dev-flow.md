@@ -50,6 +50,27 @@ shipping stays small until a feature is actually authored.
   `node tools/gen-parity-fixtures.js` + empty diff on
   `tst/fxdatatest/parity_fixtures.hpp`.
 
+## Device-test RAM budget
+
+Every `fxtest-build-%` compile is audited by `tools/fxtest_ram.py`: it parses
+arduino-cli's `Global variables use N bytes` line (that N is `.data` + `.bss`)
+and fails the **build** when N exceeds `FXTEST_RAM_BUDGET` (default 2350 B —
+2560 B SRAM minus a 210 B stack floor). The audit runs on the compile log
+before the serial phase, so an over-budget suite can never silently skip its
+run. Override for a scratch run with
+`make FXTEST_RAM_BUDGET=<n> fxtest-build-<suite>`.
+
+Observed maximum across the 19 gate suites (2026-09, `--optimize-for-debug`):
+`test_zones` 2017 B (543 B stack); the art suites cluster at ~1800–1950 B.
+Unit tests (fixture logs under, over, no-line) live in
+`tools/tests/test_fxtest_ram.py`.
+
+The `player_art` 52-case matrix once sat in `.data` at 2497 B (63 B stack) and
+silently corrupted earlier cases — the failures looked like render drift but
+were RAM corruption (fix: cases behind `MH_PROGMEM` + `memcpy_P`, 2bb7742).
+Keep large const tables in PROGMEM; if a new suite trips the guard, that is the
+first thing to move.
+
 ## Render/data review checklist
 
 Diff review before commit (it caught five real drifts in one bead):

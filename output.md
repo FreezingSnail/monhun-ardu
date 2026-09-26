@@ -1,53 +1,52 @@
-# monhun-ardu-udb — second arena (ridge) + per-room beast home
+# monhun-ardu-d76 — fxtest: guard test-sketch RAM headroom (player_art trap)
 
-Status: DONE. Landed with orchestrator trims (see below); no worker commit.
+Status: DONE. No worker commit (orchestrator commits).
 
 ## What landed
 
-- `tools/gen-zones.py` bakes `MONSTER_HOME_ROOM[MONSTER_KIND_COUNT]` (+ the
-  count) into `zone_meta.hpp`: per kind, the first room whose `monsterKind`
-  matches, else the first monster room, `0xFF` when the map hosts no monster.
-  One table read at hunt start instead of a per-room cart scan.
-- `src/core/zones.hpp`: `beastHomeRoom(kind)` (table lookup; non-roster kinds
-  like pole -> `0xFF`) and `beastHomeSpawn(g, kind)` (override the just-spawned
-  beast's x/y with the home room's `monsterSpawn` -> `zoneSpawnRead`). hp/spd/
-  FSM/body stay the creature record's. Header comment states the invariant: the
-  beast's coords live in its home room's space, no per-room simulation, the
-  distance gate keeps it idle off-room.
-- `src/app_setup.hpp`: `huntStart` calls `beastHomeSpawn(g, kind)` right after
-  `newGame`/`initMonster`, before `loadRoom`.
-- `src/core/items.hpp`: gather mask byte-indexed (`gatherMarkPicked`), so the
-  32-bit `1 << idx` AVR shift helper is gone; one-bit-per-prop semantics kept.
-- `data/map.json`: `ridge` 384x112 (heavy beast, `start` spawn, 4 nodes: herb
-  x2 / ore / bug); area gains the east door (376,72,8,24) + `from_ridge` spawn;
-  ridge west door (0,72,8,24) -> area.
-- Masks/art: ridge mask authored (+ gen-zones placeholder art; bead kcj owns
-  the art pass), area mask door idx2 (0,128,255).
-- `data/quests/crush_heavy.json`: desc "FELL THE HEAVY / IN THE RIDGE."
-- Tests: `tst/zone_test.hpp` pins the ridge record (extents, MONSTER_HEAVY,
-  spawns), the area<->ridge round-trip, and the home mapping (heavy->ridge,
-  lunge->area, sweep/ravager->area fallback, pole->no home, spawn coords moved,
-  hp/spd/FSM untouched).
-- Docs: `docs/map-zones.md` room graph + gather table (23 props).
+- `tools/fxtest_ram.py`: reads a fxtest compile log (path arg or stdin),
+  regexes `Global variables use (\d+) bytes`, prints the max, exits 0 under
+  budget / 1 over / 2 no measurement (a build the tool cannot audit is a hard
+  error, never a silent pass). `--budget` default 2350 (2560 - 210 stack
+  floor); `--label` names the suite in the message.
+- `Makefile` `fxtest-build-%`: arduino-cli output now streams through
+  `tee build/fxtest/<suite>/compile.log`, its exit status is preserved via a
+  side `compile.status` file (POSIX sh, no PIPESTATUS), and a successful
+  compile is audited by the tool with `FXTEST_RAM_BUDGET ?= 2350`. An
+  over-budget sketch fails the **build** target, so it can never silently skip
+  the serial run; `fxtest-run` is untouched.
+- `tools/tests/test_fxtest_ram.py`: 8 cases (under/over/budget-flag/no-line/
+  stdin/max-of-multiple/missing-file/label) in unittest, scratch under
+  `build/tests/fxtest_ram/` (no /tmp).
+- `docs/dev-flow.md`: new "Device-test RAM budget" section with the budget,
+  the observed maximum, and the player_art PROGMEM trap (2bb7742).
 
-## Budget (measured whole-image)
+## Numbers
 
-Order: worker first cut 29606/29696 (90 free, test_hub over board) -> trims:
-1. inline single-use readers + drop the gen-validated spawn bounds check: -4 B.
-2. byte-indexed gather mask (drops the AVR 32-bit shift helper): -68 B.
-3. generated `MONSTER_HOME_ROOM` table (replaces the runtime room scan): -32 B.
-Final 29502/29696 (**194 free**), RAM 1920/2560; test_hub 29670/29696 (26 free)
-with no extra carve — an `MH_AUDIO 0` carve attempt was a no-op (the suite never
-pulls audio) and was reverted.
+- Fresh `arduino-cli cache clean` + `rm -rf build/fxtest`, then all 19 gate
+  suites compiled: 19/19 `fxtest_ram: OK`. Observed maximum (default budget):
+  `test_zones` 2017 B (543 B stack margin). Next: `test_wire` 1951,
+  `test_perf` 1827, `test_hud` 1823, `test_player_art` 1823 B.
+- Guard-fail demo (scratch, `FXTEST_RAM_BUDGET=1800`): make exited 2;
+  `fxtest_ram: FAIL test_zones: globals 2017 B > budget 1800 B (543 B left for
+  stack would be below the 760 B floor; move const tables to PROGMEM)`.
+- Note: bead prose says player_art is 1821 B; the fresh compile reports
+  **1823 B** (.data 76 + .bss 1747). Bead figure was off by 2 B; measured wins.
 
-## Verification (orchestrator full gate)
+## Gates
 
-- `make gen-check` OK; host 6954/0; tools 394 OK.
-- 19/19 device suites PASS (incl. the previously-overflowing test_hub).
-- `make size`: flash 29502/29696 (194 free), ram 1920/2560.
-- `ARDENS=/usr/bin/true make dev-hitboxes` builds.
+- `make test-tools` — 402 tests OK, incl. the 8 new `test_fxtest_ram` cases.
+- `FXTEST_ONLY="test_boot test_player_art" make fxtest-headless` —
+  `test_boot: PASS` (4/0), `test_player_art: PASS` (156/0).
+- `make gen-check` — PASS (216 generated artifacts unchanged).
+- `make size` — flash 29502/29696 (194 free), ram 1920/2560; data facts shown.
 
-## Time
+## Wall time (scripted phases)
 
-Worker ~45 min (read/design ~30, edits + focused gates ~15; gen x2 + device
-compiles dominate). Orchestrator review + trims + gates ~40 min.
+all-19 fresh build 9 s · guard-fail scratch ~2 s · two-suite device gate 2 s ·
+test-tools 27 s · gen-check 10 s · size 3 s.
+
+## Deviations
+
+- No C++/core changes, so `make test` was not required by the bead's gate list
+  and was not run.

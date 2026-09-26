@@ -215,6 +215,13 @@ FXTEST_SIZE_FLAGS = --build-property compiler.cpp.extra_flags="-mcall-prologues 
 # serial instance). A failed compile fails its target and the sub-make.
 FXTEST_JOBS ?= 4
 
+# SRAM guard knob for the device suites. Globals (.data+.bss) above the budget
+# leave too little of the 2560 B ATmega32u4 SRAM for the stack; the player_art
+# case matrix sat at 2497 B (63 B stack) and silently corrupted its own cases.
+# The check runs on the compile log and fails the *build* target, so an
+# over-budget suite can never quietly skip the serial run (bead monhun-ardu-d76).
+FXTEST_RAM_BUDGET ?= 2350
+
 fxtest-build: $(addprefix fxtest-build-,$(FXTEST_RUN))
 
 fxtest-build-parallel:
@@ -229,10 +236,17 @@ fxtest-build-%:
 	cp tst/fxdatatest/*.hpp "$$stage/"; \
 	cp -R tst/fxdatatest/harness "$$stage/harness"; \
 	echo "build: $*"; \
-	$(ARDUINO_CLI) compile --fqbn "$(FQBN)" \
+	{ $(ARDUINO_CLI) compile --fqbn "$(FQBN)" \
 	    --optimize-for-debug --output-dir "$$stage/output" \
 	    $(FXTEST_SIZE_FLAGS) \
-	    "$$stage/$*.ino"
+	    "$$stage/$*.ino"; echo $$? > "$$stage/compile.status"; } 2>&1 \
+	    | tee "$$stage/compile.log"; \
+	cli_status=$$(cat "$$stage/compile.status"); \
+	if [ "$$cli_status" -ne 0 ]; then \
+		echo "build: $*: compile FAILED (arduino-cli exit $$cli_status)" >&2; \
+		exit "$$cli_status"; \
+	fi; \
+	python3 tools/fxtest_ram.py --budget $(FXTEST_RAM_BUDGET) --label "$*" "$$stage/compile.log"
 
 fxtest-run:
 	@failed=0; \
