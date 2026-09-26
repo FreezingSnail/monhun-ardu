@@ -33,6 +33,26 @@ RECORD_SIZE = 17
 BLOB_REL = "fxdata/tables/forge.bin"
 META_REL = "src/generated/forge_meta.hpp"
 
+# Committed fxdata.h stand-in for the sheet-offset resolution (trim A). One
+# distinct value per sheet symbol so the emitted NODE_SHEET_OFF is pinnable.
+FX_HEADER = """#pragma once
+constexpr uint24_t mh_weapon_sword = 0x1000;
+constexpr uint24_t mh_weapon_flail = 0x2000;
+constexpr uint24_t mh_weapon_gun = 0x3000;
+constexpr uint24_t mh_weapon_gun_buckler = 0x3100;
+constexpr uint24_t mh_weapon_gun_kite = 0x3200;
+constexpr uint24_t mh_weapon_gun_tower = 0x3300;
+constexpr uint24_t mh_weapon_gun_brace = 0x3400;
+constexpr uint24_t mh_weapon_sword_saber = 0x1100;
+constexpr uint24_t mh_weapon_sword_cleaver = 0x1200;
+constexpr uint24_t mh_weapon_sword_tailblade = 0x1300;
+constexpr uint24_t mh_weapon_sword_fang = 0x1400;
+constexpr uint24_t mh_weapon_flail_sling = 0x2100;
+constexpr uint24_t mh_weapon_flail_shell = 0x2200;
+constexpr uint24_t mh_weapon_flail_tail = 0x2300;
+constexpr uint24_t mh_weapon_flail_spike = 0x2400;
+"""
+
 ITEMS = {
     "version": 1,
     "items": [
@@ -161,6 +181,8 @@ def write_tree(case):
     os.makedirs(forge, exist_ok=True)
     os.makedirs(os.path.join(case, "fxdata", "tables"), exist_ok=True)
     os.makedirs(os.path.join(case, "src", "generated"), exist_ok=True)
+    with open(os.path.join(case, "fxdata", "fxdata.h"), "w", encoding="utf-8", newline="\n") as handle:
+        handle.write(FX_HEADER)
     for path, doc in ((os.path.join(data, "items.json"), ITEMS),
                       (os.path.join(forge, "flail.json"), FLAIL),
                       (os.path.join(forge, "sword.json"), SWORD)):
@@ -310,6 +332,7 @@ class GenForgeTests(unittest.TestCase):
             "constexpr uint8_t NODE_DEPTH[NODE_COUNT] = {0, 1, 2, 2, 0, 1};",
             "constexpr uint8_t NODE_BRANCH[NODE_COUNT] = {0, 0, 0, 1, 0, 0};",
             "constexpr uint16_t NODE_UPGRADE_COST[NODE_COUNT] = {0, 100, 250, 320, 0, 120};",
+            "constexpr uint32_t NODE_SHEET_OFF[NODE_COUNT] = {4096, 4096, 4096, 4096, 8192, 8192};",
         ):
             self.assertIn(needle, meta)
         # The retired smith spine map is gone (save v5 has no migration).
@@ -351,8 +374,70 @@ class GenForgeTests(unittest.TestCase):
         self.assertEqual(kinds["sword_base"], 0, "spine keeps the class default sheet")
         self.assertEqual(kinds["flail_t1"], 0, "flail spine keeps the class default sheet")
 
+    def test_sheet_offset_table(self):
+        # trim A (dap): NODE_SHEET_OFF resolves each node's sheet symbol to its
+        # absolute FX address; the class-default tree emits the class default.
+        self.run_ok()
+        meta = self.read(META_REL)
+        self.assertIn("constexpr uint32_t NODE_SHEET_OFF[NODE_COUNT] = {4096, 4096, 4096, 4096, 8192, 8192};", meta)
+        model = gen_forge.load_model(self.case)
+        offs = {n["id"]: n["sheetOff"] for n in model["nodes"]}
+        self.assertEqual(offs["sword_base"], 0x1000)
+        self.assertEqual(offs["sword_t1"], 0x1000)
+        self.assertEqual(offs["flail_base"], 0x2000)
+
+    def test_variant_sheet_offsets(self):
+        # The gun shield variants and the melee beast styles carry their own
+        # fxdata.h address, in data order.
+        write_gun(self.case)
+        self.run_ok()
+        meta = self.read(META_REL)
+        self.assertIn("constexpr uint32_t NODE_SHEET_OFF[NODE_COUNT] = {4096, 4096, 4096, 4096, 8192, 8192, 12288, 12544, 12800, 13056, 13312};", meta)
+        model = gen_forge.load_model(self.case)
+        offs = {n["id"]: n["sheetOff"] for n in model["nodes"]}
+        self.assertEqual(offs["gun_base"], 0x3000)
+        self.assertEqual(offs["gun_buckler"], 0x3100)
+        self.assertEqual(offs["gun_kite"], 0x3200)
+        self.assertEqual(offs["gun_tower"], 0x3300)
+        self.assertEqual(offs["gun_brace"], 0x3400)
+
+        write_melee(self.case)
+        self.run_ok()
+        model = gen_forge.load_model(self.case)
+        offs = {n["id"]: n["sheetOff"] for n in model["nodes"]}
+        self.assertEqual(offs["sword_saber"], 0x1100)
+        self.assertEqual(offs["sword_cleaver"], 0x1200)
+        self.assertEqual(offs["sword_tailblade"], 0x1300)
+        self.assertEqual(offs["sword_fang"], 0x1400)
+        self.assertEqual(offs["flail_sling"], 0x2100)
+        self.assertEqual(offs["flail_shell"], 0x2200)
+        self.assertEqual(offs["flail_tail"], 0x2300)
+        self.assertEqual(offs["flail_spike"], 0x2400)
+
+    def test_missing_fxdata_header_falls_back_to_zero(self):
+        # A synthetic tree for another generator has no fxdata.h; the offsets
+        # fall back to 0 without failing (the committed header is read in the
+        # real pipeline).
+        os.remove(self.path("fxdata", "fxdata.h"))
+        self.run_ok()
+        meta = self.read(META_REL)
+        self.assertIn("constexpr uint32_t NODE_SHEET_OFF[NODE_COUNT] = {0, 0, 0, 0, 0, 0};", meta)
+
+    def test_undeclared_sheet_symbol_falls_back_to_zero(self):
+        # A symbol the generator knows but this fxdata.h does not declare (a
+        # partial fixture for another generator) resolves to 0 rather than
+        # failing; the real pipeline reads the committed full header.
+        text = self.read("fxdata", "fxdata.h").replace("constexpr uint24_t mh_weapon_gun_tower = 0x3300;\n", "")
+        with open(self.path("fxdata", "fxdata.h"), "w", encoding="utf-8", newline="\n") as handle:
+            handle.write(text)
+        write_gun(self.case)
+        self.run_ok()
+        model = gen_forge.load_model(self.case)
+        offs = {n["id"]: n["sheetOff"] for n in model["nodes"]}
+        self.assertEqual(offs["gun_tower"], 0, "undeclared symbol -> 0")
+        self.assertEqual(offs["gun_buckler"], 0x3100, "declared siblings keep their address")
+
     def test_class_first_table(self):
-        # 2tb: NODE_CLASS_FIRST[WEAPON_COUNT] mirrors the generated firsts so
         # src/screens.hpp screenClassFirst can drop the retired cls*3 formula.
         write_gun(self.case)
         self.run_ok()

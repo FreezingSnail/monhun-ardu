@@ -69,13 +69,37 @@ inline bool forgeParentOwned(const SaveBlock &save, const ForgeNode &n) {
 // default sheet, 1..4 the gunshield variants, 5..8 the sword beast variants,
 // 9..12 the flail beast variants. NODE_SHEET is a generated constexpr table, so
 // this is a plain index -- no cart access (host-testable). Out-of-range /
-// unequipped falls back to 0. src/render.hpp weaponSheet resolves the kind
-// against the equipped weapon's class, so a kind can never select another
-// class's sheet.
+// unequipped falls back to 0. Kept for the host/device tests that pin the kind
+// per node; shipping resolves the sheet *address* below instead (LTO drops the
+// now-unused function from the device image).
 inline uint8_t forgeEquippedSheet(const SaveBlock &save) {
     if (save.equippedNode == SAVE_NODE_NONE || save.equippedNode >= forge::NODE_COUNT)
         return 0;
     return forge::NODE_SHEET[save.equippedNode];
+}
+
+// Per-node sheet address (trim A, monhun-ardu-dap). NODE_SHEET_OFF is an
+// AVR-flash PROGMEM table (plain constexpr on the host); mhPgmReadU32 is the
+// portable reader for both. MH_NOINLINE: the two cold callers (initGame default
+// + hunt-start resolve) share one copy instead of duplicating the read.
+MH_NOINLINE inline uint32_t forgeSheetOff(uint8_t node) {
+    return mhPgmReadU32(&forge::NODE_SHEET_OFF[node]);
+}
+
+// The sheet address the equipped weapon draws: the equipped node's address, or
+// the class root's (== class default sheet) when nothing is equipped / the id
+// is out of range. `cls` is the weapon class (WeaponId / forge::WEAPON_*; the
+// caller asserts the two orderings match). Resolved once at hunt start
+// (upgradeApplyToGame) so the render never runs this.
+inline uint32_t forgeEquippedSheetOff(const SaveBlock &save, uint8_t cls) {
+    const uint8_t node = (save.equippedNode == SAVE_NODE_NONE || save.equippedNode >= forge::NODE_COUNT) ? forge::NODE_CLASS_FIRST[cls] : save.equippedNode;
+    return forgeSheetOff(node);
+}
+
+// Class default sheet address (the root node of class `cls`), for a fresh Game
+// before the app layer resolves the equipped node (initGame).
+inline uint32_t forgeClassSheetOff(uint8_t cls) {
+    return forgeSheetOff(forge::NODE_CLASS_FIRST[cls]);
 }
 
 // Shared material-bill gate/debit (ui.4.1). `mats` is `slots` packed

@@ -9,6 +9,7 @@
 // device card path runs.
 #include "test.hpp"
 #include "../src/forge_state.hpp"
+#include "../src/generated/equip_meta.hpp"   // SHEET_OFF_MH_WEAPON_* (sheet-address pins, trim dap)
 
 using namespace mh;
 
@@ -249,6 +250,37 @@ void ForgeSuite(TestRunner &runner) {
         t.assert(forgeEquippedSheet(s), 12, "equipped flail spike -> sheet 12");
         s.equippedNode = forge::NODE_SWORD_T1;
         t.assert(forgeEquippedSheet(s), 0, "spine node -> class default sheet");
+        suite.addTest(t);
+    }
+
+    // trim A (dap): NODE_SHEET_OFF is the per-node absolute FX sheet address,
+    // resolved against the committed fxdata.h. Pin it against the equip catalog
+    // (same source symbols) + the resolver fallbacks.
+    {
+        Test t("node sheet addresses: match the equip catalog; class root = default (dap)");
+        t.assert(forge::NODE_SHEET_OFF[forge::NODE_SWORD_BASE], static_cast<uint32_t>(equip::SHEET_OFF_MH_WEAPON_SWORD), "sword root = sword default");
+        t.assert(forge::NODE_SHEET_OFF[forge::NODE_FLAIL_BASE], static_cast<uint32_t>(equip::SHEET_OFF_MH_WEAPON_FLAIL), "flail root = flail default");
+        t.assert(forge::NODE_SHEET_OFF[forge::NODE_GUN_BASE], static_cast<uint32_t>(equip::SHEET_OFF_MH_WEAPON_GUN), "gun root = gun default");
+        t.assert(forge::NODE_SHEET_OFF[forge::NODE_GUN_BUCKLER], static_cast<uint32_t>(equip::SHEET_OFF_MH_WEAPON_GUN_BUCKLER), "buckler address");
+        t.assert(forge::NODE_SHEET_OFF[forge::NODE_GUN_KITE], static_cast<uint32_t>(equip::SHEET_OFF_MH_WEAPON_GUN_KITE), "kite address");
+        t.assert(forge::NODE_SHEET_OFF[forge::NODE_GUN_TOWER], static_cast<uint32_t>(equip::SHEET_OFF_MH_WEAPON_GUN_TOWER), "tower address");
+        t.assert(forge::NODE_SHEET_OFF[forge::NODE_GUN_BRACE], static_cast<uint32_t>(equip::SHEET_OFF_MH_WEAPON_GUN_BRACE), "brace address");
+        t.assert(forge::NODE_SHEET_OFF[forge::NODE_SWORD_FANG], static_cast<uint32_t>(equip::SHEET_OFF_MH_WEAPON_SWORD_FANG), "fang address");
+        t.assert(forge::NODE_SHEET_OFF[forge::NODE_FLAIL_SPIKE], static_cast<uint32_t>(equip::SHEET_OFF_MH_WEAPON_FLAIL_SPIKE), "spike address");
+        // The byte-wise reader (AVR u24 flash / host u32) returns the same value.
+        t.assert(forgeSheetOff(forge::NODE_SWORD_SABER), static_cast<uint32_t>(equip::SHEET_OFF_MH_WEAPON_SWORD_SABER), "byte reader equals table");
+        t.assert(forgeClassSheetOff(forge::WEAPON_FLAIL), static_cast<uint32_t>(equip::SHEET_OFF_MH_WEAPON_FLAIL), "class default helper");
+        SaveBlock s;
+        saveDefaults(s);
+        t.assert(forgeEquippedSheetOff(s, forge::WEAPON_SWORD), static_cast<uint32_t>(equip::SHEET_OFF_MH_WEAPON_SWORD), "unequipped -> class root");
+        s.equippedNode = forge::NODE_GUN_BRACE;
+        t.assert(forgeEquippedSheetOff(s, forge::WEAPON_GUN), static_cast<uint32_t>(equip::SHEET_OFF_MH_WEAPON_GUN_BRACE), "equipped brace -> brace address");
+        s.equippedNode = forge::NODE_SWORD_SABER;
+        t.assert(forgeEquippedSheetOff(s, forge::WEAPON_SWORD), static_cast<uint32_t>(equip::SHEET_OFF_MH_WEAPON_SWORD_SABER), "equipped saber -> saber address");
+        s.equippedNode = SAVE_NODE_NONE;
+        t.assert(forgeEquippedSheetOff(s, forge::WEAPON_FLAIL), static_cast<uint32_t>(equip::SHEET_OFF_MH_WEAPON_FLAIL), "unequipped flail -> flail root");
+        s.equippedNode = forge::NODE_COUNT;
+        t.assert(forgeEquippedSheetOff(s, forge::WEAPON_GUN), static_cast<uint32_t>(equip::SHEET_OFF_MH_WEAPON_GUN), "out-of-range -> class root");
         suite.addTest(t);
     }
 

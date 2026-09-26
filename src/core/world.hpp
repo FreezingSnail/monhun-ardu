@@ -66,6 +66,7 @@ static void updateCamera(Game &g) {
 // The port keeps one Game::target (hurt rect + callbacks), so this points it at
 // the beast and re-arms the callbacks (prg.8 removed the training pole arm).
 static void updateActiveTarget(Game &g) {
+    refreshBeastHere(g);   // cache presence for the current room/kind (trim dap)
     if (!beastHere(g)) {
         g.target = Target{};   // no beast here: reads as null
     } else {

@@ -82,10 +82,11 @@
 // sword rows are byte-identical.
 //
 // Bead monhun-ardu-jd1 (forge node sheet -> render): the equipped forge node's
-// sheet kind (Game::wpnSheet) now selects which gun sheet renders, so the four
-// gunshield variants are pinned as appended cases 40..43 (W_GUN, PS_IDLE,
-// ST_GUARD, E, kinds 1..4). Only the appended rows are new; all 40 prior cases
-// kept their bytes (the pre-jd1 rows carry wpnSheet 0 = the class default).
+// resolved sheet address (Game::wpnSheet) now selects which gun sheet renders,
+// so the four gunshield variants are pinned as appended cases 40..43 (W_GUN,
+// PS_IDLE, ST_GUARD, E, each variant sheet). Only the appended rows are new; all
+// 40 prior cases kept their bytes (the pre-jd1 rows carry wpnSheet 0, which
+// setupCase maps to the class default sheet).
 
 //
 // Bead monhun-ardu-2tb (melee beast branches): the same equipped-node kind now
@@ -126,9 +127,11 @@ struct Case {
     // Equipped head piece + 1 (arm.2 armorHeadPart); 0 = base head. Left off the
     // pre-arm.2 rows, so they value-initialize to 0 and keep their goldens.
     uint8_t armorHead;
-    // Equipped forge-node sheet kind (jd1); 0 = class default sheet, 1..4 = the
-    // gunshield variants. Left off every pre-jd1 row so they keep their goldens.
-    uint8_t wpnSheet;
+    // Equipped weapon sheet ADDRESS (jd1/2tb; trim dap): the resolved FX sheet
+    // offset (equip::SHEET_OFF_MH_WEAPON_*) or 0 = the class default sheet
+    // (setupCase substitutes the weapon's default). The variant rows below carry
+    // the offset constant their forge node resolves to.
+    uint32_t wpnSheet;
 };
 
 // State matrix. Facings are 8-way fp vectors (E = 16,0; W = -16,0; SE = 11,11).
@@ -180,24 +183,24 @@ static const Case MH_PROGMEM CASES[] = {
     {W_SWORD, PS_IDLE, ST_NONE, 0, 0, -16, 0, 0, 0, 0, 0, armor::ARMOR_HUNTER_HELM + 1},
     {W_FLAIL, PS_IDLE, ST_NONE, 0, 0, 11, 11, 0, 0, 0, 0, armor::ARMOR_BONE_CAP + 1},
     // jd1 gunshield variants: same base pose (W_GUN idle guard, E) with each
-    // equipped forge-node sheet kind 1..4 -- the sheet selector must swap the
-    // drawn gun sheet.
-    {W_GUN, PS_IDLE, ST_GUARD, 0, 0, 16, 0, 0, 0, 0, 0, 0, 1},
-    {W_GUN, PS_IDLE, ST_GUARD, 0, 0, 16, 0, 0, 0, 0, 0, 0, 2},
-    {W_GUN, PS_IDLE, ST_GUARD, 0, 0, 16, 0, 0, 0, 0, 0, 0, 3},
-    {W_GUN, PS_IDLE, ST_GUARD, 0, 0, 16, 0, 0, 0, 0, 0, 0, 4},
+    // equipped forge-node sheet ADDRESS (the offset its node resolves to) -- the
+    // sheet selector must swap the drawn gun sheet.
+    {W_GUN, PS_IDLE, ST_GUARD, 0, 0, 16, 0, 0, 0, 0, 0, 0, equip::SHEET_OFF_MH_WEAPON_GUN_BUCKLER},
+    {W_GUN, PS_IDLE, ST_GUARD, 0, 0, 16, 0, 0, 0, 0, 0, 0, equip::SHEET_OFF_MH_WEAPON_GUN_KITE},
+    {W_GUN, PS_IDLE, ST_GUARD, 0, 0, 16, 0, 0, 0, 0, 0, 0, equip::SHEET_OFF_MH_WEAPON_GUN_TOWER},
+    {W_GUN, PS_IDLE, ST_GUARD, 0, 0, 16, 0, 0, 0, 0, 0, 0, equip::SHEET_OFF_MH_WEAPON_GUN_BRACE},
     // 2tb melee beast variants: same base pose (idle, facing E) with each
-    // equipped forge-node sheet kind 5..8 (sword) / 9..12 (flail) -- the sheet
-    // selector must swap the drawn sword/flail sheet. The idle row draws the
-    // blade / ball, so every style pins distinct pixels.
-    {W_SWORD, PS_IDLE, ST_NONE, 0, 0, 16, 0, 0, 0, 0, 0, 0, 5},
-    {W_SWORD, PS_IDLE, ST_NONE, 0, 0, 16, 0, 0, 0, 0, 0, 0, 6},
-    {W_SWORD, PS_IDLE, ST_NONE, 0, 0, 16, 0, 0, 0, 0, 0, 0, 7},
-    {W_SWORD, PS_IDLE, ST_NONE, 0, 0, 16, 0, 0, 0, 0, 0, 0, 8},
-    {W_FLAIL, PS_IDLE, ST_NONE, 0, 0, 16, 0, 0, 0, 0, 0, 0, 9},
-    {W_FLAIL, PS_IDLE, ST_NONE, 0, 0, 16, 0, 0, 0, 0, 0, 0, 10},
-    {W_FLAIL, PS_IDLE, ST_NONE, 0, 0, 16, 0, 0, 0, 0, 0, 0, 11},
-    {W_FLAIL, PS_IDLE, ST_NONE, 0, 0, 16, 0, 0, 0, 0, 0, 0, 12},
+    // equipped forge-node sheet ADDRESS (sword saber/cleaver/tailblade/fang,
+    // flail sling/shell/tail/spike) -- the selector must swap the class sheet.
+    // The idle row draws the blade / ball, so every style pins distinct pixels.
+    {W_SWORD, PS_IDLE, ST_NONE, 0, 0, 16, 0, 0, 0, 0, 0, 0, equip::SHEET_OFF_MH_WEAPON_SWORD_SABER},
+    {W_SWORD, PS_IDLE, ST_NONE, 0, 0, 16, 0, 0, 0, 0, 0, 0, equip::SHEET_OFF_MH_WEAPON_SWORD_CLEAVER},
+    {W_SWORD, PS_IDLE, ST_NONE, 0, 0, 16, 0, 0, 0, 0, 0, 0, equip::SHEET_OFF_MH_WEAPON_SWORD_TAILBLADE},
+    {W_SWORD, PS_IDLE, ST_NONE, 0, 0, 16, 0, 0, 0, 0, 0, 0, equip::SHEET_OFF_MH_WEAPON_SWORD_FANG},
+    {W_FLAIL, PS_IDLE, ST_NONE, 0, 0, 16, 0, 0, 0, 0, 0, 0, equip::SHEET_OFF_MH_WEAPON_FLAIL_SLING},
+    {W_FLAIL, PS_IDLE, ST_NONE, 0, 0, 16, 0, 0, 0, 0, 0, 0, equip::SHEET_OFF_MH_WEAPON_FLAIL_SHELL},
+    {W_FLAIL, PS_IDLE, ST_NONE, 0, 0, 16, 0, 0, 0, 0, 0, 0, equip::SHEET_OFF_MH_WEAPON_FLAIL_TAIL},
+    {W_FLAIL, PS_IDLE, ST_NONE, 0, 0, 16, 0, 0, 0, 0, 0, 0, equip::SHEET_OFF_MH_WEAPON_FLAIL_SPIKE},
 };
 constexpr uint8_t CASE_COUNT = static_cast<uint8_t>(sizeof(CASES) / sizeof(CASES[0]));
 // Changing the matrix invalidates GOLDEN: extend both in the same change and
@@ -285,6 +288,12 @@ static uint32_t fbHash() {
     return h;
 }
 
+// Class default sheet address for a row with wpnSheet 0 (trim dap): the offset
+// initGame would arm, matching the pre-offset "kind 0 = class default" rows.
+static uint32_t defaultWpnSheet(uint8_t weapon) {
+    return weapon == W_FLAIL ? equip::SHEET_OFF_MH_WEAPON_FLAIL : (weapon == W_GUN ? equip::SHEET_OFF_MH_WEAPON_GUN : equip::SHEET_OFF_MH_WEAPON_SWORD);
+}
+
 static void setupCase(Game &g, const Case &c) {
     newGame(g, c.weapon, MODE_HUNT);
     Player &p = g.player;
@@ -305,7 +314,7 @@ static void setupCase(Game &g, const Case &c) {
     p.whirlTick = 3;   // deterministic ring/ball angle
     g.tick = c.tick;
     g.armorHead = c.armorHead;
-    g.wpnSheet = c.wpnSheet;
+    g.wpnSheet = static_cast<SheetOff>(c.wpnSheet != 0 ? c.wpnSheet : defaultWpnSheet(c.weapon));
 
     const WeaponDef *def = &WEAPON_DEFS[c.weapon];
     const Attack *a = nullptr;

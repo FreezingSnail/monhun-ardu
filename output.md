@@ -1,101 +1,112 @@
-# monhun-ardu-6k2 — Cut the MAP screen (hub MAP row + SCREEN_MAP + baked pages)
+# monhun-ardu-dap — trim wave: weaponSheet switch + beast-presence cache
 
-Status: DONE
+STATUS: DONE (landed; measured reclaim is FAR BELOW the frozen lead — see Size).
 
-## Scope landed (frozen design followed, no reinterpretation)
+## What changed
 
-- Hub rows now QUESTS(0) / FORGE(1) / GEAR(2); cursor boots on QUESTS.
-  `data/screens/hub.json` lost the `open_map` row; `SCREEN_HUB_ROWS` 4 -> 3.
-- MAP screen deleted: `data/screens/map.json`, `images/screens/mh_screen_map_{0..4}_128x64.png`,
-  the generated map entries (`SCREEN_MAP*`, `mh_screen_map_*` in
-  `fxdata/screens/Sprites.txt` + `fxdata.h`); `SCREEN_COUNT` 8 -> 7. MAP was the
-  last screen id, so no other screen index moved. `PAGE_MAX 5` /
-  `SCREEN_PAGE_STRIDE 16` kept (no ABI churn).
-- `src/screens.hpp`: dropped `screenMapPage()` / `screenMapQuestRoom()`, the MAP
-  page pick (pageIdx is now `scroll / SCREEN_ROWS`), the MAP early return, and the
-  now-unused `generated/zone_meta.hpp` + `core/progmem.hpp` includes.
-- `src/app_state.hpp`: dropped `APP_NAV_MAP`, the pre-switch `ACTION_OPEN_MAP`
-  special case, and the NAV_DESTS MAP entry; NAV_DESTS is 7, static_assert is
-  `APP_NAV_HUB == 1 && APP_NAV_ARMOR_FORGE == 7` (APP_NAV_HUNT == 8). Generated
-  `ACTION_OPEN_MAP = 17` stays in the gen-screens enum (unused, zero flash).
-- Quest room-hint meta dropped end-to-end: `tools/gen-quests.py`
-  (`load_room_ids`/`read_room_hint`/`ROOM_HINT_NONE`/`MAP_REL`/`MAP_ROOM_COUNT`/
-  `QUEST_ROOM_HINT[QUEST_COUNT]`, and the `progmem.hpp` include it needed),
-  `data/quests/*.json` `roomHint` keys, and `tools/tests/test_gen_quests.py`
-  (room-hint cases replaced by a `roomHint`-is-now-unknown-key regression).
-- `data/map.json` + gen-zones + zone runtime untouched (room graph is core).
+### A) weaponSheet switch -> resolved FX sheet offset (frozen trim)
+- `tools/gen-forge.py`: resolves each node's `sheet` symbol against the committed
+  `fxdata/fxdata.h` (`FX_SYMBOL_RE`) and emits `NODE_SHEET_OFF[NODE_COUNT]` —
+  the absolute FX sheet address per node; a node with no sheet (and any
+  unequipped fallback) uses its class default (`mh_weapon_sword/flail/gun`).
+  AVR: `MH_PROGMEM constexpr uint32_t` (flash-only); host: plain `constexpr
+  uint32_t`. A synthetic tree with no part header / undeclared symbol resolves
+  to 0 without failing (gen-cards/gen-screens fixtures reuse the loader).
+- `src/generated/forge_meta.hpp`: regenerated (new table + AVR includes
+  `../core/progmem.hpp`).
+- `src/forge_state.hpp`: new `forgeSheetOff(node)`
+  (`mhPgmReadU32(&NODE_SHEET_OFF[node])`, `MH_NOINLINE`),
+  `forgeEquippedSheetOff(save, cls)` (equipped node else
+  `NODE_SHEET_OFF[NODE_CLASS_FIRST[cls]]`), `forgeClassSheetOff(cls)`.
+  Kept `NODE_SHEET` + `forgeEquippedSheet` for the kind-pinning host/device
+  tests (LTO drops the now-unused function + table from shipping).
+- `src/core/game.hpp`: `using SheetOff = __uint24` (host: `uint32_t`);
+  `Game::wpnSheet` is now `SheetOff` (was `uint8_t` kind).
+- `src/core/player.hpp`: `initGame` arms the class default address
+  (`forgeClassSheetOff(weapon)`).
+- `src/app_setup.hpp`: `upgradeApplyToGame` arms
+  `forgeEquippedSheetOff(save, g.weapon)`; static_assert pins
+  `WeaponId == forge::WEAPON_*` order.
+- `src/render.hpp`: `weaponSheet(g)` is `return static_cast<uint24_t>(g.wpnSheet);`
+  (3-level kind switch + class guard gone).
+- `tst/fxdatatest/player_art_test.hpp`: `Case.wpnSheet` is a `uint32_t` sheet
+  ADDRESS; the 12 variant rows carry the `equip::SHEET_OFF_MH_WEAPON_*`
+  constant, kind-0 rows map to the class default via `defaultWpnSheet`. All 52
+  goldens unchanged.
+- `tst/forge_state_test.hpp` / `tst/fxdatatest/forge_test.hpp` /
+  `tools/tests/test_gen_forge.py`: pin `NODE_SHEET_OFF` against the equip
+  catalog and the resolver fallbacks; tooling pins the emitted table + the
+  no-header / undeclared-symbol -> 0 fallback.
+
+### B) Beast-presence cache (frozen trim)
+- `src/core/game.hpp`: `Game::beastHere` byte (appended at the end).
+- `src/core/zones.hpp`: `refreshBeastHere(g)` computes the old predicate once;
+  `beastHere(g)` is `return g.beastHere != 0;`.
+- `src/core/world.hpp`: `refreshBeastHere` runs inside `updateActiveTarget`,
+  the single path called by `newGame` (and thus `withWeapon`/`resetHunt`) and
+  `loadRoom` — the only sites that move `monsterKind`/`roomId`/`roomMonsterKind`.
+
+## Verification
+
+- `make gen-check`: PASS (217 generated artifacts unchanged; `fxdata/fxdata.h
+  == src/fxdata.h`).
+- `make test`: Total Passed: 7000, Failed: 0.
+- `make test-tools`: Ran 411 tests — OK.
+- `FXTEST_ONLY="test_player_art test_monster_art test_zones test_hub test_forge"`:
+  - test_forge PASSED=79 FAILED=0
+  - test_hub PASSED=86 FAILED=0
+  - test_monster_art PASSED=182 FAILED=0
+  - test_player_art PASSED=156 FAILED=0
+  - test_zones (zones_test) PASSED=77 FAILED=0
+  (also ran test_wire PASSED=31, test_hud PASSED=29 earlier in the loop)
+- `make size-line` tail:
+  `size: flash=29616/29696 (80 free)  ram=1867/2560`
+  Baseline (HEAD 4fb8e10): `flash=29634/29696 (62 free)  ram=1920/2560`.
+  Delta: **flash -18 B (62 -> 80 free), RAM -53 B (1920 -> 1867)**.
+
+## Size verdict (far off the lead — reported, not forced)
+
+Frozen lead: A ~114 B, B ~16 B, target >= ~180 B free.
+Measured: **+18 B free** (flash), +53 B RAM free.
+
+Diagnosis (isolated by stub builds):
+- Removing the render switch alone: **-144 B flash** (spike: 29634 -> 29490),
+  -36 B RAM.
+- The generated `NODE_SHEET_OFF[21]` table costs **84 B flash** (PROGMEM), and
+  the resolver glue (noinline `forgeSheetOff` + `forgeEquippedSheetOff` +
+  `forgeClassSheetOff` + the `__uint24` store) ~48 B flash — together ~132 B.
+  Net A ~= -12 B.
+- B: the cached `beastHere` load saves ~74 B across the 3 hot gates, but
+  `refreshBeastHere` (+2 calls via `updateActiveTarget`) costs ~44-60 B; net
+  B ~= +6..+30 B depending on inlining (chosen: inline, single call site).
+- Conclusion: the frozen A lead (~114 B) appears to assume the offset table is
+  free; the absolute-address data is real sketch flash here. Neither trim was
+  forced to hit the target.
+
+Option to realize the lead in a follow-up (NOT implemented — out of the frozen
+scope): pack the 3-byte sheet offset into the FX-cart forge record
+(`fxdata/tables/forge.bin`) and read it via `src/forge.hpp` at hunt start; the
+blob lives on the SPI flash, so the address data costs 0 sketch bytes and the
+render change alone reclaims ~144 B.
 
 ## Files
 
-- data/screens/hub.json (rows), data/screens/map.json (deleted),
-  images/screens/mh_screen_map_{0..4}_128x64.png (deleted)
-- data/quests/{crush_heavy,gather_ore,slay_lunge,slay_sweep,train_pole}.json
-- src/screens.hpp, src/app_state.hpp
-- src/generated/{screen_meta.hpp,quest_meta.hpp,art_sheets.hpp} + src/fxdata.h
-- fxdata/{fxdata.h,fxdata.bin,fxdata-data.bin,manifest.json},
-  fxdata/screens/Sprites.txt, fxdata/tables/screens.bin,
-  images/screens/mh_screen_hub_0_128x64.png
-- tools/gen-quests.py, tools/tests/test_gen_quests.py (+ deleted fixture
-  tools/tests/fixtures/gen_quests/clean/data/map.json)
-- tst/app_state_test.hpp, tst/fxdatatest/{hub_test,screens_test}.hpp
-- README.md, docs/quests-shops.md, docs/ui-design.md
+- src/core/game.hpp, src/core/player.hpp, src/core/world.hpp, src/core/zones.hpp
+- src/forge_state.hpp, src/app_setup.hpp, src/render.hpp
+- src/generated/forge_meta.hpp (+ fxdata/manifest.json)
+- tools/gen-forge.py, tools/tests/test_gen_forge.py
+- tst/forge_state_test.hpp, tst/fxdatatest/forge_test.hpp,
+  tst/fxdatatest/player_art_test.hpp
 
-## Size (acceptance 6)
-
-Baseline shipping 29674/29696 (22 free) -> now:
-
-```
-size: flash=29634/29696 (62 free)  ram=1920/2560
-```
-
-delta = **-40 B flash, RAM unchanged**. Net-negative as expected. FX image shrank
-15,360 B (5 baked map pages): 3,004,672 -> 2,989,312 B.
-
-## Gates
-
-- `make gen` converged (2 passes: first pass re-resolves page addresses from the
-  pre-existing `fxdata.h`, known `cqw`), then `make gen-check`:
-  `fxdata_manifest: PASS (217 generated artifacts unchanged)`; `fxdata.h ==`
-  `fxdata/fxdata.h` (asserted by gen-check's cmp). Generated set staged together.
-- `make test`: `Total Passed: 6984 / Total Failed: 0`.
-- `make test-tools`: `Ran 407 tests ... OK`.
-- Device suites (touched), `FXTEST_ONLY="test_boot test_data test_hub test_screens
-  test_screens_smithy test_zones test_quests test_cards"`:
-  - test_boot PASSED=4 FAILED=0
-  - test_data PASSED=356 FAILED=0
-  - test_hub PASSED=86 FAILED=0  (was 97; -11 MAP asserts)
-  - test_screens PASSED=214 FAILED=0  (was 228; -14 MAP page/index asserts)
-  - test_screens_smithy PASSED=102 FAILED=0
-  - test_zones PASSED=77 FAILED=0
-  - test_quests PASSED=112 FAILED=0
-  - test_cards PASSED=85 FAILED=0
-  All `fxtest_ram: OK`. Full 19-suite gate left to the orchestrator.
-
-## Docs
-
-- README.md: host/device test counts, demo-content line (MAP removed), shipping
-  size 29634/62 free, FX image size + 12 screen pages, hub flow/controls
-  (QUESTS/FORGE/GEAR), demo-wave + flash history (6k2 -40 B), `dap` trim leads
-  (MAP page pick lead removed).
-- docs/quests-shops.md: layer diagram + hub-rows bullet (MAP + room-hint meta gone;
-  room graph stays).
-- docs/ui-design.md: "MAP screen (monhun-ardu-imx)" section replaced by a
-  "removed (monhun-ardu-6k2)" stub. docs/map-zones.md untouched (documents the
-  room graph, which stays).
+No commit/push (orchestrator commits). mock/ + parity untouched.
 
 ## Wall time (approx, worker)
 
-- recon/read: ~6 min
-- code + data + test edits: ~6 min
-- gen (first pass + converge + gen-check): ~5 min
-- host + tools + size: ~3 min
-- device suites (8): ~4 min
-- docs: ~5 min
-- final re-verify (host + size + test_screens): ~2 min
-- total: ~31 min
-
-## Deviations
-
-- None. `make gen-check` needed two `make gen` passes to become a fixed point
-  because removing the map pages shifted every later FX address; this is the
-  known one-pass-convergence gap (`cqw`), not a regression.
+- recon/read (bead + AGENTS + dev-flow + key headers): ~8 min
+- spike (switch removal, table/refresh isolation builds): ~18 min
+- code + generated + test edits: ~30 min
+- `make gen` (x4 converge) + gen-check: ~14 min
+- `make test` + `make test-tools`: ~5 min
+- device suites (7, one iteration): ~6 min
+- final re-verify (host + gen-check + tools + size) + report: ~10 min
+- total: ~1 h 30 min

@@ -318,21 +318,35 @@ inline bool roomIsSafe(const Game &g) {
     return ROOM_BOUNDS_ENABLED && g.roomMonsterKind == zone::MONSTER_NONE;
 }
 
-// Beast presence (demo fix): a hunt beast lives in its home room only. A safe
-// room never hosts it, and a monster room that is not the beast's home (the
-// ridge while a lunge hunt runs) reads empty -- no sim, no target, no draw, no
-// carve reach -- instead of the old behaviour where the beast's coordinates
-// happened to land inside the new room and it stood there frozen. Non-roster
-// kinds (home 0xFF, e.g. the pole) keep the legacy any-monster-room behaviour;
-// carved builds (no rooms) always host the beast. The home table is baked
-// (gen-zones MONSTER_HOME_ROOM), so no per-room cart scan runs.
-inline bool beastHere(const Game &g) {
-    if (!ROOM_BOUNDS_ENABLED)
-        return true;
-    if (roomIsSafe(g))
-        return false;
+// Beast presence (demo fix; cached trim bead monhun-ardu-dap): a hunt beast
+// lives in its home room only. A safe room never hosts it, and a monster room
+// that is not the beast's home (the ridge while a lunge hunt runs) reads empty
+// -- no sim, no target, no draw, no carve reach -- instead of the old behaviour
+// where the beast's coordinates happened to land inside the new room and it
+// stood there frozen. Non-roster kinds (home 0xFF, e.g. the pole) keep the
+// legacy any-monster-room behaviour; carved builds (no rooms) always host the
+// beast. The home table is baked (gen-zones MONSTER_HOME_ROOM), so no per-room
+// cart scan runs.
+//
+// The predicate is computed once per room/kind change (refreshBeastHere, called
+// by updateActiveTarget on newGame + loadRoom) into Game::beastHere: the
+// per-tick target, projectile and render gates then read one byte instead of
+// the home lookup. Single call site (updateActiveTarget), so it inlines.
+inline void refreshBeastHere(Game &g) {
+    if (!ROOM_BOUNDS_ENABLED) {
+        g.beastHere = 1;
+        return;
+    }
+    if (g.roomMonsterKind == zone::MONSTER_NONE) {
+        g.beastHere = 0;
+        return;
+    }
     const uint8_t home = beastHomeRoom(g.monsterKind);
-    return home == 0xFF || home == g.roomId;
+    g.beastHere = (home == 0xFF || home == g.roomId) ? 1 : 0;
+}
+
+inline bool beastHere(const Game &g) {
+    return g.beastHere != 0;
 }
 
 }   // namespace mh

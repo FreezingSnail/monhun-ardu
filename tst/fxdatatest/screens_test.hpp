@@ -229,7 +229,15 @@ inline void test_screens(FxTest &test) {
     saveEepromWrite(static_cast<uint16_t>(SAVE_EEPROM_ADDR + 5), 0xFF);
     test.expectEq(saveLoad(out, REAL_BACKEND), 0, F("bad checksum rejected"));
     test.expectEq(saveQuestGet(out, 4, 0), 0, F("bad checksum defaults quests"));
+}
 
+// Pixel split (monhun-ardu-dap gate fix): the draw/pixel checks live in their
+// own frame. test_screens' frame (rows/nav/EEPROM + this section) sat at the
+// stack ceiling; the AVR test stack is one RAM pool (globals 2062 of 2560), so
+// splitting the frame -- not hoisting locals to globals, which is
+// budget-neutral -- is what buys headroom. Same discipline as
+// test_screens_smithy/test_screens_hint.
+inline void test_screens_pixels(FxTest &test) {
     // -------------------------------------------------------- pixel check
     arduboy.startGray();
     while (arduboy.currentPlane() != 0) {
@@ -339,7 +347,12 @@ inline void test_screens(FxTest &test) {
     // Row 3 "TURN IN 250" and row 5 "TURN IN 200" (page 0).
     test.expectEq(countBits(100, 111, 38, 45) > 0 ? 1 : 0, 1, F("quests row3 baked cost 250"));
     test.expectEq(countBits(100, 111, 56, 63) > 0 ? 1 : 0, 1, F("quests row5 baked cost 200"));
+}
 
+// Gear-screen split (monhun-ardu-dap gate fix): the GEAR rows/skill/slot-pixel
+// checks + the prebaked page-table pins live in their own frame (see the
+// test_screens_pixels note above).
+inline void test_screens_gear(FxTest &test) {
     // ------------------------------------------------------- gear screen
     // hbk.12: GEAR is an equipment-box slot view -- four slot rows
     // (WEAPON/HEAD/BODY/CHARM) show the selected owned candidate's name + state

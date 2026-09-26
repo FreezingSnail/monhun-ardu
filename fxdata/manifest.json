@@ -1973,8 +1973,8 @@
     },
     {
       "path": "src/generated/forge_meta.hpp",
-      "sha256": "0c2829f4a8ca43d797968418fd1030dab84a290c7c0cdd9b8253112afaf12892",
-      "size": 5185
+      "sha256": "b5cf1bc89fc89bab1cb575a623cc009984082dd9e1c7094cec082f5eadd3a59a",
+      "size": 6249
     },
     {
       "path": "src/generated/items_data.hpp",

@@ -14,6 +14,12 @@
 
 namespace mh {
 
+// The forge class ids (forge::WEAPON_*) and WeaponId must agree: the sheet
+// resolver indexes NODE_CLASS_FIRST[g.weapon] with the game's weapon id.
+static_assert(static_cast<int>(W_SWORD) == static_cast<int>(forge::WEAPON_SWORD) && static_cast<int>(W_FLAIL) == static_cast<int>(forge::WEAPON_FLAIL) &&
+                  static_cast<int>(W_GUN) == static_cast<int>(forge::WEAPON_GUN),
+              "WeaponId order must match forge::WEAPON_*");
+
 // Start a hunt from the hub (monhun-ardu-isp.1): the save's v4 weapon picks the
 // loadout, and the active quest's goal picks the beast kind -- a GOAL_KILL quest
 // spawns its target, anything else (no quest / gather goal) falls back to the
@@ -59,10 +65,12 @@ static void questApplyToGame(Game &g, const SaveBlock &save) {
 
 // ui.4 (5co.4): the equipped forge node's dmgMul/spdMul replace the retired
 // smith tier table. SAVE_NODE_NONE (or an out-of-range id) leaves 100/100.
-// jd1: the same node's sheet kind rides along so the render draws its shield.
+// jd1: the same node's sheet address rides along so the render draws its shield.
+// Trim (dap): the render no longer maps a kind byte, so resolve the equipped
+// node's absolute FX sheet address here (class root when unequipped).
 static void upgradeApplyToGame(Game &g, const SaveBlock &save) {
     forgeEquippedMul(save, g.dmgMul, g.spdMul);
-    g.wpnSheet = forgeEquippedSheet(save);
+    g.wpnSheet = static_cast<SheetOff>(forgeEquippedSheetOff(save, static_cast<uint8_t>(g.weapon)));
 }
 
 // Restore the persisted inventory into the live hunt (prg.5 save v2). newGame

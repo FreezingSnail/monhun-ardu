@@ -51,6 +51,17 @@ DATA_DIR = "data/forge"
 ITEMS_REL = "data/items.json"
 BLOB_REL = "fxdata/tables/forge.bin"
 META_REL = "src/generated/forge_meta.hpp"
+# The packed FX image header declares every sheet offset as
+# `constexpr uint24_t <symbol> = <n>;`. NODE_SHEET_OFF resolves each node's
+# `sheet` symbol to that absolute address here (trim A, monhun-ardu-dap). The
+# header is the committed one: gen-forge runs before fxdata-build in gen.sh, so
+# a fresh checkout resolves against the previous pack exactly like gen-equipment
+# / gen-art-sheets' committed-header reads. A synthetic tree without the header,
+# or one that does not declare a symbol (another generator's partial fixture),
+# falls back to 0 without failing; the forge host/device suites pin the real
+# addresses against the equip catalog.
+FX_HEADER_REL = "fxdata/fxdata.h"
+FX_SYMBOL_RE = re.compile(r"constexpr\s+uint24_t\s+([A-Za-z_][A-Za-z0-9_]*)\s*=\s*(0[xX][0-9A-Fa-f]+|\d+)")
 
 MAGIC = 0x4647   # 'G','F' little-endian
 VERSION = 1
@@ -64,6 +75,10 @@ FLAG_DIRECT = 0x01
 
 # Weapon classes, index == WeaponId in src/core/game.hpp. Keep in sync.
 WEAPON_NAMES = ("sword", "flail", "gun")
+# Class default sheet symbol (kind 0): a root node's NODE_SHEET_OFF value. The
+# forge runtime falls back to the class root's offset when nothing is equipped,
+# so this is also the unequipped sheet.
+CLASS_DEFAULT_SHEET = ("mh_weapon_sword", "mh_weapon_flail", "mh_weapon_gun")
 
 NAME_RE = re.compile(r"^[a-z][a-z0-9_]*$")
 SHEET_RE = re.compile(r"^[a-z][a-z0-9_]*$")
@@ -161,6 +176,17 @@ def load_json(errors, path, rel):
     return None
 
 
+def load_fxdata_symbols(root):
+    """Sheet symbols declared by fxdata/fxdata.h -> absolute FX offsets (None
+    when the header is absent, e.g. a tooling-test tree for another generator)."""
+    path = os.path.join(root, FX_HEADER_REL)
+    try:
+        with open(path, encoding="utf-8") as handle:
+            return {name: int(value, 0) for name, value in FX_SYMBOL_RE.findall(handle.read())}
+    except OSError:
+        return None
+
+
 def load_item_ids(errors, root):
     path = os.path.join(root, ITEMS_REL)
     if not os.path.isfile(path):
@@ -217,7 +243,7 @@ def normalize_bill(errors, ctx, obj, key, item_ids):
     return mats
 
 
-def normalize_node(errors, ctx, obj, cls, item_ids, by_id):
+def normalize_node(errors, ctx, obj, cls, item_ids, by_id, fx_symbols):
     check_keys(errors, ctx, obj, {"id", "label", "parent", "direct", "cost", "mats",
                                   "directCost", "directMats", "dmgMul", "spdMul", "desc"},
                ("sheet",))
@@ -267,10 +293,21 @@ def normalize_node(errors, ctx, obj, cls, item_ids, by_id):
             return None
     if None in (label, cost, direct_cost, dmg, spd, mats, direct_mats):
         return None
+    # NODE_SHEET_OFF (trim A, monhun-ardu-dap): the node's absolute FX sheet
+    # address, resolved from the committed fxdata.h. A missing sheet = the class
+    # default sheet (kind 0). A tree whose fxdata.h does not declare the symbol
+    # (another generator's partial fixture) leaves it 0, matching gen-cards'
+    # committed-header discipline; the host/device forge suites pin the real
+    # addresses against the equip catalog.
+    sheet_sym = sheet if sheet is not None else CLASS_DEFAULT_SHEET[cls]
+    if fx_symbols is None:
+        sheet_off = 0
+    else:
+        sheet_off = fx_symbols.get(sheet_sym, 0)
     return {"id": node_id, "label": label, "parent": parent, "direct": direct,
             "cost": cost, "mats": mats, "directCost": direct_cost, "directMats": direct_mats,
             "dmgMul": dmg, "spdMul": spd, "desc": list(desc), "sheet": sheet,
-            "sheetKind": 0 if sheet is None else SHEET_KINDS[sheet],
+            "sheetKind": 0 if sheet is None else SHEET_KINDS[sheet], "sheetOff": sheet_off,
             "class": cls, "index": len(by_id)}
 
 
@@ -278,6 +315,7 @@ def compile_model(errors, root):
     item_ids = load_item_ids(errors, root)
     if item_ids is None:
         return None
+    fx_symbols = load_fxdata_symbols(root)
     data_dir = os.path.join(root, DATA_DIR)
     if not os.path.isdir(data_dir):
         errors.add(DATA_DIR, "missing forge directory")
@@ -324,7 +362,7 @@ def compile_model(errors, root):
                         "firstNode": len(nodes), "count": 0})
         for i, raw in enumerate(raw_nodes):
             ctx = "%s.nodes[%d]" % (rel, i)
-            node = normalize_node(errors, ctx, raw, cls, item_ids, by_id)
+            node = normalize_node(errors, ctx, raw, cls, item_ids, by_id, fx_symbols)
             if node is None:
                 continue
             node["index"] = len(nodes)
@@ -425,6 +463,9 @@ def emit_meta_header(model, blob):
     app("// semantics.")
     app("")
     app("#include <stdint.h>")
+    app("#if defined(__AVR__)")
+    app("#include \"../core/progmem.hpp\"   // MH_PROGMEM: the sheet-offset table is flash-only")
+    app("#endif")
     app("")
     app("namespace forge {")
     app("")
@@ -476,6 +517,19 @@ def emit_meta_header(model, blob):
     app("// SHEET_OFF_MH_WEAPON_* constant (only against the matching weapon class).")
     app("constexpr uint8_t NODE_SHEET[NODE_COUNT] = {%s};"
         % ", ".join(str(n["sheetKind"]) for n in nodes))
+    app("")
+    app("// Absolute FX sheet address per node (trim A, monhun-ardu-dap): the value")
+    app("// src/forge_state.hpp forgeSheetOff/forgeEquippedSheetOff resolve at hunt")
+    app("// start so src/render.hpp weaponSheet just copies Game::wpnSheet. A root")
+    app("// node's value is its class default sheet, matching the NODE_SHEET kind 0")
+    app("// fallback. AVR keeps the addresses in flash (PROGMEM, no RAM); the host")
+    app("// mirror is the same uint32 array read by the portable mhPgmReadU32.")
+    values = ", ".join(str(n["sheetOff"]) for n in nodes)
+    app("#if defined(__AVR__)")
+    app("MH_PROGMEM constexpr uint32_t NODE_SHEET_OFF[NODE_COUNT] = {%s};" % values)
+    app("#else")
+    app("constexpr uint32_t NODE_SHEET_OFF[NODE_COUNT] = {%s};" % values)
+    app("#endif")
     app("")
     app("// Per-node upgrade cost (the forge bill's zenny, N_COST_OFF). The UPGRADE")
     app("// screen resolves a class's next node and reads its cost here instead of a")

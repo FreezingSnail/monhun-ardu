@@ -31,6 +31,17 @@
 
 namespace mh {
 
+// Fixed FX sheet address (trim bead monhun-ardu-dap): Game::wpnSheet stores the
+// resolved equipped-weapon sheet offset so the render just copies it. AVR has
+// the native 3-byte __uint24 (every sheet address fits in 24 bits and Game RAM
+// matters); the host has no such type and widens to uint32_t, used only as a
+// value by the host suites (never shipped).
+#if defined(__AVR__)
+using SheetOff = __uint24;
+#else
+using SheetOff = uint32_t;
+#endif
+
 constexpr bool ZONES_ENABLED = combat::HAS_ZONES && MH_COMBAT_PARTS;
 constexpr bool MULTI_WINDOW_ENABLED = combat::HAS_MULTI_WINDOW && MH_COMBAT_PARTS;
 constexpr bool STAGGER_ENABLED = combat::HAS_STAGGER && MH_COMBAT_PARTS;
@@ -965,12 +976,13 @@ struct Game {
     // 100/100 so a default Game keeps the sim byte-identical.
     uint8_t dmgMul;
     uint8_t spdMul;
-    // Equipped forge node sheet kind (bead monhun-ardu-jd1): 0 = the weapon
-    // class's default sheet, 1..4 = the gunshield variants. Resolved from the
-    // forge node table at hunt start (upgradeApplyToGame), same timing as the
-    // multipliers. Not part of the parity state hash; initGame zeroes it and the
-    // render ignores it for sword/flail.
-    uint8_t wpnSheet;
+    // Equipped weapon sheet address (bead monhun-ardu-jd1; trim bead
+    // monhun-ardu-dap): the resolved FX sheet offset the render blits, 0 = the
+    // class default sheet until initGame/upgradeApplyToGame arms it. Resolved
+    // from the forge node table (forgeEquippedSheetOff), same timing as the
+    // multipliers. Not part of the parity state hash; initGame arms the class
+    // default so every pre-app render path is unchanged.
+    SheetOff wpnSheet;
     // Room-transition wipe (bead monhun-ardu-fie.5): loadRoom arms it and
     // stepGame decays it, so the render can black-wipe the arena for ~4 ticks
     // after a door cross without any new cart traffic. 0 = no transition.
@@ -998,6 +1010,12 @@ struct Game {
     ArmorAgg armor;
     uint8_t armorHead;
     ArmorEffects armorFx;
+    // Beast-presence cache (trim bead monhun-ardu-dap): 1 when the hunt beast is
+    // in the active room, refreshed by zones.hpp refreshBeastHere() from
+    // newGame/withWeapon + loadRoom (the only sites that move monsterKind /
+    // roomId / roomMonsterKind). zones.hpp beastHere() reads this byte, so the
+    // per-tick target/projectile/render gates skip the home-table lookup.
+    uint8_t beastHere;
 };
 
 // Active-room extents for the bound expressions. With ROOM_BOUNDS_ENABLED

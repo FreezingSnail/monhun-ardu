@@ -8,6 +8,9 @@
 // semantics.
 
 #include <stdint.h>
+#if defined(__AVR__)
+#include "../core/progmem.hpp"   // MH_PROGMEM: the sheet-offset table is flash-only
+#endif
 
 namespace forge {
 
@@ -95,6 +98,18 @@ constexpr uint8_t NODE_BRANCH[NODE_COUNT] = {0, 0, 0, 1, 2, 3, 4, 0, 0, 0, 1, 2,
 // reads this off the equipped node; src/render.hpp weaponSheet maps it to a
 // SHEET_OFF_MH_WEAPON_* constant (only against the matching weapon class).
 constexpr uint8_t NODE_SHEET[NODE_COUNT] = {0, 0, 0, 5, 6, 7, 8, 0, 0, 0, 9, 10, 11, 12, 0, 0, 0, 1, 2, 3, 4};
+
+// Absolute FX sheet address per node (trim A, monhun-ardu-dap): the value
+// src/forge_state.hpp forgeSheetOff/forgeEquippedSheetOff resolve at hunt
+// start so src/render.hpp weaponSheet just copies Game::wpnSheet. A root
+// node's value is its class default sheet, matching the NODE_SHEET kind 0
+// fallback. AVR keeps the addresses in flash (PROGMEM, no RAM); the host
+// mirror is the same uint32 array read by the portable mhPgmReadU32.
+#if defined(__AVR__)
+MH_PROGMEM constexpr uint32_t NODE_SHEET_OFF[NODE_COUNT] = {453376, 453376, 453376, 287486, 1954268, 2286048, 1622488, 2120158, 2120158, 2120158, 619266, 1788378, 954122, 788232, 1123280, 1123280, 1123280, 1456598, 2451938, 120058, 1290708};
+#else
+constexpr uint32_t NODE_SHEET_OFF[NODE_COUNT] = {453376, 453376, 453376, 287486, 1954268, 2286048, 1622488, 2120158, 2120158, 2120158, 619266, 1788378, 954122, 788232, 1123280, 1123280, 1123280, 1456598, 2451938, 120058, 1290708};
+#endif
 
 // Per-node upgrade cost (the forge bill's zenny, N_COST_OFF). The UPGRADE
 // screen resolves a class's next node and reads its cost here instead of a

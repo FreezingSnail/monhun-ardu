@@ -10,6 +10,7 @@
 #include "src/cards.hpp"
 #include "src/screens.hpp"
 #include "src/forge.hpp"
+#include "src/generated/equip_meta.hpp"   // SHEET_OFF_MH_WEAPON_* (sheet-address pins, trim dap)
 #include "src/fxdata.h"
 
 #include <stdint.h>
@@ -83,6 +84,18 @@ inline void test_forge(FxTest &test) {
     test.expectEq(forgeEquippedSheet(sheetSave), 0, F("unequipped -> default sheet"));
     sheetSave.equippedNode = forge::NODE_COUNT;
     test.expectEq(forgeEquippedSheet(sheetSave), 0, F("out-of-range -> default sheet"));
+
+    // trim A (dap): the resolved sheet ADDRESS (what Game::wpnSheet now stores)
+    // points at the equip catalog constant; the class root when unequipped /
+    // out-of-range. The render just copies Game::wpnSheet.
+    sheetSave.equippedNode = SAVE_NODE_NONE;
+    test.expectEq(forgeEquippedSheetOff(sheetSave, forge::WEAPON_SWORD), static_cast<uint32_t>(equip::SHEET_OFF_MH_WEAPON_SWORD), F("unequipped sword -> sword image"));
+    sheetSave.equippedNode = forge::NODE_GUN_BRACE;
+    test.expectEq(forgeEquippedSheetOff(sheetSave, forge::WEAPON_GUN), static_cast<uint32_t>(equip::SHEET_OFF_MH_WEAPON_GUN_BRACE), F("brace node -> brace image"));
+    sheetSave.equippedNode = forge::NODE_FLAIL_SLING;
+    test.expectEq(forgeEquippedSheetOff(sheetSave, forge::WEAPON_FLAIL), static_cast<uint32_t>(equip::SHEET_OFF_MH_WEAPON_FLAIL_SLING), F("sling node -> sling image"));
+    sheetSave.equippedNode = forge::NODE_COUNT;
+    test.expectEq(forgeEquippedSheetOff(sheetSave, forge::WEAPON_GUN), static_cast<uint32_t>(equip::SHEET_OFF_MH_WEAPON_GUN), F("out-of-range -> class root image"));
 
     // --------------------------------------------------- CRAFT row layout
     // hbk.10: the FORGE submenu opens the flat CRAFT list (no headers or tree

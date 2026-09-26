@@ -11,6 +11,7 @@
 #include "game.hpp"
 #include "items.hpp"   // gather nodes + herb use (feel.22)
 #include "../upgrade_state.hpp"
+#include "../forge_state.hpp"   // forgeClassSheetOff: fresh-Game class default sheet (trim A)
 
 namespace mh {
 
@@ -115,7 +116,8 @@ MH_NOINLINE void initGame(Game &g, int8_t weapon) {
     // mhSmith cart at hunt start (bead monhun-ardu-4ug).
     g.dmgMul = UPGRADE_MUL_BASE;
     g.spdMul = UPGRADE_MUL_BASE;
-    g.wpnSheet = 0;   // class default sheet; upgradeApplyToGame arms the forge node kind
+    g.wpnSheet = static_cast<SheetOff>(forgeClassSheetOff(static_cast<uint8_t>(weapon)));   // class default sheet; upgradeApplyToGame arms the equipped node's address
+    g.beastHere = 1;                                                                        // fresh world hosts the beast; newGame()/loadRoom() refresh the cache
     // Inventory + gather nodes are per-hunt (feel.22); loadRoom deliberately
     // leaves the node mask alone so a picked node stays picked across rooms.
     for (uint8_t i = 0; i < ITEM_COUNT; i++)
