@@ -434,9 +434,16 @@ inline void CardStateSuite(TestRunner &runner) {
         q.activeQuest = quests::QUEST_SLAY_LUNGE;
         q.progress = 2;
         t.assert(cardHint(q, turnIn, card, ForgeNode{}), HINT_NONE, "progress short -> silent");
-        t.assert(cardHint(q, take, card, ForgeNode{}), HINT_NONE, "already taken -> silent");
+        t.assert(cardHint(q, take, card, ForgeNode{}), HINT_GO, "active quest card -> A GO (087)");
         q.progress = 3;
         t.assert(cardHint(q, turnIn, card, ForgeNode{}), HINT_TURN_IN, "ready -> A TURN IN");
+        // A taken-but-inactive quest card is silent (not A GO).
+        SaveBlock takenQ;
+        saveDefaults(takenQ);
+        saveQuestSet(takenQ, quests::QUEST_SLAY_LUNGE, 0);
+        t.assert(cardHint(takenQ, take, card, ForgeNode{}), HINT_NONE, "taken but not active -> silent");
+        // 087: HINT_GO is appended after HINT_FORGE (existing hints not renumbered).
+        t.assert(HINT_GO, HINT_FORGE + 1, "HINT_GO appended");
 
         // Locked chain row: silent until the prior quest is done.
         ScreenRow locked = take;
@@ -504,6 +511,15 @@ inline void CardStateSuite(TestRunner &runner) {
         cardSetHint(s, taken, card, questRow(screens::ACTION_TAKE_QUEST, quests::QUEST_SLAY_LUNGE, 3));
         t.assert(s.hint, HINT_NONE, "already-taken quest card silent");
         t.assert(cardDenied(s), true, "silent card denied");
+
+        // An active quest card shows A GO (087): an actionable verb, not denied.
+        SaveBlock go;
+        saveDefaults(go);
+        saveQuestSet(go, quests::QUEST_SLAY_LUNGE, 0);
+        go.activeQuest = quests::QUEST_SLAY_LUNGE;
+        cardSetHint(s, go, card, questRow(screens::ACTION_TAKE_QUEST, quests::QUEST_SLAY_LUNGE, 3));
+        t.assert(s.hint, HINT_GO, "active quest card hint");
+        t.assert(cardDenied(s), false, "A GO not denied");
         suite.addTest(t);
     }
 

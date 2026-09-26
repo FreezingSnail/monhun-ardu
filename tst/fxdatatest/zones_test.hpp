@@ -256,9 +256,14 @@ inline void test_zones(FxTest &test) {
     appNavApply(APP_NAV_HUB, screen, save, d, Z_IDLE);
     test.expectEq(static_cast<uint32_t>(screen.active), 1, F("hub active"));
     test.expectEq(static_cast<uint32_t>(screen.screen), screens::SCREEN_HUB, F("on the hub"));
-    ScreenRow huntRow;
-    huntRow.action = screens::ACTION_HUNT;   // hub row 0 (no cart read needed)
-    test.expectEq(static_cast<uint32_t>(appNavApply(appScreenAccept(screens::SCREEN_HUB, huntRow), screen, save, d, Z_IDLE)), 1, F("hub HUNT requests the hunt"));
+    ScreenRow takeRow;
+    takeRow.action = screens::ACTION_TAKE_QUEST;
+    takeRow.cond = screens::COND_QUEST;
+    takeRow.param = static_cast<uint8_t>(quests::QUEST_SLAY_LUNGE);
+    save.activeQuest = static_cast<uint8_t>(quests::QUEST_SLAY_LUNGE);
+    // monhun-ardu-087: the quest card launches the hunt, not a hub row.
+    test.expectEq(static_cast<uint32_t>(appQuestCardLaunch(save, takeRow)), 1, F("quest card requests the hunt"));
+    test.expectEq(static_cast<uint32_t>(appNavApply(APP_NAV_HUNT, screen, save, d, Z_IDLE)), 1, F("hunt nav reports the request"));
     huntStart(d, save);   // the sketch's device glue starts the world
     test.expectEq(static_cast<uint32_t>(d.roomId), zone::ROOM_CAMP, F("hunt starts in camp"));
     test.expectEq(static_cast<uint32_t>(roomIsSafe(d)), 1, F("camp is safe"));

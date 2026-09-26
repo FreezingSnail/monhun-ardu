@@ -9,7 +9,7 @@ cost ~0 flash (cart data) once the framework lands.
 ## Layers
 
 ```
-hub menu (title -> HUNT / QUESTS / FORGE / GEAR, header zenny)
+hub menu (title -> QUESTS / MAP / FORGE / GEAR, header zenny; no HUNT row)
   screen framework: one generic list renderer + input + row actions
     cart data: screen tables (title, rows: label, cost, flags, condition, action)
     state:    save block v5 in EEPROM (zenny, quest flags, owned/crafted bitsets)
@@ -134,12 +134,17 @@ QuestDef (v2): id, goalKind u8 (0 kill / 1 gather), target u8
   means "quest index N-1 must be done". Turn one in and the next take row goes
   live; the board still draws a locked row (no graying/filtering yet).
 - Live hub loop (monhun-ardu-isp.1; the hub is the root, the 5r1/opening menu is
-  gone): boot --> hub --QUESTS--> take a quest --B--> hub --HUNT--> camp/area
-  hunt (kill or gather goal) --win/loss + A--> hub --QUESTS--> turn-in (pays
-  zenny + material, sets done) --B--> hub, where the next quest is now unlocked.
-  Hub B is a root no-op; camp hold-B leaves the hunt back to the hub. The loadout
-  is the save's equipped forge node (v5) and the HUNT row's beast comes from the
-  active quest's `goalKind`/`target` (`huntStart`, src/app_setup.hpp).
+  gone; monhun-ardu-087: the quest card launches): boot --> hub --QUESTS-->
+  board --A on a take row--> quest card --card A--> camp/area hunt (kill or
+  gather goal; a fresh take writes the save, a resume writes nothing)
+  --win/loss + A--> hub --QUESTS--> turn-in (pays zenny + material, sets done)
+  --B--> hub, where the next quest is now unlocked. The active quest's card
+  shows `A GO` and relaunches the hunt on A. Hub B is a root no-op; camp hold-B
+  leaves the hunt back to the hub. The loadout is the save's equipped forge node
+  (v5) and the beast comes from the active quest's `goalKind`/`target`
+  (`huntStart`, src/app_setup.hpp).
+- Hub rows (monhun-ardu-087): QUESTS / MAP / FORGE / GEAR (cursor boots on
+  QUESTS). There is no HUNT row; the quest card is the only hunt entry.
 - Gear screen (hml.3, armor rows gs.1; ui.3.1 craft; ui.4 weapons): the hub's
   GEAR row (`ACTION_OPEN_GEAR`) opens the `data/screens/gear.json` list (the
   generated weapon-tree rows + the five armor pieces + the skill rows + LEAVE).
@@ -150,9 +155,9 @@ QuestDef (v2): id, goalKind u8 (0 kill / 1 gather), target u8
   A opens the armor card: `cardArmorApply` crafts an uncrafted piece from the
   baked bill (debit + crafted bit) then toggles it into its slot
   (`armorEquipToggle`, true only on a real slot change); a crafted piece just
-  toggles. A same-piece re-press unequips. The next HUNT starts with the picked
-  loadout. An items screen is still a follow-up, and the equipped weapon/armor
-  has no on-screen mark yet.
+  toggles. A same-piece re-press unequips. The next hunt (launched from the
+  quest card, monhun-ardu-087) starts with the picked loadout. An items screen is
+  still a follow-up, and the equipped weapon/armor has no on-screen mark yet.
 - FORGE screen (ui.4): the hub's FORGE row (`ACTION_OPEN_FORGE`) opens
   `data/screens/forge.json` (generated tree rows + LEAVE). See the FORGE section.
 - Scaffold limitations: the board renders every authored row even when its

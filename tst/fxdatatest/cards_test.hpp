@@ -178,7 +178,8 @@ inline void test_cards(FxTest &test) {
     test.expectEq(detailStep(detail, a), DETAIL_ACTION, F("quest card A"));
     test.expectEq(screenApplyAction(qsave, take), 1, F("take applies"));
     test.expectEq(saveQuestGet(qsave, quests::QUEST_SLAY_LUNGE, 0), 1, F("taken bit set"));
-    test.expectEq(cardHint(qsave, take, cache, detail.node), HINT_NONE, F("taken row hint clears"));
+    // monhun-ardu-087: the taken quest is now active, so the card reads A GO.
+    test.expectEq(cardHint(qsave, take, cache, detail.node), HINT_GO, F("taken + active -> A GO"));
 
     qsave.progress = 3;
     cardLoad(detail, cache, cardRowIndex(turnIn), qsave, false);

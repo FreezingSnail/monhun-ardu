@@ -78,12 +78,13 @@ static const char MH_PROGMEM CARD_HINTS[] = "A CRAFT\0"
                                             "A TURN IN\0"
                                             "NEED PARTS\0"
                                             "NEED ZENNY\0"
-                                            "A FORGE\0";
+                                            "A FORGE\0"
+                                            "A GO\0";
 // Indexed by CardHint (src/card_state.hpp): NONE, CRAFT, EQUIP, UNEQUIP,
-// NEED_PARTS, NEED_ZENNY, ACCEPT, TURN_IN, FORGE. NONE points at the literal's
-// terminating NUL (75), so it draws nothing.
-static const uint8_t MH_PROGMEM CARD_HINT_OFF[9] = {
-    75, 0, 8, 16, 45, 56, 26, 35, 67,
+// NEED_PARTS, NEED_ZENNY, ACCEPT, TURN_IN, FORGE, GO. NONE points at the
+// literal's terminating NUL (80), so it draws nothing.
+static const uint8_t MH_PROGMEM CARD_HINT_OFF[10] = {
+    80, 0, 8, 16, 45, 56, 26, 35, 67, 75,
 };
 
 // Draw the hint line at y=56 (white). Null-terminated; at most 11 chars.

@@ -93,7 +93,7 @@ inline void test_screens(FxTest &test) {
     test.expectEq(screens::SCREEN_ARMOR_FORGE, 5, F("armor forge index"));
     test.expectEq(screens::SCREEN_UPGRADE, 6, F("upgrade index"));
     test.expectEq(screens::SCREEN_MAP, 7, F("map index"));
-    test.expectEq(screenRowCount(screens::SCREEN_HUB), 5, F("hub row count"));
+    test.expectEq(screenRowCount(screens::SCREEN_HUB), 4, F("hub row count"));
 
     // Title bytes come from the cart def (id u8, titleLen u8, title chars).
     const uint16_t hubDef = screenDefOff(screens::SCREEN_HUB);
@@ -103,32 +103,30 @@ inline void test_screens(FxTest &test) {
     test.expectEq(mhFxReadU8(screenCart(hubDef + 3)), 'U', F("hub title U"));
     test.expectEq(mhFxReadU8(screenCart(hubDef + 4)), 'B', F("hub title B"));
 
-    // ui.5: the ZENNY row is retired; the hub is HUNT/QUESTS/FORGE/GEAR.
+    // ui.5: the ZENNY row is retired; monhun-ardu-087 dropped the HUNT row, so
+    // the hub is QUESTS / MAP / FORGE / GEAR (cursor boots on QUESTS, row 0).
     ScreenRow r0, r1, r2, r3;
     screenReadRow(screenRowOffsetAt(screens::SCREEN_HUB, 0), r0);
     screenReadRow(screenRowOffsetAt(screens::SCREEN_HUB, 1), r1);
     screenReadRow(screenRowOffsetAt(screens::SCREEN_HUB, 2), r2);
     screenReadRow(screenRowOffsetAt(screens::SCREEN_HUB, 3), r3);
     test.expectEq(r0.cost, 0, F("row0 cost"));
-    test.expectEq(r0.action, screens::ACTION_HUNT, F("row0 action hunt"));
+    test.expectEq(r0.action, screens::ACTION_OPEN_QUESTS, F("row0 action open quests"));
     test.expectEq(r0.cond, screens::COND_ALWAYS, F("row0 cond"));
     test.expectEq(r0.param, 0, F("row0 param"));
     test.expectEq(r1.action, screens::ACTION_OPEN_MAP, F("row1 action open map"));
     test.expectEq(r1.cond, screens::COND_ALWAYS, F("row1 cond"));
-    test.expectEq(r2.action, screens::ACTION_OPEN_QUESTS, F("row2 action open quests"));
+    test.expectEq(r2.action, screens::ACTION_OPEN_FORGE, F("row2 action open forge"));
     test.expectEq(r2.cond, screens::COND_ALWAYS, F("row2 cond"));
-    test.expectEq(r3.action, screens::ACTION_OPEN_FORGE, F("row3 action open forge"));
+    test.expectEq(r3.action, screens::ACTION_OPEN_GEAR, F("row3 action open gear"));
     test.expectEq(r3.cond, screens::COND_ALWAYS, F("row3 cond"));
-    screenReadRow(screenRowOffsetAt(screens::SCREEN_HUB, 4), r0);
-    test.expectEq(r0.action, screens::ACTION_OPEN_GEAR, F("row4 action open gear"));
-    test.expectEq(r0.cond, screens::COND_ALWAYS, F("row4 cond"));
 
     // ----------------------------------------------------- nav/scroll
     saveDefaults(save);
 
     ScreenState st;
     screenEnter(st, screens::SCREEN_HUB, save);
-    test.expectEq(st.rowCount, 5, F("enter rowCount"));
+    test.expectEq(st.rowCount, 4, F("enter rowCount"));
     test.expectEq(st.cursor, 0, F("enter cursor"));
     test.expectEq(st.scroll, 0, F("enter scroll"));
     test.expectEq(st.active, 1, F("enter active"));
@@ -147,7 +145,7 @@ inline void test_screens(FxTest &test) {
     screenStep(st, idle);
     screenStep(st, up);   // wrap to the last row
     screenStep(st, idle);
-    test.expectEq(st.cursor, 4, F("nav up wraps"));
+    test.expectEq(st.cursor, 3, F("nav up wraps"));
     test.expectEq(screenStep(st, a), SCREEN_ACCEPT, F("A accepts"));
     test.expectEq(screenStep(st, a), SCREEN_NONE, F("held A silent"));
     screenStep(st, idle);
@@ -178,13 +176,11 @@ inline void test_screens(FxTest &test) {
     test.expectEq(saveQuestGet(act, 0, 0), 1, F("quest0 taken"));
     test.expectEq(gw0.action, screens::ACTION_SLOT_PICK, F("gear row0 is a slot row"));
     test.expectEq(screenApplyAction(act, gw0), 0, F("gear slot row is not a screen action"));
-    screenReadRow(screenRowOffsetAt(screens::SCREEN_HUB, 0), r0);   // HUNT again
-    test.expectEq(appScreenAccept(screens::SCREEN_HUB, r0), APP_NAV_HUNT, F("hub HUNT routes to hunt"));
+    screenReadRow(screenRowOffsetAt(screens::SCREEN_HUB, 0), r0);   // QUESTS
+    test.expectEq(appScreenAccept(screens::SCREEN_HUB, r0), APP_NAV_QUESTS, F("hub QUESTS route"));
     test.expectEq(appScreenAccept(screens::SCREEN_HUB, r1), APP_NAV_MAP, F("hub MAP route"));
-    test.expectEq(appScreenAccept(screens::SCREEN_HUB, r2), APP_NAV_QUESTS, F("hub QUESTS route"));
-    test.expectEq(appScreenAccept(screens::SCREEN_HUB, r3), APP_NAV_FORGE, F("hub FORGE route"));
-    screenReadRow(screenRowOffsetAt(screens::SCREEN_HUB, 4), r0);   // GEAR row
-    test.expectEq(appScreenAccept(screens::SCREEN_HUB, r0), APP_NAV_GEAR, F("hub GEAR route"));
+    test.expectEq(appScreenAccept(screens::SCREEN_HUB, r2), APP_NAV_FORGE, F("hub FORGE route"));
+    test.expectEq(appScreenAccept(screens::SCREEN_HUB, r3), APP_NAV_GEAR, F("hub GEAR route"));
     test.expectEq(appScreenBack(screens::SCREEN_MAP), APP_NAV_HUB, F("map B -> hub"));
     test.expectEq(appScreenBack(screens::SCREEN_QUESTS), APP_NAV_HUB, F("quests B -> hub"));
     test.expectEq(appScreenBack(screens::SCREEN_HUB), APP_NAV_NONE, F("hub B is a root no-op"));
@@ -259,23 +255,21 @@ inline void test_screens(FxTest &test) {
     // right-aligned on the same title line: `$` + 1234 at x 104..123.
     test.expectEq(countBits(2, 13, 0, 7) > 0 ? 1 : 0, 1, F("title band ink"));
     test.expectEq(countBits(104, 123, 0, 7) > 0 ? 1 : 0, 1, F("header zenny drawn"));
-    // Row 0 label (baked; selected -> white redraw). Row 0 is HUNT: the row
+    // Row 0 label (baked; selected -> white redraw). Row 0 is QUESTS: the row
     // shows its baked label alone (hbk.13 dropped the live quest column).
     test.expectEq(countBits(10, 40, 11, 18) > 0 ? 1 : 0, 1, F("row0 label ink"));
     test.expectEq(countBits(104, 123, 11, 18), 0, F("hub row0 no live column"));
-    // The hub bakes labels only (costs are 0): rows 1..4 have no cost ink.
+    // The hub bakes labels only (costs are 0): rows 1..3 have no cost ink.
     test.expectEq(countBits(104, 123, 20, 27), 0, F("hub row1 no baked cost"));
     test.expectEq(countBits(104, 123, 29, 36), 0, F("hub row2 no baked cost"));
     test.expectEq(countBits(104, 123, 38, 45), 0, F("hub row3 no baked cost"));
-    test.expectEq(countBits(104, 123, 47, 54), 0, F("hub row4 no baked cost"));
-    // imx inserted MAP at row 1 (y = 11 + 9 = 20); QUESTS row 2 (y=29),
-    // FORGE row 3 (y=38), GEAR row 4 (y=47).
+    // monhun-ardu-087 dropped the HUNT row: QUESTS row 0 (y=11), MAP row 1
+    // (y=20), FORGE row 2 (y=29), GEAR row 3 (y=38).
     test.expectEq(countBits(10, 50, 20, 27) > 0 ? 1 : 0, 1, F("row1 MAP label ink"));
     // The cursor sits on row 0, so row 1's cursor cell stays empty.
     test.expectEq(countBits(2, 5, 22, 25), 0, F("row1 no cursor"));
-    test.expectEq(countBits(10, 50, 29, 36) > 0 ? 1 : 0, 1, F("row2 QUESTS label ink"));
-    test.expectEq(countBits(10, 50, 38, 45) > 0 ? 1 : 0, 1, F("row3 FORGE label ink"));
-    test.expectEq(countBits(10, 50, 47, 54) > 0 ? 1 : 0, 1, F("row4 GEAR label ink"));
+    test.expectEq(countBits(10, 50, 29, 36) > 0 ? 1 : 0, 1, F("row2 FORGE label ink"));
+    test.expectEq(countBits(10, 50, 38, 45) > 0 ? 1 : 0, 1, F("row3 GEAR label ink"));
     // Control: an empty balance draws `$` + one digit at the right edge only.
     // Plane 1 clears the shade-1 band, so only the white zenny shows there.
     waitPlane(1);
@@ -297,6 +291,9 @@ inline void test_screens(FxTest &test) {
     screenEnter(hud, screens::SCREEN_HUB, qs2);
     drawScreen(hud, qs2, g_gear);
     test.expectEq(countBits(104, 123, 11, 18), 0, F("hub row0 no live quest column"));
+
+    // monhun-ardu-087: the A GO card hint pixel is pinned by test_screens_hint
+    // (below), in its own frame -- this pixel section sits at the stack ceiling.
 
     // Page indicator `n/m` bakes into each page at x = 2 + title width + 4
     // (QUESTS title 6 chars -> x=30, shade 2). Plane 1 clears the shade-1 band,
@@ -910,6 +907,23 @@ inline void test_screens_smithy(FxTest &test) {
     test.expectEq(static_cast<uint32_t>(screenUpgradeNext(forge::WEAPON_SWORD, craf, next, cost)), 1, F("forged -> next exists"));
     test.expectEq(next, forge::NODE_SWORD_T2, F("draw tracks the forge to T2"));
     test.expectEq(cost, 250, F("draw tracks cost 250"));
+}
+
+// monhun-ardu-087: the active quest card hint (A GO). Its own frame: the main
+// test_screens pixel section runs at the stack ceiling and any added draw chain
+// hangs it (the same reason test_screens_smithy is split out). test_screens.ino
+// calls this after test_screens.
+inline void test_screens_hint(FxTest &test) {
+    arduboy.startGray();
+    waitPlane(0);
+    // HINT_GO maps to the appended "A GO" string (CARD_HINT_OFF[9] = 75).
+    clearFb();
+    drawCardHint(HINT_GO);
+    test.expectEq(countBits(2, 17, 56, 63) > 0 ? 1 : 0, 1, F("A GO card hint ink"));
+    // HINT_NONE points at the literal's terminating NUL: nothing is drawn.
+    clearFb();
+    drawCardHint(HINT_NONE);
+    test.expectEq(countBits(0, 127, 56, 63), 0, F("HINT_NONE draws nothing"));
 }
 
 }   // namespace screenfx

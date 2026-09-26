@@ -5,6 +5,7 @@ void setup() {
     fxTestSetup();
     FxTest test;
     screenfx::test_screens(test);
+    screenfx::test_screens_hint(test);
     test.report(F("test_screens"));
 }
 void loop() {

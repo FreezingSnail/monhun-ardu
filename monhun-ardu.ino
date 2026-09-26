@@ -38,9 +38,9 @@ mh::AudioState s_audio;
 // save loads once in setup(); it is committed only from a screen action or the
 // hunt-end progress commit (never mid-hunt) so EEPROM write cycles stay low.
 // The hub is the root screen (monhun-ardu-isp.1, the opening menu is gone):
-// boot enters it, HUNT launches the save's weapon/active-quest hunt, and a
-// finished hunt returns to it for turn-ins. The quests/smith screens are
-// reachable from its rows.
+// boot enters it, and the QUESTS board's quest card launches the save's
+// weapon/active-quest hunt (monhun-ardu-087); a finished hunt returns to it for
+// turn-ins. The quests/smith screens are reachable from its rows.
 mh::SaveBlock s_save;
 mh::ScreenState s_screen;
 // Detail-card state (bead monhun-ardu-5co.3): the open card's page machine and
@@ -73,6 +73,19 @@ static void refreshGearReadout() {
     mh::screenGearCache(s_screen, g.armor);
 }
 
+// Arm a hunt from the save (monhun-ardu-087): build the world (huntStart reads
+// the active quest + equipped forge node) and arm the quest/upgrade/item/armor
+// state, then clear the hunt-end latch. Called only from the quest-card launch
+// (the hub-screen row path no longer starts hunts).
+static void startHuntFromSave() {
+    mh::huntStart(g, s_save);
+    mh::questApplyToGame(g, s_save);
+    mh::upgradeApplyToGame(g, s_save);
+    mh::itemsApplyToGame(g, s_save);
+    mh::armorApplyToGame(g, s_save);
+    s_huntOver = false;
+}
+
 #if DEBUG_HURTBOXES
 // The overlay is always on in this build (the A+B runtime toggle was dropped:
 // the dev image has no flash headroom for it). A+B stays untouched input.
@@ -91,7 +104,7 @@ void setup() {
 
     mh::saveLoad(s_save, SAVE_BACKEND);   // first boot / bad block -> defaults
     // The hub is the root screen (monhun-ardu-isp.1): boot enters it. The world
-    // is only built when the hub HUNT row starts a hunt (huntStart), so no
+    // is only built when the quest card launches a hunt (huntStart), so no
     // newGame/arming happens here. The armor cache is armed only for the hub
     // bottom strip (ui.5.2); a hunt re-arms it in huntStart.
     mh::armorApplyToGame(g, s_save);
@@ -113,8 +126,9 @@ static mh::Input sampleInput() {
 
 // One logic tick. Called only from needsUpdate() (never mid-plane), so the
 // whole core advances atomically between planes. pollButtons() already ran.
-// Live flow (monhun-ardu-isp.1): boot -> hub --HUNT--> camp --door--> area
-// --door--> camp; hub --QUESTS/SMITH--> screen --B--> hub; camp hold-B -> hub;
+// Live flow (monhun-ardu-isp.1; monhun-ardu-087: the quest card launches):
+// boot -> hub --QUESTS--> board --card A--> camp --door--> area --door--> camp;
+// hub --MAP/QUESTS/FORGE/GEAR--> screen --B--> hub; camp hold-B -> hub;
 // win/loss + A -> hub (turn-ins). The hub is the root: B there does nothing.
 void run() {
     const mh::Input in = sampleInput();
@@ -132,10 +146,20 @@ void run() {
         if (dev == mh::DETAIL_ACTION) {
             // One card action switch (ui.4.1): armor crafts/equips from the
             // baked bill (5co.6); weapon forge/upgrade or equip/unequip from the
-            // cached node (5co.4); quest cards take/turn in through the row.
+            // cached node (5co.4); quest cards take/turn in through the row. A
+            // take that leaves its quest active launches the hunt
+            // (monhun-ardu-087): close the card, route APP_NAV_HUNT (closes the
+            // board) and arm the hunt from the save. Everything else refreshes
+            // the card as before.
             const bool changed = mh::cardApply(s_save, s_card, s_detail.node, s_detailRow);
             if (changed)
                 mh::saveStore(s_save, SAVE_BACKEND);
+            if (mh::appQuestCardLaunch(s_save, s_detailRow)) {
+                mh::cardClose(s_detail);
+                mh::appNavApply(mh::APP_NAV_HUNT, s_screen, s_save, g, in);
+                startHuntFromSave();
+                return;
+            }
             mh::cardLoad(s_detail, s_card, s_detail.index, s_save, true);
             mh::cardSetHint(s_detail, s_save, s_card, s_detailRow);
             if (s_screen.screen == screens::SCREEN_GEAR)
@@ -202,17 +226,11 @@ void run() {
             return;
         const mh::AppNav nav = mh::appScreenAccept(s_screen.screen, row);
         if (nav != mh::APP_NAV_NONE) {
-            // Hub destination (row, hunt): a hunt start builds the world from
-            // the save (huntStart), arms the quest/upgrade/item/armor state and
-            // clears the hunt-end latch.
-            if (mh::appNavApply(nav, s_screen, s_save, g, in)) {
-                mh::huntStart(g, s_save);
-                mh::questApplyToGame(g, s_save);
-                mh::upgradeApplyToGame(g, s_save);
-                mh::itemsApplyToGame(g, s_save);
-                mh::armorApplyToGame(g, s_save);
-                s_huntOver = false;
-            } else if (s_screen.active && s_screen.screen == screens::SCREEN_GEAR) {
+            // Screen destination rows (hub QUESTS/MAP/FORGE/GEAR, LEAVE). A hunt
+            // launches from the quest card now (monhun-ardu-087), so
+            // appNavApply() never reports a hunt start from a screen row here.
+            mh::appNavApply(nav, s_screen, s_save, g, in);
+            if (s_screen.active && s_screen.screen == screens::SCREEN_GEAR) {
                 // gs.2: entering GEAR fills the live skill readout cache.
                 // hbk.12: the equipment-box slot selections default from the
                 // save (equipped, else first owned, else 0).
@@ -246,7 +264,7 @@ void run() {
     if (mh::appHuntCommit(g.over != mh::OVER_NONE, s_huntOver, s_save, g))
         mh::saveStore(s_save, SAVE_BACKEND);
     // Win/lose over screen: a fresh A returns to the hub (monhun-ardu-dlp.3) so
-    // the finished quest can be turned in; the hub HUNT row starts a fully reset
+    // the finished quest can be turned in; the quest card starts a fully reset
     // hunt (huntStart). While a carcass carve is live (prg.3) the A belongs to
     // the carve, so keep the edge current but skip the return nav; the hunt end
     // still routes out otherwise.

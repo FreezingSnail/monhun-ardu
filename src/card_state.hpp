@@ -5,7 +5,7 @@
 // Host-testable, no Arduino/cart: the DetailState page machine (open on the
 // first present page, LEFT/RIGHT cycles only pages set in the mask, B backs to
 // the list) and the dynamic hint-line rule (A CRAFT / A EQUIP / A UNEQUIP /
-// A ACCEPT / A TURN IN / NEED PARTS / NEED ZENNY). The cart read side
+// A ACCEPT / A TURN IN / NEED PARTS / NEED ZENNY / A GO). The cart read side
 // (mhCards record -> CardItem) and the blit live in src/cards.hpp so this
 // header compiles on the host with the generated constants only.
 //
@@ -243,7 +243,8 @@ enum CardHint : uint8_t {
     HINT_NEED_ZENNY,   // == ARMOR_NEED_ZENNY
     HINT_ACCEPT,
     HINT_TURN_IN,
-    HINT_FORGE   // weapon node upgrade/direct forge
+    HINT_FORGE,   // weapon node upgrade/direct forge
+    HINT_GO       // monhun-ardu-087: active quest card (resume + fresh take) launches the hunt
 };
 
 inline bool armorSlotEquipped(const SaveBlock &save, uint8_t piece, uint8_t slot) {
@@ -329,7 +330,13 @@ inline CardHint cardHint(const SaveBlock &save, const ScreenRow &row, const Card
     case screens::ACTION_FORGE_NODE:
         return forgeHint(save, node, false, direct);
     case screens::ACTION_TAKE_QUEST:
-        return screenCondOk(save, row) ? HINT_ACCEPT : HINT_NONE;
+        // monhun-ardu-087: a take row whose quest is already the active one
+        // launches the hunt (fresh take just wrote the save; resume writes
+        // nothing), so the card reads A GO instead of A ACCEPT. Conditional
+        // order: a takeable row is ACCEPT, else an active one is GO.
+        if (screenCondOk(save, row))
+            return HINT_ACCEPT;
+        return questIsActive(save, static_cast<uint8_t>(row.param & 15)) ? HINT_GO : HINT_NONE;
     case screens::ACTION_TURN_IN_QUEST:
         return screenCondOk(save, row) ? HINT_TURN_IN : HINT_NONE;
     default:

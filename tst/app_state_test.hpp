@@ -9,7 +9,8 @@
 // functions against the real cart + EEPROM and covers huntStart().
 #include "test.hpp"
 #include "../src/app_state.hpp"
-#include "../src/generated/zone_meta.hpp"   // zone::ROOM_CAMP (imx MAP cursor default)
+#include "../src/generated/zone_meta.hpp"    // zone::ROOM_CAMP (imx MAP cursor default)
+#include "../src/generated/quest_meta.hpp"   // quests::QUEST_* (quest-card launch, 087)
 
 using namespace mh;
 
@@ -42,21 +43,21 @@ void AppSuite(TestRunner &runner) {
     TestSuite suite("Boot-flow routing: hub/screens/hunt (src/app_state.hpp, isp.1)");
 
     {
-        Test t("hub HUNT requests the hunt and closes the screen");
+        Test t("APP_NAV_HUNT closes the screen and reports the hunt (quest-card launch, 087)");
         ScreenState screen;
-        screenReset(screen, screens::SCREEN_HUB, screens::SCREEN_HUB_ROWS);
+        screenReset(screen, screens::SCREEN_QUESTS, screens::SCREEN_QUESTS_ROWS);
         Game g;
         SaveBlock save;
         saveDefaults(save);
-        t.assert(appScreenAccept(screens::SCREEN_HUB, arow(screens::ACTION_HUNT)), APP_NAV_HUNT, "HUNT row routes to hunt");
-        t.assert(appNavApply(APP_NAV_HUNT, screen, save, g, AT_A), true, "HUNT reports the hunt request");
+        t.assert(appNavApply(APP_NAV_HUNT, screen, save, g, AT_A), true, "reports the hunt request");
         t.assert(screen.active, false, "screen closed for the hunt");
         suite.addTest(t);
     }
 
     {
-        Test t("hub A routing: HUNT / QUESTS / GEAR; LEAVE and status rows are no-ops");
-        t.assert(appScreenAccept(screens::SCREEN_HUB, arow(screens::ACTION_HUNT)), APP_NAV_HUNT, "HUNT row");
+        Test t("hub A routing: QUESTS / MAP / GEAR / FORGE; HUNT row gone, LEAVE/status no-ops");
+        t.assert(screens::SCREEN_HUB_ROWS, 4, "hub has 4 rows (087)");
+        t.assert(appScreenAccept(screens::SCREEN_HUB, arow(screens::ACTION_HUNT)), APP_NAV_NONE, "stray HUNT row is a no-op");
         t.assert(appScreenAccept(screens::SCREEN_HUB, arow(screens::ACTION_OPEN_QUESTS)), APP_NAV_QUESTS, "QUESTS row");
         t.assert(appScreenAccept(screens::SCREEN_HUB, arow(screens::ACTION_OPEN_GEAR)), APP_NAV_GEAR, "GEAR row");
         t.assert(appScreenAccept(screens::SCREEN_HUB, arow(screens::ACTION_OPEN_FORGE)), APP_NAV_FORGE, "FORGE row");
@@ -64,6 +65,30 @@ void AppSuite(TestRunner &runner) {
         t.assert(appScreenAccept(screens::SCREEN_HUB, arow(screens::ACTION_LEAVE)), APP_NAV_NONE, "LEAVE row is root no-op");
         t.assert(appScreenAccept(screens::SCREEN_HUB, arow(screens::ACTION_NONE, screens::COND_ALWAYS)), APP_NAV_NONE, "status row");
         t.assert(appScreenAccept(screens::SCREEN_HUB, arow(screens::ACTION_TAKE_QUEST, screens::COND_QUEST)), APP_NAV_NONE, "quest row not a hub dest");
+        suite.addTest(t);
+    }
+
+    {
+        Test t("appQuestCardLaunch: fresh take / resume launch, others don't (087)");
+        SaveBlock save;
+        saveDefaults(save);
+        const ScreenRow take = arow(screens::ACTION_TAKE_QUEST, screens::COND_QUEST, quests::QUEST_SLAY_LUNGE);
+        t.assert(appQuestCardLaunch(save, take), false, "fresh row: not active yet");
+        t.assert(appQuestCardLaunch(save, arow(screens::ACTION_TURN_IN_QUEST, screens::COND_QUEST, quests::QUEST_SLAY_LUNGE)), false, "turn-in never launches");
+        t.assert(appQuestCardLaunch(save, arow(screens::ACTION_OPEN_QUESTS)), false, "non-quest row never launches");
+        // Fresh take: cardApply wrote the save, so the same card launches.
+        t.assert(questTake(save, quests::QUEST_SLAY_LUNGE), true, "take");
+        t.assert(appQuestCardLaunch(save, take), true, "fresh take launches");
+        // Resume: a card for the active quest (nothing to write) launches too.
+        save.activeQuest = quests::QUEST_GATHER_ORE;
+        t.assert(appQuestCardLaunch(save, take), false, "other quest active -> no launch");
+        save.activeQuest = quests::QUEST_SLAY_LUNGE;
+        t.assert(appQuestCardLaunch(save, take), true, "active card resumes");
+        // A locked take row (chain unlock) for a non-active quest is silent.
+        ScreenRow locked = take;
+        locked.unlock = 2;
+        saveDefaults(save);
+        t.assert(appQuestCardLaunch(save, locked), false, "locked row no launch");
         suite.addTest(t);
     }
 
@@ -208,7 +233,7 @@ void AppSuite(TestRunner &runner) {
     }
 
     {
-        Test t("hub graph: quests/gear round trip, then a fresh HUNT request");
+        Test t("hub graph: quests/gear round trip, then the quest card launches the hunt");
         ScreenState screen;
         Game g;
         SaveBlock save;
@@ -219,8 +244,15 @@ void AppSuite(TestRunner &runner) {
         t.assert(screen.screen, screens::SCREEN_GEAR, "on gear");
         appNavApply(appScreenBack(screen.screen), screen, save, g, AT_B);
         t.assert(screen.screen, screens::SCREEN_HUB, "back on hub");
-        t.assert(appNavApply(appScreenAccept(screen.screen, arow(screens::ACTION_HUNT)), screen, save, g, AT_A), true, "hunt requested from the hub");
-        t.assert(screen.active, false, "hub closed for the hunt");
+        t.assert(appScreenAccept(screen.screen, arow(screens::ACTION_OPEN_QUESTS)), APP_NAV_QUESTS, "QUESTS row routes");
+        appNavApply(APP_NAV_QUESTS, screen, save, g, AT_A);
+        t.assert(screen.screen, screens::SCREEN_QUESTS, "on the board");
+        // The card A takes the quest (save write) then launches the hunt.
+        const ScreenRow take = arow(screens::ACTION_TAKE_QUEST, screens::COND_QUEST, quests::QUEST_SLAY_LUNGE);
+        t.assert(questTake(save, quests::QUEST_SLAY_LUNGE), true, "card take writes the save");
+        t.assert(appQuestCardLaunch(save, take), true, "card launch fires");
+        t.assert(appNavApply(APP_NAV_HUNT, screen, save, g, AT_A), true, "hunt requested");
+        t.assert(screen.active, false, "board closed for the hunt");
         suite.addTest(t);
     }
 

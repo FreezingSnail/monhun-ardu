@@ -11,16 +11,18 @@
 // same routing code.
 //
 // Live flow (monhun-ardu-isp.1; the hub is the root screen, the 5r1/opening
-// menu is gone; prg.8 removed the training-pole room):
-//   boot --> hub --HUNT--> camp --door--> area --door--> camp
-//   hub --QUESTS/GEAR--> screen --B/LEAVE--> hub
+// menu is gone; prg.8 removed the training-pole room; monhun-ardu-087 removed
+// the hub HUNT row -- the QUESTS board's quest card now launches the hunt):
+//   boot --> hub --QUESTS--> board --A on a take row--> quest card
+//   card A (take) --> camp --door--> area --door--> camp
+//   hub --MAP/QUESTS/FORGE/GEAR--> screen --B/LEAVE--> hub
 //   hub --B--> nothing (root; appScreenBack(HUB) == APP_NAV_NONE)
 //   camp hold-B --> hub                              (appHubRequest)
 //   hunt end + A --> hub                             (appHuntReturn; turn-ins)
 //
-// The picked loadout lives in the save (v4 `weapon`); the hub HUNT row launches
-// it through the device glue huntStart() (src/app_setup.hpp) and a finished hunt
-// returns to the hub to turn quests in.
+// The picked loadout lives in the save (v4 `weapon`); the quest card's take
+// action launches the hunt through the device glue huntStart() (src/app_setup.hpp)
+// and a finished hunt returns to the hub to turn quests in.
 //
 // appNavApply() takes the transition Input so the new owner's A/B edge flags
 // start from the button state that caused the change: a held button cannot
@@ -28,6 +30,7 @@
 
 #include "screen_state.hpp"
 #include "core/save.hpp"
+#include "core/progmem.hpp"   // MH_PROGMEM/mhPgmReadU8 for the NAV_DESTS table
 
 namespace mh {
 
@@ -41,7 +44,7 @@ enum AppNav : int8_t {
     APP_NAV_UPGRADE,       // hbk.10: FORGE submenu WEAPON UPGRADE row (screen in hbk.11)
     APP_NAV_ARMOR_FORGE,   // hbk.10: FORGE submenu ARMOR FORGE row
     APP_NAV_MAP,           // imx: hub MAP row (room graph screen)
-    APP_NAV_HUNT           // the hub HUNT row: the caller starts the hunt (huntStart)
+    APP_NAV_HUNT           // monhun-ardu-087: the quest card take; the caller starts the hunt (huntStart)
 };
 
 // B: hub is the root (no back destination); quests/gear -> hub.
@@ -49,19 +52,19 @@ inline AppNav appScreenBack(uint8_t screen) {
     return screen == screens::SCREEN_HUB ? APP_NAV_NONE : APP_NAV_HUB;
 }
 
-// A on the cursor row. Hub rows route to a screen (or the menu on LEAVE);
-// the FORGE submenu rows route to the craft/upgrade/armor screens (hbk.10);
-// other screens leave to the hub on a LEAVE row, else APP_NAV_NONE so the
-// caller runs the row's save action (screenApplyAction).
+// A on the cursor row. Hub rows route to a screen (or no-op on LEAVE); the
+// FORGE submenu rows route to the craft/upgrade/armor screens (hbk.10); other
+// screens leave to the hub on a LEAVE row, else APP_NAV_NONE so the caller runs
+// the row's save action (screenApplyAction / the detail card).
 inline AppNav appScreenAccept(uint8_t screen, const ScreenRow &row) {
     if (screen == screens::SCREEN_HUB) {
         // imx: the MAP row is resolved before the switch so the hub action
-        // switch (and its jump table) keeps its pre-MAP size.
+        // switch (and its jump table) keeps its pre-MAP size. monhun-ardu-087
+        // dropped the HUNT row, so ACTION_HUNT no longer routes (a stray row
+        // falls through to APP_NAV_NONE).
         if (row.action == screens::ACTION_OPEN_MAP)
             return APP_NAV_MAP;
         switch (row.action) {
-        case screens::ACTION_HUNT:
-            return APP_NAV_HUNT;
         case screens::ACTION_OPEN_QUESTS:
             return APP_NAV_QUESTS;
         case screens::ACTION_OPEN_GEAR:
@@ -93,11 +96,22 @@ inline AppNav appScreenAccept(uint8_t screen, const ScreenRow &row) {
     return APP_NAV_NONE;
 }
 
+// Quest-card launch (monhun-ardu-087): true when the open card's row takes a
+// quest that is now the save's active one. The fresh-take card A has already
+// written the save (cardApply -> screenApplyAction -> questTake) and a resume
+// writes nothing, so both paths see save.activeQuest == row quest here. The card
+// branch then closes the card, routes APP_NAV_HUNT (the caller starts the hunt)
+// and arms the save state. Host-testable, shared by the sketch and the device
+// E2E suite.
+inline bool appQuestCardLaunch(const SaveBlock &save, const ScreenRow &row) {
+    return row.action == screens::ACTION_TAKE_QUEST && questIsActive(save, static_cast<uint8_t>(row.param & 15));
+}
+
 // Hunt end: A after the over screen returns to the hub (monhun-ardu-dlp.3) so
-// the finished quest can be turned in and the next chain step taken. The hub's
-// HUNT row starts the next hunt (huntStart -> newGame, so the fresh hunt starts
-// from a fully reset world: projectiles/effects/quest counters) with the save's
-// v4 weapon.
+// the finished quest can be turned in and the next chain step taken. The QUESTS
+// board's quest card starts the next hunt (huntStart -> newGame, so the fresh
+// hunt starts from a fully reset world: projectiles/effects/quest counters) with
+// the save's v4 weapon.
 inline AppNav appHuntReturn() {
     return APP_NAV_HUB;
 }
@@ -134,71 +148,54 @@ inline AppNav appHubRequest(Game &g) {
     return APP_NAV_HUB;
 }
 
-// Apply a nav destination to the live state. Returns true when the hub HUNT row
-// requested a hunt: the caller then starts it (device glue huntStart(), which
-// runs newGame + loadRoom), arms the quest/upgrade state and clears its
-// hunt-end latch. Screen row counts come from the generated screen_meta.hpp
-// constants, so this stays cart-free and host-testable; the device build's
-// screenEnter() reads the same counts off the cart.
+// Apply a nav destination to the live state. Returns true when the hunt nav
+// (APP_NAV_HUNT, monhun-ardu-087: only the quest card emits it) requested a
+// hunt: the caller then starts it (device glue huntStart(), which runs newGame +
+// loadRoom), arms the quest/upgrade state and clears its hunt-end latch. Screen
+// row counts come from the generated screen_meta.hpp constants, so this stays
+// cart-free and host-testable; the device build's screenEnter() reads the same
+// counts off the cart.
+//
+// The screen destinations are one table (monhun-ardu-087 trim): the eight
+// APP_NAV_HUB..APP_NAV_MAP values are contiguous, so nav - 1 indexes the
+// generated (screen, rows) pair instead of a per-case switch body. MAP used to
+// be resolved before the switch to keep the old jump table small; the table is
+// smaller than either.
+struct NavDest {
+    uint8_t screen;
+    uint8_t rows;
+};
+// PROGMEM: a plain const array lands in SRAM on AVR (avr-gcc .rodata), and the
+// device suites run at the stack ceiling (this is the 087 table-trim RAM note).
+static const NavDest NAV_DESTS[8] MH_PROGMEM = {
+    {screens::SCREEN_HUB, screens::SCREEN_HUB_ROWS},
+    {screens::SCREEN_QUESTS, screens::SCREEN_QUESTS_ROWS},
+    {screens::SCREEN_GEAR, screens::SCREEN_GEAR_ROWS},
+    {screens::SCREEN_FORGE, screens::SCREEN_FORGE_ROWS},
+    {screens::SCREEN_CRAFT, screens::SCREEN_CRAFT_ROWS},
+    {screens::SCREEN_UPGRADE, screens::SCREEN_UPGRADE_ROWS},
+    {screens::SCREEN_ARMOR_FORGE, screens::SCREEN_ARMOR_FORGE_ROWS},
+    {screens::SCREEN_MAP, screens::SCREEN_MAP_ROWS},
+};
+static_assert(APP_NAV_HUB == 1 && APP_NAV_MAP == 8, "NAV_DESTS covers APP_NAV_HUB..APP_NAV_MAP in order");
+
 MH_NOINLINE inline bool appNavApply(AppNav nav, ScreenState &screen, const SaveBlock &save, Game &game, const Input &in) {
     (void)save;
     (void)game;
-    // imx: APP_NAV_MAP is handled before the switch so the nav switch (and its
-    // jump table) keeps its pre-MAP size.
-    if (nav == APP_NAV_MAP) {
-        screenReset(screen, screens::SCREEN_MAP, screens::SCREEN_MAP_ROWS);
-        screen.prevA = in.a;
-        screen.prevB = in.b;
-        return false;
-    }
-    switch (nav) {
-    case APP_NAV_HUB:
-        screenReset(screen, screens::SCREEN_HUB, screens::SCREEN_HUB_ROWS);
-        screen.prevA = in.a;
-        screen.prevB = in.b;
-        return false;
-    case APP_NAV_QUESTS:
-        screenReset(screen, screens::SCREEN_QUESTS, screens::SCREEN_QUESTS_ROWS);
-        screen.prevA = in.a;
-        screen.prevB = in.b;
-        return false;
-    case APP_NAV_GEAR:
-        screenReset(screen, screens::SCREEN_GEAR, screens::SCREEN_GEAR_ROWS);
-        screen.prevA = in.a;
-        screen.prevB = in.b;
-        return false;
-    case APP_NAV_FORGE:
-        screenReset(screen, screens::SCREEN_FORGE, screens::SCREEN_FORGE_ROWS);
-        screen.prevA = in.a;
-        screen.prevB = in.b;
-        return false;
-    case APP_NAV_CRAFT:
-        screenReset(screen, screens::SCREEN_CRAFT, screens::SCREEN_CRAFT_ROWS);
-        screen.prevA = in.a;
-        screen.prevB = in.b;
-        return false;
-    case APP_NAV_ARMOR_FORGE:
-        screenReset(screen, screens::SCREEN_ARMOR_FORGE, screens::SCREEN_ARMOR_FORGE_ROWS);
-        screen.prevA = in.a;
-        screen.prevB = in.b;
-        return false;
-    case APP_NAV_UPGRADE:
-        // hbk.11: the FORGE submenu WEAPON UPGRADE row opens the UPGRADE screen
-        // (3 class rows with a live tier/cost cache; the sketch fills it after
-        // this nav, like the GEAR readout).
-        screenReset(screen, screens::SCREEN_UPGRADE, screens::SCREEN_UPGRADE_ROWS);
-        screen.prevA = in.a;
-        screen.prevB = in.b;
-        return false;
-    case APP_NAV_HUNT:
-        // The hub HUNT row: close the screen and report the hunt request. The
+    if (nav == APP_NAV_HUNT) {
+        // The quest card take: close the screen and report the hunt request. The
         // caller starts it (huntStart reads the quest def + save weapon), so the
         // fresh hunt resets projectiles/effects/quest counters.
         screen.active = false;
         return true;
-    default:
-        return false;
     }
+    if (nav == APP_NAV_NONE)
+        return false;
+    const uint8_t idx = static_cast<uint8_t>(nav) - APP_NAV_HUB;
+    screenReset(screen, mhPgmReadU8(&NAV_DESTS[idx].screen), mhPgmReadU8(&NAV_DESTS[idx].rows));
+    screen.prevA = in.a;
+    screen.prevB = in.b;
+    return false;
 }
 
 // Hunt-end commit (beads monhun-ardu-me6 qs.2, prg.5 save v2): folds the hunt's

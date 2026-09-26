@@ -28,8 +28,8 @@ flashing. Controls are below; no USB serial device comes up while the game runs
 |---|---|
 | Vertical-slice sim | Ported + parity-verified (20 scenes / 1269 ticks / 660 device asserts) |
 | Device render + HUD | Working (block/FX-sprite art; HUD text/FX glyphs + bars — `7y3` clamp fixed). Audio (cue tones) is compiled out of shipping since `hbk.15` (`-DMH_AUDIO=0`, owner call: sound is feel, not loop); the module stays behind the flag and the device suites still exercise it |
-| Host unit tests | `make test` — **6973 passed / 0 failed** |
-| Device tests (Ardens) | 19 suites / 2136 asserts — boot 4, assets 264, audio 9, hud 29, data 356, combat 254, hub 83, monster_art 182, player_art 156, quests 112, screens 227, screens_smithy 102, smith 51, cards 85, zones 76, items 35, forge 75, wire 31, perf 5 — all PASS (the frozen `test_parity` diagnostics image is not a gate; the opening-menu `test_menu`/`test_menu_art` suites and its `mh_menu_*` sheets were deleted with the menu, `isp.1`/`hml.2`; the `test_tell` marker suite was deleted with the markers, `nup`) |
+| Host unit tests | `make test` — **6989 passed / 0 failed** |
+| Device tests (Ardens) | 19 suites / 2152 asserts — boot 4, assets 264, audio 9, hud 29, data 356, combat 254, hub 97, monster_art 182, player_art 156, quests 112, screens 228, screens_smithy 102, smith 51, cards 85, zones 77, items 35, forge 75, wire 31, perf 5 — all PASS (the frozen `test_parity` diagnostics image is not a gate; the opening-menu `test_menu`/`test_menu_art` suites and its `mh_menu_*` sheets were deleted with the menu, `isp.1`/`hml.2`; the `test_tell` marker suite was deleted with the markers, `nup`) |
 | Demo content | 4-room map (`camp` ↔ `area` ↔ `cavern` / `ridge`), start-available `gather_ore` quest + kill quests, MAP screen (baked room graph + quest-marker page), four beast-variant branches per weapon class (sword / flail / gunshield), per-room beast homes, room-art pass (`kcj`), beast presence + door-transition fixes (`ve2`) |
 | Perf gate (`monhun-ardu-8v7`, re-verified through `hbk.3`) | **PASS.** plane 157 Hz (≥135), logic 52 Hz (≥45), render max 3412 µs (≤7407), tick 172 µs, RAM free 548 B (bench) |
 | Perf tooling | Headless Ardens profiler dump (`profiledump=<path>`, local patch) + on-device cycle bench (`test_perf`) |
@@ -101,14 +101,17 @@ directly in 1/16-px units and integrated by straight addition.
   sim/audio are skipped and `drawScreen()` replaces the scene; while a detail
   card is open (`DetailState::active`) `drawCard()` replaces everything and A/B
   drive the card, with A running the stored row's action through
-  `screenApplyAction`. The hub HUNT row
-  starts the save's hunt (`huntStart`), win/loss + A returns to the hub, and the
-  camp hold-B leaves to the hub. FX reads happen inside `FX::enableOLED()` /
+  `screenApplyAction`. The QUESTS board's quest card starts the save's hunt
+  (monhun-ardu-087: the card A takes/launches through `appQuestCardLaunch` +
+  `APP_NAV_HUNT` + `huntStart`; the hub has no HUNT row), win/loss + A returns to
+  the hub, and the camp hold-B leaves to the hub. FX reads happen inside `FX::enableOLED()` /
   `waitForNextPlane()` / `FX::disableOLED()`.
-- `src/app_state.hpp` — host-testable app routing (qs.4; hub-as-root `isp.1`):
-  the hub is the root (`appScreenBack(HUB) == APP_NAV_NONE`), its HUNT row
-  requests a hunt (`appNavApply(APP_NAV_HUNT)` returns true; the caller starts
-  it), camp hold-B routes to the hub (`appHubRequest`), the held-button guards,
+- `src/app_state.hpp` — host-testable app routing (qs.4; hub-as-root `isp.1`;
+  monhun-ardu-087 moved the hunt launch to the quest card): the hub is the root
+  (`appScreenBack(HUB) == APP_NAV_NONE`), the QUESTS board's quest card requests
+  a hunt (`appQuestCardLaunch` gates the take row, `appNavApply(APP_NAV_HUNT)`
+  returns true; the caller starts it), camp hold-B routes to the hub
+  (`appHubRequest`), the held-button guards,
   the over-screen return edge (`appOverReturnStep`) and the once-per-hunt
   progress commit.
 - `src/app_setup.hpp` — device cart glue for a hunt start: `huntStart()` picks the
@@ -126,7 +129,9 @@ directly in 1/16-px units and integrated by straight addition.
   PARTS trim, the armor card action (`cardArmorApply`: craft from the baked
   bill, then equip/unequip), and the dynamic hint rule (`A CRAFT` /
   `A EQUIP` / `A UNEQUIP` / `A ACCEPT` / `A TURN IN` / `NEED PARTS` /
-  `NEED ZENNY`).
+  `NEED ZENNY` / `A GO`). `A GO` (monhun-ardu-087) is the active quest
+  card's launch hint, appended after `A FORGE` so the existing hints keep
+  their ids.
 - `src/cards.hpp` — device cart glue for the cards: reads the `mhCards` record
   with one bulk `mhFxReadBytes` into a byte-identical `CardItem` cache
   (`static_assert`d), blits the baked 128x64 page through `cardBlit`
@@ -310,22 +315,26 @@ so B there is a no-op.
 | Input | Action |
 |---|---|
 | UP / DOWN | move the cursor (6 rows per page, scroll by 6) |
-| A | accept the cursor row (start hunt / open a screen / open a card / take a quest) |
+| A | accept the cursor row (open a screen / open a card / take a quest / launch the hunt from the quest card) |
 | B | back one level (quests/gear → hub; hub B is a root no-op) |
 
 D-pad nav is debounced: a tap moves exactly one row (immediate on the direction
 change), while holding waits ~300 ms (16 logic ticks) and then repeats every
 ~115 ms (6 ticks). A is edge-based: one accept per press, and the press that
-opened a screen cannot re-fire inside it. The hub HUNT row starts the save's
-hunt: `huntStart()` reads the active quest's `QuestDef` (a `kill` goal spawns its
-target beast, anything else — no quest or a `gather` goal — falls back to the
-LUNGE beast) and the save's equipped forge node (v5), then runs `newGame` + the
-camp spawn.
+opened a screen cannot re-fire inside it. There is no HUNT row (monhun-ardu-087):
+the QUESTS board's quest card launches the save's hunt. A on a take row opens the
+quest card; the card's A takes the contract and launches (the card reads `A GO`
+on the active quest, so exiting a hunt and reopening the card relaunches it with
+no save write), running `huntStart()`, which reads the active quest's `QuestDef`
+(a `kill` goal spawns its target beast, anything else — no quest or a `gather`
+goal — falls back to the LUNGE beast) and the save's equipped forge node (v5),
+then runs `newGame` + the camp spawn.
 After a win or loss, A returns to the hub so the finished quest can be turned in;
-the next HUNT runs `newGame` again, so projectiles/effects/quest counters start
+the next launch runs `newGame` again, so projectiles/effects/quest counters start
 clean. While a screen is up the sim and audio are not stepped.
 
-The hub shows HUNT / MAP / QUESTS / FORGE / GEAR. The MAP row opens the room
+The hub shows QUESTS / MAP / FORGE / GEAR (cursor boots on QUESTS; the HUNT row
+is gone, monhun-ardu-087). The MAP row opens the room
 graph (`imx`): a baked 128x64 panel (camp west, area centre, cavern north,
 ridge east) with the v1 cursor baked at camp and a marker page picked from the
 active quest's room hint (`QUEST_ROOM_HINT`); LEFT/RIGHT are no-ops for now.
@@ -337,10 +346,9 @@ removed the SMITH screen and ui.4 (5co.4) added the FORGE trees, which own all
 weapon progression: armor crafting moved onto the GEAR armor card (below) and
 the camp smithy interaction was dropped with the screen.
 
-Hub chrome (ui.5.2, 5co.9): the HUNT row's right column shows the active quest's
-progress (`2/3`), `READY` once progress >= need, or `-` with no active quest
-(replacing the packed cost, which is always 0 on the hub). A bottom strip on the
-free y=56 line shows the equipped weapon marker (`SWD1` — the class abbreviation
+Hub chrome (ui.5.2, 5co.9; the HUNT row and its live quest-progress column were
+dropped, hbk.13/monhun-ardu-087 — quest progress lives on the quest card). A
+bottom strip on the free y=56 line shows the equipped weapon marker (`SWD1` — the class abbreviation
 + forge-tree tier) and the active armor skill point totals (`ATK12`, tiered
 skills only; no all-skills screen). Any list spanning more than one 6-row page
 carries an `n/m` page indicator after its title. A blocked A — a gated list row
@@ -381,8 +389,8 @@ generated from the same tree) open the weapon card, whose A equips an owned node
 or unequips the wielded one; the equipped node id persists in the save (v5). The
 five armor pieces (`ACTION_EQUIP_ARMOR` rows, gs.1) are always live, because the
 card's A crafts an uncrafted piece (debit + crafted bit) before toggling equip.
-A same-weapon / same-piece press is a no-op and the next HUNT starts with the
-picked loadout; the owned/crafted bitsets and the equipped ids persist in the
+A same-weapon / same-piece press is a no-op and the next hunt (launched from the
+quest card) starts with the picked loadout; the owned/crafted bitsets and the equipped ids persist in the
 save, and the equipped stats cache at hunt start (arm.2). The GEAR page also
 carries a live skill readout (gs.2): five `ROW_F_SKILL` rows (ATTACK UP /
 DEFENSE UP / HEALTH UP / STAMINA UP / EVADE) show each skill's stacked points,
@@ -410,7 +418,8 @@ for weapons; GOAL/PROG/REWARD for quests), B backs to the list, and A on the
 card performs the row's context action (forge/upgrade, craft/equip/unequip, or
 take/turn-in). The armor craft bill (zenny + up to two `{item, count}` pairs) is
 baked into the `mhCards` record (ui.3.1), so the card gates and debits the craft
-itself; quest cards still run the row action. Everything is baked into the
+itself; quest cards run the row action, and a take row that leaves its quest
+active launches the hunt (monhun-ardu-087, the card reads `A GO`). Everything is baked into the
 128x64 page image except the hint line and the live overlay slots (PARTS
 have-counts, the quest progress bar); a crafted armor piece loses its PARTS page
 immediately, so the card cannot offer a second craft. The live per-row state
@@ -541,7 +550,9 @@ Notes:
    the ridge + beast homes ~12 B (`360c0ce`, after trims), the MAP screen
    ~70 B net (`da95519`, after baking the marker pages) and the room art 0 B
    (`526f11d`); the presence/transition fixes added ~88 B (`ve2`).
-   Shipping measures **29672/29696 B (24 free)**. The 119 B of hot LUTs (`mh::SIN65`
+   Shipping then measured **29672/29696 B (24 free)**; the quest-card launch
+   (`monhun-ardu-087`, hub HUNT row removed, `A GO` resume) landed at
+   **29674/29696 B (22 free)**, VM RAM 1920 B. The 119 B of hot LUTs (`mh::SIN65`
    65 B, `fp::DIR8` 32 B, `mh::MH_MASK_TOP/BOT` 16 B, `mh::RING6` 6 B) stay in
    MCU flash by decision (`monhun-ardu-42n.5`): FX per-access reads measured
    ~150 cycles (~9 µs, 20-35x an LPM) and a SIN65 RAM cache would breach the
