@@ -223,6 +223,29 @@ void DemoSuite(TestRunner &runner) {
     }
 
     {
+        // nx9 (owner playtest): the GO A was read again on the first hunt tick
+        // and drew the stowed weapon. The sketch order is demoLaunch then
+        // primeHuntInput with the launching sample; the held A is swallowed and
+        // the next deliberate press draws.
+        Test t("GO launch + primeHuntInput: the held A does not draw the stowed weapon");
+        Game g;
+        DemoMenu m;
+        demoInit(m);
+        demoToGo(m);
+        const Input A = Input{0, 0, true, false};
+        t.assert(demoStep(m, A), DEMO_LAUNCH, "A on GO launches");
+        demoLaunch(g, m);
+        primeHuntInput(g, A);
+        stepGame(g, A);
+        t.assert(g.player.sheathed, 1, "weapon stays stowed through the transition");
+        t.assert(g.player.state, PS_IDLE, "no draw windup from the launch press");
+        stepGame(g, Input{0, 0, false, false});
+        stepGame(g, A);
+        t.assert(g.player.state, PS_DRAW, "the next deliberate A draws");
+        suite.addTest(t);
+    }
+
+    {
         Test t("demoLaunch places each beast in its home room");
         const int8_t kinds[4] = {MON_LUNGE, MON_SWEEP, MON_HEAVY, MON_RAVAGER};
         const uint8_t homes[4] = {zone::ROOM_AREA, zone::ROOM_AREA, zone::ROOM_RIDGE, zone::ROOM_AREA};

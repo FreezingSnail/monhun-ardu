@@ -6,10 +6,11 @@
 // fixtures also replay only the shipped 3). Measured costs are unchanged: the
 // zone functions were never executed by this scene.
 #define MH_COMBAT_PARTS 0
-// monhun-ardu-9kn: shipping renders the stored room-image ground (SIZE_FLAGS),
-// so the bench must compile the same path -- otherwise its rMx/pHz describe the
-// retired dot field. Same reason test_zones.ino forces this on.
-#define MH_ROOM_IMAGE 1
+// monhun-ardu-nx9: shipping is back on the procedural dot-field ground
+// (SIZE_FLAGS), so the bench must compile the shipped path -- otherwise its
+// rMx/pHz describe the retired-in-shipping stored-image blit. test_zones.ino
+// keeps forcing 1 to pin the image pipeline's pixels.
+#define MH_ROOM_IMAGE 0
 #include "harness/fx_globals.hpp"
 #include "perf_test.hpp"
 

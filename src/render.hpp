@@ -29,14 +29,16 @@
 #define DEBUG_HURTBOXES 0
 #endif
 
-// fie.8 ground carve. 0 (shipping default) fills the playfield with the
-// procedural dot field + room border (drawArena), the old basic texture; 1 uses
-// the fie.5 stored-room-image blit (drawRoom + per-plane FX streaming). The
-// carve is look/budget only -- MH_ROOM_BOUNDS stays 1 either way, so the room
-// graph, doors, spawns, heal, per-room bounds, props (tent) and fade all stay
-// live. The image pipeline (PNGs, gen-zones blob/meta, mh_map_* layers) stays in
-// the tree; only the render path compiles out. test_zones forces 1 to keep the
-// blit pixel evidence.
+// fie.8 ground carve. 0 (shipping default again, monhun-ardu-nx9 owner
+// playtest: the stored room art read worse than the old texture, and the blit
+// costs ~1 ms/plane) fills the playfield with the procedural dot field + room
+// border (drawArena); 1 uses the fie.5 stored-room-image blit (drawRoom +
+// per-plane FX streaming, -DMH_ROOM_IMAGE=1). The carve is look/budget only --
+// MH_ROOM_BOUNDS stays 1 either way, so the room graph, doors, spawns, heal,
+// per-room bounds, props (tent) and fade all stay live. The image pipeline
+// (PNGs, gen-zones blob/meta, mh_map_* layers) stays in the tree; only the
+// render path compiles out. test_zones forces 1 to keep the blit pixel
+// evidence; test_perf forces the shipped 0.
 #ifndef MH_ROOM_IMAGE
 #define MH_ROOM_IMAGE 0
 #endif

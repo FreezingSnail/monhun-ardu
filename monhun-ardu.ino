@@ -168,6 +168,10 @@ void run() {
         // Picker tick: GO launches a fresh hunt; the picker is the demo root.
         if (mh::demoStep(s_demo, in) == mh::DEMO_LAUNCH) {
             mh::demoLaunch(g, s_demo);
+            // The GO A must not read as a fresh hunt edge (nx9): seed the sim's
+            // edges from the launching sample or the held/still-down A draws the
+            // stowed weapon on the first hunt tick.
+            mh::primeHuntInput(g, in);
             s_demoPrevA = in.a;
             s_demoPicker = false;
         }
@@ -216,6 +220,9 @@ void run() {
                 mh::cardClose(s_detail);
                 mh::appNavApply(mh::APP_NAV_HUNT, s_screen, s_save, g, in);
                 startHuntFromSave();
+                // The card A must not read as a fresh hunt edge (nx9): seed the
+                // fresh world's edges from the launching sample.
+                mh::primeHuntInput(g, in);
                 return;
             }
             mh::cardLoad(s_detail, s_card, s_detail.index, s_save, true);

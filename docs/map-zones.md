@@ -203,9 +203,11 @@ seekData(mh_map_<id> + plane * ROOM_<ID>_IMAGE_LAYER_BYTES
 an AVR-only `static_assert` pins it against the live symbol, so a stale blob
 (fxdata.h changed without a regen) fails the device build.
 
-Shipping render (monhun-ardu-9kn): `-DMH_ROOM_IMAGE=1` is in the Makefile
-`SIZE_FLAGS`, so `drawRoom` blits the active room's stored layer instead of the
-procedural dot field (`drawArena` stays as the `MH_ROOM_IMAGE=0` carve).
+Shipping render (monhun-ardu-nx9, owner playtest): `-DMH_ROOM_IMAGE=0` is in the
+Makefile `SIZE_FLAGS`, so the ground is the procedural dot field (`drawArena`);
+the `9kn` stored-image blit (`drawRoom`, `-DMH_ROOM_IMAGE=1`) stays in the tree
+as the carve and is pinned by `test_zones`. The image pipeline and the four
+`mh_map_*` layers stay generated either way.
 `roomImageInfo` maps all four room ids to their generated base/extent
 (camp/area/cavern/ridge); the pre-room default falls through to area. The layer
 is streamed per plane with the fused split reader; `ROOM_ROW_COEF[0] == 1`

@@ -1,8 +1,8 @@
 #pragma once
 // On-device room-image / prop / fade suite (bead monhun-ardu-fie.5).
 //
-// fie.8 carve: shipping now defaults to the procedural dot ground
-// (MH_ROOM_IMAGE 0) and compiles the stored-image blit out. This suite is the
+// fie.8 carve: the shipped ground is the procedural dot field again (nx9,
+// MH_ROOM_IMAGE 0) and compiles the stored-image blit out. This suite is the
 // permanent blit-correctness evidence, so it forces the image path back on
 // before the first include of render.hpp in this TU. Blob/doors/props/fade
 // assertions below still run (props + fade are shared by both ground paths).

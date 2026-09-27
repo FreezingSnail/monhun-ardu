@@ -52,12 +52,12 @@ Shipping (`make build`) and dev builds are unchanged by the flag (it defaults to
 |---|---|
 | Vertical-slice sim | Ported + parity-verified (20 scenes / 1269 ticks / 660 device asserts) |
 | Device render + HUD | Working (block/FX-sprite art; HUD text/FX glyphs + bars — `7y3` clamp fixed). Audio (cue tones) is compiled out of shipping since `hbk.15` (`-DMH_AUDIO=0`, owner call: sound is feel, not loop); the module stays behind the flag and the device suites still exercise it |
-| Host unit tests | `make test` — **7106 passed / 0 failed** |
-| Device tests (Ardens) | 19 suites / 2150 asserts — boot 4, assets 264, audio 9, hud 29, data 356, combat 254, hub 86, monster_art 182, player_art 156, quests 112, screens 214, screens_smithy 102, smith 51, cards 85, zones 100, items 35, forge 75, wire 31, perf 5 — all PASS (the frozen `test_parity` diagnostics image is not a gate; the opening-menu `test_menu`/`test_menu_art` suites and its `mh_menu_*` sheets were deleted with the menu, `isp.1`/`hml.2`; the `test_tell` marker suite was deleted with the markers, `nup`) |
-| Demo content | 4-room map (`camp` ↔ `area` ↔ `cavern` / `ridge`), start-available `gather_ore` quest + kill quests, four beast-variant branches per weapon class (sword / flail / gunshield), per-room beast homes, stored room-art ground (all four rooms, `9kn`), beast presence + door-transition fixes (`ve2`) |
-| Perf gate (`monhun-ardu-8v7`, re-verified through `9kn`) | **PASS.** plane 157 Hz (≥135), logic 52 Hz (≥45), render max 4280 µs (≤7407, stored-image ground), tick 164 µs, RAM free 505 B (bench) |
+| Host unit tests | `make test` — **7115 passed / 0 failed** |
+| Device tests (Ardens) | 19 suites / 2153 asserts — boot 4, assets 264, audio 9, hud 29, data 356, combat 254, hub 86, monster_art 182, player_art 156, quests 110, screens 214, screens_smithy 102, smith 51, cards 85, zones 100, items 35, forge 79, wire 31, perf 6 — all PASS (the frozen `test_parity` diagnostics image is not a gate; the opening-menu `test_menu`/`test_menu_art` suites and its `mh_menu_*` sheets were deleted with the menu, `isp.1`/`hml.2`; the `test_tell` marker suite was deleted with the markers, `nup`) |
+| Demo content | 4-room map (`camp` ↔ `area` ↔ `cavern` / `ridge`), start-available `gather_ore` quest + kill quests, four beast-variant branches per weapon class (sword / flail / gunshield), per-room beast homes, procedural dot-field ground back in shipping (`nx9`; the stored room art stays in the tree as the `MH_ROOM_IMAGE=1` carve), beast presence + door-transition fixes (`ve2`) |
+| Perf gate (`monhun-ardu-8v7`, re-verified through `nx9`) | **PASS.** plane 157 Hz (≥135), logic 52 Hz (≥45), render max 3408 µs (≤7407, dot-field ground), moving-room (area 512x112) render max 3040 µs, tick 176 µs (moving-room logic max 440 µs), RAM free 563 B (bench) |
 | Perf tooling | Headless Ardens profiler dump (`profiledump=<path>`, local patch) + on-device cycle bench (`test_perf`) |
-| Shipping build | flash **29658 / 29696 B** (38 free), RAM **1867 / 2560 B** (693 free); USB-free + sound off + stored room-image ground (`-DMH_NO_USB -DMH_AUDIO=0 -DMH_ROOM_IMAGE=1`), see below. Reserve is below the ~150 B guideline |
+| Shipping build | flash **29628 / 29696 B** (68 free), RAM **1867 / 2560 B** (693 free); USB-free + sound off + dot-field ground (`-DMH_NO_USB -DMH_AUDIO=0 -DMH_ROOM_IMAGE=0`), see below. Reserve is below the ~150 B guideline |
 | FX data image | **2,994,688 B** of 16 MB (2.85 MB) used — equip sheets 2.44 MB, 94 card pages 282 KB, block sheets 104 KB, 12 screen pages 36 KB, 4 room images 50 KB, fonts 6 KB, tables 7 KB |
 
 Speculative gameplay status: combat (sword / flail / gunshield), monster FSM,
@@ -65,10 +65,12 @@ camera/world clamps, HUD, audio cues all in place. The prg.8 trim removed
 training mode (the pole and its room), damage-number text, screen shake, the
 projectile trail, the rare cues (part break / gather / eat / windup), and the
 stage-3 finisher + direction+A opener / roll attack (`MH_STAGE3=0`,
-`MH_ROLL_ALT=0` shipping; the carves stay for tests). The ground is the active
-room's stored image (`-DMH_ROOM_IMAGE=1` since monhun-ardu-9kn; the procedural
-dot field + border stays in the tree as `drawArena`, the `MH_ROOM_IMAGE=0`
-carve).
+`MH_ROLL_ALT=0` shipping; the carves stay for tests). The ground is the
+procedural dot field + border (`drawArena`) again: `9kn` had switched it to the
+active room's stored image, but the owner playtest found the stored art read
+worse and scrolls worse than the old texture (`-DMH_ROOM_IMAGE=0` since
+monhun-ardu-nx9; the stored-image blit + its generated maps stay in the tree as
+the `MH_ROOM_IMAGE=1` carve, pinned by `test_zones`).
 The prg.11 trim then cut charge to a single melee level (no `CHARGE_L2`, no
 charged ball), replaced the procedural tell shapes with a windup
 animation-frame selector (the `tell` byte picks the beast's authored windup
@@ -86,6 +88,9 @@ monhun-ardu-6k2 then cut the cosmetic MAP screen (hub MAP row + `SCREEN_MAP` +
 its baked pages + the dead quest room-hint meta). The trim wave `dap` then
 landed the weapon-sheet address table + beast-presence cache (`838e32f`), and
 `9kn` switched the shipping ground to the stored room images (all four rooms).
+The owner playtest `nx9` then reverted the shipped ground to the procedural dot
+field (the stored art scrolls worse and cost ~880 µs/plane) and primed the sim
+input edges at hunt start so the launching A cannot draw the stowed weapon.
 Remaining: stale-cache guards `p71`/`cqw`, real art pass
 (`vx2`, human), feel tuning (`1to`, human), EEPROM save (`qyb`, deferred).
 
@@ -321,9 +326,10 @@ data/skeletons.json + data/creatures/*.json ──tools/gen-combat.py──►�
 ### Hardware / cadence
 
 - `L4_Triplane` + `ABG_TIMER1` + `ABG_SYNC_PARK_ROW` (`src/common.hpp`).
-- Measured under load (bench): **156 Hz plane sweep, 52 Hz logic**, render max
-  4868 µs/plane, logic tick 540 µs, 572 B free RAM. Mock runs 60 Hz; tick order
-  is equivalent.
+- Measured under load (bench, `nx9` numbers): **157 Hz plane sweep, 52 Hz
+  logic**, render max 3408 µs/plane (moving-room 3040 µs), logic tick 176 µs
+  (moving-room max 440 µs), 563 B free RAM. Mock runs 60 Hz; tick order is
+  equivalent.
 - Debug overlay `DEBUG_HURTBOXES=1`: `make dev-hitboxes` builds the dev feel
   image with the 1 px hurt/hit-box wireframe always on (no runtime A+B toggle).
   It draws the player body, the beast's three hurt boxes (body, head,
@@ -555,7 +561,7 @@ Notes:
    (`80bbfb0`), and `blk()`'s `fillRect`/`drawFastVLine` path was replaced with
    direct masked framebuffer writes (`816767d`) — render max 13312 → 3984 µs,
    plane 82 → 156 Hz, logic 27 → 52 Hz, profiler `mh::blk` share 29% → 3.6%.
-   Any new feature must fit flash (30 B free today) and keep the perf gates
+   Any new feature must fit flash (68 B free today) and keep the perf gates
    green.
 2. **Flash headroom** (history): the USB-stack removal (`42n.8`: custom
    USB-free `main()`, -2666 B flash / -140 B RAM, see the device-layer note)
@@ -587,7 +593,10 @@ Notes:
    measured +136 B, the internal trims (drop the `v == 0` copy reader and the
    `drawRoom` re-clamp, 4-way `roomImageInfo`, see render.hpp) brought the bead
    to **+50 B**, shipping **29666/29696 B (30 free)**, RAM 1867 B, perf still in
-   gate (rMx 4280 µs). Measured trim leads still live in the room-name banner
+   gate (rMx 4280 µs). The owner playtest `nx9` then reverted the shipped
+   ground to the procedural dot field (`-DMH_ROOM_IMAGE=0`), reclaiming **38 B**
+   (shipping **29628/29696 B, 68 free**) and ~880 µs/plane of render (rMx
+   3408 µs). Measured trim leads still live in the room-name banner
    (46 B, whose `fxroom` sheet is authored and waiting) and the `dap`
    weaponSheet nested-switch variants that measured worse. The 119 B of hot
    LUTs (`mh::SIN65`
@@ -610,6 +619,10 @@ Notes:
    art pass; the USB-stack removal (`42n.8`) then dropped it, the opening-menu
    `MenuState` was deleted with the menu (`isp.1`) and the save grew one byte
    for the v4 weapon byte, and the prebake wave landed it at **1798 B (762 free)**.
+   Globals then grew with the demo wave (quest/item/armor/screen state) to the
+   current **1867 B (693 free)**; the `nx9` ground revert does not move globals
+   but returns the `drawRoom` 128 B stack buffer + locals to the bench's free
+   RAM (**481 → 563 B**).
 4. **Mock is legacy**: `src/` is the source of truth. The mock/device parity
    image (`test_parity`, 660 asserts) stays runnable as legacy diagnostics but
    is no longer a commit gate; do not update `mock/` or regenerate its fixtures.

@@ -4,7 +4,8 @@
 // Runs the shipping loop shape on the real target (Ardens cycle-accurate
 // ATmega32u4 model) and gates the bead's acceptance budgets:
 //   plane rate >= 135 Hz, logic >= 45 Hz, free RAM >= 300 B, render/logic/FX
-//   each inside the frame budget.
+//   each inside the frame budget, and the moving-room render (nx9) inside the
+//   same 1/135 s plane floor.
 //
 // Why the bench is so lean: the full render stack + core sim + the harness's
 // Serial already consume ~27.7 KB of the 29.7 KB flash, leaving <2 KB. So the
@@ -45,6 +46,11 @@ constexpr uint32_t LOGIC_FRAME_US = 3UL * PLANE_US;   // logic runs 1:3 planes
 
 // Loop count: 36 planes = 12 logic frames, ~0.23 s simulated.
 constexpr uint16_t PLANE_ITERS = 36;
+
+// Moving-room phase (monhun-ardu-nx9, owner playtest): 108 planes = 36 logic
+// frames (~0.7 s) of holding RIGHT, enough to walk the 512 px area room's
+// middle past the first camera clamp and make the ground blit scroll.
+constexpr uint16_t MOVING_PLANE_ITERS = 108;
 
 static inline uint32_t now() {
     return micros();
@@ -147,6 +153,41 @@ MH_NI static void runBench(Game &g, AudioState &s, Stat &wait, Stat &logic, Stat
     }
 }
 
+// Moving-room phase (monhun-ardu-nx9): the owner playtest scenario -- a hunt in
+// the real 512x112 area room, the hunter walking (RIGHT held) from mid-room with
+// the beast parked at its home spawn off-screen -- on the exact shipping loop
+// shape. Covers what the fixed-camera pressure scene cannot: the camera-follow
+// scroll of the ground blit, the real room's door cart reads in logic, and its
+// prop records in render. Logic and render are separately reported so a scroll
+// spike is readable at a glance.
+MH_NI static void runMoving(Game &g, Stat &logic, Stat &render) {
+    newGame(g, W_SWORD, MODE_HUNT, MON_LUNGE);
+    beastHomeSpawn(g, MON_LUNGE);   // area home spawn (320,72), off-screen
+    loadRoom(g, zone::ROOM_AREA, zone::SPAWN_AREA_FROM_CAMP);
+    g.player.sheathed = true;   // demo hunts start stowed (1du)
+    g.player.x = 200;           // mid-room: camX is past its clamp and scrolls
+    g.player.y = 40;            // camY = 20 -> the split reader's v != 0 path
+    updateCamera(g);
+    Input in;
+    in.mx = 1;
+    in.my = 0;
+    in.a = false;
+    in.b = false;
+    for (uint16_t i = 0; i < MOVING_PLANE_ITERS; i++) {
+        FX::enableOLED();
+        arduboy.waitForNextPlane();
+        FX::disableOLED();
+        if (arduboy.needsUpdate()) {
+            const uint32_t a = now();
+            stepGame(g, in);
+            hit(logic, now() - a);
+        }
+        const uint32_t a = now();
+        renderScene(g, false);
+        hit(render, now() - a);
+    }
+}
+
 // ------------------------------------------------------------- ram watermark
 static inline uint16_t getSP() {
     uint16_t sp;
@@ -202,6 +243,13 @@ inline void test_perf(FxTest &test) {
     s_s.inited = false;
     runBench(s_g, s_s, wait, logic, render);
 
+    // Moving-room phase (nx9): the owner playtest's walking scene.
+    Stat mLogic, mRender;
+    mLogic.sum = mRender.sum = 0;
+    mLogic.max = mRender.max = 0;
+    mLogic.n = mRender.n = 0;
+    runMoving(s_g, mLogic, mRender);
+
     // One iteration = bracket wait + render, plus logic on 1 of every 3 planes.
     const uint32_t planeUs = avg(wait) + avg(render) + avg(logic) / 3;
     const uint32_t planeHz = 1000000UL / planeUs;
@@ -230,6 +278,12 @@ inline void test_perf(FxTest &test) {
     Serial.print((unsigned)render.max);
     Serial.print(F(" rAv="));
     Serial.print((unsigned)avg(render));
+    Serial.print(F(" mRrMx="));
+    Serial.print((unsigned)mRender.max);
+    Serial.print(F(" mRrAv="));
+    Serial.print((unsigned)avg(mRender));
+    Serial.print(F(" mLgMx="));
+    Serial.print((unsigned)mLogic.max);
     Serial.print(F(" ram="));
     Serial.println((unsigned)freeRam);
 
@@ -245,10 +299,12 @@ inline void test_perf(FxTest &test) {
         mask |= 8;
     if (freeRam < RAM_FREE_MIN)
         mask |= 16;
+    if (mRender.max >= PLANE_FLOOR_US)
+        mask |= 32;   // moving-room render > 1/135 s
     if (mask == 0) {
-        test.passCount += 5;
+        test.passCount += 6;
     } else {
-        test.failCount += 5;
+        test.failCount += 6;
         Serial.print(F("F "));
         Serial.println(mask);
     }

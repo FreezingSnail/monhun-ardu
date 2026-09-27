@@ -133,6 +133,34 @@ void WorldSuite(TestRunner &runner) {
     }
 
     {
+        // nx9 (owner playtest): the A that launches a hunt (demo GO / quest
+        // card) must not read as a fresh edge on the first hunt tick and draw
+        // the stowed weapon. Control first: an unprimed fresh world + held A
+        // reproduces the bug; primed, the held press is swallowed and the next
+        // deliberate press still draws.
+        Test t("primeHuntInput swallows the launching press (held A does not draw)");
+        const Input A = Input{0, 0, true, false};
+        Game g;
+        newGame(g, W_SWORD, MODE_HUNT);
+        wparkBeast(g, 20, 0);
+        g.player.sheathed = true;
+        stepGame(g, A);
+        t.assert(g.player.state, PS_DRAW, "control: unprimed held A draws");
+        newGame(g, W_SWORD, MODE_HUNT);
+        wparkBeast(g, 20, 0);
+        g.player.sheathed = true;
+        primeHuntInput(g, A);
+        t.assert(g.prevA, 1, "prevA seeded from the launch sample");
+        stepGame(g, A);
+        t.assert(g.player.sheathed, 1, "held A leaves the weapon stowed");
+        t.assert(g.player.state, PS_IDLE, "held A did not start the draw");
+        stepGame(g, WTEST_IDLE);
+        stepGame(g, A);
+        t.assert(g.player.state, PS_DRAW, "a fresh A press draws as intended");
+        suite.addTest(t);
+    }
+
+    {
         Test t("activeTarget indirection: hunt beast, then null once dead");
         Game g;
         newGame(g, W_SWORD, MODE_HUNT);

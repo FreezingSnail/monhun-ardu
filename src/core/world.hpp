@@ -230,6 +230,20 @@ MH_NOINLINE static void newGame(Game &g, int8_t weapon, int8_t mode, int8_t mons
     updateActiveTarget(g);
 }
 
+// Hunt-start input prime (monhun-ardu-nx9, owner playtest): initGame() clears
+// Game::prevA/prevB on the fresh world, so the A (or B) press that launched the
+// hunt -- the demo picker's GO row or the quest card's A -- would read as a
+// fresh rising edge on the first stepGame() tick and draw the weapon / act.
+// Call right after newGame()/loadRoom() from the launch site, with the same
+// sample that caused the launch: the held press is swallowed, and the release
+// still tracks (prevA/prevB stay current), so the next deliberate press acts.
+// The same held-button guard appNavApply() and demoEnter() use for screen
+// changes, applied to the hunt's own edge state.
+static inline void primeHuntInput(Game &g, const Input &inp) {
+    g.prevA = inp.a;
+    g.prevB = inp.b;
+}
+
 // Mock withWeapon(): swap the weapon but keep the chosen beast (mode is always
 // hunt now, prg.8).
 static void withWeapon(Game &g, int8_t weapon) {

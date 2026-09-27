@@ -1,92 +1,95 @@
-# monhun-ardu-0ue — Demo: area 512x112 + hunt spawns at the room entrance
+# monhun-ardu-nx9 — Owner playtest fixes: ground revert, hunt-start A lock, moving-room perf guard
 
 ## Status
 
-DONE (with one documented deviation, below). No commit/push (orchestrator
-commits). Working tree holds the staged-together generated set:
-`make gen` + `make gen-check` green, `fxdata.h == src/fxdata.h`.
+DONE. No commit/push (orchestrator commits). No generated-artifact changes
+(flags/comments/tests only; `make gen-check` green with the tree's committed
+set).
+
+## Player-visible fixes
+
+1. **Ground back to the procedural dot field + border** (`drawArena`), the
+   pre-`9kn` look the owner preferred. Makefile `SIZE_FLAGS` / `dev` /
+   `dev-hitboxes` / `demo` now pass `-DMH_ROOM_IMAGE=0`; the stored-room-image
+   blit (`drawRoom`), its generated `mh_map_*` layers and `test_zones` (forces
+   1) stay in the tree as the documented carve. `test_perf` forces 0 so the
+   bench describes the shipped path.
+2. **The launch A can no longer draw the stowed weapon.** `newGame()` clears
+   `Game::prevA/prevB`; the A press that launched a hunt (demo GO row or quest
+   card) therefore read as a fresh edge on the first `stepGame()` tick.
+   `mh::primeHuntInput(g, in)` (`src/core/world.hpp`) seeds the fresh world's
+   edges from the launching sample, and the sketch calls it right after both
+   launch paths (`demoLaunch`, `startHuntFromSave`) — the same held-button
+   guard `appNavApply()`/`demoEnter()` already use for screen changes. The
+   release still tracks, so the next deliberate A draws.
+
+## Stutter evidence (moving-room perf phase)
+
+`perf_test.hpp` gained a moving-room phase (owner playtest scenario): a hunt in
+the real 512x112 area room, hunter walking RIGHT from mid-room, beast parked at
+its home spawn off-screen — on the exact shipping loop shape. It covers what the
+fixed-camera pressure scene cannot (camera-follow scroll, the area's door cart
+reads in logic, its prop records in render) and adds the 6th perf assert
+(moving render max ≤ 1/135 s).
+
+`FXTEST_ONLY=test_perf`, Ardens cycle model, before → after the ground revert:
+
+| metric | stored image (9kn) | dot field (nx9) | delta |
+|---|---|---|---|
+| `rMx` (pressure scene) | 4284 µs | 3408 µs | **−876** |
+| `rAv` (pressure scene) | 3710 µs | 2830 µs | **−880** |
+| `mRrMx` (moving area room) | 3812 µs | 3040 µs | **−772** |
+| `mRrAv` (moving area room) | 3160 µs | 2247 µs | **−913** |
+| `mLgMx` (moving logic max) | 440 µs | 440 µs | 0 |
+| bench free RAM | 481 B | 563 B | **+82** |
+| plane rate / logic | 157 / 52 Hz | 157 / 52 Hz | 0 |
+
+The stored-image blit streamed 1024 B/plane off the cart (~880 µs/plane of CPU
+inside the frame); with the dot field the frame has that margin back, so a
+scrolling camera cannot push a plane past the ISR cadence. Flash also drops.
 
 ## Files
 
-- `images/maps/mh_map_area_512x112.png` (new; 512x112 RGBA). Old 384x112 art at
-  (0,0); columns x=384..511 copy old column x=383. Old 384 PNG deleted.
-- `images/masks/mh_map_area_512x112.png` (new; 512x448 = 4 mask bands). Old mask
-  rects preserved, ridge door rect moved (376,72,8,24) -> (504,72,8,24); old mask
-  deleted. (Required: a mask matching the room's W/H is what sources the area's
-  prop/gather/door/heal geometry — `data/map.json` has behaviour only.)
-- `data/map.json` — area `w` 384->512, image path -> `_512x112.png`,
-  `from_ridge` spawn (360,80) -> (488,80). Ridge/h/camp/cavern/monster spawn
-  unchanged.
-- `src/demo_menu.hpp` — `demoHomeSpawn` (renamed in comments to the ENTRANCE
-  spawn): area -> `SPAWN_AREA_FROM_CAMP` (8,80), ridge ->
-  `SPAWN_RIDGE_FROM_AREA` (8,80); camp/cavern unchanged. `demoLaunch` drops the
-  28-px-west placement + post-load `updateCamera`; hunter stays on the spawn
-  record via `loadRoom`, beast at its home monster spawn; stowed-weapon start
-  kept.
-- `src/render.hpp` — **deviation** (see below): `roomImageInfo` now returns only
-  the image base; `drawRoom` takes the blit stride/extent from `Game::roomW/H`
-  (set by `loadRoom` from the same zone data as the meta `ROOM_*_W/H`) instead of
-  a per-room width arm. Needed to hold the shipping flash anchor.
-- `tst/demo_menu_test.hpp` — `demoHomeSpawn` -> entrance pins; launch -> hunter at
-  the entrance spawn / beast at its home monster spawn; the old "on-screen at
-  spawn" pin replaced by "present after a tick + hunter-beast x distance >
-  `SCREEN_W`" (off-screen approach), per design C.
-- `tst/zone_test.hpp` — area roomW 384->512; area camera 256->264 (inside the new
-  384 max); area->ridge door probe (376->504) + from_ridge spawn (360->488);
-  clamp pins 368->496 and 384->`zone::ROOM_AREA_W`, names 384x112->512x112.
-- `tst/world_test.hpp` — area camMaxX 256->384 (512-128).
-- `tst/fxdatatest/zones_test.hpp` — area-view comment 512x112; `roomImageInfo`
-  selector block updated to the img-only signature (extents pinned by the
-  roomBoundW/H==meta block + layer reads below).
-- `docs/map-zones.md` — area 512x112, ridge door (504,72,8,24), entrance spawns.
-- `README.md` — demo section (entrance spawn, off-screen approach, area 512x112);
-  status snapshot: shipping flash 29658 (38 free), host tests 7106, FX image
-  2,994,688 B / room images 50 KB, zones suite 100 (see deviations).
-- Generated (staged together): `src/generated/zone_{data,meta}.hpp`,
-  `fxdata/fxdata*.{h,bin}`, `fxdata/maps/Sprites.txt`,
-  `fxdata/tables/{zones,cards,screens}.bin`, `fxdata/manifest.json`, `src/fxdata.h`.
+- `Makefile` — ground flags → `-DMH_ROOM_IMAGE=0` (+ comment); flash headroom
+  note.
+- `monhun-ardu.ino` — `primeHuntInput(g, in)` after `demoLaunch()` (demo) and
+  after `startHuntFromSave()` (quest card).
+- `src/core/world.hpp` — new `primeHuntInput()` helper (documented hunt-start
+  edge guard).
+- `src/render.hpp` — ground-carve comment updated (shipping default is the dot
+  field again; image path is the `-DMH_ROOM_IMAGE=1` carve).
+- `tst/world_test.hpp` — prime test: control (unprimed held A draws) vs primed
+  (stowed stays, next press draws).
+- `tst/demo_menu_test.hpp` — demo E2E: GO A + `primeHuntInput` → no draw, next
+  A draws.
+- `tst/fxdatatest/perf_test.hpp` — moving-room phase + `mRrMx/mRrAv/mLgMx`
+  printout + 6th assert.
+- `tst/fxdatatest/test_perf.ino` — forces `MH_ROOM_IMAGE 0` (shipped path).
+- `tst/fxdatatest/zones_test.hpp` — comment refresh only (still forces 1).
+- `README.md` — status snapshot (host 7115, perf numbers, shipping 29628/68
+  free), ground paragraphs, hardware/cadence numbers, flash/RAM history.
+- `docs/map-zones.md` — shipping-render note now `-DMH_ROOM_IMAGE=0`.
 
-## Verification
+## Verification (full gate, build/nx9_gate.log)
 
-- `make gen` (twice; zone_meta resolves image offsets from the pre-pack header,
-  so the second pass converges) then `make gen-check`:
-  `fxdata_manifest: PASS (217 generated artifacts unchanged)`.
-- `make test`: `Total Passed: 7106  Total Failed: 0`.
-- `FXTEST_ONLY="test_zones test_data test_hub test_screens test_quests test_monster_art" make fxtest-headless`:
-  - `test_data  PASSED=356 FAILED=0`
-  - `test_hub   PASSED=86  FAILED=0`
-  - `test_monster_art PASSED=182 FAILED=0`
-  - `test_quests PASSED=110 FAILED=0`
-  - `test_screens PASSED=214 FAILED=0`
-  - `test_zones PASSED=100 FAILED=0`
-  - RAM audit all OK (test_zones 2024 B, test_screens 2062 B, ...).
-- `make demo ARDENS=/usr/bin/true`: `demo size: flash=23332/29696 (6364 free)  ram=1674/2560`.
-- `make size-line` (shipping): `size: flash=29658/29696 (38 free)  ram=1867/2560`.
-
-## Deviations
-
-1. **Shipping flash 29658, not 29666.** The area's new 512 width is unique among
-   the room arms, so keeping per-room `w` in `roomImageInfo` re-materialises the
-   512 immediate into `drawRoom`'s inlined copy: measured **+4 B** (29666 ->
-   29670; `avr-nm` diff: only `drawRoom` grew, 0x12e -> 0x132). Reordering the
-   switch arms cannot restore the old area/ridge 384 sharing (all 6 orders
-   measured >= 29670). To meet the "flash unchanged / no regression" intent, the
-   blit stride/extent now come from the loaded room record (`Game::roomW/H`, set
-   by `loadRoom` from the same zone record as the meta constants) and the
-   selector returns only the image base: measured **29658 (-8 vs the 29666
-   anchor)**. Behaviour is identical in every reachable state (hub/screens replace
-   the scene before a room is loaded; `zones_test` loads every room before
-   blitting). `tst/fxdatatest/zones_test.hpp`'s selector block was updated to the
-   img-only signature; its extents are still pinned by `roomBoundW/H == meta`.
-2. **README suite counts**: updated zones 108 -> 100 (the removed extent asserts)
-   and the total accordingly; `test_quests` reports 110 where the README said 112
-   — pre-existing README drift (untouched). Full 19-suite gate is the
-   orchestrator's, per instructions.
-3. **Mask PNG** changed as well as the art PNG: the design lists only the map
-   image, but the area room is mask-sourced (`images/masks/`), so the door-rect
-   move and the rename are impossible without it.
+- `make gen-check` — `fxdata_manifest: PASS (217 generated artifacts unchanged)`;
+  no generated churn (flags/comments/tests only).
+- `make test` — `Total Passed: 7115  Total Failed: 0` (7106 + 9 new asserts).
+- `make test-tools` — OK (unittest discover, exit 0).
+- `make fxtest-headless` — **19 suites, 2153 asserts, 0 FAIL**; every suite
+  `: PASS`. `test_perf` now `PASSED=6` (moving-room render gate):
+  `B pUs=6344 pHz=157 lHz=52 lTk=176 rMx=3408 rAv=2830 mRrMx=3040 mRrAv=2247 mLgMx=440 ram=563`.
+  `test_zones PASSED=100` (stored-image blit pixels still pinned with
+  `MH_ROOM_IMAGE 1`).
+- `make size` — `size: flash=29628/29696 (68 free)  ram=1867/2560`
+  (was 29666/29696, 30 free with the stored-image ground).
+- Builds outside the gate: demo flags `arduino-cli compile` → 23290 B flash /
+  1674 B RAM; dev-hitboxes flags → 26382 B / 1786 B RAM (both fit).
+- README device-suite row corrected to the measured per-suite counts (forge 79,
+  quests 110; previously stale 75/112) and the new 2153 total.
 
 ## Wall time
 
-- worker (image authoring + regen + host/device gates + demo/size + docs): ~32 min
-  (first edit ~19:02, report 19:34).
+- Diagnosis + fixes + benches + gate: one inline orchestrator session (no
+  workers dispatched — one small bead, three layers). Targeted perf runs
+  (~40 s each incl. compile) for the before/after ground numbers.
