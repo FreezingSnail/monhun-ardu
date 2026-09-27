@@ -1,9 +1,9 @@
 # monhun-ardu
 
-Monster-Hunter-style top-down duel game for **Arduboy FX** (ATmega32u4), rendered
-in 4-shade grayscale via ArduboyG `L4_Triplane`. `src/` is the source of truth;
-`mock/` is the legacy browser prototype the sim was originally ported from (its
-parity image stays runnable as diagnostics, not as a commit gate).
+Monster-Hunter-style top-down duel for **Arduboy FX** (ATmega32u4). Renders in
+4-shade gray with ArduboyG `L4_Triplane`. `src/` is the source of truth.
+`mock/` is a legacy browser prototype. It stays runnable as diagnostics. It is
+not a gate.
 
 ---
 
@@ -12,20 +12,18 @@ parity image stays runnable as diagnostics, not as a commit gate).
 ![monhun-ardu gameplay](docs/media/demo.gif)
 
 Download `monhun-ardu-<version>.arduboy` from
-[Releases](https://github.com/FreezingSnail/monhun-ardu/releases) and flash it
-with the Arduboy Toolset, MrBlinky's
+[Releases](https://github.com/FreezingSnail/monhun-ardu/releases). Flash it with
+the Arduboy Toolset, MrBlinky's
 [uploader.py](https://github.com/MrBlinky/Arduboy-Python-Utilities), or Ardens.
-The archive carries both the Arduboy FX and the Arduboy Mini program plus the
-single FX data image (`flashdata`); the plain hex files are attached for manual
-flashing. Controls are below; no USB serial device comes up while the game runs
-(see the shipping-build note).
+The archive holds the FX program, the Mini program, and the one FX data image
+(`flashdata`). Plain hex files are attached for manual flashing. The shipping
+build has no USB serial device.
 
 ### Demo build (`make demo`)
 
-`make demo` compiles a standalone playtest image (`-DMH_DEMO=1`) that boots into
-a picker instead of the hub and compiles the hub / quests / gear / forge / detail
-card / EEPROM flows out, then launches it in Ardens (same as `make dev`; the hex
-stays in `dist/` for flashing). Pick a loadout and hunt:
+`make demo` builds a playtest image (`-DMH_DEMO=1`). It boots into a picker and
+compiles the hub / quests / gear / forge / cards / EEPROM flows out. It then
+opens Ardens. The hex stays in `dist/`.
 
 | Input | Action |
 |---|---|
@@ -33,16 +31,18 @@ stays in `dist/` for flashing). Pick a loadout and hunt:
 | A | cycle the selected row — weapon 1 of 3 (sword / flail / gun), beast 1 of 4 (lunge / sweep / heavy / ravager) — or launch from GO |
 | B | inert on the picker |
 
-GO runs `newGame()` for the picked weapon + beast and drops the hunter at the
-beast's home room entrance spawn (the area 512x112 for lunge / sweep / ravager,
-the ridge for heavy); the beast stays at its own monster spawn across the room,
-so the hunt opens with the hunter closing in from off-screen. The hunt itself is
-unchanged. Camp hold-B or win/loss + A returns to
-the picker. Output lands in `dist/` (`monhun-ardu.ino.hex` + `fxdata/fxdata.bin`);
-package it with
-`python3 tools/package-arduboy.py --version vX --hex dist/monhun-ardu.ino.hex --fxdata fxdata/fxdata.bin --out dist/monhun-ardu-demo.arduboy`.
-Shipping (`make build`) and dev builds are unchanged by the flag (it defaults to
-0).
+GO runs `newGame()` for the picked weapon + beast. It drops the hunter at the
+beast's home room entrance spawn. The beast stays at its monster spawn across
+the room. The hunt opens with the hunter closing in from off-screen. Camp
+hold-B or win/loss + A returns to the picker.
+
+Package the demo:
+
+```sh
+python3 tools/package-arduboy.py --version vX-demo \
+  --hex dist/monhun-ardu.ino.hex --fxdata fxdata/fxdata.bin --license LICENSE \
+  --out dist/monhun-ardu-demo.arduboy
+```
 
 ---
 
@@ -50,58 +50,31 @@ Shipping (`make build`) and dev builds are unchanged by the flag (it defaults to
 
 | Item | State |
 |---|---|
-| Vertical-slice sim | Ported + parity-verified (20 scenes / 1269 ticks / 660 device asserts) |
-| Device render + HUD | Working (block/FX-sprite art; HUD text/FX glyphs + bars — `7y3` clamp fixed). Audio (cue tones) is compiled out of shipping since `hbk.15` (`-DMH_AUDIO=0`, owner call: sound is feel, not loop); the module stays behind the flag and the device suites still exercise it |
-| Host unit tests | `make test` — **7115 passed / 0 failed** |
-| Device tests (Ardens) | 19 suites / 2153 asserts — boot 4, assets 264, audio 9, hud 29, data 356, combat 254, hub 86, monster_art 182, player_art 156, quests 110, screens 214, screens_smithy 102, smith 51, cards 85, zones 100, items 35, forge 79, wire 31, perf 6 — all PASS (the frozen `test_parity` diagnostics image is not a gate; the opening-menu `test_menu`/`test_menu_art` suites and its `mh_menu_*` sheets were deleted with the menu, `isp.1`/`hml.2`; the `test_tell` marker suite was deleted with the markers, `nup`) |
-| Demo content | 4-room map (`camp` ↔ `area` ↔ `cavern` / `ridge`), start-available `gather_ore` quest + kill quests, four beast-variant branches per weapon class (sword / flail / gunshield), per-room beast homes, procedural dot-field ground back in shipping (`nx9`; the stored room art stays in the tree as the `MH_ROOM_IMAGE=1` carve), beast presence + door-transition fixes (`ve2`) |
-| Perf gate (`monhun-ardu-8v7`, re-verified through `nx9`) | **PASS.** plane 157 Hz (≥135), logic 52 Hz (≥45), render max 3408 µs (≤7407, dot-field ground), moving-room (area 512x112) render max 3040 µs, tick 176 µs (moving-room logic max 440 µs), RAM free 563 B (bench) |
-| Perf tooling | Headless Ardens profiler dump (`profiledump=<path>`, local patch) + on-device cycle bench (`test_perf`) |
-| Shipping build | flash **29628 / 29696 B** (68 free), RAM **1867 / 2560 B** (693 free); USB-free + sound off + dot-field ground (`-DMH_NO_USB -DMH_AUDIO=0 -DMH_ROOM_IMAGE=0`), see below. Reserve is below the ~150 B guideline |
-| FX data image | **2,994,688 B** of 16 MB (2.85 MB) used — equip sheets 2.44 MB, 94 card pages 282 KB, block sheets 104 KB, 12 screen pages 36 KB, 4 room images 50 KB, fonts 6 KB, tables 7 KB |
+| Vertical-slice sim | Ported + parity-verified (legacy diagnostics: 20 scenes / 1269 ticks / 660 asserts) |
+| Device render + HUD | Working (block art + FX sprites; HUD text/bars; `7y3` clamp fixed) |
+| Audio | Cue tones compiled out of shipping (`-DMH_AUDIO=0`). Module stays behind the flag. Device suites still test it |
+| Host tests | `make test` — **7115 passed / 0 failed** |
+| Device tests | 19 suites / 2153 asserts, all PASS (Ardens) |
+| Demo content | 4 rooms (`camp` ↔ `area` ↔ `cavern` / `ridge`), gather + kill quests, 4 beast variants per weapon class, per-room beast homes |
+| Perf gate | PASS: plane 157 Hz (≥135), logic 52 Hz (≥45), render max 3408 µs (≤7407), moving-room render max 3040 µs, tick 176 µs, bench RAM free 563 B |
+| Shipping build | flash **29628 / 29696 B** (68 free), RAM **1867 / 2560 B** (693 free). Flags: `-DMH_NO_USB -DMH_AUDIO=0 -DMH_ROOM_IMAGE=0` |
+| FX data image | **2,994,688 B** of 16 MB used: equip sheets 2.44 MB, 94 card pages 282 KB, block sheets 104 KB, 12 screen pages 36 KB, 4 room images 50 KB, fonts 6 KB, tables 7 KB |
 
-Speculative gameplay status: combat (sword / flail / gunshield), monster FSM,
-camera/world clamps, HUD, audio cues all in place. The prg.8 trim removed
-training mode (the pole and its room), damage-number text, screen shake, the
-projectile trail, the rare cues (part break / gather / eat / windup), and the
-stage-3 finisher + direction+A opener / roll attack (`MH_STAGE3=0`,
-`MH_ROLL_ALT=0` shipping; the carves stay for tests). The ground is the
-procedural dot field + border (`drawArena`) again: `9kn` had switched it to the
-active room's stored image, but the owner playtest found the stored art read
-worse and scrolls worse than the old texture (`-DMH_ROOM_IMAGE=0` since
-monhun-ardu-nx9; the stored-image blit + its generated maps stay in the tree as
-the `MH_ROOM_IMAGE=1` carve, pinned by `test_zones`).
-The prg.11 trim then cut charge to a single melee level (no `CHARGE_L2`, no
-charged ball), replaced the procedural tell shapes with a windup
-animation-frame selector (the `tell` byte picks the beast's authored windup
-pose; telegraphs are sprite art only — the 2x2/4x4 core markers were removed,
-monhun-ardu-nup), and carved the A-A-B branch buffer + player-move push flag out of
-shipping (`MH_B_BRANCH_BUFFER=0`; the carve stays for tests): **−862 B flash**.
-Perf-verified on device. The player-move push flag is no longer carved: shipping
-defaults it to 1 (monhun-ardu-ryh.1, +118 B) so a moved hunter can never shove
-the beast. The **demo wave** then landed the content: four beast-variant
-branches per weapon class (`cdd0250`…`2bb7742`, the equipped forge node selects
-the drawn sheet), the 4-room demo map + start-available ore gather quest
-(`71539ab`), the ridge arena + per-room beast homes (`360c0ce`), the room-art
-pass (`526f11d`) and the beast-presence / door-transition fixes (`ve2`);
-monhun-ardu-6k2 then cut the cosmetic MAP screen (hub MAP row + `SCREEN_MAP` +
-its baked pages + the dead quest room-hint meta). The trim wave `dap` then
-landed the weapon-sheet address table + beast-presence cache (`838e32f`), and
-`9kn` switched the shipping ground to the stored room images (all four rooms).
-The owner playtest `nx9` then reverted the shipped ground to the procedural dot
-field (the stored art scrolls worse and cost ~880 µs/plane) and primed the sim
-input edges at hunt start so the launching A cannot draw the stowed weapon.
-Remaining: stale-cache guards `p71`/`cqw`, real art pass
-(`vx2`, human), feel tuning (`1to`, human), EEPROM save (`qyb`, deferred).
+Combat (sword / flail / gunshield), monster FSM, camera clamps, HUD, and audio
+cues are in place. Trim waves cut training mode, damage numbers, screen shake,
+the projectile trail, stage-3 finisher, roll attack, and the A-A-B branch
+buffer from shipping. The demo wave added the content. `nx9` returned the
+ground to the dot field and fixed the hunt-launch A edge. Open work: stale-cache
+guards (`p71`/`cqw`), real art pass (`vx2`), feel tuning (`1to`), EEPROM save
+(`qyb`).
 
 ---
 
 ## Architecture
 
 ```
-mock/game.js ──port──► src/core/*.hpp ──shared verbatim──► host tests (tst/*.hpp)
+mock/game.js ──port──► src/core/*.hpp ──shared verbatim──► host tests (tst/)
                               │                              and device .ino
-                              │
                     device layer (monhun-ardu.ino)
                     ├─ input sampling (pollButtons → mh::Input)
                     ├─ render.hpp (arena, actors, FX sprites, HUD)
@@ -113,569 +86,246 @@ mock/game.js ──port──► src/core/*.hpp ──shared verbatim──► h
 
 | Module | Responsibility |
 |---|---|
-| `fp.hpp` | Fixed-point layer: FP=16 (1/16 px), `tdiv`, `addMove`, `addVel`, `DIR8`, 8-way dir math, `isqrt`, `rotFp`, stamina drain, `FpBody`/`FpStam` |
+| `fp.hpp` | Fixed-point layer: FP=16 (1/16 px), `tdiv`, `addMove`, `addVel`, `DIR8`, `isqrt`, `rotFp`, stamina drain |
 | `game.hpp` | `Game` state, `Player`, weapon defs + monster attack tables (PROGMEM), `Rect`, hit callbacks, `HOLD_TICKS=11`, `WORLD_W=256`, `WORLD_H=112` |
-| `player.hpp` | Player FSM: chains/branches/stances, stamina, guard/parry/deflect, gunfire flags |
+| `player.hpp` | Player FSM: chains, branches, stances, stamina, guard / parry / deflect |
 | `monster.hpp` | Monster FSM, attack cycle, windup, hit resolution, `pushApart` |
-| `projectiles.hpp` | Shells (`ball`/`scatter`), effects (sparks), `stepWorld` |
-| `world.hpp` | Screen geometry constants, camera (int px, clamped), hunt mode, `newGame`, `withWeapon`, `resetHunt`, `stepGame`, room load/door/heal + the arrival toast (`ROOM_TOAST_TICKS` wipe), `updateActiveTarget` (beast presence) |
-| `combat.hpp` | Combat blob loader (`ljj.2`, reworked by `cgk`): one production reader over the generated `combat_data.hpp` (host) / `mhCombat` blob (AVR), `creatureLoad`/`attackLoad` caches in `Game::combat`, guard eval with deterministic tick-derived chance, and the fixed 3-hitzone resolve (implicit body + optional head/appendage records). No per-tick cart reads |
-| `input.hpp` | Edge flags + B-hold detection (`aP`, `bP`, `bR`, `bHeld`), no Arduino headers |
-| `progmem.hpp` | Portable flash-read shim: `MH_PROGMEM` + typed `mhPgmRead*`; identity on host |
+| `projectiles.hpp` | Effects (sparks) and the shell path, `stepWorld` |
+| `world.hpp` | Geometry, camera (int px, clamped), `newGame` / `resetHunt` / `stepGame`, room load / door / heal + arrival toast, beast presence |
+| `combat.hpp` | Combat blob loader: caches, guard eval, fixed 3-hitzone resolve. No per-tick cart reads |
+| `input.hpp` | Edge flags + B-hold detection (`aP`, `bP`, `bR`, `bHeld`) |
+| `progmem.hpp` | Flash-read shim: `MH_PROGMEM` + `mhPgmRead*`. Identity on host |
 
-**Fixed-point discipline**: no float or double anywhere in the sim. Positions are
-integer pixels plus a 1/16-px sub-pixel accumulator; projectile `x/y` are stored
-directly in 1/16-px units and integrated by straight addition.
+Rule: no `float` and no `double` in the sim. Positions are integer px plus a
+1/16-px accumulator. Damage math truncates at each step.
 
 ### Device layer
 
 - `monhun-ardu.ino` — plane loop, input sampling, `stepGame()` + `audioUpdate()`
-  in `run()`, `renderScene()` in `render()`. Boots straight into the **hub** (the
-  root screen, `isp.1` deleted the opening menu); while a screen is active the
-  sim/audio are skipped and `drawScreen()` replaces the scene; while a detail
-  card is open (`DetailState::active`) `drawCard()` replaces everything and A/B
-  drive the card, with A running the stored row's action through
-  `screenApplyAction`. The QUESTS board's quest card starts the save's hunt
-  (monhun-ardu-087: the card A takes/launches through `appQuestCardLaunch` +
-  `APP_NAV_HUNT` + `huntStart`; the hub has no HUNT row), win/loss + A returns to
-  the hub, and the camp hold-B leaves to the hub. FX reads happen inside `FX::enableOLED()` /
-  `waitForNextPlane()` / `FX::disableOLED()`.
-- `src/app_state.hpp` — host-testable app routing (qs.4; hub-as-root `isp.1`;
-  monhun-ardu-087 moved the hunt launch to the quest card): the hub is the root
-  (`appScreenBack(HUB) == APP_NAV_NONE`), the QUESTS board's quest card requests
-  a hunt (`appQuestCardLaunch` gates the take row, `appNavApply(APP_NAV_HUNT)`
-  returns true; the caller starts it), camp hold-B routes to the hub
-  (`appHubRequest`), the held-button guards,
-  the over-screen return edge (`appOverReturnStep`) and the once-per-hunt
-  progress commit.
-- `src/app_setup.hpp` — device cart glue for a hunt start: `huntStart()` picks the
-  beast kind from the active `QuestDef` (kill target, else LUNGE) and the save's
-  v4 weapon, then arms the quest kill counter and resolves the smith tier
-  multipliers.
-- `src/armor_state.hpp` — host-testable armor engine (arm.2): crafted/equip save
-  helpers and `armorAggregate()` (defense/resist/skill-point sums + S/M tiers).
-- `src/armor.hpp` — device cart glue: reads `mhArmor` and caches the equipped
-  stats into `Game::armor`/`Game::armorHead` at hunt start and on equip change.
-- `src/card_state.hpp` — host-testable detail-card state machine (5co.3;
-  ui.3.1 added the armor craft bill): the `DetailState` page mask/machine (open
-  on the first present page, LEFT/RIGHT cycles only pages in the mask, B backs
-  out), the list-row -> card kind/global-index mapping, the crafted-armor
-  PARTS trim, the armor card action (`cardArmorApply`: craft from the baked
-  bill, then equip/unequip), and the dynamic hint rule (`A CRAFT` /
-  `A EQUIP` / `A UNEQUIP` / `A ACCEPT` / `A TURN IN` / `NEED PARTS` /
-  `NEED ZENNY` / `A GO`). `A GO` (monhun-ardu-087) is the active quest
-  card's launch hint, appended after `A FORGE` so the existing hints keep
-  their ids.
-- `src/cards.hpp` — device cart glue for the cards: reads the `mhCards` record
-  with one bulk `mhFxReadBytes` into a byte-identical `CardItem` cache
-  (`static_assert`d), blits the baked 128x64 page through `cardBlit`
-  (`src/render.hpp`, one 1024 B layer per plane), and draws the meta overlay
-  slots (live PARTS have-counts, the quest PROG bar) plus the hint line. A
-  card action reuses `screenApplyAction` with the list row that opened it.
-- `src/render.hpp` — whole render path (also compiled into the perf bench so
-  measured numbers describe the real loop). Arena, target, player, shells,
-  effects, HUD, and the fixed 128x64 card blit (`cardBlit`). The door-cross
-  blackout, the room-name banner asset (`fxroom`, budget-gated) and the
-  `DEBUG_HURTBOXES` wire overlay (player body + the beast's three hurt boxes +
-  the live hit boxes; hurt solid, hit dotted) live here too.
-- `src/audio.hpp` — cue detector diffing `Game` edges after `stepGame()`;
-  non-blocking one-shot tones via ArduboyTones (Timer3, no Timer1 conflict).
-  Shipping builds set `-DMH_AUDIO=0` (hbk.15): the module compiles to a no-op
-  `audioUpdate` and the beeper is dropped (measured -652 B); the flag defaults
-  to 1 so the host/device suites keep the real module.
-  Mute with `-DMH_AUDIO=0`.
-- **USB-free shipping main** (`monhun-ardu.ino`, `-DMH_NO_USB`): shipping builds
-  compile the sketch's own `main()` so the core archive's `main.cpp.o` is never
-  pulled in — that object is the only thing that calls `USBDevice.attach()` /
-  `serialEventRun()` and drags in the CDC/PluggableUSB stack. The game never uses
-  `Serial`, so this reclaims flash/RAM with no behavior change. `-DMH_NO_USB` is
-  set only by the shipping flags (`Makefile SIZE_FLAGS`, used by
-  `build`/`mini`/`size`/`debug`). The Ardens `fxtest` sketches are compiled by
-  the separate `fxtest-build` arduino-cli invocation with stock flags, so they
-  keep the core main and `captureserial` still works. Consequence: the shipping
-  build has **no USB serial device** (no serial monitor / no OS port while the
-  game runs); uploads go through the Cathy3K bootloader window
-  (`arduino-cli upload` resets into it as usual).
-- **Dev feel build** (`make dev`, `-DMH_DEV=1`, default off): unlimited crafting
-  — fresh sandbox defaults (9999 zenny + 99 of every item), every bill gate
-  passes with no debit, and the EEPROM save is never read or written, so the
-  player's real save is untouched. Zero shipping cost (constant-folded); the
-  save path is compiled out under `MH_DEV` (`#if MH_DEV` in `core/save.hpp`).
-- **Hurtbox build** (`make dev-hitboxes`, `-DMH_DEV=1 -DDEBUG_HURTBOXES=1`):
-  the same sandbox plus the always-on 1 px wire overlay — player body, the
-  beast's **three hurt boxes** (body, head, appendage, mirrored through the same
-  `combatZoneOffsetX` the hit test uses), the live player melee box and the
-  beast windup/attack window. The target carves `MH_CARD_OFF` (the ~1.7 KB
-  detail cards are irrelevant to combat feel) so the overlay fits; `make dev`
-  keeps the cards. Currently 28240/29696 (95%, 1456 free).
+  in `run()`, `renderScene()` in `render()`. Boots into the **hub**. A screen
+  replaces the scene and stops the sim. A detail card replaces everything and
+  takes A/B. FX reads run only inside the `FX::enableOLED()` /
+  `waitForNextPlane()` / `FX::disableOLED()` bracket.
+- `src/app_state.hpp` — host-testable routing: hub as root, quest-card hunt
+  launch, held-button guards, over-screen return, once-per-hunt progress commit.
+- `src/app_setup.hpp` — hunt start: beast kind from the quest, save weapon, kill
+  counter, smith tier multipliers.
+- `src/armor_state.hpp` / `src/armor.hpp` — armor engine + cart glue.
+- `src/card_state.hpp` / `src/cards.hpp` — prebaked detail cards + nav.
+- `src/render.hpp` — whole render path (arena, actors, sprites, HUD, cards,
+  door blackout, `DEBUG_HURTBOXES` wire overlay).
+- `src/audio.hpp` — cue detector over `Game` edges, one-shot tones. Shipping
+  sets `-DMH_AUDIO=0` (no-op module, −652 B).
+- `-DMH_NO_USB` — shipping links the sketch's own `main()`, so the USB/CDC
+  stack never enters the image. Result: no serial port while the game runs.
+- `make dev` — sandbox (`-DMH_DEV=1`): 9999 zenny, 99 items, EEPROM never
+  touched. `make dev-hitboxes` adds the always-on hurt/hit wire overlay.
 
-### FX asset pipeline (all assets live on the FX chip)
+### FX asset pipeline
+
+Sprites and fonts are packed for `SPRITESU_FX` and drawn with
+`SpritesU::drawPlusMaskFX(x, y, img, FRAME(i))`, where `FRAME(x) = x*3 +
+arduboy.currentPlane()`. MCU flash holds offset constants only. No glyph or
+bitmap arrays live in MCU flash or RAM.
 
 ```
-mock/game.js + core dims ──tools/gen-art.py──► images/**/*.png
-images/**/*.png ──tools/convert-sprite.py──► fxdata/*/Sprites.txt ──┐
-                                                                    ▼
-data/skeletons.json + data/creatures/*.json ──tools/gen-combat.py──►│
-        ├─► fxdata/tables/combat.bin ──────────────────────────────┤
-        └─► src/generated/combat_{data,meta,expect}.hpp            │
-                                                                    ▼
-                     fxdata/fxdata.txt ─► tools/gen.sh ─► fxdata-build.py
-                                                           │
-                              src/fxdata.h (offsets) ◄─────┤
-                              fxdata/fxdata.bin      ◄─────┘
+images/**/*.png ──tools/convert-sprite.py──► fxdata/*/Sprites.txt ─┐
+data/**/*.json ──tools/gen-*.py──► tables/*.bin + src/generated/ ──┤
+                                                                  ▼
+                             fxdata/fxdata.txt ─► tools/gen.sh ─► fxdata-build.py
+                                                                  │
+                                            src/fxdata.h ◄────────┤
+                                            fxdata/fxdata.bin ◄───┘
 ```
 
-- Sprites and fonts are packed for `SPRITESU_FX`; drawn with
-  `SpritesU::drawPlusMaskFX(x, y, img, FRAME(i))` where
-  `FRAME(x) = x*3 + arduboy.currentPlane()`.
-- MCU flash holds only `src/fxdata.h` offset constants and code. No glyph or
-  bitmap arrays in MCU flash or RAM.
-- Creature combat data is authored as JSON under `data/` and compiled by
-  `tools/gen-combat.py` into the packed blob + generated headers described in
-  `docs/creature-framework.md` (blob format §8, schema §§3-7, reference values
-  §11). The blob is a `raw_t mhCombat` section of the one FX image (never a
-  second flashable image); `combat_meta.hpp` carries VERSION/SIZE and the
-  per-record offsets the loader uses, `combat_data.hpp` is the host mirror and
-  `combat_expect.hpp` pins sizes, spot values and the blob sha256.
-  `src/core/combat.hpp` is the production loader (host structs / AVR
-  `mhFxRead*`), exercised by `tst/combat_test.hpp`,
-  `tst/combat_pack_test.hpp` and the Ardens `test_combat`; the game runs the
-  pattern interpreter from migrations `ljj.3`–`.5`; `data/creatures/
-  ravager.json` was the first creature with zones (head + appendage, `cgk`, and
-  `heavy.json` gained its appendage/long-tail zone in `4t4`), replacing the
-  N-part machinery of `ljj.6`/`ljj.8`: body implicit, one u8 pool + one broken
-  record per zone, broken-mask guards. Every breakable demo-roster zone overlays
-  its part at the cached zone box (`src/render.hpp` `drawZonePart`): the heavy
-  `fxtail_heavy` 24x16 tail (`4t4`) plus the `kt7.6` chicken `fxhead_chicken`/
-  `fxlegs_chicken` and bull `fxhead_bull`/`fxhooves_bull` 4-frame sheets, broken
-  variants erasing the baked part with shade-0 pixels (RAVAGER keeps the legacy
-  18x10 `fxtail` unoverlaid; page stride). The
-  zones machinery is
-  folded out of the `test_perf` and `test_parity` images with
-  `-DMH_COMBAT_PARTS=0` (see `src/core/game.hpp`), whose scenes never run the
-  ravager; shipping and `test_combat` keep it.
-- Current blobs: `fxmonster*`, `fxplayer`, `fxpole`, `fxball`, `fxscatter`,
-  `fxspark`, `fxfontw`, `fxfontg`, `fxhud`, `fxroom` (authored, the arrival
-  banner is budget-gated — see `monhun-ardu-dap`), the weapon/armor/beast-part
-  sheets, the baked card/screen/room page layers, and the raw content tables
-  (`mhWeaponDefs`, `mhMonsterAttacks`, `mhMonsterDefs`, `mhCombat`, `mhCards`,
-  `mhQuests`, `mhScreens`, `mhForge`, `mhSmith`, `mhArmor`, `mhItems`, `mhZones`)
-  — 3,004,672 B cart image total. The dead
-  `mh_menu_bg`/`mh_menu_wsel`/`mh_menu_msel` sheets were dropped with the
-  opening menu (`hml.2`).
-- Detail cards (`tools/gen-cards.py`, ui.3): `data/armor.json` +
-  `data/skills.json` + `data/quests/*.json` compile into one 128x64 page image
-  per item page under `images/cards/` (3x 1bpp page-major layers in
-  `fxdata/cards/Sprites.txt`, the same family as the room images), the packed
-  `fxdata/tables/cards.bin` record table (mask + page image addresses + overlay
-  slots + the armor craft bill: zenny + up to two `{itemIdx+1, count}` pairs)
-  and `src/generated/card_meta.hpp`. A page with no data is not
-  generated. `python3 tools/gen-cards.py --sheet build/cards_contact_sheet.png`
-  renders every page into one review grid (never committed); `--dump` lists the
-  masks/overlays without writing.
-- Regenerate with `make gen` (or `./tools/gen.sh`); bins are tracked despite
-  `*.bin` being gitignored (force-added) so device tests are reproducible.
-- `fxdata/manifest.json` (tracked) pins sha256+size for every source image,
-  JSON source, fxdata declaration and generated artifact;
-  `tools/fxdata_manifest.py --check` verifies it read-only and `make gen-check`
-  re-runs the pipeline and fails if any generated artifact changes (staleness
-  or nondeterminism).
-- `make test-tools` runs the Python unittest suites in `tools/tests/`
-  (manifest orphan/missing/malformed/staleness fixtures; gen-combat schema
-  errors, id/ref errors, integer-only rejection, size limits, determinism,
-  dump smoke, blob-ABI spot checks; contact-sheet determinism/layout).
-- Authoring review without flashing:
-  - `python3 tools/gen-combat.py --dump` validates the JSON and prints the
-    compiled model (per-creature stats, attacks, windows, patterns and guards)
-    without writing any artifact — the fast schema/id cross-ref check while
-    tuning numbers.
-  - `python3 tools/contact_sheet.py [--creature <id>] [--out build/x.png]`
-    renders `data/skeletons.json` + `data/creatures/*.json` to a PNG contact
-    sheet under `build/` (never committed): a tick timeline per attack
-    (windup/active/recover shading, window spans) plus one 1:1 preview per hit
-    window showing the body box and the window box, so a multi-window arc,
-    part box or timing change can be reviewed as a picture. `--dump` prints a
-    downsampled ASCII view for text evidence.
-- Fonts are drawn from the FX cart (vendored `Font4x6` was deleted after the
-  asset pass; it cost ~3 KB of flash).
+- Creature data is authored in JSON under `data/`. `tools/gen-combat.py`
+  compiles it into the packed blob and the generated headers
+  (`combat_data.hpp`, `combat_meta.hpp`, `combat_expect.hpp`). The blob is a
+  section of the one FX image. See `docs/creature-framework.md`.
+- One FX image only: `fxdata/fxdata.bin`. Table blobs are sections inside it.
+- `fxdata/manifest.json` pins sha256 + size for every source and artifact.
+  `make gen-check` re-runs the pipeline and fails on any change.
+- Authoring review: `python3 tools/gen-combat.py --dump` validates JSON;
+  `python3 tools/contact_sheet.py` renders attack timelines and hit windows.
+- Fonts come from the FX cart. The vendored `Font4x6` was deleted.
 
 ### Test tiers
 
-1. **Host unit tests** — `make test`. `tst/test.hpp` (Test/TestSuite/TestRunner),
-   suites in `tst/*_test.hpp`, `tst/main.cpp`. Binary in `build/tests/host`.
-   Runs the core headers unmodified.
-2. **Device tests** — `make fxtest-headless`. Stages each
-   `tst/fxdatatest/test_*.ino` under `build/fxtest/<name>/`, compiles with
-   arduino-cli, boots it in Ardens with the FX image on `d1`, and requires a
-   final bare `P` (pass) or `F` (fail) marker over serial.
-   - `test_boot` — boots, camera pin
-   - `test_assets` — reads FX blobs inside the OLED bracket, checks plane bytes
-   - `test_audio` — cue-map asserts with real tones
-    - `test_data` — FX-cart weapon/monster tables match the mock values and packed layout
-    - `test_combat` — combat blob loader: header/spot values, cross-refs, guard eval, damage routing, cache read counts
-    - `test_cards` — mhCards cart reads (incl. the baked armor craft bill), list-row -> card mapping, card action E2E (armor craft/equip, take/turn-in + EEPROM), card page blit + overlay pixels across planes
-    - `test_parity` — replays mock-generated traces tick-by-tick vs core
-   - `test_hud` — pins HUD bar/divider framebuffer bytes + world-clip control
-   - `test_perf` — cycle-based bench + budget gates
-   - Fixtures for parity are generated with
-     `node tools/gen-parity-fixtures.js` (Node only produces fixtures; the test
-     itself is C++/Ardens).
-3. **Ardens** is required for tier 2; override with `ARDENS=/path/to/Ardens`.
-   If it is missing, `fxtest-headless` skips cleanly.
+1. **Host** — `make test`. Suites in `tst/*_test.hpp`. Runs the core headers
+   unmodified.
+2. **Device** — `make fxtest-headless`. Each `tst/fxdatatest/test_*.ino` is
+   staged, compiled with arduino-cli, booted in Ardens with the FX image, and
+   must print a final `P` or `F`. Iterate with `FXTEST_ONLY=test_<name>`.
+3. **Ardens** is required for tier 2. Set `ARDENS=/path/to/Ardens` to override.
+   If Ardens is missing, the run skips cleanly.
 
 ### Hardware / cadence
 
 - `L4_Triplane` + `ABG_TIMER1` + `ABG_SYNC_PARK_ROW` (`src/common.hpp`).
-- Measured under load (bench, `nx9` numbers): **157 Hz plane sweep, 52 Hz
-  logic**, render max 3408 µs/plane (moving-room 3040 µs), logic tick 176 µs
-  (moving-room max 440 µs), 563 B free RAM. Mock runs 60 Hz; tick order is
-  equivalent.
-- Debug overlay `DEBUG_HURTBOXES=1`: `make dev-hitboxes` builds the dev feel
-  image with the 1 px hurt/hit-box wireframe always on (no runtime A+B toggle).
-  It draws the player body, the beast's three hurt boxes (body, head,
-  appendage — the zone offsets mirror `combatZoneContains` through
-  `combatZoneOffsetX`, so the wire cannot drift from the tested rect) and the
-  live hit boxes (hurt = solid, hit = dotted). Off by default; the target
-  carves `MH_CARD_OFF` so it fits beside the dev sandbox.
+- Bench (nx9): plane 157 Hz, logic 52 Hz, render max 3408 µs, tick 176 µs,
+  RAM free 563 B. Mock runs at 60 Hz; tick order matches.
+- `DEBUG_HURTBOXES=1` (`make dev-hitboxes`) draws the player body, the beast's
+  three hurt boxes, and the live hit boxes. Off by default.
 
 ---
 
 ## Controls
 
-### Hub (boot — the root screen, `isp.1`)
-
-Boot lands on the hub; the opening menu is gone (`isp.1`). The hub is the root,
-so B there is a no-op.
+### Hub (boot — the root screen)
 
 | Input | Action |
 |---|---|
 | UP / DOWN | move the cursor (6 rows per page, scroll by 6) |
-| A | accept the cursor row (open a screen / open a card / take a quest / launch the hunt from the quest card) |
-| B | back one level (quests/gear → hub; hub B is a root no-op) |
+| A | accept the cursor row (open a screen / card, take a quest, launch from the quest card) |
+| B | back one level (quests/gear → hub; hub B is a no-op) |
 
-D-pad nav is debounced: a tap moves exactly one row (immediate on the direction
-change), while holding waits ~300 ms (16 logic ticks) and then repeats every
-~115 ms (6 ticks). A is edge-based: one accept per press, and the press that
-opened a screen cannot re-fire inside it. There is no HUNT row (monhun-ardu-087):
-the QUESTS board's quest card launches the save's hunt. A on a take row opens the
-quest card; the card's A takes the contract and launches (the card reads `A GO`
-on the active quest, so exiting a hunt and reopening the card relaunches it with
-no save write), running `huntStart()`, which reads the active quest's `QuestDef`
-(a `kill` goal spawns its target beast, anything else — no quest or a `gather`
-goal — falls back to the LUNGE beast) and the save's equipped forge node (v5),
-then runs `newGame` + the camp spawn.
-After a win or loss, A returns to the hub so the finished quest can be turned in;
-the next launch runs `newGame` again, so projectiles/effects/quest counters start
-clean. While a screen is up the sim and audio are not stepped.
+D-pad nav is debounced. A tap moves one row. A hold waits ~300 ms (16 ticks),
+then repeats every ~115 ms (6 ticks). A is edge-based: one accept per press. The
+press that opened a screen cannot re-fire inside it.
 
-The hub shows QUESTS / FORGE / GEAR (cursor boots on QUESTS; the HUNT row is
-gone, monhun-ardu-087, and monhun-ardu-6k2 cut the cosmetic MAP row + screen).
-Every list screen carries the live
-`save.zenny` balance right-aligned on the title line (`$` + digits, ui.5); the
-old HUB ZENNY row and its `ROW_F_ZENNY` dynamic-value token are retired. The
-quests board takes a quest and turns it in for its reward. ui.3.1 (5co.6)
-removed the SMITH screen and ui.4 (5co.4) added the FORGE trees, which own all
-weapon progression: armor crafting moved onto the GEAR armor card (below) and
-the camp smithy interaction was dropped with the screen.
+The hub has three rows: QUESTS, FORGE, GEAR. The cursor boots on QUESTS. The
+hub strip on the free y=56 line shows the equipped weapon marker (`SWD1` = class
+abbreviation + tier) and active armor skill points (`ATK12`). Any list longer
+than one 6-row page shows an `n/m` indicator. Every list shows the live zenny
+balance on the title line. A blocked A plays a short denied cue.
 
-Hub chrome (ui.5.2, 5co.9; the HUNT row and its live quest-progress column were
-dropped, hbk.13/monhun-ardu-087 — quest progress lives on the quest card). A
-bottom strip on the free y=56 line shows the equipped weapon marker (`SWD1` — the class abbreviation
-+ forge-tree tier) and the active armor skill point totals (`ATK12`, tiered
-skills only; no all-skills screen). Any list spanning more than one 6-row page
-carries an `n/m` page indicator after its title. A blocked A — a gated list row
-or a card whose hint is `NEED PARTS` / `NEED ZENNY` / silent — plays a short
-denied cue, reusing the low `CUE_HURT` tone (no new cue row). The generator caps
-titles and labels at 16 chars, so the renderer draws the batched cart fetch only;
-the old per-char tail fallback was dead and is gone (5co.9 trim).
+Every list screen renders from prebaked 128x64 4-shade pages (one page per
+6-row window). The device draws only the live chrome on top: cursor, selected
+label, forge/gear markers, skill numbers. See `docs/ui-design.md`.
 
-Every list screen (HUB / QUESTS / FORGE / GEAR) renders from **prebaked 128x64
-4-shade pages** (`hbk`, docs/ui-design.md "Screen prebake v2"): one page image
-per 6-row window on the FX cart, the same 3x 1bpp page-major layer family as the
-detail cards, generated from the screen JSON by `tools/gen-screens.py`
-(`python3 tools/gen-screens.py --sheet build/screens_contact_sheet.png` renders
-every page for review; never committed). The baked page carries the title band,
-the page indicator (`n/m`), the rule, row labels, section bands and costs
-(right-aligned at x=112). The device draws only the live chrome on top: the
-cursor chip, the selected row's label re-drawn white, the FORGE/GEAR weapon
-markers at x=118 (white = equipped, gray = owned), the GEAR skill numbers, the
-hub quest column and the hub strip (its five skill labels are baked at fixed
-slots, the live points at slot + 12). The legacy text renderer was deleted with
-the wave — the whole prebake lands **56 B cheaper** than the text path it
-replaced. `make dev` builds the feel harness instead of a release: `-DMH_DEV=1`
-gives fresh 9999-zenny / 99-item defaults, every forge and craft bill passes
-without debiting, and the EEPROM save is never read or written (the player's
-real save is untouched; default off, so the shipping image is unchanged).
+The FORGE screen lists every weapon node as an indented tree. A opens the
+weapon card. A on the card forges the node. An owned parent makes it a cheaper
+upgrade. Otherwise it is a pricier direct forge.
 
-The FORGE screen (`data/screens/forge.json` + generated rows from
-`data/forge/*.json`) lists every weapon node as an indented tree (class headers
-+ one `ACTION_FORGE_NODE` row per node, label + upgrade cost). A opens the
-weapon card (`DESC / PARTS / STATS`); A on the card forges the node — an upgrade
-when the parent is owned (cheaper bill, transforms the owned parent, and moves
-the equipped id to the child if the parent was wielded), otherwise a pricier
-direct forge that leaves skipped nodes unowned. Skipped branches stay locked
-until an owned parent exists.
+The GEAR screen equips the loadout. Weapon rows open the weapon card (A equips
+or unequips). The five armor rows craft on first A, then toggle equip. A live
+skill readout shows stacked points. A skill gets `S` at 10 points and `M` at 15
+points. Points clamp at 15.
 
-The GEAR screen equips the loadout. The weapon rows (`ACTION_EQUIP_WEAPON`,
-generated from the same tree) open the weapon card, whose A equips an owned node
-or unequips the wielded one; the equipped node id persists in the save (v5). The
-five armor pieces (`ACTION_EQUIP_ARMOR` rows, gs.1) are always live, because the
-card's A crafts an uncrafted piece (debit + crafted bit) before toggling equip.
-A same-weapon / same-piece press is a no-op and the next hunt (launched from the
-quest card) starts with the picked loadout; the owned/crafted bitsets and the equipped ids persist in the
-save, and the equipped stats cache at hunt start (arm.2). The GEAR page also
-carries a live skill readout (gs.2): five `ROW_F_SKILL` rows (ATTACK UP /
-DEFENSE UP / HEALTH UP / STAMINA UP / EVADE) show each skill's stacked points,
-and an active skill gets an `S` (points >= 10) or `M` (points >= 15) letter just
-left of the number; points clamp at 15. The cache refills when GEAR is entered
-and after every equip action, so the numbers move as gear changes. An items
-screen is still a follow-up; the equipped weapon's hub strip marker (ui.5.2) is
-the only loadout readout outside GEAR. Every state-changing action commits the 44-byte EEPROM save block
-once (write-on-change + verify read). A save with an active quest applies it at
-hunt start and the hunt-end quest-progress commit still runs exactly once per
-hunt. Camp hold-B (sheathed) leaves the hunt back to the hub. There is no quit
-input in the hunt — win/loss + A is the only hunt exit.
+Weapon, armor, and quest rows open a **prebaked detail card**. LEFT/RIGHT cycles
+pages. B backs to the list. A runs the row action. The card hint line shows the
+live state (`A CRAFT`, `A EQUIP`, `A UNEQUIP`, `A ACCEPT`, `A TURN IN`,
+`NEED PARTS`, `NEED ZENNY`, `A GO`).
 
-Save v5 caps are fixed and data-only to grow below them: **32 owned weapon-node
-slots (4 B)** and **8 crafted armor-piece slots (1 B)** (`core/save.hpp`). There
-is no migration (ui.4.1, owner decision): only a version-5 record with a valid
-checksum decodes; anything else (blank, junk, or an older version) falls back to
-`saveDefaults()`, so an old save is discarded on a version change. Widening the
-bitsets (e.g. 16 armor pieces) is a future budget event, not a data-only change.
-
-Armor, quest, and weapon rows open a **prebaked detail card** (ui.3/ui.4)
-instead of firing the action on the list: A on the list opens the card,
-LEFT/RIGHT cycles its pages (DESC/PARTS/STATS/SKILL for armor; DESC/PARTS/STATS
-for weapons; GOAL/PROG/REWARD for quests), B backs to the list, and A on the
-card performs the row's context action (forge/upgrade, craft/equip/unequip, or
-take/turn-in). The armor craft bill (zenny + up to two `{item, count}` pairs) is
-baked into the `mhCards` record (ui.3.1), so the card gates and debits the craft
-itself; quest cards run the row action, and a take row that leaves its quest
-active launches the hunt (monhun-ardu-087, the card reads `A GO`). Everything is baked into the
-128x64 page image except the hint line and the live overlay slots (PARTS
-have-counts, the quest progress bar); a crafted armor piece loses its PARTS page
-immediately, so the card cannot offer a second craft. The live per-row state
-(equipped / owned / upgradeable / direct / need-parts / need-zenny) is carried
-by the card hint line, not a list token column (ui.4.1 trim).
+Save v5 caps: 32 owned weapon-node slots (4 B) and 8 crafted armor-piece slots
+(1 B). There is no migration. Only a version-5 record with a valid checksum
+loads. Anything else falls back to defaults. Every state change commits the
+44-byte EEPROM block once (write-on-change + verify read).
 
 ### Target roster (`MONSTER_DEFS`, FX cart blob)
 
-| Target | Mode | Size | HP | Spd | Attack |
-|---|---|---|---|---|---|
-| LUNGE | hunt | 32x24 | 1200 | 5 | pecks inside 28 px, leaps 29..41 px (leap locks facing at windup) |
-| SWEEP | hunt | 28x22 | 1000 | 7 | stomps inside 24 px, gores 25..41 px (gore locks facing at windup) |
-| HEAVY | hunt | 40x28 | 1900 | 3 | lunges inside 24 px |
-| RAVAGER | hunt | 32x24 | 1600 | 6 | breakable head/appendage zones (ljj.6), pattern-driven |
+| Target | Size | HP | Spd | Attack |
+|---|---|---|---|---|
+| LUNGE | 32x24 | 1200 | 5 | pecks inside 28 px, leaps 29..41 px (leap locks facing at windup) |
+| SWEEP | 28x22 | 1000 | 7 | stomps inside 24 px, gores 25..41 px (gore locks facing at windup) |
+| HEAVY | 40x28 | 1900 | 3 | lunges inside 24 px |
+| RAVAGER | 32x24 | 1600 | 6 | breakable head/appendage zones, pattern-driven |
 
 ### In game (hunt)
 
 | Input | Action |
 |---|---|
 | D-pad | move |
-| D-pad double-tap | dodge roll toward the tapped direction (all weapons, sheathed too — same sword roll; stamina + state gates as the B tap) |
-| B held + double-tap Down | sheathe (stow the weapon); A draws — rooted per-weapon windup (sword 6 / flail 10 / gun 16 ticks), then combo hit 1 |
+| D-pad double-tap | dodge roll toward the tapped direction (all weapons, sheathed too) |
 | A | attack (in a stance: stance special) |
-| A (sheathed, at a herb node) | gather the node (rooted ~40 ticks; a tap away from a node draws instead) |
+| A (sheathed, at a herb node) | gather the node (rooted ~40 ticks) |
+| A (sheathed, at a carcass) | carve (win screen, 3 carves per hunt) |
 | B tap | dodge (sword) / deflect (flail) / shove (gunshield); inert while sheathed |
 | B hold ~11 ticks | enter stance (parry / whirl / guard); release exits |
-| B hold ~11 ticks (sheathed, herb held) | eat a herb: +20 hp, rooted ~40 ticks; a shorter hold does nothing (roll is the double-tap) |
+| B hold ~11 ticks (sheathed, herb held) | eat a herb: +20 hp, rooted ~40 ticks |
+| hold A ~24 ticks | sheathe (stow the weapon) |
+| A (sheathed) | draw (rooted windup), then combo hit 1 |
 
-Per-move numbers (startup/active/recover, boxes, damage, stamina, lunge/push,
-carved-in-shipping rows) live in `docs/weapon-movesets.md`.
+Per-move numbers (startup/active/recover, boxes, damage, stamina, lunge/push)
+live in `docs/weapon-movesets.md`.
 
-**Rooms.** The hunt runs on the 4-room demo map: the camp door leads east into
-the area, which forks north to the cavern (safe mine, ore nodes) and east to
-the ridge (heavy beast); every room has its own doors/spawns/heal rects. A door
-cross black-wipes the arena band for 12 ticks (`ROOM_TOAST_TICKS` 40 arrival
-toast). A beast — carcass included — exists only in its home room (`beastHere`,
-`src/core/zones.hpp`): the area hosts lunge/sweep/ravager, the ridge the heavy,
-and an off-home monster room reads empty (no sim, no target, no draw, no HUD
-bar) instead of showing a frozen beast at stale coordinates.
+**Rooms.** The camp door leads east into the area. The area forks north to the
+cavern (safe mine, ore nodes) and east to the ridge (heavy beast). Every room
+has its own doors, spawns, and heal rects. A door cross black-wipes the arena
+for 12 ticks, then shows a 40-tick arrival toast. A beast exists only in its
+home room. An off-home room reads empty: no sim, no target, no draw, no HUD bar.
 
+There is no quit input in the hunt. Win/loss + A is the only exit. Camp hold-B
+(sheathed) returns to the hub.
 
 ---
 
 ## Commands
 
 ```sh
-make test               # host unit tests (6984 asserts)
+make test               # host unit tests
 make fxtest-headless    # Ardens device tests (19 suites; FXTEST_ONLY=test_combat for one)
-make size               # whole-image flash/RAM report + compile-time data facts
-make size-line          # just the flash/RAM line (script/checkpoint friendly)
-make test-tools         # Python tooling unittests (tools/tests/)
-make dev                # dev feel build: unlimited crafting, EEPROM untouched,
-                        #   then opens Ardens on it (like make debug)
-make dev-hitboxes       # dev feel build + the always-on hurt/hit wire overlay
-                        #   (carves the detail cards so the overlay fits)
+make size               # whole-image flash/RAM report + data facts
+make size-line          # flash/RAM line only
+make test-tools         # Python tooling unittests
+make dev                # dev sandbox build, then opens Ardens
+make dev-hitboxes       # dev build + always-on hurt/hit wire overlay
 make gen-check          # regen determinism + generated header sync
-make build              # compile shipping sketch (output in dist/)
-make debug              # build, then open Ardens debugger (ELF + DWARF) with FX image
-make mini               # compile for Arduboy Mini FQBN
-make gen                # regenerate FX assets + fxdata.h/bin from images/
-make hooks              # install git hooks (clang-format pre-commit), once per clone
+make build              # shipping sketch (output in dist/)
+make debug              # build, then open Ardens debugger (ELF + FX image)
+make mini               # compile for the Arduboy Mini FQBN
+make demo               # demo picker build, then opens Ardens
+make gen                # regenerate FX assets + fxdata.h/bin
+make hooks              # install git hooks (once per clone)
 make format             # format all tracked C-family sources
 ```
 
-Workflow conventions (budget spikes, data facts, generated-artifact rules,
-render review checklist) live in `docs/dev-flow.md`.
+Full gate before a commit: `make gen-check`, `make test`,
+`make fxtest-headless`, `make size`. Workflow conventions live in
+`docs/dev-flow.md`.
 
-`make debug` launches Ardens on `dist/monhun-ardu.ino.elf` (DWARF debug info
-for source view, symbols, globals, call stack) + `fxdata/fxdata.bin`
-(windowed, FX cart on `d1`, SSD1306). Debugger keys: `F5` pause/continue,
-`F8` reset, `O` settings, `F11` fullscreen.
+`make debug` opens Ardens on `dist/monhun-ardu.ino.elf` + `fxdata/fxdata.bin`
+with DWARF info. Keys: `F5` pause, `F8` reset, `O` settings, `F11` fullscreen.
+The debugger also offers a CPU profiler, auto-breaks (stack, SPI collision, FX
+busy), snapshots, screenshots, and GIF recording. Headless dump:
 
-Also available there:
-- **CPU profiler** — instruction-level inclusive CPU load and raw cycle counts,
-  hotspot list, annotations on source/disassembly. Open via the debugger menu
-  (Profiler) or set `open_profiler=1` in `Ardens.ini`. **Headless dump** (no
-  window, scriptable/agent-readable):
-  ```sh
-  "$ARDENS" headless=3000 display=ssd1306 fxport=d1 \
-      profiledump=build/profiler.txt \
-      file=dist/monhun-ardu.ino.elf file=fxdata/fxdata.bin
-  ```
-  Writes tab-separated `count/pct/begin/end/symbol` rows (top 50, sorted) plus
-  total cycles and CPU-active %. Requires the ELF from `make build`. Note: the
-  `profiledump` parameter is a local Ardens patch (uncommitted in
-  `~/code/Ardens/src/headless.cpp` as of this writing).
-- **Auto-breaks**: stack overflow, null deref, out-of-bounds, SPI write
-  collision, FX busy access — useful when touching render/FX code.
-- Snapshots (`F4`), display screenshots (`F2`), GIF recording (`F3`).
+```sh
+"$ARDENS" headless=3000 display=ssd1306 fxport=d1 \
+    profiledump=build/profiler.txt \
+    file=dist/monhun-ardu.ino.elf file=fxdata/fxdata.bin
+```
 
-Notes:
-- `build`, `mini`, `gen`, `debug`, `hooks`, `format`, `test`, `fxtest*` are all
-  `.PHONY`, so `make build` always recompiles even when `build/` (host tests,
-  staged fxtests) exists.
-- `make build` does not tolerate a stale `dist/`; it overwrites as needed.
-- **Formatting**: `.clang-format` (LLVM base, 4-space, 200 col, LF) defines the
-  style. `make hooks` sets `core.hooksPath=.githooks`; the pre-commit hook runs
-  `clang-format` on staged C/C++/`.ino` files and restages them. Vendored
-  (`src/external`, `Arduboy-Python-Utilities`) and generated files
-  (`src/fxdata.h`, `fxdata/fxdata.h`, `tst/fxdatatest/parity_fixtures.hpp`) are
-  skipped. Override the binary with `CLANG_FORMAT=/path/to/clang-format`.
+Notes: `build`, `mini`, `gen`, `debug`, `hooks`, `format`, `test`, and `fxtest*`
+are `.PHONY`, so they always rebuild. `.clang-format` defines the style (LLVM
+base, 4-space, 200 col, LF). The pre-commit hook formats staged C/C++ files.
 
 ---
 
-## Challenges / known issues
+## Constraints / known issues
 
-1. **Perf resolved, headroom watched.** Two render fixes landed:
-   `drawArena()`'s per-dot signed modulo field (~6044 µs/plane) became
-   incremental counters plus a `MAX_FX_DRAW=6` render-side effect cap
-   (`80bbfb0`), and `blk()`'s `fillRect`/`drawFastVLine` path was replaced with
-   direct masked framebuffer writes (`816767d`) — render max 13312 → 3984 µs,
-   plane 82 → 156 Hz, logic 27 → 52 Hz, profiler `mh::blk` share 29% → 3.6%.
-   Any new feature must fit flash (68 B free today) and keep the perf gates
-   green.
-2. **Flash headroom** (history): the USB-stack removal (`42n.8`: custom
-   USB-free `main()`, -2666 B flash / -140 B RAM, see the device-layer note)
-   landed shipping at 27470/29696 B (2226 free); the content-table offload
-   (`42n.1`-`42n.4`), the sine-LUT shrink (`42n.7`; the
-   65 B quarter-wave table + sign fold), the opening menu (`6zb.2`, +1604 B
-   for the menu state machine, FX-glyph render and the runtime monster-kind
-   start path), d-pad nav debounce (`6zb.4`, +16 B for the per-axis hold
-   timers) and the combat blob pipeline (`ljj.1`; blob is FX data, shipping
-   flash unchanged). The hub-as-root rework (`isp.1`) then deleted the opening
-   menu (FSM + FX render + its suites) and reclaimed 470 B; the menu art cleanup
-   (`hml.2`) dropped the dead `mh_menu_*` sheets from the cart (flash unchanged,
-   -8262 B FX data). The prebake wave (`hbk.2`/`hbk.3`) then replaced the
-   per-row text renderer with baked 4-shade page blits and landed **net -56 B**
-   (the baked pages, live overlays and the deleted legacy path together).
-   The demo wave then spent **+376 B** on content — weapon variants ~190 B
-   (`cdd0250`…`2bb7742`), the 4-room map + gather quest ~104 B (`71539ab`),
-   the ridge + beast homes ~12 B (`360c0ce`, after trims), the MAP screen
-   ~70 B net (`da95519`, after baking the marker pages) and the room art 0 B
-   (`526f11d`); the presence/transition fixes added ~88 B (`ve2`).
-   Shipping then measured **29672/29696 B (24 free)**; the quest-card launch
-   (`monhun-ardu-087`, hub HUNT row removed, `A GO` resume) landed at
-   **29674/29696 B (22 free)**; the MAP cut (`monhun-ardu-6k2`, hub MAP row +
-   `SCREEN_MAP` + its 5 baked panel pages + the dead quest room-hint meta
-   removed) reclaimed 40 B, landing at **29634/29696 B (62 free)**, VM RAM
-   1920 B. The trim wave `dap` (`838e32f`) then landed the per-node weapon-sheet
-   address PROGMEM table + the beast-presence cache (net ~-18 B), and `9kn`
-   switched the shipping ground to the stored room images — the flag alone
-   measured +136 B, the internal trims (drop the `v == 0` copy reader and the
-   `drawRoom` re-clamp, 4-way `roomImageInfo`, see render.hpp) brought the bead
-   to **+50 B**, shipping **29666/29696 B (30 free)**, RAM 1867 B, perf still in
-   gate (rMx 4280 µs). The owner playtest `nx9` then reverted the shipped
-   ground to the procedural dot field (`-DMH_ROOM_IMAGE=0`), reclaiming **38 B**
-   (shipping **29628/29696 B, 68 free**) and ~880 µs/plane of render (rMx
-   3408 µs). Measured trim leads still live in the room-name banner
-   (46 B, whose `fxroom` sheet is authored and waiting) and the `dap`
-   weaponSheet nested-switch variants that measured worse. The 119 B of hot
-   LUTs (`mh::SIN65`
-   65 B, `fp::DIR8` 32 B, `mh::MH_MASK_TOP/BOT` 16 B, `mh::RING6` 6 B) stay in
-   MCU flash by decision (`monhun-ardu-42n.5`): FX per-access reads measured
-   ~150 cycles (~9 µs, 20-35x an LPM) and a SIN65 RAM cache would breach the
-   300 B free-RAM gate. The 65-entry quarter-wave SIN65 table + quadrant sign
-   folding (`42n.7`) is bit-identical to the old 256-byte table (pinned by the
-   exhaustive host suite `tst/sin_test.hpp`). Any new feature must still budget
-   flash, prefer FX data; debug-only code (`DEBUG_HURTBOXES`) must stay behind
-   compile-time flags. Trim leads that remain: the room-name banner (46 B, its
-   `fxroom` sheet authored and waiting) and the `dap` weaponSheet nested-switch
-   variants that measured worse than the switch.
-3. **RAM history**: constant tables originally sat in AVR `.rodata` (RAM) at
-   2494 B used; moved to PROGMEM (MCU flash) via `progmem.hpp` → 1888 B. Audio
-   added timers/state → 1941 B; the opening menu's 5 B `MenuState` → 1946 B; its
-   per-axis nav hold state (`6zb.4`) → 1950 B; the `ljj.2` combat loader caches
-   in `Game::combat` (22 B profile + 21 B attack/window + 7 B runtime = 50 B)
-   → 2000 B. FX sprite data stays on the cart, so RAM grew little through the
-   art pass; the USB-stack removal (`42n.8`) then dropped it, the opening-menu
-   `MenuState` was deleted with the menu (`isp.1`) and the save grew one byte
-   for the v4 weapon byte, and the prebake wave landed it at **1798 B (762 free)**.
-   Globals then grew with the demo wave (quest/item/armor/screen state) to the
-   current **1867 B (693 free)**; the `nx9` ground revert does not move globals
-   but returns the `drawRoom` 128 B stack buffer + locals to the bench's free
-   RAM (**481 → 563 B**).
-4. **Mock is legacy**: `src/` is the source of truth. The mock/device parity
-   image (`test_parity`, 660 asserts) stays runnable as legacy diagnostics but
-   is no longer a commit gate; do not update `mock/` or regenerate its fixtures.
-5. **FX/OLED SPI sharing**: all FX reads must stay inside the
-   enable/park/disable bracket; per-access cost measured at ~150 cycles (~9 µs
-   at 16 MHz: 4-byte seek command at 8 MHz SPI + `readEnd`; static count from
-   the `avr-objdump` disassembly of `FX::seekData`/`readEnd`, cross-checked with
-   the Ardens headless profiler), ~20-35x an LPM. That per-access cost is why
-   the hot LUTs stay in MCU flash (`monhun-ardu-42n.5`) and why asset reads may
-   only run between plane blits, never during the paint.
-6. **Parity fixes discovered real bugs**: hitstop gating, projectile cull
-   boundary (int px vs 1/16 px), and missing player hurt sparks were fixed in
-   core to match the mock; the mock itself had an isqrt seed bug and a
-   projectile-speed double-scaling bug, both fixed (`6c9371e`, `4ac3f5b`).
-7. **HUD bars were invisible on device** (fixed, `monhun-ardu-7y3`): `blk()`
-   clamped every rect to y >= HUD_H, but `drawHud()` draws its divider at y=7 and
-   the HP / stamina / monster / reload bars at rows 2..6, so those calls returned
-   without painting; only the FX-glyph text showed. The clamp now lives in a
-   shared `blkClamp()` core with two wrappers: `blk()` (world, y >= HUD_H) and
-   `hudBlk()` (HUD strip, y >= 0); only the HUD call sites switched, so the
-   arena border still cannot spill into rows 0..7. `test_hud` pins the real
-   framebuffer bytes for every bar/divider on planes 0/1 plus the world-clip
-   negative control; the perf gate absorbs the ~16 extra MH_MASK page
-   reads/plane when the bars render (render max 4676 -> 5056 µs, inside the
-   7407 µs budget).
+1. **Perf.** Two render fixes landed: incremental dot counters and the
+   `MAX_FX_DRAW=6` effect cap, plus direct masked framebuffer writes in `blk()`.
+   Any new feature must keep the perf gates green and fit the flash budget.
+2. **Flash.** Current headroom: 68 B. Debug-only code must stay behind
+   compile-time flags. Prefer FX data over MCU flash.
+3. **RAM.** Current usage: 1867 B (693 free). Hot LUTs (`SIN65`, `DIR8`,
+   `MH_MASK_TOP/BOT`, `RING6`, 119 B total) stay in MCU flash by decision: FX
+   reads cost ~150 cycles each (~9 µs). A sine RAM cache would breach the free
+   RAM gate.
+4. **Mock is legacy.** `src/` is the source of truth. Do not update `mock/` and
+   do not regenerate its parity fixtures.
+5. **FX/OLED share SPI.** All FX reads must stay inside the bracket, never
+   during the paint. Per-access cost is ~150 cycles (~9 µs).
+6. **Parity fixes found real bugs**: hitstop gating, projectile cull boundary,
+   missing hurt sparks, an isqrt seed bug, and a projectile double-scaling bug.
+7. **HUD bars** were invisible on device (`blk()` clamped them out). Fixed
+   (`7y3`): `blkClamp()` + `blk()` / `hudBlk()` wrappers. `test_hud` pins the
+   framebuffer bytes.
 
 ---
 
-## Design decisions (recorded in bd)
+## Design decisions
 
-- **Grayscale mode**: keep `L4_Triplane` + `ABG_TIMER1` + park row; accept
-  plane-bound cadence (measured 156 Hz plane / 52 Hz logic under load).
-  (`monhun-ardu-b3t`)
-- **World**: scrolling camera (mock parity). FX has ample room for map growth;
-  a single-screen pen would mean retuning sim extents and monster ranges away
-  from mock truth. (`monhun-ardu-kpi`)
-- **Assets**: everything (sprites, fonts, text) on the FX chip; MCU flash holds
-  code and PROGMEM tables only. (`monhun-ardu-kt7.2`)
-- **Audio**: procedural one-shot tones (ArduboyTones), edge-diffed from sim
-  state — no audio calls inside core logic. (`monhun-ardu-6zc`)
-- **Hot LUTs + procedural primitives** (`monhun-ardu-42n.5`): sine (`mh::SIN65`
-  65 B after the `42n.7` quarter-wave shrink), `fp::DIR8`, `mh::MH_MASK_TOP/BOT`,
-  `mh::RING6` (119 B total) stay in MCU flash as a documented exception —
-  measured FX cost is ~150 cycles/access (~20-35x an LPM, worst plane +~580 µs
-  if all were moved) and a sine RAM cache would breach the 300 B free-RAM gate.
-  Arena dot field/border, HUD bars/reload bar and the `DEBUG_HURTBOXES` wire
-  stay procedural; only sprite-like art moved to FX (`42n.3`). The
-  256 B `mh::SIN256` table was replaced in place by the 65-entry quarter-wave
-  table + quadrant sign folding (`monhun-ardu-42n.7`, -200 B shipping,
-  bit-identical); never offload the sine LUT per-access.
+- **Grayscale**: `L4_Triplane` + `ABG_TIMER1` + park row. Accept the plane-bound
+  cadence (157 Hz plane / 52 Hz logic). (`monhun-ardu-b3t`)
+- **World**: scrolling camera, mock parity. FX has room for map growth.
+  (`monhun-ardu-kpi`)
+- **Assets**: everything on the FX chip. MCU flash holds code and PROGMEM
+  tables only. (`monhun-ardu-kt7.2`)
+- **Audio**: procedural one-shot tones, edge-diffed from sim state. No audio
+  calls inside core logic. (`monhun-ardu-6zc`)
+- **Hot LUTs** stay in MCU flash as a documented exception.
+  (`monhun-ardu-42n.5`)
 
 ---
 
@@ -684,13 +334,13 @@ Notes:
 ```
 monhun-ardu.ino     device sketch (plane loop, input, run/render wiring)
 src/core/           host-testable sim (no Arduino.h)
-src/render.hpp      device render path (also in perf bench)
-src/app_state.hpp   host-testable hub/screen/hunt routing
-src/app_setup.hpp   device cart glue: huntStart + quest/tier arming
+src/render.hpp      device render path (also in the perf bench)
+src/app_state.hpp   hub/screen/hunt routing
+src/app_setup.hpp   hunt start + quest/tier arming
 src/audio.hpp       tone cue detector
 src/external/       ArduboyG, SpritesU, SpritesABC
 src/fxdata.h        generated FX offset constants
-src/generated/      generated headers (combat/art/equip/zone/screen/card/quest meta)
+src/generated/      generated headers
 data/               creatures, map, quests, screens, forge, armor, items JSON
 docs/               creature-framework, ui-design, map-zones, quests-shops,
                     weapon-art, weapon-movesets, feel-design, dev-flow
@@ -698,29 +348,25 @@ src/common.hpp      hardware config + FRAME macros
 tst/                host suites + main
 tst/fxdatatest/     Ardens device tests + harness
 fxdata/             fxdata.txt, generated bins (tracked)
-images/             source PNGs (blocks, equip, cards, screens, maps, fonts, masks)
-tools/              gen-art.py, gen-combat.py, gen-zones.py, gen-quests.py,
-                    gen-screens.py, gen-forge.py, gen-cards.py, gen-hitboxes.py,
-                    gen.sh, convert-sprite.py, fxdata_manifest.py,
-                    gen-parity-fixtures.js, tests/ (tooling unittests)
-mock/               JS prototype (legacy) + node tests
+images/             source PNGs
+tools/              generators, converters, manifest, tooling tests
+mock/               JS prototype (legacy)
 dist/               compile output
-output.md           most recent worker report (scratch, overwritten per task)
+output.md           most recent worker report (scratch)
 ```
 
-## Beads / tracker
+## Beads
 
-Work is tracked with `bd` (epic `monhun-ardu-kt7`). Everything autonomous is
-closed, including the perf chain: `kt7.1` PROGMEM/RAM, `kt7.2` FX assets,
-`kt7.3` arena hotspot, `kt7.4` redundant black fills, `kt7.5` fast rect fill,
-and the gates `b3t`/`kpi`/`8v7`, plus the demo waves (weapon variants,
-4-room map + gather quest, ridge/beast homes, MAP screen, room art, presence +
-transition fixes). Remaining:
+Work is tracked with `bd` (epic `monhun-ardu-kt7`). Open items:
 
-- `dap` — trim wave: reclaim ~150 B (weaponSheet switch 114 B, room-name
-  banner 46 B, presence cache ~16 B)
-- `p71` — `make size` can report a stale ELF (arduino-cli cache)
-- `cqw` — gen pipeline: one-pass convergence assert (stale addresses)
+- `bhp` — weapon art pass follow-ups (`.7` docs/review, `.8` cleanup)
+- `feel` — boss feel (`feel.11` player commitment tune)
+- `fie` — demo map epic
+- `prg.13` — hub ITEMS screen
+- `05x` — equipment framework (paper-doll)
+- `arm` — armor epic
+- `cqw` — gen pipeline convergence assert
+- `p71` — `make size` stale-ELF guard
 - `vx2` — real 4-shade art pass (human)
 - `1to` — device feel playtest + tuning (human)
-- `qyb` — EEPROM save (deferred, out of slice)
+- `qyb` — EEPROM save (deferred)
