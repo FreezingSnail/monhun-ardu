@@ -480,6 +480,9 @@ by the card hint line, not a list token column (ui.4.1 trim).
 | B hold ~11 ticks | enter stance (parry / whirl / guard); release exits |
 | B hold ~11 ticks (sheathed, herb held) | eat a herb: +20 hp, rooted ~40 ticks; a shorter hold does nothing (roll is the double-tap) |
 
+Per-move numbers (startup/active/recover, boxes, damage, stamina, lunge/push,
+carved-in-shipping rows) live in `docs/weapon-movesets.md`.
+
 **Rooms.** The hunt runs on the 4-room demo map: the camp door leads east into
 the area, which forks north to the cavern (safe mine, ore nodes) and east to
 the ridge (heavy beast); every room has its own doors/spawns/heal rects. A door
@@ -690,7 +693,7 @@ src/fxdata.h        generated FX offset constants
 src/generated/      generated headers (combat/art/equip/zone/screen/card/quest meta)
 data/               creatures, map, quests, screens, forge, armor, items JSON
 docs/               creature-framework, ui-design, map-zones, quests-shops,
-                    weapon-art, feel-design, dev-flow
+                    weapon-art, weapon-movesets, feel-design, dev-flow
 src/common.hpp      hardware config + FRAME macros
 tst/                host suites + main
 tst/fxdatatest/     Ardens device tests + harness
